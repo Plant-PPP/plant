@@ -1,15 +1,15 @@
 ---
-description: Next.js con TypeScript y Tailwind
+description: Next.js with TypeScript and Tailwind
 globs: apps/web/**/*.ts, apps/web/**/*.tsx
 alwaysApply: false
 ---
 
 # Next.js
 
-- App Router. Server Components por defecto; `"use client"` solo donde hace falta.
-- Componentes compartidos en `src/components`, utilidades en `src/lib`, dominios en `src/features/<dominio>`.
-- Directorios en minúscula con guiones; componentes en `PascalCase.tsx`.
-- Validación con zod en el servidor, siempre.
-- UI en español de Argentina con voseo; números con `Intl.NumberFormat("es-AR")`.
-- Nada de lógica de valuación en componentes: va en `@plant/core`.
-- Preferí el estado del servidor; minimizá `useEffect` y `useState`.
+- App Router. Server Components by default; `"use client"` only where needed.
+- Shared components in `src/components`, utilities in `src/lib`, domains in `src/features/<domain>`.
+- Lowercase, hyphenated directories; components in `PascalCase.tsx`.
+- Validation with zod on the server, always.
+- User-facing UI in Spanish from Argentina with voseo; numbers with `Intl.NumberFormat("es-AR")`.
+- No valuation logic in components: it goes in `@plant/core`.
+- Prefer server state; minimize `useEffect` and `useState`.

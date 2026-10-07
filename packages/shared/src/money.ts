@@ -12,9 +12,9 @@ export const decimalStringSchema = z
   .string()
   .regex(
     /^-?(0|[1-9]\d{0,11})(\.\d{1,8})?$/,
-    "Debe ser un número decimal, por ejemplo 1234.56",
+    "Must be a decimal number, e.g. 1234.56",
   )
-  .refine((value) => !/^-0(\.0+)?$/.test(value), "Usá 0 en lugar de -0");
+  .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
 
 export const moneySchema = z.object({
   amount: decimalStringSchema,

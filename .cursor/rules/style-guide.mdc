@@ -2,6 +2,7 @@
 alwaysApply: true
 ---
 
-- Usá `pnpm`, nunca `npm`.
-- Preferí desestructurar objetos antes que la notación con punto repetida.
-- Plata como string decimal con su moneda (`Money` de `@plant/shared`), nunca `number`.
+- Everything in the repo is English; only user-facing text is es-AR with voseo (see `CLAUDE.md`, Language).
+- Use `pnpm`, never `npm`.
+- Prefer destructuring objects over repeated dot notation.
+- Money as a decimal string with its currency (`Money` from `@plant/shared`), never `number`.

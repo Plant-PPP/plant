@@ -96,7 +96,7 @@ replied to by this skill; resolving it silences them irreversibly and `nav-githu
 to people stands under the mode. Bugbot often auto-resolves its own outdated threads after a fixing push — re-query; only resolve what's still open.
 
 ### 3. Push the fixes → back to step 1
-Commit (Conventional Commits message; the Claude Code co-author trailer is allowed), push, and return to step 1: the new head triggers a fresh bot review. If every finding was refuted or deferred there is nothing to push — reply + resolve, then re-apply the settle rule on the unchanged head (counting toward its cap) rather than pushing an empty commit. Keep looping until the bots are **green on the latest head per the settle rule**.
+Commit (one-line message per CLAUDE.md), push, and return to step 1: the new head triggers a fresh bot review. If every finding was refuted or deferred there is nothing to push — reply + resolve, then re-apply the settle rule on the unchanged head (counting toward its cap) rather than pushing an empty commit. Keep looping until the bots are **green on the latest head per the settle rule**.
 
 ### 4. Only now: await CI/CD green
 - `gh pr checks <n>` — wait until no check is `pending`.

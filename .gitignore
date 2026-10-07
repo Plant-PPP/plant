@@ -162,6 +162,8 @@ next-env.d.ts
 *.pem
 *.key
 # Real documents for local evals never enter the repo.
+evals/local-docs/
+# Former name, kept so existing copies stay ignored.
 evals/docs-locales/
 *.p12
 *.pfx

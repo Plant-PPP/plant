@@ -9,7 +9,7 @@ OUT="$ROOT/apps/web/.env.development.local"
 cd "$ROOT"
 
 status=$(pnpm exec supabase status -o env 2>/dev/null) || {
-  echo "Supabase local no está corriendo. Corré: pnpm exec supabase start" >&2
+  echo "Local Supabase is not running. Run: pnpm exec supabase start" >&2
   exit 1
 }
 
@@ -17,7 +17,7 @@ value() {
   local v
   v=$(printf '%s\n' "$status" | sed -n "s/^$1=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p")
   if [ -z "$v" ]; then
-    echo "supabase status no devolvió $1" >&2
+    echo "supabase status did not return $1" >&2
     exit 1
   fi
   printf '%s' "$v"

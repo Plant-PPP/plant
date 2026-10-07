@@ -4,16 +4,16 @@ export const dynamic = "force-dynamic";
 
 async function supabaseStatus(): Promise<string> {
   const env = supabaseEnv();
-  if (!env) return "Sin configurar: corré pnpm env:local";
+  if (!env) return "Not configured: run pnpm env:local";
   try {
     const res = await fetch(`${env.url}/auth/v1/health`, {
       headers: { apikey: env.anonKey },
       cache: "no-store",
       signal: AbortSignal.timeout(2000),
     });
-    return res.ok ? "Conectado" : `Respondió ${res.status}`;
+    return res.ok ? "Connected" : `Responded ${res.status}`;
   } catch {
-    return "No responde: ¿corriste supabase start?";
+    return "Not responding: did you run supabase start?";
   }
 }
 

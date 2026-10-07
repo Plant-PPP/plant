@@ -1,95 +1,99 @@
 # Plant
 
-Web app para que inversores argentinos vean todo su patrimonio en pesos y en dólares MEP: suben lo que ya tienen (PDF del broker, capturas, CSV o Excel), la IA arma la cartera, el usuario la revisa y confirma. Es **solo lectura**: nunca opera, transfiere ni custodia, y no hay botones de comprar o vender.
+Web app for Argentine investors to see their whole net worth in pesos and in MEP dollars: they upload what they already have (broker PDF, screenshots, CSV or Excel), the AI builds the portfolio, and the user reviews and confirms it. It is **read-only**: it never trades, transfers or holds custody, and there are no buy or sell buttons.
 
-Las rutas de skills y el ruteo de agentes están en [`AGENTS.md`](AGENTS.md).
+Skill paths and agent routing are in [`AGENTS.md`](AGENTS.md).
 
 ## Setup
 
-Monorepo pnpm + turbo. Necesitás Node >= 22, pnpm (`corepack enable`) y Docker.
+pnpm + turbo monorepo. You need Node >= 22, pnpm (`corepack enable`) and Docker.
 
 ```bash
 pnpm install
-pnpm preflight                      # revisa lo que falta
-vercel env pull apps/web/.env.local # keys de desarrollo (Gemini, Anthropic), opcional al principio
-pnpm dev:up                         # Supabase local + web en :3000 + Inngest dev en :8288
+pnpm preflight                      # checks what is missing
+vercel env pull apps/web/.env.local # development keys (Gemini, Anthropic), optional at first
+pnpm dev:up                         # local Supabase + web on :3000 + Inngest dev on :8288
 ```
 
-`pnpm dev:up` levanta Supabase si no está corriendo, escribe `apps/web/.env.development.local` con las URLs y keys locales (`pnpm env:local`) y arranca la web y el dev server de Inngest, que registra las funciones de `/api/inngest`. Se corta con Ctrl-C.
+`pnpm dev:up` starts Supabase if it is not running, writes `apps/web/.env.development.local` with the local URLs and keys (`pnpm env:local`) and starts the web app and the Inngest dev server, which registers the functions in `/api/inngest`. Stop it with Ctrl-C.
 
-## Estructura
+## Structure
 
-| Paquete            | Qué tiene                                                                                                                                                      |
+| Package            | What it holds                                                                                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | Next.js 16 (App Router) + React 19 en Vercel `gru1`. Incluye `/api/inngest` (el chat llega con el Asistente)                                                   |
-| `packages/shared`  | Dinero (`Money` con string decimal y moneda). Tipos de la base generados en `src/db/generated/`. Llegan después: `pricing.ts`, `ai-cost.ts` y `prompt-text.ts` |
-| `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                                                   |
-| `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                                                  |
-| `packages/jobs`    | Cliente de Inngest, una función `ping` de prueba y las opciones de `/api/inngest`. El puerto `JobRunner` llega con Carga con IA                                |
-| `supabase/`        | Config, migraciones y tests pgTAP (`supabase/tests/`, corren en el job `database` de CI)                                                                       |
-| `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                                               |
+| `apps/web`         | Next.js 16 (App Router) + React 19 on Vercel `gru1`. Includes `/api/inngest` (the chat arrives with the "Asistente" stage)                                     |
+| `packages/shared`  | Money (`Money` as a decimal string with its currency). Database types generated in `src/db/generated/`. Later: `pricing.ts`, `ai-cost.ts` and `prompt-text.ts` |
+| `packages/sources` | `PortfolioSourcePort` and the `file_upload` adapter (arrive with the "Carga con IA" stage)                                                                     |
+| `packages/core`    | Valuation and portfolio functions used by the UI and the assistant (arrive with the "Patrimonio manual" stage)                                                 |
+| `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                              |
+| `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                           |
+| `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                                      |
 
-Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `transpilePackages`, así que no hay que buildearlos antes de levantar la web. Qué paquete puede depender de cuál lo verifica `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) sobre los `package.json`, y `inngest` solo se declara en `packages/jobs` y `apps/web`. El chequeo incluye el `package.json` de la raíz, porque todos los paquetes ven su `node_modules`; no importes otro paquete con rutas relativas (`../../jobs/src`).
+Packages export their TypeScript sources and `apps/web` compiles them with `transpilePackages`, so they don't need a build before starting the web app. Which package may depend on which is checked by `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) over the `package.json` files, and `inngest` is declared only in `packages/jobs` and `apps/web`. The check includes the root `package.json`, because every package sees its `node_modules`; don't import another package through relative paths (`../../jobs/src`).
 
-## Tests y chequeos
+## Tests and checks
 
 ```bash
-pnpm check          # typecheck + lint de todos los paquetes
-pnpm test           # tests de todo
-pnpm turbo:affected # solo lo que cambió contra origin/staging
-pnpm format         # prettier sobre lo cambiado
+pnpm check          # typecheck + lint of every package
+pnpm test           # every test
+pnpm turbo:affected # only what changed against origin/staging
+pnpm format         # prettier over what changed
 ```
 
-Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, el mismo chequeo sobre el mensaje en `commit-msg`, y en el pre-push el chequeo sobre los commits, autores y nombre de cada rama que subís, más typecheck, lint y tests de lo afectado. CI repite todo eso, más `pnpm audit`, los límites entre paquetes y el job `database` (migraciones append-only y en orden, tipos al día y pgTAP).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (append-only and ordered migrations, up-to-date types and pgTAP).
 
-## Ramas, commits y PRs
+## Language
 
-- `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`. Al hacer merge se despliega solo a staging.
-- **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción va a salir con el workflow _Promote to production_ (PLA-13), que va a marcar el commit con el tag `production-latest`. No hay `main`.
-- Commits y títulos de PR en Conventional Commits, menos de 70 caracteres. Migraciones destructivas: `[DESTRUCTIVE]` al principio del título.
-- El cuerpo del PR arranca con `## Intent` y sigue el template de `.github/pull_request_template.md`.
-- Se permiten los trailers de co-autor de Claude Code (`Co-Authored-By:`).
+Everything in the repo is English: code, identifiers, comments, test names, migrations, scripts, developer-facing messages (thrown errors, logs, CI), docs, skills, rules, templates, commits, branch names and PRs. Spanish from Argentina with voseo is only for what a Plant user reads: UI copy and app metadata, emails, assistant answers and the bug-report form (`.github/ISSUE_TEMPLATE/error.yml`). Fixtures and assertions that mirror user-facing text keep it as the user sees it. Validation messages in packages are English; the UI maps them to its own copy. Linear stays in Spanish, so stage names and Linear headings are quoted as written there.
+
+## Branches, commits and PRs
+
+- `staging` is the only working branch and it is protected. Work on your own branch named with the Linear key (`feat/pla-12-job-runner`) and open a PR to `staging`. A merge deploys to staging automatically.
+- **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
+- A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
+- PR titles use the same format with the Linear key, and PRs are merged with Squash and merge, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title.
+- The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase
 
-**Nunca corras `supabase db push`.** Las migraciones van a llegar a staging por CI en cada merge (PLA-11).
+**Never run `supabase db push`.** Migrations will reach staging through CI on every merge (PLA-11).
 
 ```bash
-pnpm exec supabase migration new <nombre>
-pnpm db:reset                       # rehace la base local desde las migraciones
-pnpm db:generate:supabase-types     # después de cada migración; el pre-push falla si quedan viejos
+pnpm exec supabase migration new <name>
+pnpm db:reset                       # rebuilds the local database from the migrations
+pnpm db:generate:supabase-types     # after every migration; pre-push fails if they are stale
 ```
 
-- Una migración aplicada en staging es de solo lectura: los cambios van en una migración nueva.
-- RLS en cada tabla desde que se crea, con `user_id = (select auth.uid())` en `USING` y `WITH CHECK`.
-- "Automatically expose new tables" está apagado (`auto_expose_new_tables = false` en `supabase/config.toml` y en el dashboard): cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
-- Cada tabla arranca con `REVOKE ALL` y `authenticated` escribe solo con grants por columna, nunca sobre `user_id`. La forma completa de las tablas con dueño está en `docs/decisiones.md`; el piso de pgTAP verifica una parte y el test de dos usuarios de cada tabla, el resto.
-- `REVOKE ... FROM PUBLIC, anon, authenticated` explícito en las funciones, y `SECURITY DEFINER` siempre con `SET search_path`.
-- Plata en `numeric` en Postgres y como string decimal en el contrato, nunca en float. Cada monto lleva su moneda.
+- A migration applied on staging is read-only: changes go in a new migration.
+- RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`.
+- "Automatically expose new tables" is off (`auto_expose_new_tables = false` in `supabase/config.toml` and in the dashboard): every migration makes an explicit `GRANT` to `authenticated` with only the operations the app uses. Never to `anon`.
+- Every table starts with `REVOKE ALL`, and `authenticated` writes only through column-level grants, never on `user_id`. The full shape of owned tables is in `docs/decisions.md`; the pgTAP floor checks part of it and each table's two-user test checks the rest.
+- Explicit `REVOKE ... FROM PUBLIC, anon, authenticated` on functions, and `SECURITY DEFINER` always with `SET search_path`.
+- Money as `numeric` in Postgres and as a decimal string in the contract, never as a float. Every amount carries its currency.
 
-## Variables de entorno
+## Environment variables
 
-- `apps/web/.env.local` sale **solo** de `vercel env pull apps/web/.env.local`; no lo edites a mano.
-- `apps/web/.env.development.local` lo escribe `pnpm env:local` con Supabase local.
-- `.env.example` lista los nombres sin valores. Si sumás una variable, agregala ahí y en cada plataforma.
+- `apps/web/.env.local` comes **only** from `vercel env pull apps/web/.env.local`; don't edit it by hand.
+- `apps/web/.env.development.local` is written by `pnpm env:local` with local Supabase.
+- `.env.example` lists the names without values. If you add a variable, add it there and on every platform.
 
-## Repo público
+## Public repo
 
-- Nunca entra un `.env`, una key, un documento real, datos personales, el plan ni los análisis internos. Los fixtures de tests son inventados.
-- No se nombra la app de referencia de la que se portan patrones: ni en código, comentarios, commits, ramas, PRs, skills ni docs. Se habla de "la app de referencia" o directamente del patrón. `pnpm check:forbidden-words` lo verifica si tenés `FORBIDDEN_WORDS` en tu shell.
-- Actions con `permissions: contents: read`, fijadas por SHA y nunca `pull_request_target` con checkout del PR.
+- Never commit a `.env`, a key, a real document, personal data, the plan or the internal analyses. Test fixtures are made up.
+- The reference app that patterns are ported from is never named: not in code, comments, commits, branches, PRs, skills or docs. Say "the reference app" or describe the pattern. `pnpm check:forbidden-words` checks it if you have `FORBIDDEN_WORDS` in your shell.
+- Actions with `permissions: contents: read`, pinned by SHA, and never `pull_request_target` with a checkout of the PR.
 
-## Producto
+## Product
 
-- Toda la UI va en español de Argentina con voseo. Números en formato `es-AR` (`$ 1.234.567,89`, `US$ 12.345,67`).
-- El asistente explica, resume y compara. **Nunca recomienda comprar o vender** y muestra el aviso de que no es asesoramiento financiero.
-- Los números de los gráficos nunca salen del modelo: el servidor carga los datos y arma el spec de Vega-Lite.
-- El texto de documentos y del usuario pasa por `prompt-text.ts` y se trata como no confiable. Las tools del asistente son de solo lectura y filtran por el usuario de la sesión.
-- La IA ignora DNI, CUIT y CBU. Nunca se loguean montos, tenencias, CUIT, tokens ni el JSON extraído.
-- Si algo no está especificado, elegí la opción más simple y anotala en `docs/decisiones.md`.
+- All user-facing UI is in Spanish from Argentina with voseo (dev-only strings hidden in production are English). Numbers in `es-AR` format (`$ 1.234.567,89`, `US$ 12.345,67`).
+- The assistant explains, summarizes and compares. It **never recommends buying or selling** and shows the notice that it is not financial advice.
+- Chart numbers never come from the model: the server loads the data and builds the Vega-Lite spec.
+- Text from documents and from the user goes through `prompt-text.ts` and is treated as untrusted. The assistant's tools are read-only and filter by the session's user.
+- The AI ignores DNI, CUIT and CBU. Amounts, holdings, CUIT, tokens and the extracted JSON are never logged.
+- If something is not specified, pick the simplest option and record it in `docs/decisions.md`.
 
-## Comentarios y prosa de PRs
+## Comments and PR prose
 
-No defiendas una decisión que nadie cuestionaría. Antes de explicar por qué algo _no está_, o por qué no se tomó una alternativa, preguntate: ¿un lector competente asumiría que debería estar y abriría un bug si faltara? Si sí, explicalo. Si no, borralo: la explicación solo planta la idea que responde.
+Don't defend a decision nobody would question. Before explaining why something is _not there_, or why an alternative was not taken, ask yourself: would a competent reader assume it should be there and file a bug if it were missing? If yes, explain it. If not, delete it: the explanation only plants the idea it answers.
 
-Lo mismo para cuerpos de PR y mensajes de commit, más: describí el estado actual del cambio y por qué, no cómo se llegó. Nada de narrar iteraciones ("arreglado en el segundo commit", "atendí la review") ni stats del diff: GitHub ya los muestra.
+The same goes for PR bodies, plus: describe the current state of the change and why, not how you got there. No narrating iterations ("fixed in the second commit", "addressed the review") and no diff stats: GitHub already shows them.

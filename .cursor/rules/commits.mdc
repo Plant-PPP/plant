@@ -1,12 +1,12 @@
 ---
-description: Commits y PRs en Conventional Commits
+description: Commits and PRs in Conventional Commits
 alwaysApply: true
 ---
 
 # Commits
 
-- Conventional Commits, asunto de menos de 70 caracteres: `feat(web): carga manual de tenencias`.
-- Migraciones destructivas: `[DESTRUCTIVE]` al principio del título del PR.
-- El cuerpo del PR arranca con `## Intent`.
-- Se permiten los trailers de co-autor de Claude Code (`Co-Authored-By:`).
-- Describí el estado actual y por qué, no cómo se llegó.
+- A commit is a single Conventional Commits subject line in English, under 70 characters: `feat(web): add manual holdings entry (PLA-26)`. No body and no trailers (`Co-Authored-By:`, `Claude-Session:`).
+- PR titles use the same format with the Linear key; PRs are merged with Squash and merge.
+- Destructive migrations: `[DESTRUCTIVE]` at the start of the PR title.
+- The PR body starts with `## Intent`.
+- Describe the current state and why, not how you got there.

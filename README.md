@@ -1,17 +1,17 @@
 # Plant
 
-Todo tu patrimonio, en pesos y en dólares. Plant es una web app para inversores argentinos: subís lo que ya tenés (PDF del broker, capturas, CSV o Excel), la IA arma tu cartera, la revisás y la confirmás. Es solo lectura: nunca opera ni mueve plata.
+Your whole net worth, in pesos and in dollars. Plant is a web app for Argentine investors: you upload what you already have (broker PDF, screenshots, CSV or Excel), the AI builds your portfolio, and you review and confirm it. It is read-only: it never trades or moves money.
 
-## Arrancar
+## Getting started
 
 ```bash
 pnpm install
 pnpm preflight
-pnpm dev:up      # Supabase local, web en http://localhost:3000 e Inngest en http://localhost:8288
+pnpm dev:up      # local Supabase, web on http://localhost:3000 and Inngest on http://localhost:8288
 ```
 
-Necesitás Node 22 o superior, pnpm y Docker. Todo lo demás (estructura, comandos, ramas, migraciones y reglas) está en [`CLAUDE.md`](CLAUDE.md).
+You need Node 22 or newer, pnpm and Docker. Everything else (structure, commands, branches, migrations and rules) is in [`CLAUDE.md`](CLAUDE.md).
 
-## Ramas
+## Branches
 
-Ramas propias → PR a `staging` → deploy automático a staging. Producción va a salir con el workflow _Promote to production_ (PLA-13), que marca el commit con el tag `production-latest`.
+Your own branch → PR to `staging` → automatic deploy to staging. Production will ship through the _Promote to production_ workflow (PLA-13), which tags the commit `production-latest`.

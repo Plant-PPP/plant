@@ -2,7 +2,7 @@
   "name": "@plant/shared",
   "version": "0.0.0",
   "private": true,
-  "description": "Tipos y utilidades compartidas. Hoy: dinero como string decimal con moneda.",
+  "description": "Shared types and utilities. Today: money as a decimal string with its currency.",
   "type": "module",
   "sideEffects": false,
   "exports": {
