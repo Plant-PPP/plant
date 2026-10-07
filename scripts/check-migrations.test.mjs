@@ -66,7 +66,8 @@ const version = (days) =>
  * A repo with `merged` on `staging`, then a `feature` branch where `change`
  * edits the tree; returns the exit code and output of `script` run from `from`
  * against `base`, or against the base `change` returns; `afterCommit` it
- * returns runs on the repo before the script. `env` adds to ENV.
+ * returns runs on the repo before the script. `env` adds to ENV; `input` is
+ * the script's stdin.
  */
 const check = (
   change,
@@ -76,6 +77,7 @@ const check = (
     from = ".",
     script = SCRIPT,
     env = {},
+    input = "",
   } = {},
 ) => {
   const cwd = mkdtempSync(join(tmpdir(), "check-migrations-"));
@@ -100,6 +102,7 @@ const check = (
     const r = spawnSync("bash", [script, returned?.base ?? base], {
       cwd: join(cwd, from),
       env: { ...ENV, ...env },
+      input,
       encoding: "utf8",
       timeout: 30_000,
     });
@@ -255,6 +258,11 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
   for (const statement of [
     "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "/* unused */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "-- squawk-ignore prefer-robust-stmts\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "REINDEX INDEX\n  CONCURRENTLY public.fixture_runs_user_id_idx;",
+    // The exemption turns off squawk's own check on a concurrent build.
+    "-- squawk-ignore ban-concurrent-index-creation-in-transaction, prefer-robust-stmts\nCREATE INDEX CONCURRENTLY fixture_runs_ran_at_idx ON public.fixture_runs (ran_at);",
+    "-- squawk-ignore ban-concurrent-index-creation-in-transaction, prefer-robust-stmts\nCREATE UNIQUE INDEX CONCURRENTLY fixture_runs_id_idx ON public.fixture_runs (id);",
     "REINDEX INDEX CONCURRENTLY public.fixture_runs_user_id_idx;",
     "vacuum public.fixture_runs;",
     "CLUSTER public.fixture_runs USING fixture_runs_pkey;",
@@ -267,6 +275,17 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
     assert.equal(code, 1, statement);
     assert.match(output, /all-or-nothing/);
   }
+});
+
+test("a concurrent index statement beside a single other fails", () => {
+  const { code, output } = check(({ write }) =>
+    write(
+      `${MIGRATIONS}/20260106000000_new.sql`,
+      "SET lock_timeout = '5s';\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;\n",
+    ),
+  );
+  assert.equal(code, 1);
+  assert.match(output, /all-or-nothing/);
 });
 
 test("VACUUM, CLUSTER or ALTER SYSTEM alone fails", () => {
@@ -288,7 +307,7 @@ test("a lone concurrent index drop passes", () => {
     write(
       `${MIGRATIONS}/20260106000000_drop_index.sql`,
       "-- squawk-ignore require-lock-timeout, require-statement-timeout, prefer-robust-stmts\n" +
-        "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;\n",
+        "DROP INDEX CONCURRENTLY\n  IF EXISTS public.fixture_runs_user_id_idx;\n",
     ),
   );
   assert.equal(code, 0, output);
@@ -297,6 +316,8 @@ test("a lone concurrent index drop passes", () => {
 test("a file-wide squawk exemption fails", () => {
   for (const exemption of [
     "-- squawk-ignore-file",
+    "--squawk-ignore-file",
+    "-- squawk-ignore-file require-lock-timeout, require-statement-timeout",
     "/* squawk-ignore-file */",
   ]) {
     const { code, output } = check(({ write }) =>
@@ -337,7 +358,7 @@ test("a long first line does not slow the check down", () => {
   const { code, output } = check(({ write }) =>
     write(
       `${MIGRATIONS}/20260106000000_long_line.sql`,
-      `-- ${"x".repeat(1_000_000)}\n${VALID}`,
+      `-- ${"x".repeat(4_000_000)}\n${VALID}`,
     ),
   );
   assert.equal(code, 0, output);
@@ -374,6 +395,23 @@ test("a misnamed migration fails", () => {
     assert.equal(code, 1, name);
     assert.match(output, /14-digit timestamp/);
   }
+});
+
+test("a change with only misnamed migrations does not lint stdin", () => {
+  const { code, output } = check(
+    ({ write }) => write(`${MIGRATIONS}/2026_misnamed.sql`),
+    { input: NO_TIMEOUT },
+  );
+  assert.equal(code, 1);
+  assert.doesNotMatch(output, /require-lock-timeout/);
+});
+
+test("a merged file the CLI would skip does not set the latest version", () => {
+  const { code, output } = check(
+    ({ write }) => write(`${MIGRATIONS}/20260201000000_new.sql`),
+    { merged: [...MERGED, `${MIGRATIONS}/20260301000000_skipped.SQL`] },
+  );
+  assert.equal(code, 0, output);
 });
 
 test("a missing squawk fails", () => {

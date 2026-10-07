@@ -89,3 +89,12 @@ test("pg_version matches supabase/config.toml major_version", () => {
   assert.ok(pgVersion, "pg_version not found in .squawk.toml");
   assert.equal(pgVersion.split(".")[0], major);
 });
+
+// The fixtures pin only the rules they exercise; turning off any other default
+// rule would pass them.
+test(".squawk.toml turns off no rule", () => {
+  assert.doesNotMatch(
+    readFileSync(CONFIG, "utf8"),
+    /^\s*(excluded_rules|disable_rules)\s*=/m,
+  );
+});
