@@ -63,5 +63,5 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 ## Residual risk
 
 - `audit_log` keeps the `user_id` after the account is deleted (no FK). It is an opaque id with no personal data; it is reviewed with the lawyer (PLA-56).
-- Deleting the account deletes its `consents` history in cascade, which is the proof of what it accepted. How long it must be kept after the account is closed is reviewed with the lawyer (PLA-56).
+- Deleting the account deletes its `consents` history in cascade, which is the proof of what the user accepted. How long it must be kept after the account is closed is reviewed with the lawyer (PLA-56).
 - The table owner (`postgres`) can bypass the triggers from any session (`DISABLE TRIGGER` or `session_replication_role = replica`), with no trace in the migrations. Accepted: it is the same role that administers Supabase.

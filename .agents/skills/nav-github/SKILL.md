@@ -122,7 +122,7 @@ root cause if known. Reference the Linear issue (PLA-NNN) if one exists.>
 - Title: short (<70 chars), Conventional Commits style (`fix:`, `feat:`), `[DESTRUCTIVE]` prefix if a destructive migration is included.
 - Postfix the title with the branch's Linear issue key in parentheses — e.g. `(PLA-12)` — as the very last token, so the issue is scannable from the PR list (e.g. `feat(jobs): add JobRunner port with Inngest adapter (PLA-12)`). Omit only when the branch genuinely has no Linear issue.
 - Commit messages follow CLAUDE.md (Branches, commits and PRs).
-- Stacked PRs (a dependent chain reviewed/merged together) get an `(N/X)` marker so they read as one set — placed as a **prefix** at the very start of the title, before the conventional-commit type (e.g. `(3/5) fix(import): …`). Number by dependency/merge order (1 = base off `staging`). Keep the markers in sync if the set grows or is reordered.
+- Stacked PRs (a dependent chain reviewed/merged together) get an `(N/X)` marker so they read as one set — placed as a **prefix** at the very start of the title, before the conventional-commit type (e.g. `(3/5) fix(import): …`). Number by dependency/merge order (1 = base off `staging`). Keep the markers in sync if the set grows or is reordered. Drop the `(N/X)` marker from the squash commit title when merging.
 - Open PRs as **draft** by default, base `staging`.
 - If an existing PR of mine lacks an Intent section, write one from the diff/commits and prepend it — preserve the rest of the body.
 

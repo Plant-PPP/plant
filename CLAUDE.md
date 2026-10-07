@@ -48,10 +48,10 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 
 ## Branches, commits and PRs
 
-- `staging` is the only working branch and it is protected. Work on your own branch named with the Linear key (`feat/pla-12-job-runner`) and open a PR to `staging`. A merge deploys to staging automatically.
+- `staging` is the only working branch and it is protected. Work on your own branch named with the Linear key (`feat/pla-12-job-runner`) and open a PR to `staging`. A merge deploys automatically, and only to staging.
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
-- PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Merge with Squash and merge; with the repo set to use the PR title and an empty message, the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title.
+- PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Merge with Squash and merge, keep the PR title as the commit title and clear the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title (the only prefix allowed before the Conventional Commits type).
 - The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase
@@ -96,4 +96,4 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 
 Don't defend a decision nobody would question. Before explaining why something is _not there_, or why an alternative was not taken, ask yourself: would a competent reader assume it should be there and file a bug if it were missing? If yes, explain it. If not, delete it: the explanation only plants the idea it answers.
 
-The same goes for PR bodies, plus: describe the current state of the change and why, not how you got there. No narrating iterations ("fixed in the second commit", "addressed the review") and no diff stats: GitHub already shows them.
+The same goes for PR titles, PR bodies and commit subjects, plus: describe the current state of the change and why, not how you got there. No narrating iterations ("fixed in the second commit", "addressed the review") and no diff stats: GitHub already shows them.
