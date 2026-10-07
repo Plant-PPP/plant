@@ -54,7 +54,7 @@ Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-wor
 
 ## Supabase
 
-**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that changes them, after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
+**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that changes them (or `ci.yml`), after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
 
 ```bash
 pnpm exec supabase migration new <nombre>

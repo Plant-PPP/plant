@@ -149,12 +149,13 @@ jobs:
           persist-credentials: false
 
       # deploy-migrations, and the approval it asks for, runs only on a push
-      # that touches supabase/migrations/. An unusable base counts as a change.
+      # that touches supabase/migrations/ or this workflow, so a change to the
+      # deploy applies whatever is pending. An unusable base counts as a change.
       - name: Does this push change migrations
         id: migrations
         if: github.event_name == 'push'
         run: |
-          if git cat-file -e "$BASE^{commit}" 2>/dev/null && git diff --quiet "$BASE" HEAD -- supabase/migrations/; then
+          if git cat-file -e "$BASE^{commit}" 2>/dev/null && git diff --quiet "$BASE" HEAD -- supabase/migrations/ .github/workflows/ci.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
