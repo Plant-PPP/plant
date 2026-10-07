@@ -128,9 +128,9 @@ jobs:
           TURBO_SCM_BASE: ${{ steps.base.outputs.ref }}
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
 
-  # Runs in parallel with `ci` on every PR and push: the new migrations'
-  # checks, a fresh local Postgres with every migration applied, the types
-  # check and pgTAP.
+  # Every PR and push: the migration checks and their script tests, then a
+  # fresh local Postgres with every migration applied, the types check and
+  # pgTAP.
   database:
     name: Database (migrations, types, pgTAP, plpgsql_check)
     runs-on: ubuntu-latest
@@ -162,7 +162,7 @@ jobs:
       # New migrations sort after the merged ones and pass squawk. The push run
       # repeats it because two PRs green on their own can land out of order, and
       # deploy-migrations needs this job.
-      - name: New migrations (name, order, squawk)
+      - name: New migrations (name, version, transaction, squawk)
         run: bash scripts/check-migrations.sh "$BASE"
 
       - name: Script tests (squawk config, migration checks)
@@ -197,13 +197,14 @@ jobs:
       # Deployed databases never re-run an applied migration, so an edited one
       # would only change fresh databases. Corrections go in a new, later
       # migration. On a push the change already landed; the PR is where it can
-      # be stopped. It runs last so a PR that breaks it on purpose (the
-      # procedure in docs/decisiones.md) still shows the rest of the job.
+      # be stopped. It runs last so a PR that breaks it on purpose (procedure 1
+      # in the PLA-11 entry of docs/decisiones.md) still shows the rest of the
+      # job.
       - name: Merged migrations are append-only
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: |
           set -o pipefail
-          mutated="$(git -c core.quotePath=false diff --name-status --find-renames --diff-filter=MDRCT "$BASE...HEAD" -- 'supabase/migrations/*.sql')"
+          mutated="$(git -c core.quotePath=false diff --name-status --find-renames --diff-filter=MDRCT "$BASE...HEAD" -- supabase/migrations/)"
           if [ -n "$mutated" ]; then
             echo "::error::Merged migrations are append-only, fix forward in a new migration:"
             echo "$mutated"
@@ -246,4 +247,5 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           [ -n "$SUPABASE_DB_URL" ] || { echo "::error::SUPABASE_DB_URL is not set in the supabase-staging environment"; exit 1; }
-          supabase db push --db-url "$SUPABASE_DB_URL"
+          # Migrations only: no Vault secrets from config.toml, and no prompt.
+          supabase db push --db-url "$SUPABASE_DB_URL" --skip-vault --yes

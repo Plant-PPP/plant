@@ -41,7 +41,7 @@ pnpm turbo:affected # solo lo que cambió contra origin/staging
 pnpm format         # prettier sobre lo cambiado
 ```
 
-Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (append-only migrations, new migrations' name, order and squawk, script tests, up-to-date types and pgTAP).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types and pgTAP).
 
 ## Ramas, commits y PRs
 

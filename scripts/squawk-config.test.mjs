@@ -35,6 +35,7 @@ const EXPECTED = {
   "pass-migration-header.sql": "pass",
   "fail-index-not-concurrent.sql": "require-concurrent-index-creation",
   "fail-missing-lock-timeout.sql": "require-lock-timeout",
+  "fail-missing-statement-timeout.sql": "require-statement-timeout",
   // included_rules = ["require-table-schema"].
   "fail-unqualified-table.sql": "require-table-schema",
   "pass-squawk-ignore.sql": "pass",

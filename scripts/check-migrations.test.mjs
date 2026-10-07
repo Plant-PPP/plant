@@ -7,6 +7,7 @@ import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  copyFileSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -63,17 +64,26 @@ const version = (days) =>
 
 /**
  * A repo with `merged` on `staging`, then a `feature` branch where `change`
- * edits the tree; returns the script's exit code and output against `base`,
- * or against the base `change` returns.
+ * edits the tree; returns the exit code and output of `script` run from `from`
+ * against `base`, or against the base `change` returns. `env` adds to ENV.
  */
-const check = (change, { base = "staging", merged = MERGED } = {}) => {
+const check = (
+  change,
+  {
+    base = "staging",
+    merged = MERGED,
+    from = ".",
+    script = SCRIPT,
+    env = {},
+  } = {},
+) => {
   const cwd = mkdtempSync(join(tmpdir(), "check-migrations-"));
   try {
     git(cwd, "init", "-q", "-b", "staging");
     mkdirSync(join(cwd, MIGRATIONS), { recursive: true });
     for (const path of merged) writeFileSync(join(cwd, path), VALID);
     git(cwd, "add", ".");
-    git(cwd, "commit", "-q", "-m", "base");
+    git(cwd, "commit", "-q", "--allow-empty", "-m", "base");
     git(cwd, "checkout", "-q", "-b", "feature");
     const returned = change({
       write: (path, sql = VALID) => writeFileSync(join(cwd, path), sql),
@@ -82,10 +92,11 @@ const check = (change, { base = "staging", merged = MERGED } = {}) => {
     });
     git(cwd, "add", "-A");
     git(cwd, "commit", "-q", "--allow-empty", "-m", "change");
-    const r = spawnSync("bash", [SCRIPT, returned?.base ?? base], {
-      cwd,
-      env: ENV,
+    const r = spawnSync("bash", [script, returned?.base ?? base], {
+      cwd: join(cwd, from),
+      env: { ...ENV, ...env },
       encoding: "utf8",
+      timeout: 30_000,
     });
     return { code: r.status, output: `${r.stdout}${r.stderr}` };
   } finally {
@@ -102,6 +113,37 @@ test("a new valid migration passes", () => {
     write(`${MIGRATIONS}/20260106000000_new.sql`),
   );
   assert.equal(code, 0, output);
+});
+
+test("the first migration passes", () => {
+  const { code, output } = check(
+    ({ write }) => write(`${MIGRATIONS}/20260106000000_new.sql`),
+    { merged: [] },
+  );
+  assert.equal(code, 0, output);
+});
+
+test("a name with uppercase letters and hyphens passes", () => {
+  const { code, output } = check(({ write }) =>
+    write(`${MIGRATIONS}/20260106000000_Add-Note.sql`),
+  );
+  assert.equal(code, 0, output);
+});
+
+test("a file outside supabase/migrations/ is not checked", () => {
+  const { code, output } = check(({ write }) =>
+    write("supabase/seed.sql", NO_TIMEOUT),
+  );
+  assert.equal(code, 0, output);
+});
+
+test("every new migration goes through squawk", () => {
+  const { code, output } = check(({ write }) => {
+    write(`${MIGRATIONS}/20260106000000_a.sql`);
+    write(`${MIGRATIONS}/20260107000000_b.sql`, NO_TIMEOUT);
+  });
+  assert.equal(code, 1);
+  assert.match(output, /require-lock-timeout/);
 });
 
 test("a version before the latest merged one fails", () => {
@@ -129,6 +171,13 @@ test("a merged migration with an accented name still sets the latest version", (
   assert.match(output, /after the latest one in staging \(20260301000000\)/);
 });
 
+test("a version less than a day in the future passes", () => {
+  const { code, output } = check(({ write }) =>
+    write(`${MIGRATIONS}/${version(0.5)}_soon.sql`),
+  );
+  assert.equal(code, 0, output);
+});
+
 test("a version more than a day in the future fails", () => {
   const { code, output } = check(({ write }) =>
     write(`${MIGRATIONS}/${version(2)}_future.sql`),
@@ -137,12 +186,89 @@ test("a version more than a day in the future fails", () => {
   assert.match(output, /in the future/);
 });
 
-test("a misnamed migration fails", () => {
+test("a migration file the CLI would skip fails", () => {
+  for (const name of ["20260106000000_new.SQL", "20260106000000_new"]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/${name}`),
+    );
+    assert.equal(code, 1, name);
+    assert.match(output, /14-digit timestamp/);
+  }
+});
+
+test("two new migrations with one version fail", () => {
+  const { code, output } = check(({ write }) => {
+    write(`${MIGRATIONS}/20260106000000_a.sql`);
+    write(`${MIGRATIONS}/20260106000000_b.sql`);
+  });
+  assert.equal(code, 1);
+  assert.match(output, /share a version/);
+});
+
+test("a migration that opts out of the transaction fails", () => {
   const { code, output } = check(({ write }) =>
-    write(`${MIGRATIONS}/2026_misnamed.sql`),
+    write(
+      `${MIGRATIONS}/20260106000000_new.sql`,
+      `\uFEFF-- pg-delta: transaction=false\r\n${VALID}`,
+    ),
   );
   assert.equal(code, 1);
-  assert.match(output, /14-digit timestamp/);
+  assert.match(output, /one transaction/);
+});
+
+test("it checks the whole checkout from a subdirectory", () => {
+  const { code, output } = check(
+    ({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_no_timeout.sql`, NO_TIMEOUT),
+    { from: "supabase" },
+  );
+  assert.equal(code, 1);
+  assert.match(output, /require-lock-timeout/);
+});
+
+test("a misnamed migration fails", () => {
+  for (const name of [
+    "2026_misnamed.sql",
+    "202601060000000_long.sql",
+    "20260106000000_.sql",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/${name}`),
+    );
+    assert.equal(code, 1, name);
+    assert.match(output, /14-digit timestamp/);
+  }
+});
+
+test("a missing squawk fails", () => {
+  const dir = mkdtempSync(join(tmpdir(), "check-migrations-script-"));
+  try {
+    mkdirSync(join(dir, "scripts"));
+    copyFileSync(SCRIPT, join(dir, "scripts/check-migrations.sh"));
+    const { code, output } = check(
+      ({ write }) => write(`${MIGRATIONS}/20260106000000_new.sql`),
+      { script: join(dir, "scripts/check-migrations.sh") },
+    );
+    assert.equal(code, 1);
+    assert.match(output, /squawk not found/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a date that cannot compute the limit fails", () => {
+  const bin = mkdtempSync(join(tmpdir(), "check-migrations-bin-"));
+  try {
+    writeFileSync(join(bin, "date"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    const { code, output } = check(
+      ({ write }) => write(`${MIGRATIONS}/20260106000000_new.sql`),
+      { env: { PATH: `${bin}:${process.env.PATH}` } },
+    );
+    assert.equal(code, 1);
+    assert.match(output, /Could not compute/);
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
+  }
 });
 
 test("a name squawk would read as a glob fails", () => {
@@ -178,7 +304,7 @@ test("an edited merged migration is left to the append-only check", () => {
 });
 
 test("a base with no history in common fails", () => {
-  const { code } = check(({ git }) => ({
+  const { code, output } = check(({ git }) => ({
     base: git(
       "commit-tree",
       git("hash-object", "-w", "-t", "tree", "/dev/null"),
@@ -187,6 +313,7 @@ test("a base with no history in common fails", () => {
     ),
   }));
   assert.notEqual(code, 0);
+  assert.match(output, /merge base/);
 });
 
 test("the all-zero base of a new branch skips with a warning", () => {
