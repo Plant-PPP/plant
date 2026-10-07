@@ -31,6 +31,7 @@ const workspaceLines = readFileSync(
 const start = workspaceLines.indexOf("packages:") + 1;
 const globs = [];
 for (const line of workspaceLines.slice(start)) {
+  if (/^\s*(#.*)?$/.test(line)) continue;
   const entry = /^\s+-\s+"?([^"]+?)"?\s*$/.exec(line);
   if (!entry) break;
   globs.push(entry[1]);
@@ -39,15 +40,25 @@ if (start === 0 || globs.length === 0) {
   console.error("Could not read the packages globs in pnpm-workspace.yaml");
   process.exit(1);
 }
-const manifests = globs
-  .flatMap((glob) => {
-    if (!glob.endsWith("/*")) return [glob];
-    const parent = glob.slice(0, -2);
-    return readdirSync(new URL(`${parent}/`, root), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `${parent}/${entry.name}`);
-  })
-  .filter((dir) => existsSync(new URL(`${dir}/package.json`, root)));
+const manifests = globs.flatMap((glob) => {
+  const dirs = glob.endsWith("/*")
+    ? readdirSync(new URL(`${glob.slice(0, -2)}/`, root), {
+        withFileTypes: true,
+      })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => `${glob.slice(0, -2)}/${entry.name}`)
+    : [glob];
+  const found = dirs.filter((dir) =>
+    existsSync(new URL(`${dir}/package.json`, root)),
+  );
+  if (found.length === 0) {
+    console.error(
+      `No package matches "${glob}"; this script only knows "dir/*" and "dir"`,
+    );
+    process.exit(1);
+  }
+  return found;
+});
 
 const violations = [];
 for (const dir of manifests) {

@@ -5,7 +5,8 @@ ROOT=$(git rev-parse --show-toplevel)
 export TURBO_TELEMETRY_DISABLED=1
 
 if git show-ref --verify --quiet refs/remotes/origin/staging; then
-  merge_base="$(git merge-base HEAD origin/staging)"
+  # Empty when there is no shared history (an orphan branch).
+  merge_base="$(git merge-base HEAD origin/staging || true)"
 else
   merge_base=""
 fi
@@ -15,10 +16,21 @@ fi
 zero=0000000000000000000000000000000000000000
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue # deleting a remote branch
+  if [ "$(git cat-file -t "$local_sha")" = "tag" ]; then
+    # An annotated tag carries its own message; git log would only see the
+    # commit it points to.
+    tag_message=$(mktemp)
+    git cat-file tag "$local_sha" > "$tag_message"
+    status=0
+    FORBIDDEN_WORDS_MESSAGE_FILE="$tag_message" \
+      bash "$ROOT/scripts/check-forbidden-words.sh" || status=$?
+    rm -f "$tag_message"
+    [ "$status" -eq 0 ] || exit "$status"
+  fi
   if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
     range="$remote_sha..$local_sha"
-  elif [ -n "$merge_base" ]; then
-    range="$(git merge-base "$local_sha" origin/staging)..$local_sha"
+  elif ref_base="$(git merge-base "$local_sha" origin/staging 2>/dev/null)"; then
+    range="$ref_base..$local_sha"
   else
     range="$local_sha"
   fi
@@ -37,6 +49,8 @@ if [ -n "$merge_base" ] && git diff --diff-filter=A --name-only "$merge_base"...
   fi
 fi
 
+# From here on the checks run on the checked-out branch (HEAD), even when
+# the push names another ref; CI covers that ref.
 # Typecheck, lint and test the packages this branch affects, per the
 # dependency graph. Without an origin/staging ref (a single-branch clone, a
 # remote not named origin) there is no base, so fall back to the whole repo.

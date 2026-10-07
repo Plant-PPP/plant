@@ -1,19 +1,14 @@
-const ORIGINAL_ENV = process.env;
+import { loadWithEnv, restoreEnv } from "./testing";
 
 function loadClientMode(env: Record<string, string>): string {
-  process.env = { ...ORIGINAL_ENV, ...env };
-  let mode = "";
-  jest.isolateModules(() => {
+  return loadWithEnv(env, () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { inngest } = require("./client") as typeof import("./client");
-    mode = inngest.mode;
+    return inngest.mode;
   });
-  return mode;
 }
 
-afterEach(() => {
-  process.env = ORIGINAL_ENV;
-});
+afterEach(restoreEnv);
 
 describe("inngest client mode", () => {
   it("stays in cloud mode (signatures checked) outside development, even with INNGEST_DEV=1", () => {

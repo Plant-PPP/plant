@@ -7,12 +7,13 @@
 # where it is (commit ids, paths that do not match themselves, counts),
 # because CI logs of a public repo are public too.
 #
-# Optional (CI sets all three; the pre-push hook sets the last two):
+# Optional (CI sets the first three, pre-push sets RANGE and BRANCH, and
+# commit-msg sets MESSAGE_FILE):
 #   REQUIRE_FORBIDDEN_WORDS=1     fail instead of skipping when the list is unset
 #   FORBIDDEN_WORDS_RANGE=A..B    also check the commit messages in that range
 #   FORBIDDEN_WORDS_BRANCH=name   also check that branch name
-#   FORBIDDEN_WORDS_MESSAGE_FILE=path  check only that commit message (the
-#                                 commit-msg hook)
+#   FORBIDDEN_WORDS_MESSAGE_FILE=path  check only that message (commit-msg
+#                                 hook, annotated tags in pre-push)
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
@@ -59,8 +60,10 @@ report() {
 }
 
 if [ -n "${FORBIDDEN_WORDS_MESSAGE_FILE:-}" ]; then
-  message=$(grep -v '^#' "$FORBIDDEN_WORDS_MESSAGE_FILE" || true)
-  report "lines of the commit message" "$message"
+  # Lines starting with "#" count (git keeps them with -m); the diff that
+  # `git commit -v` appends below the scissors line does not.
+  message=$(sed '/^# -\{24\} >8 -\{24\}$/,$d' "$FORBIDDEN_WORDS_MESSAGE_FILE")
+  report "lines of the message" "$message"
   if [ "$found" -eq 1 ]; then exit 1; fi
   exit 0
 fi

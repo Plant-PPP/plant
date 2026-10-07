@@ -1,23 +1,19 @@
 import { createHmac } from "node:crypto";
 
-// Invented key in Inngest's format; never a real one.
-const KEY = `signkey-test-${"ab".repeat(32)}`;
-const ORIGINAL_ENV = process.env;
+import { loadWithEnv, restoreEnv, TEST_SIGNING_KEY as KEY } from "./testing";
+
 const ORIGINAL_FETCH = global.fetch;
 
 type Handler = (req: Request) => Promise<Response>;
 
 function loadHandler(env: Record<string, string | undefined>): Handler {
-  process.env = { ...ORIGINAL_ENV, NODE_ENV: "production", ...env };
-  let handler!: Handler;
-  jest.isolateModules(() => {
+  return loadWithEnv({ NODE_ENV: "production", ...env }, () => {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { serve } = require("inngest/edge") as typeof import("inngest/edge");
     const { serveOptions } = require("./index") as typeof import("./index");
     /* eslint-enable @typescript-eslint/no-require-imports */
-    handler = serve(serveOptions) as Handler;
+    return serve(serveOptions) as Handler;
   });
-  return handler;
 }
 
 function request(
@@ -55,7 +51,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   jest.restoreAllMocks();
-  process.env = ORIGINAL_ENV;
+  restoreEnv();
   global.fetch = ORIGINAL_FETCH;
 });
 

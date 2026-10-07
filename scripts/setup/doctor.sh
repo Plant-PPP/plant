@@ -20,7 +20,7 @@ if [ -d node_modules ]; then ok "Dependencias instaladas"; else bad "Dependencia
 
 if pnpm exec supabase --version >/dev/null 2>&1; then ok "Supabase CLI $(pnpm exec supabase --version)"; else bad "Supabase CLI" "pnpm install"; fi
 
-if [ -f apps/web/.env.development.local ]; then ok "apps/web/.env.development.local"; else bad "apps/web/.env.development.local" "pnpm env:local (con Supabase corriendo)"; fi
+if [ -f apps/web/.env.development.local ]; then ok "apps/web/.env.development.local"; else printf '  aviso apps/web/.env.development.local no existe: lo escribe `pnpm dev:up` (o `pnpm env:local` con Supabase corriendo)\n'; fi
 
 if [ -f apps/web/.env.local ]; then ok "apps/web/.env.local"; else printf '  aviso apps/web/.env.local no existe: las keys de IA salen de `vercel env pull apps/web/.env.local`\n'; fi
 
