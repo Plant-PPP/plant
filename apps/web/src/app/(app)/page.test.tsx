@@ -1,12 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import Home from "./page";
 
-const visibleText = (html: string) =>
-  html
-    .replace(/<h1 class="sr-only">[^<]*<\/h1>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .trim();
-
 describe("Resumen page in production", () => {
   const previous = process.env.VERCEL_ENV;
   beforeAll(() => {
@@ -18,6 +12,6 @@ describe("Resumen page in production", () => {
 
   it("shows an empty state like the other sections", async () => {
     const html = renderToStaticMarkup(await Home());
-    expect(visibleText(html)).not.toBe("");
+    expect(html).toMatch(/<p[^>]*>[^<]+<\/p>/);
   });
 });
