@@ -2,7 +2,7 @@
   "name": "@plant/core",
   "version": "0.0.0",
   "private": true,
-  "description": "Valuaci\u00f3n y funciones de cartera que usan la UI y el asistente.",
+  "description": "Valuación y funciones de cartera; llegan con Patrimonio manual.",
   "type": "module",
   "sideEffects": false,
   "exports": {

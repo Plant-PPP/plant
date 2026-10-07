@@ -69,13 +69,27 @@ describe("/api/inngest outside development", () => {
   it("rejects an unsigned sync without calling Inngest", async () => {
     const handler = loadHandler({ INNGEST_SIGNING_KEY: KEY });
     const res = await handler(request("PUT", "", { host: "evil.example" }));
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(401);
     expect(outbound).not.toHaveBeenCalled();
   });
 
   it("fails closed without a signing key", async () => {
     const handler = loadHandler({ INNGEST_SIGNING_KEY: undefined });
     expect((await handler(request("POST", "{}"))).status).toBe(500);
+  });
+
+  it("accepts a signed in-band sync, as the dashboard sends it", async () => {
+    const handler = loadHandler({ INNGEST_SIGNING_KEY: KEY });
+    const body = JSON.stringify({ url: "https://plant.test/api/inngest" });
+    const res = await handler(
+      request("PUT", body, {
+        "x-inngest-sync-kind": "in_band",
+        "x-inngest-signature": sign(body),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-inngest-sync-kind")).toBe("in_band");
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("answers a signed introspection", async () => {

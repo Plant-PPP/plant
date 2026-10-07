@@ -35,15 +35,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # Needs only the checked-out tree, so it runs before anything expensive.
-      - name: Every actions/checkout sets persist-credentials
-        run: python3 .github/scripts/check-checkout-persist-credentials.py
-
-      # A green gate run prints "ok" and proves nothing about the parser itself,
-      # so the parser gets its own fixtures.
-      - name: Checkout-credentials gate self-test
-        run: python3 .github/scripts/check_checkout_persist_credentials_test.py
-
       # PR runs diff against the PR's base branch; push runs diff against the
       # previous staging head. A degenerate push base (branch creation, a head
       # force-pushed out of history) falls back to the root commit, which makes
@@ -68,25 +59,27 @@ jobs:
 
       # The repo is public. The word list is a secret so it is never spelled
       # out in the repo. Secrets do not reach fork or Dependabot PRs, so only
-      # those may skip; everywhere else a missing secret fails the run.
+      # those may skip; everywhere else a missing secret fails the run. It runs
+      # before any other script from the branch so none can tamper with the
+      # tools it calls. It only guards against leaking the word by accident:
+      # anyone who can push a branch can also edit this workflow and read the
+      # secret.
       - name: No forbidden words in files, names, commits or branch
         env:
           FORBIDDEN_WORDS: ${{ secrets.FORBIDDEN_WORDS }}
           REQUIRE_FORBIDDEN_WORDS: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '1' || '' }}
           FORBIDDEN_WORDS_RANGE: ${{ steps.base.outputs.ref }}..HEAD
           FORBIDDEN_WORDS_BRANCH: ${{ github.head_ref || github.ref_name }}
-          BASE_REF: ${{ steps.base.outputs.ref }}
-        # The step holds the secret, so on PRs it runs the base branch's copy
-        # of the script: a PR cannot rewrite it to print the list.
-        run: |
-          set -euo pipefail
-          script=scripts/check-forbidden-words.sh
-          if [ "${{ github.event_name }}" = "pull_request" ] \
-            && git cat-file -e "$BASE_REF:$script" 2>/dev/null; then
-            git show "$BASE_REF:$script" > "$RUNNER_TEMP/check-forbidden-words.sh"
-            script="$RUNNER_TEMP/check-forbidden-words.sh"
-          fi
-          bash "$script"
+        run: bash scripts/check-forbidden-words.sh
+
+      # Needs only the checked-out tree, so it runs before anything expensive.
+      - name: Every actions/checkout sets persist-credentials
+        run: python3 .github/scripts/check-checkout-persist-credentials.py
+
+      # A green gate run prints "ok" and proves nothing about the parser itself,
+      # so the parser gets its own fixtures.
+      - name: Checkout-credentials gate self-test
+        run: python3 .github/scripts/check_checkout_persist_credentials_test.py
 
       - name: Setup pnpm
         # Version is read from the root package.json "packageManager" field.

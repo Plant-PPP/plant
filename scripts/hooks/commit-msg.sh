@@ -3,10 +3,5 @@
 # exists, so it gets its own check.
 set -euo pipefail
 
-pattern="${FORBIDDEN_WORDS:-}"
-[ -z "$pattern" ] && exit 0
-
-if grep -v '^#' "$1" | grep -qiE -- "$pattern"; then
-  echo "[forbidden-words] The commit message contains a forbidden word." >&2
-  exit 1
-fi
+ROOT=$(git rev-parse --show-toplevel)
+FORBIDDEN_WORDS_MESSAGE_FILE="$1" bash "$ROOT/scripts/check-forbidden-words.sh"

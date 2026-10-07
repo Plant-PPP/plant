@@ -2,7 +2,7 @@
   "name": "@plant/jobs",
   "version": "0.0.0",
   "private": true,
-  "description": "Puerto JobRunner y orquestadores de Inngest.",
+  "description": "Cliente de Inngest y las opciones del endpoint. El puerto JobRunner llega con Carga con IA.",
   "type": "module",
   "sideEffects": false,
   "exports": {

@@ -25,7 +25,7 @@ pnpm dev:up                         # Supabase local + web en :3000 + Inngest de
 | `packages/shared`  | Dinero (`Money` con string decimal y moneda). Llegan después: `pricing.ts`, `ai-cost.ts`, `prompt-text.ts` y los tipos de la base |
 | `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                      |
 | `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                     |
-| `packages/jobs`    | Cliente de Inngest y una función `ping` de prueba. El puerto `JobRunner` llega con Carga con IA                                   |
+| `packages/jobs`    | Cliente de Inngest, una función `ping` de prueba y las opciones de `/api/inngest`. El puerto `JobRunner` llega con Carga con IA   |
 | `supabase/`        | Config. Las migraciones y los tests pgTAP llegan con la base (PLA-16)                                                             |
 | `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                  |
 
@@ -40,7 +40,7 @@ pnpm turbo:affected # solo lo que cambió contra origin/staging
 pnpm format         # prettier sobre lo cambiado
 ```
 
-Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, y typecheck, lint y tests de lo afectado en el pre-push. CI repite todo eso, más `pnpm audit`, los límites entre paquetes y el chequeo de palabras prohibidas sobre los mensajes de commit y el nombre de la rama.
+Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, el mismo chequeo sobre el mensaje en `commit-msg`, y en el pre-push el chequeo sobre los commits, autores y nombre de cada rama que subís, más typecheck, lint y tests de lo afectado. CI repite todo eso, más `pnpm audit` y los límites entre paquetes.
 
 ## Ramas, commits y PRs
 

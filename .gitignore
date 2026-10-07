@@ -168,3 +168,4 @@ evals/docs-locales/
 .netrc
 credentials*.json
 service-account*.json
+packages/shared/src/db/generated/database.types.ts.*

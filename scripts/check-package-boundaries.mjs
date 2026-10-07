@@ -20,16 +20,34 @@ const allowed = {
   "@plant/evals": ["@plant/shared", "@plant/sources", "@plant/core"],
 };
 const engineAllowed = new Set(["@plant/jobs", "@plant/web"]);
-// Every workspace package, so a new one without an entry in `allowed` fails.
+// Every workspace package, from the `packages:` globs in pnpm-workspace.yaml
+// (the "dir/*" and plain "dir" forms), so a new one without an entry in
+// `allowed` fails.
 const root = new URL("../", import.meta.url);
-const manifests = [
-  ...["apps", "packages"].flatMap((parent) =>
-    readdirSync(new URL(`${parent}/`, root), { withFileTypes: true })
+const workspaceLines = readFileSync(
+  new URL("pnpm-workspace.yaml", root),
+  "utf8",
+).split("\n");
+const start = workspaceLines.indexOf("packages:") + 1;
+const globs = [];
+for (const line of workspaceLines.slice(start)) {
+  const entry = /^\s+-\s+"?([^"]+?)"?\s*$/.exec(line);
+  if (!entry) break;
+  globs.push(entry[1]);
+}
+if (start === 0 || globs.length === 0) {
+  console.error("Could not read the packages globs in pnpm-workspace.yaml");
+  process.exit(1);
+}
+const manifests = globs
+  .flatMap((glob) => {
+    if (!glob.endsWith("/*")) return [glob];
+    const parent = glob.slice(0, -2);
+    return readdirSync(new URL(`${parent}/`, root), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => `${parent}/${entry.name}`),
-  ),
-  "evals",
-].filter((dir) => existsSync(new URL(`${dir}/package.json`, root)));
+      .map((entry) => `${parent}/${entry.name}`);
+  })
+  .filter((dir) => existsSync(new URL(`${dir}/package.json`, root)));
 
 const violations = [];
 for (const dir of manifests) {
@@ -53,7 +71,8 @@ for (const dir of manifests) {
     if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {
       violations.push(`${name} may not depend on ${dep}`);
     }
-    if (dep === "inngest" && !engineAllowed.has(name)) {
+    const isEngine = dep === "inngest" || dep.startsWith("@inngest/");
+    if (isEngine && !engineAllowed.has(name)) {
       violations.push(
         `${name} may not depend on inngest: steps stay engine-free`,
       );

@@ -45,9 +45,8 @@
     },
     "test": {
       "dependsOn": ["transit"],
-      // Turbo strips undeclared env vars (strict mode); without these the
-      // env-gated integration suites silently skip even when the caller has
-      // them exported.
+      // Turbo strips undeclared env vars (strict mode). The database suites
+      // that read SUPABASE_* arrive with PLA-16.
       "env": ["SUPABASE_*"],
       "outputs": []
     }
