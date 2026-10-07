@@ -1,0 +1,46 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  // AGENTS.md is ours; turbo would otherwise rewrite a block into it.
+  "agentGuidance": false,
+  // pnpm-workspace.yaml holds the catalog: a version bump there must
+  // invalidate every cache.
+  "globalDependencies": ["pnpm-lock.yaml", "pnpm-workspace.yaml"],
+  "tasks": {
+    // The whole gate, for one local command: `turbo run ci --affected`.
+    // CI runs the two halves as separate steps (see ci.yml).
+    "ci": {
+      "dependsOn": ["check", "test"],
+      "outputs": []
+    },
+    // Everything except tests.
+    "check": {
+      "dependsOn": ["typecheck", "lint"],
+      "outputs": []
+    },
+    // Workspace packages export their TypeScript sources (apps/web lists them
+    // in transpilePackages), so only the web app has a build. Vercel builds it
+    // on every PR, so CI does not.
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "POSTHOG_*", "VERCEL_ENV", "INNGEST_*"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      // Turbo strips undeclared env vars (strict mode); without these the
+      // env-gated integration suites silently skip even when the caller has
+      // them exported.
+      "env": ["SUPABASE_*"],
+      "outputs": []
+    }
+  }
+}

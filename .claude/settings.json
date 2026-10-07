@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(supabase db push*)",
+      "Bash(pnpm exec supabase db push*)",
+      "Bash(npx supabase db push*)",
+      "Bash(*supabase link*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push*--force*)",
+      "Bash(git push origin production*)",
+      "Bash(git push*:production*)",
+      "Bash(cat *.env)",
+      "Bash(cat *.env.local)",
+      "Bash(cat *.env.*.local)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.production*)",
+      "Read(**/.env.staging*)"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+name: Reportar un error
+description: Algo de Plant no funciona como debería.
+labels: [error]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No pegues datos personales, CUIT, DNI, CBU, montos reales ni documentos. Para un problema de seguridad, no abras un issue: escribinos por privado.
+  - type: textarea
+    id: que-paso
+    attributes:
+      label: Qué pasó
+      description: Qué hiciste, qué esperabas y qué pasó en cambio.
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Cómo reproducirlo
+      placeholder: "1. Entré a...\n2. Subí un archivo de...\n3. Vi..."
+  - type: input
+    id: navegador
+    attributes:
+      label: Navegador y dispositivo

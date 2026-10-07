@@ -1,0 +1,18 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "evals"
+
+# One version of these across the monorepo. Inngest is pinned exactly: the
+# endpoint in apps/web and the orchestrators in packages/jobs must serve the
+# same SDK, or the functions registered with Inngest drift from the code.
+catalog:
+  inngest: 4.22.0
+  zod: ^4.6.5
+
+onlyBuiltDependencies:
+  - esbuild
+  - inngest-cli
+  - supabase
+  - sharp
+  - unrs-resolver

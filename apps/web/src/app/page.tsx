@@ -1,0 +1,34 @@
+import { supabaseEnv } from "@/lib/supabase/env";
+
+export const dynamic = "force-dynamic";
+
+async function supabaseStatus(): Promise<string> {
+  const env = supabaseEnv();
+  if (!env) return "Sin configurar: corré pnpm env:local";
+  try {
+    const res = await fetch(`${env.url}/auth/v1/health`, {
+      headers: { apikey: env.anonKey },
+      cache: "no-store",
+    });
+    return res.ok ? "Conectado" : `Respondió ${res.status}`;
+  } catch {
+    return "No responde: ¿corriste supabase start?";
+  }
+}
+
+export default async function Home() {
+  const status = await supabaseStatus();
+
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-4 p-6">
+      <h1 className="text-2xl font-semibold">Plant</h1>
+      <p className="text-sm text-zinc-500">
+        Todo tu patrimonio, en pesos y en dólares.
+      </p>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt className="text-zinc-500">Supabase</dt>
+        <dd>{status}</dd>
+      </dl>
+    </main>
+  );
+}

@@ -1,0 +1,19 @@
+---
+alwaysApply: true
+description: Guía de Linear (equipo Plant, key PLA)
+---
+
+- Linear organiza el trabajo: equipo **Plant**, key **PLA**. Issues y comentarios en español.
+- GitHub tiene los comentarios por línea y las reviews.
+
+## Rama -> issue
+
+```
+git branch --show | grep -oiE 'pla-[0-9]+' | tr a-z A-Z
+```
+
+Arrancá con `get_issue` y `list_comments` sobre esa key, y cumplí su "Terminado cuando".
+
+## Issue -> PR
+
+El PR está en `issue.attachments[].url`. `get_diff` trae sus datos y `get_diff_threads` sus hilos.
