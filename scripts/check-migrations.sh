@@ -29,13 +29,23 @@ cd "$(git rev-parse --show-toplevel)"
 
 errors=0
 
+# The CLI follows a symlink, so a merged one would let a later change edit an
+# applied migration outside supabase/migrations/, where no check looks.
+irregular="$(git -c core.quotePath=false ls-files -s -- supabase/migrations/ | awk '$1 != "100644" && $1 != "100755"' | cut -f 2)"
+if [ -n "$irregular" ]; then
+  echo "::error::Migrations are regular files, not symlinks or submodules:"
+  echo "$irregular"
+  errors=$((errors + 1))
+fi
+
 # Every added file, not only *.sql: the CLI skips a file whose name it does not
 # recognise (`.SQL`, no extension) with a warning and exit 0, so it would never
 # apply. Unquoted paths, so the errors below show names with accents as typed.
 added="$(git -c core.quotePath=false diff --name-only --no-renames --diff-filter=A "$base...HEAD" -- supabase/migrations/)"
 if [ -z "$added" ]; then
   echo "No new migrations since $base."
-  exit 0
+  [ "$errors" -eq 0 ]
+  exit
 fi
 
 misnamed="$(printf '%s\n' "$added" | grep -Ev "$NAME_RE" || true)"
@@ -86,6 +96,8 @@ if [ -n "$future" ]; then
   errors=$((errors + 1))
 fi
 
+bom="$(printf '\357\273\277')"
+
 # Prints why the migration on stdin would not apply all-or-nothing, or nothing.
 # The CLI commits what came before a CREATE/DROP INDEX or REINDEX with
 # CONCURRENTLY, VACUUM, CLUSTER or ALTER SYSTEM and runs it alone, so one of
@@ -95,9 +107,10 @@ fi
 # statement by statement; squawk's transaction-nesting rule catches all but
 # PREPARE TRANSACTION, and its exemption is rejected below. Squawk alone only
 # catches CREATE INDEX CONCURRENTLY. Statements are split on `;` after dropping
-# `--` comments, so a `;` or `--` inside a string literal can mis-split.
+# `--` comments and a leading BOM, so a `;` or `--` inside a string literal or
+# block comment can mis-split.
 not_atomic() {
-  sed 's/--.*$//' | awk 'BEGIN { RS = ";" }
+  sed "1s/^$bom//; s/--.*\$//" | awk 'BEGIN { RS = ";" }
     {
       s = toupper($0)
       gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
@@ -119,7 +132,6 @@ not_atomic() {
 
 # bash 3.2 (macOS) has no mapfile, and with `set -u` it fails on an empty array.
 files=()
-bom="$(printf '\357\273\277')"
 cr=$'\r'
 while IFS= read -r file; do
   [ -n "$file" ] || continue

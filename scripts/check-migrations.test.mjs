@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -94,6 +95,7 @@ const check = (
         writeFileSync(join(cwd, path), sql);
       },
       append: (path, sql) => appendFileSync(join(cwd, path), sql),
+      symlink: (target, path) => symlinkSync(target, join(cwd, path)),
       git: (...args) => git(cwd, ...args),
     });
     git(cwd, "add", "-A");
@@ -277,6 +279,17 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
   }
 });
 
+test("a BOM does not hide a concurrent index statement", () => {
+  const { code, output } = check(({ write }) =>
+    write(
+      `${MIGRATIONS}/20260106000000_new.sql`,
+      "\uFEFFDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;\nSELECT 1;\n",
+    ),
+  );
+  assert.equal(code, 1);
+  assert.match(output, /all-or-nothing/);
+});
+
 test("a concurrent index statement beside a single other fails", () => {
   const { code, output } = check(({ write }) =>
     write(
@@ -340,6 +353,23 @@ test("an exempted transaction control statement fails", () => {
   );
   assert.equal(code, 1);
   assert.match(output, /without a transaction/);
+});
+
+test("a symlinked migration fails, also when merged earlier", () => {
+  // `base: "HEAD"` leaves the symlink with nothing added, as when a later
+  // change edits only its target.
+  for (const base of [undefined, "HEAD"]) {
+    const { code, output } = check(({ write, symlink }) => {
+      write("sql/linked.sql");
+      symlink(
+        "../../sql/linked.sql",
+        `${MIGRATIONS}/20260106000000_linked.sql`,
+      );
+      return { base };
+    });
+    assert.equal(code, 1, `base: ${base}`);
+    assert.match(output, /regular files/);
+  }
 });
 
 test("a committed migration missing from the working tree fails", () => {
