@@ -65,9 +65,9 @@ const version = (days) =>
 /**
  * A repo with `merged` on `staging`, then a `feature` branch where `change`
  * edits the tree; returns the exit code and output of `script` run from `from`
- * against `base`, or against the base `change` returns; `afterCommit` it
- * returns runs on the repo before the script. `env` adds to ENV; `input` is
- * the script's stdin.
+ * against `base`. `change` may return `{ base }` to override `base`, and
+ * `{ afterCommit(cwd) }` to run on the repo after the commit, before the
+ * script. `env` adds to ENV; `input` is the script's stdin.
  */
 const check = (
   change,
