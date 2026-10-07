@@ -1,0 +1,4 @@
+# Generated from the local database by `pnpm db:generate:supabase-types`.
+packages/shared/src/db/generated/
+pnpm-lock.yaml
+.next/

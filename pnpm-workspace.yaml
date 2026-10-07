@@ -1,0 +1,37 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "evals"
+
+# One version of these across the monorepo. Inngest is pinned exactly: the
+# endpoint in apps/web and the orchestrators in packages/jobs must serve the
+# same SDK, or the functions registered with Inngest drift from the code.
+catalog:
+  "@types/jest": ^30.0.0
+  "@types/node": ^22.20.5
+  eslint: ^9.39.5
+  inngest: 4.22.0
+  jest: ^30.5.2
+  ts-jest: ^29.4.14
+  typescript: ^5.9.3
+  typescript-eslint: ^8.71.1
+  zod: ^4.6.5
+
+# Patched versions of dev-tool dependencies that CI's `pnpm audit` flags.
+# Drop each one once its parent (inngest-cli, concurrently) ships the fix.
+overrides:
+  adm-zip: ^0.6.1
+  shell-quote: ^1.11.0
+
+auditConfig:
+  ignoreGhsas:
+    # braces (via eslint-config-next): no patched release exists. Only lint
+    # reaches it, with glob patterns from this repo.
+    - GHSA-vfj7-8cjw-p6xm
+
+onlyBuiltDependencies:
+  - esbuild
+  - inngest-cli
+  - supabase
+  - sharp
+  - unrs-resolver

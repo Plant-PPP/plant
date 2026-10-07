@@ -1,0 +1,12 @@
+---
+description: Commits y PRs en Conventional Commits
+alwaysApply: true
+---
+
+# Commits
+
+- Conventional Commits, asunto de menos de 70 caracteres: `feat(web): carga manual de tenencias`.
+- Migraciones destructivas: `[DESTRUCTIVE]` al principio del título del PR.
+- El cuerpo del PR arranca con `## Intent`.
+- Se permiten los trailers de co-autor de Claude Code (`Co-Authored-By:`).
+- Describí el estado actual y por qué, no cómo se llegó.

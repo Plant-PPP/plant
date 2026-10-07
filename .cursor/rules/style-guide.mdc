@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+- Usá `pnpm`, nunca `npm`.
+- Preferí desestructurar objetos antes que la notación con punto repetida.
+- Plata como string decimal con su moneda (`Money` de `@plant/shared`), nunca `number`.

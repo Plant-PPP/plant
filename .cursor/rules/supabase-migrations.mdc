@@ -1,0 +1,12 @@
+---
+description: Las migraciones aplicadas en staging o producción son de solo lectura
+alwaysApply: true
+---
+
+# Migraciones de Supabase
+
+- **No edites una migración que ya se aplicó en staging o producción.** Son de solo lectura.
+- Para cambiar algo de una migración pasada, agregá una migración **nueva**.
+- Solo se crean o editan migraciones que todavía no se aplicaron.
+- Nunca corras `supabase db push`: las migraciones van a llegar a staging por CI (PLA-11).
+- Cada tabla nace con RLS (`user_id = (select auth.uid())` en `USING` y `WITH CHECK`) y `GRANT` explícito a `authenticated`, nunca a `anon`.

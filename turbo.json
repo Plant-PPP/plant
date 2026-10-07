@@ -1,0 +1,54 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  // AGENTS.md is ours; turbo would otherwise rewrite a block into it.
+  "agentGuidance": false,
+  // Files outside every package that change what typecheck, lint and tests
+  // see: a bump to any of them must invalidate every cache.
+  "globalDependencies": [
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    "eslint.packages.mjs",
+    "eslint.money.mjs",
+    ".npmrc"
+  ],
+  "tasks": {
+    // Workspace packages ship TypeScript sources with no build of their own,
+    // so nothing upstream puts a dependency's code into a task's hash. This
+    // no-op node does: a change in @plant/shared re-runs the typecheck, lint
+    // and tests of everything that imports it instead of replaying a cached
+    // green result.
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "check": {
+      "dependsOn": ["typecheck", "lint"],
+      "outputs": []
+    },
+    // Only the web app builds. Vercel builds it on every PR, so CI does not.
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "POSTHOG_*", "VERCEL_ENV", "INNGEST_*"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "lint": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["transit"],
+      // Turbo strips undeclared env vars (strict mode). The database suites
+      // that read SUPABASE_* arrive with PLA-16.
+      "env": ["SUPABASE_*"],
+      "outputs": []
+    }
+  }
+}

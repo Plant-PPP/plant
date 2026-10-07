@@ -1,0 +1,38 @@
+{
+  "name": "plant",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@plant/web",
+    "dev:up": "bash ./scripts/setup/dev-up.sh",
+    "env:local": "bash ./scripts/setup/env-local.sh",
+    "preflight": "bash ./scripts/setup/doctor.sh",
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "turbo:affected": "TURBO_TELEMETRY_DISABLED=1 TURBO_SCM_BASE=origin/staging turbo run check test --affected",
+    "format": "bash ./scripts/formatting/format-changed.sh",
+    "format:check": "bash ./scripts/formatting/ci-format-check.sh",
+    "check:forbidden-words": "bash ./scripts/check-forbidden-words.sh",
+    "db:reset": "bash ./scripts/setup/db-reset.sh",
+    "db:generate:supabase-types": "bash ./scripts/generate-supabase-types.sh",
+    "prepare": "node .husky/install.mjs",
+    "check:boundaries": "node scripts/check-package-boundaries.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "eslint": "catalog:",
+    "husky": "^9.1.7",
+    "inngest-cli": "1.46.0",
+    "prettier": "3.9.9",
+    "supabase": "2.120.0",
+    "turbo": "2.11.7",
+    "typescript-eslint": "catalog:"
+  }
+}

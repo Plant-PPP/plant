@@ -147,3 +147,25 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Local tooling
+.claude/settings.local.json
+CLAUDE.local.md
+.vercel
+supabase/.branches
+supabase/.temp
+*.tsbuildinfo
+next-env.d.ts
+**/.claude/settings.local.json
+.envrc
+.env.keys
+*.pem
+*.key
+# Real documents for local evals never enter the repo.
+evals/docs-locales/
+*.p12
+*.pfx
+.netrc
+credentials*.json
+service-account*.json
+packages/shared/src/db/generated/database.types.ts.*

@@ -1,0 +1,43 @@
+{
+  "name": "@plant/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.127",
+    "@ai-sdk/google": "^3.0.130",
+    "@plant/core": "workspace:*",
+    "@plant/jobs": "workspace:*",
+    "@plant/shared": "workspace:*",
+    "@plant/sources": "workspace:*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
+    "ai": "^6.0.301",
+    "inngest": "catalog:",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "catalog:",
+    "eslint-config-next": "16.4.0",
+    "jest": "catalog:",
+    "tailwindcss": "^4.3.3",
+    "ts-jest": "catalog:",
+    "typescript": "catalog:"
+  }
+}
