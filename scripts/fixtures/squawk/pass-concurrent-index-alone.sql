@@ -1,0 +1,11 @@
+-- A concurrent index build, alone in its file so `db push` does not wrap it in
+-- a transaction.
+--
+-- The exemptions are forced by Postgres:
+--   require-lock-timeout / require-statement-timeout: a `SET` beside this
+--     statement makes the file multi-statement, and a concurrent build inside a
+--     transaction fails with SQLSTATE 25001.
+--   prefer-robust-stmts: `IF NOT EXISTS` would silently adopt an INVALID index
+--     left by a failed build instead of failing loudly.
+-- squawk-ignore require-lock-timeout, require-statement-timeout, prefer-robust-stmts
+CREATE INDEX CONCURRENTLY fixture_holdings_user_id_idx ON public.fixture_holdings (user_id, id);

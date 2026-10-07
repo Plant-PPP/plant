@@ -128,12 +128,15 @@ jobs:
           TURBO_SCM_BASE: ${{ steps.base.outputs.ref }}
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
 
-  # Runs in parallel with `ci` on every PR and push: a fresh local Postgres
-  # with every migration applied, the types check and pgTAP.
+  # Runs in parallel with `ci` on every PR and push: the new migrations'
+  # checks, a fresh local Postgres with every migration applied, the types
+  # check and pgTAP.
   database:
-    name: Database (types, pgTAP, plpgsql_check)
+    name: Database (migrations, types, pgTAP, plpgsql_check)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
 
     steps:
       - name: Checkout
@@ -141,42 +144,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      # Deployed databases never re-run an applied migration, so an edited one
-      # would only change fresh databases, and a new one dated before the
-      # latest merged one would run in a different order there than in a fresh
-      # database. Corrections go in a new, later migration. On a push the change
-      # already landed; the PR is where it can be stopped.
-      - name: Migrations are append-only and ordered
-        if: github.event_name == 'pull_request'
-        run: |
-          set -o pipefail
-          base="origin/${{ github.base_ref }}"
-          # Unquoted paths, so names with accents still match the patterns below.
-          git config core.quotePath false
-          mutated="$(git diff --name-status --find-renames --diff-filter=MDRCT "$base...HEAD" -- 'supabase/migrations/*.sql')"
-          if [ -n "$mutated" ]; then
-            echo "::error::Merged migrations are append-only, fix forward in a new migration:"
-            echo "$mutated"
-            exit 1
-          fi
-          # The CLI applies migrations in filename byte order, which matches
-          # numeric order only while every version has 14 digits.
-          added="$(git diff --name-only --no-renames --diff-filter=A "$base...HEAD" -- 'supabase/migrations/*.sql')"
-          misnamed="$(printf '%s\n' "$added" | grep -Ev '^(supabase/migrations/[0-9]{14}_[^/]*\.sql)?$' || true)"
-          if [ -n "$misnamed" ]; then
-            echo "::error::Migrations are named <14-digit timestamp>_<name>.sql (pnpm exec supabase migration new <name>):"
-            echo "$misnamed"
-            exit 1
-          fi
-          latest="$(git ls-tree --name-only "$base" -- supabase/migrations/ \
-            | sed -n 's|^supabase/migrations/\([0-9]\{14\}\)_[^/]*\.sql$|\1|p' | sort | tail -n 1)"
-          early="$(printf '%s\n' "$added" | awk -F'[/_]' -v latest="${latest:-0}" 'NF && $3 <= latest')"
-          if [ -n "$early" ]; then
-            echo "::error::New migrations must have a version after the latest merged one ($latest). Rename with a newer timestamp:"
-            echo "$early"
-            exit 1
-          fi
 
       - name: Setup pnpm
         # Version is read from the root package.json "packageManager" field.
@@ -189,7 +156,18 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
+        id: install
         run: pnpm install --frozen-lockfile
+
+      # New migrations sort after the merged ones and pass squawk. The push run
+      # repeats it because two PRs green on their own can land out of order, and
+      # deploy-migrations needs this job.
+      - name: New migrations (name, order, squawk)
+        run: bash scripts/check-migrations.sh "$BASE"
+
+      - name: Script tests (squawk config, migration checks)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm test:scripts
 
       # `db start` boots only Postgres with every migration applied; the full
       # stack pulls images for services nothing below uses.
@@ -212,3 +190,57 @@ jobs:
       - name: DB behavior tests (pgTAP)
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm exec supabase test db --local
+
+      # Deployed databases never re-run an applied migration, so an edited one
+      # would only change fresh databases. Corrections go in a new, later
+      # migration. On a push the change already landed; the PR is where it can
+      # be stopped. It runs last so a PR that breaks it on purpose (the
+      # procedure in docs/decisiones.md) still shows the rest of the job.
+      - name: Merged migrations are append-only
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: |
+          set -o pipefail
+          mutated="$(git -c core.quotePath=false diff --name-status --find-renames --diff-filter=MDRCT "$BASE...HEAD" -- 'supabase/migrations/*.sql')"
+          if [ -n "$mutated" ]; then
+            echo "::error::Merged migrations are append-only, fix forward in a new migration:"
+            echo "$mutated"
+            exit 1
+          fi
+
+  # Push-only, no workflow_dispatch: a dispatch from another branch would apply
+  # its migrations, which are recorded and never re-run. See docs/decisiones.md
+  # (PLA-11).
+  deploy-migrations:
+    name: Deploy migrations to plant-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: [database]
+    runs-on: ubuntu-latest
+    environment: supabase-staging
+    timeout-minutes: 15
+    concurrency:
+      group: supabase-staging-migrations
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve pinned Supabase CLI version
+        run: |
+          version="$(jq -r '.devDependencies.supabase' package.json)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::package.json must pin supabase exactly, got '$version'"; exit 1; }
+          echo "SUPABASE_CLI_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Push pending migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          [ -n "$SUPABASE_DB_URL" ] || { echo "::error::SUPABASE_DB_URL is not set in the supabase-staging environment"; exit 1; }
+          supabase db push --db-url "$SUPABASE_DB_URL"

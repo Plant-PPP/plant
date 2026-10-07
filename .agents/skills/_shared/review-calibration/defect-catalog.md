@@ -88,11 +88,11 @@ class below is only the look-here index; the rule lives in that guide.
 - source: adv-review migration gate.
 
 **[migrations — reversible, lock-safe, ordered]**
-- Pattern: timestamp below staging's max; unbackfilled new column; changed RPC shape without regenerated types; RLS enabled with zero policies; missing explicit `statement_timeout=0`/`lock_timeout=0`; unflagged large/hot-table lock risk; a destructive change without the `[DESTRUCTIVE]` PR-title prefix.
+- Pattern: timestamp below staging's max; unbackfilled new column; changed RPC shape without regenerated types; RLS enabled with zero policies; missing the `SET lock_timeout`/`statement_timeout` header (copy it from `scripts/fixtures/squawk/pass-migration-header.sql`; squawk enforces it); unflagged large/hot-table lock risk; a destructive change without the `[DESTRUCTIVE]` PR-title prefix.
 - Frequency: ~5.
 - Where: `supabase/migrations`, the generated DB types in `@plant/shared` (`pnpm db:generate:supabase-types`), pgTAP tests in `supabase/tests`, growing per-user tables (e.g. `imports`, `audit_log`, holdings/valuation history).
 - Example: RLS on with no policy returns `200 []` to the legitimate owner; a large-table ALTER holding ACCESS EXCLUSIVE with no timeout override aborts mid-scan.
-- Fix: timestamp > staging max; backfill existing rows; regenerate types (prefer the generated `Returns` shape); set `statement_timeout=0` explicitly; flag lock/rewrite risk + chosen timeout in the PR body; ship the pgTAP test with the migration.
+- Fix: timestamp > staging max; backfill existing rows; regenerate types (prefer the generated `Returns` shape); start with that header; `statement_timeout = 0` only with a stated reason; flag lock/rewrite risk + chosen timeout in the PR body; ship the pgTAP test with the migration.
 - source: senior Pass-2; adv-review.
 
 **[authorization / owner-scoping / IDOR]**

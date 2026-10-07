@@ -1,0 +1,13 @@
+# squawk over the migrations a change adds (scripts/check-migrations.sh).
+# An exemption is a per-statement `-- squawk-ignore <rule>` with its reason.
+
+# `supabase db push` runs a multi-statement migration as one transaction, so a
+# CREATE INDEX CONCURRENTLY beside any other statement fails the deploy.
+assume_in_transaction = true
+
+# supabase/config.toml [db] major_version; scripts/squawk-config.test.mjs
+# fails if they differ.
+pg_version = "17.0"
+
+# An unqualified name resolves through a search_path the reader cannot see.
+included_rules = ["require-table-schema"]

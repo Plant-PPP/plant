@@ -2,6 +2,19 @@
 
 Registro de decisiones que no están en el plan, o que lo bajan a detalle. La más nueva arriba.
 
+## 07/10/2026 · Migration gates and deploy to `plant-staging` (PLA-11)
+
+- **The reference app's behavior, not its file layout.** Same checks, same `.squawk.toml`, same self-test and the same push-only `db push`, with three differences: (a) name, order, future and squawk checks live in `scripts/check-migrations.sh`, called from the `database` job, because a workflow with `paths:` cannot be a required check; (b) squawk is pinned in `package.json` like the Supabase CLI (PLA-7), with no separate version files; (c) `deploy-migrations` lives in `ci.yml` with `needs: [database]`, because `needs:` only works within one workflow, and the reference's deploy runs in parallel with CI and can apply a migration CI rejects.
+- **`needs: [database]`, not `ci`.** A new `pnpm audit` advisory or an unrelated test does not hold back migrations, and the Vercel deploy does not wait for CI either.
+- **The append-only check runs only on PRs.** It protects review, not the database: `db push` fails closed when an applied version is deleted or renamed and ignores edits. On push it would block the only way out for a migration that never applied (procedure 1).
+- **One secret, no personal token.** `SUPABASE_DB_URL` (Session pooler, port 5432) in the `supabase-staging` environment, restricted to the `staging` branch and passed only to the push step. No `supabase link`. Only the push job in `ci.yml` names that environment: the branch rule does not stop other events that run on `staging`, such as `schedule` or `pull_request_target`.
+- **Shared database until the beta.** `plant-staging` is also production's database, so migrations are additive only: a `DROP` or `RENAME` waits until production runs code that no longer uses it.
+- **Procedures:**
+  1. A merged migration that never applied (it failed on the real database or landed out of order). If it failed on `lock_timeout`, first "Re-run jobs". Otherwise a PR moves it with `git mv` to a new timestamp and fixes it there; it is never edited in place, because the push only checks added files. The append-only check stops that PR, so Tomas adds himself as a ruleset bypass actor in "For pull requests only" mode, merges only that PR and removes himself right away. The push checks the new file's name, order and squawk, and the deploy applies it.
+  2. With `deploy-migrations` or `database` red on `staging`, the next merge is the fix and nothing else: the next push only checks its own changes.
+  3. A red or cancelled deploy for a SHA whose `database` passed, because it finished after a newer one or a third merge arrived, is harmless if the next one went green.
+  4. A merge with `[skip ci]` does not deploy until the next push.
+
 ## 07/10/2026 · Perfiles, consentimientos y auditoría (PLA-16)
 
 - **`REVOKE ALL` antes de cada grant.** Con `auto_expose_new_tables = false`, una tabla nueva en `public` igual les deja TRUNCATE, REFERENCES, TRIGGER y MAINTAIN a `anon`, `authenticated` y `service_role` por default. Cada tabla hace `REVOKE ALL` de los roles de la API y le saca esos cuatro a `service_role`, que con auto-expose apagado no recibe otra cosa: queda sin privilegios, y el primer código de servidor que lo use trae su `GRANT`. `schema_rls_and_grants_test.sql` falla si `anon` tiene cualquier privilegio sobre una tabla de `public` o `private` o si alguien que no es el dueño tiene uno de esos cuatro.
