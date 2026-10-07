@@ -47,4 +47,4 @@ Anyone on the internet can send GET, POST or PUT to `/api/inngest` (HEAD goes to
 - Vercel previews must use a signing key different from production's (an Inngest branch environment). Tomas sets it up when connecting Inngest to Vercel.
 - `INNGEST_DEV`, `INNGEST_BASE_URL` or `INNGEST_API_BASE_URL` holding a URL no longer turn signatures off, but they do redirect outbound traffic (registration and events, with their keys). None of the three may exist in Vercel.
 - No telemetry until PLA-21: a spike of rejected requests alerts nobody.
-- The signature covers the body, not the URL parameters (`fnId`, `stepId`). It doesn't matter today because `ping` touches no data, but once there are several service-role functions, a captured signed body could be replayed to another function within the 5 minutes. Review it with the "Carga con IA" functions.
+- The signature covers the body, not the URL parameters (`fnId`, `stepId`). It doesn't matter today because `ping` touches no data, but once there are several service-role functions, a captured signed body could be replayed to another function within the 5 minutes. Revisit it when the "Carga con IA" functions are built.

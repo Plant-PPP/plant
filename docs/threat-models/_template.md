@@ -35,4 +35,4 @@ Each control and the layer it lives in: RLS and grants, `proxy.ts`, route handle
 
 ## Residual risk
 
-What stays open, why it is accepted and when it is reviewed.
+What stays open, why it is accepted and when it will be revisited.

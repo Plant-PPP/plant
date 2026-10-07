@@ -51,7 +51,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 - `staging` is the only working branch and it is protected. Work on your own branch named with the Linear key (`feat/pla-12-job-runner`) and open a PR to `staging`. A merge deploys automatically, and only to staging.
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
-- PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Merge with Squash and merge, keep the PR title as the commit title and clear the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title (the only prefix allowed before the Conventional Commits type).
+- PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Merge with Squash and merge, keep the PR title as the commit title (GitHub's appended ` (#N)` may stay) and clear the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title, before any stacked-PR `(N/X)` marker, which is dropped from the squash commit title (see `nav-github`).
 - The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase
@@ -79,7 +79,7 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 
 ## Public repo
 
-- Never commit a `.env`, a key, a real document, personal data, the plan or the internal analyses. Test fixtures are made up.
+- None of these ever goes into the repo, its commits or its PRs: a `.env`, a key, a real document, personal data, the plan or the internal analyses. Test fixtures are made up.
 - The reference app that patterns are ported from is never named: not in code, comments, commits, branches, PRs, skills or docs. Say "the reference app" or describe the pattern. `pnpm check:forbidden-words` checks it if you have `FORBIDDEN_WORDS` in your shell.
 - Actions with `permissions: contents: read`, pinned by SHA, and never `pull_request_target` with a checkout of the PR.
 

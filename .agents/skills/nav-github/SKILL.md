@@ -114,7 +114,8 @@ root cause if known. Reference the Linear issue (PLA-NNN) if one exists.>
   Summary section below it.
 - The WHOLE PR body must be short: aim under ~25 lines total. Summary =
   a handful of one-line bullets, no sub-narratives. Do NOT add a Test plan /
-  Tests / Verification section — CI is authoritative; don't restate it in the
+  Tests section of your own — fill the template's Verification checkboxes and
+  keep its "How I tested it" line short. CI is authoritative; don't restate it in the
   body. Plain words over jargon ("the import screen showed the wrong total",
   not "15 fatal mismatches"). If a reviewer needs more, they read the diff.
 

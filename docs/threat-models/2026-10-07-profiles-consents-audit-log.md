@@ -23,7 +23,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 ## Where it is enforced
 
 - RLS `user_id = (select auth.uid())` in `USING` and `WITH CHECK`.
-- Column grants: the user only edits `display_name` and `reference_dollar`, and in `consents` only names `kind`, `version` and `granted`; `user_id` and `accepted_at` come from the defaults.
+- Column grants: the user only edits `display_name` and `reference_dollar`, and in `consents` only supplies `kind`, `version` and `granted`; `user_id` and `accepted_at` come from the defaults.
 - `REVOKE ALL` from `anon` and `authenticated` before every grant, because with "auto expose" off TRUNCATE, REFERENCES, TRIGGER and MAINTAIN still remain by default.
 - `audit_log` in the `private` schema, with no `USAGE` for the API roles and no privileges for `service_role`, and triggers that reject UPDATE, DELETE and TRUNCATE even for the owner.
 
@@ -62,6 +62,6 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 
 ## Residual risk
 
-- `audit_log` keeps the `user_id` after the account is deleted (no FK). It is an opaque id with no personal data; it is reviewed with the lawyer (PLA-56).
-- Deleting the account deletes its `consents` history in cascade, which is the proof of what the user accepted. How long it must be kept after the account is closed is reviewed with the lawyer (PLA-56).
+- `audit_log` keeps the `user_id` after the account is deleted (no FK). It is an opaque id with no personal data; to be reviewed with the lawyer (PLA-56).
+- Deleting the account deletes its `consents` history in cascade, which is the proof of what the user accepted. How long that history must be kept after the account is closed is to be reviewed with the lawyer (PLA-56).
 - The table owner (`postgres`) can bypass the triggers from any session (`DISABLE TRIGGER` or `session_replication_role = replica`), with no trace in the migrations. Accepted: it is the same role that administers Supabase.

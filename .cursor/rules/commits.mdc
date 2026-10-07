@@ -5,8 +5,8 @@ alwaysApply: true
 
 # Commits
 
-- A commit is a single Conventional Commits subject line in English, under 70 characters: `feat(web): add manual holdings entry (PLA-26)`. No body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
-- PR titles use the same format with the Linear key (omitted only when there is no Linear issue); merge PRs with Squash and merge, keeping the PR title as the commit title and clearing the message box.
+- A commit is a single Conventional Commits subject line in English, under 70 characters: `feat(web): add manual holdings entry`. No body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
+- PR titles use the same format plus the Linear key as the last token, e.g. `feat(web): add manual holdings entry (PLA-26)` (omitted only when there is no Linear issue); merge PRs with Squash and merge, keeping the PR title (minus any stacked `(N/X)` marker) as the commit title and clearing the message box.
 - Destructive migrations: `[DESTRUCTIVE]` at the start of the PR title.
 - The PR body starts with `## Intent`.
 - Describe the current state and why, not how you got there.
