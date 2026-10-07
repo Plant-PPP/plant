@@ -8,5 +8,6 @@ alwaysApply: true
 - **Don't edit a migration that was already applied on staging or production.** They are read-only.
 - To change something from a past migration, add a **new** migration.
 - Only migrations that were not applied yet are created or edited.
-- Never run `supabase db push`: migrations will reach staging through CI (PLA-11).
+- Never run `supabase db push`: the CI `deploy-migrations` job applies migrations to `plant-staging` after a merge to `staging` and Tomas's approval (see `CLAUDE.md`). Until the beta that database is also production's, so migrations are additive only (see `CLAUDE.md`).
+- Every new migration passes squawk and starts with the header in `scripts/fixtures/squawk/pass-migration-header.sql`, except a lone `... INDEX CONCURRENTLY` statement (see `CLAUDE.md`).
 - Every table is born with RLS (`user_id = (select auth.uid())` in `USING` and `WITH CHECK`) and an explicit `GRANT` to `authenticated`, never to `anon`.

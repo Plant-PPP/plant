@@ -13,6 +13,8 @@
       "Bash(git push*production*)",
       "Bash(git push*:staging*)",
       "Bash(git push* staging*)",
+      "Bash(git push*refs/heads/staging*)",
+      "Bash(*pr merge*--admin*)",
       "Bash(*.env)",
       "Bash(*.env *)",
       "Bash(*.env.local*)",

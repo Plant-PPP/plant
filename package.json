@@ -23,7 +23,8 @@
     "db:reset": "bash ./scripts/setup/db-reset.sh",
     "db:generate:supabase-types": "bash ./scripts/generate-supabase-types.sh",
     "prepare": "node .husky/install.mjs",
-    "check:boundaries": "node scripts/check-package-boundaries.mjs"
+    "check:boundaries": "node scripts/check-package-boundaries.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
@@ -31,6 +32,7 @@
     "husky": "^9.1.7",
     "inngest-cli": "1.46.0",
     "prettier": "3.9.9",
+    "squawk-cli": "2.66.0",
     "supabase": "2.120.0",
     "turbo": "2.11.7",
     "typescript-eslint": "catalog:"

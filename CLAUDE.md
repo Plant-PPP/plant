@@ -35,12 +35,13 @@ Packages export their TypeScript sources and `apps/web` compiles them with `tran
 
 ```bash
 pnpm check          # typecheck + lint of every package
-pnpm test           # every test
+pnpm test           # package tests
+pnpm test:scripts   # scripts/ tests (squawk and migration checks)
 pnpm turbo:affected # only what changed against origin/staging
 pnpm format         # prettier over what changed
 ```
 
-Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (append-only and ordered migrations, up-to-date types and pgTAP).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types and pgTAP).
 
 ## Language
 
@@ -48,7 +49,8 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 
 ## Branches, commits and PRs
 
-- `staging` is the only working branch and it is protected. Work on your own branch named `<type>/<slug>` in English, with the Linear key when there is an issue (`feat/pla-12-job-runner`), and open a PR to `staging`. A merge deploys automatically, and only to staging.
+- `staging` is the only working branch and it is protected. Work on your own branch named `<type>/<slug>` in English, with the Linear key when there is an issue (`feat/pla-12-job-runner`), and open a PR to `staging`.
+- A merge to `staging` deploys code and migrations to staging (see Supabase). A PR that adds migrations or touches `.github/workflows/` is merged by Tomas; an agent never merges it on its own, and never approves a deployment.
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
 - PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Whoever merges uses Squash and merge, keeps the PR title as the commit title (GitHub's appended ` (#N)` may stay) and clears the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title, before any stacked-PR `(N/X)` marker, which is dropped from the squash commit title (see `nav-github`); the squash commit title keeps `[DESTRUCTIVE]`, the only prefix it may have before the type.
@@ -56,7 +58,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 
 ## Supabase
 
-**Never run `supabase db push`.** Migrations will reach staging through CI on every merge (PLA-11).
+**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that leaves one unapplied since the last deploy, after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
 
 ```bash
 pnpm exec supabase migration new <name>
@@ -65,6 +67,7 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 ```
 
 - A migration applied on staging is read-only: changes go in a new migration.
+- Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. Any `... INDEX CONCURRENTLY` statement goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql`. The PLA-16 migration predates squawk: do not use it as a model.
 - RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`.
 - "Automatically expose new tables" is off (`auto_expose_new_tables = false` in `supabase/config.toml` and in the dashboard): every migration makes an explicit `GRANT` to `authenticated` with only the operations the app uses. Never to `anon`.
 - Every table starts with `REVOKE ALL`, and `authenticated` writes only through column-level grants, never on `user_id`. The full shape of owned tables is in `docs/decisions.md`; the pgTAP floor checks part of it and each table's two-user test checks the rest.
