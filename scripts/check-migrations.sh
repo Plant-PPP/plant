@@ -108,7 +108,8 @@ bom="$(printf '\357\273\277')"
 # PREPARE TRANSACTION, and its exemption is rejected below. Squawk alone only
 # catches CREATE INDEX CONCURRENTLY. Statements are split on `;` after dropping
 # `--` comments and a leading BOM, so a `;` or `--` inside a string literal or
-# block comment can mis-split.
+# block comment can mis-split; the index statements are matched anywhere in a
+# statement so a split in front of one still counts it.
 not_atomic() {
   sed "1s/^$bom//; s/--.*\$//" | awk 'BEGIN { RS = ";" }
     {
@@ -122,7 +123,7 @@ not_atomic() {
       if (s == "") next
       n++
       if (s ~ /^(VACUUM|CLUSTER|ALTER[ \t\r\n]+SYSTEM|PREPARE[ \t\r\n]+TRANSACTION)([ \t\r\n(]|$)/) banned = 1
-      if (s ~ /^((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
+      if (s ~ /(^|[^A-Z0-9_])((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
     }
     END {
       if (banned) print "VACUUM, CLUSTER, ALTER SYSTEM and PREPARE TRANSACTION do not belong in a migration"
@@ -158,11 +159,11 @@ while IFS= read -r file; do
     errors=$((errors + 1))
   fi
   # An exemption names its rule and sits on the statement it covers.
-  if grep -Eq -- '(--|/\*)[[:space:]]*squawk-ignore-file' "$file"; then
+  if grep -Eq -- 'squawk-ignore-file' "$file"; then
     echo "::error::$file: exempt single statements with '-- squawk-ignore <rule>', not the whole file."
     errors=$((errors + 1))
   fi
-  if grep -Eq -- '(--|/\*)[[:space:]]*squawk-ignore[[:space:]].*transaction-nesting' "$file"; then
+  if grep -Eq -- 'squawk-ignore[[:space:]].*transaction-nesting' "$file"; then
     echo "::error::$file: a transaction control statement makes the CLI apply the file without a transaction; split it into separate migrations."
     errors=$((errors + 1))
   fi

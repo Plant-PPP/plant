@@ -260,6 +260,10 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
   for (const statement of [
     "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "/* unused */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "/* a */ /* b */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "/** doc **/ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "/* Old index; unused. */\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "/* a */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx /* b */;",
     "-- squawk-ignore prefer-robust-stmts\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "REINDEX INDEX\n  CONCURRENTLY public.fixture_runs_user_id_idx;",
     // The exemption turns off squawk's own check on a concurrent build.
@@ -303,7 +307,10 @@ test("a concurrent index statement beside a single other fails", () => {
 
 test("VACUUM, CLUSTER or ALTER SYSTEM alone fails", () => {
   for (const statement of [
+    "VACUUM;",
+    "/** doc **/ VACUUM public.fixture_runs;",
     "VACUUM public.fixture_runs;",
+    "ALTER\n  SYSTEM SET work_mem = '64MB';",
     "CLUSTER public.fixture_runs USING fixture_runs_pkey;",
     "ALTER SYSTEM SET work_mem = '64MB';",
   ]) {
@@ -332,6 +339,7 @@ test("a file-wide squawk exemption fails", () => {
     "--squawk-ignore-file",
     "-- squawk-ignore-file require-lock-timeout, require-statement-timeout",
     "/* squawk-ignore-file */",
+    "/*\nsquawk-ignore-file */",
   ]) {
     const { code, output } = check(({ write }) =>
       write(
@@ -345,14 +353,34 @@ test("a file-wide squawk exemption fails", () => {
 });
 
 test("an exempted transaction control statement fails", () => {
+  for (const exemption of [
+    "-- squawk-ignore transaction-nesting",
+    "--squawk-ignore transaction-nesting",
+    "-- squawk-ignore prefer-robust-stmts, transaction-nesting",
+    "/* squawk-ignore transaction-nesting */",
+    "/*\n squawk-ignore transaction-nesting */",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(
+        `${MIGRATIONS}/20260106000000_new.sql`,
+        `${VALID}\n${exemption}\ncommit;\n`,
+      ),
+    );
+    assert.equal(code, 1, exemption);
+    assert.match(output, /without a transaction/);
+  }
+});
+
+test("an unterminated block comment does not hang the check", () => {
+  const started = Date.now();
   const { code, output } = check(({ write }) =>
     write(
       `${MIGRATIONS}/20260106000000_new.sql`,
-      `${VALID}\n-- squawk-ignore transaction-nesting\ncommit;\n`,
+      `${VALID}\n/* a; b */\nSELECT 1;\n`,
     ),
   );
-  assert.equal(code, 1);
-  assert.match(output, /without a transaction/);
+  assert.equal(code, 0, output || "timed out");
+  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started} ms`);
 });
 
 test("a symlinked migration fails, also when merged earlier", () => {
@@ -391,8 +419,8 @@ test("a long first line does not slow the check down", () => {
       `-- ${"x".repeat(4_000_000)}\n${VALID}`,
     ),
   );
-  assert.equal(code, 0, output);
-  assert.ok(Date.now() - started < 10_000);
+  assert.equal(code, 0, output || "timed out");
+  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started} ms`);
 });
 
 test("errors show accented names as typed", () => {
