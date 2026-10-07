@@ -12,8 +12,8 @@
 #   REQUIRE_FORBIDDEN_WORDS=1     fail instead of skipping when the list is unset
 #   FORBIDDEN_WORDS_RANGE=A..B    also check the commit messages in that range
 #   FORBIDDEN_WORDS_BRANCH=name   also check that branch name
-#   FORBIDDEN_WORDS_MESSAGE_FILE=path  check only that message (commit-msg
-#                                 hook, annotated tags in pre-push)
+#   FORBIDDEN_WORDS_MESSAGE_FILE=path  check only that message, as is
+#                                 (commit-msg hook, annotated tags in pre-push)
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
@@ -60,9 +60,7 @@ report() {
 }
 
 if [ -n "${FORBIDDEN_WORDS_MESSAGE_FILE:-}" ]; then
-  # Lines starting with "#" count (git keeps them with -m); the diff that
-  # `git commit -v` appends below the scissors line does not.
-  message=$(sed '/^# -\{24\} >8 -\{24\}$/,$d' "$FORBIDDEN_WORDS_MESSAGE_FILE")
+  message=$(cat "$FORBIDDEN_WORDS_MESSAGE_FILE")
   report "lines of the message" "$message"
   if [ "$found" -eq 1 ]; then exit 1; fi
   exit 0

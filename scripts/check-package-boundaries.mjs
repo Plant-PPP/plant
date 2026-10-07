@@ -32,8 +32,12 @@ const start = workspaceLines.indexOf("packages:") + 1;
 const globs = [];
 for (const line of workspaceLines.slice(start)) {
   if (/^\s*(#.*)?$/.test(line)) continue;
-  const entry = /^\s+-\s+"?([^"]+?)"?\s*$/.exec(line);
-  if (!entry) break;
+  if (/^\S/.test(line)) break; // the next top-level key
+  const entry = /^\s+-\s+"?([^"#\s]+)"?\s*(#.*)?$/.exec(line);
+  if (!entry) {
+    console.error(`Could not parse this pnpm-workspace.yaml entry: ${line}`);
+    process.exit(1);
+  }
   globs.push(entry[1]);
 }
 if (start === 0 || globs.length === 0) {
