@@ -65,7 +65,8 @@ const version = (days) =>
 /**
  * A repo with `merged` on `staging`, then a `feature` branch where `change`
  * edits the tree; returns the exit code and output of `script` run from `from`
- * against `base`, or against the base `change` returns. `env` adds to ENV.
+ * against `base`, or against the base `change` returns; `afterCommit` it
+ * returns runs on the repo before the script. `env` adds to ENV.
  */
 const check = (
   change,
@@ -95,6 +96,7 @@ const check = (
     });
     git(cwd, "add", "-A");
     git(cwd, "commit", "-q", "--allow-empty", "-m", "change");
+    returned?.afterCommit?.(cwd);
     const r = spawnSync("bash", [script, returned?.base ?? base], {
       cwd: join(cwd, from),
       env: { ...ENV, ...env },
@@ -247,6 +249,68 @@ test("a migration that opts out of the transaction fails", () => {
     assert.equal(code, 1, JSON.stringify(first));
     assert.match(output, /one transaction/);
   }
+});
+
+test("a statement the CLI runs outside the transaction fails beside others", () => {
+  for (const statement of [
+    "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "REINDEX INDEX CONCURRENTLY public.fixture_runs_user_id_idx;",
+    "vacuum public.fixture_runs;",
+    "CLUSTER public.fixture_runs USING fixture_runs_pkey;",
+    "ALTER SYSTEM SET work_mem = '64MB';",
+    "PREPARE TRANSACTION 'x';",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${VALID}\n${statement}\n`),
+    );
+    assert.equal(code, 1, statement);
+    assert.match(output, /all-or-nothing/);
+  }
+});
+
+test("a lone concurrent index drop passes", () => {
+  const { code, output } = check(({ write }) =>
+    write(
+      `${MIGRATIONS}/20260106000000_drop_index.sql`,
+      "-- squawk-ignore require-lock-timeout, require-statement-timeout, prefer-robust-stmts\n" +
+        "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;\n",
+    ),
+  );
+  assert.equal(code, 0, output);
+});
+
+test("a file-wide squawk exemption fails", () => {
+  const { code, output } = check(({ write }) =>
+    write(
+      `${MIGRATIONS}/20260106000000_new.sql`,
+      `-- squawk-ignore-file\n${NO_TIMEOUT}`,
+    ),
+  );
+  assert.equal(code, 1);
+  assert.match(output, /not the whole file/);
+});
+
+test("a committed migration missing from the working tree fails", () => {
+  const path = `${MIGRATIONS}/20260107000000_gone.sql`;
+  const { code, output } = check(({ write }) => {
+    write(`${MIGRATIONS}/20260106000000_new.sql`);
+    write(path, NO_TIMEOUT);
+    return { afterCommit: (cwd) => rmSync(join(cwd, path)) };
+  });
+  assert.equal(code, 1);
+  assert.match(output, /missing from the working tree/);
+});
+
+test("a long first line does not slow the check down", () => {
+  const started = Date.now();
+  const { code, output } = check(({ write }) =>
+    write(
+      `${MIGRATIONS}/20260106000000_long_line.sql`,
+      `-- ${"x".repeat(1_000_000)}\n${VALID}`,
+    ),
+  );
+  assert.equal(code, 0, output);
+  assert.ok(Date.now() - started < 10_000);
 });
 
 test("errors show accented names as typed", () => {

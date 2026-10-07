@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the migrations added since <base>: the file name, a version of its own
-# after the latest one in <base> and not in the future, one transaction per
-# file, and squawk (.squawk.toml).
+# after the latest one in <base> and not in the future, statements the CLI
+# applies all-or-nothing, and squawk (.squawk.toml).
 #
 #   bash scripts/check-migrations.sh <base>
 #
@@ -86,29 +86,64 @@ if [ -n "$future" ]; then
   errors=$((errors + 1))
 fi
 
+# Prints why the CLI would not apply the migration on stdin all-or-nothing,
+# or nothing. The CLI commits what came before an index statement with
+# CONCURRENTLY (and VACUUM, CLUSTER, ALTER SYSTEM) and runs it alone, and runs a
+# file with PREPARE TRANSACTION statement by statement; squawk only catches
+# CREATE INDEX CONCURRENTLY. Statements are split on `;` after dropping `--`
+# comments, which can only over-count.
+not_atomic() {
+  sed 's/--.*$//' | awk 'BEGIN { RS = ";" }
+    {
+      s = toupper($0)
+      gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+      if (s == "") next
+      n++
+      if (s ~ /^(VACUUM|CLUSTER|ALTER[ \t\r\n]+SYSTEM|PREPARE[ \t\r\n]+TRANSACTION)([ \t\r\n(]|$)/) banned = 1
+      if (s ~ /^((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
+    }
+    END {
+      if (banned) print "it runs VACUUM, CLUSTER, ALTER SYSTEM or PREPARE TRANSACTION"
+      else if (concurrent && n > 1) print "a CONCURRENTLY index statement is not alone in the file"
+    }'
+}
+
 # bash 3.2 (macOS) has no mapfile, and with `set -u` it fails on an empty array.
 files=()
-no_transaction=""
 bom="$(printf '\357\273\277')"
+cr=$'\r'
 while IFS= read -r file; do
   [ -n "$file" ] || continue
+  if [ ! -f "$file" ]; then
+    echo "::error::$file is committed but missing from the working tree."
+    errors=$((errors + 1))
+    continue
+  fi
   files+=("$file")
   # This first line makes the CLI run the file statement by statement with no
-  # transaction, which squawk cannot see (it assumes one per file).
+  # transaction, which squawk cannot see. Only a short line can match.
+  first=""
   IFS= read -r first <"$file" || true
-  first="${first#"$bom"}"
-  if [ "${first%$'\r'}" = "-- pg-delta: transaction=false" ]; then
-    no_transaction="$no_transaction$file
-"
+  if [ "${#first}" -le 40 ]; then
+    first="${first#"$bom"}"
+    if [ "${first%"$cr"}" = "-- pg-delta: transaction=false" ]; then
+      echo "::error::$file: migrations run in one transaction; remove the '-- pg-delta: transaction=false' first line."
+      errors=$((errors + 1))
+    fi
+  fi
+  reason="$(not_atomic <"$file")"
+  if [ -n "$reason" ]; then
+    echo "::error::$file would not apply all-or-nothing: $reason (see .squawk.toml)."
+    errors=$((errors + 1))
+  fi
+  # An exemption names its rule and sits on the statement it covers.
+  if grep -Eq -- '--[[:space:]]*squawk-ignore-file' "$file"; then
+    echo "::error::$file: exempt single statements with '-- squawk-ignore <rule>', not the whole file."
+    errors=$((errors + 1))
   fi
 done <<EOF
 $named
 EOF
-if [ -n "$no_transaction" ]; then
-  echo "::error::Migrations run in one transaction; remove the '-- pg-delta: transaction=false' first line:"
-  printf '%s' "$no_transaction"
-  errors=$((errors + 1))
-fi
 
 if [ ! -x "$SQUAWK" ]; then
   echo "::error::squawk not found at $SQUAWK (run pnpm install)."
