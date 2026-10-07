@@ -44,14 +44,14 @@ Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-wor
 
 ## Language
 
-Everything in the repo is English: code, identifiers, comments, test names, migrations, scripts, developer-facing messages (thrown errors, logs, CI), docs, skills, rules, templates, commits, branch names and PRs. Spanish from Argentina with voseo is only for what a Plant user reads: UI copy and app metadata, emails, assistant answers and the bug-report form (`.github/ISSUE_TEMPLATE/error.yml`). Fixtures and assertions that mirror user-facing text keep it as the user sees it. Validation messages in packages are English; the UI maps them to its own copy. Linear stays in Spanish, so stage names and Linear headings are quoted as written there.
+Everything in the repo is English: code, identifiers, comments, test names, migrations, scripts, developer-facing messages (thrown errors, logs, CI), docs, skills, rules, templates, commits, branch names and PRs. Spanish from Argentina with voseo is only for what a Plant user reads: UI copy and app metadata, emails, assistant answers and the bug-report form (`.github/ISSUE_TEMPLATE/error.yml`). Fixtures, assertions and examples that mirror user-facing text keep it as the user sees it. Validation messages in packages are English; the UI maps them to its own copy. Linear stays in Spanish, so stage names and Linear headings are quoted as written there.
 
 ## Branches, commits and PRs
 
 - `staging` is the only working branch and it is protected. Work on your own branch named with the Linear key (`feat/pla-12-job-runner`) and open a PR to `staging`. A merge deploys to staging automatically.
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
-- PR titles use the same format with the Linear key, and PRs are merged with Squash and merge, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title.
+- PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Merge with Squash and merge; with the repo set to use the PR title and an empty message, the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title.
 - The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase

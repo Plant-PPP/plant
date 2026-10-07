@@ -75,8 +75,8 @@ call to `/adv-review` — you already own the one change.
 
 ## Phase 4 — Ship  (invoke `/auto-ship-gate`)
 ⚠️ **File the Linear issue FIRST, before the branch.** `mcp__linear__save_issue{team:"Plant", title,
-description}` (title and description in Spanish), then name the branch from its `gitBranchName` so it
-carries the `PLA-<n>` key (e.g. `feat/pla-12-job-runner`) and the integration links the PR by key.
+description}` (title and description in Spanish), then name the branch `<type>/pla-<n>-<english-slug>` with its
+`PLA-<n>` key (e.g. `feat/pla-12-job-runner`) and the integration links the PR by key.
 If `save_issue` fails, retry up to 3 times with backoff — the whole back half of the pipeline rides on
 this one call, so one retry is not enough margin. Still failing: open the PR anyway (an unlinked PR
 beats no PR), record `FAILED: Linear issue not created — gate unreachable`, and report the run as
