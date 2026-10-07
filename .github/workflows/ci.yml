@@ -135,6 +135,9 @@ jobs:
     # The staging ruleset requires a check with this name.
     name: database
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: read
     timeout-minutes: 20
     env:
       BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
@@ -148,14 +151,27 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # deploy-migrations, and the approval it asks for, runs only on a push
-      # that touches supabase/migrations/ or this workflow, so a change to the
-      # deploy applies whatever is pending. An unusable base counts as a change.
-      - name: Does this push change migrations
+      # deploy-migrations, and the approval it asks for, runs only while
+      # supabase/migrations/ differs from the last successful deploy, so a
+      # migration a red run, a failed deploy or a rejected approval left behind
+      # goes out with the next push. No deploy found, or an API error, counts as
+      # a difference.
+      - name: Migrations changed since the last deploy
         id: migrations
         if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if git cat-file -e "$BASE^{commit}" 2>/dev/null && git diff --quiet "$BASE" HEAD -- supabase/migrations/ .github/workflows/ci.yml; then
+          last=""
+          deployments="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=supabase-staging&per_page=30" --jq '.[] | "\(.id) \(.sha)"' || true)"
+          while read -r id sha; do
+            [ -n "$id" ] || continue
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state' || true)" = "success" ]; then
+              last="$sha"
+              break
+            fi
+          done <<<"$deployments"
+          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null && git diff --quiet "$last" HEAD -- supabase/migrations/; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -260,7 +276,8 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_TELEMETRY_DISABLED: "1"
-          # The CLI also reads these from committed .env files; the shell wins.
+          # The CLI also reads these from a supabase/.env a change could commit; the
+          # shell wins.
           SUPABASE_DB_MIGRATIONS_ENABLED: "true"
           PGSSLMODE: require
         run: |

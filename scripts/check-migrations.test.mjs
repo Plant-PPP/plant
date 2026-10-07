@@ -322,6 +322,18 @@ test("VACUUM, CLUSTER or ALTER SYSTEM alone fails", () => {
   }
 });
 
+test("a literal or comment mentioning a concurrent index passes", () => {
+  for (const statement of [
+    "COMMENT ON TABLE public.fixture_runs IS 'Indexed later with create index concurrently';",
+    "CREATE INDEX fixture_runs_ran_at_idx ON public.fixture_runs (ran_at) /* no concurrently: new table */;",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${VALID}\n${statement}\n`),
+    );
+    assert.equal(code, 0, `${statement}\n${output}`);
+  }
+});
+
 test("a lone concurrent index drop passes", () => {
   const { code, output } = check(({ write }) =>
     write(

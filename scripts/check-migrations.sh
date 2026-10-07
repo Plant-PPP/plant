@@ -123,7 +123,10 @@ not_atomic() {
       if (s == "") next
       n++
       if (s ~ /^(VACUUM|CLUSTER|ALTER[ \t\r\n]+SYSTEM|PREPARE[ \t\r\n]+TRANSACTION)([ \t\r\n(]|$)/) banned = 1
-      if (s ~ /(^|[^A-Z0-9_])((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
+      # Literals and block comments may mention an index statement.
+      t = s
+      gsub(/\047[^\047]*\047|\/\*([^*]|\*+[^*\/])*\*+\//, " ", t)
+      if (t ~ /(^|[^A-Z0-9_])((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
     }
     END {
       if (banned) print "VACUUM, CLUSTER, ALTER SYSTEM and PREPARE TRANSACTION do not belong in a migration"
