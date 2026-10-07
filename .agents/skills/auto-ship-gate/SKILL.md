@@ -112,7 +112,8 @@ Re-run the step-1 thread query once more here, before mergeable — CI's run is 
 
 ### 5. Confirm mergeable
 - `gh pr view <n> --json mergeStateStatus,reviewDecision`.
-- `DIRTY` = conflict with base: merge `origin/staging` in and resolve (mind the hazards:
+- `DIRTY` = conflict with base: merge `origin/staging` in (`git merge -m "chore: merge staging" origin/staging`; after resolving,
+  `git commit --no-edit` keeps that subject) and resolve (mind the hazards:
   keep-both conflict resolutions, migration timestamps that now sort before staging's), re-verify tests, push →
   **back to step 1**. ⚠️ **Unattended, resolve only a conflict you can settle mechanically.** A
   resolution that needs judgement — overlapping hunks, anything in a migration or money-math path —

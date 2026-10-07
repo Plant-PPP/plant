@@ -7,6 +7,6 @@ alwaysApply: true
 
 - A commit is a single Conventional Commits subject line in English, under 70 characters: `feat(web): add manual holdings entry`. No body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
 - PR titles use the same format plus the Linear key as the last token, e.g. `feat(web): add manual holdings entry (PLA-26)` (omitted only when there is no Linear issue). Whoever merges uses Squash and merge, keeps the PR title (minus any stacked `(N/X)` marker) as the commit title and clears the message box.
-- Destructive migrations: `[DESTRUCTIVE]` at the start of the PR title, before any `(N/X)` marker; it stays on the squash commit and is the only prefix allowed before the type.
+- Destructive migrations: `[DESTRUCTIVE]` at the start of the PR title, before any `(N/X)` marker; the squash commit title keeps `[DESTRUCTIVE]`, the only prefix it may have before the type.
 - The PR body starts with `## Intent`.
 - Describe the current state and why, not how you got there.
