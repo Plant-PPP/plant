@@ -46,7 +46,7 @@ Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-wor
 ## Ramas, commits y PRs
 
 - `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`.
-- A merge to `staging` deploys code and migrations to staging (see Supabase). A PR that adds migrations or touches `.github/workflows/` is merged by Tomas; an agent never merges it on its own.
+- A merge to `staging` deploys code and migrations to staging (see Supabase). A PR that adds migrations or touches `.github/workflows/` is merged by Tomas; an agent never merges it on its own, and never approves a deployment.
 - **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción va a salir con el workflow _Promote to production_ (PLA-13), que va a marcar el commit con el tag `production-latest`. No hay `main`.
 - Commits y títulos de PR en Conventional Commits, menos de 70 caracteres. Migraciones destructivas: `[DESTRUCTIVE]` al principio del título.
 - El cuerpo del PR arranca con `## Intent` y sigue el template de `.github/pull_request_template.md`.
@@ -54,7 +54,7 @@ Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-wor
 
 ## Supabase
 
-**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging`, after the `database` job. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
+**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that changes them, after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
 
 ```bash
 pnpm exec supabase migration new <nombre>

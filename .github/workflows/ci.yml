@@ -138,6 +138,8 @@ jobs:
     timeout-minutes: 20
     env:
       BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
+    outputs:
+      migrations: ${{ steps.migrations.outputs.changed }}
 
     steps:
       - name: Checkout
@@ -145,6 +147,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # deploy-migrations, and the approval it asks for, runs only on a push
+      # that touches supabase/migrations/. An unusable base counts as a change.
+      - name: Does this push change migrations
+        id: migrations
+        if: github.event_name == 'push'
+        run: |
+          if git cat-file -e "$BASE^{commit}" 2>/dev/null && git diff --quiet "$BASE" HEAD -- supabase/migrations/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup pnpm
         # Version is read from the root package.json "packageManager" field.
@@ -215,7 +229,7 @@ jobs:
   # its migrations, which are recorded and never re-run.
   deploy-migrations:
     name: Deploy migrations to plant-staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging' && needs.database.outputs.migrations == 'true'
     needs: [database]
     runs-on: ubuntu-latest
     environment: supabase-staging
