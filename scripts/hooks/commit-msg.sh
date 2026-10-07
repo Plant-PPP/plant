@@ -16,7 +16,12 @@ scissors=" ------------------------ >8 ------------------------"
 
 strip=(git stripspace --strip-comments)
 if [ "$(git config core.commentChar || true)" = "auto" ]; then
-  char=$(awk -v q="'" 'substr($0, 2, 1) == " " && index($0, q substr($0, 1, 1) q) { print substr($0, 1, 1); exit }' "$1")
+  # The last such line before the scissors: the template follows the user's
+  # text, which can have the same shape.
+  char=$(awk -v q="'" -v cut="$scissors" '
+    length($0) > length(cut) && substr($0, length($0) - length(cut) + 1) == cut { exit }
+    substr($0, 2, 1) == " " && index($0, q substr($0, 1, 1) q) { c = substr($0, 1, 1) }
+    END { print c }' "$1")
   strip=(git -c core.commentChar="${char:-#}" stripspace --strip-comments)
 fi
 
