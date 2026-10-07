@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   scan:
+    # A branch deletion is a push too, with nothing left to check out.
+    if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

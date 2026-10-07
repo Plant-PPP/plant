@@ -77,9 +77,6 @@ contents=$(git grep --text -i -l -E -e "$pattern" -- .) || {
 }
 flag "files whose contents match" "$contents"
 
-staged_names=$(git diff --cached --name-only --diff-filter=ACR) || die "git diff --cached"
-report "staged file names" "$staged_names"
-
 staged=$(git diff --cached --text -U0 --no-color) || die "git diff --cached"
 report "staged additions" "$(printf '%s\n' "$staged" | grep -E '^\+' | grep -vE '^\+\+\+ ' || true)"
 
