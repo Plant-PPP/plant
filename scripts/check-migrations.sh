@@ -123,9 +123,11 @@ not_atomic() {
       if (s == "") next
       n++
       if (s ~ /^(VACUUM|CLUSTER|ALTER[ \t\r\n]+SYSTEM|PREPARE[ \t\r\n]+TRANSACTION)([ \t\r\n(]|$)/) banned = 1
-      # Literals and block comments may mention an index statement.
+      # Literals and block comments may mention an index statement. An odd
+      # number of quotes means a `;` or `--` cut one off, so the literals stay.
       t = s
-      gsub(/\047[^\047]*\047|\/\*([^*]|\*+[^*\/])*\*+\//, " ", t)
+      if (gsub(/\047/, "&", t) % 2) gsub(/\/\*([^*]|\*+[^*\/])*\*+\//, " ", t)
+      else gsub(/\047[^\047]*\047|\/\*([^*]|\*+[^*\/])*\*+\//, " ", t)
       if (t ~ /(^|[^A-Z0-9_])((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
     }
     END {

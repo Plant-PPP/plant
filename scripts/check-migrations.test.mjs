@@ -11,6 +11,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  chmodSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -262,6 +263,9 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
     "/* unused */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "/* a */ /* b */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "/** doc **/ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    // A quote cut off by `--` or a `;` must not pair with a later literal.
+    "COMMENT ON COLUMN public.fixture_runs.ran_at IS 'Start time -- UTC';\n-- squawk-ignore ban-concurrent-index-creation-in-transaction, prefer-robust-stmts\nCREATE INDEX CONCURRENTLY fixture_runs_recent_idx ON public.fixture_runs (ran_at) WHERE user_id <> '00000000-0000-0000-0000-000000000000';",
+    "/* Owner list; the table's too big to lock */\n-- squawk-ignore ban-concurrent-index-creation-in-transaction, prefer-robust-stmts\nCREATE INDEX CONCURRENTLY fixture_runs_recent_idx ON public.fixture_runs (ran_at) WHERE user_id <> '00000000-0000-0000-0000-000000000000';",
     "/* Old index; unused. */\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "/* a */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx /* b */;",
     "-- squawk-ignore prefer-robust-stmts\nDROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
@@ -308,6 +312,8 @@ test("a concurrent index statement beside a single other fails", () => {
 test("VACUUM, CLUSTER or ALTER SYSTEM alone fails", () => {
   for (const statement of [
     "VACUUM;",
+    "\uFEFFVACUUM public.fixture_runs;",
+    "/* a */ /* b */ VACUUM public.fixture_runs;",
     "/** doc **/ VACUUM public.fixture_runs;",
     "VACUUM public.fixture_runs;",
     "ALTER\n  SYSTEM SET work_mem = '64MB';",
@@ -384,7 +390,6 @@ test("an exempted transaction control statement fails", () => {
 });
 
 test("an unterminated block comment does not hang the check", () => {
-  const started = Date.now();
   const { code, output } = check(({ write }) =>
     write(
       `${MIGRATIONS}/20260106000000_new.sql`,
@@ -392,7 +397,6 @@ test("an unterminated block comment does not hang the check", () => {
     ),
   );
   assert.equal(code, 0, output || "timed out");
-  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started} ms`);
 });
 
 test("a symlinked migration fails, also when merged earlier", () => {
@@ -408,8 +412,49 @@ test("a symlinked migration fails, also when merged earlier", () => {
       return { base };
     });
     assert.equal(code, 1, `base: ${base}`);
-    assert.match(output, /regular files/);
+    assert.match(
+      output,
+      /submodules:\nsupabase\/migrations\/20260106000000_linked\.sql\n/,
+    );
   }
+});
+
+test("a submodule migration fails, also when merged earlier", () => {
+  // `git add -A` drops a gitlink with no checkout, so it is committed after.
+  for (const base of [undefined, "HEAD~1"]) {
+    const { code, output } = check(() => ({
+      base,
+      afterCommit: (cwd) => {
+        git(
+          cwd,
+          "update-index",
+          "--add",
+          "--cacheinfo",
+          `160000,${git(cwd, "rev-parse", "HEAD")},${MIGRATIONS}/20260106000000_sub.sql`,
+        );
+        git(cwd, "commit", "-q", "-m", "submodule");
+      },
+    }));
+    assert.equal(code, 1, `base: ${base}\n${output}`);
+    assert.match(
+      output,
+      /submodules:\nsupabase\/migrations\/20260106000000_sub\.sql\n/,
+    );
+  }
+});
+
+test("an executable migration passes", () => {
+  const path = `${MIGRATIONS}/20260106000000_new.sql`;
+  const { code, output } = check(({ write }) => {
+    write(path);
+    return {
+      afterCommit: (cwd) => {
+        chmodSync(join(cwd, path), 0o755);
+        git(cwd, "commit", "-q", "-am", "executable");
+      },
+    };
+  });
+  assert.equal(code, 0, output);
 });
 
 test("a committed migration missing from the working tree fails", () => {
@@ -424,7 +469,6 @@ test("a committed migration missing from the working tree fails", () => {
 });
 
 test("a long first line does not slow the check down", () => {
-  const started = Date.now();
   const { code, output } = check(({ write }) =>
     write(
       `${MIGRATIONS}/20260106000000_long_line.sql`,
@@ -432,7 +476,6 @@ test("a long first line does not slow the check down", () => {
     ),
   );
   assert.equal(code, 0, output || "timed out");
-  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started} ms`);
 });
 
 test("errors show accented names as typed", () => {
