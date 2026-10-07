@@ -78,7 +78,7 @@ Check all my open/draft PRs for unresolved feedback — from review bots AND any
 
 4. **Check CI on each PR.** Use the `statusCheckRollup` from step 1, or per-PR `gh pr checks NNN`. Surface any check in a FAIL/ERROR/CANCELLED state. For details on a failure, drill in with `gh pr checks NNN` then `gh run view <run-id> --log-failed`.
    - **Formatting is checked on changed files only** (`pnpm format:check`, backed by `scripts/formatting/`). A red formatting check is real for the PR's own files — fix it with `pnpm format`. NEVER dismiss a build/test/typecheck/migration failure as noise.
-   - Keep branches linear: rebase off `staging`, never merge `staging` in. That rebase needs a force-push: `git fetch` first and pin the lease to the exact sha (`--force-with-lease=<branch>:<sha>`) — a bare `--force-with-lease` can still clobber a commit pushed from another session and report success.
+   - Keep branches current by merging `origin/staging` in (`git merge -m "chore: merge staging" origin/staging`); Squash and merge flattens it on `staging`. Never rebase a pushed branch or force-push (`.claude/settings.json` denies it).
    - Genuinely-failing checks (unit tests, tsc, lint, build, type-gen drift) are real — surface them.
 
 5. Output three sections:

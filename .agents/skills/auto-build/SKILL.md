@@ -76,7 +76,7 @@ call to `/adv-review` — you already own the one change.
 ## Phase 4 — Ship  (invoke `/auto-ship-gate`)
 ⚠️ **File the Linear issue FIRST, before the branch.** `mcp__linear__save_issue{team:"Plant", title,
 description}` (title and description in Spanish), then name the branch `<type>/pla-<n>-<english-slug>` with its
-`PLA-<n>` key (e.g. `feat/pla-12-job-runner`) and the integration links the PR by key.
+`PLA-<n>` key (e.g. `feat/pla-12-job-runner`; without an issue, `<type>/<english-slug>`) and the integration links the PR by key.
 If `save_issue` fails, retry up to 3 times with backoff — the whole back half of the pipeline rides on
 this one call, so one retry is not enough margin. Still failing: open the PR anyway (an unlinked PR
 beats no PR), record `FAILED: Linear issue not created — gate unreachable`, and report the run as
@@ -86,7 +86,7 @@ and CI gate is unreachable**: no `gh pr ready`, no review bots, no CI. The back 
 of this pipeline exists only if the issue exists.
 
 Then commit (one-line message per CLAUDE.md) + push (branch first if on staging — never push to `staging` or `production`), open
-the PR against `staging` (title per CLAUDE.md and `nav-github`, ending in `(PLA-<n>)`; body
+the PR against `staging` (title per CLAUDE.md and `nav-github`, ending in `(PLA-<n>)` when the issue exists; body
 starting with `## Intent`), write `phase: 4 | gate: not-started`
 into the master plan (a PR now exists, so it is materialized — never a separate `auto-build.state`),
 and **invoke `/auto-ship-gate` via the `Skill` tool.** Nothing else. This conductor

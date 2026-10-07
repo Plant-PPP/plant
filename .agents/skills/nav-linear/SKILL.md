@@ -229,7 +229,7 @@ Match the workspace's existing triage and classification patterns rather than in
 
 Start from one project unless there's a clear reason to split.
 
-- **Name** in title case ("Broker PDF Import", not "Broker pdf import"); Spanish names are fine when that is the workspace convention.
+- **Name** in Spanish, matching existing Plant projects ("Carga con IA"), capitalized consistently.
 - **Team** is always Plant.
 - **Icon** — a built-in icon matching the purpose and nearby conventions. No emojis. Invalid icon names 400 the whole create — have a fallback ready ("Heart", "Book", "Rocket" are known-valid).
 - **Description** holds purpose, scope, phase/version framing, boundaries, non-goals, and success criteria — only where they clarify naturally. Concise and decision-oriented; not the home for every supporting detail.
@@ -251,7 +251,7 @@ Start from one project unless there's a clear reason to split.
 Use an initiative only when the work is a broader goal grouping multiple projects over time.
 
 - Start from the problem, goal, or strategic outcome; keep it high-level (per the Part 2 opener). No issue-level breakdown unless the context requires it.
-- **Name** in title case; **description** decision-oriented and easy to scan.
+- **Name** in Spanish, capitalized like existing projects; **description** decision-oriented and easy to scan.
 - Prefer one explicit **owner**; set status, target date, and labels when determinable with high confidence. Labels for cross-cutting strategic categories (product line, region, company goal, planning period).
 - **Initiatives carry no priority.** Ranking them is a deliberate planning act, not a queue; sweeps leave the all-None state alone.
 - **Sub-initiatives** only when a larger goal genuinely benefits from nesting.

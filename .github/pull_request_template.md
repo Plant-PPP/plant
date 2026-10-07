@@ -1,6 +1,6 @@
 <!--
-Title: Conventional Commits, under 70 characters, with the Linear key (for example `feat(web): add manual holdings entry (PLA-26)`).
-Destructive migration: the title starts with `[DESTRUCTIVE]`.
+Title: Conventional Commits, under 70 characters, ending in the Linear key when there is an issue (for example `feat(web): add manual holdings entry (PLA-26)`).
+Destructive migration: the title starts with `[DESTRUCTIVE]`, before any stacked-PR `(N/X)` marker.
 Delete the sections that don't apply.
 -->
 
