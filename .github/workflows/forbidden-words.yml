@@ -21,19 +21,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # New branch (before is all zeros): scan from where it left staging, or
-      # all history when it shares none.
-      # Same range policy as scripts/hooks/pre-push.sh; change both.
+      # Scans the whole branch since it left staging (all history when it
+      # shares none), not only the new commits: a push whose head says
+      # [skip ci] creates no run, so the next push has to cover it.
       - name: Resolve range
         id: range
-        env:
-          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
-            && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            echo "range=$BEFORE..HEAD" >> "$GITHUB_OUTPUT"
-          elif base=$(git merge-base HEAD origin/staging 2>/dev/null); then
+          if base=$(git merge-base HEAD origin/staging 2>/dev/null); then
             echo "range=$base..HEAD" >> "$GITHUB_OUTPUT"
           else
             echo "range=HEAD" >> "$GITHUB_OUTPUT"
