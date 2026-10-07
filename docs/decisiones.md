@@ -2,6 +2,14 @@
 
 Registro de decisiones que no están en el plan, o que lo bajan a detalle. La más nueva arriba.
 
+## 07/10/2026 · Perfiles, consentimientos y auditoría (PLA-16)
+
+- **`REVOKE ALL` antes de cada grant.** Con `auto_expose_new_tables = false`, una tabla nueva en `public` igual les deja TRUNCATE, REFERENCES, TRIGGER y MAINTAIN a `anon` y `authenticated` por default. El test `schema_rls_and_grants_test.sql` falla si `anon` tiene cualquier privilegio.
+- **Los titulares no van en `profiles` todavía.** Llegan con la feature que los usa (cuentas y tenencias), igual que el resto de las tablas.
+- **`consents` es un historial.** Retirar un consentimiento es una fila nueva con `granted = false`; el estado actual es la última fila por tipo.
+- **`audit_log` vive en `private` y no tiene FK a `auth.users`**, así el rastro sobrevive al borrado de la cuenta. Quién la escribe llega con PLA-21.
+- **El job `database` de CI usa la CLI fijada en `package.json`** (`pnpm exec supabase`) y no hace login en ghcr.io, así el workflow sigue con `contents: read`. Si el registro de imágenes empieza a limitar las descargas, se suma el login.
+
 ## 07/10/2026 · Monorepo (PLA-7)
 
 - **Los paquetes exportan TypeScript, sin build.** `@plant/shared`, `sources`, `core` y `jobs` apuntan `exports` a `src/index.ts` y `apps/web` los compila con `transpilePackages`. Así no hay un `dist` que se quede viejo ni un paso de build antes de `pnpm dev:up`. Si algún día un paquete corre fuera de Next (por ejemplo un worker de Temporal), ese paquete suma su build.

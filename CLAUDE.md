@@ -26,7 +26,7 @@ pnpm dev:up                         # Supabase local + web en :3000 + Inngest de
 | `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                      |
 | `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                     |
 | `packages/jobs`    | Cliente de Inngest, una función `ping` de prueba y las opciones de `/api/inngest`. El puerto `JobRunner` llega con Carga con IA   |
-| `supabase/`        | Config. Las migraciones y los tests pgTAP llegan con la base (PLA-16)                                                             |
+| `supabase/`        | Config, migraciones y tests pgTAP (`supabase/tests/`, corren en el job `database` de CI)                                          |
 | `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                  |
 
 Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `transpilePackages`, así que no hay que buildearlos antes de levantar la web. Qué paquete puede depender de cuál lo verifica `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) sobre los `package.json`, y `inngest` solo se declara en `packages/jobs` y `apps/web`. El chequeo incluye el `package.json` de la raíz, porque todos los paquetes ven su `node_modules`; no importes otro paquete con rutas relativas (`../../jobs/src`).

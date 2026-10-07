@@ -127,3 +127,113 @@ jobs:
         env:
           TURBO_SCM_BASE: ${{ steps.base.outputs.ref }}
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
+
+  # Runs in parallel with `ci`: it needs only the checkout, the pinned
+  # Supabase CLI and a local Postgres. Its steps skip when the diff touches
+  # nothing a fresh database is built from or tested by, so the job still
+  # reports green and can be a required check.
+  database:
+    name: Database (types, pgTAP, plpgsql_check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Same base as the `ci` job.
+      - name: Resolve diff base
+        id: base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            candidate="${{ github.event.before }}"
+          else
+            candidate="origin/${{ github.base_ref }}"
+          fi
+          if [ -n "$candidate" ] && [ "$candidate" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "$candidate^{commit}" 2>/dev/null; then
+            echo "ref=$candidate" >> "$GITHUB_OUTPUT"
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No usable diff base ('$candidate'), falling back to the root commit, which runs everything."
+            echo "ref=$(git rev-list --max-parents=0 HEAD | head -n 1)" >> "$GITHUB_OUTPUT"
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Deployed databases never re-run an applied migration, so an edited one
+      # would only change fresh databases. Corrections go in a new migration.
+      # Skipped without a resolved base: against the root commit every
+      # migration would look modified.
+      - name: Migrations are append-only
+        if: steps.base.outputs.resolved == 'true'
+        run: |
+          mutated="$(git diff --name-status --find-renames --diff-filter=MDRCT "${{ steps.base.outputs.ref }}...HEAD" -- supabase/migrations)"
+          if [ -n "$mutated" ]; then
+            echo "::error::Merged migrations are append-only, fix forward in a new migration:"
+            echo "$mutated"
+            exit 1
+          fi
+
+      # Fails closed: a git error runs the gate instead of skipping it.
+      # package.json pins the Supabase CLI, which shapes the generated types.
+      - name: Detect database changes
+        id: db_changes
+        run: |
+          if git diff --quiet "${{ steps.base.outputs.ref }}...HEAD" -- supabase packages/shared/src/db \
+            scripts/generate-supabase-types.sh package.json pnpm-lock.yaml .github/workflows/ci.yml; then
+            echo "has_db_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_db_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup pnpm
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        # Version is read from the root package.json "packageManager" field.
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - name: Setup Node.js
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # `db start` boots only Postgres with every migration applied; the full
+      # stack pulls images for services nothing below uses.
+      - name: Start Supabase database
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        run: pnpm exec supabase db start
+
+      - name: Check Supabase types are up to date
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        run: |
+          pnpm run db:generate:supabase-types
+          if [ -n "$(git status --porcelain -- packages/shared/src/db/generated)" ]; then
+            echo "::error::Supabase types are out of date. Run 'pnpm db:generate:supabase-types' locally and commit the changes."
+            git diff -- packages/shared/src/db/generated
+            exit 1
+          fi
+
+      # `test db` exits 0 on an empty suite, so an emptied supabase/tests must
+      # fail here instead of passing.
+      - name: DB behavior tests (pgTAP)
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        run: |
+          shopt -s nullglob; files=(supabase/tests/*.sql supabase/tests/*.pg)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::supabase/tests contains no pgTAP tests"; exit 1; }
+          pnpm exec supabase test db --local
+
+      # plpgsql bodies are late-bound: CREATE FUNCTION validates nothing inside
+      # them, so dropping or renaming a table breaks every function that uses
+      # it without anything else noticing. plpgsql_check (`db lint`) does.
+      - name: DB function lint (plpgsql_check)
+        if: steps.db_changes.outputs.has_db_changes == 'true'
+        run: pnpm exec supabase db lint --local --schema public,private --level error --fail-on error
