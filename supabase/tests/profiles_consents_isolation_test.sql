@@ -43,7 +43,7 @@ SELECT results_eq(
 -- would let the select policy hide Beto's row too). The second then sets Ana's
 -- own row.
 SELECT lives_ok(
-  $$ UPDATE public.profiles SET display_name = 'pisado' $$,
+  $$ UPDATE public.profiles SET display_name = 'overwritten' $$,
   'an update with no WHERE reaches only the user''s own profile'
 );
 UPDATE public.profiles SET display_name = 'Ana', reference_dollar = 'ccl'
