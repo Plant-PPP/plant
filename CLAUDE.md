@@ -35,16 +35,18 @@ Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `trans
 
 ```bash
 pnpm check          # typecheck + lint de todos los paquetes
-pnpm test           # tests de todo
+pnpm test           # package tests
+pnpm test:scripts   # scripts/ tests (squawk and migration checks)
 pnpm turbo:affected # solo lo que cambió contra origin/staging
 pnpm format         # prettier sobre lo cambiado
 ```
 
-Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, el mismo chequeo sobre el mensaje en `commit-msg`, y en el pre-push el chequeo sobre los commits, autores y nombre de cada rama que subís, más typecheck, lint y tests de lo afectado. CI repite todo eso, más `pnpm audit`, los límites entre paquetes y el job `database` (migraciones append-only y en orden, tipos al día y pgTAP).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types and pgTAP).
 
 ## Ramas, commits y PRs
 
-- `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`. Al hacer merge se despliega solo a staging.
+- `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`.
+- A merge to `staging` deploys code and migrations to staging (see Supabase). A PR that adds migrations or touches `.github/workflows/` is merged by Tomas; an agent never merges it on its own, and never approves a deployment.
 - **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción va a salir con el workflow _Promote to production_ (PLA-13), que va a marcar el commit con el tag `production-latest`. No hay `main`.
 - Commits y títulos de PR en Conventional Commits, menos de 70 caracteres. Migraciones destructivas: `[DESTRUCTIVE]` al principio del título.
 - El cuerpo del PR arranca con `## Intent` y sigue el template de `.github/pull_request_template.md`.
@@ -52,7 +54,7 @@ Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el cheque
 
 ## Supabase
 
-**Nunca corras `supabase db push`.** Las migraciones van a llegar a staging por CI en cada merge (PLA-11).
+**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that leaves one unapplied since the last deploy, after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
 
 ```bash
 pnpm exec supabase migration new <nombre>
@@ -61,6 +63,7 @@ pnpm db:generate:supabase-types     # después de cada migración; el pre-push f
 ```
 
 - Una migración aplicada en staging es de solo lectura: los cambios van en una migración nueva.
+- Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. Any `... INDEX CONCURRENTLY` statement goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql`. The PLA-16 migration predates squawk: do not use it as a model.
 - RLS en cada tabla desde que se crea, con `user_id = (select auth.uid())` en `USING` y `WITH CHECK`.
 - "Automatically expose new tables" está apagado (`auto_expose_new_tables = false` en `supabase/config.toml` y en el dashboard): cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
 - Cada tabla arranca con `REVOKE ALL` y `authenticated` escribe solo con grants por columna, nunca sobre `user_id`. La forma completa de las tablas con dueño está en `docs/decisiones.md`; el piso de pgTAP verifica una parte y el test de dos usuarios de cada tabla, el resto.
