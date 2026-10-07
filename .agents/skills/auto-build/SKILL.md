@@ -85,9 +85,9 @@ greenfield run has no `PLA-<n>` key, manifest A1 (BLOCKING) can never clear, and
 and CI gate is unreachable**: no `gh pr ready`, no review bots, no CI. The back half
 of this pipeline exists only if the issue exists.
 
-Then commit + push (branch first if on staging — never push to `staging` or `production`), open
-the PR against `staging` (Conventional Commits title under 70 chars, `[DESTRUCTIVE]` prefix for a
-destructive migration, body starting with `## Intent`), write `phase: 4 | gate: not-started`
+Then commit (one-line message per CLAUDE.md) + push (branch first if on staging — never push to `staging` or `production`), open
+the PR against `staging` (title per CLAUDE.md and `nav-github`, ending in `(PLA-<n>)`; body
+starting with `## Intent`), write `phase: 4 | gate: not-started`
 into the master plan (a PR now exists, so it is materialized — never a separate `auto-build.state`),
 and **invoke `/auto-ship-gate` via the `Skill` tool.** Nothing else. This conductor
 does not know what the gate does and must not act as though it does — migration checks, the Phase-A

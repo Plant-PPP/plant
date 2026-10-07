@@ -96,7 +96,7 @@ When creating branches or PRs for me, follow these rules:
 
 ### Branches
 - Always branch from up-to-date `staging` (the integration branch) unless told otherwise: `git fetch origin && git checkout -b <name> origin/staging`
-- Naming: `fix/<short-slug>` for bug fixes, `feat/<short-slug>` for features, `idea/<short-slug>` for spec/research work. Include the Linear issue key when one exists so Linear auto-links the PR, e.g. `feat/pla-12-job-runner` (see `nav-linear`).
+- Naming: `<conventional-type>/<short-slug>` in English (`feat/`, `fix/`, `chore/`, `docs/`, `test/`…), `idea/<short-slug>` for spec/research work. Include the Linear issue key when one exists so Linear auto-links the PR, e.g. `feat/pla-12-job-runner` (see `nav-linear`).
 - Never commit research/spec `.md` docs; never reference research docs in code or migrations.
 
 ### PR descriptions
