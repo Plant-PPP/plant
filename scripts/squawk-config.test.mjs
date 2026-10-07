@@ -24,8 +24,8 @@ const SQUAWK = fromRoot("node_modules/.bin/squawk");
 
 /** Fixture -> the rule squawk must reject it for, or "pass". */
 const EXPECTED = {
-  // assume_in_transaction: a concurrent build beside any other statement is
-  // the SQLSTATE 25001 deploy failure...
+  // assume_in_transaction: a concurrent build beside any other statement makes
+  // the migration non-atomic under `db push`...
   "fail-concurrent-index-not-alone.sql":
     "ban-concurrent-index-creation-in-transaction",
   // ...and a lone one is legal.

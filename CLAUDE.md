@@ -45,7 +45,7 @@ Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-wor
 
 ## Ramas, commits y PRs
 
-- `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`. Al hacer merge se despliega solo a staging.
+- `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`.
 - A merge to `staging` deploys code and migrations to staging (see Supabase). A PR that adds migrations or touches `.github/workflows/` is merged by Tomas; an agent never merges it on its own.
 - **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción va a salir con el workflow _Promote to production_ (PLA-13), que va a marcar el commit con el tag `production-latest`. No hay `main`.
 - Commits y títulos de PR en Conventional Commits, menos de 70 caracteres. Migraciones destructivas: `[DESTRUCTIVE]` al principio del título.

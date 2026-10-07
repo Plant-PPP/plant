@@ -170,12 +170,15 @@ jobs:
         run: pnpm test:scripts
 
       # `db start` boots only Postgres with every migration applied; the full
-      # stack pulls images for services nothing below uses.
+      # stack pulls images for services nothing below uses. It runs even when
+      # the migration checks failed, so one push reports whether they apply.
       - name: Start Supabase database
         id: db
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm exec supabase db start
 
       - name: Check Supabase types are up to date
+        if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: |
           bash scripts/check-supabase-types.sh || {
             rc=$?

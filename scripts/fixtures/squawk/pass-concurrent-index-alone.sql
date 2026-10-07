@@ -1,10 +1,9 @@
--- A concurrent index build, alone in its file so `db push` does not wrap it in
--- a transaction.
+-- A concurrent index build, alone in its file so the migration still applies
+-- all-or-nothing (.squawk.toml).
 --
--- The exemptions are forced by Postgres:
---   require-lock-timeout / require-statement-timeout: a `SET` beside this
---     statement makes the file multi-statement, and a concurrent build inside a
---     transaction fails with SQLSTATE 25001.
+-- The exemptions:
+--   require-lock-timeout / require-statement-timeout: the header's `SET`s would
+--     be other statements beside the build.
 --   prefer-robust-stmts: `IF NOT EXISTS` would silently adopt an INVALID index
 --     left by a failed build instead of failing loudly.
 -- squawk-ignore require-lock-timeout, require-statement-timeout, prefer-robust-stmts
