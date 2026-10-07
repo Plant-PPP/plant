@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -86,7 +86,10 @@ const check = (
     git(cwd, "commit", "-q", "--allow-empty", "-m", "base");
     git(cwd, "checkout", "-q", "-b", "feature");
     const returned = change({
-      write: (path, sql = VALID) => writeFileSync(join(cwd, path), sql),
+      write: (path, sql = VALID) => {
+        mkdirSync(dirname(join(cwd, path)), { recursive: true });
+        writeFileSync(join(cwd, path), sql);
+      },
       append: (path, sql) => appendFileSync(join(cwd, path), sql),
       git: (...args) => git(cwd, ...args),
     });
@@ -173,21 +176,49 @@ test("a merged migration with an accented name still sets the latest version", (
 
 test("a version less than a day in the future passes", () => {
   const { code, output } = check(({ write }) =>
-    write(`${MIGRATIONS}/${version(0.5)}_soon.sql`),
+    write(`${MIGRATIONS}/${version(0.9)}_soon.sql`),
   );
   assert.equal(code, 0, output);
 });
 
 test("a version more than a day in the future fails", () => {
   const { code, output } = check(({ write }) =>
-    write(`${MIGRATIONS}/${version(2)}_future.sql`),
+    write(`${MIGRATIONS}/${version(1.1)}_future.sql`),
   );
   assert.equal(code, 1);
   assert.match(output, /in the future/);
 });
 
+test("the day of slack is counted in UTC", () => {
+  const { code, output } = check(
+    ({ write }) => write(`${MIGRATIONS}/${version(1.5)}_future.sql`),
+    { env: { TZ: "Etc/GMT-14" } },
+  );
+  assert.equal(code, 1);
+  assert.match(output, /in the future/);
+});
+
+test("a version before one merged after the branch point fails", () => {
+  const { code, output } = check(({ git, write }) => {
+    git("checkout", "-q", "staging");
+    write(`${MIGRATIONS}/20260110000000_later.sql`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "staging moves on");
+    git("checkout", "-q", "feature");
+    write(`${MIGRATIONS}/20260108000000_new.sql`);
+  });
+  assert.equal(code, 1);
+  assert.match(output, /after the latest one in staging \(20260110000000\)/);
+});
+
 test("a migration file the CLI would skip fails", () => {
-  for (const name of ["20260106000000_new.SQL", "20260106000000_new"]) {
+  for (const name of [
+    "20260106000000_new.SQL",
+    "20260106000000_new",
+    "20260106000000_new.sql.bak",
+    "20260106000000_new.sql~",
+    "sub/20260106000000_new.sql",
+  ]) {
     const { code, output } = check(({ write }) =>
       write(`${MIGRATIONS}/${name}`),
     );
@@ -206,14 +237,24 @@ test("two new migrations with one version fail", () => {
 });
 
 test("a migration that opts out of the transaction fails", () => {
+  for (const first of [
+    "-- pg-delta: transaction=false\n",
+    "\uFEFF-- pg-delta: transaction=false\r\n",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${first}${VALID}`),
+    );
+    assert.equal(code, 1, JSON.stringify(first));
+    assert.match(output, /one transaction/);
+  }
+});
+
+test("errors show accented names as typed", () => {
   const { code, output } = check(({ write }) =>
-    write(
-      `${MIGRATIONS}/20260106000000_new.sql`,
-      `\uFEFF-- pg-delta: transaction=false\r\n${VALID}`,
-    ),
+    write(`${MIGRATIONS}/20260106000000_añadir.sql`),
   );
   assert.equal(code, 1);
-  assert.match(output, /one transaction/);
+  assert.match(output, /20260106000000_añadir\.sql/);
 });
 
 test("it checks the whole checkout from a subdirectory", () => {
@@ -313,7 +354,7 @@ test("a base with no history in common fails", () => {
     ),
   }));
   assert.notEqual(code, 0);
-  assert.match(output, /merge base/);
+  assert.doesNotMatch(output, /::warning::/);
 });
 
 test("the all-zero base of a new branch skips with a warning", () => {

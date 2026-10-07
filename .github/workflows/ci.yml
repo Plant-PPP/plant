@@ -128,9 +128,9 @@ jobs:
           TURBO_SCM_BASE: ${{ steps.base.outputs.ref }}
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
 
-  # Every PR and push: the migration checks and their script tests, then a
-  # fresh local Postgres with every migration applied, the types check and
-  # pgTAP.
+  # Every PR and push: the new-migration checks and script tests, then a fresh
+  # local Postgres with every migration applied, the types check and pgTAP. On
+  # PRs, last, the append-only check.
   database:
     name: Database (migrations, types, pgTAP, plpgsql_check)
     runs-on: ubuntu-latest
@@ -245,6 +245,7 @@ jobs:
       - name: Push pending migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_TELEMETRY_DISABLED: "1"
         run: |
           [ -n "$SUPABASE_DB_URL" ] || { echo "::error::SUPABASE_DB_URL is not set in the supabase-staging environment"; exit 1; }
           # Migrations only: no Vault secrets from config.toml, and no prompt.

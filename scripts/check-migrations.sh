@@ -6,7 +6,7 @@
 #   bash scripts/check-migrations.sh <base>
 #
 # Checks the checkout that holds the current directory, and finds squawk and
-# its config next to this script, so it can check any checkout.
+# its config in the repo this script belongs to, so it can check any checkout.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -63,7 +63,7 @@ pnpm db:generate:supabase-types     # después de cada migración; el pre-push f
 ```
 
 - Una migración aplicada en staging es de solo lectura: los cambios van en una migración nueva.
-- Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. A `CREATE INDEX CONCURRENTLY` goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql`. The PLA-16 migration predates squawk: do not use it as a model.
+- Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. Any `... INDEX CONCURRENTLY` statement goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql` (squawk only checks `CREATE`). The PLA-16 migration predates squawk: do not use it as a model.
 - RLS en cada tabla desde que se crea, con `user_id = (select auth.uid())` en `USING` y `WITH CHECK`.
 - "Automatically expose new tables" está apagado (`auto_expose_new_tables = false` en `supabase/config.toml` y en el dashboard): cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
 - Cada tabla arranca con `REVOKE ALL` y `authenticated` escribe solo con grants por columna, nunca sobre `user_id`. La forma completa de las tablas con dueño está en `docs/decisiones.md`; el piso de pgTAP verifica una parte y el test de dos usuarios de cada tabla, el resto.

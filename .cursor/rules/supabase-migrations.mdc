@@ -9,5 +9,5 @@ alwaysApply: true
 - Para cambiar algo de una migración pasada, agregá una migración **nueva**.
 - Solo se crean o editan migraciones que todavía no se aplicaron.
 - Never run `supabase db push`: the CI `deploy-migrations` job applies migrations to `plant-staging` on every merge to `staging`. Until the beta that database is also production's, so migrations are additive only (see `CLAUDE.md`).
-- Every new migration passes squawk and starts with the header in `scripts/fixtures/squawk/pass-migration-header.sql`, except a lone `CREATE INDEX CONCURRENTLY` (see `CLAUDE.md`).
+- Every new migration passes squawk and starts with the header in `scripts/fixtures/squawk/pass-migration-header.sql`, except a lone `... INDEX CONCURRENTLY` statement (see `CLAUDE.md`).
 - Cada tabla nace con RLS (`user_id = (select auth.uid())` en `USING` y `WITH CHECK`) y `GRANT` explícito a `authenticated`, nunca a `anon`.

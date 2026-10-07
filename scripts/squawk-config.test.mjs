@@ -6,8 +6,8 @@
 // The lint does nothing on a change that adds no migration, so the fixtures are
 // what prove it still works after a squawk bump. They also pin .squawk.toml:
 // squawk ignores config keys it does not recognise, so a typo there would drop
-// a setting silently, and each fixture changes verdict without the setting it
-// covers.
+// a setting silently, and the fixtures tied to a setting (assume_in_transaction,
+// included_rules) change verdict without it.
 
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
