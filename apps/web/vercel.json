@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
   "regions": ["gru1"],
   "buildCommand": "TURBO_TELEMETRY_DISABLED=1 pnpm exec turbo run build --filter=@plant/web",
   "ignoreCommand": "npx turbo-ignore @plant/web"
