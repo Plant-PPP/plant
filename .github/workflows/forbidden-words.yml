@@ -23,6 +23,7 @@ jobs:
 
       # New branch (before is all zeros): scan from where it left staging, or
       # all history when it shares none.
+      # Same range policy as scripts/hooks/pre-push.sh; change both.
       - name: Resolve range
         id: range
         env:

@@ -27,6 +27,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     rm -f "$tag_message"
     [ "$status" -eq 0 ] || exit "$status"
   fi
+  # Same range policy as .github/workflows/forbidden-words.yml; change both.
   if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
     range="$remote_sha..$local_sha"
   elif ref_base="$(git merge-base "$local_sha" origin/staging 2>/dev/null)"; then
