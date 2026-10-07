@@ -19,15 +19,15 @@ pnpm dev:up                         # Supabase local + web en :3000 + Inngest de
 
 ## Estructura
 
-| Paquete            | Qué tiene                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | Next.js 16 (App Router) + React 19 en Vercel `gru1`. Incluye `/api/inngest` (el chat llega con el Asistente)                      |
-| `packages/shared`  | Dinero (`Money` con string decimal y moneda). Llegan después: `pricing.ts`, `ai-cost.ts`, `prompt-text.ts` y los tipos de la base |
-| `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                      |
-| `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                     |
-| `packages/jobs`    | Cliente de Inngest, una función `ping` de prueba y las opciones de `/api/inngest`. El puerto `JobRunner` llega con Carga con IA   |
-| `supabase/`        | Config. Las migraciones y los tests pgTAP llegan con la base (PLA-16)                                                             |
-| `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                  |
+| Paquete            | Qué tiene                                                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`         | Next.js 16 (App Router) + React 19 en Vercel `gru1`. Incluye `/api/inngest` (el chat llega con el Asistente)                                                   |
+| `packages/shared`  | Dinero (`Money` con string decimal y moneda). Tipos de la base generados en `src/db/generated/`. Llegan después: `pricing.ts`, `ai-cost.ts` y `prompt-text.ts` |
+| `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                                                   |
+| `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                                                  |
+| `packages/jobs`    | Cliente de Inngest, una función `ping` de prueba y las opciones de `/api/inngest`. El puerto `JobRunner` llega con Carga con IA                                |
+| `supabase/`        | Config, migraciones y tests pgTAP (`supabase/tests/`, corren en el job `database` de CI)                                                                       |
+| `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                                               |
 
 Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `transpilePackages`, así que no hay que buildearlos antes de levantar la web. Qué paquete puede depender de cuál lo verifica `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) sobre los `package.json`, y `inngest` solo se declara en `packages/jobs` y `apps/web`. El chequeo incluye el `package.json` de la raíz, porque todos los paquetes ven su `node_modules`; no importes otro paquete con rutas relativas (`../../jobs/src`).
 
@@ -40,7 +40,7 @@ pnpm turbo:affected # solo lo que cambió contra origin/staging
 pnpm format         # prettier sobre lo cambiado
 ```
 
-Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, el mismo chequeo sobre el mensaje en `commit-msg`, y en el pre-push el chequeo sobre los commits, autores y nombre de cada rama que subís, más typecheck, lint y tests de lo afectado. CI repite todo eso, más `pnpm audit` y los límites entre paquetes.
+Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, el mismo chequeo sobre el mensaje en `commit-msg`, y en el pre-push el chequeo sobre los commits, autores y nombre de cada rama que subís, más typecheck, lint y tests de lo afectado. CI repite todo eso, más `pnpm audit`, los límites entre paquetes y el job `database` (migraciones append-only y en orden, tipos al día y pgTAP).
 
 ## Ramas, commits y PRs
 
@@ -63,6 +63,7 @@ pnpm db:generate:supabase-types     # después de cada migración; el pre-push f
 - Una migración aplicada en staging es de solo lectura: los cambios van en una migración nueva.
 - RLS en cada tabla desde que se crea, con `user_id = (select auth.uid())` en `USING` y `WITH CHECK`.
 - "Automatically expose new tables" está apagado (`auto_expose_new_tables = false` en `supabase/config.toml` y en el dashboard): cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
+- Cada tabla arranca con `REVOKE ALL` y `authenticated` escribe solo con grants por columna, nunca sobre `user_id`. La forma completa de las tablas con dueño está en `docs/decisiones.md`; el piso de pgTAP verifica una parte y el test de dos usuarios de cada tabla, el resto.
 - `REVOKE ... FROM PUBLIC, anon, authenticated` explícito en las funciones, y `SECURITY DEFINER` siempre con `SET search_path`.
 - Plata en `numeric` en Postgres y como string decimal en el contrato, nunca en float. Cada monto lleva su moneda.
 

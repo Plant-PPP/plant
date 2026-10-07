@@ -45,9 +45,6 @@
     },
     "test": {
       "dependsOn": ["transit"],
-      // Turbo strips undeclared env vars (strict mode). The database suites
-      // that read SUPABASE_* arrive with PLA-16.
-      "env": ["SUPABASE_*"],
       "outputs": []
     }
   }

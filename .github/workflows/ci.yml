@@ -127,3 +127,88 @@ jobs:
         env:
           TURBO_SCM_BASE: ${{ steps.base.outputs.ref }}
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
+
+  # Runs in parallel with `ci` on every PR and push: a fresh local Postgres
+  # with every migration applied, the types check and pgTAP.
+  database:
+    name: Database (types, pgTAP, plpgsql_check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Deployed databases never re-run an applied migration, so an edited one
+      # would only change fresh databases, and a new one dated before the
+      # latest merged one would run in a different order there than in a fresh
+      # database. Corrections go in a new, later migration. On a push the change
+      # already landed; the PR is where it can be stopped.
+      - name: Migrations are append-only and ordered
+        if: github.event_name == 'pull_request'
+        run: |
+          set -o pipefail
+          base="origin/${{ github.base_ref }}"
+          # Unquoted paths, so names with accents still match the patterns below.
+          git config core.quotePath false
+          mutated="$(git diff --name-status --find-renames --diff-filter=MDRCT "$base...HEAD" -- 'supabase/migrations/*.sql')"
+          if [ -n "$mutated" ]; then
+            echo "::error::Merged migrations are append-only, fix forward in a new migration:"
+            echo "$mutated"
+            exit 1
+          fi
+          # The CLI applies migrations in filename byte order, which matches
+          # numeric order only while every version has 14 digits.
+          added="$(git diff --name-only --no-renames --diff-filter=A "$base...HEAD" -- 'supabase/migrations/*.sql')"
+          misnamed="$(printf '%s\n' "$added" | grep -Ev '^(supabase/migrations/[0-9]{14}_[^/]*\.sql)?$' || true)"
+          if [ -n "$misnamed" ]; then
+            echo "::error::Migrations are named <14-digit timestamp>_<name>.sql (pnpm exec supabase migration new <name>):"
+            echo "$misnamed"
+            exit 1
+          fi
+          latest="$(git ls-tree --name-only "$base" -- supabase/migrations/ \
+            | sed -n 's|^supabase/migrations/\([0-9]\{14\}\)_[^/]*\.sql$|\1|p' | sort | tail -n 1)"
+          early="$(printf '%s\n' "$added" | awk -F'[/_]' -v latest="${latest:-0}" 'NF && $3 <= latest')"
+          if [ -n "$early" ]; then
+            echo "::error::New migrations must have a version after the latest merged one ($latest). Rename with a newer timestamp:"
+            echo "$early"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        # Version is read from the root package.json "packageManager" field.
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `db start` boots only Postgres with every migration applied; the full
+      # stack pulls images for services nothing below uses.
+      - name: Start Supabase database
+        id: db
+        run: pnpm exec supabase db start
+
+      - name: Check Supabase types are up to date
+        run: |
+          bash scripts/check-supabase-types.sh || {
+            rc=$?
+            if [ "$rc" -eq 1 ]; then
+              echo "::error::Supabase types are out of date. Run 'pnpm db:generate:supabase-types' locally and commit the changes."
+            fi
+            exit "$rc"
+          }
+
+      # Runs even when the types check failed, so one push reports both.
+      # plpgsql_check runs inside the suite (schema_rls_and_grants_test.sql).
+      - name: DB behavior tests (pgTAP)
+        if: ${{ !cancelled() && steps.db.outcome == 'success' }}
+        run: pnpm exec supabase test db --local
