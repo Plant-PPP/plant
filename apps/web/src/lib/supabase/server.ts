@@ -1,13 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { supabaseEnv } from "./env";
+import { requireSupabaseEnv } from "./env";
 
 export async function createClient() {
-  const env = supabaseEnv();
-  if (!env)
-    throw new Error(
-      "Faltan NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    );
+  const env = requireSupabaseEnv();
   const cookieStore = await cookies();
 
   return createServerClient(env.url, env.anonKey, {
@@ -21,7 +17,8 @@ export async function createClient() {
             cookieStore.set(name, value, options);
           }
         } catch {
-          // Server Components cannot set cookies; the proxy refreshes the session.
+          // Server Components cannot set cookies. Refreshing the session needs
+          // apps/web/src/proxy.ts, which lands with login (PLA-17, PLA-19).
         }
       },
     },

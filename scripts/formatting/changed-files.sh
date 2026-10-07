@@ -4,11 +4,11 @@
 #
 # Usage:
 #   source "$ROOT/scripts/formatting/changed-files.sh"
-#   changed_since_last_commit --pattern '\.(ts|tsx)$' frontend api
+#   changed_staged --pattern '\.(ts|tsx)$' apps packages
 #   printf '%s\n' "${CHANGED_PROJECTS[@]}"
 #   printf '%s\n' "${CHANGED_FILES[@]}"
 #
-# Both public functions populate:
+# changed_staged and changed_against_staging both populate:
 #   CHANGED_PROJECTS - top-level projects with at least one changed file
 #   CHANGED_FILES    - changed files under the requested projects
 
@@ -126,32 +126,6 @@ linting_parse_changed_args() {
   fi
 
   CHANGED_ARG_PROJECTS=("$@")
-}
-
-changed_since_last_commit() {
-  if ! linting_parse_changed_args "$@"; then
-    printf 'Usage: changed_since_last_commit [--pattern <regex>] <project> [project...]\n' >&2
-    return 2
-  fi
-
-  local root
-  root=$(linting_git_root)
-
-  local pathspecs
-  pathspecs=$(linting_project_pathspecs "${CHANGED_ARG_PROJECTS[@]}")
-
-  local files
-  files=$(
-    cd "$root" && {
-      git diff --name-only --diff-filter=ACMR HEAD -- $pathspecs
-      git ls-files --others --exclude-standard -- $pathspecs
-    } | sort -u
-  )
-
-  files=$(linting_filter_existing_files "$files")
-  files=$(linting_filter_files "$files" "$CHANGED_FILE_PATTERN")
-
-  linting_set_changed_results "$files" "${CHANGED_ARG_PROJECTS[@]}"
 }
 
 changed_staged() {

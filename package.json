@@ -22,14 +22,17 @@
     "check:forbidden-words": "bash ./scripts/check-forbidden-words.sh",
     "db:reset": "bash ./scripts/setup/db-reset.sh",
     "db:generate:supabase-types": "bash ./scripts/generate-supabase-types.sh",
-    "prepare": "node .husky/install.mjs"
+    "prepare": "node .husky/install.mjs",
+    "check:boundaries": "node scripts/check-package-boundaries.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
+    "eslint": "catalog:",
     "husky": "^9.1.7",
     "inngest-cli": "1.46.0",
     "prettier": "3.9.9",
     "supabase": "2.120.0",
-    "turbo": "^2.11.7"
+    "turbo": "^2.11.7",
+    "typescript-eslint": "catalog:"
   }
 }

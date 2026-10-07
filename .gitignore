@@ -156,3 +156,10 @@ supabase/.branches
 supabase/.temp
 *.tsbuildinfo
 next-env.d.ts
+**/.claude/settings.local.json
+.envrc
+.env.keys
+*.pem
+*.key
+# Real documents for local evals never enter the repo.
+evals/docs-locales/

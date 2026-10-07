@@ -2,24 +2,29 @@
   "$schema": "https://turbo.build/schema.json",
   // AGENTS.md is ours; turbo would otherwise rewrite a block into it.
   "agentGuidance": false,
-  // pnpm-workspace.yaml holds the catalog: a version bump there must
-  // invalidate every cache.
-  "globalDependencies": ["pnpm-lock.yaml", "pnpm-workspace.yaml"],
+  // Files outside every package that change what typecheck, lint and tests
+  // see: a bump to any of them must invalidate every cache.
+  "globalDependencies": [
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    "eslint.packages.mjs",
+    ".npmrc"
+  ],
   "tasks": {
-    // The whole gate, for one local command: `turbo run ci --affected`.
-    // CI runs the two halves as separate steps (see ci.yml).
-    "ci": {
-      "dependsOn": ["check", "test"],
-      "outputs": []
+    // Workspace packages ship TypeScript sources with no build of their own,
+    // so nothing upstream puts a dependency's code into a task's hash. This
+    // no-op node does: a change in @plant/shared re-runs the typecheck, lint
+    // and tests of everything that imports it instead of replaying a cached
+    // green result.
+    "transit": {
+      "dependsOn": ["^transit"]
     },
-    // Everything except tests.
     "check": {
       "dependsOn": ["typecheck", "lint"],
       "outputs": []
     },
-    // Workspace packages export their TypeScript sources (apps/web lists them
-    // in transpilePackages), so only the web app has a build. Vercel builds it
-    // on every PR, so CI does not.
+    // Only the web app builds. Vercel builds it on every PR, so CI does not.
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
@@ -30,12 +35,15 @@
       "persistent": true
     },
     "typecheck": {
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "lint": {
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "test": {
+      "dependsOn": ["transit"],
       // Turbo strips undeclared env vars (strict mode); without these the
       // env-gated integration suites silently skip even when the caller has
       // them exported.

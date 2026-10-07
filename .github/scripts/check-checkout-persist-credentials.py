@@ -273,9 +273,8 @@ def main() -> int:
             print(f"  {v}", file=sys.stderr)
         print(
             "\nAdd `persist-credentials: false` under `with:`. Use `true` only when a later\n"
-            "step in the SAME job runs `git push` or `git fetch` against the remote — this\n"
-            "repo is private, so an unauthenticated fetch fails — and say which step in a\n"
-            "comment above the checkout.",
+            "step in the SAME job runs `git push` against the remote, and say which step in\n"
+            "a comment above the checkout.",
             file=sys.stderr,
         )
         return 1

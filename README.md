@@ -14,4 +14,4 @@ Necesitás Node 22 o superior, pnpm y Docker. Todo lo demás (estructura, comand
 
 ## Ramas
 
-Ramas propias → PR a `staging` → deploy automático a staging. Producción sale con el workflow *Promote to production* y queda marcada con el tag `production-latest`.
+Ramas propias → PR a `staging` → deploy automático a staging. Producción va a salir con el workflow _Promote to production_ (PLA-13), que marca el commit con el tag `production-latest`.

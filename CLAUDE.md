@@ -19,50 +19,50 @@ pnpm dev:up                         # Supabase local + web en :3000 + Inngest de
 
 ## Estructura
 
-| Paquete | Qué tiene |
-|---|---|
-| `apps/web` | Next.js 16 (App Router) + React 19 en Vercel `gru1`. Incluye `/api/inngest` y el chat |
-| `packages/shared` | Dinero (`Money` con string decimal y moneda), `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`, tipos de la base |
-| `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` |
-| `packages/core` | Valuación y funciones de cartera que usan la UI y el asistente |
-| `packages/jobs` | Puerto `JobRunner` y orquestadores de Inngest |
-| `supabase/` | Config, migraciones y tests pgTAP |
-| `evals/` | Evals de extracción y del asistente (los documentos reales viven fuera del repo) |
+| Paquete            | Qué tiene                                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`         | Next.js 16 (App Router) + React 19 en Vercel `gru1`. Incluye `/api/inngest` (el chat llega con el Asistente)                      |
+| `packages/shared`  | Dinero (`Money` con string decimal y moneda). Llegan después: `pricing.ts`, `ai-cost.ts`, `prompt-text.ts` y los tipos de la base |
+| `packages/sources` | `PortfolioSourcePort` y el adaptador `file_upload` (llegan con Carga con IA)                                                      |
+| `packages/core`    | Valuación y funciones de cartera que usan la UI y el asistente (llegan con Patrimonio manual)                                     |
+| `packages/jobs`    | Cliente de Inngest y una función `ping` de prueba. El puerto `JobRunner` llega con Carga con IA                                   |
+| `supabase/`        | Config. Las migraciones y los tests pgTAP llegan con la base (PLA-16)                                                             |
+| `evals/`           | Evals de extracción y del asistente (los documentos reales viven fuera del repo)                                                  |
 
-Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `transpilePackages`, así que no hay que buildearlos antes de levantar la web.
+Los paquetes exportan sus fuentes TypeScript y `apps/web` los compila con `transpilePackages`, así que no hay que buildearlos antes de levantar la web. Qué paquete puede importar a cuál lo verifica `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`), y `inngest` solo se importa en `packages/jobs` y `apps/web`.
 
 ## Tests y chequeos
 
 ```bash
-pnpm check          # typecheck + lint de todo
+pnpm check          # typecheck + lint de todos los paquetes
 pnpm test           # tests de todo
 pnpm turbo:affected # solo lo que cambió contra origin/staging
 pnpm format         # prettier sobre lo cambiado
 ```
 
-Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, y typecheck, lint y tests de lo afectado en el pre-push.
+Husky (`.husky/`, con la lógica en `scripts/hooks/`) corre prettier y el chequeo de palabras prohibidas en el pre-commit, y typecheck, lint y tests de lo afectado en el pre-push. CI repite todo eso, más `pnpm audit`, los límites entre paquetes y el chequeo de palabras prohibidas sobre los mensajes de commit y el nombre de la rama.
 
 ## Ramas, commits y PRs
 
 - `staging` es la única rama de trabajo y está protegida. Trabajá en una rama propia con la key de Linear (`feat/pla-12-job-runner`) y abrí un PR a `staging`. Al hacer merge se despliega solo a staging.
-- **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción sale con el workflow *Promote to production* y queda marcada con el tag `production-latest`. No hay `main`.
+- **Nunca hagas push a `production`.** Es una rama congelada que existe solo porque Vercel pide una Production Branch. Producción va a salir con el workflow _Promote to production_ (PLA-13), que va a marcar el commit con el tag `production-latest`. No hay `main`.
 - Commits y títulos de PR en Conventional Commits, menos de 70 caracteres. Migraciones destructivas: `[DESTRUCTIVE]` al principio del título.
 - El cuerpo del PR arranca con `## Intent` y sigue el template de `.github/pull_request_template.md`.
 - Se permiten los trailers de co-autor de Claude Code (`Co-Authored-By:`).
 
 ## Supabase
 
-**Nunca corras `supabase db push`.** Las migraciones llegan a staging por CI en cada merge.
+**Nunca corras `supabase db push`.** Las migraciones van a llegar a staging por CI en cada merge (PLA-11).
 
 ```bash
 pnpm exec supabase migration new <nombre>
 pnpm db:reset                       # rehace la base local desde las migraciones
-pnpm db:generate:supabase-types     # después de cada migración; CI falla si quedan viejos
+pnpm db:generate:supabase-types     # después de cada migración; el pre-push falla si quedan viejos
 ```
 
 - Una migración aplicada en staging es de solo lectura: los cambios van en una migración nueva.
 - RLS en cada tabla desde que se crea, con `user_id = (select auth.uid())` en `USING` y `WITH CHECK`.
-- "Automatically expose new tables" está apagado en Supabase: cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
+- "Automatically expose new tables" está apagado (`auto_expose_new_tables = false` en `supabase/config.toml` y en el dashboard): cada migración hace `GRANT` explícito a `authenticated` solo con las operaciones que la app usa. Nunca a `anon`.
 - `REVOKE ... FROM PUBLIC, anon, authenticated` explícito en las funciones, y `SECURITY DEFINER` siempre con `SET search_path`.
 - Plata en `numeric` en Postgres y como string decimal en el contrato, nunca en float. Cada monto lleva su moneda.
 
@@ -89,6 +89,6 @@ pnpm db:generate:supabase-types     # después de cada migración; CI falla si q
 
 ## Comentarios y prosa de PRs
 
-No defiendas una decisión que nadie cuestionaría. Antes de explicar por qué algo *no está*, o por qué no se tomó una alternativa, preguntate: ¿un lector competente asumiría que debería estar y abriría un bug si faltara? Si sí, explicalo. Si no, borralo: la explicación solo planta la idea que responde.
+No defiendas una decisión que nadie cuestionaría. Antes de explicar por qué algo _no está_, o por qué no se tomó una alternativa, preguntate: ¿un lector competente asumiría que debería estar y abriría un bug si faltara? Si sí, explicalo. Si no, borralo: la explicación solo planta la idea que responde.
 
 Lo mismo para cuerpos de PR y mensajes de commit, más: describí el estado actual del cambio y por qué, no cómo se llegó. Nada de narrar iteraciones ("arreglado en el segundo commit", "atendí la review") ni stats del diff: GitHub ya los muestra.

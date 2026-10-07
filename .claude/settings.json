@@ -1,23 +1,34 @@
 {
   "permissions": {
     "deny": [
-      "Bash(supabase db push*)",
-      "Bash(pnpm exec supabase db push*)",
-      "Bash(npx supabase db push*)",
+      "Bash(*supabase*db push*)",
+      "Bash(*supabase*db reset*--linked*)",
+      "Bash(*supabase*db reset*--db-url*)",
+      "Bash(*supabase*migration repair*)",
       "Bash(*supabase link*)",
-      "Bash(git push --force*)",
-      "Bash(git push -f*)",
       "Bash(git push*--force*)",
-      "Bash(git push origin production*)",
-      "Bash(git push*:production*)",
-      "Bash(cat *.env)",
-      "Bash(cat *.env.local)",
-      "Bash(cat *.env.*.local)",
+      "Bash(git push* -f*)",
+      "Bash(git push* +*)",
+      "Bash(git push*--delete*)",
+      "Bash(git push*production*)",
+      "Bash(git push*:staging*)",
+      "Bash(git push* staging*)",
+      "Bash(*.env)",
+      "Bash(*.env *)",
+      "Bash(*.env.local*)",
+      "Bash(*.env.*.local*)",
+      "Bash(*.env.development*)",
+      "Bash(*.env.production*)",
+      "Bash(*.env.staging*)",
+      "Bash(*.env.keys*)",
       "Read(**/.env)",
       "Read(**/.env.local)",
       "Read(**/.env.*.local)",
+      "Read(**/.env.development)",
       "Read(**/.env.production*)",
-      "Read(**/.env.staging*)"
+      "Read(**/.env.staging*)",
+      "Read(**/.env.keys)",
+      "Read(**/.envrc)"
     ]
   }
 }

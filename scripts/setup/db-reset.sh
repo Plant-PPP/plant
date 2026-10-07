@@ -6,5 +6,5 @@ set -euo pipefail
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
-pnpm exec supabase status >/dev/null 2>&1 || pnpm exec supabase start
+bash ./scripts/setup/ensure-supabase.sh
 pnpm exec supabase db reset --local
