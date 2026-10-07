@@ -2,8 +2,10 @@
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
-OUTFILE="$ROOT/packages/shared/src/db/generated/database.types.ts"
 cd "$ROOT"
+# shellcheck source=scripts/lib/supabase-types-path.sh
+source ./scripts/lib/supabase-types-path.sh
+OUTFILE="$ROOT/$SUPABASE_TYPES_FILE"
 
 bash ./scripts/setup/ensure-supabase.sh
 

@@ -40,13 +40,7 @@ done
 
 # Regenerate the Supabase types only when the branch adds migrations.
 if [ -n "$merge_base" ] && git diff --diff-filter=A --name-only "$merge_base"...HEAD -- "supabase/migrations/*.sql" | grep -q .; then
-  pnpm run db:generate:supabase-types
-  # --porcelain also sees a first-time (untracked) types file and staged-only
-  # changes, which `git diff --quiet` misses.
-  if [ -n "$(git status --porcelain -- packages/shared/src/db/generated/)" ]; then
-    echo "Error: the Supabase types were out of date and are now regenerated in packages/shared/src/db/generated/. Commit them and push again."
-    exit 1
-  fi
+  bash "$ROOT/scripts/check-supabase-types.sh"
 fi
 
 # From here on the checks run on the checked-out branch (HEAD), even when
