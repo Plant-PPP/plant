@@ -29,8 +29,11 @@ export default async function Home() {
   return (
     <div>
       <h1 className="sr-only">{navTitle("/")}</h1>
+      <p className="text-sm text-muted-foreground">
+        Acá vas a ver tu patrimonio en pesos y en dólares.
+      </p>
       {status && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           <dt className="text-muted-foreground">Supabase</dt>
           <dd>{status}</dd>
         </dl>

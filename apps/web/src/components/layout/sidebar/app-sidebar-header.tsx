@@ -16,10 +16,9 @@ export function AppSidebarHeader() {
   const title = navItemForPath(usePathname())?.title;
 
   return (
-    // Sticky card header: p-4 around a fixed 28px (h-7) content row, closed
-    // by the same hairline border the shell cards use, so every card header
-    // is exactly 60px tall. Stays pinned while the canvas scrolls.
-    <header className="sticky top-0 z-20 shrink-0 border-b-[0.5px] bg-background p-4 dark:border-[#2e2e2e] dark:bg-[#171717]">
+    // Sticky over the scrolling canvas, with the canvas card's surface and
+    // hairline so it reads as part of the card.
+    <header className="sticky top-0 z-20 shrink-0 border-b-[0.5px] border-canvas-border bg-canvas p-4">
       <div className="flex h-7 w-full items-center justify-between">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="-ml-1" />

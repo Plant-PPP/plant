@@ -207,7 +207,6 @@ function Sidebar({
       data-side={side}
       data-slot="sidebar"
     >
-      {}
       <div
         data-slot="sidebar-gap"
         className={cn(
@@ -222,7 +221,7 @@ function Sidebar({
       <div
         data-slot="sidebar-container"
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex border-r",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -311,16 +310,16 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "bg-background relative flex w-full flex-1 flex-col",
+        "bg-canvas relative flex w-full flex-1 flex-col",
         // Floating canvas card (app shell): 8px gutters, rounded, hairline
         // border, with the dark card surface lighter than the page so the
-        // card stands out. The left gutter comes from the wrapper in the
-        // (app) layout, hence ml-0. The stock peer-data-[variant=inset]
-        // selectors can't express this: that wrapper sits between the
-        // Sidebar and the inset, so they are not DOM siblings. The app always
-        // renders SidebarInset inside that shell, so the card styles live on
-        // the component itself.
-        "min-h-0 min-w-0 overflow-y-auto scrollbar-none md:m-2 md:ml-0 md:rounded-xl md:border-[0.5px] dark:border-[#2e2e2e] dark:bg-[#171717]",
+        // card stands out. The left gutter is the sidebar container's p-2
+        // when expanded and the (app) layout wrapper's ml-2 when collapsed,
+        // hence ml-0. The stock peer-data-[variant=inset] selectors can't
+        // express this: that wrapper sits between the Sidebar and the inset,
+        // so they are not DOM siblings. The app always renders SidebarInset
+        // inside that shell, so the card styles live on the component itself.
+        "min-h-0 min-w-0 overflow-y-auto scrollbar-none md:m-2 md:ml-0 md:rounded-xl md:border-[0.5px] md:border-canvas-border",
         className,
       )}
       {...props}

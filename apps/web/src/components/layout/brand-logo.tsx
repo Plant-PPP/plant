@@ -24,13 +24,11 @@ export function BrandLogo({
       <Image
         src={light}
         alt={SITE_NAME}
-        priority
         className={cn("dark:hidden", className)}
       />
       <Image
         src={dark}
         alt={SITE_NAME}
-        priority
         className={cn("hidden dark:block", className)}
       />
     </>

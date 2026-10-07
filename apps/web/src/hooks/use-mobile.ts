@@ -1,7 +1,8 @@
 import * as React from "react";
 
-const MOBILE_BREAKPOINT = 768;
-const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
+// Tailwind's md breakpoint, in rem so it scales with the browser's font size
+// exactly like the md: classes that hide the desktop sidebar.
+const MOBILE_QUERY = "(width < 48rem)";
 
 function subscribe(onChange: () => void) {
   const mql = window.matchMedia(MOBILE_QUERY);

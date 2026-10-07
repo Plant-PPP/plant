@@ -3,8 +3,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Hide the scrollbar entirely (it takes no width) while keeping the element
-   scrollable. Used by the app-shell canvas. */
+/* Extends Tailwind's scrollbar-none with the ::-webkit-scrollbar fallback for
+   Safari without scrollbar-width support. */
 @utility scrollbar-none {
   scrollbar-width: none;
   &::-webkit-scrollbar {
@@ -14,6 +14,8 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-canvas: var(--canvas);
+  --color-canvas-border: var(--canvas-border);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -87,6 +89,9 @@
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
+  /* The app shell's page card and its header. */
+  --canvas: var(--background);
+  --canvas-border: var(--border);
   --brand: #7fa877;
   --gain: #16a34a;
   --loss: #dc2626;
@@ -142,7 +147,9 @@
   --gain: #4ade80;
   --loss: #f87171;
   --warn: #fbbf24;
-  /* Dark page background (#09090B): darker than the canvas card (#171717),
+  --canvas: #171717;
+  --canvas-border: #2e2e2e;
+  /* Dark page background (#09090B): darker than the canvas card (--canvas),
      swapped vs light mode so the card is the lighter surface. */
   --sidebar: #09090b;
   --sidebar-foreground: oklch(0.985 0 0);

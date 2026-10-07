@@ -4,8 +4,6 @@ import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { SIDEBAR_COOKIE_NAME } from "@/lib/sidebar-cookie";
 
-// The app shell: inset sidebar on a tinted page background (--sidebar in
-// globals.css), with the page canvas as a floating card.
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
