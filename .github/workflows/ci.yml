@@ -231,7 +231,7 @@ jobs:
       # would only change fresh databases. Corrections go in a new, later
       # migration. On a push the change already landed; the PR is where it can
       # be stopped. It runs last so a PR that breaks it on purpose (procedure 1
-      # in the PLA-11 entry of docs/decisiones.md) still shows the rest of the
+      # in the PLA-11 entry of docs/decisions.md) still shows the rest of the
       # job.
       - name: Merged migrations are append-only
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}

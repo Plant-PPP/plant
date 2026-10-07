@@ -1,14 +1,14 @@
-# AGENTS.md — ruteo de agentes en Plant
+# AGENTS.md — agent routing in Plant
 
-Complementa a `CLAUDE.md`, que tiene el setup, los paquetes, los comandos y las reglas del repo. Este archivo lleva a los agentes a las skills compartidas.
+Complements `CLAUDE.md`, which has the setup, the packages, the commands and the repo rules. This file points agents to the shared skills.
 
 ## Skills
 
-Las skills viven en formato [Agent Skills](https://agentskills.io) en **`.agents/skills/<nombre>/SKILL.md`** (la copia canónica). Cada una tiene un symlink en `.claude/skills/<nombre>`, que Claude Code descubre solo y Cursor encuentra por su compatibilidad con `.claude/skills/`. Un runtime sin descubrimiento de skills (por ejemplo Codex) rutea desde esta tabla.
+Skills live in [Agent Skills](https://agentskills.io) format in **`.agents/skills/<name>/SKILL.md`** (the canonical copy). Each one has a symlink at `.claude/skills/<name>`, which Claude Code discovers on its own and Cursor finds through its `.claude/skills/` compatibility. A runtime without skill discovery (for example Codex) routes from this table.
 
-**El `description:` del frontmatter de cada skill es el disparador que manda: leelo ahí.** Esta tabla lista solo nombres y rutas, así no se desactualiza.
+**The `description:` in each skill's frontmatter is the trigger that counts: read it there.** This table lists only names and paths, so it does not go stale.
 
-| Skill | Ruta |
+| Skill | Path |
 |---|---|
 | adv-planning | `.agents/skills/adv-planning/SKILL.md` |
 | adv-research | `.agents/skills/adv-research/SKILL.md` |
@@ -25,14 +25,14 @@ Las skills viven en formato [Agent Skills](https://agentskills.io) en **`.agents
 | supabase-postgres-best-practices | `.agents/skills/supabase-postgres-best-practices/SKILL.md` |
 | tighten | `.agents/skills/tighten/SKILL.md` |
 
-`.agents/skills/README.md` explica cómo encajan, y `.agents/skills/_shared/runtime/capabilities.md` cómo se reparte el trabajo en olas con o sin sub-agentes.
+`.agents/skills/README.md` explains how they fit together, and `.agents/skills/_shared/runtime/capabilities.md` how work is split into waves with or without sub-agents.
 
-Para sumar una skill: creá `.agents/skills/<nombre>/SKILL.md`, el symlink `ln -s ../../.agents/skills/<nombre> .claude/skills/<nombre>` y la fila en esta tabla.
+To add a skill: create `.agents/skills/<name>/SKILL.md`, the symlink `ln -s ../../.agents/skills/<name> .claude/skills/<name>` and the row in this table.
 
 ## Frontmatter
 
-El núcleo portable es `name` + `description`. Las demás claves son pistas para Claude Code, y `disable-model-invocation` es una clave de **seguridad** de Claude Code. El contrato completo está en `.agents/skills/_shared/runtime/capabilities.md`.
+The portable core is `name` + `description`. The other keys are hints for Claude Code, and `disable-model-invocation` is a Claude Code **security** key. The full contract is in `.agents/skills/_shared/runtime/capabilities.md`.
 
-## Reglas para Cursor
+## Cursor rules
 
-`.cursor/rules/` repite para Cursor las reglas de `CLAUDE.md` que aplican siempre (commits, migraciones, Linear, Next.js).
+`.cursor/rules/` repeats for Cursor the `CLAUDE.md` rules that always apply (language, commits, migrations, Linear, Next.js).

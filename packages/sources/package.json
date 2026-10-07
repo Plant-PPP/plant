@@ -2,7 +2,7 @@
   "name": "@plant/sources",
   "version": "0.0.0",
   "private": true,
-  "description": "PortfolioSourcePort y sus adaptadores; llegan con Carga con IA.",
+  "description": "PortfolioSourcePort and its adapters; they arrive with the \"Carga con IA\" stage.",
   "type": "module",
   "sideEffects": false,
   "exports": {

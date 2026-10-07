@@ -78,7 +78,7 @@ Check all my open/draft PRs for unresolved feedback — from review bots AND any
 
 4. **Check CI on each PR.** Use the `statusCheckRollup` from step 1, or per-PR `gh pr checks NNN`. Surface any check in a FAIL/ERROR/CANCELLED state. For details on a failure, drill in with `gh pr checks NNN` then `gh run view <run-id> --log-failed`.
    - **Formatting is checked on changed files only** (`pnpm format:check`, backed by `scripts/formatting/`). A red formatting check is real for the PR's own files — fix it with `pnpm format`. NEVER dismiss a build/test/typecheck/migration failure as noise.
-   - Keep branches linear: rebase off `staging`, never merge `staging` in. That rebase needs a force-push: `git fetch` first and pin the lease to the exact sha (`--force-with-lease=<branch>:<sha>`) — a bare `--force-with-lease` can still clobber a commit pushed from another session and report success.
+   - Keep branches current by merging `origin/staging` in (`git merge -m "chore: merge staging" origin/staging`); Squash and merge flattens it on `staging`. Never rebase a pushed branch or force-push (the GitHub ruleset blocks it on `staging`; `.claude/settings.json` denies the common forms).
    - Genuinely-failing checks (unit tests, tsc, lint, build, type-gen drift) are real — surface them.
 
 5. Output three sections:
@@ -96,7 +96,7 @@ When creating branches or PRs for me, follow these rules:
 
 ### Branches
 - Always branch from up-to-date `staging` (the integration branch) unless told otherwise: `git fetch origin && git checkout -b <name> origin/staging`
-- Naming: `fix/<short-slug>` for bug fixes, `feat/<short-slug>` for features, `idea/<short-slug>` for spec/research work. Include the Linear issue key when one exists so Linear auto-links the PR, e.g. `feat/pla-12-job-runner` (see `nav-linear`).
+- Naming: `<conventional-type>/<short-slug>` in English (`feat/`, `fix/`, `chore/`, `docs/`, `test/`…). Include the Linear issue key when one exists so Linear auto-links the PR, e.g. `feat/pla-12-job-runner` (see `nav-linear`).
 - Never commit research/spec `.md` docs; never reference research docs in code or migrations.
 
 ### PR descriptions
@@ -114,15 +114,16 @@ root cause if known. Reference the Linear issue (PLA-NNN) if one exists.>
   Summary section below it.
 - The WHOLE PR body must be short: aim under ~25 lines total. Summary =
   a handful of one-line bullets, no sub-narratives. Do NOT add a Test plan /
-  Tests / Verification section — CI is authoritative; don't restate it in the
+  Tests section of your own — fill the template's Verification checkboxes and
+  keep its "How I tested it" line short. CI is authoritative; don't restate it in the
   body. Plain words over jargon ("the import screen showed the wrong total",
   not "15 fatal mismatches"). If a reviewer needs more, they read the diff.
 
 - If the repo has a PR template, keep it below the Intent and tick the checkboxes that apply (security relevance, migration destructiveness, AI usage); delete sections that don't apply.
 - Title: short (<70 chars), Conventional Commits style (`fix:`, `feat:`), `[DESTRUCTIVE]` prefix if a destructive migration is included.
 - Postfix the title with the branch's Linear issue key in parentheses — e.g. `(PLA-12)` — as the very last token, so the issue is scannable from the PR list (e.g. `feat(jobs): add JobRunner port with Inngest adapter (PLA-12)`). Omit only when the branch genuinely has no Linear issue.
-- Claude Code co-author trailers in commits are allowed.
-- Stacked PRs (a dependent chain reviewed/merged together) get an `(N/X)` marker so they read as one set — placed as a **prefix** at the very start of the title, before the conventional-commit type (e.g. `(3/5) fix(import): …`). Number by dependency/merge order (1 = base off `staging`). Keep the markers in sync if the set grows or is reordered.
+- Commit messages follow CLAUDE.md (Branches, commits and PRs).
+- Stacked PRs (a dependent chain reviewed/merged together) get an `(N/X)` marker so they read as one set — placed as a **prefix** before the conventional-commit type, after `[DESTRUCTIVE]` when that is present (e.g. `(3/5) fix(import): …`, `[DESTRUCTIVE] (3/5) feat(db): …`). Number by dependency/merge order (1 = base off `staging`). Keep the markers in sync if the set grows or is reordered. Drop the `(N/X)` marker from the squash commit title when merging.
 - Open PRs as **draft** by default, base `staging`.
 - If an existing PR of mine lacks an Intent section, write one from the diff/commits and prepend it — preserve the rest of the body.
 

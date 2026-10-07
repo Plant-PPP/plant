@@ -2,7 +2,7 @@
   "name": "@plant/core",
   "version": "0.0.0",
   "private": true,
-  "description": "Valuación y funciones de cartera; llegan con Patrimonio manual.",
+  "description": "Valuation and portfolio functions; they arrive with the \"Patrimonio manual\" stage.",
   "type": "module",
   "sideEffects": false,
   "exports": {

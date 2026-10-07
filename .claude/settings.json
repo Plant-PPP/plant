@@ -32,5 +32,8 @@
       "Read(**/.env.keys)",
       "Read(**/.envrc)"
     ]
+  },
+  "attribution": {
+    "commit": ""
   }
 }

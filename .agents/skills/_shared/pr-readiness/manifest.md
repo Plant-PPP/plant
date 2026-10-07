@@ -24,7 +24,7 @@ often empty). If the attachment is missing:
   (do it; append-only, lands in `issue.attachments[]` — mechanics single-sourced in `nav-linear`
   §Linking mechanics; `create_attachment` is a file upload, not a URL attach). Re-fetch to confirm.
 - branch has no key / ambiguous → SURFACE (do NOT rename the branch). ⚠️ **A greenfield run should never reach this leg** — `/auto-build` Phase 4 files the issue and
-  names the branch from its `gitBranchName` before opening the PR, precisely so this clears. If you
+  names the branch with its `PLA-<n>` key before opening the PR, precisely so this clears. If you
   are here anyway — Phase 4 was skipped, or issue creation failed — **do not file it from here**:
   Phase A's sanctioned writes are additive metadata only. Record
   `FAILED: A1 — no Linear issue for <branch>` (a failed

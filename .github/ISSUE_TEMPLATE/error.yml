@@ -7,18 +7,18 @@ body:
       value: |
         No pegues datos personales, CUIT, DNI, CBU, montos reales ni documentos. Para un problema de seguridad, no abras un issue: escribinos por privado.
   - type: textarea
-    id: que-paso
+    id: what-happened
     attributes:
       label: Qué pasó
       description: Qué hiciste, qué esperabas y qué pasó en cambio.
     validations:
       required: true
   - type: textarea
-    id: pasos
+    id: steps
     attributes:
       label: Cómo reproducirlo
       placeholder: "1. Entré a...\n2. Subí un archivo de...\n3. Vi..."
   - type: input
-    id: navegador
+    id: browser
     attributes:
       label: Navegador y dispositivo

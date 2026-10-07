@@ -1,59 +1,59 @@
 <!--
-Título: Conventional Commits, menos de 70 caracteres (por ejemplo `feat(web): carga manual de tenencias`).
-Migración destructiva: el título arranca con `[DESTRUCTIVE]`.
-Borrá las secciones que no apliquen.
+Title: Conventional Commits, under 70 characters, ending in the Linear key when there is an issue (for example `feat(web): add manual holdings entry (PLA-26)`).
+Destructive migration: the title starts with `[DESTRUCTIVE]`, before any stacked-PR `(N/X)` marker.
+Delete the sections that don't apply.
 -->
 
 ## Intent
 
-_Qué cambia, por qué y qué ve el usuario. Describí el estado final, no cómo se llegó._
+_What changes, why, and what the user sees. Describe the final state, not how you got there._
 
 Linear: PLA-
 
-## Seguridad
+## Security
 
 > [!IMPORTANT]
-> Un cambio es **sensible** si toca: auth, sesiones o MFA, RLS o grants, exportar o borrar datos, la subida o lectura de archivos, un proveedor nuevo, un campo nuevo con datos financieros o personales (CUIT, DNI, CBU, montos, tenencias), o prompts de IA que incluyen datos del usuario.
+> A change is **sensitive** if it touches: auth, sessions or MFA, RLS or grants, exporting or deleting data, uploading or reading files, a new provider, a new field with financial or personal data (CUIT, DNI, CBU, amounts, holdings), or AI prompts that include user data.
 
-- [ ] No es sensible
-- [ ] Es sensible: completá abajo
+- [ ] Not sensitive
+- [ ] Sensitive: fill in below
 
-**Qué datos toca y quién puede verlos después del cambio:**
+**What data it touches and who can see it after the change:**
 
-**STRIDE, qué podría salir mal:**
+**STRIDE, what could go wrong:**
 
-### ¿Hace falta threat model?
+### Does it need a threat model?
 
 > [!WARNING]
-> Si marcás alguna, va un threat model en `docs/threat-models/` (partí de `_template.md`).
+> If you check any, a threat model goes in `docs/threat-models/` (start from `_template.md`).
 
-- [ ] Ninguna aplica
-- [ ] Endpoint nuevo o cambio de frontera de confianza
-- [ ] Campo nuevo con datos financieros o personales
-- [ ] Dependencia o proveedor nuevo que procesa datos del usuario (incluye un proveedor o caso de uso de IA nuevo)
-- [ ] Cambio en autenticación, sesión, MFA o RLS
-- [ ] Subida, importación o exportación nueva controlada por el usuario
+- [ ] None applies
+- [ ] New endpoint or trust boundary change
+- [ ] New field with financial or personal data
+- [ ] New dependency or provider that processes user data (includes a new AI provider or use case)
+- [ ] Change in authentication, session, MFA or RLS
+- [ ] New user-controlled upload, import or export
 
 **Threat model:**
 
-## Verificación
+## Verification
 
-**Cómo lo probé (comandos, URL de staging, capturas):**
+**How I tested it (commands, staging URL, screenshots):**
 
-- [ ] Tests de aislamiento por usuario (pgTAP) para cada tabla nueva con datos del usuario (o `n/a`)
-- [ ] Sin `.env`, keys, documentos reales ni datos personales en el diff
+- [ ] Per-user isolation tests (pgTAP) for every new table with user data (or `n/a`)
+- [ ] No `.env`, keys, real documents or personal data in the diff
 
-## Migración
+## Migration
 
 > [!CAUTION]
-> Las migraciones destructivas (drop de columna o tabla, achicar un tipo) llevan `[DESTRUCTIVE]` en el título **y** un plan de vuelta atrás.
+> Destructive migrations (dropping a column or table, narrowing a type) carry `[DESTRUCTIVE]` in the title **and** a rollback plan.
 
-- [ ] No destructiva
-- [ ] Destructiva: título con `[DESTRUCTIVE]`
+- [ ] Not destructive
+- [ ] Destructive: title with `[DESTRUCTIVE]`
 
-**Plan de vuelta atrás:**
+**Rollback plan:**
 
-## IA
+## AI
 
-- [ ] Un asistente de IA escribió código en rutas sensibles (auth, RLS, migraciones, dependencias, CI): qué generó
-- [ ] Agrega o cambia llamadas a un proveedor de IA: costo registrado con `ai-cost.ts` y texto de afuera por `prompt-text.ts` (los dos llegan con la primera llamada a IA)
+- [ ] An AI assistant wrote code in sensitive paths (auth, RLS, migrations, dependencies, CI): what it generated
+- [ ] Adds or changes calls to an AI provider: cost recorded with `ai-cost.ts` and outside text through `prompt-text.ts` (both arrive with the first AI call)

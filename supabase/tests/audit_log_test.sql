@@ -10,7 +10,7 @@ INSERT INTO private.audit_log (user_id, action, request_id)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'login', 'req-1');
 
 SELECT throws_ok(
-  $$ UPDATE private.audit_log SET action = 'otra' $$,
+  $$ UPDATE private.audit_log SET action = 'other' $$,
   '42501', 'audit_log is append-only',
   'rows cannot be updated, even by the owner'
 );
@@ -38,7 +38,7 @@ SELECT throws_ok(
 );
 
 SELECT throws_ok(
-  $$ INSERT INTO private.audit_log (user_id, action) VALUES (auth.uid(), 'forjado') $$,
+  $$ INSERT INTO private.audit_log (user_id, action) VALUES (auth.uid(), 'forged') $$,
   '42501', NULL,
   'authenticated cannot write the audit log'
 );

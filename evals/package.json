@@ -2,5 +2,5 @@
   "name": "@plant/evals",
   "version": "0.0.0",
   "private": true,
-  "description": "Evals de extracción y del asistente. El set de documentos reales vive fuera del repo."
+  "description": "Extraction and assistant evals. The set of real documents lives outside the repo."
 }

@@ -48,7 +48,7 @@ bone". Never infer level from soft phrasing ("tidy", "clean it up", "a bit short
 Name the **load-bearing spec** before cutting — what you'll grade candidates against. Without it,
 compression goes lossy.
 
-- **Artifact + audience.** A commit body, an 11-word reply, and a PR description get different lengths
+- **Artifact + audience.** A commit subject, an 11-word reply, and a PR description get different lengths
   and registers. Is the reader *inside this session* or *cold*? A cold reader (anyone external) sees only
   what they wrote plus the visible code.
 - **What must survive:** the ask/answer; the one concrete example; the *why* (not just the conclusion);

@@ -1,50 +1,50 @@
 # Threat model: endpoint `/api/inngest`
 
-Rama `claude/project-thread-7gbyoe` (PLA-7). Lo pide el disparador "Endpoint nuevo o cambio de frontera de confianza": `/api/inngest` queda expuesto a internet en cada deploy de Vercel.
+Branch `claude/project-thread-7gbyoe` (PLA-7). Required by the trigger "New endpoint or trust boundary change": `/api/inngest` is exposed to the internet on every Vercel deploy.
 
-## Alcance y activos
+## Scope and assets
 
-Hoy el endpoint sirve una sola función, `ping`, que no lee ni escribe datos. Lo que protege es la capacidad de ejecutar funciones de Plant y de registrar la app en Inngest. Cuando lleguen las importaciones (Carga con IA), esas funciones van a usar service role, así que este endpoint pasa a ser la puerta a los documentos y tenencias de cada usuario.
+Today the endpoint serves a single function, `ping`, which reads and writes no data. What it protects is the ability to run Plant functions and to register the app with Inngest. When imports arrive (the "Carga con IA" stage), those functions will use the service role, so this endpoint becomes the door to every user's documents and holdings.
 
-## Frontera de confianza
+## Trust boundary
 
-Cualquiera en internet puede mandar GET, POST o PUT a `/api/inngest` (HEAD va al GET; OPTIONS lo responde Next sin tocar Inngest). Solo Inngest, que firma cada request con `INNGEST_SIGNING_KEY`, debe poder ejecutar funciones, ver la introspección o sincronizar la app.
+Anyone on the internet can send GET, POST or PUT to `/api/inngest` (HEAD goes to GET; Next answers OPTIONS without touching Inngest). Only Inngest, which signs every request with `INNGEST_SIGNING_KEY`, may run functions, read the introspection or sync the app.
 
-## Flujo de datos
+## Data flow
 
-1. Un evento llega a Inngest (por ahora solo `plant/ping`).
-2. Inngest hace POST firmado a `/api/inngest` en Vercel (`apps/web/src/app/api/inngest/route.ts`).
-3. El SDK verifica la firma y corre la función de `packages/jobs`.
-4. Para sincronizar, el dashboard o la integración de Vercel mandan un PUT firmado (in-band).
+1. An event reaches Inngest (for now only `plant/ping`).
+2. Inngest sends a signed POST to `/api/inngest` on Vercel (`apps/web/src/app/api/inngest/route.ts`).
+3. The SDK verifies the signature and runs the function from `packages/jobs`.
+4. To sync, the dashboard or the Vercel integration sends a signed PUT (in-band).
 
-## Dónde se hace cumplir
+## Where it is enforced
 
-- `packages/jobs/src/client.ts`: el modo dev (sin verificar firmas) sale de `NODE_ENV === "development"`, que Next fija en el build. `INNGEST_DEV` no lo puede prender.
-- `packages/jobs/src/index.ts`: `serveOptions` con `enableUnauthedSync: false`.
-- El SDK: verifica la firma HMAC con ventana de 5 minutos y responde 500 si falta la signing key.
+- `packages/jobs/src/client.ts`: dev mode (no signature verification) comes from `NODE_ENV === "development"`, which Next sets at build time. `INNGEST_DEV` cannot turn it on.
+- `packages/jobs/src/index.ts`: `serveOptions` with `enableUnauthedSync: false`.
+- The SDK: verifies the HMAC signature with a 5-minute window and answers 500 if the signing key is missing.
 
 ## STRIDE
 
-|       | Vector                                                                    | Control                                                                                                         |
-| ----- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **S** | Un tercero manda un POST haciéndose pasar por Inngest                     | Firma HMAC obligatoria fuera de `next dev`                                                                      |
-| **T** | Un PUT sin firmar re-registra la app con una URL sacada del header `Host` | `enableUnauthedSync: false`                                                                                     |
-| **R** | No queda registro de quién disparó una función                            | Inngest guarda cada run; `audit_log` llega con las funciones que tocan datos                                    |
-| **I** | Un GET sin firmar lee la introspección                                    | 401 sin firma válida                                                                                            |
-| **D** | Requests sin firmar en masa                                               | Se rechazan antes de ejecutar; el body se parsea antes de verificar la firma, con el límite de 4,5 MB de Vercel |
-| **E** | Una variable `INNGEST_DEV` en Vercel apaga las firmas                     | `isDev` fijado por `NODE_ENV`, no por la variable                                                               |
+|       | Vector                                                                       | Control                                                                                                    |
+| ----- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **S** | A third party sends a POST pretending to be Inngest                          | Mandatory HMAC signature outside `next dev`                                                                |
+| **T** | An unsigned PUT re-registers the app with a URL taken from the `Host` header | `enableUnauthedSync: false`                                                                                |
+| **R** | No record of who triggered a function                                        | Inngest stores every run; `audit_log` arrives with the functions that touch data                           |
+| **I** | An unsigned GET reads the introspection                                      | 401 without a valid signature                                                                              |
+| **D** | Mass unsigned requests                                                       | Rejected before running; the body is parsed before the signature is verified, within Vercel's 4.5 MB limit |
+| **E** | An `INNGEST_DEV` variable in Vercel turns signatures off                     | `isDev` set from `NODE_ENV`, not from the variable                                                         |
 
-## Controles como quedaron
+## Controls as built
 
-- **El endpoint usa esas opciones**: `apps/web/src/app/api/inngest/route.test.ts` prueba que la ruta desplegada rechaza un sync sin firma.
-- **Firma obligatoria**: `packages/jobs/src/serve.test.ts` prueba que GET y POST sin firma devuelven 401 con `INNGEST_DEV=1`, y que un GET firmado responde 200.
-- **Sin signing key falla cerrado**: el mismo test espera 500.
-- **Sync sin firma apagado**: el mismo test prueba que un PUT sin firma no llama a Inngest y que un sync in-band firmado (el del dashboard) sigue funcionando.
-- **Modo por `NODE_ENV`**: `packages/jobs/src/client.test.ts`.
+- **The endpoint uses those options**: `apps/web/src/app/api/inngest/route.test.ts` checks that the deployed route rejects an unsigned sync.
+- **Mandatory signature**: `packages/jobs/src/serve.test.ts` checks that unsigned GET and POST return 401 with `INNGEST_DEV=1`, and that a signed GET returns 200.
+- **No signing key fails closed**: the same test expects 500.
+- **Unsigned sync off**: the same test checks that an unsigned PUT does not call Inngest and that a signed in-band sync (the dashboard's) still works.
+- **Mode from `NODE_ENV`**: `packages/jobs/src/client.test.ts`.
 
-## Riesgo residual
+## Residual risk
 
-- Los previews de Vercel deben usar una signing key distinta de la de producción (un branch environment de Inngest). Lo configura Tomas al conectar Inngest con Vercel.
-- `INNGEST_DEV`, `INNGEST_BASE_URL` o `INNGEST_API_BASE_URL` con una URL ya no apagan las firmas, pero sí redirigen el tráfico saliente (registro y eventos, con sus keys). Ninguna de las tres debe existir en Vercel.
-- Sin telemetría hasta PLA-21: un pico de requests rechazados no avisa a nadie.
-- La firma cubre el body, no los parámetros de la URL (`fnId`, `stepId`). Hoy no importa porque `ping` no toca datos, pero cuando haya varias funciones con service role, un body firmado capturado se podría reenviar a otra función dentro de los 5 minutos. Revisarlo con las funciones de Carga con IA.
+- Vercel previews must use a signing key different from production's (an Inngest branch environment). Tomas sets it up when connecting Inngest to Vercel.
+- `INNGEST_DEV`, `INNGEST_BASE_URL` or `INNGEST_API_BASE_URL` holding a URL no longer turn signatures off, but they do redirect outbound traffic (registration and events, with their keys). None of the three may exist in Vercel.
+- No telemetry until PLA-21: a spike of rejected requests alerts nobody.
+- The signature covers the body, not the URL parameters (`fnId`, `stepId`). It doesn't matter today because `ping` touches no data, but once there are several service-role functions, a captured signed body could be replayed to another function within the 5 minutes. Revisit it when the "Carga con IA" functions are built.

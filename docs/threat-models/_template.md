@@ -1,38 +1,38 @@
-# Threat model: <qué cambia>
+# Threat model: <what changes>
 
-Rama `<tipo>/pla-<n>-<slug>` (PLA-<n>). Qué disparador del template de PR lo pide y por qué.
+Branch `<type>/pla-<n>-<slug>` (PLA-<n>). Which PR template trigger requires it and why.
 
-## Alcance y activos
+## Scope and assets
 
-Qué datos y capacidades protege este cambio (tenencias, montos, documentos subidos, sesión, CUIT/DNI/CBU) y qué queda afuera.
+What data and capabilities this change protects (holdings, amounts, uploaded documents, session, CUIT/DNI/CBU) and what is left out.
 
-## Frontera de confianza
+## Trust boundary
 
-Dónde entra texto o datos que no controlamos (archivo subido, input del usuario, respuesta de un modelo, webhook) y quién está de cada lado.
+Where text or data we don't control comes in (uploaded file, user input, model response, webhook) and who is on each side.
 
-## Flujo de datos
+## Data flow
 
-Paso a paso, desde el navegador hasta la base y los proveedores externos. Nombrá cada componente (`apps/web`, `/api/inngest`, Storage, Gemini, Anthropic).
+Step by step, from the browser to the database and the external providers. Name each component (`apps/web`, `/api/inngest`, Storage, Gemini, Anthropic).
 
-## Dónde se hace cumplir
+## Where it is enforced
 
-Cada control y la capa en la que vive: RLS y grants, `proxy.ts`, route handler, paso del job, prompt.
+Each control and the layer it lives in: RLS and grants, `proxy.ts`, route handler, job step, prompt.
 
 ## STRIDE
 
 | | Vector | Control |
 |---|---|---|
-| **S** | Suplantación | |
-| **T** | Manipulación | |
-| **R** | Repudio | |
-| **I** | Divulgación de información | |
-| **D** | Denegación de servicio | |
-| **E** | Elevación de privilegios | |
+| **S** | Spoofing | |
+| **T** | Tampering | |
+| **R** | Repudiation | |
+| **I** | Information disclosure | |
+| **D** | Denial of service | |
+| **E** | Elevation of privilege | |
 
-## Controles como quedaron
+## Controls as built
 
-- **<control>**: qué hace y qué test lo prueba.
+- **<control>**: what it does and which test proves it.
 
-## Riesgo residual
+## Residual risk
 
-Lo que queda abierto, por qué se acepta y cuándo se revisa.
+What stays open, why it is accepted and when it will be revisited.
