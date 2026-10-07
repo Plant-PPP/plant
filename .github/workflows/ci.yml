@@ -136,8 +136,8 @@ jobs:
     name: database
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
-      deployments: read
     timeout-minutes: 20
     env:
       BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
@@ -152,10 +152,11 @@ jobs:
           persist-credentials: false
 
       # deploy-migrations, and the approval it asks for, runs only while
-      # supabase/migrations/ differs from the last successful deploy, so a
-      # migration a red run, a failed deploy or a rejected approval left behind
-      # goes out with the next push. No deploy found, or an API error, counts as
-      # a difference.
+      # supabase/migrations/ differs from the last push run on staging whose
+      # deploy succeeded, so a migration a red run, a failed deploy or a rejected
+      # approval left behind goes out with the next push. Run outcomes come from
+      # the Actions API because deployment records can be written by anyone with
+      # write access. No such run, or an API error, counts as a difference.
       - name: Migrations changed since the last deploy
         id: migrations
         if: github.event_name == 'push'
@@ -163,15 +164,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           last=""
-          deployments="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=supabase-staging&per_page=30" --jq '.[] | "\(.id) \(.sha)"' || true)"
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=staging&event=push&per_page=30" --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)"
           while read -r id sha; do
             [ -n "$id" ] || continue
-            if [ "$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state' || true)" = "success" ]; then
+            deploy="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "Deploy migrations to plant-staging") | .conclusion' </dev/null || true)"
+            if [ "$deploy" = "success" ]; then
               last="$sha"
               break
             fi
-          done <<<"$deployments"
-          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null && git diff --quiet "$last" HEAD -- supabase/migrations/; then
+          done <<<"$runs"
+          if [ -n "$last" ] && git merge-base --is-ancestor "$last" HEAD 2>/dev/null && git diff --quiet "$last" HEAD -- supabase/migrations/; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -276,10 +278,11 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_TELEMETRY_DISABLED: "1"
-          # The CLI also reads these from a supabase/.env a change could commit; the
+          # The CLI also reads these from any .env file a change could commit; the
           # shell wins.
           SUPABASE_DB_MIGRATIONS_ENABLED: "true"
           PGSSLMODE: require
+          PGSERVICEFILE: /dev/null
         run: |
           [ -n "$SUPABASE_DB_URL" ] || { echo "::error::SUPABASE_DB_URL is not set in the supabase-staging environment"; exit 1; }
           # Migrations only: no Vault secrets from config.toml, and no prompt.
