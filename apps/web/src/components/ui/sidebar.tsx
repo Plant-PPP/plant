@@ -187,6 +187,14 @@ function Sidebar({
             } as React.CSSProperties
           }
           side={side}
+          // The trigger is not a SheetTrigger, so Radix can't return focus to
+          // it on close.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            document
+              .querySelector<HTMLElement>('[data-sidebar="trigger"]')
+              ?.focus();
+          }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Menú</SheetTitle>
@@ -206,6 +214,9 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
+      // An offcanvas sidebar slid off-screen must not keep its links in the
+      // tab order.
+      inert={state === "collapsed" && collapsible === "offcanvas"}
     >
       <div
         data-slot="sidebar-gap"
