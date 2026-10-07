@@ -132,7 +132,8 @@ jobs:
   # local Postgres with every migration applied, the types check and pgTAP. On
   # PRs, last, the append-only check.
   database:
-    name: Database (migrations, types, pgTAP, plpgsql_check)
+    # The staging ruleset requires a check with this name.
+    name: database
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -159,9 +160,8 @@ jobs:
         id: install
         run: pnpm install --frozen-lockfile
 
-      # New migrations sort after the merged ones and pass squawk. The push run
-      # repeats it because two PRs green on their own can land out of order, and
-      # deploy-migrations needs this job.
+      # The push run repeats it because two PRs green on their own can land out of
+      # order, and deploy-migrations needs this job.
       - name: New migrations (name, version, transaction, squawk)
         run: bash scripts/check-migrations.sh "$BASE"
 
@@ -212,8 +212,7 @@ jobs:
           fi
 
   # Push-only, no workflow_dispatch: a dispatch from another branch would apply
-  # its migrations, which are recorded and never re-run. See docs/decisiones.md
-  # (PLA-11).
+  # its migrations, which are recorded and never re-run.
   deploy-migrations:
     name: Deploy migrations to plant-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'

@@ -254,6 +254,7 @@ test("a migration that opts out of the transaction fails", () => {
 test("a statement the CLI runs outside the transaction fails beside others", () => {
   for (const statement of [
     "DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
+    "/* unused */ DROP INDEX CONCURRENTLY IF EXISTS public.fixture_runs_user_id_idx;",
     "REINDEX INDEX CONCURRENTLY public.fixture_runs_user_id_idx;",
     "vacuum public.fixture_runs;",
     "CLUSTER public.fixture_runs USING fixture_runs_pkey;",
@@ -265,6 +266,20 @@ test("a statement the CLI runs outside the transaction fails beside others", () 
     );
     assert.equal(code, 1, statement);
     assert.match(output, /all-or-nothing/);
+  }
+});
+
+test("VACUUM, CLUSTER or ALTER SYSTEM alone fails", () => {
+  for (const statement of [
+    "VACUUM public.fixture_runs;",
+    "CLUSTER public.fixture_runs USING fixture_runs_pkey;",
+    "ALTER SYSTEM SET work_mem = '64MB';",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${statement}\n`),
+    );
+    assert.equal(code, 1, statement);
+    assert.match(output, /do not belong in a migration/);
   }
 });
 
@@ -280,14 +295,30 @@ test("a lone concurrent index drop passes", () => {
 });
 
 test("a file-wide squawk exemption fails", () => {
+  for (const exemption of [
+    "-- squawk-ignore-file",
+    "/* squawk-ignore-file */",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(
+        `${MIGRATIONS}/20260106000000_new.sql`,
+        `${exemption}\n${NO_TIMEOUT}`,
+      ),
+    );
+    assert.equal(code, 1, exemption);
+    assert.match(output, /not the whole file/);
+  }
+});
+
+test("an exempted transaction control statement fails", () => {
   const { code, output } = check(({ write }) =>
     write(
       `${MIGRATIONS}/20260106000000_new.sql`,
-      `-- squawk-ignore-file\n${NO_TIMEOUT}`,
+      `${VALID}\n-- squawk-ignore transaction-nesting\ncommit;\n`,
     ),
   );
   assert.equal(code, 1);
-  assert.match(output, /not the whole file/);
+  assert.match(output, /without a transaction/);
 });
 
 test("a committed migration missing from the working tree fails", () => {

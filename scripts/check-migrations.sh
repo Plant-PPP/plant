@@ -86,24 +86,33 @@ if [ -n "$future" ]; then
   errors=$((errors + 1))
 fi
 
-# Prints why the CLI would not apply the migration on stdin all-or-nothing,
-# or nothing. The CLI commits what came before an index statement with
-# CONCURRENTLY (and VACUUM, CLUSTER, ALTER SYSTEM) and runs it alone, and runs a
-# file with PREPARE TRANSACTION statement by statement; squawk only catches
-# CREATE INDEX CONCURRENTLY. Statements are split on `;` after dropping `--`
-# comments, which can only over-count.
+# Prints why the migration on stdin would not apply all-or-nothing, or nothing.
+# The CLI commits what came before a CREATE/DROP INDEX or REINDEX with
+# CONCURRENTLY, VACUUM, CLUSTER or ALTER SYSTEM and runs it alone, so one of
+# these is allowed only as the file's single statement (and only the index
+# statements: the rest do not belong in a migration). A file with a transaction
+# control statement (BEGIN, COMMIT, ROLLBACK, PREPARE TRANSACTION...) runs
+# statement by statement; squawk's transaction-nesting rule catches all but
+# PREPARE TRANSACTION, and its exemption is rejected below. Squawk alone only
+# catches CREATE INDEX CONCURRENTLY. Statements are split on `;` after dropping
+# `--` comments, so a `;` or `--` inside a string literal can mis-split.
 not_atomic() {
   sed 's/--.*$//' | awk 'BEGIN { RS = ";" }
     {
       s = toupper($0)
       gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+      # Leading block comments, which the CLI also skips.
+      while (s ~ /^\/\*/) {
+        if (!sub(/^\/\*([^*]|\*+[^*\/])*\*+\//, "", s)) break
+        gsub(/^[ \t\r\n]+/, "", s)
+      }
       if (s == "") next
       n++
       if (s ~ /^(VACUUM|CLUSTER|ALTER[ \t\r\n]+SYSTEM|PREPARE[ \t\r\n]+TRANSACTION)([ \t\r\n(]|$)/) banned = 1
       if (s ~ /^((CREATE([ \t\r\n]+UNIQUE)?|DROP)[ \t\r\n]+INDEX|REINDEX)[ \t\r\n(].*CONCURRENTLY/) concurrent = 1
     }
     END {
-      if (banned) print "it runs VACUUM, CLUSTER, ALTER SYSTEM or PREPARE TRANSACTION"
+      if (banned) print "VACUUM, CLUSTER, ALTER SYSTEM and PREPARE TRANSACTION do not belong in a migration"
       else if (concurrent && n > 1) print "a CONCURRENTLY index statement is not alone in the file"
     }'
 }
@@ -133,12 +142,16 @@ while IFS= read -r file; do
   fi
   reason="$(not_atomic <"$file")"
   if [ -n "$reason" ]; then
-    echo "::error::$file would not apply all-or-nothing: $reason (see .squawk.toml)."
+    echo "::error::$file would not apply all-or-nothing: $reason."
     errors=$((errors + 1))
   fi
   # An exemption names its rule and sits on the statement it covers.
-  if grep -Eq -- '--[[:space:]]*squawk-ignore-file' "$file"; then
+  if grep -Eq -- '(--|/\*)[[:space:]]*squawk-ignore-file' "$file"; then
     echo "::error::$file: exempt single statements with '-- squawk-ignore <rule>', not the whole file."
+    errors=$((errors + 1))
+  fi
+  if grep -Eq -- '(--|/\*)[[:space:]]*squawk-ignore[[:space:]].*transaction-nesting' "$file"; then
+    echo "::error::$file: a transaction control statement makes the CLI apply the file without a transaction; split it into separate migrations."
     errors=$((errors + 1))
   fi
 done <<EOF
