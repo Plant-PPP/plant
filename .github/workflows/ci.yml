@@ -52,9 +52,12 @@ jobs:
           if [ -n "$candidate" ] && [ "$candidate" != "0000000000000000000000000000000000000000" ] \
             && git cat-file -e "$candidate^{commit}" 2>/dev/null; then
             echo "ref=$candidate" >> "$GITHUB_OUTPUT"
+            echo "range=$candidate..HEAD" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::No usable diff base ('$candidate'), falling back to the root commit, which runs everything."
             echo "ref=$(git rev-list --max-parents=0 HEAD | head -n 1)" >> "$GITHUB_OUTPUT"
+            # <root>..HEAD would leave the root commit itself unscanned.
+            echo "range=HEAD" >> "$GITHUB_OUTPUT"
           fi
 
       # The repo is public. The word list is a secret so it is never spelled
@@ -68,7 +71,7 @@ jobs:
         env:
           FORBIDDEN_WORDS: ${{ secrets.FORBIDDEN_WORDS }}
           REQUIRE_FORBIDDEN_WORDS: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '1' || '' }}
-          FORBIDDEN_WORDS_RANGE: ${{ steps.base.outputs.ref }}..HEAD
+          FORBIDDEN_WORDS_RANGE: ${{ steps.base.outputs.range }}
           FORBIDDEN_WORDS_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: bash scripts/check-forbidden-words.sh
 

@@ -73,7 +73,7 @@ for (const dir of manifests) {
     peerDependencies = {},
     optionalDependencies = {},
   } = JSON.parse(
-    readFileSync(new URL(`../${dir}/package.json`, import.meta.url), "utf8"),
+    readFileSync(new URL(`${dir}/package.json`, root), "utf8"),
   );
   const deps = Object.keys({
     ...dependencies,
