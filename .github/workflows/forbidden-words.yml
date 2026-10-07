@@ -25,7 +25,9 @@ jobs:
 
       # Scans the whole branch since it left staging (all history when it
       # shares none), not only the new commits: a push whose head says
-      # [skip ci] creates no run, so the next push has to cover it.
+      # [skip ci] creates no run, so the next push has to cover it. A skipped
+      # head later force-pushed away is never scanned here; only the hooks
+      # cover it.
       - name: Resolve range
         id: range
         run: |

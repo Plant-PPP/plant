@@ -47,3 +47,4 @@ Cualquiera en internet puede mandar GET, POST o PUT a `/api/inngest` (HEAD va al
 - Los previews de Vercel deben usar una signing key distinta de la de producción (un branch environment de Inngest). Lo configura Tomas al conectar Inngest con Vercel.
 - `INNGEST_DEV`, `INNGEST_BASE_URL` o `INNGEST_API_BASE_URL` con una URL ya no apagan las firmas, pero sí redirigen el tráfico saliente (registro y eventos, con sus keys). Ninguna de las tres debe existir en Vercel.
 - Sin telemetría hasta PLA-21: un pico de requests rechazados no avisa a nadie.
+- La firma cubre el body, no los parámetros de la URL (`fnId`, `stepId`). Hoy no importa porque `ping` no toca datos, pero cuando haya varias funciones con service role, un body firmado capturado se podría reenviar a otra función dentro de los 5 minutos. Revisarlo con las funciones de Carga con IA.
