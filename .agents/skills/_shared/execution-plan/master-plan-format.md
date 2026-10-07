@@ -78,8 +78,8 @@ than one entry.
    what is deferred and WHY.
 5. **PR map + merge order** — appears ONLY at PR #2 (a 1-PR run never renders it): current + intended
    PRs, each with status; the merge ordering + end-state (what the tree looks like when done); and
-   file-overlap dependencies as explicit rows (which PRs touch the same files and need a rebase after
-   the first merges).
+   file-overlap dependencies as explicit rows (which PRs touch the same files and need `origin/staging` merged in
+   after the first merges).
 6. **Blocked & deferred** — live `FAILED` / `RED` / `AWAITING-HUMAN` items with *what was tried*
    (not only in the terminal summary); deferred work as the **Linear ticket ids already filed**
    (`PLA-<n>`) so nobody re-files them.

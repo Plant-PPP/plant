@@ -113,7 +113,7 @@ Re-run the step-1 thread query once more here, before mergeable — CI's run is 
 ### 5. Confirm mergeable
 - `gh pr view <n> --json mergeStateStatus,reviewDecision`.
 - `DIRTY` = conflict with base: merge `origin/staging` in and resolve (mind the hazards:
-  keep-both rebases, migration timestamps that now sort before staging's), re-verify tests, push →
+  keep-both conflict resolutions, migration timestamps that now sort before staging's), re-verify tests, push →
   **back to step 1**. ⚠️ **Unattended, resolve only a conflict you can settle mechanically.** A
   resolution that needs judgement — overlapping hunks, anything in a migration or money-math path —
   is a `FAILED: PR <n> conflicts with staging — <files>`: stop that item, leave the branch as it is.
