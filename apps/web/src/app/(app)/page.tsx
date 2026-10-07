@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
+import { navTitle } from "@/lib/navigation";
 import { supabaseEnv } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: navTitle("/") };
 
 async function supabaseStatus(): Promise<string> {
   const env = supabaseEnv();
@@ -23,17 +27,17 @@ export default async function Home() {
     process.env.VERCEL_ENV === "production" ? null : await supabaseStatus();
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-4 p-6">
-      <h1 className="text-2xl font-semibold">Plant</h1>
-      <p className="text-sm text-zinc-500">
-        Todo tu patrimonio, en pesos y en dólares.
+    <div>
+      <h1 className="sr-only">{navTitle("/")}</h1>
+      <p className="text-sm text-muted-foreground">
+        Acá vas a ver tu patrimonio en pesos y en dólares.
       </p>
       {status && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-zinc-500">Supabase</dt>
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-muted-foreground">Supabase</dt>
           <dd>{status}</dd>
         </dl>
       )}
-    </main>
+    </div>
   );
 }

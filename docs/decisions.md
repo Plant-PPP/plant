@@ -2,11 +2,20 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-07 · App layout, themes and brand (PLA-20)
+
+- **The shell, not the features around it.** The user menu arrives with login (PLA-17), the assistant's side panel with the assistant (PLA-47), forms in a Sheet with the first form (PLA-24), and a settings group in the sidebar with the first settings page.
+- **English routes, Spanish labels.** `/`, `/assets`, `/debts`, `/import` and `/assistant`; the sidebar, breadcrumb and page titles show Resumen, Activos, Deudas, Cargar and Asistente, from `lib/navigation.ts`.
+- **The `(app)` group has no auth guard yet.** Login (PLA-17) adds it to that layout.
+- **Chart colors are the brand range, the same in light and dark.** `--chart-1`…`--chart-8` replace shadcn's five; the grays are `--chart-gray-1`…`--chart-gray-8`.
+- **`--brand` is not for text or focus rings on a light background:** Salvia `#7fa877` on white is below 3:1. Text uses `foreground`, and focus uses `ring`.
+- **next-themes injects an inline script.** Today's CSP has no `script-src`; the nonce-based CSP (PLA-17) passes its nonce to `ThemeProvider`.
+
 ## 2026-10-07 · Repo language (PLA-87)
 
 - **The rule lives in `CLAUDE.md` (Language).** This entry records where the line fell.
 - **The bug-report form stays in Spanish.** `.github/ISSUE_TEMPLATE/error.yml` is filled in by people outside the team, who read Spanish. Its field ids are English because nobody sees them; its `error` label stays.
-- **Dev-aid strings on the home page are English.** The Supabase status in `apps/web/src/app/page.tsx` is a dev aid; production does not render it (previews do).
+- **Dev-aid strings on the home page are English.** The Supabase status in `apps/web/src/app/(app)/page.tsx` is a dev aid; production does not render it (previews do).
 - **Validation messages in `@plant/shared` are English.** No form shows them today; a form that uses them maps zod issue codes to its own Spanish copy.
 - **Linear names stay quoted in Spanish** ("Carga con IA", "Terminado cuando"), so a grep from the repo still finds the Linear project or heading.
 - **Commits:** `.claude/settings.json` sets `attribution.commit` to `""`, so Claude Code stops adding `Co-Authored-By:`. `Claude-Session:` is dropped only by `attribution.sessionUrl: false`, which also drops the session link from PR bodies, so `CLAUDE.md` covers it instead. What lands on `staging` is one line only when the repo merges with Squash and merge, PR title as the commit title and an empty message.
