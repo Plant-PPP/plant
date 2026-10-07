@@ -30,9 +30,9 @@ THE FOUR CO-EQUAL LAWS — check and REPORT each (an unstated law is UNCHECKED, 
                 that wires concretes; hosts /api/inngest and the chat route)
      off-spine: evals → may import packages; NOTHING imports evals
    An edge pointing up or sideways = defect. Engine rule: steps are pure functions in sources/core with
-   NO engine import — `inngest` appears only in packages/jobs and the composition root. There is no
-   machine boundary guard yet: check manifests and relative-path climbs BY HAND, and a new package or
-   port that lands without a boundary test is a defect to raise.
+   NO engine import — `inngest` appears only in packages/jobs and the composition root. `pnpm
+   check:boundaries` enforces the manifest graph (root included); relative-path climbs across package
+   roots are checked BY HAND, and a new package without an entry in the script's `allowed` map fails.
 4. CONTRACT-VOCAB — the core speaks only the contract's words. A provider/adapter name or coined
    word (inngest, file_upload, an AI provider, a broker) leaked into a core identifier, file, shared
    type, or comment = boundary leak (HARD blocker). New ports are named `<Domain>Port` like

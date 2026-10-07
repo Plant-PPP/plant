@@ -74,9 +74,7 @@ for (const dir of manifests) {
     devDependencies = {},
     peerDependencies = {},
     optionalDependencies = {},
-  } = JSON.parse(
-    readFileSync(new URL(`${dir}/package.json`, root), "utf8"),
-  );
+  } = JSON.parse(readFileSync(new URL(`${dir}/package.json`, root), "utf8"));
   const deps = Object.keys({
     ...dependencies,
     ...devDependencies,

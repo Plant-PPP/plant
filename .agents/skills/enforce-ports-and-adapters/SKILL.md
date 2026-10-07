@@ -227,12 +227,11 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 
 ### Machine enforcement (what actually guards this)
 
-There is NO import-boundaries test, dependency-cruiser, madge, or eslint `no-restricted-imports`
-guard yet. Every edge above is checked BY HAND: the package manifests (`dependencies` /
-`devDependencies` on `@plant/*`) and source-level relative-path climbs across package roots. When you
-add a package or a port, TIGHTEN the guard — add a boundary test that ranks every `@plant/*` package
-and fails on an edge to an equal or higher rank, and on an `inngest` import outside `packages/jobs`
-and the composition root. Do not rely on review alone having caught the old shape.
+`pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`, run in CI) checks every workspace
+manifest and the root `package.json` against this graph, and fails on an `inngest` dependency
+outside `packages/jobs` and the composition root. It reads manifests only: source-level relative-path
+climbs across package roots (`../../jobs/src`) are still checked BY HAND. A new package needs an
+entry in the script's `allowed` map, or the check fails with "unknown package".
 
 ## How to attack a change with this lens
 
@@ -277,7 +276,7 @@ and the composition root. Do not rely on review alone having caught the old shap
 - "Defect — the port imports an adapter or something external; the port must know nothing."
 - "Defect — consumer checks which source it holds instead of the port's capability matrix."
 - "Defect — adapter-specific error crosses the boundary; surface it as `SourceError` with `retryable`."
-- "Defect — new package or port with no boundary guard; add it to the boundary test."
+- "Defect — new package with no entry in `allowed` in scripts/check-package-boundaries.mjs."
 - "Defect — invented parallel vocabulary; mirror the house `<Domain>Port` naming."
 - "Defect — concrete/provider name (or coined word) leaked into the implementation-blind core."
 - "Defect — version/lineage marker in a name; rename by what it is."
