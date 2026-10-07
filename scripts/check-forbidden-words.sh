@@ -68,7 +68,9 @@ fi
 
 # Each git command runs on its own so a failure stops the check instead of
 # reading as "no match". --text everywhere: otherwise a binary file, or one a
-# .gitattributes entry marks -diff, is skipped silently.
+# .gitattributes entry marks -diff, is skipped silently. Matching is on raw
+# bytes, so UTF-16 text and compressed files (PDF, xlsx, docx, zip) are not
+# really read; fixtures in those formats need a manual check.
 names=$(git ls-files) || die "git ls-files"
 report "file names" "$names"
 

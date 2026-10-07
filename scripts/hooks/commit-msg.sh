@@ -5,9 +5,10 @@
 # scissors line is matched by its fixed suffix, because its leading comment
 # string can come from core.commentChar=auto or core.commentString. Under
 # `auto`, git picks the comment char per message and stripspace would assume
-# `#`, so the char is read from git's template line. A comment-looking line
-# kept by `git commit -m` is caught by pre-push and CI, which read the stored
-# message.
+# `#`, so the char is read from the template line that quotes it ("; with ';'
+# will be ignored"), a shape that does not depend on git's language. A
+# comment-looking line kept by `git commit -m` is caught by pre-push and CI,
+# which read the stored message.
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
@@ -15,7 +16,7 @@ scissors=" ------------------------ >8 ------------------------"
 
 strip=(git stripspace --strip-comments)
 if [ "$(git config core.commentChar || true)" = "auto" ]; then
-  char=$(grep -m1 -E '^. Please enter the commit message' "$1" | cut -c1 || true)
+  char=$(awk -v q="'" 'substr($0, 2, 1) == " " && index($0, q substr($0, 1, 1) q) { print substr($0, 1, 1); exit }' "$1")
   strip=(git -c core.commentChar="${char:-#}" stripspace --strip-comments)
 fi
 
