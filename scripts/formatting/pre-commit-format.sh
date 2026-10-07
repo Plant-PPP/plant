@@ -29,14 +29,16 @@ changed_staged --pattern "$FORMAT_FILE_PATTERN" "${FORMAT_PROJECTS[@]}"
 # Formatting restages whole files, which would sweep unstaged edits into the
 # commit. Partly staged files are left alone; the CI format check still
 # covers them.
+# The ${arr[@]+...} form keeps empty arrays safe under set -u on bash 3.2
+# (macOS /bin/bash).
 fully_staged=()
-for file in "${CHANGED_FILES[@]}"; do
+for file in ${CHANGED_FILES[@]+"${CHANGED_FILES[@]}"}; do
   if git diff --quiet -- "$file"; then
     fully_staged+=("$file")
   else
     echo "[formatting] Skipped $file: it has unstaged changes."
   fi
 done
-CHANGED_FILES=("${fully_staged[@]}")
+CHANGED_FILES=(${fully_staged[@]+"${fully_staged[@]}"})
 
 formatting_write_changed_files "$CHECKED_FILES" "$MISMATCHED_FILES"

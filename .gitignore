@@ -163,3 +163,8 @@ next-env.d.ts
 *.key
 # Real documents for local evals never enter the repo.
 evals/docs-locales/
+*.p12
+*.pfx
+.netrc
+credentials*.json
+service-account*.json

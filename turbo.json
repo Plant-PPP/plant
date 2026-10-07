@@ -9,6 +9,7 @@
     "pnpm-workspace.yaml",
     "tsconfig.base.json",
     "eslint.packages.mjs",
+    "eslint.money.mjs",
     ".npmrc"
   ],
   "tasks": {

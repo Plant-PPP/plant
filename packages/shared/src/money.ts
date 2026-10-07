@@ -5,8 +5,9 @@ export type Currency = z.infer<typeof currencySchema>;
 
 // Amounts travel as decimal strings so no layer rounds them through a float.
 // Postgres stores them as numeric(20, 8): up to 12 integer digits and 8
-// decimals. One canonical spelling per value (no leading zeros, no "-0"), so
-// two equal amounts compare equal as strings.
+// decimals. Trailing zeros are allowed ("1.5" and "1.50"; Postgres returns the
+// column padded to 8 decimals), so amounts are compared as decimals, never as
+// strings.
 export const decimalStringSchema = z
   .string()
   .regex(

@@ -35,8 +35,8 @@ catalogs:
       version: 4.6.5
 
 overrides:
-  adm-zip: '>=0.6.1'
-  shell-quote: '>=1.11.0'
+  adm-zip: ^0.6.1
+  shell-quote: ^1.11.0
 
 importers:
 
@@ -61,7 +61,7 @@ importers:
         specifier: 2.120.0
         version: 2.120.0
       turbo:
-        specifier: ^2.11.7
+        specifier: 2.11.7
         version: 2.11.7
       typescript-eslint:
         specifier: 'catalog:'

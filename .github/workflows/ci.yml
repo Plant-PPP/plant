@@ -75,7 +75,18 @@ jobs:
           REQUIRE_FORBIDDEN_WORDS: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '1' || '' }}
           FORBIDDEN_WORDS_RANGE: ${{ steps.base.outputs.ref }}..HEAD
           FORBIDDEN_WORDS_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: bash scripts/check-forbidden-words.sh
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        # The step holds the secret, so on PRs it runs the base branch's copy
+        # of the script: a PR cannot rewrite it to print the list.
+        run: |
+          set -euo pipefail
+          script=scripts/check-forbidden-words.sh
+          if [ "${{ github.event_name }}" = "pull_request" ] \
+            && git cat-file -e "$BASE_REF:$script" 2>/dev/null; then
+            git show "$BASE_REF:$script" > "$RUNNER_TEMP/check-forbidden-words.sh"
+            script="$RUNNER_TEMP/check-forbidden-words.sh"
+          fi
+          bash "$script"
 
       - name: Setup pnpm
         # Version is read from the root package.json "packageManager" field.

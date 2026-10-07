@@ -9,6 +9,11 @@ else
   merge_base=""
 fi
 
+# Commit messages, authors and the branch name go public with this push.
+FORBIDDEN_WORDS_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
+  FORBIDDEN_WORDS_RANGE="${merge_base:+$merge_base..HEAD}" \
+  bash "$ROOT/scripts/check-forbidden-words.sh"
+
 # Regenerate the Supabase types only when the branch adds migrations.
 if [ -n "$merge_base" ] && git diff --diff-filter=A --name-only "$merge_base"...HEAD -- "supabase/migrations/*.sql" | grep -q .; then
   pnpm run db:generate:supabase-types
@@ -23,12 +28,8 @@ fi
 # Typecheck, lint and test the packages this branch affects, per the
 # dependency graph. Without origin/staging (fresh clone) there is no base to
 # diff against, so fall back to the whole repo.
-export TURBO_TELEMETRY_DISABLED=1
 if [ -n "$merge_base" ]; then
-  export TURBO_SCM_BASE=origin/staging
-  affected=--affected
+  pnpm turbo:affected
 else
-  affected=
+  pnpm check && pnpm test
 fi
-
-pnpm exec turbo run check test $affected

@@ -56,4 +56,4 @@ Linear: PLA-
 ## IA
 
 - [ ] Un asistente de IA escribió código en rutas sensibles (auth, RLS, migraciones, dependencias, CI): qué generó
-- [ ] Agrega o cambia llamadas a un proveedor de IA: costo registrado en `ai_costs`, texto de afuera por `prompt-text.ts`
+- [ ] Agrega o cambia llamadas a un proveedor de IA: costo registrado con `ai-cost.ts` y texto de afuera por `prompt-text.ts` (los dos llegan con la primera llamada a IA)

@@ -1,8 +1,10 @@
-// Enforces the package graph CLAUDE.md describes: shared is a leaf; sources
-// and core see only shared; jobs sees shared, sources and core; only jobs and
-// the web app (the composition root) may depend on the Inngest SDK; nothing
-// depends on evals.
-import { readFileSync } from "node:fs";
+// Checks the dependencies each workspace manifest declares against the
+// package graph: shared is a leaf; sources and core see only shared; jobs
+// sees shared, sources and core; only jobs and the web app (the composition
+// root) may depend on the Inngest SDK; nothing depends on evals. pnpm only
+// links declared dependencies, so a bare import of anything else fails to
+// resolve.
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 const allowed = {
   "@plant/shared": [],
@@ -18,14 +20,16 @@ const allowed = {
   "@plant/evals": ["@plant/shared", "@plant/sources", "@plant/core"],
 };
 const engineAllowed = new Set(["@plant/jobs", "@plant/web"]);
+// Every workspace package, so a new one without an entry in `allowed` fails.
+const root = new URL("../", import.meta.url);
 const manifests = [
-  "packages/shared",
-  "packages/sources",
-  "packages/core",
-  "packages/jobs",
-  "apps/web",
+  ...["apps", "packages"].flatMap((parent) =>
+    readdirSync(new URL(`${parent}/`, root), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `${parent}/${entry.name}`),
+  ),
   "evals",
-];
+].filter((dir) => existsSync(new URL(`${dir}/package.json`, root)));
 
 const violations = [];
 for (const dir of manifests) {
@@ -33,10 +37,17 @@ for (const dir of manifests) {
     name,
     dependencies = {},
     devDependencies = {},
+    peerDependencies = {},
+    optionalDependencies = {},
   } = JSON.parse(
     readFileSync(new URL(`../${dir}/package.json`, import.meta.url), "utf8"),
   );
-  const deps = Object.keys({ ...dependencies, ...devDependencies });
+  const deps = Object.keys({
+    ...dependencies,
+    ...devDependencies,
+    ...peerDependencies,
+    ...optionalDependencies,
+  });
   if (!(name in allowed)) violations.push(`${dir}: unknown package ${name}`);
   for (const dep of deps) {
     if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {

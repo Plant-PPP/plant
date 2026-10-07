@@ -20,8 +20,8 @@ catalog:
 # Patched versions of dev-tool dependencies that CI's `pnpm audit` flags.
 # Drop each one once its parent (inngest-cli, concurrently) ships the fix.
 overrides:
-  adm-zip: ">=0.6.1"
-  shell-quote: ">=1.11.0"
+  adm-zip: ^0.6.1
+  shell-quote: ^1.11.0
 
 auditConfig:
   ignoreGhsas:

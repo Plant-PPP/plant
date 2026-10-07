@@ -7,9 +7,9 @@ org-level way to invert it. A local composite wrapper cannot do it either:
 perform the initial checkout.
 
 Stdlib only — no PyYAML: this must fire on a PR that touches ONLY workflow
-files, which `turbo run ci --affected` skips (turbo.json `globalDependencies`
-excludes `.github/`). So it cannot live in a package's jest suite, and it runs
-before dependencies are installed.
+files, which the affected-only turbo tasks skip (`.github/` is in no package
+and not in turbo.json `globalDependencies`). So it cannot live in a package's
+test suite, and it runs before dependencies are installed.
 """
 
 from __future__ import annotations

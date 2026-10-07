@@ -16,7 +16,7 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "turbo:affected": "TURBO_SCM_BASE=origin/staging turbo run check test --affected",
+    "turbo:affected": "TURBO_TELEMETRY_DISABLED=1 TURBO_SCM_BASE=origin/staging turbo run check test --affected",
     "format": "bash ./scripts/formatting/format-changed.sh",
     "format:check": "bash ./scripts/formatting/ci-format-check.sh",
     "check:forbidden-words": "bash ./scripts/check-forbidden-words.sh",
@@ -32,7 +32,7 @@
     "inngest-cli": "1.46.0",
     "prettier": "3.9.9",
     "supabase": "2.120.0",
-    "turbo": "^2.11.7",
+    "turbo": "2.11.7",
     "typescript-eslint": "catalog:"
   }
 }
