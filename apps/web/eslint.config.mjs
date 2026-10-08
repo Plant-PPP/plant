@@ -113,4 +113,7 @@ export default defineConfig([
     "playwright-report/**",
     "test-results/**",
   ]),
+  // eslint-config-next ignores build/, which git does not ignore here and tsc
+  // compiles.
+  globalIgnores(["!build/**"]),
 ]);

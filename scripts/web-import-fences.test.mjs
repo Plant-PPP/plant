@@ -65,6 +65,34 @@ const flagged = [
     "src/lib/ai/ai-cost-sink.ts",
     'export async function f() {\n  "use\\x20server";\n}',
   ],
+  ["src/lib/x.mjs", 'import "ai";'],
+  ["build/reach.ts", 'import "@/lib/supabase/service-role";'],
+  [
+    "src/app/api/x/route.ts",
+    'export async function POST() {\n  await step.ai.infer("x", {});\n}',
+  ],
+  [
+    "src/lib/ai/x.ts",
+    'export const f = ({ step: { ai } }) => ai.infer("x", {});',
+  ],
+  ["src/lib/ai/x.ts", 'export const f = (step) => step["ai"].wrap("x", f);'],
+  ["src/components/x.tsx", 'import { gemini } from "@inngest/ai";'],
+  [
+    "src/app/actions.ts",
+    'export const c = require.context("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/app/page.tsx",
+    'export const c = (require as unknown as { context: Function }).context("../lib", false, /role/);',
+  ],
+  ...[
+    "src/lib/ai/x.ts",
+    "src/lib/ai/ai-cost-sink.ts",
+    "src/app/api/x/route.ts",
+  ].flatMap((filePath) => [
+    [filePath, "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;"],
+    [filePath, 'const m = "x";\nexport const f = () => import(m);'],
+  ]),
   ["src/lib/ai/x.ts", 'import "@/lib/ai/ai-cost-sink";'],
   ["src/lib/ai/x.ts", 'import "../supabase/service-role";'],
   ["src/app/api/x/route.ts", 'import "@/lib/supabase/service-role";'],
@@ -212,6 +240,11 @@ const allowed = [
   ],
   ["src/lib/ai/x.ts", 'export { type LanguageModel } from "ai";'],
   ["src/app/api/x/route.ts", 'export { type X } from "@/lib/ai/ai-cost-sink";'],
+  [
+    "src/app/api/a/b/route.ts",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
+  ],
+  ["src/lib/x.ts", "export const f = (o: { aim: number }) => o.aim;"],
   ["src/lib/ai/ai-cost-sink.ts", 'export const s = "use server";'],
   [
     "src/lib/ai/ai-cost-sink.ts",
@@ -235,6 +268,10 @@ for (const code of [
   'import "../../../apps/web/node_modules/ai";',
   'export const f = () => import("../../../apps/web/src/lib/ai/ai-cost-sink");',
   'const m = "x";\nexport const f = () => import(m);',
+  'import "../../node_modules/.pnpm/node_modules/ai";',
+  'export const f = ({ step }) => step.ai.infer("x", {});',
+  'import { gemini } from "@inngest/ai";',
+  'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
 ]) {
   test(`packages/jobs: ${code} is flagged`, async () => {
     const [result] = await jobs.lintText(code, { filePath: "src/x.ts" });
