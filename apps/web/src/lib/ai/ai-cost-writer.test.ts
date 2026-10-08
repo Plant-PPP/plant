@@ -37,6 +37,7 @@ async function failure(write: Promise<void>): Promise<AiCostWriteError> {
   );
   expect(error).toBeInstanceOf(AiCostWriteError);
   expect((error as Error).name).toBe("AiCostWriteError");
+  expect((error as AiCostWriteError).code).toBe((error as Error).message);
   return error as AiCostWriteError;
 }
 
@@ -92,6 +93,11 @@ it("throws the status when the body is not JSON", async () => {
   expect((await failure(writerWith(fetch)(row))).message).toBe("http_502");
 });
 
+it("throws the status when a failed response's body is falsy", async () => {
+  const fetch = jest.fn(async () => json(500, null));
+  expect((await failure(writerWith(fetch)(row))).message).toBe("http_500");
+});
+
 it("throws fetch_error when the request fails", async () => {
   const fetch = jest.fn(async () => {
     throw new TypeError("fetch failed");
@@ -106,4 +112,18 @@ it("times out a request that ignores the abort", async () => {
   await jest.advanceTimersByTimeAsync(1500);
   expect((await settled).message).toBe("timeout");
   expect(fetch).toHaveBeenCalledTimes(1);
+  const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  expect(init.signal?.aborted).toBe(true);
+});
+
+it.each([
+  ["timeout", true],
+  ["fetch_error", true],
+  ["http_502", true],
+  ["http_401", false],
+  ["23503", false],
+  ["PGRST204", false],
+  ["missing_key", false],
+])("%s may have committed: %s", (code, expected) => {
+  expect(new AiCostWriteError(code).mayHaveCommitted).toBe(expected);
 });

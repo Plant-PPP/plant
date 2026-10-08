@@ -5,11 +5,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const TIMEOUT_MS = 1500;
 const ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d+)$/;
 
-// The message is one of `timeout`, `fetch_error`, `missing_key`, a SQLSTATE
-// or PostgREST code, or `http_<status>`: never the error's details or hint,
+// `code` is one of `timeout`, `fetch_error`, `missing_key`, a SQLSTATE or
+// PostgREST code, or `http_<status>`: never the error's details or hint,
 // which carry the failing row.
 export class AiCostWriteError extends Error {
   override name = "AiCostWriteError";
+
+  constructor(readonly code: string) {
+    super(code);
+  }
+
+  // A SQLSTATE or PostgREST code means the statement failed and rolled back.
+  // The others can follow a commit: the connection or a gateway failed after
+  // PostgREST answered, or the timeout fired with the insert in flight.
+  get mayHaveCommitted(): boolean {
+    return (
+      this.code === "timeout" ||
+      this.code === "fetch_error" ||
+      /^http_5\d\d$/.test(this.code)
+    );
+  }
 }
 
 export function createAiCostWriter(
@@ -33,10 +48,13 @@ export function createAiCostWriter(
         .insert({ ...row, amount_usd: row.amount_usd as unknown as number })
         .abortSignal(controller.signal);
       const { error, status } = await Promise.race([insert, timeout]);
-      if (!error) return;
+      // postgrest-js takes any parsed body of a failed response as the error,
+      // so a gateway answering `null` leaves it falsy.
+      if (!error && status >= 200 && status < 300) return;
       if (status === 0) throw new AiCostWriteError("fetch_error");
+      const code = typeof error?.code === "string" ? error.code : "";
       throw new AiCostWriteError(
-        ERROR_CODE.test(error.code ?? "") ? error.code : `http_${status}`,
+        ERROR_CODE.test(code) ? code : `http_${status}`,
       );
     } finally {
       clearTimeout(timer);
