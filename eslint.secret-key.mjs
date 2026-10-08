@@ -1,6 +1,6 @@
-// The Supabase secret key bypasses RLS. Shared by the web app and the
-// packages, which Next compiles into the same server: only
-// apps/web/src/lib/supabase/service-role.ts (and its test) may name it.
+// The Supabase secret key bypasses RLS. Shared by the web app, packages/* and
+// security-tests: only apps/web/src/lib/supabase/service-role.ts (and its
+// test) may name it.
 const SECRET_KEY = "/^(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY$/";
 
 export const secretKeyReads = [
@@ -10,5 +10,5 @@ export const secretKeyReads = [
 ].map((selector) => ({
   selector,
   message:
-    "Only apps/web/src/lib/supabase/service-role.ts reads the secret key.",
+    "Only apps/web/src/lib/supabase/service-role.ts names SUPABASE_SERVICE_ROLE_KEY.",
 }));

@@ -163,6 +163,22 @@ for (const spec of ["workspace:../jobs", "link:../jobs", "file:../jobs"]) {
   });
 }
 
+for (const [spec, label] of [
+  ["./vendor/ai", "llm \\(ai\\)"],
+  ["../jobs", "llm \\(@plant\\/jobs\\)"],
+]) {
+  test(`llm: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["llm", spec]] }, "dependencies", {
+      "packages/core/vendor/ai/package.json": JSON.stringify({ name: "ai" }),
+    });
+    assert.equal(r.status, 1);
+    assert.match(
+      r.output,
+      new RegExp(`@plant/core may not depend on ${label}`),
+    );
+  });
+}
+
 test("a path without a leading dot is read", () => {
   const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
     "vendor/ai/package.json": JSON.stringify({ name: "ai" }),

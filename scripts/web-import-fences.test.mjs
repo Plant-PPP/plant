@@ -192,6 +192,8 @@ const allowed = [
     "src/lib/supabase/service-role.test.ts",
     'import "./service-role";\nprocess.env.SUPABASE_SERVICE_ROLE_KEY = "k";',
   ],
+  ["src/lib/ai/x.ts", 'export { type LanguageModel } from "ai";'],
+  ["src/app/api/x/route.ts", 'export { type X } from "@/lib/ai/ai-cost-sink";'],
 ];
 
 for (const [filePath, code] of allowed) {

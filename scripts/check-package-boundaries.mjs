@@ -83,13 +83,16 @@ const manifests = globs.flatMap((glob) => {
 manifests.push(".");
 
 // The package a spec installs when it is not the dependency's key: an alias
-// ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path ("link:../jobs",
-// "file:vendor/x", "workspace:../jobs") holds its manifest. null when a path,
-// tarball, URL or git spec gives no name to check; undefined for a version.
+// ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path ("../jobs",
+// "link:../jobs", "file:vendor/x", "workspace:../jobs") holds its manifest.
+// null when a path, tarball, URL or git spec gives no name to check;
+// undefined for a version range, a tag or "catalog:".
 function installedName(dir, spec) {
+  if (spec.startsWith("~/")) return null;
   const path =
     /^(?:link|file):(.+)$/.exec(spec)?.[1] ??
-    /^workspace:([./].*)$/.exec(spec)?.[1];
+    /^workspace:([./].*)$/.exec(spec)?.[1] ??
+    /^(\.{1,2}(?:\/.*)?|\/.*)$/.exec(spec)?.[1];
   if (path !== undefined) {
     const manifest = new URL(
       `${path.replace(/\/?$/, "/")}package.json`,

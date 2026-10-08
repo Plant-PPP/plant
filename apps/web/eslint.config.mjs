@@ -39,7 +39,10 @@ const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
 // A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>
   modules.flatMap(({ regex, message }) =>
-    ["ExportAllDeclaration", "ExportNamedDeclaration"].map((node) => ({
+    [
+      "ExportAllDeclaration",
+      'ExportNamedDeclaration:has(> ExportSpecifier[exportKind!="type"])',
+    ].map((node) => ({
       selector: `${node}[exportKind!="type"][source.value=${asSelector(regex)}]`,
       message,
     })),
