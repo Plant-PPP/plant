@@ -110,6 +110,15 @@ describe("the Auth settings the MFA rules rely on", () => {
     }
   });
 
+  it("calls no Auth hook but the access token hook", () => {
+    for (const hook of tablesUnder("auth.hook")) {
+      expect([hook, value(`auth.hook.${hook}`, "enabled")]).toEqual([
+        hook,
+        hook === "custom_access_token" ? "true" : "false",
+      ]);
+    }
+  });
+
   it("accepts no third-party, Web3 or OAuth server tokens", () => {
     for (const prefix of ["auth.third_party", "auth.web3"]) {
       for (const provider of tablesUnder(prefix)) {

@@ -9,8 +9,11 @@
 
 BEGIN;
 
-CREATE TEMP TABLE truth (aal text, mfa_enrolled boolean, expected text NOT NULL)
-  ON COMMIT DROP;
+CREATE TEMP TABLE truth (
+  aal text,
+  mfa_enrolled boolean,
+  expected text NOT NULL CHECK (expected IN ('met', 'verify'))
+) ON COMMIT DROP;
 -- NULL is a claim the token does not carry. expected: met (the session may
 -- read its own rows) or verify (it must verify a factor first).
 INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
@@ -28,8 +31,12 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
 
 SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 3);
 
-SELECT ok((SELECT count(*) = 9 AND count(DISTINCT (aal, mfa_enrolled)) = 9 FROM truth),
-          'the truth table has exactly one row for each aal and claim');
+SELECT bag_eq(
+  $$SELECT aal, mfa_enrolled FROM truth$$,
+  $$SELECT a, m FROM (VALUES ('aal1'), ('aal2'), (NULL)) x (a)
+    CROSS JOIN (VALUES (true), (false), (NULL::boolean)) y (m)$$,
+  'the truth table has exactly one row for each aal and claim'
+);
 
 -- Ena has a verified TOTP factor; Uri's factor was never verified.
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
