@@ -39,22 +39,33 @@ const SECRET_KEY_READS = [
   message: "Only src/lib/supabase/service-role.ts reads the secret key.",
 }));
 const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
-// A module allowed to import the key or the sink may not hand it on.
-const NO_REEXPORT = [SERVICE_ROLE, COST_SINK].flatMap(({ regex }) =>
-  ["ExportAllDeclaration", "ExportNamedDeclaration"].map((node) => ({
-    selector: `${node}[source.value=${asSelector(regex)}]`,
-    message:
-      "Re-exporting the secret key's client or the cost sink widens who reaches it.",
-  })),
-);
+// A module allowed to import a fenced one may not pass it on.
+const noReexport = (modules) =>
+  modules.flatMap(({ regex, message }) =>
+    ["ExportAllDeclaration", "ExportNamedDeclaration"].map((node) => ({
+      selector: `${node}[source.value=${asSelector(regex)}]`,
+      message,
+    })),
+  );
+// The sink and route handlers export only what they define, so an imported
+// sink or client cannot be handed on through an export list.
+const NO_EXPORT_LIST = [
+  "ExportNamedDeclaration:not([source]) > ExportSpecifier",
+  'ExportDefaultDeclaration[declaration.type="Identifier"]',
+].map((selector) => ({
+  selector,
+  message: "Export what this module defines, so the fences see who uses it.",
+}));
+const BASE_SYNTAX = [
+  ...LITERAL_IMPORTS_ONLY,
+  ...SECRET_KEY_READS,
+  ...noReexport([SERVICE_ROLE, COST_SINK]),
+];
 
 // The rules for one block: a later block replaces the rule's options, so each
 // lists everything it keeps. no-restricted-imports does not see import() or
 // require(), so the same regexes go to no-restricted-syntax.
-function fence(
-  modules,
-  syntax = [...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS, ...NO_REEXPORT],
-) {
+function fence(modules, syntax = BASE_SYNTAX) {
   return {
     "no-restricted-imports": [
       "error",
@@ -100,19 +111,18 @@ export default defineConfig([
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
-    rules: fence([SERVICE_ROLE, COST_SINK]),
+    rules: fence(
+      [SERVICE_ROLE, COST_SINK],
+      [...BASE_SYNTAX, ...noReexport([AI, AI_PROVIDERS])],
+    ),
+  },
+  {
+    files: ["src/lib/ai/ai-cost-sink.test.ts"],
+    rules: fence([SERVICE_ROLE]),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: fence(
-      [],
-      [
-        ...NO_SERVER_ACTION,
-        ...LITERAL_IMPORTS_ONLY,
-        ...SECRET_KEY_READS,
-        ...NO_REEXPORT,
-      ],
-    ),
+    rules: fence([], [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX]),
   },
   {
     files: ["src/lib/supabase/service-role.ts"],
@@ -122,12 +132,7 @@ export default defineConfig([
     files: [`src/app/api/**/route.${SOURCE}`],
     rules: fence(
       [AI, AI_PROVIDERS, SERVICE_ROLE],
-      [
-        ...NO_SERVER_ACTION,
-        ...LITERAL_IMPORTS_ONLY,
-        ...SECRET_KEY_READS,
-        ...NO_REEXPORT,
-      ],
+      [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
     ),
   },
   globalIgnores([

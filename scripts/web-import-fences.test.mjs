@@ -86,6 +86,20 @@ const flagged = [
     'export { createServiceRoleClient } from "@/lib/supabase/service-role";',
   ],
   ["src/app/actions.ts", 'export * from "@/lib/supabase/service-role";'],
+  [
+    "src/app/api/x/route.ts",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport { aiCostSink };',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";\nexport { createServiceRoleClient };',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";\nexport default createServiceRoleClient;',
+  ],
+  ["src/lib/ai/x.ts", 'export { generateText } from "ai";'],
+  ["src/lib/ai/x.ts", 'export * from "@ai-sdk/google";'],
   ["src/lib/ai/ai-cost-sink.ts", '"use server";\nexport const x = 1;'],
   [
     "src/lib/ai/ai-cost-sink.ts",
@@ -118,6 +132,14 @@ const allowed = [
     "export const key = process.env.SUPABASE_SERVICE_ROLE_KEY;",
   ],
   ["src/instrumentation.ts", 'export const f = () => import("@vercel/otel");'],
+  [
+    "src/app/api/inngest/route.ts",
+    'import { serveOptions } from "@plant/jobs";\nimport { serve } from "inngest/next";\nexport const { GET, POST, PUT } = serve(serveOptions);',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.test.ts",
+    'import { aiCostSink } from "./ai-cost-sink";\nexport const s = aiCostSink;',
+  ],
   [
     "src/app/api/x/route.ts",
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
