@@ -135,12 +135,14 @@ function hangsUntilAborted(): DoGenerate {
   return ({ abortSignal }) => untilAborted(abortSignal);
 }
 
-// A stream that starts, then errors when its signal aborts.
-function streamsUntilAborted(): DoStream {
+// A stream that sends `parts`, then errors when its signal aborts.
+function streamsUntilAborted(
+  parts: StreamPart[] = [{ type: "stream-start", warnings: [] }],
+): DoStream {
   return async ({ abortSignal }) => ({
     stream: new ReadableStream<StreamPart>({
       start(controller) {
-        controller.enqueue({ type: "stream-start", warnings: [] });
+        for (const part of parts) controller.enqueue(part);
         abortSignal?.addEventListener("abort", () =>
           controller.error(abortSignal.reason),
         );
@@ -380,6 +382,7 @@ describe("generate", () => {
       }),
     ).rejects.toBeDefined();
     expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
+    expect(lines[0]?.["error.type"]).toBe("TimeoutError");
   });
 
   it("resolves the call and logs when the row is not written", async () => {
@@ -518,19 +521,8 @@ describe("stream", () => {
     expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
   });
 
-  it("logs a stream that hit its step timeout as aborted", async () => {
-    const result = streamText({
-      model: model({ doStream: streamsUntilAborted() }),
-      prompt: "hi",
-      timeout: { stepMs: 10 },
-      onError: () => {},
-    });
-    await result.consumeStream({ onError: () => {} });
-    expect(record).not.toHaveBeenCalled();
-    expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
-  });
-
   it.each([
+    ["step", { stepMs: 10 }],
     ["chunk", { chunkMs: 10 }],
     ["total", { totalMs: 10 }],
   ])("logs a stream that hit its %s timeout as aborted", async (_, timeout) => {
@@ -543,6 +535,7 @@ describe("stream", () => {
     await result.consumeStream({ onError: () => {} });
     expect(record).not.toHaveBeenCalled();
     expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
+    expect(lines[0]?.["error.type"]).toBe("TimeoutError");
   });
 
   it("logs a stream aborted before it started", async () => {
@@ -620,18 +613,7 @@ describe("stream", () => {
     });
     const controller = new AbortController();
     const result = streamText({
-      model: model({
-        doStream: async ({ abortSignal }) => ({
-          stream: new ReadableStream<StreamPart>({
-            start(stream) {
-              for (const part of [...TEXT_PARTS, FINISH]) stream.enqueue(part);
-              abortSignal?.addEventListener("abort", () =>
-                stream.error(abortSignal.reason),
-              );
-            },
-          }),
-        }),
-      }),
+      model: model({ doStream: streamsUntilAborted([...TEXT_PARTS, FINISH]) }),
       prompt: "hi",
       abortSignal: controller.signal,
       onError: () => {},
@@ -651,18 +633,7 @@ describe("stream", () => {
       return written;
     });
     const result = streamText({
-      model: model({
-        doStream: async ({ abortSignal }) => ({
-          stream: new ReadableStream<StreamPart>({
-            start(stream) {
-              for (const part of [...TEXT_PARTS, FINISH]) stream.enqueue(part);
-              abortSignal?.addEventListener("abort", () =>
-                stream.error(abortSignal.reason),
-              );
-            },
-          }),
-        }),
-      }),
+      model: model({ doStream: streamsUntilAborted([...TEXT_PARTS, FINISH]) }),
       prompt: "hi",
       timeout: { chunkMs: 10 },
       onError: () => {},
@@ -772,25 +743,61 @@ describe("stream", () => {
     },
   );
 
-  it("writes the row and logs a stream that errored before it finished", async () => {
-    const result = streamText({
-      model: model({
-        doStream: async () => ({
-          stream: streamOf([
-            ...TEXT_PARTS,
-            { type: "error", error: new TypeError("x") },
-            FINISH,
-          ]),
+  // The first error part is logged; a provider may send it as a plain object.
+  const ERROR_PARTS: [string, unknown[], string][] = [
+    ["an Error", [new TypeError("x")], "TypeError"],
+    [
+      "a provider error",
+      [{ type: "overloaded_error", message: "x" }],
+      "overloaded_error",
+    ],
+    ["two errors", [new TypeError("a"), new RangeError("b")], "TypeError"],
+  ];
+
+  it.each(ERROR_PARTS)(
+    "writes the row and logs a stream that sent %s before it finished",
+    async (_, errors, type) => {
+      const result = streamText({
+        model: model({
+          doStream: async () => ({
+            stream: streamOf([
+              ...TEXT_PARTS,
+              ...errors.map((error): StreamPart => ({ type: "error", error })),
+              FINISH,
+            ]),
+          }),
         }),
-      }),
-      prompt: "hi",
-      onError: () => {},
-    });
-    await result.consumeStream({ onError: () => {} });
-    expect(record.mock.calls).toEqual([[ROW]]);
-    expect(events()).toEqual([["ai_cost.unbilled", "usage_partial"]]);
-    expect(lines[0]!["error.type"]).toBe("TypeError");
-  });
+        prompt: "hi",
+        onError: () => {},
+      });
+      await result.consumeStream({ onError: () => {} });
+      expect(record.mock.calls).toEqual([[ROW]]);
+      expect(events()).toEqual([["ai_cost.unbilled", "usage_partial"]]);
+      expect(lines[0]?.["error.type"]).toBe(type);
+    },
+  );
+
+  it.each(ERROR_PARTS)(
+    "logs the cause of a stream that sent %s and never finished",
+    async (_, errors, type) => {
+      const result = streamText({
+        model: model({
+          doStream: async () => ({
+            stream: streamOf([
+              ...TEXT_PARTS,
+              ...errors.map((error): StreamPart => ({ type: "error", error })),
+            ]),
+          }),
+        }),
+        prompt: "hi",
+        onError: () => {},
+      });
+      await result.consumeStream({ onError: () => {} });
+      expect(record).not.toHaveBeenCalled();
+      expect(events()).toEqual([["ai_cost.unbilled", "no_finish"]]);
+      expect(lines[0]?.["error.type"]).toBe(type);
+    },
+  );
 
   it("logs a stream that closes without finishing and writes nothing", async () => {
     const result = streamText({

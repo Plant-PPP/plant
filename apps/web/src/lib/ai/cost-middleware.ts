@@ -59,6 +59,15 @@ function providerStatus(error: unknown): number | undefined {
   return APICallError.isInstance(error) ? error.statusCode : undefined;
 }
 
+// Not only Errors: an abort reason may be a DOMException from another realm,
+// and @ai-sdk/anthropic passes on the provider's `{ type, message }` as a
+// stream's error part. Only the type is logged, never the message.
+function failureType(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const { type } = error as { type?: unknown };
+  return errorType(error) ?? (typeof type === "string" ? type : undefined);
+}
+
 // A provider that answered 4xx or 5xx refused before generating; any other
 // failure may have billed. @ai-sdk/anthropic also reports a first stream event
 // that fails to parse as a 500, so a change in that event's schema could bill
@@ -89,7 +98,7 @@ export function costMiddleware(options: {
     serverLog.warn("ai_cost.unbilled", {
       ...fields,
       "plant.ai_cost.reason": reason,
-      "error.type": error instanceof Error ? errorType(error) : undefined,
+      "error.type": failureType(error),
       "http.response.status_code": providerStatus(error),
     });
   }
@@ -167,7 +176,7 @@ export function costMiddleware(options: {
           controller.enqueue(part);
         },
         flush() {
-          if (!finished) unbilled("no_finish");
+          if (!finished) unbilled("no_finish", partError);
         },
         cancel(reason) {
           if (finished) return;
