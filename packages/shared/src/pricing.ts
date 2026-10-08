@@ -4,8 +4,11 @@
 // gemini-3.8-flash carries its price from 2027-01-01; until 2026-12-31 Google
 // bills 0.75 / 3.75 / 0.075, so its rows before then are over-counted, never
 // under-counted. cacheWrite is the 5-minute cache write; "0" means the model
-// has no per-token write price. 1-hour cache writes, audio input and Gemini's
-// per-hour cache storage are not priced: no caller uses them.
+// has no per-token write price. Not priced, so a caller that enables one prices
+// it first: 1-hour cache writes, which @ai-sdk/anthropic counts inside
+// cacheWrite (prompt caching arrives with PLA-47); audio input, which
+// gemini-3.1-flash-lite bills at twice its text rate; and Gemini's per-hour
+// cache storage.
 type ModelPricing = {
   input: string;
   output: string;

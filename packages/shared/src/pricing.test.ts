@@ -23,6 +23,17 @@ describe("costUsd", () => {
     ).toBe("0.0087");
   });
 
+  it("keeps the whole dollars", () => {
+    // 2,000,000 × 1.00 / 1M + 100,000 × 5.00 / 1M = 2 + 0.5
+    expect(
+      costUsd("claude-haiku-4-5", {
+        ...none,
+        input: 2_000_000,
+        output: 100_000,
+      }),
+    ).toBe("2.5");
+  });
+
   it("prices all four buckets", () => {
     // 1,000 × 1.00 + 2,000 × 0.10 + 400 × 1.25 + 500 × 5.00 = 4,200 per 1M
     expect(

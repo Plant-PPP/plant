@@ -75,7 +75,7 @@ mention is UNCHECKED, not passed.
 
 - **Owning the row is not owning its parent.** `WITH CHECK (user_id = (select auth.uid()))` on a
   child table (`holdings.import_id`, `import_files.import_id`, a debt or valuation row referencing an
-  account) proves *the caller owns this row* and never *the caller owns the parent it hangs off*. The
+  account) proves _the caller owns this row_ and never _the caller owns the parent it hangs off_. The
   attacker inserts a row about himself that references your import, and every query that joins
   through the parent now surfaces his row in your portfolio — a fake holding in your net worth, or
   his untrusted text in your assistant's context (prompt injection). This is the exact expression
@@ -85,7 +85,7 @@ mention is UNCHECKED, not passed.
   constraint on the parent's `(id, user_id)`), or a `WITH CHECK` that also asserts the parent's
   ownership.
 - **UPDATE with no `WITH CHECK`.** Postgres silently reuses `USING` as the check, and `USING` is
-  written to pick *which rows you may touch*, never *what they may become*. A `USING`-only UPDATE
+  written to pick _which rows you may touch_, never _what they may become_. A `USING`-only UPDATE
   policy lets the caller rewrite `user_id` on his own row and hand it to another user — the same
   injection as above, by a different verb. Every UPDATE policy gets an explicit `WITH CHECK` naming
   `user_id`, and the `for all` house form carries both clauses.
@@ -106,7 +106,7 @@ mention is UNCHECKED, not passed.
   `(select auth.uid())`. The same holds for an id that implies ownership: a function taking
   `p_import_id` must check that import's `user_id` against the session before touching it.
 - **`CREATE OR REPLACE` silently drops `proconfig`.** Re-declaring a function without its existing
-  `SET search_path` reverts it. Run `select proconfig from pg_proc where proname = '<f>'` *before*
+  `SET search_path` reverts it. Run `select proconfig from pg_proc where proname = '<f>'` _before_
   any replace and carry the settings forward. Do not then "fix" it by pinning `search_path = 'public'`
   when the body calls an extension function — `gen_random_bytes` and friends live in `extensions`;
   prefer `set search_path = ''` with fully qualified names.
@@ -182,7 +182,7 @@ asserting nothing — and a hole can survive for months behind a green suite.
 - DB-layer regressions belong in `supabase/tests/` (pgTAP), and their HTTP view in `security-tests/`
   (`pnpm test:security`), both run in CI. Test with two users: user B
   cannot read, insert into, update, reassign, or reference user A's rows.
-- **Use the matcher the policy dictates:** a `USING` violation filters *silently* (0 rows, no error);
+- **Use the matcher the policy dictates:** a `USING` violation filters _silently_ (0 rows, no error);
   a `WITH CHECK` violation raises `42501`. A test expecting a throw where the policy filters passes
   vacuously, and so does the reverse.
 
@@ -208,7 +208,7 @@ standing `authenticated` grant (an unused verb) the diff does not touch.
 CONDITIONAL, unlike the ports/DRY/perf/comment/telemetry lenses. It activates when the diff touches
 any of: `supabase/migrations/**`; a `CREATE POLICY` / `GRANT` / `REVOKE` / `SECURITY DEFINER` /
 `CREATE OR REPLACE FUNCTION`; a storage bucket or its policies; a client built from
-`SUPABASE_SERVICE_ROLE_KEY` (in practice, `apps/web/src/lib/supabase/service-role.ts`); a `"use server"` file;
+`SUPABASE_SERVICE_ROLE_KEY` (in practice, `apps/web/src/lib/supabase/service-role.ts` and the cost sink and writer in `apps/web/src/lib/ai` that use it); a `"use server"` file;
 `apps/web/**/route.ts` (including `/api/inngest` and the chat route) or any other HTTP route handler;
 an assistant tool definition. It is a **no-op otherwise** — a diff with none of that surface passes
 this lens clean, and does not pay for it.

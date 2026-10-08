@@ -18,7 +18,7 @@ touch a migration, a policy/grant, a DEFINER function, a storage bucket, a servi
 
 FIRES ON: supabase/migrations/**; CREATE POLICY | GRANT | REVOKE | SECURITY DEFINER | CREATE OR REPLACE
 FUNCTION; a storage bucket or its policies; a client built from SUPABASE_SERVICE_ROLE_KEY (in practice
-apps/web/src/lib/supabase/service-role.ts); any `"use server"` file; apps/web/**/route.ts (incl. /api/inngest and the chat route)
+apps/web/src/lib/supabase/service-role.ts and the cost sink and writer in apps/web/src/lib/ai that use it); any `"use server"` file; apps/web/**/route.ts (incl. /api/inngest and the chat route)
 or any other HTTP route handler; an assistant tool definition. Nothing in that list touched → N/A, and
 the wave is clean.
 
