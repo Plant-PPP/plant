@@ -4,41 +4,77 @@ import { defineConfig, globalIgnores } from "eslint/config";
 
 import { moneyRules } from "../../eslint.money.mjs";
 
+const SOURCE = "{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
+
+// Who may reach a model and the secret key. Each fenced module is a regex
+// over the import specifier, with or without a file extension.
+const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?`;
 const AI_MESSAGE = "Only src/lib/ai may call a model, so every call is costed.";
-const AI = { name: "ai", message: AI_MESSAGE };
-const AI_PATTERNS = ["^ai/", "^@ai-sdk/(?!react(/|$))"].map((regex) => ({
-  regex,
-  message: AI_MESSAGE,
-}));
+const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
+const AI_PROVIDERS = { regex: "^@ai-sdk/(?!react(/|$))", message: AI_MESSAGE };
 const SERVICE_ROLE = {
-  regex: "(^|/)service-role$",
+  regex: `(^|/)service-role${EXTENSION}$`,
   message: "The secret key bypasses RLS; only the AI cost sink holds it.",
 };
 const COST_SINK = {
-  regex: "(^|/)ai-cost-sink$",
+  regex: `(^|/)ai-cost-sink${EXTENSION}$`,
   message: "The cost sink writes past RLS; only route handlers may use it.",
 };
 
-const UI_BANNED =
-  /^(ai(\/.*)?|@ai-sdk\/(?!react(\/|$)).*|.*(^|\/)(service-role|ai-cost-sink))$/;
-const AI_LIB_BANNED = /(^|\/)(service-role|ai-cost-sink)$/;
-const ROUTE_BANNED =
-  /^(ai(\/.*)?|@ai-sdk\/(?!react(\/|$)).*|.*(^|\/)service-role)$/;
+// The fences read import specifiers, so a computed one cannot pass them.
+const LITERAL_IMPORTS_ONLY = [
+  'ImportExpression[source.type!="Literal"]',
+  'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
+].map((selector) => ({
+  selector,
+  message: "Import a module by a string literal so the import fences see it.",
+}));
+const SECRET_KEY_READS = [
+  'Identifier[name="SUPABASE_SERVICE_ROLE_KEY"]',
+  'Literal[value="SUPABASE_SERVICE_ROLE_KEY"]',
+  'TemplateElement[value.raw="SUPABASE_SERVICE_ROLE_KEY"]',
+].map((selector) => ({
+  selector,
+  message: "Only src/lib/supabase/service-role.ts reads the secret key.",
+}));
 
-// no-restricted-imports does not see import() or require().
-function dynamicImports(banned) {
-  const source = `/${banned.source}/`;
-  return [
-    {
-      selector: `ImportExpression[source.value=${source}]`,
-      message: "This module may not be imported here.",
-    },
-    {
-      selector: `CallExpression[callee.name="require"][arguments.0.value=${source}]`,
-      message: "This module may not be imported here.",
-    },
-  ];
+// The rules for one block: a later block replaces the rule's options, so each
+// lists everything it keeps. no-restricted-imports does not see import() or
+// require(), so the same regexes go to no-restricted-syntax.
+function fence(
+  modules,
+  syntax = [...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS],
+) {
+  const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
+  return {
+    "no-restricted-imports": [
+      "error",
+      { patterns: modules.map(({ regex, message }) => ({ regex, message })) },
+    ],
+    "no-restricted-syntax": [
+      "error",
+      ...modules.flatMap(({ regex, message }) => [
+        {
+          selector: `ImportExpression[source.value=${asSelector(regex)}]`,
+          message,
+        },
+        {
+          selector: `CallExpression[callee.name="require"][arguments.0.value=${asSelector(regex)}]`,
+          message,
+        },
+      ]),
+      ...syntax,
+    ],
+  };
 }
+
+const NO_SERVER_ACTION = ["Program", ":function > BlockStatement"].map(
+  (parent) => ({
+    selector: `${parent} > ExpressionStatement[directive="use server"]`,
+    message:
+      "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
+  }),
+);
 
 export default defineConfig([
   ...nextVitals,
@@ -49,51 +85,28 @@ export default defineConfig([
     ignores: ["src/lib/log/server-log.ts"],
     rules: { "no-console": "error" },
   },
-  // Who may reach a model and the secret key. A later block replaces the
-  // rule's options, so each lists everything it keeps.
   {
-    files: ["src/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: [AI], patterns: [...AI_PATTERNS, SERVICE_ROLE, COST_SINK] },
-      ],
-      "no-restricted-syntax": ["error", ...dynamicImports(UI_BANNED)],
-    },
+    files: [`src/**/*.${SOURCE}`],
+    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK]),
   },
   {
-    files: ["src/lib/ai/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: [SERVICE_ROLE, COST_SINK] },
-      ],
-      "no-restricted-syntax": ["error", ...dynamicImports(AI_LIB_BANNED)],
-    },
+    files: [`src/lib/ai/**/*.${SOURCE}`],
+    rules: fence([SERVICE_ROLE, COST_SINK]),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: {
-      "no-restricted-imports": "off",
-      "no-restricted-syntax": [
-        "error",
-        ...["Program", ":function > BlockStatement"].map((parent) => ({
-          selector: `${parent} > ExpressionStatement[directive="use server"]`,
-          message:
-            "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
-        })),
-      ],
-    },
+    rules: fence(
+      [],
+      [...NO_SERVER_ACTION, ...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS],
+    ),
   },
   {
-    files: ["src/app/api/**/route.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: [AI], patterns: [...AI_PATTERNS, SERVICE_ROLE] },
-      ],
-      "no-restricted-syntax": ["error", ...dynamicImports(ROUTE_BANNED)],
-    },
+    files: ["src/lib/supabase/service-role.ts"],
+    rules: fence([AI, AI_PROVIDERS, COST_SINK], LITERAL_IMPORTS_ONLY),
+  },
+  {
+    files: [`src/app/api/**/route.${SOURCE}`],
+    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE]),
   },
   globalIgnores([
     ".next/**",
