@@ -25,7 +25,12 @@ type StreamPart =
     : never;
 
 type UnbilledReason =
-  "aborted" | "call_error" | "no_finish" | "stream_error" | "usage_missing";
+  | "aborted"
+  | "call_error"
+  | "no_finish"
+  | "stream_error"
+  | "usage_missing"
+  | "usage_partial";
 
 // Without both totals there is nothing to price: a missing count is not 0.
 function tokenUsage({
@@ -96,13 +101,15 @@ export function costMiddleware(options: {
     else if (!providerRefused(error)) unbilled("call_error", error);
   }
 
-  async function safeRecord(usage: ProviderUsage) {
+  // `partError`: an error part the stream sent before this usage.
+  async function safeRecord(usage: ProviderUsage, partError?: unknown) {
     try {
       const tokens = tokenUsage(usage);
       if (!tokens) {
         unbilled("usage_missing");
         return;
       }
+      if (partError !== undefined) unbilled("usage_partial", partError);
       await record(aiCostRow(modelId, context, tokens));
     } catch (error) {
       const unknown =
@@ -142,15 +149,20 @@ export function costMiddleware(options: {
         throw error;
       }
       let finished = false;
+      // A provider reports a chunk it could not parse as an error part and
+      // still finishes, with the usage it read before: possibly less than it
+      // billed.
+      let partError: unknown;
       // The DOM lib's Transformer lacks cancel, which runs when the model
       // stream errors or either side is cancelled.
       const transformer: Transformer<StreamPart, StreamPart> & {
         cancel?: (reason: unknown) => void;
       } = {
         async transform(part, controller) {
+          if (part.type === "error" && !finished) partError ??= part.error;
           if (part.type === "finish") {
             finished = true;
-            await safeRecord(part.usage);
+            await safeRecord(part.usage, partError);
           }
           controller.enqueue(part);
         },

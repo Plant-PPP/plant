@@ -530,6 +530,21 @@ describe("stream", () => {
     expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
   });
 
+  it.each([
+    ["chunk", { chunkMs: 10 }],
+    ["total", { totalMs: 10 }],
+  ])("logs a stream that hit its %s timeout as aborted", async (_, timeout) => {
+    const result = streamText({
+      model: model({ doStream: streamsUntilAborted() }),
+      prompt: "hi",
+      timeout,
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
+    expect(record).not.toHaveBeenCalled();
+    expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
+  });
+
   it("logs a stream aborted before it started", async () => {
     const controller = new AbortController();
     const result = streamText({
@@ -624,6 +639,35 @@ describe("stream", () => {
     const done = result.consumeStream({ onError: () => {} });
     setTimeout(() => controller.abort(), 10);
     await done;
+    await written;
+    expect(record.mock.calls).toEqual([[ROW]]);
+    expect(lines).toEqual([]);
+  });
+
+  it("writes the row when the chunk timeout fires while it is recorded", async () => {
+    let written!: Promise<void>;
+    record.mockImplementation(() => {
+      written = new Promise((resolve) => setTimeout(resolve, 50));
+      return written;
+    });
+    const result = streamText({
+      model: model({
+        doStream: async ({ abortSignal }) => ({
+          stream: new ReadableStream<StreamPart>({
+            start(stream) {
+              for (const part of [...TEXT_PARTS, FINISH]) stream.enqueue(part);
+              abortSignal?.addEventListener("abort", () =>
+                stream.error(abortSignal.reason),
+              );
+            },
+          }),
+        }),
+      }),
+      prompt: "hi",
+      timeout: { chunkMs: 10 },
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
     await written;
     expect(record.mock.calls).toEqual([[ROW]]);
     expect(lines).toEqual([]);
@@ -727,6 +771,26 @@ describe("stream", () => {
       expect(events()).toEqual(expected);
     },
   );
+
+  it("writes the row and logs a stream that errored before it finished", async () => {
+    const result = streamText({
+      model: model({
+        doStream: async () => ({
+          stream: streamOf([
+            ...TEXT_PARTS,
+            { type: "error", error: new TypeError("x") },
+            FINISH,
+          ]),
+        }),
+      }),
+      prompt: "hi",
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
+    expect(record.mock.calls).toEqual([[ROW]]);
+    expect(events()).toEqual([["ai_cost.unbilled", "usage_partial"]]);
+    expect(lines[0]!["error.type"]).toBe("TypeError");
+  });
 
   it("logs a stream that closes without finishing and writes nothing", async () => {
     const result = streamText({
