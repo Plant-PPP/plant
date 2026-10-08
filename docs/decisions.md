@@ -13,6 +13,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **An Auth failure is not a logout.** Only Auth's session-gone codes send the user to `/login`; a rate limit, conflict or outage keeps the cookies and shows the retry page.
 - **The name shown is the email's local part** until there is a name editor; then the layout reads `profiles.display_name`.
 - **"Cerrar sesión" signs out this device** (`scope: "local"`). An access token already issued stays valid until it expires (1 h).
+- **A local test user, `test@plant.test`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit. `.test` is reserved, so no real inbox receives it.
 - **No telemetry or audit rows yet** (PLA-21): sign-in, sign-out, callback failures and Auth unavailability are the surfaces it instruments.
 
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
