@@ -8,7 +8,7 @@ Branch `claude/project-thread-k27wk1` (PLA-16). Required by the trigger "Change 
 - `public.consents`: which version of the terms, the privacy policy and sending data to AI providers each user accepted or withdrew, and when. It is the proof of consent that Law 25.326 requires.
 - `private.audit_log`: trail of sensitive actions (login, MFA, export, deletion, upload). No amounts, holdings, CUIT, DNI, CBU or tokens.
 
-Out of scope: who writes the audit log (PLA-21) and login (PLA-17).
+Out of scope: who writes the audit log (`2026-10-08-logs-audit.md`, PLA-21) and login (PLA-17).
 
 ## Trust boundary
 
@@ -18,7 +18,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 
 1. On sign-up, the `on_auth_user_created` trigger creates the profile.
 2. `apps/web` reads and edits the profile and records consents with supabase-js, as `authenticated`.
-3. The server writes `audit_log` from PLA-21 on, outside the API.
+3. A trigger on `auth.sessions` writes `audit_log` on every new session (PLA-21), outside the API.
 
 ## Where it is enforced
 

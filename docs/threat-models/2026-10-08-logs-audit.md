@@ -1,0 +1,53 @@
+# Threat model: logs and audit
+
+Branch `claude/pla-21-logs-audit-940b43` (PLA-21). Required by the PR template because the change adds a migration with a `SECURITY DEFINER` trigger on an `auth` table and new logging of request data.
+
+## Scope and assets
+
+What leaves the app in a log line: request paths, Auth error codes, user ids, exception messages and stacks. What could reach them by accident: Auth's PKCE `code` and tokens, emails, CUIT, DNI and CBU, amounts and holdings. The audit trail itself (`private.audit_log`) and the availability of sign-in, which now depends on it. Out of scope: the Dash0 export (PLA-73), PostHog, client error reporting.
+
+## Trust boundary
+
+The request path and query, every request header (including a client's own `x-request-id` outside the proxy's matcher), the callback's `error` and `error_code` parameters, and the messages of errors thrown by Auth, libraries or our own code. The `auth.sessions` row comes from Supabase Auth, which runs as its own role.
+
+## Data flow
+
+1. `proxy.ts` mints a request id, checks the session and writes one `proxy.request` line to the function's console, which Vercel collects.
+2. `/auth/callback` writes one `auth.callback` line after the exchange.
+3. An uncaught error in a page, route handler or server action reaches Next's `onRequestError`, which writes one `request.error` line.
+4. Auth inserts an `auth.sessions` row on every new session; the `record_session_created` trigger inserts one `audit_log` row in the same transaction.
+5. With `OTEL_EXPORTER_OTLP_*` set (not before PLA-73), `@vercel/otel` exports traces.
+
+## Where it is enforced
+
+- `credential-scrub.ts` and `server-log.ts`: every string scrubbed then cut, sensitive keys masked, flat values only, the logger's own keys written last.
+- `no-console` in `apps/web` and every package: `serverLog` is the only way out.
+- `private.record_session_created()`: fixed literals, only `NEW.*` as input, `search_path = ''`, no grants; the pgTAP floor pins it and the table it fires on.
+- `audit_log`'s append-only triggers and missing grants (PLA-16).
+
+## STRIDE
+
+|       | Vector                                                                                                                                  | Control                                                                                                                                                                                           |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S** | A client sends its own `x-request-id` to tie its noise to another request, or forges an audit row by inserting a session.               | The proxy replaces the header; `onRequestError` keeps it only as a UUID. No API role can insert into `auth.sessions` (pgTAP).                                                                     |
+| **T** | Log injection: newlines or JSON in a path or message forge a second line or a field.                                                    | One `JSON.stringify` per line, flat values, the logger's keys last. `audit_log` is append-only.                                                                                                   |
+| **R** | A sign-in leaves no Plant record.                                                                                                       | Every new session writes `auth.session.created`; sign-out and MFA rows arrive with PLA-18.                                                                                                        |
+| **I** | A code, token, email or identity number ends up in a log: the callback query, an exception message, a stack, a field named for a value. | Query never logged by our lines; params masked raw or encoded; CBU, CUIT, DNI and emails masked; sensitive keys masked; values scrubbed before they are cut. Unit tests per pattern and per line. |
+| **D** | A hostile path makes scrubbing slow; logs grow without bound; a failing audit insert blocks sign-in.                                    | Linear patterns, bounded reads (4096 characters, 8 KB stacks) and timing tests. One line per proxied request. Fail-closed is a choice, see below.                                                 |
+| **E** | The definer trigger is used to write as its owner.                                                                                      | It takes no parameters, writes fixed values from the inserted row, has an empty `search_path` and no EXECUTE grant; firing a trigger is the only way to run it.                                   |
+
+## Controls as built
+
+- **Scrubber**: `credential-scrub.test.ts` covers each param raw and encoded once and twice, a UUID `code`, each identity-number format, emails raw and encoded, what must survive (UUIDs, dates, pnpm paths) and hostile inputs under a time limit.
+- **Logger**: `server-log.test.ts` checks one JSON line per call, masked keys, scrubbing before the cut, the edge of a long value, the logger's own keys, trace ids and exceptions.
+- **Callers**: `proxy.test.ts`, `route.test.ts` and `instrumentation.test.ts` check each outcome's line, that no query or code reaches it, and that a forged request id is dropped.
+- **Trigger**: `audit_session_created_test.sql` checks one row per new session and none per refresh, the closed vocabulary, that Auth's role cannot write the table itself and that no API role can insert a session. The floor pins the definer, its owner, `search_path` and trigger definition. The pentest sign-ins in the CI `database` job go through Auth's real role, so a trigger that breaks sign-in fails CI and holds `deploy-migrations`.
+
+## Residual risk
+
+- **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs and a 500 from `/verify` or `/token` in the browser; Plant has no signal of its own until client error reporting. Accepted so no session goes unaudited.
+- **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read so that dropping it cannot.
+- **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.
+- **Next prints its own unscrubbed line for uncaught errors**, next to ours. Our code does not put personal data in error messages.
+- **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes; the rule is still never to log values.
+- **Vercel Hobby keeps logs for one hour.** Enough for the done condition; retention arrives with Dash0 (PLA-73).

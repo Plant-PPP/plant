@@ -2,6 +2,22 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-08 · Logs and audit (PLA-21)
+
+- **Every new Auth session writes one `auth.session.created` row to `audit_log`**, from an `AFTER INSERT` trigger on `auth.sessions`. Sign-in happens in the browser (the code and Google talk to Auth directly), so no server code sees it; the trigger sees every sign-in, and also recovery, email change and identity linking, which create sessions too. A method-aware `auth.login` can be added later without narrowing it. A refresh updates the row and writes nothing.
+- **Sign-in is fail-closed.** The trigger's insert runs in Auth's transaction: if it fails, the sign-in fails, so no session goes unaudited. Any later change to `audit_log` is on the sign-in path; `audit_session_created_test.sql` and the pentest sign-ins in the CI `database` job pin that the insert stays valid. The trigger reads only `auth.sessions.id` and `user_id` directly; `aal` goes through `to_jsonb`, so an Auth upgrade that drops it cannot break sign-in.
+- **`SECURITY DEFINER`, `search_path = ''`, owned by the owner of `audit_log`.** Auth's role holds nothing on `private`. No API role can insert into `auth.sessions`, so nobody can forge a row through it. The pgTAP floor pins both definers to the table each fires on.
+- **`audit_log.action` and `outcome` are enums** (`private.audit_action`, `private.audit_outcome`), extend-only: a new value is `ALTER TYPE … ADD VALUE`, never a rename. `outcome` is `NOT NULL` with no default, so every writer states it. Changing `action`'s type and dropping its `CHECK` is the one exception to additive-only migrations: nothing had written to the table or read it.
+- **`metadata` holds `session_id` and `aal`.** Its size cap arrives with the first writer that takes outside input. Retention waits for the lawyer review (PLA-56).
+- **`serverLog.audit` and a `service_role` writer move to the first server-side action that needs auditing**, the upload in "Carga con IA". Until then the trigger is the only writer, which also supersedes the PLA-16 migration's note that rows arrive only through `service_role`.
+- **Server code logs through `serverLog`** (`apps/web/src/lib/log/server-log.ts`) and `no-console` is on in `apps/web` and every package. One JSON line per call, flat fields, the event name a static `noun.verb`, `level` matching the outcome (error only for a final failure). The logger writes `level`, `event`, `trace_id` and `span_id` last, so a field cannot replace them; Vercel stamps the time.
+- **Every string is scrubbed, then cut** (`credential-scrub.ts`): Auth's code and token params raw or percent-encoded once or twice, CBU, CUIT, DNI and emails. UUIDs are kept, since their digit groups would read as a DNI. A field whose key names money, holdings, an identity number or a credential is masked whatever it holds, except counts and durations. A value is read up to 4096 characters, scrubbed and cut to 512; an exception's stack up to 8 KB and 4 KB.
+- **One `proxy.request` line per proxied request**, prefetch and RSC requests included: `plant.request_id`, method, `url.path` without the query, `plant.outcome`, Auth's duration, `enduser.id` from the verified claims and `error.type` (Auth's code, or the error's class). No status code: a pass-through is 200 even when the page fails, and Vercel's request log has the real one. The proxy logs its own crash, because Next's `onRequestError` does not run for it.
+- **`onRequestError` logs uncaught errors** in pages, route handlers and server actions as `request.error`. Its request id is kept only if it is a UUID: outside the proxy's matcher the header is the client's. `AuthUnavailableError` (the page's half of an Auth outage) is a warning without a stack.
+- **`/auth/callback` logs one `auth.callback` line** with a static outcome; never the code, `error_description` or Auth's message.
+- **OpenTelemetry is off without an endpoint.** `register()` loads `@vercel/otel` only when `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set, traces only, and never rejects (Next would fail every request after it). Logs and traces join through `trace_id` and Vercel's own request id, not `x-request-id`: `@vercel/otel` reads the headers before the proxy replaces a client's copy.
+- **Before PLA-73 sets an endpoint, a span processor must scrub `http.target` and `http.url`.** Next puts the query there, and `/auth/callback`'s carries the PKCE `code`; Vercel's own request log already shows it. A Vercel tracing integration (`VERCEL_OTEL_ENDPOINTS`) makes `@vercel/otel` ignore the OTLP variables. Default fetch spans carry outbound URLs; Supabase REST filters there are ids, never amounts.
+
 ## 2026-10-08 · CSP and security headers (PLA-19)
 
 - **`proxy.ts` sends the CSP, with a fresh nonce on every request.** Next reads the nonce from the request's CSP and stamps it on its own scripts; the root layout passes it to `ThemeProvider` for next-themes' inline script. Reading the request makes every page dynamic, which a nonce needs: a static page is built with no nonce, so the CSP would block its scripts.
@@ -9,8 +25,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **`style-src 'unsafe-inline'`.** The sidebar renders `style` attributes with its CSS variables, which a nonce cannot cover. Styles cannot run code.
 - **`connect-src` adds Supabase** (HTTP and WebSocket), because the browser calls Auth directly (PLA-17).
 - **One CSP.** `next.config.ts` holds the headers that are the same on every route (HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`); the CSP, with `frame-ancestors 'none'`, comes only from the proxy. The proxy skips `_next/static`, `_next/image`, `/api/inngest` and paths ending in an image, `.txt`, `.xml` or `.webmanifest` extension; those get no CSP but are covered by `X-Frame-Options`. A future route that serves HTML must not end in one of those extensions.
-- **`x-request-id` on every proxied request and response**, so the request can be correlated once telemetry arrives (PLA-21, which also puts it on the root span).
-- **No `report-to` yet.** Violation reports need an endpoint and telemetry (PLA-21); until then the e2e checks the login page loads with no violation. There is no Report-Only switch either: rolling the CSP back means reverting the change.
+- **`x-request-id` on every proxied request and response**, logged as `plant.request_id` on the proxy's line (PLA-21).
+- **No `report-to` yet.** Violation reports need an endpoint, which arrives with client error reporting; until then the e2e checks the login page loads with no violation. There is no Report-Only switch either: rolling the CSP back means reverting the change.
 - **HSTS without `preload`** until Plant has its own domain (PLA-64); `vercel.app` is already preloaded.
 - **The CSP blocks the Vercel toolbar** on previews and staging; until Tomas turns it off in the project settings, it is the one expected violation there.
 
@@ -28,14 +44,14 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The name shown is the email's local part** until there is a name editor; then the layout reads `profiles.display_name`.
 - **"Cerrar sesión" signs out this device** (`scope: "local"`). An access token already issued stays valid until it expires (1 h).
 - **A local test user, `test@plantia.io`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit.
-- **No telemetry or audit rows yet** (PLA-21): sign-in, sign-out, callback failures and Auth unavailability are the surfaces it instruments.
+- **Sign-ins are audited from the database** (PLA-21): every new session writes an `audit_log` row, and the proxy and callback log their outcomes. Sign-out writes nothing yet (PLA-18).
 
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
 
 - **Raw `fetch`, no Supabase client.** The specs assert PostgREST's exact status and code (401 vs 403, `42501`, `PGRST205`), which the client hides behind `{ data, error }`.
 - **Real Auth users, created and deleted on each run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
 - **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
-- **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway, so a red spec also holds `deploy-migrations`. `audit_log` has no positive case until it has a writer (PLA-21).
+- **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway, so a red spec also holds `deploy-migrations`. `audit_log` is never in the API; its positive case is pgTAP's `audit_session_created_test.sql` (PLA-21).
 - **Tables and views must have a spec; functions don't yet.** The pgTAP floor forbids executable functions in `public`, so the first RPC adds its own spec and widens the map in `security-tests/src/pentest-specs.ts`.
 
 ## 2026-10-07 · App layout, themes and brand (PLA-20)
@@ -81,7 +97,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Closed values as Postgres enums** (`reference_dollar`, `consent_kind`), so the generated types bring the unions and the TypeScript does not copy the literals.
 - **Account holders are not in `profiles` yet.** They arrive with the feature that uses them (accounts and holdings), like every other table.
 - **`consents` is a history.** Withdrawing a consent is a new row with `granted = false`; the current state is the latest row per kind. `granted` has no default, so every row says explicitly whether it grants or withdraws.
-- **`audit_log` lives in `private` and has no FK to `auth.users`**, so the trail survives account deletion. It has no policies or grants: the PLA-21 writer brings its own and, on the still-empty table, decides `outcome`, the action vocabulary (a table with an FK), the shape and cap of `metadata` and retention. `metadata` never carries emails, IPs, amounts or document text.
+- **`audit_log` lives in `private` and has no FK to `auth.users`**, so the trail survives account deletion. It has no policies or grants. PLA-21 decided, on the still-empty table, `outcome` and the action vocabulary (enums) and the shape of `metadata`; the cap and retention come later. `metadata` never carries emails, IPs, amounts or document text.
 - **plpgsql_check runs inside pgTAP**, because `supabase db lint` skips trigger functions, which today are all of them.
 - **The CI `database` job uses the CLI pinned in `package.json`** (`pnpm exec supabase`) and does not log in to ghcr.io, so the workflow stays at `contents: read`. If the image registry starts rate-limiting pulls, the login gets added.
 
@@ -105,5 +121,5 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **`/api/inngest` does not accept unsigned syncs** (`enableUnauthedSync: false`). Threat model in `docs/threat-models/2026-10-07-endpoint-inngest.md`.
 - **Base security headers** in `next.config.ts` (no iframes, `nosniff`, `Referrer-Policy`, and since PLA-19 HSTS and `Permissions-Policy`). The CSP lives in `proxy.ts` (PLA-19).
 - **The `.claude/settings.json` deny list is an aid, not the boundary.** What really protects `staging` and `production` is the GitHub ruleset (required PR, green CI, no force push or deletion).
-- **No telemetry yet.** OpenTelemetry with Dash0 and PostHog events come with PLA-21; until then `/api/inngest` and the home page emit nothing.
+- **Telemetry starts with logs** (PLA-21). The Dash0 export waits for PLA-73; `/api/inngest` emits nothing of its own until its first real job.
 - **Ported skills:** the ones the plan lists (§2 ter), with `enforce-tenant-isolation` turned into `enforce-owner-isolation`. The night-autonomy ones have no skill of their own: the mode is armed only by an explicit request and is described in `_shared/night-shift/detect.md`.
