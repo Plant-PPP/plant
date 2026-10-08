@@ -1,8 +1,11 @@
 // USD per 1M tokens, Standard tier. Sources (checked 2026-10-08):
 // https://ai.google.dev/gemini-api/docs/pricing,
 // https://platform.claude.com/docs/en/about-claude/pricing.
-// A time-limited price is loaded at its later, higher value, so a cost is never
-// under-counted. cacheWrite "0": the model has no per-token cache-write price.
+// gemini-3.8-flash carries its price from 2027-01-01; until 2026-12-31 Google
+// bills 0.75 / 3.75 / 0.075, so its rows before then are over-counted, never
+// under-counted. cacheWrite is the 5-minute cache write; "0" means the model
+// has no per-token write price. 1-hour cache writes and audio input are not
+// priced: no caller uses them.
 type ModelPricing = {
   input: string;
   output: string;
