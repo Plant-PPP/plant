@@ -29,13 +29,20 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
   (NULL, NULL, 'verify');
 -- truth-table:end
 
-SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 3);
+SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 4);
 
 SELECT bag_eq(
   $$SELECT aal, mfa_enrolled FROM truth$$,
   $$SELECT a, m FROM (VALUES ('aal1'), ('aal2'), (NULL)) x (a)
     CROSS JOIN (VALUES (true), (false), (NULL::boolean)) y (m)$$,
   'the truth table has exactly one row for each aal and claim'
+);
+
+SELECT is_empty(
+  $$SELECT n.aal FROM truth n
+    JOIN truth e ON e.aal IS NOT DISTINCT FROM n.aal AND e.mfa_enrolled
+    WHERE n.mfa_enrolled IS NULL AND n.expected <> e.expected$$,
+  'a token without the claim counts as enrolled'
 );
 
 -- Ena has a verified TOTP factor; Uri's factor was never verified.

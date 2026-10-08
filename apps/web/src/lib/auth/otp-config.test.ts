@@ -111,6 +111,9 @@ describe("the Auth settings the MFA rules rely on", () => {
   });
 
   it("calls no Auth hook but the access token hook", () => {
+    expect(value("auth.hook.custom_access_token", "uri")).toBe(
+      '"pg-functions://postgres/private/custom_access_token_hook"',
+    );
     for (const hook of tablesUnder("auth.hook")) {
       expect([hook, value(`auth.hook.${hook}`, "enabled")]).toEqual([
         hook,
