@@ -17,6 +17,13 @@ import { createClient } from "@/lib/supabase/server";
 // Auth's error codes are snake_case; anything else in the param is not one.
 const AUTH_ERROR_CODE = /^[a-z_]{1,64}$/;
 
+type CallbackOutcome =
+  | "link_expired"
+  | "oauth_error"
+  | "missing_code"
+  | "exchange_failed"
+  | "signed_in";
+
 // Google and the mail link land here with a PKCE code. The verifier is in the
 // cookies of the browser that asked, so a link opened elsewhere fails.
 export async function GET(request: NextRequest) {
@@ -26,7 +33,7 @@ export async function GET(request: NextRequest) {
   const errorCode = searchParams.get("error_code");
   const log = (
     level: Exclude<LogLevel, "error">,
-    outcome: string,
+    outcome: CallbackOutcome,
     fields?: LogFields,
   ) =>
     serverLog[level]("auth.callback", {
@@ -66,8 +73,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       target = loginErrorPath("callback");
-      // Auth answers a malformed code with a 500 too, so the status, not the
-      // level, tells an outage (5xx, or 0 for no answer) from a bad request.
+      // Auth answers a malformed code with a 500 too, so this stays a warning;
+      // a run of 5xx (or 0, no answer) is what reads as Auth failing.
       log("warn", "exchange_failed", {
         "error.type": errorType(error),
         "plant.auth.status": error.status,

@@ -193,7 +193,7 @@ describe("the callback line", () => {
       { "error.type": "AuthRetryableFetchError", "plant.auth.status": 0 },
     ],
   ])(
-    "records a failed exchange on %s with Auth's status, never the code",
+    "records a failed exchange on %s with the error's status, never the code",
     async (_label, error, fields) => {
       exchangeCodeForSession.mockResolvedValue({ data: { user: null }, error });
       await callback("?code=s3cr3t", "/assets");
