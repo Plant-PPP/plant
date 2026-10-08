@@ -122,6 +122,7 @@ const FINISH: StreamPart = { type: "finish", usage: USAGE, finishReason: STOP };
 // Rejects when the signal aborts, like a fetch.
 function untilAborted(signal: AbortSignal | undefined): Promise<never> {
   return new Promise((_, reject) => {
+    if (signal?.aborted) reject(signal.reason);
     signal?.addEventListener("abort", () => reject(signal.reason));
   });
 }
@@ -289,7 +290,7 @@ describe("generate", () => {
       }),
     ).rejects.toThrow("Internal server error");
     expect(events()).toEqual([["ai_cost.unbilled", "call_error"]]);
-    expect(lines[0]).not.toHaveProperty("http.response.status_code");
+    expect(lines[0]?.["http.response.status_code"]).toBeUndefined();
   });
 
   it("prices cache writes apart from the input", async () => {
@@ -347,6 +348,27 @@ describe("generate", () => {
     controller.abort(new RangeError("stop"));
     await expect(call).rejects.toBeDefined();
     expect(lines[0]?.["error.type"]).toBe("RangeError");
+  });
+
+  it("logs an aborted call even when the provider refused", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const refusal = new APICallError({
+      message: "Service Unavailable",
+      url: "https://provider.test",
+      requestBodyValues: {},
+      statusCode: 503,
+      isRetryable: false,
+    });
+    await expect(
+      generateText({
+        model: model({ doGenerate: () => Promise.reject(refusal) }),
+        prompt: "hi",
+        abortSignal: controller.signal,
+      }),
+    ).rejects.toBeDefined();
+    expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
+    expect(lines[0]?.["http.response.status_code"]).toBe(503);
   });
 
   it("logs a call that hit its step timeout as aborted", async () => {
