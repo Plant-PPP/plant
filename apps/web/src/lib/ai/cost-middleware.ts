@@ -46,9 +46,11 @@ function tokenUsage({
   };
 }
 
-// Only a provider's own error status shows it refused the call. The AI
-// Gateway's errors carry made-up ones too (408 for its own timeout, 500 for a
-// lost connection), so they count as calls that may have billed.
+// An APICallError with a 4xx or 5xx means the provider refused before
+// generating: its HTTP status, or the one @ai-sdk/anthropic gives a stream
+// that opens with an error event. The AI Gateway's errors are not
+// APICallErrors and make up statuses for its own timeouts and lost
+// connections, so they count as calls that may have billed.
 function providerRefused(error: unknown): boolean {
   return (
     APICallError.isInstance(error) &&
@@ -79,6 +81,10 @@ export function costMiddleware(options: {
       ...fields,
       "plant.ai_cost.reason": reason,
       "error.type": error instanceof Error ? errorType(error) : undefined,
+      // Absent when the provider never answered.
+      "http.response.status_code": APICallError.isInstance(error)
+        ? error.statusCode
+        : undefined,
     });
   }
 

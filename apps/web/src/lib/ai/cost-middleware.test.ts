@@ -156,26 +156,38 @@ describe("generate", () => {
   });
 
   it.each([
-    ["the uncached count", 10_000],
-    ["the total less the cached", undefined],
-  ])("bills cache reads apart, from %s", async (_, noCache) => {
-    const cached = {
-      ...USAGE,
-      inputTokens: {
-        total: 12_000,
-        noCache,
-        cacheRead: 2_000,
-        cacheWrite: undefined,
-      },
-    };
-    await generateText({
-      model: model({ doGenerate: { ...TEXT, usage: cached } }),
-      prompt: "hi",
-    });
-    expect(record.mock.calls).toEqual([
-      [{ ...ROW, amount_usd: "0.00876", cache_read_tokens: 2_000 }],
-    ]);
-  });
+    ["the uncached count", 12_000, 9_500, 9_500, "0.00861"],
+    ["the total less the cached", 12_000, undefined, 10_000, "0.00876"],
+    ["zero when the cached exceed the total", 1_000, undefined, 0, "0.00576"],
+  ])(
+    "bills cache reads apart, from %s",
+    async (_, total, noCache, input, amount) => {
+      const cached = {
+        ...USAGE,
+        inputTokens: {
+          total,
+          noCache,
+          cacheRead: 2_000,
+          cacheWrite: undefined,
+        },
+      };
+      await generateText({
+        model: model({ doGenerate: { ...TEXT, usage: cached } }),
+        prompt: "hi",
+      });
+      expect(record.mock.calls).toEqual([
+        [
+          {
+            ...ROW,
+            amount_usd: amount,
+            input_tokens: input,
+            cache_read_tokens: 2_000,
+          },
+        ],
+      ]);
+      expect(lines).toEqual([]);
+    },
+  );
 
   it("writes one row per step", async () => {
     const toolCall: GenerateResult = {
@@ -242,6 +254,7 @@ describe("generate", () => {
         ...FIELDS,
         "plant.ai_cost.reason": "call_error",
         "error.type": "AI_APICallError",
+        "http.response.status_code": 200,
         level: "warn",
         event: "ai_cost.unbilled",
       },
