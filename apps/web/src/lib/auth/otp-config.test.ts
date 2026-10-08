@@ -74,9 +74,9 @@ describe("the sign-in mail", () => {
   });
 });
 
-// Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts) and of
-// TOTP being the only MFA factor. The hosted project keeps its own copy of each
-// setting in the dashboard.
+// Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts), of TOTP
+// being the only MFA factor, and of Auth calling the access token hook. The
+// hosted project keeps its own copy of each setting in the dashboard.
 describe("the Auth settings the MFA rules rely on", () => {
   it("allows no MFA factor or passkey but TOTP", () => {
     expect(value("auth.mfa.phone", "enroll_enabled")).toBe("false");
