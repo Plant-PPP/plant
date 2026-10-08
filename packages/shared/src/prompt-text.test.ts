@@ -38,6 +38,14 @@ describe("neutralizePromptText", () => {
     expect(neutralizePromptText(value)).toBe("fin/document");
   });
 
+  it("cannot join a template's bracket under normalization", () => {
+    for (const form of ["NFC", "NFKC"] as const) {
+      expect(
+        ("<d>" + neutralizePromptText("\u0338x") + "</d>").normalize(form),
+      ).toBe("<d>x</d>");
+    }
+  });
+
   it("drops every tag character", () => {
     expect(neutralizePromptText("a\u{E0001}\u{E0041}\u{E007F}b")).toBe("ab");
   });
