@@ -25,7 +25,7 @@ const allowed = {
   plant: [],
 };
 // `ai` is fenced with the providers: given a string model id it reaches them
-// through the AI Gateway.
+// through the AI Gateway. Inngest's model packages call providers too.
 const sdkFences = [
   {
     matches: (dep) => dep === "inngest" || dep.startsWith("@inngest/"),
@@ -33,7 +33,10 @@ const sdkFences = [
     reason: "inngest: steps stay engine-free",
   },
   {
-    matches: (dep) => dep === "ai" || dep.startsWith("@ai-sdk/"),
+    matches: (dep) =>
+      dep === "ai" ||
+      dep.startsWith("@ai-sdk/") ||
+      /^@inngest\/(ai|agent-kit)$/.test(dep),
     allowed: new Set(["@plant/web", "@plant/evals"]),
     reason:
       "the AI SDK: models are called only from the web app, which records their cost, and the evals",
@@ -42,9 +45,10 @@ const sdkFences = [
 // Every workspace package, from the `packages:` globs in pnpm-workspace.yaml
 // (the "dir/*" and plain "dir" forms), so a new one without an entry in
 // `allowed` fails.
-const root = new URL("../", import.meta.url);
+// Paths, not URLs: pnpm reads a "%61" in a directory name literally.
+const root = fileURLToPath(new URL("../", import.meta.url));
 const workspaceLines = readFileSync(
-  new URL("pnpm-workspace.yaml", root),
+  resolve(root, "pnpm-workspace.yaml"),
   "utf8",
 ).split("\n");
 const start = workspaceLines.indexOf("packages:") + 1;
@@ -65,7 +69,7 @@ if (start === 0 || globs.length === 0) {
 }
 const manifests = globs.flatMap((glob) => {
   const dirs = glob.endsWith("/*")
-    ? readdirSync(new URL(`${glob.slice(0, -2)}/`, root), {
+    ? readdirSync(resolve(root, glob.slice(0, -2)), {
         withFileTypes: true,
       })
         .filter((entry) => entry.isDirectory())
@@ -73,14 +77,14 @@ const manifests = globs.flatMap((glob) => {
     : [glob];
   for (const dir of dirs) {
     for (const other of ["package.yaml", "package.json5"]) {
-      if (existsSync(new URL(`${dir}/${other}`, root))) {
+      if (existsSync(resolve(root, dir, other))) {
         console.error(`${dir}/${other}: this script reads only package.json`);
         process.exit(1);
       }
     }
   }
   const found = dirs.filter((dir) =>
-    existsSync(new URL(`${dir}/package.json`, root)),
+    existsSync(resolve(root, dir, "package.json")),
   );
   if (found.length === 0) {
     console.error(
@@ -92,21 +96,28 @@ const manifests = globs.flatMap((glob) => {
 });
 manifests.push(".");
 
+// A path dependency must be a workspace package: one anywhere else installs
+// its own dependencies, which this script never reads.
+const workspaceDirs = new Set(
+  manifests.filter((dir) => dir !== ".").map((dir) => resolve(root, dir)),
+);
+
 // The package a spec installs when it is not the dependency's key: an alias
-// ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path ("../jobs",
-// "link:../jobs", "file:vendor/x", "workspace:../jobs") holds its manifest.
-// undefined for a version range, a tag or "catalog:"; null for anything else
-// (a tarball, URL, git spec or a path with no manifest), which fails the check.
+// ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path to a workspace
+// package ("../jobs", "link:../jobs", "file:../jobs", "workspace:../jobs")
+// holds its manifest. undefined for a version range, a tag or "catalog:"; null
+// for anything else (a tarball, URL, git spec or a path outside the workspace
+// packages), which fails the check.
 function installedName(dir, spec) {
   const path =
     /^(?:link|file):(.+)$/.exec(spec)?.[1] ??
     /^workspace:([./].*)$/.exec(spec)?.[1] ??
     /^(\.{1,2}(?:\/.*)?|\/.*)$/.exec(spec)?.[1];
   if (path !== undefined) {
-    // A path, not a URL: pnpm reads "%61" literally.
-    const manifest = resolve(fileURLToPath(root), dir, path, "package.json");
-    return existsSync(manifest)
-      ? (JSON.parse(readFileSync(manifest, "utf8")).name ?? null)
+    const target = resolve(root, dir, path);
+    return workspaceDirs.has(target)
+      ? (JSON.parse(readFileSync(resolve(target, "package.json"), "utf8"))
+          .name ?? null)
       : null;
   }
   const range = String.raw`[\w.^~<>=|*+ -]*`;
@@ -131,7 +142,7 @@ for (const dir of manifests) {
     devDependencies = {},
     peerDependencies = {},
     optionalDependencies = {},
-  } = JSON.parse(readFileSync(new URL(`${dir}/package.json`, root), "utf8"));
+  } = JSON.parse(readFileSync(resolve(root, dir, "package.json"), "utf8"));
   // Field by field: a key in one field must not hide the same key's spec in
   // another, which pnpm may install instead.
   const deps = [
@@ -145,7 +156,7 @@ for (const dir of manifests) {
       const target = installedName(dir, spec);
       if (target === null) {
         violations.push(
-          `${name}: cannot tell which package ${key} (${spec}) installs`,
+          `${name}: ${key} (${spec}) is not a version, an alias or a workspace package`,
         );
       }
       return target && target !== key

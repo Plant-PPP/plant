@@ -163,29 +163,34 @@ for (const spec of ["workspace:../jobs", "link:../jobs", "file:../jobs"]) {
   });
 }
 
-for (const [spec, label] of [
-  ["./vendor/ai", "llm \\(ai\\)"],
-  ["../jobs", "llm \\(@plant\\/jobs\\)"],
-]) {
-  test(`llm: ${spec} in @plant/core fails`, () => {
-    const r = check({ "@plant/core": [["llm", spec]] }, "dependencies", {
-      "packages/core/vendor/ai/package.json": JSON.stringify({ name: "ai" }),
+test("llm: ../jobs in @plant/core fails", () => {
+  const r = check({ "@plant/core": [["llm", "../jobs"]] });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /@plant\/core may not depend on llm \(@plant\/jobs\)/);
+});
+
+test("a path without a leading dot is read", () => {
+  const r = check({ plant: [["runner", "link:packages/jobs"]] });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /plant may not depend on runner \(@plant\/jobs\)/);
+});
+
+// A package outside the workspace installs its own dependencies unchecked.
+for (const spec of ["./vendor/x", "file:./vendor/x", "link:vendor/x"]) {
+  test(`x: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["x", spec]] }, "dependencies", {
+      "packages/core/vendor/x/package.json": JSON.stringify({
+        name: "x",
+        dependencies: { ai: "6.0.301" },
+      }),
     });
     assert.equal(r.status, 1);
     assert.match(
       r.output,
-      new RegExp(`@plant/core may not depend on ${label}`),
+      /x \(.*\) is not a version, an alias or a workspace package/,
     );
   });
 }
-
-test("a path without a leading dot is read", () => {
-  const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
-    "vendor/ai/package.json": JSON.stringify({ name: "ai" }),
-  });
-  assert.equal(r.status, 1);
-  assert.match(r.output, /plant may not depend on llm \(ai\), the AI SDK/);
-});
 
 for (const spec of [
   "link:../missing",
@@ -205,7 +210,10 @@ for (const spec of [
   test(`llm: ${spec} in @plant/core fails`, () => {
     const r = check({ "@plant/core": [["llm", spec]] });
     assert.equal(r.status, 1);
-    assert.match(r.output, /cannot tell which package llm \(.*\) installs/);
+    assert.match(
+      r.output,
+      /llm \(.*\) is not a version, an alias or a workspace package/,
+    );
   });
 }
 
@@ -224,25 +232,34 @@ test("an absolute path is read", () => {
   const r = check({}, "dependencies", (root) => ({
     "package.json": JSON.stringify({
       name: "plant",
-      dependencies: { llm: join(root, "vendor/ai") },
+      dependencies: { runner: join(root, "packages/jobs") },
     }),
-    "vendor/ai/package.json": JSON.stringify({ name: "ai" }),
   }));
   assert.equal(r.status, 1);
-  assert.match(r.output, /plant may not depend on llm \(ai\), the AI SDK/);
+  assert.match(r.output, /plant may not depend on runner \(@plant\/jobs\)/);
 });
 
 test("a path is read as written, not as a URL", () => {
   const r = check(
-    { "@plant/core": [["llm", "link:../../vendor/%61i"]] },
+    { "@plant/jobs": [["s", "link:../%73hared"]] },
     "dependencies",
-    {
-      "vendor/%61i/package.json": JSON.stringify({ name: "ai" }),
-      "vendor/ai/package.json": JSON.stringify({ name: "benign" }),
-    },
+    { "packages/%73hared/index.js": "" },
   );
   assert.equal(r.status, 1);
-  assert.match(r.output, /@plant\/core may not depend on llm \(ai\)/);
+  assert.match(r.output, /s \(link:..\/%73hared\) is not a version/);
+});
+
+test("an Inngest model package outside the web app fails", () => {
+  const r = check({ "@plant/jobs": ["@inngest/agent-kit", "@inngest/ai"] });
+  assert.equal(r.status, 1);
+  assert.match(
+    r.output,
+    /@plant\/jobs may not depend on @inngest\/agent-kit, the AI SDK/,
+  );
+  assert.match(
+    r.output,
+    /@plant\/jobs may not depend on @inngest\/ai, the AI SDK/,
+  );
 });
 
 for (const other of ["package.yaml", "package.json5"]) {
@@ -258,6 +275,14 @@ for (const other of ["package.yaml", "package.json5"]) {
   });
 }
 
+test("keys after the packages list are not read as globs", () => {
+  const r = check({}, "dependencies", {
+    "pnpm-workspace.yaml":
+      'packages:\n  - "apps/*"\n  - "packages/*"\n  - "evals"\n  - "security-tests"\ncatalog:\n  - "ai"\n',
+  });
+  assert.equal(r.status, 0, r.output);
+});
+
 test("a workspace glob that matches no package fails", () => {
   const r = check({}, "dependencies", {
     "pnpm-workspace.yaml":
@@ -269,11 +294,11 @@ test("a workspace glob that matches no package fails", () => {
 });
 
 test("a path whose manifest has no name fails", () => {
-  const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
-    "vendor/ai/package.json": "{}",
+  const r = check({ "@plant/core": [["x", "link:../x"]] }, "dependencies", {
+    "packages/x/package.json": "{}",
   });
   assert.equal(r.status, 1);
-  assert.match(r.output, /cannot tell which package llm \(link:vendor\/ai\)/);
+  assert.match(r.output, /x \(link:..\/x\) is not a version/);
 });
 
 test("a workspace package the graph does not list fails", () => {
