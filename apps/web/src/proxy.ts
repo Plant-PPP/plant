@@ -1,0 +1,51 @@
+import { type NextRequest, NextResponse } from "next/server";
+import {
+  afterLoginPath,
+  isPublicPath,
+  LOGIN_PATH,
+  loginPath,
+} from "@/lib/auth/routes";
+import { loginErrorMessage } from "@/lib/auth/login-errors";
+import { isSessionMissing } from "@/lib/auth/session-state";
+import { supabaseEnv } from "@/lib/supabase/env";
+import { updateSession } from "@/lib/supabase/proxy";
+
+// Checks the session on every page request, refreshes it before it nears
+// expiry and sends anyone without one to /login. Server Components cannot
+// write cookies, so the exchange happens here.
+export async function proxy(request: NextRequest) {
+  // Without Supabase the layout's own check fails and shows the error page.
+  if (!supabaseEnv()) return NextResponse.next();
+
+  const { pathname, search, searchParams } = request.nextUrl;
+  const session = await updateSession(request);
+
+  if (session.claims) {
+    // A signed-in user on /login goes where they were headed, unless /login
+    // is showing a sign-in error.
+    if (
+      pathname === LOGIN_PATH &&
+      !loginErrorMessage(searchParams.get("error"))
+    ) {
+      return session.redirect(
+        new URL(afterLoginPath(searchParams.get("next")), request.url),
+      );
+    }
+    return session.response();
+  }
+
+  if (isSessionMissing(session.error)) {
+    if (isPublicPath(pathname)) return session.response();
+    return session.redirect(new URL(loginPath(pathname + search), request.url));
+  }
+
+  // Auth is unavailable (rate limit, conflict, outage, timeout): a failed
+  // refresh deletes no cookie, and the page shows the retry.
+  return session.unavailable();
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|api/inngest(?:/|$)|.*\\.(?:ico|png|svg|jpg|jpeg|gif|webp|webmanifest|txt|xml)$).*)",
+  ],
+};

@@ -163,7 +163,9 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# Any URL on the site_url hostname (any scheme, port or path) passes without an
+# entry; `next dev` serves on localhost.
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -220,21 +222,23 @@ web3 = 30
 # secret = ""
 
 [auth.email]
+# OTP_LENGTH, OTP_EXPIRY_MINUTES and RESEND_COOLDOWN_SECONDS in
+# apps/web/src/lib/auth/otp-config.ts must match this table (otp-config.test.ts).
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
-secure_password_change = false
+secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+otp_expiry = 600
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]
@@ -246,10 +250,21 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# A new address gets the confirmation mail and a known one the magic link mail; both carry the
+# same sign-in code.
+[auth.email.template.confirmation]
+subject = "Tu código para entrar a Plant"
+content_path = "./supabase/templates/login-code.html"
+
+[auth.email.template.magic_link]
+subject = "Tu código para entrar a Plant"
+content_path = "./supabase/templates/login-code.html"
+
+# A password reset (POST /recover) sends the same sign-in code: there is no
+# password to reset.
+[auth.email.template.recovery]
+subject = "Tu código para entrar a Plant"
+content_path = "./supabase/templates/login-code.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
@@ -271,12 +286,12 @@ max_frequency = "5s"
 # [auth.sms.test_otp]
 # 4152127777 = "123456"
 
-# Configure logged in session timeouts.
-# [auth.sessions]
+# Configure logged in session timeouts. Pro plan only on hosted projects (PLA-73).
+[auth.sessions]
 # Force log out after the specified duration.
-# timebox = "24h"
+timebox = "24h"
 # Force log out if the user has been inactive longer than the specified duration.
-# inactivity_timeout = "8h"
+inactivity_timeout = "8h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]
@@ -336,6 +351,14 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+# Off locally unless SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED=true and the client id and secret are
+# set in the shell or supabase/.env. Staging and production configure Google in the dashboard.
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

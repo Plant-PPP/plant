@@ -2,10 +2,25 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-08 · Login (PLA-17)
+
+- **The browser talks to Auth for the code and Google.** Auth rate-limits by caller IP; from server actions every user would share the server's IP, so one person guessing codes would lock everyone out. Forwarding the user's IP needs a secret key, so it waits for the beta (PLA-73). The session cookies are readable by JavaScript either way (`@supabase/ssr`), which is why the CSP (PLA-19) ships before anyone outside the team signs in.
+- **`next` rides in a cookie scoped to `/auth/callback`**, not in the redirect URL, so `additional_redirect_urls` holds exact URLs only. `sanitizeNextPath` is the one function that turns an outside value into a path.
+- **One mail template for new and known addresses and password resets**, with a 10-minute code; a reset has no password to reset, so it sends the same code. `otp-config.test.ts` keeps `config.toml`, the template and the form in step.
+- **No passwords.** A trigger blanks `auth.users.encrypted_password` on every insert and update: a password set before the owner confirms the address, or with a stolen session, would otherwise keep working. The same migration blanks the passwords already stored.
+- **`primary` is Salvia (`--brand`) with dark text, in light and dark.** Tomas wants the brand on buttons and the Asistente nav item rather than black. Salvia fails 3:1 on white, so `primary` fills and never colors text; the `link` button variant uses `foreground` and tooltips stay neutral (`foreground` on `background`), and a focused Salvia fill gets a `foreground` ring with an offset, since the gray `ring` disappears against it.
+- **Staging sends a link, not the code, until Resend (PLA-75).** On the Free plan the default sender cannot use custom templates and only mails team members, 2 per hour. The link signs you in through `/auth/callback` when opened in the same browser; a password reset sends Auth's default reset mail until then, so PLA-75 sets the Reset password template too. Session limits (`timebox`, `inactivity_timeout`) are Pro-only and apply on staging from PLA-73.
+- **Every page, server action and route handler that touches user data calls `getSessionClaims()` itself.** The `(app)` layout's call guards the UI only. Identity comes from the verified `sub` and `email` claims; `user_metadata` is never read.
+- **An Auth failure is not a logout.** Only Auth's session-gone codes send the user to `/login`; a rate limit, conflict or outage keeps the cookies and shows the retry page.
+- **The name shown is the email's local part** until there is a name editor; then the layout reads `profiles.display_name`.
+- **"Cerrar sesión" signs out this device** (`scope: "local"`). An access token already issued stays valid until it expires (1 h).
+- **A local test user, `test@plantia.io`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit.
+- **No telemetry or audit rows yet** (PLA-21): sign-in, sign-out, callback failures and Auth unavailability are the surfaces it instruments.
+
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
 
 - **Raw `fetch`, no Supabase client.** The specs assert PostgREST's exact status and code (401 vs 403, `42501`, `PGRST205`), which the client hides behind `{ data, error }`.
-- **Real Auth users, two per run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
+- **Real Auth users, created and deleted on each run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
 - **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
 - **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway, so a red spec also holds `deploy-migrations`. `audit_log` has no positive case until it has a writer (PLA-21).
 - **Tables and views must have a spec; functions don't yet.** The pgTAP floor forbids executable functions in `public`, so the first RPC adds its own spec and widens the map in `security-tests/src/pentest-specs.ts`.
@@ -17,7 +32,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The `(app)` group has no auth guard yet.** Login (PLA-17) adds it to that layout.
 - **Chart colors are the brand range, the same in light and dark.** `--chart-1`…`--chart-8` replace shadcn's five; the grays are `--chart-gray-1`…`--chart-gray-8`.
 - **`--brand` is not for text or focus rings on a light background:** Salvia `#7fa877` on white is below 3:1. Text uses `foreground`, and focus uses `ring`.
-- **next-themes injects an inline script.** Today's CSP has no `script-src`; the nonce-based CSP (PLA-17) passes its nonce to `ThemeProvider`.
+- **next-themes injects an inline script.** Today's CSP has no `script-src`; the nonce-based CSP (PLA-19) passes its nonce to `ThemeProvider`.
 
 ## 2026-10-07 · Repo language (PLA-87)
 
@@ -75,7 +90,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Dependabot waits 7 days** before proposing a new version (`cooldown`). The same limit in pnpm (`minimumReleaseAge`) is left for when the current dependencies are more than a week old; today it would force downgrading Next and turbo.
 - **The forbidden-words check fails closed in CI**: without the secret it fails on push and on same-repo PRs (it only skips forks and Dependabot), and it also checks every commit of the PR (diff, file names, message and author) and the branch name. It runs before any other script from the branch, and `forbidden-words.yml` repeats it on every push to any other branch, with or without a PR. Logs never show the matching text: only how many matches there are, commit ids and paths. It protects against leaking the word by accident, not against someone with push access, who can read the secret by editing the workflow. Locally the `commit-msg` hook and pre-push repeat it, over every branch you push.
 - **`/api/inngest` does not accept unsigned syncs** (`enableUnauthedSync: false`). Threat model in `docs/threat-models/2026-10-07-endpoint-inngest.md`.
-- **Base security headers** in `next.config.ts` (no iframes, `nosniff`, `Referrer-Policy`). The nonce-based CSP arrives with login (PLA-17).
+- **Base security headers** in `next.config.ts` (no iframes, `nosniff`, `Referrer-Policy`). The nonce-based CSP arrives with PLA-19, on top of login's `proxy.ts`.
 - **The `.claude/settings.json` deny list is an aid, not the boundary.** What really protects `staging` and `production` is the GitHub ruleset (required PR, green CI, no force push or deletion).
 - **No telemetry yet.** OpenTelemetry with Dash0 and PostHog events come with PLA-21; until then `/api/inngest` and the home page emit nothing.
 - **Ported skills:** the ones the plan lists (§2 ter), with `enforce-tenant-isolation` turned into `enforce-owner-isolation`. The night-autonomy ones have no skill of their own: the mode is armed only by an explicit request and is described in `_shared/night-shift/detect.md`.

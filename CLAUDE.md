@@ -64,7 +64,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 
 ```bash
 pnpm exec supabase migration new <name>
-pnpm db:reset                       # rebuilds the local database from the migrations
+pnpm db:reset                       # rebuilds the local database from the migrations and supabase/seed.sql
 pnpm db:generate:supabase-types     # after every migration; pre-push fails if they are stale
 ```
 

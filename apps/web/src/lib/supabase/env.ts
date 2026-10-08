@@ -10,8 +10,14 @@ export function requireSupabaseEnv() {
   const env = supabaseEnv();
   if (!env) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "Missing NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY; run pnpm env:local",
     );
   }
   return env;
 }
+
+// The session cookies carry the refresh token, so they never travel over
+// plain http once deployed; `next dev` serves http on localhost.
+export const SESSION_COOKIE_OPTIONS = {
+  secure: process.env.NODE_ENV === "production",
+};

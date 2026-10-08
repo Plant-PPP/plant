@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuilds the LOCAL database from supabase/migrations. Never touches a hosted
+# Rebuilds the LOCAL database from supabase/migrations and supabase/seed.sql. Never touches a hosted
 # project: there is no --linked here, and nobody runs `supabase db push` by hand.
 set -euo pipefail
 
