@@ -6,6 +6,13 @@ export function supabaseEnv() {
   return { url, anonKey };
 }
 
+// The origins the browser reaches Supabase on: HTTP for Auth and the REST
+// API, WebSocket for Realtime.
+export function supabaseOrigins(url: string): string[] {
+  const origin = new URL(url).origin;
+  return [origin, origin.replace(/^http/, "ws")];
+}
+
 export function requireSupabaseEnv() {
   const env = supabaseEnv();
   if (!env) {

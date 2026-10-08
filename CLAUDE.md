@@ -39,11 +39,12 @@ pnpm check          # typecheck + lint of every package
 pnpm test           # package tests
 pnpm test:scripts   # scripts/ tests (squawk and migration checks)
 pnpm test:security  # pentest specs against local PostgREST (needs `supabase start`)
+pnpm test:e2e       # Playwright against a production build of apps/web
 pnpm turbo:affected # only what changed against origin/staging
 pnpm format         # prettier over what changed
 ```
 
-Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types, pgTAP and the pentest specs).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries, the `e2e` job (Playwright: the CSP, eval blocked, login hydrating) and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types, pgTAP and the pentest specs).
 
 ## Language
 

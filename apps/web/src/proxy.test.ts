@@ -26,6 +26,8 @@ jest.mock("@supabase/ssr", () => ({
   }),
 }));
 
+import { CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
+import { REQUEST_ID_HEADER } from "@/lib/request-id";
 import { config, proxy } from "./proxy";
 
 const CACHE_HEADERS = {
@@ -264,5 +266,109 @@ describe("a token close to expiry", () => {
     const res = await proxy(request("/assets"));
     expect(res.headers.get("location")).toBeNull();
     expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+  });
+});
+
+describe("the CSP and request id", () => {
+  function nonceOf(csp: string | null) {
+    return csp?.match(/'nonce-([^']+)'/)?.[1];
+  }
+
+  // What the page renders with matches what the browser enforces.
+  function expectForwarded(res: Response) {
+    const csp = res.headers.get(CSP_HEADER);
+    expect(nonceOf(csp)).toBeDefined();
+    expect(forwarded(res, CSP_HEADER)).toBe(csp);
+    expect(forwarded(res, NONCE_HEADER)).toBe(nonceOf(csp));
+    expect(res.headers.get(REQUEST_ID_HEADER)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(forwarded(res, REQUEST_ID_HEADER)).toBe(
+      res.headers.get(REQUEST_ID_HEADER),
+    );
+  }
+
+  it("reach a signed-in page", async () => {
+    getClaims = signedIn;
+    expectForwarded(await proxy(request("/assets")));
+  });
+
+  it("reach the retry page", async () => {
+    getClaims = async () => ({
+      data: null,
+      error: new AuthApiError("rate limit", 429, "over_request_rate_limit"),
+    });
+    const res = await proxy(request("/assets"));
+    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expectForwarded(res);
+  });
+
+  it("reach the retry page after a refresh", async () => {
+    getClaims = async ({ setAll }) => {
+      setAll(
+        [{ name: "sb-x-auth-token", value: "new", options: {} }],
+        CACHE_HEADERS,
+      );
+      return {
+        data: null,
+        error: new AuthApiError("unavailable", 503, "unexpected_failure"),
+      };
+    };
+    const res = await proxy(
+      request("/assets", { cookie: "sb-x-auth-token=old" }),
+    );
+    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+    expectForwarded(res);
+  });
+
+  it("reach the page without Supabase", async () => {
+    for (const key of Object.keys(ENV)) delete process.env[key];
+    const res = await proxy(request("/assets"));
+    expectForwarded(res);
+    expect(res.headers.get(CSP_HEADER)).toContain("connect-src 'self';");
+  });
+
+  it("go on the redirect to /login", async () => {
+    getClaims = async () => ({ data: null, error: null });
+    const res = await proxy(request("/assets"));
+    expect(res.status).toBe(307);
+    expect(nonceOf(res.headers.get(CSP_HEADER))).toBeDefined();
+    expect(res.headers.get(REQUEST_ID_HEADER)).not.toBeNull();
+  });
+
+  it("are new on every request", async () => {
+    getClaims = signedIn;
+    const [a, b] = await Promise.all([
+      proxy(request("/assets")),
+      proxy(request("/assets")),
+    ]);
+    expect(nonceOf(a.headers.get(CSP_HEADER))).not.toBe(
+      nonceOf(b.headers.get(CSP_HEADER)),
+    );
+    expect(a.headers.get(REQUEST_ID_HEADER)).not.toBe(
+      b.headers.get(REQUEST_ID_HEADER),
+    );
+  });
+
+  it("replace the client's own", async () => {
+    getClaims = signedIn;
+    const res = await proxy(
+      request("/assets", {
+        [CSP_HEADER]: "script-src 'nonce-attacker'",
+        [NONCE_HEADER]: "attacker",
+        [REQUEST_ID_HEADER]: "attacker",
+      }),
+    );
+    expectForwarded(res);
+    expect(forwarded(res, CSP_HEADER)).not.toContain("attacker");
+  });
+
+  it("let the browser reach Supabase", async () => {
+    getClaims = signedIn;
+    const res = await proxy(request("/assets"));
+    expect(res.headers.get(CSP_HEADER)).toContain(
+      "connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321",
+    );
   });
 });

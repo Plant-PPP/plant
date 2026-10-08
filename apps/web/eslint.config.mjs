@@ -8,5 +8,10 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   { rules: moneyRules },
-  globalIgnores([".next/**", "next-env.d.ts"]),
+  globalIgnores([
+    ".next/**",
+    "next-env.d.ts",
+    "playwright-report/**",
+    "test-results/**",
+  ]),
 ]);
