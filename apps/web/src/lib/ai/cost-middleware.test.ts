@@ -130,7 +130,6 @@ function started() {
   return new Promise((resolve) => setTimeout(resolve, 5));
 }
 
-// A model call that hangs until its signal aborts.
 function hangsUntilAborted(): DoGenerate {
   return ({ abortSignal }) => untilAborted(abortSignal);
 }
@@ -287,7 +286,7 @@ describe("generate", () => {
       {
         ...FIELDS,
         "plant.ai_cost.reason": "unknown",
-        "error.type": "AiCostWriteError",
+        "error.type": "timeout",
         "exception.type": "AiCostWriteError",
         "exception.message": "timeout",
         "exception.stacktrace": expect.any(String),
@@ -312,29 +311,35 @@ describe("generate", () => {
     ]);
   });
 
-  it("writes a zero row and logs a missing usage", async () => {
+  it.each([
+    ["fetch_error", "unknown"],
+    ["http_504", "unknown"],
+    ["http_401", "not_written"],
+    ["23503", "not_written"],
+    ["missing_key", "not_written"],
+  ])("logs a %s write as %s", async (code, reason) => {
+    record.mockRejectedValue(new AiCostWriteError(code));
+    await generateText({ model: model({ doGenerate: TEXT }), prompt: "hi" });
+    expect(events()).toEqual([["ai_cost.record_failed", reason]]);
+    expect(lines[0]?.["error.type"]).toBe(code);
+  });
+
+  it.each([
+    ["both totals", usage(undefined, undefined)],
+    ["the output total", usage(10_000, undefined)],
+    ["a total that is not a number", usage(NaN, 5)],
+  ])("writes no row and logs a call missing %s", async (_, missing) => {
     await generateText({
-      model: model({
-        doGenerate: { ...TEXT, usage: usage(undefined, undefined) },
-      }),
+      model: model({ doGenerate: { ...TEXT, usage: missing } }),
       prompt: "hi",
     });
-    expect(record.mock.calls).toEqual([
-      [
-        {
-          ...ROW,
-          amount_usd: "0",
-          input_tokens: 0,
-          output_tokens: 0,
-        },
-      ],
-    ]);
+    expect(record).not.toHaveBeenCalled();
     expect(lines).toEqual([
       {
         ...FIELDS,
-        "plant.ai_cost.reason": "no_usage",
+        "plant.ai_cost.reason": "usage_missing",
         level: "warn",
-        event: "ai_cost.usage_missing",
+        event: "ai_cost.unbilled",
       },
     ]);
   });
@@ -472,7 +477,7 @@ describe("stream", () => {
     expect(events()).toEqual([["ai_cost.unbilled", "no_finish"]]);
   });
 
-  it("flags a usage missing after a provider error part", async () => {
+  it("writes no row for a stream that finishes without usage", async () => {
     const result = streamText({
       model: model({
         doStream: async () => ({
@@ -487,7 +492,7 @@ describe("stream", () => {
       onError: () => {},
     });
     await result.consumeStream({ onError: () => {} });
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(events()).toEqual([["ai_cost.usage_missing", "provider_error"]]);
+    expect(record).not.toHaveBeenCalled();
+    expect(events()).toEqual([["ai_cost.unbilled", "usage_missing"]]);
   });
 });

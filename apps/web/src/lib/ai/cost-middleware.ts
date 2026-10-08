@@ -5,7 +5,7 @@ import {
   type PricedModelId,
   type TokenUsage,
 } from "@plant/shared";
-import { APICallError, type LanguageModelMiddleware } from "ai";
+import type { LanguageModelMiddleware } from "ai";
 import { errorType, serverLog } from "@/lib/log/server-log";
 import { AiCostWriteError } from "./ai-cost-writer";
 
@@ -24,9 +24,20 @@ type StreamPart =
     ? P
     : never;
 
-type UnbilledReason = "aborted" | "call_error" | "no_finish" | "stream_error";
+type UnbilledReason =
+  "aborted" | "call_error" | "no_finish" | "stream_error" | "usage_missing";
 
-function tokenUsage({ inputTokens, outputTokens }: ProviderUsage): TokenUsage {
+// Without both totals there is nothing to price: a missing count is not 0.
+function tokenUsage({
+  inputTokens,
+  outputTokens,
+}: ProviderUsage): TokenUsage | undefined {
+  if (
+    !Number.isFinite(inputTokens.total) ||
+    !Number.isFinite(outputTokens.total)
+  ) {
+    return undefined;
+  }
   const cacheRead = inputTokens.cacheRead ?? 0;
   const cacheWrite = inputTokens.cacheWrite ?? 0;
   return {
@@ -39,9 +50,17 @@ function tokenUsage({ inputTokens, outputTokens }: ProviderUsage): TokenUsage {
   };
 }
 
+// APICallError and the AI Gateway's errors carry the provider's HTTP status.
+function providerRefused(error: unknown): boolean {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status === "number" && status >= 400;
+}
+
 // Writes one ai_costs row per model call, priced by the requested model.
-// Recording never throws into the call: a failure is logged, and so is a call
-// the provider may have billed without a row.
+// Recording never throws into the call; a row that may be missing is logged.
+// `record` must settle (createAiCostWriter gives up after 1.5 s), and a step
+// finishes only once its row is recorded, so a caller's step or chunk timeout
+// must leave room for it.
 export function costMiddleware(options: {
   modelId: PricedModelId;
   context: AiCostContext;
@@ -67,36 +86,25 @@ export function costMiddleware(options: {
   // failure.
   function callFailed(params: CallParams, error: unknown) {
     if (params.abortSignal?.aborted) unbilled("aborted", error);
-    else if (
-      !APICallError.isInstance(error) ||
-      error.statusCode === undefined ||
-      error.statusCode < 400
-    ) {
-      unbilled("call_error", error);
-    }
+    else if (!providerRefused(error)) unbilled("call_error", error);
   }
 
-  async function safeRecord(usage: ProviderUsage, errorSeen: boolean) {
+  async function safeRecord(usage: ProviderUsage) {
     try {
-      if (
-        usage.inputTokens.total === undefined ||
-        usage.outputTokens.total === undefined
-      ) {
-        serverLog.warn("ai_cost.usage_missing", {
-          ...fields,
-          "plant.ai_cost.reason": errorSeen ? "provider_error" : "no_usage",
-        });
+      const tokens = tokenUsage(usage);
+      if (!tokens) {
+        unbilled("usage_missing");
+        return;
       }
-      await record(aiCostRow(modelId, context, tokenUsage(usage)));
+      await record(aiCostRow(modelId, context, tokens));
     } catch (error) {
-      // A timed-out insert may still have committed.
-      const timedOut =
-        error instanceof AiCostWriteError && error.message === "timeout";
+      const unknown =
+        error instanceof AiCostWriteError && error.mayHaveCommitted;
       serverLog.error(
         "ai_cost.record_failed",
         {
           ...fields,
-          "plant.ai_cost.reason": timedOut ? "unknown" : "not_written",
+          "plant.ai_cost.reason": unknown ? "unknown" : "not_written",
         },
         error,
       );
@@ -114,7 +122,7 @@ export function costMiddleware(options: {
         callFailed(params, error);
         throw error;
       }
-      await safeRecord(result.usage, false);
+      await safeRecord(result.usage);
       return result;
     },
 
@@ -127,18 +135,16 @@ export function costMiddleware(options: {
         throw error;
       }
       let finished = false;
-      let errorSeen = false;
       // The DOM lib's Transformer lacks cancel, which runs when the model
       // stream errors or is aborted.
       const transformer: Transformer<StreamPart, StreamPart> & {
         cancel?: (reason: unknown) => void;
       } = {
         async transform(part, controller) {
-          if (part.type === "error") errorSeen = true;
           if (part.type === "finish") {
             finished = true;
             // The step finishes only once its cost is recorded.
-            await safeRecord(part.usage, errorSeen);
+            await safeRecord(part.usage);
           }
           controller.enqueue(part);
         },
