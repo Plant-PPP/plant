@@ -1,6 +1,7 @@
 // Text from documents and from the user is untrusted: once it is inside a
 // prompt it must not start a new line that reads as an instruction, nor open or
-// close a delimited block such as </document>.
+// close a tag block such as </document>. Only tags are safe delimiters: a
+// fence of backticks, quotes or dashes is not neutralized.
 
 // Unicode's line terminators (UAX #13) and the information separators
 // U+001C-U+001E, which Python's splitlines also breaks on. Escapes only: a raw

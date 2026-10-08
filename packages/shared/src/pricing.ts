@@ -4,8 +4,8 @@
 // gemini-3.8-flash carries its price from 2027-01-01; until 2026-12-31 Google
 // bills 0.75 / 3.75 / 0.075, so its rows before then are over-counted, never
 // under-counted. cacheWrite is the 5-minute cache write; "0" means the model
-// has no per-token write price. 1-hour cache writes and audio input are not
-// priced: no caller uses them.
+// has no per-token write price. 1-hour cache writes, audio input and Gemini's
+// per-hour cache storage are not priced: no caller uses them.
 type ModelPricing = {
   input: string;
   output: string;
