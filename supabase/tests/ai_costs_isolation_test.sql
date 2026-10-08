@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(22);
+SELECT plan(23);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -16,6 +16,22 @@ VALUES
    'authenticated', 'authenticated', 'beto@pgtap.invalid', '', now(), '{}', '{}', now(), now());
 
 -- ── The service role (the server's cost writer) ─────────────────────────────
+-- It bypasses RLS, so its grants are the whole boundary: exactly INSERT on
+-- the data columns, on the table and on every column.
+SELECT set_eq(
+  $$ SELECT a.attname || ':' || acl.privilege_type
+     FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.ai_costs'::regclass AND acl.grantee = 'service_role'::regrole
+     UNION ALL
+     SELECT '(table):' || acl.privilege_type
+     FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+     WHERE c.oid = 'public.ai_costs'::regclass AND acl.grantee = 'service_role'::regrole $$,
+  ARRAY['user_id:INSERT', 'cost_type:INSERT', 'model_id:INSERT', 'amount_usd:INSERT',
+        'input_tokens:INSERT', 'cache_read_tokens:INSERT', 'cache_write_tokens:INSERT',
+        'output_tokens:INSERT'],
+  'the service role holds only INSERT on the data columns'
+);
+
 SELECT set_config('request.jwt.claims', '{"role": "service_role"}', true);
 SET LOCAL ROLE service_role;
 
