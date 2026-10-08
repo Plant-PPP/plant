@@ -33,7 +33,8 @@ const sdkFences = [
   {
     matches: (dep) => dep === "ai" || dep.startsWith("@ai-sdk/"),
     allowed: new Set(["@plant/web", "@plant/evals"]),
-    reason: "the AI SDK: model calls stay where their cost is recorded",
+    reason:
+      "the AI SDK: models are called only from the web app, which records their cost, and the evals",
   },
 ];
 // Every workspace package, from the `packages:` globs in pnpm-workspace.yaml
@@ -103,7 +104,7 @@ for (const dir of manifests) {
     }
     for (const fence of sdkFences) {
       if (fence.matches(dep) && !fence.allowed.has(name)) {
-        violations.push(`${name} may not depend on ${fence.reason}`);
+        violations.push(`${name} may not depend on ${dep}, ${fence.reason}`);
       }
     }
   }

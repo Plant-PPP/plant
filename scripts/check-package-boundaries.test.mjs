@@ -5,7 +5,13 @@
 
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -25,8 +31,11 @@ const PACKAGES = {
   ".": "plant",
 };
 
-/** Runs the script over a workspace where `deps` maps a package name to the dependencies it declares. */
-function check(deps) {
+/**
+ * Runs the script over a workspace where `deps` maps a package name to the
+ * dependencies it declares, under `field` in every manifest.
+ */
+function check(deps, field = "dependencies") {
   const root = mkdtempSync(join(tmpdir(), "boundaries-"));
   try {
     mkdirSync(join(root, "scripts"));
@@ -42,7 +51,7 @@ function check(deps) {
       );
       writeFileSync(
         join(root, dir, "package.json"),
-        JSON.stringify({ name, dependencies }),
+        JSON.stringify({ name, [field]: dependencies }),
       );
     }
     const r = spawnSync(
@@ -74,7 +83,10 @@ for (const [name, dep] of [
   test(`${dep} in ${name} fails`, () => {
     const r = check({ [name]: [dep] });
     assert.equal(r.status, 1);
-    assert.match(r.output, new RegExp(`${name} may not depend on the AI SDK`));
+    assert.match(
+      r.output,
+      new RegExp(`${name} may not depend on ${dep}, the AI SDK`),
+    );
   });
 }
 
@@ -82,6 +94,21 @@ for (const dep of ["inngest", "@inngest/middleware-x"]) {
   test(`${dep} in @plant/core fails`, () => {
     const r = check({ "@plant/core": [dep] });
     assert.equal(r.status, 1);
-    assert.match(r.output, /@plant\/core may not depend on inngest/);
+    assert.match(
+      r.output,
+      new RegExp(`@plant/core may not depend on ${dep}, inngest`),
+    );
+  });
+}
+
+for (const field of [
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+]) {
+  test(`ai in the root's ${field} fails`, () => {
+    const r = check({ plant: ["ai"] }, field);
+    assert.equal(r.status, 1);
+    assert.match(r.output, /plant may not depend on ai, the AI SDK/);
   });
 }
