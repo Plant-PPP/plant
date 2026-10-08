@@ -47,7 +47,6 @@ export function LoginForm({
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  // The callback reads where to go from this cookie (Google, mail link).
   function writeNextCookie(value: string, maxAge: number) {
     const secure = location.protocol === "https:" ? "; Secure" : "";
     document.cookie = `${NEXT_COOKIE.name}=${value}; Path=${NEXT_COOKIE.path}; Max-Age=${maxAge}; SameSite=${NEXT_COOKIE.sameSite}${secure}`;
