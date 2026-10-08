@@ -1,7 +1,7 @@
 import {
   Banknote,
   Bitcoin,
-  Building2,
+  BuildingComplex,
   ChartLine,
   ChartPie,
   Globe,
@@ -58,11 +58,11 @@ const ASSETS: {
     label: "FCI",
     icon: ChartPie,
     iconClassName: "bg-chart-6/25 text-chart-6",
-    position: "top-[84%] left-[36%]",
+    position: "top-[84%] left-[30%]",
   },
   {
     label: "Inmuebles",
-    icon: Building2,
+    icon: BuildingComplex,
     iconClassName: "bg-chart-8/25 text-chart-8",
     position: "top-[86%] right-[18%]",
   },

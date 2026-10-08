@@ -38,7 +38,7 @@ export default async function LoginPage({
     Array.isArray(value) ? value[0] : value,
   );
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
+    <div className="grid min-h-svh lg:min-h-[36rem] lg:grid-cols-2">
       <div className="flex flex-col p-6 md:p-10">
         <header>
           <BrandLogo variant="logotype" className="h-7 w-auto" />
