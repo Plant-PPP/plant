@@ -1,8 +1,14 @@
 // Masks credentials and personal data in text before it is logged. Every
-// pattern is linear on hostile input: no nested quantifiers, one open-ended
-// loop at most.
+// pattern stays linear on hostile input: nested repeats are bounded, and the
+// timing tests pin the worst shapes.
 
 export const MASK = "<masked>";
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+  .source;
+// Right after a percent escape, raw or encoded once: its hex digits belong to
+// the escape, so `%2012345678` is a space and a DNI.
+const AFTER_ESCAPE = /(?<=%(?:25)?[0-9A-Fa-f]{2})/.source;
 
 // Auth's token names, as a query param and as a named value.
 const AUTH_TOKEN =
@@ -18,17 +24,19 @@ const SECRET_PARAM = new RegExp(
 );
 
 // Credentials outside a query: a credential named in JSON, escaped JSON or
-// `name: value` form (a quoted value runs to its closing quote), the PKCE
-// code as a named UUID, a bearer or basic value, a JWT (whole or cut),
-// Supabase's auth and verifier cookies and its secret keys. A letter before
-// `code`, `Bearer` or `eyJ` means another word; a digit may be a mask's
-// neighbour.
+// `name: value` form (a quoted or backticked value runs to its closing
+// quote), the PKCE code as a named UUID, a bearer or basic value, a JWT
+// (whole or cut), Supabase's auth and verifier cookies and its secret keys. A
+// letter before `code`, `Bearer` or `eyJ` means another word; a digit may be
+// a mask's neighbour.
 const NAMED_SECRET = new RegExp(
-  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'[^']*|[^"'\\\s,}&<]+)`,
+  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\`[^\`]*|[^"'\\\s,}&<]+)`,
   "gi",
 );
-const NAMED_CODE =
-  /((?<![A-Za-z])(?:auth_)?code(?:\\?")?\s{0,8}[:=]\s{0,8}(?:\\?"|')?)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const NAMED_CODE = new RegExp(
+  String.raw`((?<![A-Za-z])(?:auth_)?code(?:\\?")?\s{0,8}[:=]\s{0,8}(?:\\?"|')?)${UUID}`,
+  "gi",
+);
 const AUTHORIZATION = /((?<![A-Za-z])(?:Bearer|Basic)\s+)[^\s"',<]+/gi;
 const JWT = /(?<![A-Za-z])eyJ[\w.-]{6,}/g;
 const SUPABASE_AUTH_COOKIE =
@@ -36,26 +44,40 @@ const SUPABASE_AUTH_COOKIE =
 const SUPABASE_SECRET_KEY = /sb_secret_[\w-]+/g;
 
 // Kept whole: ids and times, whose digit groups would otherwise read as a
-// DNI. A UUID, a hex run of 16 or more with a letter (a trace id, a hash, a
-// chunk name), a time with its fraction, a basic ISO timestamp. Not followed
+// DNI. A UUID; a hex run of 16 or more with a letter and no 11 digits in a
+// row (a trace id, a hash, a chunk name, but not a CBU or CUIT glued to a
+// hex letter); a time with its fraction (a comma one up to microseconds, so a
+// CSV's next field is not read as one); a basic ISO timestamp. Not followed
 // by `@`: an id used as an email's local part is not an id. An id inside a
 // longer local part still splits it, and the part before it passes.
-const KEPT =
-  /((?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?<![0-9a-z])(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?|\d{8}T\d{6})(?!\d))(?!@|%(?:25)?40))/i;
+const KEPT = new RegExp(
+  String.raw`((?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?[0-9a-f]?)(?![0-9a-f]*?\d{11})(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6})(?!\d))(?!@|%(?:25)?40))`,
+  "i",
+);
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
-// file name, is masked. A DNI may follow a dot (`nro.12345678`) but not sit
-// between a digit and a dot. Any other 7 or 8 digits, a byte count or a date
-// in a file name, read as a DNI.
-const CBU = /(?<!\d)\d{22}(?!\d)/g;
-const CUIT = /(?<!\d)(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?!\d)/g;
-const DNI = /(?<!\d|\d\.)\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)/g;
+// file name, is masked; a percent escape's hex digits do not count. A DNI may
+// follow a dot (`nro.12345678`) but not sit between a digit and a dot. Any
+// other 7 or 8 digits, a byte count or a date in a file name, read as a DNI.
+const CBU = new RegExp(
+  String.raw`(?:(?<!\d)|${AFTER_ESCAPE})\d{22}(?!\d)`,
+  "g",
+);
+const CUIT = new RegExp(
+  String.raw`(?:(?<!\d)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?!\d)`,
+  "g",
+);
+const DNI = new RegExp(
+  String.raw`(?:(?<!\d|\d\.)|${AFTER_ESCAPE})\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)`,
+  "g",
+);
 // The lookbehind keeps the hex digits of a percent escape, raw or encoded
 // (`%3Djohn%40…`, `%253Djohn%2540…`), out of the local part; an escape inside
-// it, encoded once or twice, is a `+` or a byte of a non-ASCII letter. The
-// domain needs a TLD, so `pkg@2.71.1` in a pnpm path is not an address.
+// it, encoded once or twice, is a `+` or a byte of a non-ASCII letter. It
+// does not start with `'`, the closing quote of a value before it. The domain
+// needs a TLD, so `pkg@2.71.1` in a pnpm path is not an address.
 const EMAIL =
-  /(?<!%(?:25)?[0-9A-Fa-f]?)(?:[\p{L}\p{N}._+'-]|%(?:25)?2[Bb]|%(?:25)?[89A-Fa-f][0-9A-Fa-f]){1,64}(?:@|%40|%2540)[\p{L}\p{N}-]{1,63}(?:\.[\p{L}\p{N}-]{1,63}){0,8}\.\p{L}{2,24}(?!\p{L})/gu;
+  /(?<!%(?:25)?[0-9A-Fa-f]?)(?!')(?:[\p{L}\p{N}._+'-]|%(?:25)?2[Bb]|%(?:25)?[89A-Fa-f][0-9A-Fa-f]){1,64}(?:@|%40|%2540)[\p{L}\p{N}-]{1,63}(?:\.[\p{L}\p{N}-]{1,63}){0,8}\.\p{L}{2,24}(?!\p{L})/gu;
 
 // Money and holdings: their ids pass.
 const VALUE_SEGMENTS = new Set([
@@ -94,6 +116,7 @@ const SECRET_SEGMENTS = new Set([
   "cookie",
   "cookies",
   "authorization",
+  "authcode",
   "apikey",
   "privatekey",
   "signingkey",
@@ -102,8 +125,8 @@ const SECRET_SEGMENTS = new Set([
   "phone",
 ]);
 
-// Emails first: a mask holds no digit, so a number after an address is still
-// masked in one pass.
+// Emails first: a number masked inside an address would cut it and leave the
+// domain unmasked.
 function scrubPersonalData(text: string): string {
   return text
     .replace(EMAIL, MASK)
@@ -119,7 +142,7 @@ export function scrubSensitiveText(text: string): string {
     .replace(
       NAMED_SECRET,
       (_match, name: string, value: string) =>
-        `${name}${/^(?:\\?"|')/.exec(value)?.[0] ?? ""}${MASK}`,
+        `${name}${/^(?:\\?"|'|`)/.exec(value)?.[0] ?? ""}${MASK}`,
     )
     .replace(NAMED_CODE, `$1${MASK}`)
     .replace(AUTHORIZATION, `$1${MASK}`)

@@ -33,6 +33,21 @@ describe("scrubSensitiveText", () => {
     );
   });
 
+  it.each([
+    [
+      "a single-quoted value with an escaped quote",
+      "password: 'it\\'s me' ok",
+      `password: '${MASK}' ok`,
+    ],
+    [
+      "a backticked value",
+      'password: `he said "it\'s" ok`, x',
+      `password: \`${MASK}\`, x`,
+    ],
+  ])("masks %s whole", (_label, text, expected) => {
+    expect(scrubSensitiveText(text)).toBe(expected);
+  });
+
   it("masks a value in a fragment and up to whitespace", () => {
     expect(scrubSensitiveText("/x#access_token=abc.def&type=bearer")).toBe(
       `/x#access_token=${MASK}&type=bearer`,
@@ -126,6 +141,7 @@ describe("scrubSensitiveText", () => {
       "12345678Bearer abc 12345678sb_secret_x 12345678eyJhbGciOiJ9",
       '{"password":"a b"} password=""',
       String.raw`{\"password\":\"x\"} password: 'y' {"code":"${UUID}"}`,
+      "token:'=aa'x@y.com;",
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -181,6 +197,42 @@ describe("scrubSensitiveText", () => {
       MASK,
     ],
     ["a twice-encoded email with a plus", "ana%252Bx%2540example.com", MASK],
+    [
+      "a DNI after an encoded space",
+      "/files/DNI%2012345678.pdf",
+      `/files/DNI%20${MASK}.pdf`,
+    ],
+    [
+      "a CUIT after an encoded space",
+      "/files/CUIT%2020123456789.pdf",
+      `/files/CUIT%20${MASK}.pdf`,
+    ],
+    [
+      "a CBU after an encoded space",
+      "/files/CBU%200170099220000067797370.pdf",
+      `/files/CBU%20${MASK}.pdf`,
+    ],
+    [
+      "a CBU after an encoded slash",
+      "/x%2F0170099220000067797370",
+      `/x%2F${MASK}`,
+    ],
+    [
+      "a DNI after a twice-encoded space",
+      "/DNI%252012345678",
+      `/DNI%2520${MASK}`,
+    ],
+    ["a DNI in an encoded JSON string", "%2212345678%22", `%22${MASK}%22`],
+    [
+      "a CBU after a hex letter",
+      "cbu_de0170099220000067797370.pdf",
+      `cbu_de${MASK}.pdf`,
+    ],
+    [
+      "a DNI after a comma time",
+      "at 16:00:00,12345678,ana",
+      `at 16:00:00,${MASK},ana`,
+    ],
   ])("masks %s", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -216,6 +268,11 @@ describe("scrubSensitiveText", () => {
     ["a chunk name", "/_next/static/chunks/page-4f3a87654321bc9d.js:1:2345"],
     ["a timestamp with microseconds", "at 2026-10-08T16:00:00.123456+00:00"],
     ["a basic ISO timestamp", "X-Amz-Date=20261008T160000Z"],
+    ["a comma time with microseconds", "at 16:00:00,123456 done"],
+    [
+      "a hex id after an encoded slash",
+      "/x%2F0af7651916cd43dd8448eb211c80319c",
+    ],
     ["a word with eyJ inside", "keyJsonParser failed"],
   ])("leaves %s", (_label, text) => {
     expect(scrubSensitiveText(text)).toBe(text);
@@ -269,6 +326,8 @@ describe("isSensitiveKey", () => {
     "emailId",
     "plant.code_verifier",
     "plant.auth.otp",
+    "plant.auth.code",
+    "authCode",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
