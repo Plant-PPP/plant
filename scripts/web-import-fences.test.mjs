@@ -65,7 +65,30 @@ const flagged = [
     "src/lib/ai/ai-cost-sink.ts",
     'export async function f() {\n  "use\\x20server";\n}',
   ],
-  ["src/lib/x.mjs", 'import "ai";'],
+  ...["mjs", "cjs", "mts", "cts", "jsx"].map((ext) => [
+    `src/components/x.${ext}`,
+    'import "ai";',
+  ]),
+  ["src/app/api/x/route.mts", 'import "@/lib/supabase/service-role";'],
+  [
+    "src/app/page.tsx",
+    'export const c = (require as any)["context"]("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/app/page.tsx",
+    'export const c = (require as any)[`context`]("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/lib/ai/x.ts",
+    'export const f = (step) => {\n  const { "ai": a } = step;\n  return a;\n};',
+  ],
+  [
+    "src/lib/ai/x.ts",
+    'export const f = (step) => {\n  const { ["ai"]: a } = step;\n  return a;\n};',
+  ],
+  ["src/lib/ai/x.ts", "export const f = (step) => step[`ai`];"],
+  ["src/components/x.tsx", 'import { models } from "@inngest/ai/models";'],
+  ["src/components/x.tsx", 'import { createAgent } from "@inngest/agent-kit";'],
   ["build/reach.ts", 'import "@/lib/supabase/service-role";'],
   [
     "src/app/api/x/route.ts",
@@ -263,14 +286,12 @@ const jobs = new ESLint({
 });
 
 for (const code of [
-  "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;",
-  'import "../../../apps/web/src/lib/supabase/service-role";',
-  'import "../../../apps/web/node_modules/ai";',
+  'import "../../node_modules/.pnpm/node_modules/ai";',
   'export const f = () => import("../../../apps/web/src/lib/ai/ai-cost-sink");',
   'const m = "x";\nexport const f = () => import(m);',
-  'import "../../node_modules/.pnpm/node_modules/ai";',
   'export const f = ({ step }) => step.ai.infer("x", {});',
   'import { gemini } from "@inngest/ai";',
+  'import { createAgent } from "@inngest/agent-kit";',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
 ]) {
   test(`packages/jobs: ${code} is flagged`, async () => {
@@ -280,6 +301,32 @@ for (const code of [
       [],
     );
   });
+}
+
+// Every package that shares eslint.packages.mjs, at its own depth.
+for (const [dir, up] of [
+  ["packages/core", "../../.."],
+  ["packages/jobs", "../../.."],
+  ["packages/shared", "../../.."],
+  ["packages/sources", "../../.."],
+  ["security-tests", "../.."],
+]) {
+  const lint = new ESLint({
+    cwd: fileURLToPath(new URL(`../${dir}/`, import.meta.url)),
+  });
+  for (const code of [
+    "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;",
+    `import "${up}/apps/web/src/lib/supabase/service-role";`,
+    `import "${up}/apps/web/node_modules/ai";`,
+  ]) {
+    test(`${dir}: ${code} is flagged`, async () => {
+      const [result] = await lint.lintText(code, { filePath: "src/x.ts" });
+      assert.notDeepEqual(
+        result.messages.filter((message) => FENCES.has(message.ruleId)),
+        [],
+      );
+    });
+  }
 }
 
 test("packages/jobs: its own and workspace imports are allowed", async () => {

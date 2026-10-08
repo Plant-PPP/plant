@@ -21,17 +21,23 @@ const NODE_MODULES = {
   message: "Import a package by its name, so the import fences see it.",
 };
 
-// Inngest's step.ai calls a model itself, past the cost middleware;
-// inngest re-exports @inngest/ai's model helpers for it.
+// Inngest's step.ai and @inngest/agent-kit call a model themselves, past the
+// cost middleware; inngest re-exports @inngest/ai's model helpers for step.ai.
 const INNGEST_AI = {
-  regex: "^@inngest/ai(/|$)",
+  regex: "^@inngest/(ai|agent-kit)(/|$)",
   message:
     "Models are called only through src/lib/ai, which records their cost.",
 };
+// A property or destructured key named `name`, written bare, quoted or as a
+// template literal.
+const named = (node, key, name) => [
+  `${node}[${key}.name="${name}"]`,
+  `${node}[${key}.value="${name}"]`,
+  `${node}[${key}.quasis.0.value.cooked="${name}"]`,
+];
 const STEP_AI = [
-  'MemberExpression[property.name="ai"]',
-  'MemberExpression[property.value="ai"]',
-  'ObjectPattern > Property[key.name="ai"]',
+  ...named("MemberExpression", "property", "ai"),
+  ...named("ObjectPattern > Property", "key", "ai"),
 ].map((selector) => ({ selector, message: INNGEST_AI.message }));
 
 // The fences read import specifiers, so a computed one, or a bundler's
@@ -39,7 +45,9 @@ const STEP_AI = [
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
-  'MemberExpression[property.name="context"]:has(Identifier[name="require"])',
+  ...named("MemberExpression", "property", "context").map(
+    (node) => `${node}:has(Identifier[name="require"])`,
+  ),
 ].map((selector) => ({
   selector,
   message: "Import a module by a string literal so the import fences see it.",
@@ -48,8 +56,8 @@ export const LITERAL_IMPORTS_ONLY = [
 export const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
 
 // The rules for one config block: `fenced` lists the modules it may not
-// import, each a regex over the import specifier, on top of node_modules
-// paths and Inngest's model calls, which no block may use. A later block replaces a
+// import, each a regex over the import specifier, on top of node_modules paths
+// and Inngest's model calls, which no block may use. A later block replaces a
 // rule's options, so each lists everything it keeps. no-restricted-imports
 // does not see import() or require(), so the same regexes go to
 // no-restricted-syntax.
