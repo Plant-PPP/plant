@@ -105,6 +105,20 @@ const flagged = [
     "src/lib/ai/ai-cost-sink.ts",
     'export async function f() {\n  "use server";\n}',
   ],
+  [
+    "src/lib/ai/x.ts",
+    'import { generateText } from "ai";\nexport { generateText };',
+  ],
+  ["src/lib/ai/x.ts", 'import * as ai from "ai";\nexport { ai };'],
+  ["src/lib/ai/ai-cost-sink.ts", 'export * from "ai";'],
+  ["src/lib/ai/ai-cost-sink.ts", 'export { generateText } from "ai";'],
+  ["src/lib/ai/ai-cost-sink.test.ts", 'import "@/lib/supabase/service-role";'],
+  [
+    "src/lib/ai/ai-cost-sink.test.ts",
+    'import { aiCostSink } from "./ai-cost-sink";\nexport { aiCostSink };',
+  ],
+  ["src/lib/ai/x.test.ts", 'import "./ai-cost-sink";'],
+  ["src/app/auth/callback/route.ts", 'import "@/lib/ai/ai-cost-sink";'],
 ];
 
 for (const [filePath, code] of flagged) {
@@ -144,6 +158,8 @@ const allowed = [
     "src/app/api/x/route.ts",
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
   ],
+  ["src/app/api/x/route.ts", "type T = string;\nexport type { T };"],
+  ["src/lib/ai/x.ts", "type T = string;\nexport type { T };"],
 ];
 
 for (const [filePath, code] of allowed) {

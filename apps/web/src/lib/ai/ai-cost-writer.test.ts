@@ -89,12 +89,10 @@ it("throws a PostgREST code", async () => {
 });
 
 it("throws the status when the body's code is not a code", async () => {
-  const fetch = jest.fn(async () =>
-    json(400, { code: "Failing row contains (0.0087)" }),
-  );
+  const fetch = jest.fn(async () => json(400, { code: "10000 in row 22800" }));
   const error = await failure(writerWith(fetch)(row));
   expect(error.message).toBe("http_400");
-  expect(JSON.stringify(error)).not.toContain("0.0087");
+  expect(JSON.stringify(error)).not.toContain("22800");
 });
 
 it("throws the status when the body has no code", async () => {

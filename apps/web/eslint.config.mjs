@@ -47,19 +47,26 @@ const noReexport = (modules) =>
       message,
     })),
   );
-// The sink and route handlers export only what they define, so an imported
-// sink or client cannot be handed on through an export list.
+// The sink, route handlers and src/lib/ai export values only through a
+// declaration, so an imported sink, client or model cannot be handed on
+// through an export list.
 const NO_EXPORT_LIST = [
-  "ExportNamedDeclaration:not([source]) > ExportSpecifier",
+  'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
   'ExportDefaultDeclaration[declaration.type="Identifier"]',
 ].map((selector) => ({
   selector,
-  message: "Export what this module defines, so the fences see who uses it.",
+  message:
+    "Export through a declaration (export function, export const), so the fences see who uses what.",
 }));
 const BASE_SYNTAX = [
   ...LITERAL_IMPORTS_ONLY,
   ...SECRET_KEY_READS,
   ...noReexport([SERVICE_ROLE, COST_SINK]),
+];
+const LIB_AI_SYNTAX = [
+  ...BASE_SYNTAX,
+  ...noReexport([AI, AI_PROVIDERS]),
+  ...NO_EXPORT_LIST,
 ];
 
 // The rules for one block: a later block replaces the rule's options, so each
@@ -111,18 +118,15 @@ export default defineConfig([
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
-    rules: fence(
-      [SERVICE_ROLE, COST_SINK],
-      [...BASE_SYNTAX, ...noReexport([AI, AI_PROVIDERS])],
-    ),
+    rules: fence([SERVICE_ROLE, COST_SINK], LIB_AI_SYNTAX),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.test.ts"],
-    rules: fence([SERVICE_ROLE]),
+    rules: fence([SERVICE_ROLE], LIB_AI_SYNTAX),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: fence([], [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX]),
+    rules: fence([], [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX]),
   },
   {
     files: ["src/lib/supabase/service-role.ts"],
