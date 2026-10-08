@@ -163,7 +163,8 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# Any path on the site_url host passes without an entry; `next dev` serves on localhost.
+# Any URL on the site_url hostname (any scheme, port or path) passes without an
+# entry; `next dev` serves on localhost.
 additional_redirect_urls = ["http://localhost:3000/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

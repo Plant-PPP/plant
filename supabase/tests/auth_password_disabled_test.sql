@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(5);
+SELECT plan(6);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -47,6 +47,12 @@ INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
 VALUES ('c0000000-0000-4000-8000-00000000000c', '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated', 'cora@pgtap.invalid', 'planted', NULL, '{}', '{}', now(), now());
 SET LOCAL session_replication_role = origin;
+
+SELECT is(
+  (SELECT encrypted_password FROM auth.users WHERE id = 'c0000000-0000-4000-8000-00000000000c'),
+  'planted'::varchar,
+  'a row written with triggers off keeps its password until confirmed'
+);
 
 UPDATE auth.users SET email_confirmed_at = now()
 WHERE id = 'c0000000-0000-4000-8000-00000000000c';
