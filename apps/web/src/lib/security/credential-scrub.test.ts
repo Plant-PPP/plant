@@ -348,10 +348,11 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(text)).toBe(text);
   });
 
-  // Each input at a quarter of its size and at full size: a linear scan takes
-  // about four times as long on the larger one, a backtracking pattern sixteen
-  // times or more. Comparing the two keeps the check independent of how loaded
-  // the machine is.
+  // Each input at its size and four times it: the linear passes take about
+  // four times as long on the larger one, while a pattern that backtracks
+  // across the input grows sixteenfold and fails the check once it outweighs
+  // them. Comparing the CPU time of the two keeps the check independent of
+  // how fast or loaded the machine is.
   it.each<[string, (scale: number) => string]>([
     ["encoded separators", (k) => "%25".repeat(5000 * k) + "code="],
     ["letters", (k) => "a".repeat(16000 * k)],
@@ -369,14 +370,15 @@ describe("scrubSensitiveText", () => {
     ["repeated JWT prefixes", (k) => "eyJ-".repeat(4000 * k)],
     ["repeated named secrets", (k) => 'password:"'.repeat(1600 * k)],
   ])("stays linear on %s", (_label, input) => {
-    const texts = [input(0.25), input(1)];
+    const texts = [input(1), input(4)];
     texts.forEach((text) => scrubSensitiveText(text));
     const best = [Infinity, Infinity];
     for (let run = 0; run < 5; run++) {
       texts.forEach((text, i) => {
-        const start = performance.now();
+        const start = process.cpuUsage();
         scrubSensitiveText(text);
-        best[i] = Math.min(best[i]!, performance.now() - start);
+        const { user, system } = process.cpuUsage(start);
+        best[i] = Math.min(best[i]!, (user + system) / 1000);
       });
     }
     expect(best[1]).toBeLessThan(8 * best[0]! + 5);
