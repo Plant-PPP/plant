@@ -75,7 +75,8 @@ SELECT is(
          'mfa_enrolled', mfa_enrolled,
          'role', CASE expected WHEN 'verify' THEN 'authenticated_aal1' ELSE 'authenticated' END)),
   format('aal %s, enrolled %s: the hook adds the claim and the role is %s',
-         COALESCE(aal, 'absent'), mfa_enrolled::text, expected)
+         COALESCE(aal, 'absent'), mfa_enrolled::text,
+         CASE expected WHEN 'verify' THEN 'authenticated_aal1' ELSE 'authenticated' END)
 )
 FROM hooked
 ORDER BY aal NULLS LAST, mfa_enrolled;

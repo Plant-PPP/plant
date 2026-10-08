@@ -3,12 +3,12 @@ SET statement_timeout = '5min';
 
 -- The role an enrolled user's aal1 token gets instead of authenticated
 -- (custom_access_token_hook). It holds no grant and USAGE on no schema but
--- public, so PostgREST answers 42501 on every table, view and function, and
--- Storage, GraphQL and Realtime refuse it too. Roles are cluster-wide, hence the
--- guard, and the ALTER sets the attributes on a role that already existed.
--- NOINHERIT: a later grant of another role to it gives nothing without SET
--- ROLE. PostgREST switches to it through authenticator, like authenticated, with
--- the same statement timeout.
+-- public, so PostgREST answers 42501 on every table, view and function, Storage
+-- and GraphQL refuse it, and Realtime gives it no private channel. Roles are
+-- cluster-wide, hence the guard, and the ALTER sets the attributes on a role
+-- that already existed. NOINHERIT: a plain grant of another role to it inherits
+-- nothing (WITH INHERIT TRUE would). PostgREST switches to it through
+-- authenticator, like authenticated, with the same statement timeout.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated_aal1') THEN

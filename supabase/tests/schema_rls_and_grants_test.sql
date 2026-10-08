@@ -406,10 +406,12 @@ SELECT is_empty(
 -- these see everything authenticated_aal1 could use. PUBLIC keeps USAGE on the
 -- public schema, which reaches nothing by itself; a schema without USAGE hides
 -- whatever PUBLIC may execute in it.
-CREATE TEMP TABLE aal1_floor (name text PRIMARY KEY, canaries int NOT NULL, query text NOT NULL)
+CREATE TEMP TABLE aal1_floor (name text PRIMARY KEY, canaries text[] NOT NULL, query text NOT NULL)
   ON COMMIT DROP;
 INSERT INTO aal1_floor VALUES
-('authenticated_aal1 uses no schema but public and holds no privilege on any relation, column or function there', 8,
+('authenticated_aal1 uses no schema but public and holds no privilege on any relation, column or function there',
+ ARRAY['schema private', 'schema graphql_public', 'profiles', 'consents', 'pgtap_canary_insert',
+       'pgtap_canary_update', 'private.audit_log_id_seq', 'private.audit_log', 'private.set_updated_at()'],
  $$ SELECT 'schema ' || n.nspname FROM pg_namespace n
     WHERE n.nspname NOT IN ('public', 'pg_catalog', 'information_schema')
       AND n.nspname !~ '^pg_(toast_)?temp_'
@@ -433,13 +435,14 @@ INSERT INTO aal1_floor VALUES
       AND has_function_privilege('authenticated_aal1', p.oid, 'EXECUTE') $$),
 -- Creating a role gives its creator a membership with ADMIN only, which
 -- neither inherits nor switches.
-('authenticated_aal1 is a member of no role, and only authenticator can switch to it', 2,
+('authenticated_aal1 is a member of no role, and only authenticator can switch to it',
+ ARRAY['pgtap_canary > authenticated_aal1', 'authenticated_aal1 > anon'],
  $$ SELECT m.roleid::regrole || ' > ' || m.member::regrole FROM pg_auth_members m
     WHERE m.member = 'authenticated_aal1'::regrole
        OR (m.roleid = 'authenticated_aal1'::regrole
            AND m.member <> 'authenticator'::regrole
            AND (m.set_option OR m.inherit_option)) $$),
-('only supabase_auth_admin and the owner can execute the access token hook', 1,
+('only supabase_auth_admin and the owner can execute the access token hook', ARRAY['authenticated'],
  $$ SELECT a.grantee::regrole::text FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
     WHERE p.oid = 'private.custom_access_token_hook(jsonb)'::regprocedure
@@ -466,21 +469,27 @@ SELECT ok(
   'the access token hook runs as supabase_auth_admin, which can reach it and read the factors, with an empty search_path'
 );
 
--- Each canary breaks one rule above. A sequence keeps its value through
--- ROLLBACK TO, so it carries the count of asserts that missed their canaries
--- out of the savepoint; it stays at -1 if the count never ran.
+-- Each canary breaks one rule above, and each assert must name every canary
+-- it is given. A sequence keeps its value through ROLLBACK TO, so it carries
+-- the number of missed canaries out of the savepoint; it stays at -1 if the
+-- count never ran.
 CREATE TEMP SEQUENCE aal1_floor_misses MINVALUE -1 START -1;
-CREATE FUNCTION pg_temp.hits(query text) RETURNS bigint LANGUAGE plpgsql AS $f$
+CREATE FUNCTION pg_temp.misses(query text, canaries text[]) RETURNS bigint LANGUAGE plpgsql AS $f$
 DECLARE n bigint;
 BEGIN
-  EXECUTE format('SELECT count(*) FROM (%s) q', query) INTO n;
+  EXECUTE format('SELECT count(*) FROM unnest($1) c WHERE c NOT IN (SELECT * FROM (%s) q)', query)
+    USING canaries INTO n;
   RETURN n;
 END
 $f$;
 
 SAVEPOINT canaries;
-GRANT SELECT ON public.profiles TO authenticated_aal1;
+GRANT DELETE ON public.profiles TO authenticated_aal1;
 GRANT SELECT (kind) ON public.consents TO authenticated_aal1;
+CREATE VIEW public.pgtap_canary_insert WITH (security_invoker) AS SELECT 1 AS x;
+CREATE VIEW public.pgtap_canary_update WITH (security_invoker) AS SELECT 1 AS x;
+GRANT INSERT (x) ON public.pgtap_canary_insert TO authenticated_aal1;
+GRANT UPDATE (x) ON public.pgtap_canary_update TO authenticated_aal1;
 GRANT EXECUTE ON FUNCTION private.set_updated_at() TO authenticated_aal1;
 GRANT USAGE ON SCHEMA private TO authenticated_aal1;
 GRANT USAGE ON SEQUENCE private.audit_log_id_seq TO authenticated_aal1;
@@ -493,7 +502,7 @@ GRANT EXECUTE ON FUNCTION private.custom_access_token_hook(jsonb) TO authenticat
 DO $$
 BEGIN
   PERFORM setval('aal1_floor_misses',
-                 (SELECT count(*) FROM aal1_floor WHERE pg_temp.hits(query) < canaries));
+                 (SELECT sum(pg_temp.misses(query, canaries))::bigint FROM aal1_floor));
 END
 $$;
 ROLLBACK TO SAVEPOINT canaries;
