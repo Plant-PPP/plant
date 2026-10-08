@@ -22,6 +22,7 @@ function callback(query: string, next?: string, requestId = REQUEST_ID) {
 
 let log: jest.SpyInstance;
 let warn: jest.SpyInstance;
+let error: jest.SpyInstance;
 
 beforeEach(() => {
   exchangeCodeForSession.mockReset();
@@ -31,6 +32,7 @@ beforeEach(() => {
   });
   log = jest.spyOn(console, "log").mockImplementation(() => {});
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  error = jest.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -39,6 +41,7 @@ function logged(): { level: string; line: string } {
   const calls = [
     ...log.mock.calls.map(([line]) => ({ level: "info", line })),
     ...warn.mock.calls.map(([line]) => ({ level: "warn", line })),
+    ...error.mock.calls.map(([line]) => ({ level: "error", line })),
   ];
   expect(calls).toHaveLength(1);
   return calls[0]!;
@@ -179,4 +182,32 @@ describe("the callback line", () => {
     });
     expect(line).not.toContain("s3cr3t");
   });
+
+  it.each([
+    [
+      "a 5xx",
+      { status: 500, code: "unexpected_failure" },
+      "unexpected_failure",
+    ],
+    [
+      "no answer",
+      { name: "AuthRetryableFetchError", status: 0 },
+      "AuthRetryableFetchError",
+    ],
+  ])(
+    "records an exchange that fails on Auth's side with %s as an error",
+    async (_label, fields, type) => {
+      exchangeCodeForSession.mockResolvedValue({
+        data: { user: null },
+        error: Object.assign(new Error("Auth failed"), fields),
+      });
+      await callback("?code=abc", "/assets");
+      const { level, line } = logged();
+      expect(level).toBe("error");
+      expect(JSON.parse(line)).toMatchObject({
+        "plant.outcome": "exchange_failed",
+        "error.type": type,
+      });
+    },
+  );
 });

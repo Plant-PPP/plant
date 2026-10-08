@@ -28,18 +28,21 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
 // session, so server code throws instead of refreshing again.
 export const AUTH_UNAVAILABLE_HEADER = "x-plant-auth";
 
-const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError";
+const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError" as const;
 
 // What server code throws on that header.
 export class AuthUnavailableError extends Error {
+  override readonly name = AUTH_UNAVAILABLE_ERROR;
+
   constructor() {
     super("Auth unavailable");
-    this.name = AUTH_UNAVAILABLE_ERROR;
   }
 }
 
 // By name, not instanceof: the instrumentation hook and the pages are built as
 // separate bundles, which need not share the class.
-export function isAuthUnavailable(error: unknown): error is Error {
+export function isAuthUnavailable(
+  error: unknown,
+): error is AuthUnavailableError {
   return error instanceof Error && error.name === AUTH_UNAVAILABLE_ERROR;
 }

@@ -4,7 +4,7 @@ Branch `claude/pla-21-logs-audit-940b43` (PLA-21). Required by the PR template b
 
 ## Scope and assets
 
-What leaves the app in a log line: request paths, Auth error codes, user ids, exception messages and stacks. What could reach them by accident: Auth's PKCE `code` and tokens, emails, CUIT, DNI and CBU, amounts and holdings. The audit trail itself (`private.audit_log`) and the availability of sign-in, which now depends on it. Out of scope: the Dash0 export (PLA-73), PostHog, client error reporting.
+What leaves the app in a log line: request paths, Auth error codes, user ids, exception messages and stacks. What could reach them by accident: Auth's PKCE `code` and tokens, emails, CUIT, DNI and CBU, amounts and holdings. The audit trail itself (`private.audit_log`) and the availability of sign-in, which now depends on it. Out of scope: the Dash0 export (PLA-73), PostHog, client error reporting (PLA-88).
 
 ## Trust boundary
 
@@ -45,10 +45,11 @@ The request path and query, every request header (including a client's own `x-re
 
 ## Residual risk
 
-- **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs, an `auth.callback` `exchange_failed` line for Google and the mail link, and for the email code only a 500 from `/verify` in the browser, which Plant does not see until client error reporting. Accepted so a failing insert cannot leave a session unaudited.
+- **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs, an `auth.callback` `exchange_failed` line for Google and the mail link, and for the email code only a 500 from `/verify` in the browser, which Plant does not see until client error reporting (PLA-88). Accepted so a failing insert cannot leave a session unaudited.
 - **A trigger that does not fire fails open.** Writes in `session_replication_role = replica` (a data restore) skip it, and Auth's own role owns `auth.sessions` and could drop or disable it in an upgrade. CI's floor catches a missing trigger against the CLI's Auth image only; nothing checks it on `plant-staging` at runtime.
 - **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read through `to_jsonb`, so dropping it cannot.
 - **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.
 - **Next prints its own unscrubbed line for uncaught errors**, next to ours. Our code does not put personal data in error messages.
 - **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does a DNI (7 or 8 digits) inside a hex id of 16 or more characters, glued to a UUID, after a time's dot (read as its fraction) or after a version number and a dot, and a CUIT or CBU inside a hex id that holds other digits too; the rule is still never to log values.
+- **A failed sign-in writes no `audit_log` row**: a wrong or expired code or a failed exchange creates no session. Auth's own logs and, for Google and the mail link, the `auth.callback` line are its record.
 - **Vercel Hobby keeps logs for one hour.** Enough for the done condition; retention arrives with Dash0 (PLA-73).
