@@ -10,9 +10,9 @@ import { isSessionMissing } from "@/lib/auth/session-state";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
 
-// Refreshes the session on every page request and sends anyone without one
-// to /login. Server Components cannot write cookies, so this is where an
-// expired access token is exchanged.
+// Checks the session on every page request, refreshes it before it nears
+// expiry and sends anyone without one to /login. Server Components cannot
+// write cookies, so the exchange happens here.
 export async function proxy(request: NextRequest) {
   // Without Supabase the layout's own check fails and shows the error page.
   if (!supabaseEnv()) return NextResponse.next();
