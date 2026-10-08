@@ -3,6 +3,7 @@ import nextTs from "eslint-config-next/typescript";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 import { moneyRules } from "../../eslint.money.mjs";
+import { secretKeyReads } from "../../eslint.secret-key.mjs";
 
 const SOURCE = "{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
 
@@ -15,6 +16,11 @@ const AI_PROVIDERS = { regex: "^@ai-sdk/(?!react(/|$))", message: AI_MESSAGE };
 const SERVICE_ROLE = {
   regex: `(^|/)service-role${EXTENSION}$`,
   message: "The secret key bypasses RLS; only the AI cost sink holds it.",
+};
+// A path into node_modules reaches a package without naming it.
+const NODE_MODULES = {
+  regex: "(^|/)node_modules(/|$)",
+  message: "Import a package by its name, so the import fences see it.",
 };
 const COST_SINK = {
   regex: `(^|/)ai-cost-sink${EXTENSION}$`,
@@ -29,30 +35,21 @@ const LITERAL_IMPORTS_ONLY = [
   selector,
   message: "Import a module by a string literal so the import fences see it.",
 }));
-const SECRET_KEY = "/^(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY$/";
-const SECRET_KEY_READS = [
-  `Identifier[name=${SECRET_KEY}]`,
-  `Literal[value=${SECRET_KEY}]`,
-  `TemplateElement[value.raw=${SECRET_KEY}]`,
-].map((selector) => ({
-  selector,
-  message: "Only src/lib/supabase/service-role.ts reads the secret key.",
-}));
 const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
-// A module allowed to import a fenced one may not pass it on.
+// A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>
   modules.flatMap(({ regex, message }) =>
     ["ExportAllDeclaration", "ExportNamedDeclaration"].map((node) => ({
-      selector: `${node}[source.value=${asSelector(regex)}]`,
+      selector: `${node}[exportKind!="type"][source.value=${asSelector(regex)}]`,
       message,
     })),
   );
-// The sink, route handlers and src/lib/ai export values only through a
+// The sink, route handlers and src/lib/ai export values only through a named
 // declaration, so an imported sink, client or model cannot be handed on
-// through an export list.
+// through an export list or a default export.
 const NO_EXPORT_LIST = [
   'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
-  'ExportDefaultDeclaration[declaration.type="Identifier"]',
+  "ExportDefaultDeclaration",
 ].map((selector) => ({
   selector,
   message:
@@ -60,7 +57,7 @@ const NO_EXPORT_LIST = [
 }));
 const BASE_SYNTAX = [
   ...LITERAL_IMPORTS_ONLY,
-  ...SECRET_KEY_READS,
+  ...secretKeyReads,
   ...noReexport([SERVICE_ROLE, COST_SINK]),
 ];
 const LIB_AI_SYNTAX = [
@@ -72,7 +69,8 @@ const LIB_AI_SYNTAX = [
 // The rules for one block: a later block replaces the rule's options, so each
 // lists everything it keeps. no-restricted-imports does not see import() or
 // require(), so the same regexes go to no-restricted-syntax.
-function fence(modules, syntax = BASE_SYNTAX) {
+function fence(fenced, syntax = BASE_SYNTAX) {
+  const modules = [...fenced, NODE_MODULES];
   return {
     "no-restricted-imports": [
       "error",
@@ -129,7 +127,10 @@ export default defineConfig([
     rules: fence([], [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX]),
   },
   {
-    files: ["src/lib/supabase/service-role.ts"],
+    files: [
+      "src/lib/supabase/service-role.ts",
+      "src/lib/supabase/service-role.test.ts",
+    ],
     rules: fence([AI, AI_PROVIDERS, COST_SINK], LITERAL_IMPORTS_ONLY),
   },
   {

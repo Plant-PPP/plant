@@ -1,6 +1,7 @@
 // Cases for the import fences in apps/web/eslint.config.mjs: who may reach a
 // model, the cost sink and the secret key. Each source is linted in memory
-// under the path it would have in apps/web.
+// under the path it would have in apps/web, and the key's fence once more
+// under packages/jobs.
 //
 //   pnpm test:scripts
 
@@ -119,6 +120,30 @@ const flagged = [
   ],
   ["src/lib/ai/x.test.ts", 'import "./ai-cost-sink";'],
   ["src/app/auth/callback/route.ts", 'import "@/lib/ai/ai-cost-sink";'],
+  ["src/components/x.tsx", 'export const m = require("ai");'],
+  ["src/components/x.tsx", 'import "ai/rsc";'],
+  [
+    "src/components/x.tsx",
+    'import { generateText } from "../../node_modules/ai";',
+  ],
+  ["src/lib/x.ts", 'const m = "ai";\nexport const f = () => require(m);'],
+  [
+    "src/lib/x.ts",
+    "export const k = process.env[`SUPABASE_SERVICE_ROLE_KEY`];",
+  ],
+  [
+    "src/lib/x.ts",
+    "export const k = process.env[`SUPABASE_SERVICE_ROLE_\\x4bEY`];",
+  ],
+  [
+    "src/lib/ai/x.ts",
+    'import { generateText } from "ai";\nexport default generateText as typeof generateText;',
+  ],
+  [
+    "src/app/api/x/route.ts",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport default { aiCostSink };',
+  ],
+  ["src/lib/supabase/service-role.test.ts", 'import "@/lib/ai/ai-cost-sink";'],
 ];
 
 for (const [filePath, code] of flagged) {
@@ -160,6 +185,13 @@ const allowed = [
   ],
   ["src/app/api/x/route.ts", "type T = string;\nexport type { T };"],
   ["src/lib/ai/x.ts", "type T = string;\nexport type { T };"],
+  ["src/lib/ai/x.ts", "type T = string;\nexport { type T };"],
+  ["src/lib/ai/x.ts", 'export type { LanguageModel } from "ai";'],
+  ["src/app/api/x/route.ts", 'export type * from "@/lib/ai/ai-cost-sink";'],
+  [
+    "src/lib/supabase/service-role.test.ts",
+    'import "./service-role";\nprocess.env.SUPABASE_SERVICE_ROLE_KEY = "k";',
+  ],
 ];
 
 for (const [filePath, code] of allowed) {
@@ -167,3 +199,15 @@ for (const [filePath, code] of allowed) {
     assert.deepEqual(await fenced(filePath, code), []);
   });
 }
+
+test("a package may not read the secret key", async () => {
+  const jobs = fileURLToPath(new URL("../packages/jobs/", import.meta.url));
+  const [result] = await new ESLint({ cwd: jobs }).lintText(
+    "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;",
+    { filePath: "src/x.ts" },
+  );
+  assert.deepEqual(
+    result.messages.map((message) => message.ruleId),
+    ["no-restricted-syntax"],
+  );
+});
