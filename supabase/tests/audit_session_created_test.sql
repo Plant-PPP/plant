@@ -19,12 +19,13 @@ SELECT ok(
 
 SELECT ok(
   NOT has_table_privilege('anon', 'auth.sessions', 'INSERT')
-    AND NOT has_table_privilege('authenticated', 'auth.sessions', 'INSERT'),
+    AND NOT has_table_privilege('authenticated', 'auth.sessions', 'INSERT')
+    AND NOT has_table_privilege('service_role', 'auth.sessions', 'INSERT'),
   'no API role can insert a session to write an audit row'
 );
 
-INSERT INTO auth.sessions (id, user_id)
-VALUES ('5e550000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-00000000000a');
+INSERT INTO auth.sessions (id, user_id, aal)
+VALUES ('5e550000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-00000000000a', 'aal1');
 
 SELECT results_eq(
   $$ SELECT action::text, outcome::text, request_id, metadata->>'session_id'
@@ -34,7 +35,7 @@ SELECT results_eq(
 );
 
 SELECT ok(
-  (SELECT metadata ? 'aal' FROM private.audit_log
+  (SELECT metadata->>'aal' = 'aal1' FROM private.audit_log
    WHERE user_id = 'a0000000-0000-4000-8000-00000000000a'),
   'the row records the session''s assurance level'
 );

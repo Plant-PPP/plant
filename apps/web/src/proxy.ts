@@ -12,7 +12,7 @@ import {
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
 import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
-import { serverLog } from "@/lib/log/server-log";
+import { type LogLevel, serverLog } from "@/lib/log/server-log";
 import {
   createRequestId,
   REQUEST_ID_FIELD,
@@ -33,8 +33,8 @@ export async function proxy(request: NextRequest) {
     "http.request.method": request.method,
     "url.path": request.nextUrl.pathname,
   };
-  // Next's onRequestError never runs for the proxy, so a throw here is
-  // logged here.
+  // In Next 16.4 only an edge proxy reaches onRequestError, so a throw here
+  // is logged here; onRequestError skips the proxy if that changes.
   try {
     const env = supabaseEnv();
     const csp = buildCsp({
@@ -49,12 +49,17 @@ export async function proxy(request: NextRequest) {
     const session = await sessionResponse(request);
     session.response.headers.set(CSP_HEADER, csp);
     session.response.headers.set(REQUEST_ID_HEADER, requestId);
+    // `error.type` only when Auth failed: a missing or broken session is the
+    // proxy doing its job, and its code is the reason.
+    const authError = authErrorType(session.authError);
     serverLog[LOG_LEVEL[session.outcome]]("proxy.request", {
       ...fields,
       "plant.outcome": session.outcome,
       "plant.auth.duration_ms": session.authDurationMs,
       "enduser.id": session.userId,
-      "error.type": authErrorType(session.authError),
+      ...(session.outcome === "auth_unavailable"
+        ? { "error.type": authError }
+        : { "plant.auth.reason": authError }),
     });
     return session.response;
   } catch (error) {
@@ -82,7 +87,7 @@ const LOG_LEVEL = {
   anonymous: "info",
   redirect_login: "info",
   auth_unavailable: "warn",
-} as const satisfies Record<SessionOutcome, "info" | "warn" | "error">;
+} as const satisfies Record<SessionOutcome, LogLevel>;
 
 type SessionResult = {
   response: NextResponse;

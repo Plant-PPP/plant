@@ -11,8 +11,8 @@ import { GET } from "./route";
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 const USER_ID = "a0000000-0000-4000-8000-00000000000a";
 
-function callback(query: string, next?: string) {
-  const headers: Record<string, string> = { "x-request-id": REQUEST_ID };
+function callback(query: string, next?: string, requestId = REQUEST_ID) {
+  const headers: Record<string, string> = { "x-request-id": requestId };
   if (next !== undefined)
     headers.cookie = `plant-auth-next=${encodeURIComponent(next)}`;
   return GET(
@@ -98,7 +98,7 @@ describe("the callback line", () => {
       "a refusal on Google",
       "?error=access_denied",
       "info",
-      { "plant.outcome": "oauth_error", "error.type": "access_denied" },
+      { "plant.outcome": "oauth_error", "plant.auth.reason": "access_denied" },
     ],
     [
       "another OAuth error",
@@ -131,6 +131,11 @@ describe("the callback line", () => {
       "plant.request_id": REQUEST_ID,
       ...fields,
     });
+  });
+
+  it("drops a request id that is not a UUID", async () => {
+    await callback("", "/assets", "not-a-uuid");
+    expect(JSON.parse(logged().line)).not.toHaveProperty("plant.request_id");
   });
 
   it("records a failed exchange with Auth's code, never the code itself", async () => {

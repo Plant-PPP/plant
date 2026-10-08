@@ -448,8 +448,9 @@ describe("the request line", () => {
     await proxy(request("/assets"));
     expect(logged().line).toMatchObject({
       "plant.outcome": "redirect_login",
-      "error.type": "invalid_jwt",
+      "plant.auth.reason": "invalid_jwt",
     });
+    expect(logged().line).not.toHaveProperty("error.type");
   });
 
   it("warns with Auth's code when Auth is unavailable", async () => {

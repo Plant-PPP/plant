@@ -13,7 +13,7 @@ import {
 export type LogValue = string | number | boolean | null | undefined;
 export type LogFields = Readonly<Record<string, LogValue>>;
 
-type Level = "info" | "warn" | "error";
+export type LogLevel = "info" | "warn" | "error";
 
 const FIELD_LIMITS = { read: 4096, keep: 512 };
 const STACK_LIMITS = { read: 8192, keep: 4096 };
@@ -65,7 +65,7 @@ function traceFields(): Record<string, LogValue> {
 }
 
 function write(
-  level: Level,
+  level: LogLevel,
   event: string,
   fields: LogFields | undefined,
   extra: Record<string, LogValue> = {},

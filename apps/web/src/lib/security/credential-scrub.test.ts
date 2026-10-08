@@ -42,6 +42,26 @@ describe("scrubSensitiveText", () => {
     );
   });
 
+  it.each([
+    [
+      "a token in JSON",
+      '{"access_token":"abc","refresh_token": "def"}',
+      `{"access_token":"${MASK}","refresh_token": "${MASK}"}`,
+    ],
+    ["a token after a colon", "access_token: abc", `access_token: ${MASK}`],
+    ["a password param", "/x?a=1&password=hunter2", `/x?a=1&password=${MASK}`],
+    ["an API key param", "/x?apikey=abc", `/x?apikey=${MASK}`],
+    ["a bearer header", "Bearer abc.def", `Bearer ${MASK}`],
+    [
+      "a bare JWT",
+      "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc expired",
+      `jwt ${MASK} expired`,
+    ],
+    ["a Supabase secret key", "key sb_secret_abc123", `key ${MASK}`],
+  ])("masks %s", (_label, text, expected) => {
+    expect(scrubSensitiveText(text)).toBe(expected);
+  });
+
   it("leaves params that are not secrets", () => {
     const url =
       "/auth/callback?next=/assets&error=access_denied&error_code=otp_expired";
@@ -53,6 +73,7 @@ describe("scrubSensitiveText", () => {
       "/login?next=%2Fx%3Fcode%3Dabc%26email%3Djohn%40x.com",
       "/auth/callback?code=abc&token_hash=def",
       "CUIT 20-12345678-9, DNI 12.345.678, ana@example.com",
+      '{"access_token":"abc"} Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc',
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -74,6 +95,23 @@ describe("scrubSensitiveText", () => {
       `email%253D${MASK}`,
     ],
     ["an email with an encoded plus", "ana%2Bx%40example.com", MASK],
+    ["an email with a lowercase encoded plus", "ana%2bx@example.com", MASK],
+    ["an email with accents", "from muñoz.josé@example.com", `from ${MASK}`],
+    ["an email with an encoded accent", "/Jos%C3%A9@example.com", `/${MASK}`],
+    ["an email with an apostrophe", "o'brien@example.com", MASK],
+    ["an email glued to a word", "ana@example.com_x", `${MASK}_x`],
+    [
+      "a CUIT in a file name",
+      "Resumen_20123456789_202409.pdf",
+      `Resumen_${MASK}_202409.pdf`,
+    ],
+    [
+      "a CBU in a file name",
+      "extracto_0170099220000067797370.pdf",
+      `extracto_${MASK}.pdf`,
+    ],
+    ["a DNI in a file name", "dni_12345678.jpg", `dni_${MASK}.jpg`],
+    ["a CUIT glued to a word", "CUIT20123456789", `CUIT${MASK}`],
   ])("masks %s", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -83,6 +121,12 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(`/x/${UUID}/y`)).toBe(`/x/${UUID}/y`);
     expect(scrubSensitiveText("12345678-1234-4234-8234-123456789012")).toBe(
       "12345678-1234-4234-8234-123456789012",
+    );
+  });
+
+  it("masks a UUID used as an email's local part", () => {
+    expect(scrubSensitiveText(`${UUID}@example.com`)).not.toMatch(
+      /example|dddd/,
     );
   });
 
@@ -107,6 +151,13 @@ describe("scrubSensitiveText", () => {
     ["dotted letters", "a.".repeat(8000)],
     ["digits before an at sign", "1".repeat(16000) + "@"],
     ["a long secret", "?code=" + "a".repeat(16000)],
+    [
+      "long local parts and domains",
+      ("/" + "a".repeat(64) + "@" + ("b".repeat(63) + ".").repeat(9) + "1")
+        .repeat(7)
+        .slice(0, 4096),
+    ],
+    ["a long JWT prefix", "eyJ" + "a".repeat(16000)],
   ])("stays fast on %s", (_label, text) => {
     scrubSensitiveText(text);
     const runs = [0, 1, 2].map(() => {
@@ -130,12 +181,19 @@ describe("isSensitiveKey", () => {
     "x-api-key",
     "user.email",
     "plant.token_count_x",
+    "amounts",
+    "privateKey",
+    "service_role_key",
+    "plant.auth.jwt",
+    "user.phone",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
 
   it.each([
     "plant.holdings.count",
+    "plant.holding.id",
+    "plant.debt.id",
     "gen_ai.usage.input_tokens",
     "plant.price.duration_ms",
     "plant.auth.duration_ms",

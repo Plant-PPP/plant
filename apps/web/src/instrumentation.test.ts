@@ -97,9 +97,18 @@ describe("onRequestError", () => {
     expect(JSON.stringify(line)).not.toContain("s3cr3t");
   });
 
-  it("drops a request id that is not one the proxy minted", async () => {
+  it("drops a request id that is not a UUID", async () => {
     await onRequestError(new Error("x"), request("attacker\nvalue"), context);
     expect(lineOf(error)).not.toHaveProperty("plant.request_id");
+  });
+
+  it("skips the proxy, which logs its own errors", async () => {
+    await onRequestError(new Error("x"), request(REQUEST_ID), {
+      ...context,
+      routeType: "proxy",
+    });
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("warns on an Auth outage, without a stack", async () => {

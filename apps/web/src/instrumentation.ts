@@ -3,9 +3,9 @@ import type { Instrumentation } from "next";
 import { isAuthUnavailable } from "@/lib/auth/session-state";
 import { serverLog } from "@/lib/log/server-log";
 import {
-  isRequestId,
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
+  requestIdFrom,
 } from "@/lib/request-id";
 
 // Traces go to the OTLP endpoint in OTEL_EXPORTER_OTLP_* (Dash0 from PLA-73).
@@ -30,16 +30,16 @@ export async function register() {
 }
 
 // Uncaught errors in pages, route handlers and server actions. The proxy logs
-// its own. Next still prints its own line too.
+// its own, so a proxy error that reaches here is skipped. Next still prints
+// its own line too.
 export const onRequestError: Instrumentation.onRequestError = (
   error,
   request,
   context,
 ) => {
-  const requestId = request.headers[REQUEST_ID_HEADER];
+  if (context.routeType === "proxy") return;
   const fields = {
-    // Outside the proxy's matcher the header is whatever the client sent.
-    [REQUEST_ID_FIELD]: isRequestId(requestId) ? requestId : undefined,
+    [REQUEST_ID_FIELD]: requestIdFrom(request.headers[REQUEST_ID_HEADER]),
     "http.request.method": request.method,
     "http.route": context.routePath,
     "plant.route_type": context.routeType,

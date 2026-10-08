@@ -2,8 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { loginErrorPath } from "@/lib/auth/login-errors";
 import { afterLoginPath, NEXT_COOKIE } from "@/lib/auth/routes";
 import { authErrorType } from "@/lib/auth/session-state";
-import { type LogFields, serverLog } from "@/lib/log/server-log";
-import { REQUEST_ID_FIELD, REQUEST_ID_HEADER } from "@/lib/request-id";
+import { type LogFields, type LogLevel, serverLog } from "@/lib/log/server-log";
+import {
+  REQUEST_ID_FIELD,
+  REQUEST_ID_HEADER,
+  requestIdFrom,
+} from "@/lib/request-id";
 import { createClient } from "@/lib/supabase/server";
 
 // Auth's error codes are snake_case; anything else in the param is not one.
@@ -16,9 +20,13 @@ export async function GET(request: NextRequest) {
   const next = afterLoginPath(request.cookies.get(NEXT_COOKIE.name)?.value);
   const code = searchParams.get("code");
   const errorCode = searchParams.get("error_code");
-  const log = (level: "info" | "warn", outcome: string, fields?: LogFields) =>
+  const log = (
+    level: Exclude<LogLevel, "error">,
+    outcome: string,
+    fields?: LogFields,
+  ) =>
     serverLog[level]("auth.callback", {
-      [REQUEST_ID_FIELD]: request.headers.get(REQUEST_ID_HEADER) ?? undefined,
+      [REQUEST_ID_FIELD]: requestIdFrom(request.headers.get(REQUEST_ID_HEADER)),
       "plant.outcome": outcome,
       ...fields,
     });
@@ -32,7 +40,9 @@ export async function GET(request: NextRequest) {
     // access_denied is the user saying no on Google's screen, not a fault.
     const denied = searchParams.get("error") === "access_denied";
     log(denied ? "info" : "warn", "oauth_error", {
-      "error.type": denied ? "access_denied" : "other",
+      ...(denied
+        ? { "plant.auth.reason": "access_denied" }
+        : { "error.type": "other" }),
       "plant.auth.error_code":
         errorCode === null
           ? undefined

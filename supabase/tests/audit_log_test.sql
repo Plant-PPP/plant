@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(7);
+SELECT plan(8);
 
 INSERT INTO private.audit_log (user_id, action, outcome, request_id)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'auth.session.created', 'success', 'req-1');
@@ -53,6 +53,11 @@ SELECT throws_ok(
 );
 
 RESET ROLE;
+
+SELECT ok(
+  NOT has_any_column_privilege('service_role', 'private.audit_log', 'SELECT, INSERT, UPDATE'),
+  'service_role has no privilege on the audit log until a server-side writer needs one'
+);
 
 SELECT is(
   (SELECT outcome FROM private.audit_log WHERE request_id = 'req-1'),
