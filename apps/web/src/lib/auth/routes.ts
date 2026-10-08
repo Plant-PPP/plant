@@ -2,7 +2,7 @@ import { sanitizeNextPath } from "./safe-redirect";
 
 export const LOGIN_PATH = "/login";
 export const CALLBACK_PATH = "/auth/callback";
-const PUBLIC_PATHS = [LOGIN_PATH, "/auth"];
+const PUBLIC_PATHS = [LOGIN_PATH, CALLBACK_PATH];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

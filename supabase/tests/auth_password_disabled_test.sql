@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(4);
+SELECT plan(5);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -27,7 +27,7 @@ WHERE id = 'a0000000-0000-4000-8000-00000000000a';
 SELECT is(
   (SELECT encrypted_password FROM auth.users WHERE id = 'a0000000-0000-4000-8000-00000000000a'),
   NULL::varchar,
-  'confirming the address does not keep a password'
+  'setting a password while confirming the address keeps none'
 );
 
 UPDATE auth.users SET encrypted_password = 'planted'
@@ -39,8 +39,24 @@ SELECT is(
   'a confirmed user cannot set a password'
 );
 
--- An UPDATE of email_confirmed_at alone carries no password to clear, so only
--- the definition shows that arm is there.
+-- A data-only restore inserts with triggers off.
+SET LOCAL session_replication_role = replica;
+INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
+                        email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+                        created_at, updated_at)
+VALUES ('c0000000-0000-4000-8000-00000000000c', '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated', 'cora@pgtap.invalid', 'planted', NULL, '{}', '{}', now(), now());
+SET LOCAL session_replication_role = origin;
+
+UPDATE auth.users SET email_confirmed_at = now()
+WHERE id = 'c0000000-0000-4000-8000-00000000000c';
+
+SELECT is(
+  (SELECT encrypted_password FROM auth.users WHERE id = 'c0000000-0000-4000-8000-00000000000c'),
+  NULL::varchar,
+  'confirming the address clears a password the row already held'
+);
+
 SELECT is(
   (SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t
    WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'clear_password' AND t.tgenabled = 'O'),

@@ -19,8 +19,8 @@ $$;
 
 REVOKE ALL ON FUNCTION private.clear_password() FROM PUBLIC, anon, authenticated;
 
--- email_confirmed_at too: whatever password an unconfirmed row holds goes when
--- its owner confirms the address.
+-- email_confirmed_at too: a row written while triggers were off (a data-only
+-- restore skips them) loses its password when its owner confirms the address.
 CREATE TRIGGER clear_password
   BEFORE INSERT OR UPDATE OF encrypted_password, email_confirmed_at ON auth.users
   FOR EACH ROW EXECUTE FUNCTION private.clear_password();
