@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { loginErrorPath } from "@/lib/auth/login-errors";
 import { afterLoginPath, NEXT_COOKIE } from "@/lib/auth/routes";
-import { authErrorType } from "@/lib/auth/session-state";
-import { type LogFields, type LogLevel, serverLog } from "@/lib/log/server-log";
+import {
+  errorType,
+  type LogFields,
+  type LogLevel,
+  serverLog,
+} from "@/lib/log/server-log";
 import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest) {
     log(denied ? "info" : "warn", "oauth_error", {
       ...(denied
         ? { "plant.auth.reason": "access_denied" }
-        : { "error.type": "other" }),
+        : { "error.type": "_OTHER" }),
       "plant.auth.error_code":
         errorCode === null
           ? undefined
@@ -58,7 +62,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       target = loginErrorPath("callback");
-      log("warn", "exchange_failed", { "error.type": authErrorType(error) });
+      log("warn", "exchange_failed", { "error.type": errorType(error) });
     } else {
       target = next;
       log("info", "signed_in", { "enduser.id": data.user.id });

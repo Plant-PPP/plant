@@ -7,12 +7,16 @@ import {
 } from "@/lib/auth/routes";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import {
-  authErrorType,
   isSessionMissing,
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
 import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
-import { type LogFields, type LogLevel, serverLog } from "@/lib/log/server-log";
+import {
+  errorType,
+  type LogFields,
+  type LogLevel,
+  serverLog,
+} from "@/lib/log/server-log";
 import {
   createRequestId,
   REQUEST_ID_FIELD,
@@ -97,7 +101,7 @@ type SessionResult = {
 // broken session is the proxy doing its job, and its code is the reason.
 function authFields({ outcome, authError }: SessionResult): LogFields {
   if (outcome === "no_auth_config") return { "error.type": outcome };
-  const code = authErrorType(authError);
+  const code = errorType(authError);
   return outcome === "auth_unavailable"
     ? { "error.type": code }
     : { "plant.auth.reason": code };

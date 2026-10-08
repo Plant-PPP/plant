@@ -42,13 +42,23 @@ function cleanFields(fields: LogFields | undefined): Record<string, LogValue> {
   return out;
 }
 
+// An error's code when it has one (Auth's, Node's), else its class, so one
+// failure reads the same on every line.
+export function errorType(
+  error: { name?: unknown; code?: unknown } | null | undefined,
+): string | undefined {
+  const { code, name } = error ?? {};
+  if (typeof code === "string" && code) return code;
+  return typeof name === "string" && name ? name : undefined;
+}
+
 function exceptionFields(error: unknown): Record<string, LogValue> {
   if (!(error instanceof Error)) {
     return { "error.type": typeof error, "exception.type": typeof error };
   }
   const type = clean(error.name, FIELD_LIMITS);
   return {
-    "error.type": type,
+    "error.type": clean(errorType(error) ?? error.name, FIELD_LIMITS),
     "exception.type": type,
     "exception.message": clean(error.message, FIELD_LIMITS),
     "exception.stacktrace": error.stack

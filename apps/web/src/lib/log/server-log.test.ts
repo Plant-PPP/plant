@@ -2,7 +2,7 @@ import { trace, type Span } from "@opentelemetry/api";
 
 import { MASK } from "@/lib/security/credential-scrub";
 
-import { serverLog } from "./server-log";
+import { errorType, serverLog } from "./server-log";
 
 const UUID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 
@@ -121,6 +121,47 @@ it("logs an Error's type, message and stack, scrubbed", () => {
   });
   expect(line["exception.stacktrace"]).toContain("server-log.test.ts");
   expect(line["exception.stacktrace"]).not.toContain("ana@example.com");
+});
+
+it("logs an error's code as its type, and its class as the exception's", () => {
+  const thrown = Object.assign(new Error("rate limited"), {
+    name: "AuthApiError",
+    code: "over_request_rate_limit",
+  });
+  serverLog.error("x", {}, thrown);
+  expect(lineOf(error)).toMatchObject({
+    "error.type": "over_request_rate_limit",
+    "exception.type": "AuthApiError",
+  });
+});
+
+describe("errorType", () => {
+  it.each([
+    [
+      "the code",
+      { name: "AuthApiError", code: "over_request_rate_limit" },
+      "over_request_rate_limit",
+    ],
+    [
+      "the class without a code",
+      { name: "AuthRetryableFetchError" },
+      "AuthRetryableFetchError",
+    ],
+    [
+      "the class when the code is not a string",
+      { name: "DatabaseError", code: 23505 },
+      "DatabaseError",
+    ],
+    [
+      "the class when the code is empty",
+      { name: "TypeError", code: "" },
+      "TypeError",
+    ],
+    ["nothing without an error", null, undefined],
+    ["nothing for no result", undefined, undefined],
+  ])("returns %s", (_label, value, type) => {
+    expect(errorType(value)).toBe(type);
+  });
 });
 
 it("cuts a long stack", () => {

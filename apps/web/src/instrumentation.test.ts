@@ -76,7 +76,7 @@ describe("onRequestError", () => {
 
   function request(requestId?: string) {
     return {
-      path: "/assets/1?code=s3cr3t",
+      path: "/assets/1?q=s3cr3t",
       method: "GET",
       headers: requestId === undefined ? {} : { "x-request-id": requestId },
     };
@@ -124,6 +124,15 @@ describe("onRequestError", () => {
     });
     expect(error).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("warns on an Auth outage thrown from another bundle's class", async () => {
+    const foreign = Object.assign(new Error("Auth unavailable"), {
+      name: "AuthUnavailableError",
+    });
+    await onRequestError(foreign, request(REQUEST_ID), context);
+    expect(error).not.toHaveBeenCalled();
+    expect(lineOf(warn)).toMatchObject({ "plant.outcome": "auth_unavailable" });
   });
 
   it("warns on an Auth outage, without a stack", async () => {

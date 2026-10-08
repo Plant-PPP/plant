@@ -106,7 +106,7 @@ describe("the callback line", () => {
       "warn",
       {
         "plant.outcome": "oauth_error",
-        "error.type": "other",
+        "error.type": "_OTHER",
         "plant.auth.error_code": "unexpected_failure",
       },
     ],
@@ -116,7 +116,7 @@ describe("the callback line", () => {
       "warn",
       {
         "plant.outcome": "oauth_error",
-        "error.type": "other",
+        "error.type": "_OTHER",
         "plant.auth.error_code": "other",
       },
     ],
