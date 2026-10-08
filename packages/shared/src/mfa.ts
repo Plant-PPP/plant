@@ -6,8 +6,10 @@ export const MFA_ENROLLED_CLAIM = "mfa_enrolled";
 // writes otp for any POST /verify (an email code, but also an SMS or
 // phone-change code), magiclink for a link to a known user, email/signup for a
 // new user's first link and oauth for any external provider. So they prove the
-// mailbox only while phone sign-in, phone change and every provider but Google
-// stay off; the Auth settings tests pin that against supabase/config.toml.
+// mailbox only while phone sign-in, SMS codes and every provider but Google
+// stay off: apps/web/src/lib/auth/otp-config.test.ts pins that in
+// supabase/config.toml, and security-tests/src/auth.pentest.test.ts against the
+// running Auth.
 export const FIRST_FACTOR_METHODS = [
   "otp",
   "magiclink",

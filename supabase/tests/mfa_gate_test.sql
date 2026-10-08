@@ -1,8 +1,9 @@
 -- The MFA rule over its truth table: a user with a verified factor needs an
 -- aal2 session. A token's mfa_enrolled claim says whether the user has one,
 -- and a token without the claim counts as enrolled. Here the access token hook
--- adds the claim and demotes the role on each row; the TS rule in apps/web
--- reads the same rows.
+-- adds the claim and demotes the role on each row that carries it; the hook
+-- always adds the claim, so the rows without it describe tokens minted before
+-- the hook was on.
 --
 -- Run with: pnpm exec supabase test db --local
 

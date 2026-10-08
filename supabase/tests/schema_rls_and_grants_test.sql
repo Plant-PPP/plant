@@ -32,10 +32,10 @@
 -- - authenticated writes public tables only through column grants, none on
 --   user_id.
 -- - authenticated_aal1, the role the access token hook gives an enrolled
---   user's aal1 token, holds no privilege in public or private, is a member of
---   no role, and only authenticator can switch to it. Only supabase_auth_admin
---   can execute the hook, which runs as the caller with an empty search_path.
---   Canaries prove each of these asserts can fail.
+--   user's aal1 token, uses no schema but public and holds no privilege there,
+--   is a member of no role, and only authenticator can switch to it. Only
+--   supabase_auth_admin can execute the hook, which runs as the caller with an
+--   empty search_path. Canaries prove each is_empty assert can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them; RLS and the revokes still apply. It covers public and private:
@@ -404,13 +404,21 @@ SELECT is_empty(
 
 -- has_*_privilege counts grants to PUBLIC and through inherited roles, so
 -- these see everything authenticated_aal1 could use. PUBLIC keeps USAGE on the
--- public schema, which reaches nothing by itself.
+-- public schema, which reaches nothing by itself; a schema without USAGE hides
+-- whatever PUBLIC may execute in it.
 CREATE TEMP TABLE aal1_floor (name text PRIMARY KEY, canaries int NOT NULL, query text NOT NULL)
   ON COMMIT DROP;
 INSERT INTO aal1_floor VALUES
-('authenticated_aal1 holds no privilege on any relation, column, function or the private schema', 4,
- $$ SELECT c.oid::regclass::text FROM pg_class c
-    WHERE c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)
+('authenticated_aal1 uses no schema but public and holds no privilege on any relation, column or function there', 8,
+ $$ SELECT 'schema ' || n.nspname FROM pg_namespace n
+    WHERE n.nspname NOT IN ('public', 'pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_(toast_)?temp_'
+      AND has_schema_privilege('authenticated_aal1', n.oid, 'USAGE')
+    UNION ALL
+    SELECT c.oid::regclass::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+      AND n.nspname !~ '^pg_(toast_)?temp_'
+      AND has_schema_privilege('authenticated_aal1', n.oid, 'USAGE')
       AND CASE WHEN c.relkind = 'S'
                THEN has_sequence_privilege('authenticated_aal1', c.oid, 'USAGE, SELECT, UPDATE')
                WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f')
@@ -418,11 +426,11 @@ INSERT INTO aal1_floor VALUES
                     OR has_table_privilege('authenticated_aal1', c.oid, 'DELETE, TRUNCATE, TRIGGER, MAINTAIN')
           END
     UNION ALL
-    SELECT p.oid::regprocedure::text FROM pg_proc p
-    WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
-      AND has_function_privilege('authenticated_aal1', p.oid, 'EXECUTE')
-    UNION ALL
-    SELECT 'schema private' WHERE has_schema_privilege('authenticated_aal1', 'private', 'USAGE') $$),
+    SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_(toast_)?temp_'
+      AND has_schema_privilege('authenticated_aal1', n.oid, 'USAGE')
+      AND has_function_privilege('authenticated_aal1', p.oid, 'EXECUTE') $$),
 -- Creating a role gives its creator a membership with ADMIN only, which
 -- neither inherits nor switches.
 ('authenticated_aal1 is a member of no role, and only authenticator can switch to it', 2,
@@ -475,6 +483,9 @@ GRANT SELECT ON public.profiles TO authenticated_aal1;
 GRANT SELECT (kind) ON public.consents TO authenticated_aal1;
 GRANT EXECUTE ON FUNCTION private.set_updated_at() TO authenticated_aal1;
 GRANT USAGE ON SCHEMA private TO authenticated_aal1;
+GRANT USAGE ON SEQUENCE private.audit_log_id_seq TO authenticated_aal1;
+GRANT TRUNCATE ON private.audit_log TO authenticated_aal1;
+GRANT USAGE ON SCHEMA graphql_public TO authenticated_aal1;
 CREATE ROLE pgtap_canary NOLOGIN;
 GRANT pgtap_canary TO authenticated_aal1;
 GRANT authenticated_aal1 TO anon;

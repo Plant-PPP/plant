@@ -26,7 +26,6 @@ function value(tableName: string, key: string): string {
   return (matches[0]?.[1] ?? "").trim();
 }
 
-// The names of the [tables] under a prefix, as [prefix.name] headers.
 function tablesUnder(prefix: string): string[] {
   return [...config.matchAll(/^\[([^\]]+)\]$/gm)]
     .map((m) => m[1] ?? "")
@@ -75,10 +74,8 @@ describe("the sign-in mail", () => {
   });
 });
 
-// otp in an access token's amr means any POST /verify, so FIRST_FACTOR_METHODS
-// (@plant/shared) proves the mailbox only while these hold. Turning one on
-// means revisiting that list and apps/web's sensitive-action rule. The hosted
-// project keeps its own copy of each setting in the dashboard.
+// Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts). The
+// hosted project keeps its own copy of each setting in the dashboard.
 describe("the Auth settings the MFA rules rely on", () => {
   it("offers TOTP as the only MFA factor", () => {
     expect(value("auth.mfa.phone", "enroll_enabled")).toBe("false");

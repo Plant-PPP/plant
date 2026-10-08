@@ -30,8 +30,9 @@ async function waitForRest(stack: LocalStack): Promise<void> {
 }
 
 // Two users for every spec, created once per run: Auth rate-limits sign-ins
-// (auth.rate_limit in supabase/config.toml). The service role key stays here,
-// so the auth spec's admin steps run here too.
+// and code verifications (auth.rate_limit in supabase/config.toml), so a few
+// back-to-back local runs can hit HTTP 429. The service role key stays here, so
+// the auth and MFA specs' admin steps run here too.
 export default async function globalSetup(): Promise<void> {
   const stack = readLocalStack();
   await waitForRest(stack);
