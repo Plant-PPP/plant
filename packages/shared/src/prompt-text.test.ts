@@ -11,6 +11,7 @@ describe("stripPromptLineBreaks", () => {
     ["line separator (U+2028)", "a\u2028b"],
     ["paragraph separator (U+2029)", "a\u2029b"],
     ["file separator (U+001C)", "a\u001Cb"],
+    ["group separator (U+001D)", "a\u001Db"],
     ["record separator (U+001E)", "a\u001Eb"],
   ])("turns %s into one space", (_label, value) => {
     expect(stripPromptLineBreaks(value)).toBe("a b");
@@ -57,8 +58,23 @@ describe("neutralizePromptText", () => {
     expect(neutralizePromptText("")).toBe("");
   });
 
-  it("is idempotent", () => {
-    const once = neutralizePromptText("a\r\n<b>\u2028c ");
-    expect(neutralizePromptText(once)).toBe(once);
+  it("cannot rebuild a tag character from lone surrogates", () => {
+    expect(neutralizePromptText("fin\uDB40<\uDC3C/document\uDB40>\uDC3E")).toBe(
+      "fin/document",
+    );
+    expect(neutralizePromptText("\uDB40\uFF1C\uDC41")).toBe("");
+  });
+
+  it("leaves nothing to neutralize on a second pass", () => {
+    const symbols = ["<", "\uDB40", "\uDC3C", "\n", "a"];
+    let inputs = [""];
+    for (let length = 0; length < 4; length++) {
+      inputs = inputs.flatMap((prefix) => symbols.map((s) => prefix + s));
+      for (const input of inputs) {
+        const once = neutralizePromptText(input);
+        expect(neutralizePromptText(once)).toBe(once);
+        expect(once).not.toMatch(/[<>\n\u{E0000}-\u{E007F}]/u);
+      }
+    }
   });
 });
