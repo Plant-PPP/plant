@@ -28,6 +28,7 @@ pnpm dev:up                         # local Supabase + web on :3000 + Inngest de
 | `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                              |
 | `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                           |
 | `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                                      |
+| `security-tests/`  | Pentest specs over HTTP: `anon`, another user and the owner on every `public` table and view; a new one fails typecheck without a spec                         |
 
 Packages export their TypeScript sources and `apps/web` compiles them with `transpilePackages`, so they don't need a build before starting the web app. Which package may depend on which is checked by `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) over the `package.json` files, and `inngest` is declared only in `packages/jobs` and `apps/web`. The check includes the root `package.json`, because every package sees its `node_modules`; don't import another package through relative paths (`../../jobs/src`).
 
@@ -37,11 +38,12 @@ Packages export their TypeScript sources and `apps/web` compiles them with `tran
 pnpm check          # typecheck + lint of every package
 pnpm test           # package tests
 pnpm test:scripts   # scripts/ tests (squawk and migration checks)
+pnpm test:security  # pentest specs against local PostgREST (needs `supabase start`)
 pnpm turbo:affected # only what changed against origin/staging
 pnpm format         # prettier over what changed
 ```
 
-Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types and pgTAP).
+Husky (`.husky/`, logic in `scripts/hooks/`) runs prettier and the forbidden-words check on pre-commit, the same check on the message in `commit-msg`, and on pre-push the check over the commits, authors and name of every branch you push, plus typecheck, lint and tests of what is affected. CI repeats all of that, plus `pnpm audit`, the package boundaries and the `database` job (on PRs, append-only migrations; on PRs and pushes, the new migrations' name, version, transaction and squawk, script tests, up-to-date types, pgTAP and the pentest specs).
 
 ## Language
 

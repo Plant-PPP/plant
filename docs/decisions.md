@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
+
+- **Raw `fetch`, no Supabase client.** The specs assert PostgREST's exact status and code (401 vs 403, `42501`, `PGRST205`), which the client hides behind `{ data, error }`.
+- **Real Auth users, two per run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
+- **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
+- **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway, so a red spec also holds `deploy-migrations`. `audit_log` has no positive case until it has a writer (PLA-21).
+- **Tables and views must have a spec; functions don't yet.** The pgTAP floor forbids executable functions in `public`, so the first RPC adds its own spec and widens the map in `security-tests/src/pentest-specs.ts`.
+
 ## 2026-10-07 · App layout, themes and brand (PLA-20)
 
 - **The shell, not the features around it.** The user menu arrives with login (PLA-17), the assistant's side panel with the assistant (PLA-47), forms in a Sheet with the first form (PLA-24), and a settings group in the sidebar with the first settings page.

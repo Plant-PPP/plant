@@ -111,7 +111,7 @@ passing tests do not prove the app runs: a missing env var, an RLS policy or `GR
 real user, an Inngest function that never registers, or build-time vs runtime config all sail
 straight through a green unit suite. Tests-only is insufficient.
 1. Run the project's REAL test/lint/build commands COLD (`pnpm turbo` tasks; pgTAP via
-   `supabase test db` when `supabase/` changed). Fix any failure before proceeding.
+   `supabase test db` and `pnpm test:security` when `supabase/` changed). Fix any failure before proceeding.
 2. Unless the diff touches ONLY tests, docs, or other non-runtime code, run the **prove-it-runs
    gate**: drive the affected flow end to end yourself and OBSERVE real behavior — cold start of
    `apps/web` against the local Supabase stack (plus the Inngest dev server when `packages/jobs`

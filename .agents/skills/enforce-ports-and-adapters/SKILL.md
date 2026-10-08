@@ -176,6 +176,7 @@ domain:     sources (@plant/sources) → shared
 orchestr.:  jobs    (@plant/jobs)    → { sources, core, shared }
 app:        apps/web                 → { jobs, core, sources, shared }   (composition root)
 off-spine:  evals                    → may import packages; NOTHING imports evals
+            security-tests           → shared; NOTHING imports it
 ```
 
 - **`shared` is the leaf and is deliberately infra-free** — pure types and pure functions
@@ -197,6 +198,8 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   ports; they never name Inngest or `file_upload`.
 - **`evals` is a leaf consumer** (in-degree 0). It may drive `sources`/`core` through their ports; a
   package depending on `evals` is a defect — it would pull eval fixtures into a shipped package.
+- **`security-tests` is a leaf consumer** too: it reads `shared`'s generated types and talks to
+  PostgREST and Auth over HTTP. A package depending on it is a defect.
 - **No cycles, ever.** An external SDK in a package (e.g. `inngest` in `jobs`) is an external dep, not
   an internal edge — do not draw it.
 
@@ -210,6 +213,7 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 | `jobs` | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state | step logic itself (it lives in `sources`/`core`); UI knowledge |
 | `apps/web` | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools | domain logic that belongs in `core`; branching on a concrete source or engine |
 | `evals` | extraction and assistant evals | being imported by anything |
+| `security-tests` | pentest specs against local PostgREST, their Auth fixtures | being imported by anything |
 
 ### The live hexagons
 
@@ -271,7 +275,7 @@ entry in the script's `allowed` map, or the check fails with "unknown package".
 - "Defect — wrong placement; contract/adapter/wiring does not sit where the sibling hexagon puts it."
 - "Defect — infra-bearing adapter placed in an infra-free package; move to the composition root and inject."
 - "Defect — import points up/sideways in the repo DAG; a package may import only packages below it."
-- "Defect — a package depends on `evals`; evals is a leaf consumer (nothing imports it)."
+- "Defect — a package depends on `evals` or `security-tests`; both are leaf consumers (nothing imports them)."
 - "Defect — engine import (`inngest`) in a step or outside `packages/jobs` and the composition root; steps stay pure."
 - "Defect — the port imports an adapter or something external; the port must know nothing."
 - "Defect — consumer checks which source it holds instead of the port's capability matrix."

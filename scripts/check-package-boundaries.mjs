@@ -1,9 +1,10 @@
 // Checks the dependencies each workspace manifest declares against the
 // package graph: shared is a leaf; sources and core see only shared; jobs
 // sees shared, sources and core; only jobs and the web app (the composition
-// root) may depend on the Inngest SDK; nothing depends on evals. pnpm only
-// links declared dependencies, but Node and TypeScript also resolve the root
-// node_modules from every package, so the root manifest is checked too.
+// root) may depend on the Inngest SDK; nothing depends on evals or the
+// security tests. pnpm only links declared dependencies, but Node and
+// TypeScript also resolve the root node_modules from every package, so the
+// root manifest is checked too.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 const allowed = {
@@ -18,6 +19,7 @@ const allowed = {
     "@plant/jobs",
   ],
   "@plant/evals": ["@plant/shared", "@plant/sources", "@plant/core"],
+  "@plant/security-tests": ["@plant/shared"],
   plant: [],
 };
 const engineAllowed = new Set(["@plant/jobs", "@plant/web"]);

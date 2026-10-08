@@ -24,7 +24,8 @@
     "db:generate:supabase-types": "bash ./scripts/generate-supabase-types.sh",
     "prepare": "node .husky/install.mjs",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
-    "test:scripts": "node --test scripts/*.test.mjs"
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "test:security": "pnpm --filter @plant/security-tests test:security"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
