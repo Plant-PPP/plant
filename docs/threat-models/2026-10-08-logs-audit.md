@@ -45,7 +45,7 @@ The request path and query, every request header (including a client's own `x-re
 
 ## Residual risk
 
-- **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs, an `auth.callback` `exchange_failed` line for Google and the mail link, and for the email code only a 500 from `/verify` in the browser, which Plant does not see until client error reporting (PLA-88). Accepted so a failing insert cannot leave a session unaudited.
+- **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs, `auth.callback` `exchange_failed` lines with a 5xx `plant.auth.status` for Google and the mail link (a warning, since a malformed code also gets a 500), and for the email code only a 500 from `/verify` in the browser, which Plant does not see until client error reporting (PLA-88). Accepted so a failing insert cannot leave a session unaudited.
 - **A trigger that does not fire fails open.** Writes in `session_replication_role = replica` (a data restore) skip it, and Auth's own role owns `auth.sessions` and could drop or disable it in an upgrade. CI's floor catches a missing trigger against the CLI's Auth image only; nothing checks it on `plant-staging` at runtime.
 - **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read through `to_jsonb`, so dropping it cannot.
 - **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.

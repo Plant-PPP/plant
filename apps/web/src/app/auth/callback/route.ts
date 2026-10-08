@@ -24,7 +24,11 @@ export async function GET(request: NextRequest) {
   const next = afterLoginPath(request.cookies.get(NEXT_COOKIE.name)?.value);
   const code = searchParams.get("code");
   const errorCode = searchParams.get("error_code");
-  const log = (level: LogLevel, outcome: string, fields?: LogFields) =>
+  const log = (
+    level: Exclude<LogLevel, "error">,
+    outcome: string,
+    fields?: LogFields,
+  ) =>
     serverLog[level]("auth.callback", {
       [REQUEST_ID_FIELD]: requestIdFrom(request.headers.get(REQUEST_ID_HEADER)),
       "plant.outcome": outcome,
@@ -62,12 +66,11 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       target = loginErrorPath("callback");
-      // A caller can only make Auth answer 4xx; a 5xx or no answer is Auth
-      // failing every sign-in, as when the audit insert fails.
-      const authFailed =
-        error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500;
-      log(authFailed ? "error" : "warn", "exchange_failed", {
+      // Auth answers a malformed code with a 500 too, so the status, not the
+      // level, tells an outage (5xx, or 0 for no answer) from a bad request.
+      log("warn", "exchange_failed", {
         "error.type": errorType(error),
+        "plant.auth.status": error.status,
       });
     } else {
       target = next;

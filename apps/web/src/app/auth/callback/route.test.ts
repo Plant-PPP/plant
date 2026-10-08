@@ -1,3 +1,8 @@
+import {
+  AuthApiError,
+  AuthPKCECodeVerifierMissingError,
+  AuthRetryableFetchError,
+} from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 const exchangeCodeForSession = jest.fn();
@@ -22,7 +27,6 @@ function callback(query: string, next?: string, requestId = REQUEST_ID) {
 
 let log: jest.SpyInstance;
 let warn: jest.SpyInstance;
-let error: jest.SpyInstance;
 
 beforeEach(() => {
   exchangeCodeForSession.mockReset();
@@ -32,7 +36,6 @@ beforeEach(() => {
   });
   log = jest.spyOn(console, "log").mockImplementation(() => {});
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
-  error = jest.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -41,7 +44,6 @@ function logged(): { level: string; line: string } {
   const calls = [
     ...log.mock.calls.map(([line]) => ({ level: "info", line })),
     ...warn.mock.calls.map(([line]) => ({ level: "warn", line })),
-    ...error.mock.calls.map(([line]) => ({ level: "error", line })),
   ];
   expect(calls).toHaveLength(1);
   return calls[0]!;
@@ -166,48 +168,45 @@ describe("the callback line", () => {
     expect(JSON.parse(logged().line)).not.toHaveProperty("plant.request_id");
   });
 
-  it("records a failed exchange with Auth's code, never the code itself", async () => {
-    exchangeCodeForSession.mockResolvedValue({
-      data: { user: null },
-      error: Object.assign(new Error("PKCE verifier s3cr3t"), {
-        code: "bad_code_verifier",
-      }),
-    });
-    await callback("?code=s3cr3t", "/assets");
-    const { level, line } = logged();
-    expect(level).toBe("warn");
-    expect(JSON.parse(line)).toMatchObject({
-      "plant.outcome": "exchange_failed",
-      "error.type": "bad_code_verifier",
-    });
-    expect(line).not.toContain("s3cr3t");
-  });
-
   it.each([
     [
-      "a 5xx",
-      { status: 500, code: "unexpected_failure" },
-      "unexpected_failure",
+      "a link opened in another browser",
+      new AuthPKCECodeVerifierMissingError(),
+      {
+        "error.type": "pkce_code_verifier_not_found",
+        "plant.auth.status": 400,
+      },
     ],
     [
-      "no answer",
-      { name: "AuthRetryableFetchError", status: 0 },
-      "AuthRetryableFetchError",
+      "a code Auth rejects",
+      new AuthApiError("PKCE verifier s3cr3t", 400, "bad_code_verifier"),
+      { "error.type": "bad_code_verifier", "plant.auth.status": 400 },
+    ],
+    [
+      "Auth failing, as when the audit insert fails",
+      new AuthRetryableFetchError("Internal Server Error", 500),
+      { "error.type": "AuthRetryableFetchError", "plant.auth.status": 500 },
+    ],
+    [
+      "no answer from Auth",
+      new AuthRetryableFetchError("fetch failed", 0),
+      { "error.type": "AuthRetryableFetchError", "plant.auth.status": 0 },
     ],
   ])(
-    "records an exchange that fails on Auth's side with %s as an error",
-    async (_label, fields, type) => {
-      exchangeCodeForSession.mockResolvedValue({
-        data: { user: null },
-        error: Object.assign(new Error("Auth failed"), fields),
-      });
-      await callback("?code=abc", "/assets");
+    "records a failed exchange on %s with Auth's status, never the code",
+    async (_label, error, fields) => {
+      exchangeCodeForSession.mockResolvedValue({ data: { user: null }, error });
+      await callback("?code=s3cr3t", "/assets");
       const { level, line } = logged();
-      expect(level).toBe("error");
-      expect(JSON.parse(line)).toMatchObject({
+      expect(level).toBe("warn");
+      expect(JSON.parse(line)).toEqual({
+        level: "warn",
+        event: "auth.callback",
+        "plant.request_id": REQUEST_ID,
         "plant.outcome": "exchange_failed",
-        "error.type": type,
+        ...fields,
       });
+      expect(line).not.toContain("s3cr3t");
     },
   );
 });
