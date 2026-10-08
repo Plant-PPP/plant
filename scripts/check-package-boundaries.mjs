@@ -82,6 +82,35 @@ const manifests = globs.flatMap((glob) => {
 });
 manifests.push(".");
 
+// The package a spec installs when it is not the dependency's key: an alias
+// ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path ("link:../jobs",
+// "file:vendor/x", "workspace:../jobs") holds its manifest. null when a path,
+// tarball, URL or git spec gives no name to check; undefined for a version.
+function installedName(dir, spec) {
+  const path =
+    /^(?:link|file):(.+)$/.exec(spec)?.[1] ??
+    /^workspace:([./].*)$/.exec(spec)?.[1];
+  if (path !== undefined) {
+    const manifest = new URL(
+      `${path.replace(/\/?$/, "/")}package.json`,
+      new URL(`${dir}/`, root),
+    );
+    return existsSync(manifest)
+      ? (JSON.parse(readFileSync(manifest, "utf8")).name ?? null)
+      : null;
+  }
+  if (
+    /^(?:[a-z+]+:\/\/|git[+:]|github:|gitlab:|bitbucket:|[^@/:]+\/[^/:]+$)/i.test(
+      spec,
+    )
+  ) {
+    return null;
+  }
+  return /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
+    spec,
+  )?.[1];
+}
+
 const violations = [];
 for (const dir of manifests) {
   const {
@@ -97,17 +126,12 @@ for (const dir of manifests) {
     ...peerDependencies,
     ...optionalDependencies,
   }).flatMap(([key, spec]) => {
-    // A spec can install a package other than its key: an alias
-    // ("llm": "npm:ai@6", "workspace:@plant/jobs@*") names it, and a path
-    // ("workspace:../jobs", "link:../jobs", "file:../jobs") holds it.
-    const path = /^(?:workspace|link|file):(\..*)$/.exec(spec)?.[1];
-    const manifest = path && new URL(`${dir}/${path}/package.json`, root);
-    const target =
-      manifest && existsSync(manifest)
-        ? JSON.parse(readFileSync(manifest, "utf8")).name
-        : /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
-            spec,
-          )?.[1];
+    const target = installedName(dir, spec);
+    if (target === null) {
+      violations.push(
+        `${name}: cannot tell which package ${key} (${spec}) installs`,
+      );
+    }
     return target && target !== key
       ? [
           { dep: key, label: key },

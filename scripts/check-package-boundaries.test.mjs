@@ -34,9 +34,9 @@ const PACKAGES = {
 /**
  * Runs the script over a workspace where `deps` maps a package name to the
  * dependencies it declares (a name, or a [name, spec] pair), under `field` in
- * every manifest.
+ * every manifest, plus `files` (path to contents) outside the packages.
  */
-function check(deps, field = "dependencies") {
+function check(deps, field = "dependencies", files = {}) {
   const root = mkdtempSync(join(tmpdir(), "boundaries-"));
   try {
     mkdirSync(join(root, "scripts"));
@@ -56,6 +56,10 @@ function check(deps, field = "dependencies") {
         join(root, dir, "package.json"),
         JSON.stringify({ name, [field]: dependencies }),
       );
+    }
+    for (const [path, contents] of Object.entries(files)) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), contents);
     }
     const r = spawnSync(
       process.execPath,
@@ -156,6 +160,28 @@ for (const spec of ["workspace:../jobs", "link:../jobs", "file:../jobs"]) {
       r.output,
       /@plant\/core may not depend on runner \(@plant\/jobs\)/,
     );
+  });
+}
+
+test("a path without a leading dot is read", () => {
+  const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
+    "vendor/ai/package.json": JSON.stringify({ name: "ai" }),
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /plant may not depend on llm \(ai\), the AI SDK/);
+});
+
+for (const spec of [
+  "link:../missing",
+  "file:./vendor/ai-6.0.301.tgz",
+  "github:vercel/ai",
+  "vercel/ai",
+  "https://registry.npmjs.org/ai/-/ai-6.0.301.tgz",
+]) {
+  test(`llm: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["llm", spec]] });
+    assert.equal(r.status, 1);
+    assert.match(r.output, /cannot tell which package llm \(.*\) installs/);
   });
 }
 
