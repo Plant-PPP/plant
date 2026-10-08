@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { authErrorSlug, loginErrorMessage } from "@/lib/auth/login-errors";
 import { OTP_LENGTH, RESEND_COOLDOWN_SECONDS } from "@/lib/auth/otp-config";
 import { CALLBACK_PATH, NEXT_COOKIE } from "@/lib/auth/routes";
@@ -132,6 +133,23 @@ export function LoginForm({
       )}
       {step === "email" ? (
         <>
+          {googleEnabled && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void signInWithGoogle()}
+              >
+                <GoogleIcon />
+                Continuar con Google
+              </Button>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Separator className="flex-1" />o seguí con tu mail
+                <Separator className="flex-1" />
+              </div>
+            </>
+          )}
           <form
             className="flex flex-col gap-3"
             onSubmit={(event) => {
@@ -144,6 +162,7 @@ export function LoginForm({
               <Input
                 type="email"
                 autoComplete="email"
+                placeholder="nombre@mail.com"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -153,16 +172,6 @@ export function LoginForm({
               Recibir código
             </Button>
           </form>
-          {googleEnabled && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => void signInWithGoogle()}
-            >
-              Continuar con Google
-            </Button>
-          )}
         </>
       ) : (
         <form
@@ -220,5 +229,13 @@ export function LoginForm({
         </form>
       )}
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.15 1.15-2.94 2.4-6.11 2.4-4.89 0-8.71-3.95-8.71-8.84s3.82-8.84 8.71-8.84c2.64 0 4.57 1.04 5.99 2.37l2.31-2.31C18.75 1.19 16.07 0 12.48 0 5.87 0 .31 5.39.31 12s5.56 12 12.17 12c3.57 0 6.27-1.17 8.37-3.36 2.16-2.16 2.84-5.21 2.84-7.66 0-.76-.05-1.47-.17-2.06H12.48z" />
+    </svg>
   );
 }

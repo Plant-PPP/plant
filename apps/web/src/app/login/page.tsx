@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
+import { LoginShowcase } from "@/components/auth/login-showcase";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { afterLoginPath } from "@/lib/auth/routes";
@@ -36,16 +37,29 @@ export default async function LoginPage({
     Array.isArray(value) ? value[0] : value,
   );
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center p-6">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <BrandLogo variant="logotype" className="h-8 w-auto" />
-        <h1 className="text-xl font-semibold">Entrá a Plant</h1>
-        <LoginForm
-          next={afterLoginPath(next)}
-          error={loginErrorMessage(error)}
-          googleEnabled={await googleEnabled()}
-        />
+    <div className="grid min-h-svh lg:grid-cols-2">
+      <div className="flex flex-col p-6 md:p-10">
+        <header>
+          <BrandLogo variant="logotype" className="h-7 w-auto" />
+        </header>
+        <main className="flex flex-1 items-center justify-center py-10">
+          <div className="flex w-full max-w-sm flex-col gap-6">
+            <div className="flex flex-col gap-1 text-center">
+              <h1 className="text-2xl font-semibold">Te damos la bienvenida</h1>
+              <p className="text-sm text-muted-foreground">
+                Entrá para ver tu patrimonio
+              </p>
+            </div>
+            <LoginForm
+              next={afterLoginPath(next)}
+              error={loginErrorMessage(error)}
+              googleEnabled={await googleEnabled()}
+            />
+          </div>
+        </main>
+        <footer className="text-xs text-muted-foreground">© Plant</footer>
       </div>
-    </main>
+      <LoginShowcase />
+    </div>
   );
 }
