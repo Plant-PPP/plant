@@ -179,7 +179,8 @@ asserting nothing — and a hole can survive for months behind a green suite.
 - Every fix for a defect in this taxonomy ships a test **observed to fail against the pre-fix state**.
 - It must also assert the **legitimate path still works** — otherwise a "fix" that simply breaks the
   feature passes.
-- DB-layer regressions belong in `supabase/tests/` (pgTAP), run in CI. Test with two users: user B
+- DB-layer regressions belong in `supabase/tests/` (pgTAP), and their HTTP view in `security-tests/`
+  (`pnpm test:security`), both run in CI. Test with two users: user B
   cannot read, insert into, update, reassign, or reference user A's rows.
 - **Use the matcher the policy dictates:** a `USING` violation filters *silently* (0 rows, no error);
   a `WITH CHECK` violation raises `42501`. A test expecting a throw where the policy filters passes

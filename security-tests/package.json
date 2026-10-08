@@ -2,7 +2,7 @@
   "name": "@plant/security-tests",
   "version": "0.0.0",
   "private": true,
-  "description": "Pentest specs against the local Supabase REST API: anon, another user and the owner on every table.",
+  "description": "Pentest specs against the local Supabase REST API: anon, another user and the owner on every public table and view.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
