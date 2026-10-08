@@ -7,6 +7,7 @@ import {
   type PentestUsers,
   createUser,
   deleteUsers,
+  prepareAuthCases,
   runEnv,
 } from "./pentest-users";
 
@@ -28,7 +29,8 @@ async function waitForRest(stack: LocalStack): Promise<void> {
 }
 
 // Two users for every spec, created once per run: Auth rate-limits sign-ins
-// (auth.rate_limit.sign_in_sign_ups in supabase/config.toml).
+// (auth.rate_limit in supabase/config.toml). The service role key stays here,
+// so the auth spec's admin steps run here too.
 export default async function globalSetup(): Promise<void> {
   const stack = readLocalStack();
   await waitForRest(stack);
@@ -48,6 +50,9 @@ export default async function globalSetup(): Promise<void> {
     process.env[runEnv.stack] = JSON.stringify(publicStack);
     const users: PentestUsers = { a, b };
     process.env[runEnv.users] = JSON.stringify(users);
+    process.env[runEnv.auth] = JSON.stringify(
+      await prepareAuthCases(stack, track),
+    );
   } catch (error) {
     // Jest skips globalTeardown when globalSetup throws.
     await deleteUsers(stack, ids).catch(() => undefined);
