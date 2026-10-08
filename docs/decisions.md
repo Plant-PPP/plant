@@ -6,13 +6,13 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **`proxy.ts` sends the CSP, with a fresh nonce on every request.** Next reads the nonce from the request's CSP and stamps it on its own scripts; the root layout passes it to `ThemeProvider` for next-themes' inline script. Reading the request makes every page dynamic, which a nonce needs: a static page would ship one nonce to everyone.
 - **`script-src 'self' 'nonce-…'`, no `'strict-dynamic'`.** Every script Plant loads is its own; `'strict-dynamic'` would let any nonced script load others from anywhere. `'unsafe-eval'` only under `next dev`, which needs it. The e2e fails if production allows eval.
-- **`style-src 'unsafe-inline'`.** Radix and the theme set `style` attributes, which a nonce cannot cover. Styles cannot run code.
+- **`style-src 'unsafe-inline'`.** The sidebar renders `style` attributes with its CSS variables, which a nonce cannot cover. Styles cannot run code.
 - **`connect-src` adds Supabase** (HTTP and WebSocket), because the browser calls Auth directly (PLA-17).
 - **One CSP.** `next.config.ts` holds the headers that are the same on every route (HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`); the CSP, with `frame-ancestors 'none'`, comes only from the proxy. The proxy skips `_next/static`, `_next/image`, `/api/inngest` and paths ending in an image, `.txt`, `.xml` or `.webmanifest` extension; those get no CSP but are covered by `X-Frame-Options`. A future route that serves HTML must not end in one of those extensions.
 - **`x-request-id` on every proxied request and response**, so the request can be correlated once telemetry arrives (PLA-21, which also puts it on the root span).
 - **No `report-to` yet.** Violation reports need an endpoint and telemetry (PLA-21); until then the e2e checks the login page loads with no violation.
 - **HSTS without `preload`** until Plant has its own domain (PLA-64); `vercel.app` is already preloaded.
-- **The Vercel toolbar is blocked by the CSP** on previews. Tomas turns it off in the project settings.
+- **The CSP blocks the Vercel toolbar** on previews and staging; until Tomas turns it off in the project settings, it is the one expected violation there.
 
 ## 2026-10-08 · Login (PLA-17)
 

@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
+import { CSP_HEADER } from "@/lib/csp";
 
 const NONCE = /'nonce-([^']+)'/;
 
@@ -9,6 +10,12 @@ function directive(csp: string, name: string): string[] {
     .map((d) => d.trim())
     .find((d) => d.startsWith(`${name} `));
   return found ? found.split(" ").slice(1) : [];
+}
+
+function expectNoncedScripts(html: string, nonce: string | undefined) {
+  const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
+  expect(scripts.length).toBeGreaterThan(0);
+  for (const tag of scripts) expect(tag).toContain(`nonce="${nonce}"`);
 }
 
 // Collected from page load: an init script runs outside the page's CSP.
@@ -41,7 +48,7 @@ test("/login sends one strict CSP and every script carries its nonce", async ({
   const res = await request.get("/login");
   const csps = res
     .headersArray()
-    .filter(({ name }) => name.toLowerCase() === "content-security-policy");
+    .filter(({ name }) => name.toLowerCase() === CSP_HEADER);
   expect(csps).toHaveLength(1);
   const csp = csps[0]!.value;
 
@@ -52,9 +59,7 @@ test("/login sends one strict CSP and every script carries its nonce", async ({
   expect(nonce).toBeDefined();
   expect(directive(csp, "frame-ancestors")).toEqual(["'none'"]);
 
-  const scripts = (await res.text()).match(/<script\b[^>]*>/g) ?? [];
-  expect(scripts.length).toBeGreaterThan(0);
-  for (const tag of scripts) expect(tag).toContain(`nonce="${nonce}"`);
+  expectNoncedScripts(await res.text(), nonce);
 });
 
 // eval called from page.evaluate is not held to the page's CSP, so the probe
@@ -62,9 +67,7 @@ test("/login sends one strict CSP and every script carries its nonce", async ({
 test("the CSP blocks eval", async ({ page }) => {
   await page.route("**/login", async (route) => {
     const response = await route.fetch();
-    const nonce = response
-      .headers()
-      ["content-security-policy"]?.match(NONCE)?.[1];
+    const nonce = response.headers()[CSP_HEADER]?.match(NONCE)?.[1];
     const probe = `<script nonce="${nonce}">
       const root = document.documentElement.dataset;
       try { eval("1"); root.evalProbe = "allowed"; } catch (e) { root.evalProbe = e.name; }
@@ -112,7 +115,9 @@ test.describe("fixed headers", () => {
       expect(headers["strict-transport-security"]).toBe(
         "max-age=63072000; includeSubDomains",
       );
-      expect(headers["permissions-policy"]).toContain("camera=()");
+      expect(headers["permissions-policy"]).toBe(
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+      );
       expect(headers["x-content-type-options"]).toBe("nosniff");
       expect(headers["referrer-policy"]).toBe(
         "strict-origin-when-cross-origin",
@@ -125,6 +130,38 @@ test.describe("fixed headers", () => {
   // next.config.ts, where a second policy would compete with the proxy's.
   test("no CSP outside the proxy", async ({ request }) => {
     const headers = (await request.get("/icon.svg")).headers();
-    expect(headers["content-security-policy"]).toBeUndefined();
+    expect(headers[CSP_HEADER]).toBeUndefined();
   });
+});
+
+// Next takes the nonce from the request's CSP, and the layout from x-nonce;
+// the proxy must replace both before the render reads them.
+test("a client's own nonce headers do not reach the page", async ({
+  request,
+}) => {
+  const res = await request.get("/login", {
+    headers: {
+      [CSP_HEADER]: "script-src 'nonce-attacker'",
+      "x-nonce": "attacker",
+      "x-request-id": "attacker",
+    },
+  });
+  const nonce = res.headers()[CSP_HEADER]?.match(NONCE)?.[1];
+  expect(nonce).toBeDefined();
+  expect(nonce).not.toBe("attacker");
+  expect(res.headers()["x-request-id"]).not.toBe("attacker");
+  const html = await res.text();
+  expect(html).not.toContain("attacker");
+  expectNoncedScripts(html, nonce);
+});
+
+test("the not-found page has the CSP and nonces its scripts", async ({
+  request,
+}) => {
+  // Public, so the proxy renders it rather than redirecting to /login.
+  const res = await request.get("/login/missing");
+  expect(res.status()).toBe(404);
+  const nonce = res.headers()[CSP_HEADER]?.match(NONCE)?.[1];
+  expect(nonce).toBeDefined();
+  expectNoncedScripts(await res.text(), nonce);
 });

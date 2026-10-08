@@ -27,6 +27,15 @@ it("blocks framing, plugins and foreign base URLs", () => {
   expect(directive(csp, "base-uri")).toEqual(["'self'"]);
 });
 
+it("keeps every other source and form target same-origin", () => {
+  const csp = buildCsp({ ...base, dev: false });
+  expect(directive(csp, "default-src")).toEqual(["'self'"]);
+  expect(directive(csp, "form-action")).toEqual(["'self'"]);
+  expect(directive(csp, "img-src")).toEqual(["'self'", "data:", "blob:"]);
+  expect(directive(csp, "font-src")).toEqual(["'self'"]);
+  expect(directive(csp, "style-src")).toEqual(["'self'", "'unsafe-inline'"]);
+});
+
 it("lets the browser reach the given origins", () => {
   const csp = buildCsp({
     ...base,

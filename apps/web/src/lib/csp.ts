@@ -9,8 +9,8 @@ export function createNonce(): string {
 
 // Next stamps the nonce on its own scripts; chunks load from 'self', so
 // 'strict-dynamic' is not needed. React needs eval only under `next dev`.
-// Styles stay 'unsafe-inline': Radix renders style="" attributes on the
-// server, which a nonce cannot cover.
+// Styles stay 'unsafe-inline': the sidebar renders style="" attributes with
+// its CSS variables, which a nonce cannot cover.
 export function buildCsp({
   nonce,
   connectOrigins,

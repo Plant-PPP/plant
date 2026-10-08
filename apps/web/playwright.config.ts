@@ -21,15 +21,15 @@ export default defineConfig({
       },
     },
   ],
-  // A production build: `next dev` allows eval. Nothing listens on the
-  // Supabase URL, so sign-in requests fail fast.
+  // A production build: `next dev` allows eval. Supabase points at port 1,
+  // where nothing listens even with `supabase start` running, so sign-in
+  // requests fail fast.
   webServer: {
     command: `pnpm build && pnpm start -p ${PORT}`,
     url: `http://localhost:${PORT}/login`,
     timeout: 180_000,
-    reuseExistingServer: !process.env.CI,
     env: {
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "e2e",
     },
   },
