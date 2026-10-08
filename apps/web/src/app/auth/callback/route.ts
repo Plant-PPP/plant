@@ -73,8 +73,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       target = loginErrorPath("callback");
-      // Auth answers a malformed code with a 500 too, so this stays a warning;
-      // a run of 5xx (or 0, no answer) is what reads as Auth failing.
+      // Auth answers a code Postgres cannot store (a NUL) with a 500 too, and
+      // anyone can send one, so this stays a warning.
       log("warn", "exchange_failed", {
         "error.type": errorType(error),
         "plant.auth.status": error.status,

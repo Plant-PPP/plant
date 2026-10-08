@@ -59,10 +59,10 @@ const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?
 // file name, is masked; a percent escape's hex digits do not count. A DNI may
 // follow a dot (`nro.12345678`) but not sit between a digit and a dot. Any
 // other 7 or 8 digits, a byte count or a date in a file name, read as a DNI.
-const CBU = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})\d{22}(?!\d)`;
+const CBU = String.raw`(?:(?<!\d|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE})\d{22}(?!\d)`;
 // Also with a spreadsheet's thousands dots (`20.123.456.789`).
-const CUIT = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)(?:[-. ]?\d{8}[-. ]?\d(?!\d)|\.\d{3}\.\d{3}\.\d{3}(?!\d|\.\d))`;
-const DNI_START = String.raw`(?:(?<!\d|\d\.)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
+const CUIT = String.raw`(?:(?<!\d|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)(?:[-. ]?\d{8}[-. ]?\d(?!\d)|\.\d{3}\.\d{3}\.\d{3}(?!\d|\.\d))`;
+const DNI_START = String.raw`(?:(?<!\d|\d\.|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
 // Two DNIs joined by a dot, as in a file name or a CSV row, which the DNI's
 // own bounds read as one dotted number.
 const DNI_PAIR = String.raw`${DNI_START}\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;

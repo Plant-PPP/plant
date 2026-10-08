@@ -163,6 +163,7 @@ describe("scrubSensitiveText", () => {
       "v 2012.345.678deadbeefcafebabe20123456789",
       "x 1.234.567.890abcdefabcdefa20123456789",
       `T1code:${UUID}code:${UUID}`,
+      "?code=%2312345 ?code=%2612345x ?code=%2523123x",
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -339,6 +340,10 @@ describe("scrubSensitiveText", () => {
     ],
     ["a span id that holds a CUIT's digits", "id e23190104525f268 x"],
     ["a word with eyJ inside", "keyJsonParser failed"],
+    [
+      "a short number after a percent escape",
+      "/import/Factura%20123456.pdf /import/Resumen%20%2812345%29.pdf %22123456789%22",
+    ],
   ])("leaves %s", (_label, text) => {
     expect(scrubSensitiveText(text)).toBe(text);
   });
