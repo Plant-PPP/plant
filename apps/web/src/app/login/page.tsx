@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
-import { sanitizeNextPath } from "@/lib/auth/safe-redirect";
+import { afterLoginPath } from "@/lib/auth/routes";
 import { requireSupabaseEnv } from "@/lib/supabase/env";
 
 export const metadata: Metadata = { title: "Ingresar" };
@@ -37,7 +37,7 @@ export default async function LoginPage({
         <BrandLogo variant="logotype" className="h-8 w-auto" />
         <h1 className="text-xl font-semibold">Entrá a Plant</h1>
         <LoginForm
-          next={sanitizeNextPath(next)}
+          next={afterLoginPath(next)}
           error={loginErrorMessage(error)}
           googleEnabled={await googleEnabled()}
         />

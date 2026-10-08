@@ -44,7 +44,7 @@ export function NavUser({ user }: { user: SessionUser }) {
   // a `next`.
   const signingOut = useRef(false);
 
-  // Another tab signed out, or Auth ended the session.
+  // Another tab signed out.
   useEffect(() => {
     const { data } = createClient().auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT" && !signingOut.current) {

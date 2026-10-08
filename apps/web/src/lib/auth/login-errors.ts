@@ -17,11 +17,11 @@ const COPY: Record<LoginErrorSlug, string> = {
   invalid_email: "Revisá el mail: no parece válido.",
   not_authorized: "Ese mail todavía no tiene acceso a Plant.",
   rate_limited:
-    "Pediste demasiados códigos. Esperá unos minutos y probá de nuevo.",
+    "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo.",
   invalid_code: "El código no es correcto o ya venció. Pedí uno nuevo.",
   link_expired: "El link ya venció. Pedí uno nuevo.",
   callback:
-    "No pudimos terminar el ingreso. Abrí el link en el mismo navegador donde lo pediste, o pedí uno nuevo.",
+    "No pudimos terminar el ingreso. Probá de nuevo desde este navegador.",
   oauth: "No pudimos entrar con Google. Probá de nuevo.",
   generic: "Algo salió mal. Probá de nuevo.",
 };

@@ -29,6 +29,15 @@ export function LoginForm({
   const [pending, setPending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
+  // Back from Google can restore this page with the buttons still disabled.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setPending(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
@@ -94,7 +103,7 @@ export function LoginForm({
       return error;
     });
     if (verified) {
-      // A later Google sign-in in this browser must not land on this `next`.
+      // A later mail link opened in this browser must not land on this `next`.
       writeNextCookie("", 0);
       router.replace(next);
       router.refresh();

@@ -1,14 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { loginErrorPath } from "@/lib/auth/login-errors";
-import { NEXT_COOKIE } from "@/lib/auth/routes";
-import { sanitizeNextPath } from "@/lib/auth/safe-redirect";
+import { afterLoginPath, NEXT_COOKIE } from "@/lib/auth/routes";
 import { createClient } from "@/lib/supabase/server";
 
 // Google and the mail link land here with a PKCE code. The verifier is in the
 // cookies of the browser that asked, so a link opened elsewhere fails.
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const next = sanitizeNextPath(request.cookies.get(NEXT_COOKIE.name)?.value);
+  const next = afterLoginPath(request.cookies.get(NEXT_COOKIE.name)?.value);
   const code = searchParams.get("code");
 
   let target: string;

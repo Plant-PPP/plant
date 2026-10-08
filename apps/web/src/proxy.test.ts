@@ -83,6 +83,7 @@ it.each([
   ["/login?next=%2Fassets", "http://localhost:3000/assets"],
   ["/login?next=//evil.example", "http://localhost:3000/"],
   ["/login", "http://localhost:3000/"],
+  ["/login?next=%2Fauth%2Fcallback", "http://localhost:3000/"],
 ])("sends a signed-in user on %s to %s", async (path, location) => {
   getClaims = signedIn;
   const res = await proxy(request(path));
@@ -115,6 +116,40 @@ it("keeps the session when Auth is unavailable", async () => {
   expect(res.headers.get("set-cookie")).toBeNull();
   expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
   expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=original");
+});
+
+it("keeps a refresh that succeeded before Auth failed", async () => {
+  getClaims = async ({ setAll }) => {
+    setAll(
+      [{ name: "sb-x-auth-token", value: "new", options: {} }],
+      CACHE_HEADERS,
+    );
+    return {
+      data: null,
+      error: new AuthApiError("unavailable", 503, "unexpected_failure"),
+    };
+  };
+  const res = await proxy(
+    request("/assets", { cookie: "sb-x-auth-token=old" }),
+  );
+  expect(res.headers.get("location")).toBeNull();
+  expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+  expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=new");
+  expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+});
+
+it("shows the retry when Auth does not answer", async () => {
+  jest.useFakeTimers();
+  try {
+    getClaims = () => new Promise(() => {});
+    const pending = proxy(request("/assets"));
+    await jest.advanceTimersByTimeAsync(5000);
+    const res = await pending;
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it("does not forward a client's own x-plant-auth", async () => {

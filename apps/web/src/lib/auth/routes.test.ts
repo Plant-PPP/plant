@@ -1,4 +1,4 @@
-import { isPublicPath, loginPath } from "./routes";
+import { afterLoginPath, isPublicPath, loginPath } from "./routes";
 
 it.each(["/login", "/login/x", "/auth/callback"])("%s is public", (path) => {
   expect(isPublicPath(path)).toBe(true);
@@ -19,4 +19,18 @@ it("drops an unsafe or empty next", () => {
   expect(loginPath("//evil")).toBe("/login");
   expect(loginPath("/")).toBe("/login");
   expect(loginPath()).toBe("/login");
+});
+
+it.each([
+  "/login",
+  "/login?error=callback",
+  "/auth/callback",
+  "//evil",
+  undefined,
+])("lands on / after signing in for %p", (next) => {
+  expect(afterLoginPath(next)).toBe("/");
+});
+
+it("lands where the user was going", () => {
+  expect(afterLoginPath("/assets?x=1")).toBe("/assets?x=1");
 });

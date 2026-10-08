@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { isPublicPath, LOGIN_PATH, loginPath } from "@/lib/auth/routes";
-import { sanitizeNextPath } from "@/lib/auth/safe-redirect";
 import {
-  AUTH_UNAVAILABLE_HEADER,
-  isSessionMissing,
-} from "@/lib/auth/session-state";
+  afterLoginPath,
+  isPublicPath,
+  LOGIN_PATH,
+  loginPath,
+} from "@/lib/auth/routes";
+import { isSessionMissing } from "@/lib/auth/session-state";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
 
@@ -23,7 +24,7 @@ export async function proxy(request: NextRequest) {
     // is showing an error from the callback.
     if (pathname === LOGIN_PATH && !searchParams.has("error")) {
       return session.redirect(
-        new URL(sanitizeNextPath(searchParams.get("next")), request.url),
+        new URL(afterLoginPath(searchParams.get("next")), request.url),
       );
     }
     return session.response();
@@ -34,11 +35,9 @@ export async function proxy(request: NextRequest) {
     return session.redirect(new URL(loginPath(pathname + search), request.url));
   }
 
-  // Auth is unavailable (rate limit, conflict, outage). Forward the request
-  // as it arrived, so a failed refresh deletes no cookie, and let the page
-  // show the retry.
-  session.original.set(AUTH_UNAVAILABLE_HEADER, "unavailable");
-  return NextResponse.next({ request: { headers: session.original } });
+  // Auth is unavailable (rate limit, conflict, outage, timeout): a failed
+  // refresh deletes no cookie, and the page shows the retry.
+  return session.unavailable();
 }
 
 export const config = {
