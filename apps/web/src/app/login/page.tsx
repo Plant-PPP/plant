@@ -4,6 +4,7 @@ import { LoginShowcase } from "@/components/auth/login-showcase";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { afterLoginPath } from "@/lib/auth/routes";
+import { SITE_NAME } from "@/lib/site";
 import { requireSupabaseEnv } from "@/lib/supabase/env";
 
 export const metadata: Metadata = { title: "Ingresar" };
@@ -57,7 +58,7 @@ export default async function LoginPage({
             />
           </div>
         </main>
-        <footer className="text-xs text-muted-foreground">© Plant</footer>
+        <footer className="text-xs text-muted-foreground">© {SITE_NAME}</footer>
       </div>
       <LoginShowcase />
     </div>

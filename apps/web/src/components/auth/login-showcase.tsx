@@ -10,69 +10,66 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const ASSETS: {
   label: string;
   icon: LucideIcon;
-  color: string;
-  top: string;
-  left: string;
+  iconClassName: string;
+  position: string;
 }[] = [
   {
     label: "Acciones",
     icon: ChartLine,
-    color: "--chart-1",
-    top: "14%",
-    left: "16%",
+    iconClassName: "bg-chart-1/25 text-chart-1",
+    position: "top-[14%] left-[16%]",
   },
   {
     label: "CEDEARs",
     icon: Globe,
-    color: "--chart-5",
-    top: "10%",
-    left: "62%",
+    iconClassName: "bg-chart-5/25 text-chart-5",
+    position: "top-[10%] right-[12%]",
   },
   {
     label: "Bonos",
     icon: Landmark,
-    color: "--chart-7",
-    top: "30%",
-    left: "80%",
+    iconClassName: "bg-chart-7/25 text-chart-7",
+    position: "top-[30%] right-[4%]",
   },
   {
     label: "Cripto",
     icon: Bitcoin,
-    color: "--chart-2",
-    top: "32%",
-    left: "6%",
+    iconClassName: "bg-chart-2/25 text-chart-2",
+    position: "top-[32%] left-[6%]",
   },
   {
     label: "Dólares",
     icon: Banknote,
-    color: "--chart-3",
-    top: "66%",
-    left: "10%",
+    iconClassName: "bg-chart-3/25 text-chart-3",
+    position: "top-[66%] left-[10%]",
   },
   {
     label: "Plazo fijo",
     icon: PiggyBank,
-    color: "--chart-4",
-    top: "70%",
-    left: "74%",
+    iconClassName: "bg-chart-4/25 text-chart-4",
+    position: "top-[70%] right-[6%]",
   },
-  { label: "FCI", icon: ChartPie, color: "--chart-6", top: "84%", left: "36%" },
+  {
+    label: "FCI",
+    icon: ChartPie,
+    iconClassName: "bg-chart-6/25 text-chart-6",
+    position: "top-[84%] left-[36%]",
+  },
   {
     label: "Inmuebles",
     icon: Building2,
-    color: "--chart-8",
-    top: "86%",
-    left: "60%",
+    iconClassName: "bg-chart-8/25 text-chart-8",
+    position: "top-[86%] right-[18%]",
   },
 ];
 
 const RINGS = [90, 180, 270, 360, 450, 540];
 
-// Decorative panel beside the login form; screen readers skip it.
 export function LoginShowcase() {
   return (
     <div
@@ -80,7 +77,7 @@ export function LoginShowcase() {
       className="relative hidden overflow-hidden bg-brand/15 lg:block"
     >
       <svg
-        className="absolute top-1/2 left-1/2 size-[1100px] -translate-x-1/2 -translate-y-1/2 text-brand"
+        className="absolute top-1/2 left-1/2 size-[max(1100px,150%)] -translate-x-1/2 -translate-y-1/2 text-brand"
         viewBox="-550 -550 1100 1100"
         fill="none"
       >
@@ -94,18 +91,19 @@ export function LoginShowcase() {
           />
         ))}
       </svg>
-      {ASSETS.map(({ label, icon: Icon, color, top, left }) => (
+      {ASSETS.map(({ label, icon: Icon, iconClassName, position }) => (
         <div
           key={label}
-          className="absolute flex items-center gap-2 rounded-xl border bg-background/90 px-3 py-2 text-sm font-medium shadow-sm"
-          style={{ top, left }}
+          className={cn(
+            "absolute flex items-center gap-2 rounded-xl border bg-background/90 px-3 py-2 text-sm font-medium whitespace-nowrap shadow-sm",
+            position,
+          )}
         >
           <span
-            className="flex size-8 items-center justify-center rounded-lg"
-            style={{
-              backgroundColor: `color-mix(in oklab, var(${color}) 25%, transparent)`,
-              color: `var(${color})`,
-            }}
+            className={cn(
+              "flex size-8 items-center justify-center rounded-lg",
+              iconClassName,
+            )}
           >
             <Icon className="size-4" />
           </span>
