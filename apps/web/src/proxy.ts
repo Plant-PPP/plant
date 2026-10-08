@@ -28,7 +28,7 @@ import { updateSession } from "@/lib/supabase/proxy";
 // Every page gets a CSP with a fresh nonce and a request id. Both go on the
 // request too: Next reads the nonce from the request's CSP and stamps its
 // own scripts, and the root layout passes it to next-themes. `set` replaces
-// any copy the client sent. Each request logs one `proxy.request` line.
+// any copy the client sent.
 export async function proxy(request: NextRequest) {
   const nonce = createNonce();
   const requestId = createRequestId();

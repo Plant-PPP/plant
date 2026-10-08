@@ -130,6 +130,16 @@ describe("onRequestError", () => {
     expect(log).not.toHaveBeenCalled();
   });
 
+  // A warning carries the request's fields and no exception.
+  const warnLine = {
+    level: "warn",
+    event: "request.error",
+    "plant.request_id": REQUEST_ID,
+    "http.request.method": "GET",
+    "http.route": "/assets/[id]",
+    "plant.route_type": "render",
+  };
+
   it.each([
     "Multiple router state headers were sent. This is not allowed.",
     "The router state header was too large.",
@@ -137,13 +147,11 @@ describe("onRequestError", () => {
   ])("warns on a client's bad router state header: %s", async (message) => {
     await onRequestError(new Error(message), request(REQUEST_ID), context);
     expect(error).not.toHaveBeenCalled();
-    const line = lineOf(warn);
-    expect(line).toMatchObject({
-      level: "warn",
+    expect(lineOf(warn)).toEqual({
+      ...warnLine,
       "plant.outcome": "bad_request",
       "error.type": "bad_router_state",
     });
-    expect(line).not.toHaveProperty("exception.stacktrace");
   });
 
   it("warns on an Auth outage thrown from another bundle's class", async () => {
@@ -152,7 +160,11 @@ describe("onRequestError", () => {
     });
     await onRequestError(foreign, request(REQUEST_ID), context);
     expect(error).not.toHaveBeenCalled();
-    expect(lineOf(warn)).toMatchObject({ "plant.outcome": "auth_unavailable" });
+    expect(lineOf(warn)).toEqual({
+      ...warnLine,
+      "plant.outcome": "auth_unavailable",
+      "error.type": "AuthUnavailableError",
+    });
   });
 
   it("warns on an Auth outage, without a stack", async () => {
@@ -162,12 +174,10 @@ describe("onRequestError", () => {
       context,
     );
     expect(error).not.toHaveBeenCalled();
-    const line = lineOf(warn);
-    expect(line).toMatchObject({
-      level: "warn",
+    expect(lineOf(warn)).toEqual({
+      ...warnLine,
       "plant.outcome": "auth_unavailable",
       "error.type": "AuthUnavailableError",
     });
-    expect(line).not.toHaveProperty("exception.stacktrace");
   });
 });

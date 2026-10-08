@@ -93,6 +93,18 @@ it("adds no trace ids without an active span", () => {
   expect(lineOf(log)).not.toHaveProperty("trace_id");
 });
 
+it("adds no trace ids for a span with an invalid context", () => {
+  jest.spyOn(trace, "getActiveSpan").mockReturnValue({
+    spanContext: () => ({
+      traceId: "0".repeat(32),
+      spanId: "0".repeat(16),
+      traceFlags: 0,
+    }),
+  } as unknown as Span);
+  serverLog.info("x");
+  expect(lineOf(log)).not.toHaveProperty("trace_id");
+});
+
 it("adds the active span's trace ids", () => {
   const spanContext = {
     traceId: "0af7651916cd43dd8448eb211c80319c",
