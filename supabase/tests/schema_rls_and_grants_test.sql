@@ -34,8 +34,9 @@
 -- - authenticated_aal1, the role the access token hook gives an enrolled
 --   user's token below aal2, uses no schema but public and holds no privilege
 --   there, is a member of no role, and only authenticator can switch to it.
---   Only supabase_auth_admin can execute the hook, which runs as the caller
---   with an empty search_path. Canaries prove each is_empty assert can fail.
+--   Only supabase_auth_admin and the owner can execute the hook, which runs as
+--   the caller with an empty search_path. Canaries prove each is_empty assert
+--   can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them; RLS and the revokes still apply. It covers public and private:
