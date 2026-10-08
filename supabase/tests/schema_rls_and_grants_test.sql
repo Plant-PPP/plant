@@ -4,8 +4,8 @@
 -- - Every public table has RLS enabled AND some grant to authenticated: the
 --   app reads it through PostgREST, and auto_expose_new_tables is off.
 -- - Every private table has RLS enabled and no grant to authenticated.
--- - anon holds no privilege on any relation in either schema, and neither
---   anon nor authenticated can use the private schema.
+-- - anon holds no privilege on any relation in either schema, and no API
+--   role, service_role included, can use the private schema.
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
@@ -13,9 +13,10 @@
 --   and foreign tables grant authenticated nothing.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
---   authenticated can execute any function in them, the only SECURITY DEFINER
---   function is the signup trigger, and no trigger on public, private or auth
---   runs another definer. No table in either schema has rewrite rules.
+--   authenticated can execute any function in them, service_role none in
+--   private, the only SECURITY DEFINER
+--   functions are the signup and session triggers, and no trigger on public,
+--   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
 -- - plpgsql_check finds no error in any function, trigger functions checked
 --   against each table they fire on.
@@ -40,7 +41,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(26);
+SELECT plan(27);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -83,8 +84,9 @@ SELECT is_empty(
 
 SELECT ok(
   NOT has_schema_privilege('anon', 'private', 'USAGE')
-    AND NOT has_schema_privilege('authenticated', 'private', 'USAGE'),
-  'anon and authenticated cannot use the private schema'
+    AND NOT has_schema_privilege('authenticated', 'private', 'USAGE')
+    AND NOT has_schema_privilege('service_role', 'private', 'USAGE'),
+  'no API role, service_role included, can use the private schema'
 );
 
 -- Extensions live in the extensions schema, which the API does not expose:
@@ -100,8 +102,10 @@ SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
-            OR has_function_privilege('authenticated', p.oid, 'EXECUTE')) $$,
-  'anon, authenticated and PUBLIC cannot execute any function in public or private'
+            OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+            OR (p.pronamespace = 'private'::regnamespace
+                AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
+  'anon, authenticated and PUBLIC cannot execute any function in public or private, nor service_role in private'
 );
 
 SELECT is_empty(
@@ -161,17 +165,34 @@ SELECT set_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND p.prosecdef $$,
-  ARRAY['private.create_profile_for_new_user()'],
-  'the signup trigger is the only SECURITY DEFINER function'
+  ARRAY['private.create_profile_for_new_user()', 'private.record_session_created()'],
+  'the signup and session triggers are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
   (SELECT p.proconfig = ARRAY['search_path=""']
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.profiles'::regclass)
    FROM pg_proc p WHERE p.oid = 'private.create_profile_for_new_user()'::regprocedure)
-    AND (SELECT t.tgenabled = 'O' FROM pg_trigger t
-         WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created'),
-  'the signup trigger runs as the owner of profiles, with an empty search_path, and is enabled'
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.create_profile_for_new_user()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.create_profile_for_new_user()'::regprocedure) = 1,
+  'the signup trigger runs as the owner of profiles, with an empty search_path, is enabled and is its function''s only trigger'
+);
+
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.record_session_created()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_created AFTER INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_created()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_created')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.record_session_created()'::regprocedure) = 1,
+  'the session trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires only on insert and is its function''s only trigger'
 );
 
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
@@ -183,8 +204,10 @@ SELECT is_empty(
      WHERE NOT t.tgisinternal
        AND c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace, 'auth'::regnamespace)
        AND p.prosecdef
-       AND t.tgfoid <> 'private.create_profile_for_new_user()'::regprocedure $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup trigger'
+       AND (t.tgfoid, t.tgrelid) NOT IN (
+             ('private.create_profile_for_new_user()'::regprocedure, 'auth.users'::regclass),
+             ('private.record_session_created()'::regprocedure, 'auth.sessions'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup and session triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.

@@ -8,7 +8,7 @@ Branch `claude/project-thread-k27wk1` (PLA-16). Required by the trigger "Change 
 - `public.consents`: which version of the terms, the privacy policy and sending data to AI providers each user accepted or withdrew, and when. It is the proof of consent that Law 25.326 requires.
 - `private.audit_log`: trail of sensitive actions (login, MFA, export, deletion, upload). No amounts, holdings, CUIT, DNI, CBU or tokens.
 
-Out of scope: who writes the audit log (PLA-21) and login (PLA-17).
+Out of scope: who writes the audit log (`2026-10-08-logs-audit.md`, PLA-21) and login (PLA-17).
 
 ## Trust boundary
 
@@ -18,7 +18,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 
 1. On sign-up, the `on_auth_user_created` trigger creates the profile.
 2. `apps/web` reads and edits the profile and records consents with supabase-js, as `authenticated`.
-3. The server writes `audit_log` from PLA-21 on, outside the API.
+3. A trigger on `auth.sessions` writes `audit_log` on every new session (PLA-21), outside the API.
 
 ## Where it is enforced
 
@@ -35,7 +35,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 | **T** | Editing or deleting a consent or an audit row | No UPDATE or DELETE on `consents`; append-only triggers on `audit_log`                                                     |
 | **R** | Denying having accepted the terms             | Append-only `consents` with `accepted_at` set by the database                                                              |
 | **I** | Reading someone else's profile or consents    | RLS by `user_id`; `anon` without privileges                                                                                |
-| **D** | Huge texts in the profile or the version      | Length `CHECK` on `display_name`, `version`, `action` and `request_id`                                                     |
+| **D** | Huge texts in the profile or the version      | Length `CHECK` on `display_name`, `version` and `request_id`; `action` is a closed enum (PLA-21)                           |
 | **E** | Functions callable from the API               | Functions in `private`, no EXECUTE for `PUBLIC`, `anon` or `authenticated`; `SECURITY DEFINER` with an empty `search_path` |
 
 ## Controls as built
@@ -45,8 +45,8 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
   - every permissive policy in `public` is exactly `user_id = (select auth.uid())` for `authenticated`;
   - views with a grant run as the caller, and materialized views and foreign tables grant nothing;
   - an FK between owned tables pairs `user_id` with `user_id`;
-  - `anon` has no privileges; no extensions are installed in `public` or `private`, and no function is executable by `anon` or `authenticated`;
-  - the only `SECURITY DEFINER` function is the signup one; no other trigger on `public`, `private` or `auth` runs as its function's owner, and there are no rewrite rules in `public` or `private`;
+  - `anon` has no privileges; no extensions are installed in `public` or `private`, and no function is executable by `anon` or `authenticated`, nor by `service_role` in `private`;
+  - the only `SECURITY DEFINER` functions are the signup and session triggers (PLA-21), each pinned to the table it fires on; no other trigger on `public`, `private` or `auth` runs as its function's owner, and there are no rewrite rules in `public` or `private`;
   - only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN;
   - plpgsql_check finds no errors;
   - every table in `public` with a grant to `authenticated` has at least one policy;

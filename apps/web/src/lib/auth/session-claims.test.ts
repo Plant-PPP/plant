@@ -17,6 +17,7 @@ jest.mock("@/lib/supabase/server", () => ({
 jest.mock("react", () => ({ cache: <T>(fn: T) => fn }));
 
 import { getSessionClaims } from "./session-claims";
+import { AuthUnavailableError } from "./session-state";
 
 beforeEach(() => {
   requestHeaders.delete("x-plant-auth");
@@ -26,7 +27,7 @@ beforeEach(() => {
 
 it("throws without refreshing when proxy.ts found Auth unavailable", async () => {
   requestHeaders.set("x-plant-auth", "unavailable");
-  await expect(getSessionClaims()).rejects.toThrow("Auth unavailable");
+  await expect(getSessionClaims()).rejects.toThrow(AuthUnavailableError);
   expect(getClaims).not.toHaveBeenCalled();
 });
 

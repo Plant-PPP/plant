@@ -13,7 +13,7 @@ const SESSION_GONE_CODES = new Set([
   "bad_jwt",
 ]);
 
-type MaybeAuthError = { name?: string; code?: string } | null;
+export type MaybeAuthError = { name?: string; code?: string } | null;
 
 export function isSessionMissing(error: MaybeAuthError): boolean {
   if (!error) return true;
@@ -27,3 +27,21 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
 // Set by proxy.ts on the forwarded request when Auth could not refresh the
 // session, so server code throws instead of refreshing again.
 export const AUTH_UNAVAILABLE_HEADER = "x-plant-auth";
+
+const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError";
+
+export class AuthUnavailableError extends Error {
+  override readonly name = AUTH_UNAVAILABLE_ERROR;
+
+  constructor() {
+    super("Auth unavailable");
+  }
+}
+
+// By name, not instanceof: the instrumentation hook and the pages are built as
+// separate bundles, which need not share the class.
+export function isAuthUnavailable(
+  error: unknown,
+): error is AuthUnavailableError {
+  return error instanceof Error && error.name === AUTH_UNAVAILABLE_ERROR;
+}

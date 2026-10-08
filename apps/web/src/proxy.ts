@@ -6,9 +6,22 @@ import {
   loginPath,
 } from "@/lib/auth/routes";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
-import { isSessionMissing } from "@/lib/auth/session-state";
+import {
+  isSessionMissing,
+  type MaybeAuthError,
+} from "@/lib/auth/session-state";
 import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
-import { createRequestId, REQUEST_ID_HEADER } from "@/lib/request-id";
+import {
+  errorType,
+  type LogFields,
+  type LogLevel,
+  serverLog,
+} from "@/lib/log/server-log";
+import {
+  createRequestId,
+  REQUEST_ID_FIELD,
+  REQUEST_ID_HEADER,
+} from "@/lib/request-id";
 import { supabaseEnv, supabaseOrigins } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
 
@@ -19,56 +32,140 @@ import { updateSession } from "@/lib/supabase/proxy";
 export async function proxy(request: NextRequest) {
   const nonce = createNonce();
   const requestId = createRequestId();
-  const env = supabaseEnv();
-  const csp = buildCsp({
-    nonce,
-    connectOrigins: env ? supabaseOrigins(env.url) : [],
-    dev: process.env.NODE_ENV === "development",
-  });
-  request.headers.set(CSP_HEADER, csp);
-  request.headers.set(NONCE_HEADER, nonce);
-  request.headers.set(REQUEST_ID_HEADER, requestId);
+  const fields = {
+    [REQUEST_ID_FIELD]: requestId,
+    "http.request.method": request.method,
+    "url.path": request.nextUrl.pathname,
+  };
+  // Next 16.4 does not run onRequestError for the proxy, which is always
+  // Node, so a throw is logged here; onRequestError skips the proxy if that
+  // changes.
+  try {
+    const env = supabaseEnv();
+    const csp = buildCsp({
+      nonce,
+      connectOrigins: env ? supabaseOrigins(env.url) : [],
+      dev: process.env.NODE_ENV === "development",
+    });
+    request.headers.set(CSP_HEADER, csp);
+    request.headers.set(NONCE_HEADER, nonce);
+    request.headers.set(REQUEST_ID_HEADER, requestId);
 
-  const response = await sessionResponse(request);
-  response.headers.set(CSP_HEADER, csp);
-  response.headers.set(REQUEST_ID_HEADER, requestId);
-  return response;
+    const session = await sessionResponse(request);
+    session.response.headers.set(CSP_HEADER, csp);
+    session.response.headers.set(REQUEST_ID_HEADER, requestId);
+    serverLog[LOG_LEVEL[session.outcome]]("proxy.request", {
+      ...fields,
+      "plant.outcome": session.outcome,
+      "plant.auth.duration_ms": session.authDurationMs,
+      "enduser.id": session.userId,
+      ...authFields(session),
+    });
+    return session.response;
+  } catch (error) {
+    serverLog.error(
+      "proxy.request",
+      { ...fields, "plant.outcome": "error" },
+      error,
+    );
+    throw error;
+  }
+}
+
+type SessionOutcome =
+  | "no_auth_config"
+  | "signed_in"
+  | "redirect_signed_in"
+  | "anonymous"
+  | "redirect_login"
+  | "auth_unavailable";
+
+const LOG_LEVEL = {
+  no_auth_config: "error",
+  signed_in: "info",
+  redirect_signed_in: "info",
+  anonymous: "info",
+  redirect_login: "info",
+  auth_unavailable: "warn",
+} as const satisfies Record<SessionOutcome, LogLevel>;
+
+type SessionResult = {
+  response: NextResponse;
+  outcome: SessionOutcome;
+  authDurationMs?: number;
+  userId?: string;
+  authError?: MaybeAuthError;
+};
+
+// `error.type` only when the session could not be checked: a missing or
+// broken session is the proxy doing its job, and its code is the reason.
+function authFields({ outcome, authError }: SessionResult): LogFields {
+  if (outcome === "no_auth_config") return { "error.type": outcome };
+  const code = errorType(authError);
+  return outcome === "auth_unavailable"
+    ? { "error.type": code }
+    : { "plant.auth.reason": code };
 }
 
 // Checks the session on every page request, refreshes it before it nears
 // expiry and sends anyone without one to /login. Server Components cannot
 // write cookies, so the exchange happens here.
-async function sessionResponse(request: NextRequest) {
+async function sessionResponse(request: NextRequest): Promise<SessionResult> {
   // Without Supabase the layout's own check fails and shows the error page.
   if (!supabaseEnv()) {
-    return NextResponse.next({ request: { headers: request.headers } });
+    return {
+      response: NextResponse.next({ request: { headers: request.headers } }),
+      outcome: "no_auth_config",
+    };
   }
 
   const { pathname, search, searchParams } = request.nextUrl;
+  const started = performance.now();
   const session = await updateSession(request);
+  const timing = {
+    authDurationMs: Math.round(performance.now() - started),
+    authError: session.error,
+  };
 
   if (session.claims) {
+    const signedIn = { ...timing, userId: session.claims.sub };
     // A signed-in user on /login goes where they were headed, unless /login
     // is showing a sign-in error.
     if (
       pathname === LOGIN_PATH &&
       !loginErrorMessage(searchParams.get("error"))
     ) {
-      return session.redirect(
-        new URL(afterLoginPath(searchParams.get("next")), request.url),
-      );
+      return {
+        ...signedIn,
+        response: session.redirect(
+          new URL(afterLoginPath(searchParams.get("next")), request.url),
+        ),
+        outcome: "redirect_signed_in",
+      };
     }
-    return session.response();
+    return { ...signedIn, response: session.response(), outcome: "signed_in" };
   }
 
   if (isSessionMissing(session.error)) {
-    if (isPublicPath(pathname)) return session.response();
-    return session.redirect(new URL(loginPath(pathname + search), request.url));
+    if (isPublicPath(pathname)) {
+      return { ...timing, response: session.response(), outcome: "anonymous" };
+    }
+    return {
+      ...timing,
+      response: session.redirect(
+        new URL(loginPath(pathname + search), request.url),
+      ),
+      outcome: "redirect_login",
+    };
   }
 
   // Auth is unavailable (rate limit, conflict, outage, timeout): a failed
   // refresh deletes no cookie, and the page shows the retry.
-  return session.unavailable();
+  return {
+    ...timing,
+    response: session.unavailable(),
+    outcome: "auth_unavailable",
+  };
 }
 
 export const config = {

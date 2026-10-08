@@ -63,12 +63,20 @@ export async function updateSession(request: NextRequest) {
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<{ data: null; error: Error }>((resolve) => {
-    timer = setTimeout(
-      () => resolve({ data: null, error: new Error("Auth timed out") }),
-      AUTH_TIMEOUT_MS,
-    );
-  });
+  const timeout = new Promise<{ data: null; error: Error & { code: string } }>(
+    (resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({
+            data: null,
+            error: Object.assign(new Error("Auth timed out"), {
+              code: "timeout",
+            }),
+          }),
+        AUTH_TIMEOUT_MS,
+      );
+    },
+  );
   // getClaims and refreshSession return Auth's failures and throw only on a
   // token they cannot decode or verify (a corrupted or planted cookie). That
   // is no session, so the visitor goes to /login, which replaces it.

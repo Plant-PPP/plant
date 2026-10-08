@@ -96,6 +96,7 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 - Chart numbers never come from the model: the server loads the data and builds the Vega-Lite spec.
 - Text from documents and from the user goes through `prompt-text.ts` and is treated as untrusted. The assistant's tools are read-only and filter by the session's user.
 - The AI ignores DNI, CUIT and CBU. Amounts, holdings, CUIT, tokens and the extracted JSON are never logged.
+- Server code logs through `serverLog` (`apps/web/src/lib/log/server-log.ts`), never `console.*`: flat fields, ids and counts, never values.
 - If something is not specified, pick the simplest option and record it in `docs/decisions.md`.
 
 ## Comments and PR prose
