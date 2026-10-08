@@ -260,6 +260,12 @@ content_path = "./supabase/templates/login-code.html"
 subject = "Tu código para entrar a Plant"
 content_path = "./supabase/templates/login-code.html"
 
+# A password reset (POST /recover) sends the same sign-in code: there is no
+# password to reset.
+[auth.email.template.recovery]
+subject = "Tu código para entrar a Plant"
+content_path = "./supabase/templates/login-code.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

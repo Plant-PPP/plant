@@ -50,13 +50,15 @@ describe("the sign-in mail", () => {
     "content_path",
   );
   const magicLink = value("auth.email.template.magic_link", "content_path");
+  const recovery = value("auth.email.template.recovery", "content_path");
   const template = readFileSync(
     join(root, JSON.parse(confirmation) as string),
     "utf8",
   );
 
-  it("is the same file for new and known addresses", () => {
+  it("is the same file for new and known addresses and a reset", () => {
     expect(magicLink).toBe(confirmation);
+    expect(recovery).toBe(confirmation);
   });
 
   it("shows the code and its expiry", () => {
