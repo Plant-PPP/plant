@@ -303,6 +303,25 @@ describe("the CSP and request id", () => {
     expectForwarded(res);
   });
 
+  it("reach the retry page after a refresh", async () => {
+    getClaims = async ({ setAll }) => {
+      setAll(
+        [{ name: "sb-x-auth-token", value: "new", options: {} }],
+        CACHE_HEADERS,
+      );
+      return {
+        data: null,
+        error: new AuthApiError("unavailable", 503, "unexpected_failure"),
+      };
+    };
+    const res = await proxy(
+      request("/assets", { cookie: "sb-x-auth-token=old" }),
+    );
+    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+    expectForwarded(res);
+  });
+
   it("reach the page without Supabase", async () => {
     for (const key of Object.keys(ENV)) delete process.env[key];
     const res = await proxy(request("/assets"));
