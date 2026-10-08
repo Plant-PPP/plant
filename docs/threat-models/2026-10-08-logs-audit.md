@@ -13,10 +13,10 @@ The request path and query, every request header (including a client's own `x-re
 ## Data flow
 
 1. `proxy.ts` mints a request id, checks the session and writes one `proxy.request` line to the function's console, which Vercel collects.
-2. `/auth/callback` writes one `auth.callback` line after the exchange.
+2. `/auth/callback` writes one `auth.callback` line per request.
 3. An uncaught error in a page, route handler or server action reaches Next's `onRequestError`, which writes one `request.error` line.
 4. Auth inserts an `auth.sessions` row on every new session; the `record_session_created` trigger inserts one `audit_log` row in the same transaction.
-5. With `OTEL_EXPORTER_OTLP_*` set (not before PLA-73), `@vercel/otel` exports traces.
+5. With `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` set (not before PLA-73), `@vercel/otel` exports traces.
 
 ## Where it is enforced
 

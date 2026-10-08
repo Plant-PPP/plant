@@ -173,7 +173,9 @@ SELECT ok(
   (SELECT p.proconfig = ARRAY['search_path=""']
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.profiles'::regclass)
    FROM pg_proc p WHERE p.oid = 'private.create_profile_for_new_user()'::regprocedure)
-    AND (SELECT t.tgenabled = 'O' FROM pg_trigger t
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.create_profile_for_new_user()'
+         FROM pg_trigger t
          WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created')
     AND (SELECT count(*) FROM pg_trigger t
          WHERE t.tgfoid = 'private.create_profile_for_new_user()'::regprocedure) = 1,

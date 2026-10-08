@@ -8,10 +8,10 @@ import {
   requestIdFrom,
 } from "@/lib/request-id";
 
-// Traces go to the OTLP endpoint in OTEL_EXPORTER_OTLP_* (Dash0 from PLA-73).
-// Without one nothing is registered and the OpenTelemetry API stays a no-op.
-// Before an endpoint is set, a span processor must scrub the query from
-// `http.target` and `http.url`: /auth/callback's carries the PKCE code.
+// Traces go to OTEL_EXPORTER_OTLP_ENDPOINT or _TRACES_ENDPOINT (Dash0 from
+// PLA-73). Without one nothing is registered and the OpenTelemetry API stays
+// a no-op. Before an endpoint is set, a span processor must scrub the query
+// from `http.target` and `http.url`: /auth/callback's carries the PKCE code.
 export async function register() {
   if (
     !process.env.OTEL_EXPORTER_OTLP_ENDPOINT &&
