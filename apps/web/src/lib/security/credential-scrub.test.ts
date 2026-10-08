@@ -162,6 +162,7 @@ describe("scrubSensitiveText", () => {
       "token:'=aa'x@y.com;",
       "v 2012.345.678deadbeefcafebabe20123456789",
       "x 1.234.567.890abcdefabcdefa20123456789",
+      `T1code:${UUID}code:${UUID}`,
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -270,6 +271,16 @@ describe("scrubSensitiveText", () => {
       "/tmp/uploads/Jos%C3%A9.12345678.pdf",
       `/tmp/uploads/Jos%C3%A9.${MASK}.pdf`,
     ],
+    [
+      "two dotted DNIs after a percent escape",
+      "/files/DNI%2012345678.87654321.pdf /DNI%252012345678.87654321",
+      `/files/DNI%20${MASK}.pdf /DNI%2520${MASK}`,
+    ],
+    [
+      "two dotted DNIs after an encoded accent or quote",
+      "Jos%C3%A9.12345678.87654321.pdf %2212345678.87654321%22",
+      `Jos%C3%A9.${MASK}.pdf %22${MASK}%22`,
+    ],
   ])("masks %s", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -372,6 +383,8 @@ describe("isSensitiveKey", () => {
     "plant.auth.otp",
     "plant.auth.code",
     "authCode",
+    "inngest.event_key",
+    "eventKey",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });

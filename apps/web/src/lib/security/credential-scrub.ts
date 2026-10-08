@@ -28,13 +28,14 @@ const SECRET_PARAM = new RegExp(
 // quote), the PKCE code as a named UUID, a bearer or basic value, a JWT
 // (whole or cut), Supabase's auth and verifier cookies and secret keys, and
 // Inngest's signing keys. A letter before `code`, `Bearer` or `eyJ` means
-// another word; a digit may be a mask's neighbour.
+// another word, unless it ends a UUID before `code`; a digit may be a mask's
+// neighbour.
 const NAMED_SECRET = new RegExp(
   String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|passw(?:or)?d|service[_-]?role[_-]?key|(?:client_)?secret(?:[_-]?key)?|(?:private|signing|event)[_-]?key)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\\'[^'\\]*|\`[^\`]*|[^"'\\\s,}&<]+)`,
   "gi",
 );
 const NAMED_CODE = new RegExp(
-  String.raw`((?<![A-Za-z])(?:(?:auth|oauth|pkce)_?)?code(?:\\?")?\s{0,8}[:=]\s{0,8}(?:\\?"|')?)${UUID}`,
+  String.raw`((?:(?<![A-Za-z])|(?<=${UUID}))(?:(?:auth|oauth|pkce)_?)?code(?:\\?")?\s{0,8}[:=]\s{0,8}(?:\\?"|')?)${UUID}`,
   "gi",
 );
 const AUTHORIZATION = /((?<![A-Za-z])(?:Bearer|Basic)\s+)[^\s"',<]+/gi;
@@ -60,10 +61,11 @@ const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?
 // other 7 or 8 digits, a byte count or a date in a file name, read as a DNI.
 const CBU = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})\d{22}(?!\d)`;
 const CUIT = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?!\d)`;
+const DNI_START = String.raw`(?:(?<!\d|\d\.)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
 // Two DNIs joined by a dot, as in a file name or a CSV row, which the DNI's
 // own bounds read as one dotted number.
-const DNI_PAIR = String.raw`(?<!\d|\d\.)\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;
-const DNI = String.raw`(?:(?<!\d|\d\.)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)`;
+const DNI_PAIR = String.raw`${DNI_START}\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;
+const DNI = String.raw`${DNI_START}\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)`;
 // The lookbehind keeps the hex digits of a percent escape, raw or encoded
 // (`%3Djohn%40…`, `%253Djohn%2540…`), out of the local part; an escape inside
 // it, encoded once or twice, is a `+` or a byte of a non-ASCII letter. It
@@ -121,6 +123,7 @@ const SECRET_SEGMENTS = new Set([
   "apikey",
   "privatekey",
   "signingkey",
+  "eventkey",
   "servicerole",
   "email",
   "phone",
