@@ -152,7 +152,6 @@ export function LoginForm({
             <Input
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={OTP_LENGTH}
               required
               autoFocus
               value={code}
