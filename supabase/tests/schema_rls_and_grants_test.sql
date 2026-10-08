@@ -174,8 +174,10 @@ SELECT ok(
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.profiles'::regclass)
    FROM pg_proc p WHERE p.oid = 'private.create_profile_for_new_user()'::regprocedure)
     AND (SELECT t.tgenabled = 'O' FROM pg_trigger t
-         WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created'),
-  'the signup trigger runs as the owner of profiles, with an empty search_path, and is enabled'
+         WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.create_profile_for_new_user()'::regprocedure) = 1,
+  'the signup trigger runs as the owner of profiles, with an empty search_path, is enabled and is its function''s only trigger'
 );
 
 SELECT ok(
@@ -185,8 +187,10 @@ SELECT ok(
     AND (SELECT t.tgenabled = 'O'
                 AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_created AFTER INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_created()'
          FROM pg_trigger t
-         WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_created'),
-  'the session trigger runs as the owner of audit_log, with an empty search_path, is enabled and fires only on insert'
+         WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_created')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.record_session_created()'::regprocedure) = 1,
+  'the session trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires only on insert and is its function''s only trigger'
 );
 
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
