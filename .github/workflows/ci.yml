@@ -202,13 +202,15 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:scripts
 
-      # `db start` boots only Postgres with every migration applied; the full
-      # stack pulls images for services nothing below uses. It runs even when
-      # the migration checks failed, so one push reports whether they apply.
-      - name: Start Supabase database
+      # Postgres with every migration applied, plus Auth, PostgREST and the
+      # gateway the pentest specs call; nothing below uses the other services.
+      # stdout is the status block with the local keys, so it is dropped. It
+      # runs even when the migration checks failed, so one push reports
+      # whether they apply.
+      - name: Start Supabase (database, Auth, PostgREST)
         id: db
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: pnpm exec supabase db start
+        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /dev/null
 
       - name: Check Supabase types are up to date
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
@@ -226,6 +228,12 @@ jobs:
       - name: DB behavior tests (pgTAP)
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm exec supabase test db --local
+
+      # Anon and a second user against every public table, over HTTP with real
+      # Auth sessions (security-tests/).
+      - name: Pentest specs against PostgREST
+        if: ${{ !cancelled() && steps.db.outcome == 'success' }}
+        run: pnpm test:security
 
       # Deployed databases never re-run an applied migration, so an edited one
       # would only change fresh databases. Corrections go in a new, later
