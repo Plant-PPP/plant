@@ -63,15 +63,12 @@ export async function updateSession(request: NextRequest) {
       AUTH_TIMEOUT_MS,
     );
   });
-  // getClaims throws a SyntaxError on a token it cannot decode (a corrupted or
-  // planted cookie): that is no session, so /login loads and replaces it. Any
-  // other throw counts as Auth being unavailable.
-  const claims = supabase.auth.getClaims().catch((thrown: unknown) => ({
+  // getClaims returns Auth's failures and throws only on a token it cannot
+  // decode or verify (a corrupted or planted cookie). That is no session, so
+  // the visitor goes to /login, which replaces it.
+  const claims = supabase.auth.getClaims().catch(() => ({
     data: null,
-    error:
-      thrown instanceof SyntaxError
-        ? new AuthInvalidJwtError("Invalid JWT")
-        : new Error("Auth threw"),
+    error: new AuthInvalidJwtError("Invalid JWT"),
   }));
   const { data, error } = await Promise.race([claims, timeout]).finally(() =>
     clearTimeout(timer),

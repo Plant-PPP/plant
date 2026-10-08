@@ -152,9 +152,13 @@ it("shows the retry when Auth does not answer", async () => {
   }
 });
 
-it("treats a token auth-js cannot decode as no session", async () => {
+it.each([
+  new SyntaxError("Unexpected token"),
+  new Error("Invalid UTF-8 sequence"),
+  new TypeError("Cannot read properties of null (reading 'alg')"),
+])("treats a token auth-js cannot decode as no session: %s", async (thrown) => {
   getClaims = async () => {
-    throw new SyntaxError("Unexpected token");
+    throw thrown;
   };
   const login = await proxy(request("/login"));
   expect(login.status).toBe(200);
@@ -163,15 +167,6 @@ it("treats a token auth-js cannot decode as no session", async () => {
   expect(page.headers.get("location")).toBe(
     "http://localhost:3000/login?next=%2Fassets",
   );
-});
-
-it("treats any other throw as Auth being unavailable", async () => {
-  getClaims = async () => {
-    throw new TypeError("importKey failed");
-  };
-  const res = await proxy(request("/assets"));
-  expect(res.headers.get("location")).toBeNull();
-  expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
 });
 
 it("does not forward a client's own x-plant-auth", async () => {
