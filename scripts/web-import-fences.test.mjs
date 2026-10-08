@@ -59,6 +59,33 @@ const flagged = [
     "src/lib/x.ts",
     "const { SUPABASE_SERVICE_ROLE_KEY: k } = process.env;\nexport { k };",
   ],
+  [
+    "src/lib/x.ts",
+    "export const key = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;",
+  ],
+  [
+    "next.config.ts",
+    "export default { env: { K: process.env.SUPABASE_SERVICE_ROLE_KEY } };",
+  ],
+  ["e2e/x.spec.ts", 'import "../src/lib/supabase/service-role";'],
+  [
+    "src/app/api/x/route.ts",
+    'export { aiCostSink } from "@/lib/ai/ai-cost-sink";',
+  ],
+  ["src/app/api/x/route.ts", 'export * from "@/lib/ai/ai-cost-sink";'],
+  [
+    "src/app/api/x/route.ts",
+    '"use server";\nimport { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {}',
+  ],
+  [
+    "src/app/api/x/route.ts",
+    'export async function POST() {\n  "use server";\n}',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.ts",
+    'export { createServiceRoleClient } from "@/lib/supabase/service-role";',
+  ],
+  ["src/app/actions.ts", 'export * from "@/lib/supabase/service-role";'],
   ["src/lib/ai/ai-cost-sink.ts", '"use server";\nexport const x = 1;'],
   [
     "src/lib/ai/ai-cost-sink.ts",
@@ -91,6 +118,10 @@ const allowed = [
     "export const key = process.env.SUPABASE_SERVICE_ROLE_KEY;",
   ],
   ["src/instrumentation.ts", 'export const f = () => import("@vercel/otel");'],
+  [
+    "src/app/api/x/route.ts",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
+  ],
 ];
 
 for (const [filePath, code] of allowed) {

@@ -29,23 +29,32 @@ const LITERAL_IMPORTS_ONLY = [
   selector,
   message: "Import a module by a string literal so the import fences see it.",
 }));
+const SECRET_KEY = "/^(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY$/";
 const SECRET_KEY_READS = [
-  'Identifier[name="SUPABASE_SERVICE_ROLE_KEY"]',
-  'Literal[value="SUPABASE_SERVICE_ROLE_KEY"]',
-  'TemplateElement[value.raw="SUPABASE_SERVICE_ROLE_KEY"]',
+  `Identifier[name=${SECRET_KEY}]`,
+  `Literal[value=${SECRET_KEY}]`,
+  `TemplateElement[value.raw=${SECRET_KEY}]`,
 ].map((selector) => ({
   selector,
   message: "Only src/lib/supabase/service-role.ts reads the secret key.",
 }));
+const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
+// A module allowed to import the key or the sink may not hand it on.
+const NO_REEXPORT = [SERVICE_ROLE, COST_SINK].flatMap(({ regex }) =>
+  ["ExportAllDeclaration", "ExportNamedDeclaration"].map((node) => ({
+    selector: `${node}[source.value=${asSelector(regex)}]`,
+    message:
+      "Re-exporting the secret key's client or the cost sink widens who reaches it.",
+  })),
+);
 
 // The rules for one block: a later block replaces the rule's options, so each
 // lists everything it keeps. no-restricted-imports does not see import() or
 // require(), so the same regexes go to no-restricted-syntax.
 function fence(
   modules,
-  syntax = [...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS],
+  syntax = [...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS, ...NO_REEXPORT],
 ) {
-  const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
   return {
     "no-restricted-imports": [
       "error",
@@ -86,7 +95,7 @@ export default defineConfig([
     rules: { "no-console": "error" },
   },
   {
-    files: [`src/**/*.${SOURCE}`],
+    files: [`**/*.${SOURCE}`],
     rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK]),
   },
   {
@@ -97,7 +106,12 @@ export default defineConfig([
     files: ["src/lib/ai/ai-cost-sink.ts"],
     rules: fence(
       [],
-      [...NO_SERVER_ACTION, ...LITERAL_IMPORTS_ONLY, ...SECRET_KEY_READS],
+      [
+        ...NO_SERVER_ACTION,
+        ...LITERAL_IMPORTS_ONLY,
+        ...SECRET_KEY_READS,
+        ...NO_REEXPORT,
+      ],
     ),
   },
   {
@@ -106,7 +120,15 @@ export default defineConfig([
   },
   {
     files: [`src/app/api/**/route.${SOURCE}`],
-    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE]),
+    rules: fence(
+      [AI, AI_PROVIDERS, SERVICE_ROLE],
+      [
+        ...NO_SERVER_ACTION,
+        ...LITERAL_IMPORTS_ONLY,
+        ...SECRET_KEY_READS,
+        ...NO_REEXPORT,
+      ],
+    ),
   },
   globalIgnores([
     ".next/**",
