@@ -8,6 +8,7 @@ import {
   createUser,
   deleteUsers,
   prepareAuthCases,
+  prepareMfaCases,
   runEnv,
 } from "./pentest-users";
 
@@ -52,6 +53,9 @@ export default async function globalSetup(): Promise<void> {
     process.env[runEnv.users] = JSON.stringify(users);
     process.env[runEnv.auth] = JSON.stringify(
       await prepareAuthCases(stack, track),
+    );
+    process.env[runEnv.mfa] = JSON.stringify(
+      await prepareMfaCases(stack, track),
     );
   } catch (error) {
     // Jest skips globalTeardown when globalSetup throws.
