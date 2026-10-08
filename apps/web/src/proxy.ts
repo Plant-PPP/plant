@@ -7,15 +7,42 @@ import {
 } from "@/lib/auth/routes";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { isSessionMissing } from "@/lib/auth/session-state";
-import { supabaseEnv } from "@/lib/supabase/env";
+import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
+import { createRequestId, REQUEST_ID_HEADER } from "@/lib/request-id";
+import { supabaseEnv, supabaseOrigins } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
+
+// Every page gets a CSP with a fresh nonce and a request id. Both go on the
+// request too: Next reads the nonce from the request's CSP and stamps its
+// own scripts, and the root layout passes it to next-themes. `set` replaces
+// any copy the client sent.
+export async function proxy(request: NextRequest) {
+  const nonce = createNonce();
+  const requestId = createRequestId();
+  const env = supabaseEnv();
+  const csp = buildCsp({
+    nonce,
+    connectOrigins: env ? supabaseOrigins(env.url) : [],
+    dev: process.env.NODE_ENV === "development",
+  });
+  request.headers.set(CSP_HEADER, csp);
+  request.headers.set(NONCE_HEADER, nonce);
+  request.headers.set(REQUEST_ID_HEADER, requestId);
+
+  const response = await sessionResponse(request);
+  response.headers.set(CSP_HEADER, csp);
+  response.headers.set(REQUEST_ID_HEADER, requestId);
+  return response;
+}
 
 // Checks the session on every page request, refreshes it before it nears
 // expiry and sends anyone without one to /login. Server Components cannot
 // write cookies, so the exchange happens here.
-export async function proxy(request: NextRequest) {
+async function sessionResponse(request: NextRequest) {
   // Without Supabase the layout's own check fails and shows the error page.
-  if (!supabaseEnv()) return NextResponse.next();
+  if (!supabaseEnv()) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
 
   const { pathname, search, searchParams } = request.nextUrl;
   const session = await updateSession(request);
