@@ -8,9 +8,8 @@ import {
   fence,
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
+  SOURCE,
 } from "../../eslint.fences.mjs";
-
-const SOURCE = "{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
 
 // Who may reach a model and the secret key. Each fenced module is a regex
 // over the import specifier, with or without a file extension.
@@ -98,7 +97,14 @@ export default defineConfig([
       "src/lib/supabase/service-role.ts",
       "src/lib/supabase/service-role.test.ts",
     ],
-    rules: fence([AI, AI_PROVIDERS, COST_SINK], LITERAL_IMPORTS_ONLY),
+    rules: fence(
+      [AI, AI_PROVIDERS, COST_SINK],
+      [
+        ...LITERAL_IMPORTS_ONLY,
+        ...noReexport([SERVICE_ROLE]),
+        ...NO_EXPORT_LIST,
+      ],
+    ),
   },
   {
     files: [`src/app/api/**/route.${SOURCE}`],

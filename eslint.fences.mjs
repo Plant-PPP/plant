@@ -1,6 +1,9 @@
 // Import and secret-key fences shared by the web app, packages/* and
 // security-tests.
 
+// Every source extension, so no file skips the fences.
+export const SOURCE = "{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
+
 // The Supabase secret key bypasses RLS: only
 // apps/web/src/lib/supabase/service-role.ts (and its test) may name it.
 const SECRET_KEY = "/^(NEXT_PUBLIC_)?SUPABASE_SERVICE_ROLE_KEY$/";
@@ -40,11 +43,13 @@ const STEP_AI = [
   ...named("ObjectPattern > Property", "key", "ai"),
 ].map((selector) => ({ selector, message: INNGEST_AI.message }));
 
-// The fences read import specifiers, so a computed one, or a bundler's
-// require.context, cannot pass them.
+// The fences read import specifiers, so a computed one, a bundler's
+// require.context, or a require wrapped in a type cast (which the fences'
+// callee match misses), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
+  ':matches(TSAsExpression, TSSatisfiesExpression, TSNonNullExpression, TSTypeAssertion)[expression.name="require"]',
   ...named("MemberExpression", "property", "context").map(
     (node) => `${node}:has(Identifier[name="require"])`,
   ),

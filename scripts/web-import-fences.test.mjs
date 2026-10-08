@@ -17,8 +17,8 @@ const eslint = new ESLint({ cwd: web });
 const FENCES = new Set(["no-restricted-imports", "no-restricted-syntax"]);
 
 /** The fence rules that fire on `code` linted as `filePath`. */
-async function fenced(filePath, code) {
-  const [result] = await eslint.lintText(code, { filePath });
+async function fenced(filePath, code, linter = eslint) {
+  const [result] = await linter.lintText(code, { filePath });
   return result.messages
     .filter((message) => FENCES.has(message.ruleId))
     .map((message) => message.ruleId);
@@ -30,6 +30,29 @@ const flagged = [
   ["src/components/x.tsx", 'export * from "ai";'],
   ["src/components/x.tsx", 'export const f = () => import("ai");'],
   ["src/components/x.js", 'import { generateText } from "ai";'],
+  [
+    "src/app/actions.ts",
+    '"use server";\nexport const s = (require as NodeRequire)("@/lib/ai/ai-cost-sink");',
+  ],
+  ["src/app/actions.ts", 'export const s = require!("@/lib/ai/ai-cost-sink");'],
+  ["src/components/x.ts", 'export const s = (<NodeRequire>require)("ai");'],
+  [
+    "src/components/x.ts",
+    'export const s = (require satisfies NodeRequire)("ai");',
+  ],
+  [
+    "src/app/api/x/route.ts",
+    'export async function POST() {\n  const f = async () => {\n    "use server";\n  };\n  return f;\n}',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.ts",
+    'export const f = async () => {\n  "use server";\n};',
+  ],
+  ["src/lib/supabase/service-role.test.ts", 'export * from "./service-role";'],
+  [
+    "src/lib/supabase/service-role.test.ts",
+    'import { createServiceRoleClient } from "./service-role";\nexport { createServiceRoleClient };',
+  ],
   ["src/lib/supabase/x.ts", 'import "./service-role";'],
   ["src/lib/supabase/x.ts", 'import "./service-role.js";'],
   ["src/app/page.tsx", 'import "@/lib/supabase/service-role";'],
@@ -293,13 +316,10 @@ for (const code of [
   'import { gemini } from "@inngest/ai";',
   'import { createAgent } from "@inngest/agent-kit";',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
+  'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
 ]) {
   test(`packages/jobs: ${code} is flagged`, async () => {
-    const [result] = await jobs.lintText(code, { filePath: "src/x.ts" });
-    assert.notDeepEqual(
-      result.messages.filter((message) => FENCES.has(message.ruleId)),
-      [],
-    );
+    assert.notDeepEqual(await fenced("src/x.ts", code, jobs), []);
   });
 }
 
@@ -319,13 +339,11 @@ for (const [dir, up] of [
     `import "${up}/apps/web/src/lib/supabase/service-role";`,
     `import "${up}/apps/web/node_modules/ai";`,
   ]) {
-    test(`${dir}: ${code} is flagged`, async () => {
-      const [result] = await lint.lintText(code, { filePath: "src/x.ts" });
-      assert.notDeepEqual(
-        result.messages.filter((message) => FENCES.has(message.ruleId)),
-        [],
-      );
-    });
+    for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {
+      test(`${dir}: ${code} in a .${ext} file is flagged`, async () => {
+        assert.notDeepEqual(await fenced(`src/x.${ext}`, code, lint), []);
+      });
+    }
   }
 }
 

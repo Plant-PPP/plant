@@ -5,6 +5,7 @@ import {
   fence,
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
+  SOURCE,
 } from "./eslint.fences.mjs";
 import { moneyRules } from "./eslint.money.mjs";
 
@@ -19,5 +20,8 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   { rules: moneyRules },
   { rules: { "no-console": "error" } },
-  { rules: fence([APPS], [...LITERAL_IMPORTS_ONLY, ...secretKeyReads]) },
+  {
+    files: [`**/*.${SOURCE}`],
+    rules: fence([APPS], [...LITERAL_IMPORTS_ONLY, ...secretKeyReads]),
+  },
 );
