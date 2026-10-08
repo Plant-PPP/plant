@@ -8,6 +8,10 @@ import { requireSupabaseEnv, SESSION_COOKIE_OPTIONS } from "./env";
 // request Auth never answers has no timeout of its own; past this the page
 // shows the retry.
 const AUTH_TIMEOUT_MS = 5000;
+// auth-js refreshes a token with under 90 s left wherever it runs. Refreshing
+// here from 120 s keeps a Server Component, which cannot save the rotated
+// cookies, from refreshing in the same request.
+const REFRESH_AHEAD_MS = 120_000;
 
 function withoutUnavailable(headers: Headers): Headers {
   const copy = new Headers(headers);
@@ -66,7 +70,15 @@ export async function updateSession(request: NextRequest) {
   // getClaims returns Auth's failures and throws only on a token it cannot
   // decode or verify (a corrupted or planted cookie). That is no session, so
   // the visitor goes to /login, which replaces it.
-  const claims = supabase.auth.getClaims().catch(() => ({
+  const claims = (async () => {
+    const first = await supabase.auth.getClaims();
+    const exp = first.data?.claims.exp;
+    if (exp === undefined || exp * 1000 - Date.now() >= REFRESH_AHEAD_MS) {
+      return first;
+    }
+    const { error } = await supabase.auth.refreshSession();
+    return error ? { data: null, error } : supabase.auth.getClaims();
+  })().catch(() => ({
     data: null,
     error: new AuthInvalidJwtError("Invalid JWT"),
   }));

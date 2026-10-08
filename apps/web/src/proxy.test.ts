@@ -11,6 +11,7 @@ type GetClaims = (cookies: {
 }) => Promise<{ data: { claims: object } | null; error: unknown }>;
 
 let getClaims: GetClaims;
+let refreshSession: GetClaims = async () => ({ data: null, error: null });
 
 jest.mock("@supabase/ssr", () => ({
   createServerClient: (
@@ -18,7 +19,10 @@ jest.mock("@supabase/ssr", () => ({
     _key: string,
     options: { cookies: never },
   ) => ({
-    auth: { getClaims: () => getClaims(options.cookies) },
+    auth: {
+      getClaims: () => getClaims(options.cookies),
+      refreshSession: () => refreshSession(options.cookies),
+    },
   }),
 }));
 
@@ -218,4 +222,47 @@ it("passes through without Supabase", async () => {
   const res = await proxy(request("/assets"));
   expect(res.headers.get("location")).toBeNull();
   expect(getClaims).not.toHaveBeenCalled();
+});
+
+describe("a token close to expiry", () => {
+  const expiringIn =
+    (seconds: number): GetClaims =>
+    async () => ({
+      data: { claims: { sub: "u", exp: Date.now() / 1000 + seconds } },
+      error: null,
+    });
+
+  it("is refreshed here, so the page does not refresh it again", async () => {
+    getClaims = expiringIn(100);
+    refreshSession = async ({ setAll }) => {
+      getClaims = expiringIn(3600);
+      setAll(
+        [{ name: "sb-x-auth-token", value: "fresh", options: {} }],
+        CACHE_HEADERS,
+      );
+      return { data: null, error: null };
+    };
+    const res = await proxy(request("/assets"));
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=fresh");
+    expect(forwarded(res, "cookie")).toContain("sb-x-auth-token=fresh");
+  });
+
+  it("is left alone with more than two minutes to go", async () => {
+    getClaims = expiringIn(200);
+    refreshSession = jest.fn();
+    await proxy(request("/assets"));
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it("shows the retry when Auth cannot refresh it", async () => {
+    getClaims = expiringIn(100);
+    refreshSession = async () => ({
+      data: null,
+      error: new AuthApiError("unavailable", 503, "unexpected_failure"),
+    });
+    const res = await proxy(request("/assets"));
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+  });
 });
