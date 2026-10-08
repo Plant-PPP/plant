@@ -3,6 +3,8 @@ import tseslint from "typescript-eslint";
 
 import { moneyRules } from "./eslint.money.mjs";
 
-export default tseslint.config(...tseslint.configs.recommended, {
-  rules: moneyRules,
-});
+export default tseslint.config(
+  ...tseslint.configs.recommended,
+  { rules: moneyRules },
+  { rules: { "no-console": "error" } },
+);

@@ -8,6 +8,11 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   { rules: moneyRules },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/log/server-log.ts"],
+    rules: { "no-console": "error" },
+  },
   globalIgnores([
     ".next/**",
     "next-env.d.ts",
