@@ -14,7 +14,7 @@ import { NAV_ITEMS, navItemForPath } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_BUTTON =
-  "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground data-[active=true]:bg-primary/90 data-[active=true]:text-primary-foreground";
+  "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground data-[active=true]:bg-primary/90 data-[active=true]:text-primary-foreground focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar";
 
 type Item = (typeof NAV_ITEMS)[number];
 
