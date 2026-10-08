@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { navTitle } from "@/lib/navigation";
-import { supabaseEnv } from "@/lib/supabase/env";
+import { requireSupabaseEnv } from "@/lib/supabase/env";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: navTitle("/") };
 
 async function supabaseStatus(): Promise<string> {
-  const env = supabaseEnv();
-  if (!env) return "Not configured: run pnpm env:local";
+  const env = requireSupabaseEnv();
   try {
     const res = await fetch(`${env.url}/auth/v1/health`, {
       headers: { apikey: env.anonKey },

@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     "@plant/sources",
   ],
   poweredByHeader: false,
-  // Baseline for every route. A nonce-based CSP comes with login (PLA-17).
+  // Baseline for every route. A nonce-based CSP comes with PLA-19.
   async headers() {
     return [
       {

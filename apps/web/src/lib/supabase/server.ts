@@ -17,8 +17,10 @@ export async function createClient() {
             cookieStore.set(name, value, options);
           }
         } catch {
-          // Server Components cannot set cookies. Refreshing the session needs
-          // apps/web/src/proxy.ts, which lands with login (PLA-17, PLA-19).
+          // Server Components cannot set cookies; proxy.ts refreshes the
+          // session before they run. Route handlers and server actions get the
+          // cookies but not Supabase's no-cache headers, so their responses
+          // must not be cacheable.
         }
       },
     },
