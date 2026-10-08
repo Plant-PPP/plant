@@ -6,7 +6,7 @@ export type LocalStack = {
   serviceRoleKey: string;
 };
 
-// What the specs get: the service role key stays in global setup.
+// What the specs get; the service role key stays out of the test workers.
 export type PublicStack = Pick<LocalStack, "apiUrl" | "anonKey">;
 
 const notRunning =

@@ -1,4 +1,4 @@
-// Shared lint config: each workspace's eslint.config.mjs re-exports it.
+// Lint config for packages/* and security-tests: each one's eslint.config.mjs re-exports it.
 import tseslint from "typescript-eslint";
 
 import { moneyRules } from "./eslint.money.mjs";

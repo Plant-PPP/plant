@@ -8,6 +8,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Real Auth users, two per run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
 - **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
 - **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway. `audit_log` has no positive case until it has a writer (PLA-21).
+- **Tables and views must have a spec; functions don't yet.** The pgTAP floor forbids executable functions in `public`, so the first RPC adds its own spec and widens the map in `security-tests/src/pentest-specs.ts`.
 
 ## 2026-10-07 · App layout, themes and brand (PLA-20)
 

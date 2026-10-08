@@ -3,7 +3,12 @@ import {
   type PublicStack,
   readLocalStack,
 } from "./local-stack";
-import { createUser, deleteUsers, runEnv } from "./pentest-users";
+import {
+  type PentestUsers,
+  createUser,
+  deleteUsers,
+  runEnv,
+} from "./pentest-users";
 
 // Kong answers 502/503 while PostgREST is still loading its schema cache.
 async function waitForRest(stack: LocalStack): Promise<void> {
@@ -22,8 +27,8 @@ async function waitForRest(stack: LocalStack): Promise<void> {
   throw new Error("PostgREST not ready after 10 s");
 }
 
-// Two users for every spec, created once per run: Auth allows 30 sign-ins
-// per 5 minutes (supabase/config.toml).
+// Two users for every spec, created once per run: Auth rate-limits sign-ins
+// (auth.rate_limit.sign_in_sign_ups in supabase/config.toml).
 export default async function globalSetup(): Promise<void> {
   const stack = readLocalStack();
   await waitForRest(stack);
@@ -41,7 +46,8 @@ export default async function globalSetup(): Promise<void> {
       anonKey: stack.anonKey,
     };
     process.env[runEnv.stack] = JSON.stringify(publicStack);
-    process.env[runEnv.users] = JSON.stringify({ a, b });
+    const users: PentestUsers = { a, b };
+    process.env[runEnv.users] = JSON.stringify(users);
   } catch (error) {
     // Jest skips globalTeardown when globalSetup throws.
     await deleteUsers(stack, ids).catch(() => undefined);

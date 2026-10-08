@@ -199,7 +199,7 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 - **`evals` is a leaf consumer** (in-degree 0). It may drive `sources`/`core` through their ports; a
   package depending on `evals` is a defect — it would pull eval fixtures into a shipped package.
 - **`security-tests` is a leaf consumer** too: it reads `shared`'s generated types and talks to
-  PostgREST over HTTP. A package depending on it is a defect.
+  PostgREST and Auth over HTTP. A package depending on it is a defect.
 - **No cycles, ever.** An external SDK in a package (e.g. `inngest` in `jobs`) is an external dep, not
   an internal edge — do not draw it.
 
