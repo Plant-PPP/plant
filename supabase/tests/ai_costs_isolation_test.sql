@@ -194,8 +194,8 @@ SELECT throws_ok(
   'no policy lets a user record a cost, even in their own name'
 );
 
--- No WHERE: a WHERE needs SELECT, which the select policy would grant on
--- Ana's row; with none, only an update or delete policy could reach a row.
+-- No WHERE: one would AND the select policy into the check and could hide a
+-- loose update or delete policy; without it, only those policies decide.
 SELECT lives_ok(
   $$ UPDATE public.ai_costs SET amount_usd = 0, user_id = 'b0000000-0000-4000-8000-00000000000b' $$,
   'no policy lets an update reach a row'

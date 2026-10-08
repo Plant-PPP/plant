@@ -56,4 +56,4 @@ Linear: PLA-
 ## AI
 
 - [ ] An AI assistant wrote code in sensitive paths (auth, RLS, migrations, dependencies, CI): what it generated
-- [ ] Adds or changes calls to an AI provider: cost recorded with `ai-cost.ts` and outside text through `prompt-text.ts`
+- [ ] Adds or changes calls to an AI provider: cost recorded by `costMiddleware` and outside text through `prompt-text.ts`

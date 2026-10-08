@@ -9,6 +9,7 @@ describe("MODEL_PRICING", () => {
     (_modelId, prices) => {
       for (const price of Object.values(prices)) {
         expect(decimalStringSchema.safeParse(price).success).toBe(true);
+        expect(price).not.toMatch(/^-/);
       }
     },
   );
@@ -54,16 +55,19 @@ describe("costUsd", () => {
     );
   });
 
-  it("stays a valid decimal string at the largest token counts", () => {
-    const max = Number.MAX_SAFE_INTEGER;
-    const cost = costUsd("gemini-3.8-flash", {
-      input: max,
-      cacheRead: max,
-      cacheWrite: max,
-      output: max,
-    });
-    expect(decimalStringSchema.safeParse(cost).success).toBe(true);
-  });
+  it.each(Object.keys(MODEL_PRICING) as PricedModelId[])(
+    "stays a valid decimal string at the largest token counts for %s",
+    (modelId) => {
+      const max = Number.MAX_SAFE_INTEGER;
+      const cost = costUsd(modelId, {
+        input: max,
+        cacheRead: max,
+        cacheWrite: max,
+        output: max,
+      });
+      expect(decimalStringSchema.safeParse(cost).success).toBe(true);
+    },
+  );
 
   it.each(Object.keys(MODEL_PRICING) as PricedModelId[])(
     "returns a decimal string for %s",
