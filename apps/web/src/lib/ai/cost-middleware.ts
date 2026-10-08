@@ -5,7 +5,7 @@ import {
   type PricedModelId,
   type TokenUsage,
 } from "@plant/shared";
-import type { LanguageModelMiddleware } from "ai";
+import { APICallError, type LanguageModelMiddleware } from "ai";
 import { errorType, serverLog } from "@/lib/log/server-log";
 import { AiCostWriteError } from "./ai-cost-writer";
 
@@ -32,28 +32,29 @@ function tokenUsage({
   inputTokens,
   outputTokens,
 }: ProviderUsage): TokenUsage | undefined {
-  if (
-    !Number.isFinite(inputTokens.total) ||
-    !Number.isFinite(outputTokens.total)
-  ) {
-    return undefined;
-  }
+  const input = inputTokens.total;
+  const output = outputTokens.total;
+  if (input === undefined || output === undefined) return undefined;
+  if (!Number.isFinite(input) || !Number.isFinite(output)) return undefined;
   const cacheRead = inputTokens.cacheRead ?? 0;
   const cacheWrite = inputTokens.cacheWrite ?? 0;
   return {
-    input:
-      inputTokens.noCache ??
-      Math.max(0, (inputTokens.total ?? 0) - cacheRead - cacheWrite),
+    input: inputTokens.noCache ?? Math.max(0, input - cacheRead - cacheWrite),
     cacheRead,
     cacheWrite,
-    output: outputTokens.total ?? 0,
+    output,
   };
 }
 
-// APICallError and the AI Gateway's errors carry the provider's HTTP status.
+// Only a provider's own error status shows it refused the call. The AI
+// Gateway's errors carry made-up ones too (408 for its own timeout, 500 for a
+// lost connection), so they count as calls that may have billed.
 function providerRefused(error: unknown): boolean {
-  const status = (error as { statusCode?: unknown } | null)?.statusCode;
-  return typeof status === "number" && status >= 400;
+  return (
+    APICallError.isInstance(error) &&
+    error.statusCode !== undefined &&
+    error.statusCode >= 400
+  );
 }
 
 // Writes one ai_costs row per model call, priced by the requested model.
@@ -136,14 +137,13 @@ export function costMiddleware(options: {
       }
       let finished = false;
       // The DOM lib's Transformer lacks cancel, which runs when the model
-      // stream errors or is aborted.
+      // stream errors or either side is cancelled.
       const transformer: Transformer<StreamPart, StreamPart> & {
         cancel?: (reason: unknown) => void;
       } = {
         async transform(part, controller) {
           if (part.type === "finish") {
             finished = true;
-            // The step finishes only once its cost is recorded.
             await safeRecord(part.usage);
           }
           controller.enqueue(part);

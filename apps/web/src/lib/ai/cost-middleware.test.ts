@@ -248,6 +248,48 @@ describe("generate", () => {
     ]);
   });
 
+  it("logs a failure whose status is not a provider's", async () => {
+    const error = Object.assign(new Error("Internal server error"), {
+      statusCode: 500,
+    });
+    await expect(
+      generateText({
+        model: model({ doGenerate: () => Promise.reject(error) }),
+        prompt: "hi",
+        maxRetries: 0,
+      }),
+    ).rejects.toThrow("Internal server error");
+    expect(events()).toEqual([["ai_cost.unbilled", "call_error"]]);
+  });
+
+  it("prices cache writes apart from the input", async () => {
+    const cached = {
+      inputTokens: {
+        total: 12_000,
+        noCache: undefined,
+        cacheRead: 0,
+        cacheWrite: 2_000,
+      },
+      outputTokens: { total: 1_000, text: undefined, reasoning: undefined },
+    };
+    await generateText({
+      model: model({ doGenerate: { ...TEXT, usage: cached } }),
+      prompt: "hi",
+    });
+    expect(record.mock.calls).toEqual([
+      [
+        {
+          ...ROW,
+          // 10,000 × 0.30 / 1M + 1,000 × 2.50 / 1M; the model has no write price
+          amount_usd: "0.0055",
+          input_tokens: 10_000,
+          cache_write_tokens: 2_000,
+          output_tokens: 1_000,
+        },
+      ],
+    ]);
+  });
+
   it.each([
     ["abort()", (c: AbortController) => c.abort()],
     ["abort(error)", (c: AbortController) => c.abort(new Error("stop"))],
@@ -276,7 +318,7 @@ describe("generate", () => {
   });
 
   it("resolves the call and logs when the row is not written", async () => {
-    record.mockRejectedValue(new AiCostWriteError("timeout"));
+    record.mockRejectedValue(new AiCostWriteError("timeout", true));
     const result = await generateText({
       model: model({ doGenerate: TEXT }),
       prompt: "hi",
@@ -312,17 +354,18 @@ describe("generate", () => {
   });
 
   it.each([
-    ["fetch_error", "unknown"],
-    ["http_504", "unknown"],
-    ["http_401", "not_written"],
-    ["23503", "not_written"],
-    ["missing_key", "not_written"],
-  ])("logs a %s write as %s", async (code, reason) => {
-    record.mockRejectedValue(new AiCostWriteError(code));
-    await generateText({ model: model({ doGenerate: TEXT }), prompt: "hi" });
-    expect(events()).toEqual([["ai_cost.record_failed", reason]]);
-    expect(lines[0]?.["error.type"]).toBe(code);
-  });
+    ["fetch_error", true, "unknown"],
+    ["23503", false, "not_written"],
+    ["missing_key", false, "not_written"],
+  ])(
+    "logs a %s write (may have committed: %s) as %s",
+    async (code, mayHaveCommitted, reason) => {
+      record.mockRejectedValue(new AiCostWriteError(code, mayHaveCommitted));
+      await generateText({ model: model({ doGenerate: TEXT }), prompt: "hi" });
+      expect(events()).toEqual([["ai_cost.record_failed", reason]]);
+      expect(lines[0]?.["error.type"]).toBe(code);
+    },
+  );
 
   it.each([
     ["both totals", usage(undefined, undefined)],
@@ -463,6 +506,56 @@ describe("stream", () => {
       },
     ]);
   });
+
+  it("logs nothing more when the stream errors after it finished", async () => {
+    const parts = [...TEXT_PARTS, FINISH];
+    const stream = new ReadableStream<StreamPart>(
+      {
+        async pull(controller) {
+          const part = parts.shift();
+          if (part) controller.enqueue(part);
+          else {
+            await started();
+            controller.error(new TypeError("terminated"));
+          }
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const result = streamText({
+      model: model({ doStream: async () => ({ stream }) }),
+      prompt: "hi",
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
+    expect(record.mock.calls).toEqual([[ROW]]);
+    expect(lines).toEqual([]);
+  });
+
+  it.each([
+    [503, []],
+    [200, [["ai_cost.unbilled", "call_error"]]],
+  ])(
+    "logs a stream the provider answered with %s as %j",
+    async (statusCode, expected) => {
+      const error = new APICallError({
+        message: "failed",
+        url: "https://provider.test",
+        requestBodyValues: {},
+        statusCode,
+        isRetryable: false,
+      });
+      const result = streamText({
+        model: model({ doStream: () => Promise.reject(error) }),
+        prompt: "hi",
+        maxRetries: 0,
+        onError: () => {},
+      });
+      await result.consumeStream({ onError: () => {} });
+      expect(record).not.toHaveBeenCalled();
+      expect(events()).toEqual(expected);
+    },
+  );
 
   it("logs a stream that closes without finishing and writes nothing", async () => {
     const result = streamText({
