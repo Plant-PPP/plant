@@ -30,7 +30,6 @@ export const AUTH_UNAVAILABLE_HEADER = "x-plant-auth";
 
 const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError";
 
-// What server code throws on that header.
 export class AuthUnavailableError extends Error {
   override readonly name = AUTH_UNAVAILABLE_ERROR;
 

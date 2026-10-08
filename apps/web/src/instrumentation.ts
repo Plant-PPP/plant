@@ -11,7 +11,8 @@ import {
 // Traces go to OTEL_EXPORTER_OTLP_ENDPOINT or _TRACES_ENDPOINT (Dash0 from
 // PLA-73). Without one nothing is registered and the OpenTelemetry API stays
 // a no-op. Before an endpoint is set, a span processor must scrub the query
-// from `http.target` and `http.url`: /auth/callback's carries the PKCE code.
+// from `http.target`, `http.url` and fetch span names: /auth/callback's
+// carries the PKCE code.
 export async function register() {
   if (
     !process.env.OTEL_EXPORTER_OTLP_ENDPOINT &&
@@ -30,6 +31,15 @@ export async function register() {
     serverLog.error("otel.register", {}, error);
   }
 }
+
+// Next's errors for a malformed router state header
+// (app-render/parse-and-validate-flight-router-state.js), which any client can
+// send.
+const BAD_ROUTER_STATE = new Set([
+  "Multiple router state headers were sent. This is not allowed.",
+  "The router state header was too large.",
+  "The router state header was sent but could not be parsed.",
+]);
 
 // Uncaught errors in pages, route handlers and server actions. The proxy logs
 // its own, so a proxy error that reaches here is skipped. Next still prints
@@ -52,6 +62,14 @@ export const onRequestError: Instrumentation.onRequestError = (
       ...fields,
       "plant.outcome": "auth_unavailable",
       "error.type": errorType(error),
+    });
+    return;
+  }
+  if (error instanceof Error && BAD_ROUTER_STATE.has(error.message)) {
+    serverLog.warn("request.error", {
+      ...fields,
+      "plant.outcome": "bad_request",
+      "error.type": "bad_router_state",
     });
     return;
   }

@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
           ? undefined
           : AUTH_ERROR_CODE.test(errorCode)
             ? errorCode
-            : "other",
+            : "_OTHER",
     });
   } else if (!code) {
     target = loginErrorPath("callback");
@@ -73,8 +73,8 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       target = loginErrorPath("callback");
-      // Auth answers a code Postgres cannot store (a NUL) with a 500 too, and
-      // anyone can send one, so this stays a warning.
+      // Anyone can make Auth answer 500 (a code with a NUL, which Postgres
+      // cannot store), so a failed exchange stays a warning.
       log("warn", "exchange_failed", {
         "error.type": errorType(error),
         "plant.auth.status": error.status,

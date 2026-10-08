@@ -7,7 +7,7 @@ import {
 } from "@/lib/security/credential-scrub";
 
 // The one way server code logs: a single JSON line per call, flat fields,
-// every string scrubbed. Never pass amounts, holdings or extracted data, only
+// every field's string value scrubbed (event names are static literals). Never pass amounts, holdings or extracted data, only
 // ids and counts; the masks are a net, not a license. A number passes as it
 // is: only its key is checked.
 

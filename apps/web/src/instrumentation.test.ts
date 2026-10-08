@@ -13,11 +13,13 @@ const ENDPOINTS = [
 ] as const;
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 
+let log: jest.SpyInstance;
 let warn: jest.SpyInstance;
 let error: jest.SpyInstance;
 
 beforeEach(() => {
   registerOTel.mockReset();
+  log = jest.spyOn(console, "log").mockImplementation(() => {});
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   error = jest.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -125,6 +127,23 @@ describe("onRequestError", () => {
     });
     expect(error).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Multiple router state headers were sent. This is not allowed.",
+    "The router state header was too large.",
+    "The router state header was sent but could not be parsed.",
+  ])("warns on a client's bad router state header: %s", async (message) => {
+    await onRequestError(new Error(message), request(REQUEST_ID), context);
+    expect(error).not.toHaveBeenCalled();
+    const line = lineOf(warn);
+    expect(line).toMatchObject({
+      level: "warn",
+      "plant.outcome": "bad_request",
+      "error.type": "bad_router_state",
+    });
+    expect(line).not.toHaveProperty("exception.stacktrace");
   });
 
   it("warns on an Auth outage thrown from another bundle's class", async () => {

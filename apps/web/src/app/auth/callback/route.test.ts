@@ -27,6 +27,7 @@ function callback(query: string, next?: string, requestId = REQUEST_ID) {
 
 let log: jest.SpyInstance;
 let warn: jest.SpyInstance;
+let error: jest.SpyInstance;
 
 beforeEach(() => {
   exchangeCodeForSession.mockReset();
@@ -36,6 +37,7 @@ beforeEach(() => {
   });
   log = jest.spyOn(console, "log").mockImplementation(() => {});
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  error = jest.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -44,6 +46,7 @@ function logged(): { level: string; line: string } {
   const calls = [
     ...log.mock.calls.map(([line]) => ({ level: "info", line })),
     ...warn.mock.calls.map(([line]) => ({ level: "warn", line })),
+    ...error.mock.calls.map(([line]) => ({ level: "error", line })),
   ];
   expect(calls).toHaveLength(1);
   return calls[0]!;
@@ -142,7 +145,7 @@ describe("the callback line", () => {
       {
         "plant.outcome": "oauth_error",
         "error.type": "_OTHER",
-        "plant.auth.error_code": "other",
+        "plant.auth.error_code": "_OTHER",
       },
     ],
     [

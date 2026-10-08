@@ -9,6 +9,9 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
 // Right after a percent escape, raw or encoded once (not three times): its
 // hex digits belong to the escape, so `%2012345678` is a space and a DNI.
 const AFTER_ESCAPE = /(?<=%(?:25)?[0-9A-Fa-f]{2})/.source;
+// Just after a `%`, or a `%` and one hex digit, raw or encoded once: the next
+// digit is the escape's, so a literal `%` glued to a number reads as one too.
+const INSIDE_ESCAPE = /%(?:25)?[0-9A-Fa-f]?/.source;
 
 // Auth's token names, as a query param and as a named value.
 const AUTH_TOKEN =
@@ -53,16 +56,16 @@ const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 // timestamp. Not followed by `@`: an id used as an email's local part is not
 // an id. A DNI glued to hex letters, or a CUIT or CBU in a hex run that holds
 // other digits too, reads as a hex id and passes.
-const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?[0-9a-f]?)(?![a-f]*\d{11,}[a-f]*(?![0-9a-z]))(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
+const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})(?![a-f]*\d{11,}[a-f]*(?![0-9a-z]))(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
 // file name, is masked; a percent escape's hex digits do not count. A DNI may
 // follow a dot (`nro.12345678`) but not sit between a digit and a dot. Any
 // other 7 or 8 digits, a byte count or a date in a file name, read as a DNI.
-const CBU = String.raw`(?:(?<!\d|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE})\d{22}(?!\d)`;
+const CBU = String.raw`(?:(?<!\d|${INSIDE_ESCAPE})|${AFTER_ESCAPE})\d{22}(?!\d)`;
 // Also with a spreadsheet's thousands dots (`20.123.456.789`).
-const CUIT = String.raw`(?:(?<!\d|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)(?:[-. ]?\d{8}[-. ]?\d(?!\d)|\.\d{3}\.\d{3}\.\d{3}(?!\d|\.\d))`;
-const DNI_START = String.raw`(?:(?<!\d|\d\.|%(?:25)?[0-9A-Fa-f]?)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
+const CUIT = String.raw`(?:(?<!\d|${INSIDE_ESCAPE})|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)(?:[-. ]?\d{8}[-. ]?\d(?!\d)|\.\d{3}\.\d{3}\.\d{3}(?!\d|\.\d))`;
+const DNI_START = String.raw`(?:(?<!\d|\d\.|${INSIDE_ESCAPE})|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
 // Two DNIs joined by a dot, as in a file name or a CSV row, which the DNI's
 // own bounds read as one dotted number.
 const DNI_PAIR = String.raw`${DNI_START}\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;
@@ -73,7 +76,7 @@ const DNI = String.raw`${DNI_START}0{0,4}\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)`;
 // it, encoded once or twice, is a `+` or a byte of a non-ASCII letter. It
 // does not start with `'`, the closing quote of a value before it. The domain
 // needs a TLD, so `pkg@2.71.1` in a pnpm path is not an address.
-const EMAIL = String.raw`(?<!%(?:25)?[0-9A-Fa-f]?)(?!')(?:[\p{L}\p{N}._+'-]|%(?:25)?2[Bb]|%(?:25)?[89A-Fa-f][0-9A-Fa-f]){1,64}(?:@|%40|%2540)[\p{L}\p{N}-]{1,63}(?:\.[\p{L}\p{N}-]{1,63}){0,8}\.\p{L}{2,24}(?!\p{L})`;
+const EMAIL = String.raw`(?<!${INSIDE_ESCAPE})(?!')(?:[\p{L}\p{N}._+'-]|%(?:25)?2[Bb]|%(?:25)?[89A-Fa-f][0-9A-Fa-f]){1,64}(?:@|%40|%2540)[\p{L}\p{N}-]{1,63}(?:\.[\p{L}\p{N}-]{1,63}){0,8}\.\p{L}{2,24}(?!\p{L})`;
 
 // One pass, so every pattern sees the whole text. At each position a kept id
 // wins, then an email over the numbers in its local part.
