@@ -63,6 +63,9 @@ describe("neutralizePromptText", () => {
       "fin/document",
     );
     expect(neutralizePromptText("\uDB40\uFF1C\uDC41")).toBe("");
+    expect(neutralizePromptText("\u{1F4B0}<\uDB40\u{1F4B0}>")).toBe(
+      "\u{1F4B0}\u{1F4B0}",
+    );
   });
 
   it("leaves nothing to neutralize on a second pass", () => {

@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(23);
+SELECT plan(26);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -108,6 +108,32 @@ SELECT throws_ok(
              'gemini-3.5-flash-lite', -0.01, 0, 0, 0, 0) $$,
   '23514', NULL,
   'a cost is never negative'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction', '', 0, 0, 0, 0, 0) $$,
+  '23514', NULL,
+  'a model id is never empty'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction',
+             repeat('x', 101), 0, 0, 0, 0, 0) $$,
+  '23514', NULL,
+  'a model id fits 100 characters'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction',
+             'gemini-3.5-flash-lite', 0, -1, 0, 0, 0) $$,
+  '23514', NULL,
+  'a token count is never negative'
 );
 
 RESET ROLE;

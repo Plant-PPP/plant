@@ -81,6 +81,22 @@ it("throws the SQLSTATE without the failing row", async () => {
   expect(Object.keys(error)).not.toContain("details");
 });
 
+it("throws a PostgREST code", async () => {
+  const fetch = jest.fn(async () =>
+    json(400, { code: "PGRST204", message: "Could not find the column" }),
+  );
+  expect((await failure(writerWith(fetch)(row))).message).toBe("PGRST204");
+});
+
+it("throws the status when the body's code is not a code", async () => {
+  const fetch = jest.fn(async () =>
+    json(400, { code: "Failing row contains (0.0087)" }),
+  );
+  const error = await failure(writerWith(fetch)(row));
+  expect(error.message).toBe("http_400");
+  expect(JSON.stringify(error)).not.toContain("0.0087");
+});
+
 it("throws the status when the body has no code", async () => {
   const fetch = jest.fn(async () => json(401, { message: "Invalid API key" }));
   expect((await failure(writerWith(fetch)(row))).message).toBe("http_401");
