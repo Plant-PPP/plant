@@ -92,7 +92,7 @@ describe("the callback line", () => {
       "an expired link",
       "?error=access_denied&error_code=otp_expired",
       "info",
-      { "plant.outcome": "link_expired" },
+      { "plant.outcome": "link_expired", "plant.auth.reason": "otp_expired" },
     ],
     [
       "a refusal on Google",

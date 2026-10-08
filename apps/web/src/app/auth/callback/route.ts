@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   let target: string;
   if (errorCode === "otp_expired") {
     target = loginErrorPath("link_expired");
-    log("info", "link_expired");
+    log("info", "link_expired", { "plant.auth.reason": "otp_expired" });
   } else if (searchParams.has("error")) {
     target = loginErrorPath("oauth");
     // access_denied is the user saying no on Google's screen, not a fault.

@@ -433,10 +433,14 @@ describe("the request line", () => {
   it("records a signed-out visitor on a public page and on a private one", async () => {
     getClaims = async () => ({ data: null, error: null });
     await proxy(request("/login"));
-    expect(logged().line).toMatchObject({ "plant.outcome": "anonymous" });
+    expect(logged()).toMatchObject({
+      method: "log",
+      line: { "plant.outcome": "anonymous" },
+    });
     consoleSpies.log.mockClear();
     await proxy(request("/assets"));
-    const { line } = logged();
+    const { method, line } = logged();
+    expect(method).toBe("log");
     expect(line).toMatchObject({ "plant.outcome": "redirect_login" });
     expect(line).not.toHaveProperty("enduser.id");
   });

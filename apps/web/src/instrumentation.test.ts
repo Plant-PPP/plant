@@ -24,6 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const name of ENDPOINTS) delete process.env[name];
+  delete process.env.VERCEL_GIT_COMMIT_SHA;
   jest.restoreAllMocks();
 });
 
@@ -38,14 +39,19 @@ describe("register", () => {
     expect(registerOTel).not.toHaveBeenCalled();
   });
 
-  it.each(ENDPOINTS)("registers plant-web when %s is set", async (name) => {
-    process.env[name] = "https://otlp.example";
-    await register();
-    expect(registerOTel).toHaveBeenCalledTimes(1);
-    expect(registerOTel).toHaveBeenCalledWith(
-      expect.objectContaining({ serviceName: "plant-web" }),
-    );
-  });
+  it.each(ENDPOINTS)(
+    "registers plant-web at its commit when %s is set",
+    async (name) => {
+      process.env[name] = "https://otlp.example";
+      process.env.VERCEL_GIT_COMMIT_SHA = "abc123";
+      await register();
+      expect(registerOTel).toHaveBeenCalledTimes(1);
+      expect(registerOTel).toHaveBeenCalledWith({
+        serviceName: "plant-web",
+        attributes: { "service.version": "abc123" },
+      });
+    },
+  );
 
   it("logs a failed registration instead of rejecting", async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.example";
@@ -95,6 +101,11 @@ describe("onRequestError", () => {
     });
     expect(line["exception.stacktrace"]).toEqual(expect.any(String));
     expect(JSON.stringify(line)).not.toContain("s3cr3t");
+  });
+
+  it("drops a request id with text before its UUID", async () => {
+    await onRequestError(new Error("x"), request(`x ${REQUEST_ID}`), context);
+    expect(lineOf(error)).not.toHaveProperty("plant.request_id");
   });
 
   it("drops a request id that is not a UUID", async () => {

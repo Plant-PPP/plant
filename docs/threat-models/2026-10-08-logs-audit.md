@@ -38,7 +38,7 @@ The request path and query, every request header (including a client's own `x-re
 
 ## Controls as built
 
-- **Scrubber**: `credential-scrub.test.ts` covers each param raw and encoded once and twice, a UUID `code`, each identity-number format, emails raw and encoded, what must survive (UUIDs, dates, pnpm paths) and hostile inputs under a time limit.
+- **Scrubber**: `credential-scrub.test.ts` covers each param raw and encoded once and twice, a UUID `code`, each identity-number format, emails raw and encoded, what must survive (UUIDs, ISO dates and times, trace ids, hashes, chunk names, pnpm paths) and hostile inputs under a time limit.
 - **Logger**: `server-log.test.ts` checks one JSON line per call, masked keys, scrubbing before the cut, the edge of a long value, the logger's own keys, trace ids and exceptions.
 - **Callers**: `proxy.test.ts`, `route.test.ts` and `instrumentation.test.ts` check each outcome's line, that no query or code reaches it, and that a request id that is not a UUID is dropped.
 - **Trigger**: `audit_session_created_test.sql` checks one row per new session and none per refresh, the closed vocabulary, that Auth's role cannot write the table itself and that no API role, `service_role` included, can insert a session; `audit_log_test.sql` and the floor's no-`USAGE` assert check that none can touch the table. The floor pins the definer, its owner, `search_path` and trigger definition. The pentest sign-ins in the CI `database` job go through Auth's real role, so a trigger that breaks sign-in fails CI and holds `deploy-migrations`.
@@ -47,7 +47,7 @@ The request path and query, every request header (including a client's own `x-re
 
 - **Sign-in is fail-closed.** If the audit insert fails, every sign-in fails. Detection is Supabase's Auth logs, an `auth.callback` `exchange_failed` line for Google and the mail link, and for the email code only a 500 from `/verify` in the browser, which Plant does not see until client error reporting. Accepted so a failing insert cannot leave a session unaudited.
 - **A trigger that does not fire fails open.** Writes in `session_replication_role = replica` (a data restore) skip it, and Auth's own role owns `auth.sessions` and could drop or disable it in an upgrade. CI's floor catches a missing trigger against the CLI's Auth image only; nothing checks it on `plant-staging` at runtime.
-- **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read so that dropping it cannot.
+- **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read through `to_jsonb`, so dropping it cannot.
 - **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.
 - **Next prints its own unscrubbed line for uncaught errors**, next to ours. Our code does not put personal data in error messages.
 - **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does an identity number inside a hex id of 16 or more characters; the rule is still never to log values.

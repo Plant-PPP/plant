@@ -45,8 +45,8 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
   - every permissive policy in `public` is exactly `user_id = (select auth.uid())` for `authenticated`;
   - views with a grant run as the caller, and materialized views and foreign tables grant nothing;
   - an FK between owned tables pairs `user_id` with `user_id`;
-  - `anon` has no privileges; no extensions are installed in `public` or `private`, and no function is executable by `anon` or `authenticated`;
-  - the only `SECURITY DEFINER` function is the signup one; no other trigger on `public`, `private` or `auth` runs as its function's owner, and there are no rewrite rules in `public` or `private`;
+  - `anon` has no privileges; no extensions are installed in `public` or `private`, and no function is executable by `anon` or `authenticated`, nor by `service_role` in `private`;
+  - the only `SECURITY DEFINER` functions are the signup and session triggers (PLA-21), each pinned to the table it fires on; no other trigger on `public`, `private` or `auth` runs as its function's owner, and there are no rewrite rules in `public` or `private`;
   - only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN;
   - plpgsql_check finds no errors;
   - every table in `public` with a grant to `authenticated` has at least one policy;

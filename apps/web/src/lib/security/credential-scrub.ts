@@ -102,8 +102,8 @@ const SECRET_SEGMENTS = new Set([
   "phone",
 ]);
 
-// Emails first: a mask is not hex, so a number after an address is masked in
-// one pass.
+// Emails first: a mask holds no digit, so a number after an address is still
+// masked in one pass.
 function scrubPersonalData(text: string): string {
   return text
     .replace(EMAIL, MASK)
