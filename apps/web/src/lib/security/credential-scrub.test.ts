@@ -363,7 +363,7 @@ describe("scrubSensitiveText", () => {
       "long local parts and domains",
       (k) =>
         ("/" + "a".repeat(64) + "@" + ("b".repeat(63) + ".").repeat(9) + "1")
-          .repeat(7)
+          .repeat(7 * k)
           .slice(0, 4096 * k),
     ],
     ["a long JWT prefix", (k) => "eyJ" + "a".repeat(16000 * k)],

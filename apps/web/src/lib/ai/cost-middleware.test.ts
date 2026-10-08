@@ -641,6 +641,66 @@ describe("stream", () => {
     expect(events()).toEqual([["ai_cost.record_failed", "unknown"]]);
   });
 
+  it("logs a later step that errors after an earlier one finished", async () => {
+    const steps = [
+      streamOf([
+        { type: "stream-start", warnings: [] },
+        { type: "tool-call", toolCallId: "1", toolName: "lookup", input: "{}" },
+        {
+          type: "finish",
+          usage: USAGE,
+          finishReason: { unified: "tool-calls", raw: undefined },
+        },
+      ]),
+      new ReadableStream<StreamPart>({
+        start(controller) {
+          controller.enqueue({ type: "stream-start", warnings: [] });
+          controller.enqueue({ type: "text-start", id: "1" });
+          controller.error(new TypeError("terminated"));
+        },
+      }),
+    ];
+    const result = streamText({
+      model: model({ doStream: async () => ({ stream: steps.shift()! }) }),
+      tools: {
+        lookup: tool({ inputSchema: z.object({}), execute: async () => "x" }),
+      },
+      stopWhen: stepCountIs(2),
+      prompt: "hi",
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(events()).toEqual([["ai_cost.unbilled", "stream_error"]]);
+  });
+
+  it("logs nothing when the reader cancels while the row is recorded", async () => {
+    let recorded!: () => void;
+    record.mockImplementation(
+      () => new Promise<void>((resolve) => (recorded = resolve)),
+    );
+    const middleware = costMiddleware({
+      modelId: "gemini-3.5-flash-lite",
+      context: { userId: USER_ID, costType: "import_extraction" },
+      record,
+    });
+    const { stream } = await middleware.wrapStream!({
+      doStream: async () => ({ stream: streamOf([FINISH]) }),
+      doGenerate: undefined as never,
+      params: { prompt: [] },
+      model: new MockLanguageModelV3(),
+    });
+    const reader = stream.getReader();
+    const read = reader.read();
+    await started();
+    expect(record).toHaveBeenCalledTimes(1);
+    await reader.cancel(new Error("gone"));
+    recorded();
+    await read.catch(() => {});
+    await started();
+    expect(lines).toEqual([]);
+  });
+
   it.each([
     [400, []],
     [429, []],
