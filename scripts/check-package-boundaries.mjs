@@ -1,10 +1,10 @@
 // Checks the dependencies each workspace manifest declares against the
 // package graph: shared is a leaf; sources and core see only shared; jobs
 // sees shared, sources and core; only jobs and the web app (the composition
-// root) may depend on the Inngest SDK; nothing depends on evals or the
-// security tests. pnpm only links declared dependencies, but Node and
-// TypeScript also resolve the root node_modules from every package, so the
-// root manifest is checked too.
+// root) may depend on the Inngest SDK; only the web app and the evals may
+// depend on the AI SDK; nothing depends on evals or the security tests. pnpm
+// only links declared dependencies, but Node and TypeScript also resolve the
+// root node_modules from every package, so the root manifest is checked too.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 const allowed = {
@@ -22,7 +22,20 @@ const allowed = {
   "@plant/security-tests": ["@plant/shared"],
   plant: [],
 };
-const engineAllowed = new Set(["@plant/jobs", "@plant/web"]);
+// `ai` is fenced with the providers: given a string model id it reaches them
+// through the AI Gateway.
+const sdkFences = [
+  {
+    matches: (dep) => dep === "inngest" || dep.startsWith("@inngest/"),
+    allowed: new Set(["@plant/jobs", "@plant/web"]),
+    reason: "inngest: steps stay engine-free",
+  },
+  {
+    matches: (dep) => dep === "ai" || dep.startsWith("@ai-sdk/"),
+    allowed: new Set(["@plant/web", "@plant/evals"]),
+    reason: "the AI SDK: model calls stay where their cost is recorded",
+  },
+];
 // Every workspace package, from the `packages:` globs in pnpm-workspace.yaml
 // (the "dir/*" and plain "dir" forms), so a new one without an entry in
 // `allowed` fails.
@@ -88,11 +101,10 @@ for (const dir of manifests) {
     if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {
       violations.push(`${name} may not depend on ${dep}`);
     }
-    const isEngine = dep === "inngest" || dep.startsWith("@inngest/");
-    if (isEngine && !engineAllowed.has(name)) {
-      violations.push(
-        `${name} may not depend on inngest: steps stay engine-free`,
-      );
+    for (const fence of sdkFences) {
+      if (fence.matches(dep) && !fence.allowed.has(name)) {
+        violations.push(`${name} may not depend on ${fence.reason}`);
+      }
     }
   }
 }
