@@ -50,6 +50,12 @@ describe("scrubSensitiveText", () => {
       `password: \\'${MASK}\\' ok`,
     ],
     ["a secret key", "secret_key=abc123 ok", `secret_key=${MASK} ok`],
+    [
+      "a signing key",
+      '{"signingKey":"abc123"} INNGEST_SIGNING_KEY=signkey-prod-0123abcdef',
+      `{"signingKey":"${MASK}"} INNGEST_SIGNING_KEY=${MASK}`,
+    ],
+    ["an unnamed Inngest key", "bad signkey-test-0123abcdef", `bad ${MASK}`],
     ["a private key", "privateKey: abc123 ok", `privateKey: ${MASK} ok`],
     [
       "a PKCE code named in camel case",

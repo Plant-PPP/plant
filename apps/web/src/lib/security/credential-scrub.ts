@@ -26,11 +26,11 @@ const SECRET_PARAM = new RegExp(
 // Credentials outside a query: a credential named in JSON, escaped JSON or
 // `name: value` form (a quoted or backticked value runs to its closing
 // quote), the PKCE code as a named UUID, a bearer or basic value, a JWT
-// (whole or cut), Supabase's auth and verifier cookies and its secret keys. A
-// letter before `code`, `Bearer` or `eyJ` means another word; a digit may be
-// a mask's neighbour.
+// (whole or cut), Supabase's auth and verifier cookies and secret keys, and
+// Inngest's signing keys. A letter before `code`, `Bearer` or `eyJ` means
+// another word; a digit may be a mask's neighbour.
 const NAMED_SECRET = new RegExp(
-  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret(?:[_-]?key)?|private[_-]?key)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\\'[^'\\]*|\`[^\`]*|[^"'\\\s,}&<]+)`,
+  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret(?:[_-]?key)?|(?:private|signing|event)[_-]?key)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\\'[^'\\]*|\`[^\`]*|[^"'\\\s,}&<]+)`,
   "gi",
 );
 const NAMED_CODE = new RegExp(
@@ -42,6 +42,7 @@ const JWT = /(?<![A-Za-z])eyJ[\w.-]{6,}/g;
 const SUPABASE_AUTH_COOKIE =
   /(sb-[\w-]{1,64}-auth-token(?:-code-verifier)?(?:\.\d+)?=)[^;\s"<]+/g;
 const SUPABASE_SECRET_KEY = /sb_secret_[\w-]+/g;
+const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 
 // Kept whole: ids and times, whose digit groups would otherwise read as a
 // DNI. A UUID; a hex run of 16 or more with a letter (a trace id, a hash, a
@@ -134,7 +135,8 @@ export function scrubSensitiveText(text: string): string {
     .replace(AUTHORIZATION, `$1${MASK}`)
     .replace(SUPABASE_AUTH_COOKIE, `$1${MASK}`)
     .replace(JWT, MASK)
-    .replace(SUPABASE_SECRET_KEY, MASK);
+    .replace(SUPABASE_SECRET_KEY, MASK)
+    .replace(INNGEST_SIGNING_KEY, MASK);
   return scrubPersonalData(scrubPersonalData(withoutSecrets));
 }
 
