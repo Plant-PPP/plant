@@ -3,7 +3,12 @@ import nextTs from "eslint-config-next/typescript";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 import { moneyRules } from "../../eslint.money.mjs";
-import { secretKeyReads } from "../../eslint.secret-key.mjs";
+import {
+  asSelector,
+  fence,
+  LITERAL_IMPORTS_ONLY,
+  secretKeyReads,
+} from "../../eslint.fences.mjs";
 
 const SOURCE = "{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
 
@@ -17,25 +22,11 @@ const SERVICE_ROLE = {
   regex: `(^|/)service-role${EXTENSION}$`,
   message: "The secret key bypasses RLS; only the AI cost sink holds it.",
 };
-// A path into node_modules reaches a package without naming it.
-const NODE_MODULES = {
-  regex: "(^|/)node_modules(/|$)",
-  message: "Import a package by its name, so the import fences see it.",
-};
 const COST_SINK = {
   regex: `(^|/)ai-cost-sink${EXTENSION}$`,
   message: "The cost sink writes past RLS; only route handlers may use it.",
 };
 
-// The fences read import specifiers, so a computed one cannot pass them.
-const LITERAL_IMPORTS_ONLY = [
-  'ImportExpression[source.type!="Literal"]',
-  'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
-].map((selector) => ({
-  selector,
-  message: "Import a module by a string literal so the import fences see it.",
-}));
-const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
 // A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>
   modules.flatMap(({ regex, message }) =>
@@ -69,36 +60,9 @@ const LIB_AI_SYNTAX = [
   ...NO_EXPORT_LIST,
 ];
 
-// The rules for one block: a later block replaces the rule's options, so each
-// lists everything it keeps. no-restricted-imports does not see import() or
-// require(), so the same regexes go to no-restricted-syntax.
-function fence(fenced, syntax = BASE_SYNTAX) {
-  const modules = [...fenced, NODE_MODULES];
-  return {
-    "no-restricted-imports": [
-      "error",
-      { patterns: modules.map(({ regex, message }) => ({ regex, message })) },
-    ],
-    "no-restricted-syntax": [
-      "error",
-      ...modules.flatMap(({ regex, message }) => [
-        {
-          selector: `ImportExpression[source.value=${asSelector(regex)}]`,
-          message,
-        },
-        {
-          selector: `CallExpression[callee.name="require"][arguments.0.value=${asSelector(regex)}]`,
-          message,
-        },
-      ]),
-      ...syntax,
-    ],
-  };
-}
-
 const NO_SERVER_ACTION = ["Program", ":function > BlockStatement"].map(
   (parent) => ({
-    selector: `${parent} > ExpressionStatement[directive="use server"]`,
+    selector: `${parent} > ExpressionStatement[directive][expression.value="use server"]`,
     message:
       "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
   }),
@@ -115,7 +79,7 @@ export default defineConfig([
   },
   {
     files: [`**/*.${SOURCE}`],
-    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK]),
+    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK], BASE_SYNTAX),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],

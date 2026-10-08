@@ -10,7 +10,7 @@
     "tsconfig.base.json",
     "eslint.packages.mjs",
     "eslint.money.mjs",
-    "eslint.secret-key.mjs",
+    "eslint.fences.mjs",
     ".npmrc",
     // Read by apps/web's otp-config.test.ts.
     "supabase/config.toml",
