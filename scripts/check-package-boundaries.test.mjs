@@ -193,6 +193,14 @@ for (const spec of [
   "github:vercel/ai",
   "vercel/ai",
   "https://registry.npmjs.org/ai/-/ai-6.0.301.tgz",
+  "git@github.com:vercel/ai.git",
+  "vercel/ai#semver:^6",
+  "vercel/ai#path:packages/ai",
+  "gist:abc123",
+  "sourcehut:~x/ai",
+  "vendor/x/ai",
+  "~/vendor/ai",
+  "npm:ai@github:vercel/ai",
 ]) {
   test(`llm: ${spec} in @plant/core fails`, () => {
     const r = check({ "@plant/core": [["llm", spec]] });
@@ -200,6 +208,22 @@ for (const spec of [
     assert.match(r.output, /cannot tell which package llm \(.*\) installs/);
   });
 }
+
+test("a path whose manifest has no name fails", () => {
+  const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
+    "vendor/ai/package.json": "{}",
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /cannot tell which package llm \(link:vendor\/ai\)/);
+});
+
+test("a workspace package the graph does not list fails", () => {
+  const r = check({}, "dependencies", {
+    "packages/x/package.json": JSON.stringify({ name: "@plant/x" }),
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /packages\/x: unknown package @plant\/x/);
+});
 
 test("ai from the catalog in @plant/core fails", () => {
   const r = check({ "@plant/core": [["ai", "catalog:"]] });
@@ -221,6 +245,9 @@ test("the repo's own specs pass", () => {
       ["@plant/shared", "workspace:*"],
       ["inngest", "catalog:"],
       ["ai", "^6.0.301"],
+      ["runner", "workspace:@plant/jobs@*"],
+      ["@plant/core", "workspace:^"],
+      ["zod", "4.1.0-beta.1+build || latest"],
     ],
   });
   assert.equal(r.status, 0, r.output);

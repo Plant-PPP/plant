@@ -85,10 +85,9 @@ manifests.push(".");
 // The package a spec installs when it is not the dependency's key: an alias
 // ("npm:ai@6", "workspace:@plant/jobs@*") names it and a path ("../jobs",
 // "link:../jobs", "file:vendor/x", "workspace:../jobs") holds its manifest.
-// null when a path, tarball, URL or git spec gives no name to check;
-// undefined for a version range, a tag or "catalog:".
+// undefined for a version range, a tag or "catalog:"; null for anything else
+// (a tarball, URL, git spec or a path with no manifest), which fails the check.
 function installedName(dir, spec) {
-  if (spec.startsWith("~/")) return null;
   const path =
     /^(?:link|file):(.+)$/.exec(spec)?.[1] ??
     /^workspace:([./].*)$/.exec(spec)?.[1] ??
@@ -102,16 +101,18 @@ function installedName(dir, spec) {
       ? (JSON.parse(readFileSync(manifest, "utf8")).name ?? null)
       : null;
   }
-  if (
-    /^(?:[a-z+]+:\/\/|git[+:]|github:|gitlab:|bitbucket:|[^@/:]+\/[^/:]+$)/i.test(
-      spec,
-    )
-  ) {
-    return null;
-  }
-  return /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
-    spec,
-  )?.[1];
+  const range = String.raw`[\w.^~<>=|*+ -]*`;
+  const name = String.raw`((?:@[\w.~-]+\/)?[\w.~-]+)`;
+  const alias = new RegExp(
+    `^(?:npm:${name}(?:@${range})?|workspace:${name}@${range})$`,
+  )
+    .exec(spec)
+    ?.slice(1)
+    .find(Boolean);
+  if (alias !== undefined) return alias;
+  return new RegExp(`^(?:catalog:|(?:workspace:)?${range}$)`).test(spec)
+    ? undefined
+    : null;
 }
 
 const violations = [];
