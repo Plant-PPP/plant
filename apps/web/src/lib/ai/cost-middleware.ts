@@ -46,17 +46,20 @@ function tokenUsage({
   };
 }
 
-// An APICallError with a 4xx or 5xx means the provider refused before
-// generating: its HTTP status, or the one @ai-sdk/anthropic gives a stream
-// that opens with an error event. The AI Gateway's errors are not
-// APICallErrors and make up statuses for its own timeouts and lost
-// connections, so they count as calls that may have billed.
+// Only an APICallError carries the provider's HTTP status, or the one
+// @ai-sdk/anthropic gives a stream whose first event is an error or fails to
+// parse. The AI Gateway's errors are not APICallErrors and make up statuses
+// for its own timeouts and lost connections.
+function providerStatus(error: unknown): number | undefined {
+  return APICallError.isInstance(error) ? error.statusCode : undefined;
+}
+
+// A provider that answered 4xx or 5xx refused before generating; any other
+// failure may have billed. @ai-sdk/anthropic also reports a first stream event
+// that fails to parse as a 500, so a change in that event's schema could bill
+// calls that leave neither a row nor a line.
 function providerRefused(error: unknown): boolean {
-  return (
-    APICallError.isInstance(error) &&
-    error.statusCode !== undefined &&
-    error.statusCode >= 400
-  );
+  return (providerStatus(error) ?? 0) >= 400;
 }
 
 // Writes one ai_costs row per model call, priced by the requested model.
@@ -81,10 +84,7 @@ export function costMiddleware(options: {
       ...fields,
       "plant.ai_cost.reason": reason,
       "error.type": error instanceof Error ? errorType(error) : undefined,
-      // Absent when the provider never answered.
-      "http.response.status_code": APICallError.isInstance(error)
-        ? error.statusCode
-        : undefined,
+      "http.response.status_code": providerStatus(error),
     });
   }
 

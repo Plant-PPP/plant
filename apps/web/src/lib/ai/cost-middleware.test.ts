@@ -213,6 +213,22 @@ describe("generate", () => {
     expect(record).toHaveBeenCalledTimes(2);
   });
 
+  it("writes the row before the step finishes", async () => {
+    const order: string[] = [];
+    record.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push("recorded");
+    });
+    await generateText({
+      model: model({ doGenerate: TEXT }),
+      prompt: "hi",
+      onStepFinish: () => {
+        order.push("step-finish");
+      },
+    });
+    expect(order).toEqual(["recorded", "step-finish"]);
+  });
+
   it("logs nothing for retried provider refusals", async () => {
     const refusal = () =>
       new APICallError({
@@ -273,6 +289,7 @@ describe("generate", () => {
       }),
     ).rejects.toThrow("Internal server error");
     expect(events()).toEqual([["ai_cost.unbilled", "call_error"]]);
+    expect(lines[0]).not.toHaveProperty("http.response.status_code");
   });
 
   it("prices cache writes apart from the input", async () => {
@@ -546,6 +563,7 @@ describe("stream", () => {
   });
 
   it.each([
+    [429, []],
     [503, []],
     [200, [["ai_cost.unbilled", "call_error"]]],
   ])(
