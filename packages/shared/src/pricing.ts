@@ -1,0 +1,83 @@
+// USD per 1M tokens, Standard tier. Sources (checked 2026-10-08):
+// https://ai.google.dev/gemini-api/docs/pricing,
+// https://platform.claude.com/docs/en/about-claude/pricing.
+// A time-limited price is loaded at its later, higher value, so a cost is never
+// under-counted. cacheWrite "0": the model has no per-token cache-write price.
+type ModelPricing = {
+  input: string;
+  output: string;
+  cacheRead: string;
+  cacheWrite: string;
+};
+
+export const MODEL_PRICING = {
+  "gemini-3.5-flash-lite": {
+    input: "0.30",
+    output: "2.50",
+    cacheRead: "0.03",
+    cacheWrite: "0",
+  },
+  "gemini-3.1-flash-lite": {
+    input: "0.25",
+    output: "1.50",
+    cacheRead: "0.025",
+    cacheWrite: "0",
+  },
+  "gemini-3.8-flash": {
+    input: "1.50",
+    output: "7.50",
+    cacheRead: "0.15",
+    cacheWrite: "0",
+  },
+  "claude-haiku-4-5": {
+    input: "1.00",
+    output: "5.00",
+    cacheRead: "0.10",
+    cacheWrite: "1.25",
+  },
+} as const satisfies Record<string, ModelPricing>;
+
+export type PricedModelId = keyof typeof MODEL_PRICING;
+
+// input excludes cached input; output includes reasoning.
+export type TokenUsage = {
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+};
+
+const SCALE_DIGITS = 8;
+const SCALE = 10n ** BigInt(SCALE_DIGITS);
+const TOKENS_PER_PRICE_UNIT = 1_000_000n;
+
+function toScaled(decimal: string): bigint {
+  const [whole = "0", fraction = ""] = decimal.split(".");
+  return BigInt(whole) * SCALE + BigInt(fraction.padEnd(SCALE_DIGITS, "0"));
+}
+
+function tokens(count: number): bigint {
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new RangeError("Token counts must be non-negative safe integers");
+  }
+  return BigInt(count);
+}
+
+// Exact cost in USD as a decimal string with at most 8 decimals (numeric(20, 8)),
+// rounded half-up.
+export function costUsd(modelId: PricedModelId, usage: TokenUsage): string {
+  const price = MODEL_PRICING[modelId];
+  const perMillion =
+    toScaled(price.input) * tokens(usage.input) +
+    toScaled(price.cacheRead) * tokens(usage.cacheRead) +
+    toScaled(price.cacheWrite) * tokens(usage.cacheWrite) +
+    toScaled(price.output) * tokens(usage.output);
+  const scaled =
+    (perMillion + TOKENS_PER_PRICE_UNIT / 2n) / TOKENS_PER_PRICE_UNIT;
+  const whole = scaled / SCALE;
+  const fraction = (scaled % SCALE)
+    .toString()
+    .padStart(SCALE_DIGITS, "0")
+    .replace(/0+$/, "");
+  return fraction === "" ? whole.toString() : `${whole}.${fraction}`;
+}
