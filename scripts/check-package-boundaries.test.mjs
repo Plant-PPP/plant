@@ -266,6 +266,19 @@ test("an Inngest model package outside the web app fails", () => {
   );
 });
 
+test("an Inngest model package in evals fails", () => {
+  const r = check({ "@plant/evals": ["@inngest/ai", "@inngest/agent-kit"] });
+  assert.equal(r.status, 1);
+  assert.match(
+    r.output,
+    /@plant\/evals may not depend on @inngest\/ai, inngest/,
+  );
+  assert.match(
+    r.output,
+    /@plant\/evals may not depend on @inngest\/agent-kit, inngest/,
+  );
+});
+
 for (const other of ["package.yaml", "package.json5"]) {
   test(`a workspace package with a ${other} fails`, () => {
     const r = check({}, "dependencies", {
@@ -303,6 +316,28 @@ test("a path whose manifest has no name fails", () => {
   });
   assert.equal(r.status, 1);
   assert.match(r.output, /x \(link:..\/x\) is not a version/);
+});
+
+// pnpm reads a spec that starts with a dot as a path, even with characters a
+// version range may hold.
+for (const spec of [".v|x", ". v", ".v+x"]) {
+  test(`llm: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["llm", spec]] });
+    assert.equal(r.status, 1);
+    assert.match(
+      r.output,
+      /llm \(.*\) is not a version, an alias or a workspace package/,
+    );
+  });
+}
+
+test("a flow-style packages list fails", () => {
+  const r = check({ "@plant/core": ["ai"] }, "dependencies", {
+    "pnpm-workspace.yaml":
+      'packages: ["apps/*", "packages/*", "evals", "security-tests"]\n',
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /Could not read the packages globs/);
 });
 
 test("a path to the repo root fails", () => {

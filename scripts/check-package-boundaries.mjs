@@ -116,7 +116,8 @@ function installedName(dir, spec) {
   const path =
     /^(?:link|file):(.+)$/.exec(spec)?.[1] ??
     /^workspace:([./].*)$/.exec(spec)?.[1] ??
-    /^(\.{1,2}(?:\/.*)?|\/.*)$/.exec(spec)?.[1];
+    // pnpm reads any spec that starts with ".", "/" or "~/" as a path.
+    /^((?:\.|\/|~\/).*)$/.exec(spec)?.[1];
   if (path !== undefined) {
     // A path, not a URL: pnpm reads a "%61" in a directory name literally.
     const target = resolve(root, dir, path);
