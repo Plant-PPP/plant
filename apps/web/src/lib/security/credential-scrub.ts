@@ -8,7 +8,8 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
   .source;
 // Right after a percent escape, raw or encoded once (not three times): its
 // hex digits belong to the escape, so `%2012345678` is a space and a DNI.
-const AFTER_ESCAPE = /(?<=%(?:25)?[0-9A-Fa-f]{2})/.source;
+const ESCAPE = /%(?:25)?[0-9A-Fa-f]{2}/.source;
+const AFTER_ESCAPE = `(?<=${ESCAPE})`;
 // Just after a `%`, or a `%` and one hex digit, raw or encoded once: the next
 // digit is the escape's, so a literal `%` glued to a number reads as one too.
 const INSIDE_ESCAPE = /%(?:25)?[0-9A-Fa-f]?/.source;
@@ -65,7 +66,7 @@ const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE
 const CBU = String.raw`(?:(?<!\d|${INSIDE_ESCAPE})|${AFTER_ESCAPE})\d{22}(?!\d)`;
 // Also with a spreadsheet's thousands dots (`20.123.456.789`).
 const CUIT = String.raw`(?:(?<!\d|${INSIDE_ESCAPE})|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)(?:[-. ]?\d{8}[-. ]?\d(?!\d)|\.\d{3}\.\d{3}\.\d{3}(?!\d|\.\d))`;
-const DNI_START = String.raw`(?:(?<!\d|\d\.|${INSIDE_ESCAPE})|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))`;
+const DNI_START = String.raw`(?:(?<!\d|\d\.|${INSIDE_ESCAPE})|${AFTER_ESCAPE}|(?<=${ESCAPE}\.))`;
 // Two DNIs joined by a dot, as in a file name or a CSV row, which the DNI's
 // own bounds read as one dotted number.
 const DNI_PAIR = String.raw`${DNI_START}\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;
