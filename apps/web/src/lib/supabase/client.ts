@@ -7,7 +7,8 @@ export function createClient() {
     cookieOptions: SESSION_COOKIE_OPTIONS,
     // proxy.ts refreshes the session on every request. A refresh here that
     // hits a rate limit after the access token expired deletes the cookies,
-    // which would sign the user out.
+    // which would sign the user out. auth-js still refreshes a token it reads
+    // as near expiry (a clock ahead of the server's), and that edge stays.
     auth: { autoRefreshToken: false },
   });
 }

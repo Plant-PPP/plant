@@ -1,4 +1,4 @@
-import { sanitizeNextPath } from "./safe-redirect";
+import { pathOf, sanitizeNextPath } from "./safe-redirect";
 
 describe("sanitizeNextPath", () => {
   it.each([
@@ -34,7 +34,11 @@ describe("sanitizeNextPath", () => {
     expect(sanitizeNextPath("/a/../assets")).toBe("/assets");
   });
 
-  it("uses the given fallback", () => {
-    expect(sanitizeNextPath("//evil.example", "/x")).toBe("/x");
+  it.each([
+    ["/a?b#c", "/a"],
+    ["/a#b?c", "/a"],
+    ["/a", "/a"],
+  ])("takes the path of %s", (raw, path) => {
+    expect(pathOf(raw)).toBe(path);
   });
 });

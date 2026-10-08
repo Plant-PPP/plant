@@ -60,8 +60,11 @@ export function NavUser({ user }: { user: SessionUser }) {
     signingOut.current = true;
     setPending(true);
     setFailed(false);
-    const { error } = await createClient().auth.signOut({ scope: "local" });
-    if (error) {
+    const auth = createClient().auth;
+    const { error } = await auth.signOut({ scope: "local" });
+    // auth-js clears this device's session even when Auth fails to revoke it,
+    // and then this device is signed out all the same.
+    if (error && (await auth.getSession()).data.session) {
       signingOut.current = false;
       setPending(false);
       setFailed(true);

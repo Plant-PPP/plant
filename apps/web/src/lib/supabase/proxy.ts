@@ -1,10 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
+import { AuthInvalidJwtError } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { AUTH_UNAVAILABLE_HEADER } from "@/lib/auth/session-state";
 import { requireSupabaseEnv, SESSION_COOKIE_OPTIONS } from "./env";
 
-// auth-js retries a refresh for up to 30 s while Auth answers 5xx or does not
-// answer; past this the page shows the retry instead of hanging.
+// auth-js retries a refresh for up to 30 s on a 5xx or a failed fetch, and a
+// request Auth never answers has no timeout of its own; past this the page
+// shows the retry.
 const AUTH_TIMEOUT_MS = 5000;
 
 function withoutUnavailable(headers: Headers): Headers {
@@ -61,10 +63,15 @@ export async function updateSession(request: NextRequest) {
       AUTH_TIMEOUT_MS,
     );
   });
-  const { data, error } = await Promise.race([
-    supabase.auth.getClaims(),
-    timeout,
-  ]).finally(() => clearTimeout(timer));
+  // getClaims throws on a token it cannot decode (a corrupted or planted
+  // cookie); treat that as no session, so /login still loads and replaces it.
+  const claims = supabase.auth.getClaims().catch(() => ({
+    data: null,
+    error: new AuthInvalidJwtError("Invalid JWT"),
+  }));
+  const { data, error } = await Promise.race([claims, timeout]).finally(() =>
+    clearTimeout(timer),
+  );
 
   return {
     claims: data?.claims ?? null,

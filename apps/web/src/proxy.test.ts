@@ -152,6 +152,19 @@ it("shows the retry when Auth does not answer", async () => {
   }
 });
 
+it("treats a token auth-js cannot decode as no session", async () => {
+  getClaims = async () => {
+    throw new SyntaxError("Unexpected token");
+  };
+  const login = await proxy(request("/login"));
+  expect(login.status).toBe(200);
+  expect(login.headers.get("location")).toBeNull();
+  const page = await proxy(request("/assets"));
+  expect(page.headers.get("location")).toBe(
+    "http://localhost:3000/login?next=%2Fassets",
+  );
+});
+
 it("does not forward a client's own x-plant-auth", async () => {
   getClaims = signedIn;
   const res = await proxy(

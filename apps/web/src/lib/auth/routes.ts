@@ -1,4 +1,4 @@
-import { sanitizeNextPath } from "./safe-redirect";
+import { pathOf, sanitizeNextPath } from "./safe-redirect";
 
 export const LOGIN_PATH = "/login";
 export const CALLBACK_PATH = "/auth/callback";
@@ -14,7 +14,7 @@ export function isPublicPath(pathname: string): boolean {
 // callback, which would only show a signed-in user the sign-in page.
 export function afterLoginPath(raw: unknown): string {
   const safe = sanitizeNextPath(raw);
-  return isPublicPath(safe.split(/[?#]/, 1)[0] ?? "") ? "/" : safe;
+  return isPublicPath(pathOf(safe)) ? "/" : safe;
 }
 
 export function loginPath(next?: string): string {
