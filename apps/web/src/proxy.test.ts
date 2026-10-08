@@ -467,6 +467,7 @@ describe("the request line", () => {
         "error.type": "over_request_rate_limit",
       },
     });
+    expect(logged().line).not.toHaveProperty("plant.auth.reason");
   });
 
   it("warns with a timeout when Auth does not answer", async () => {
@@ -490,7 +491,11 @@ describe("the request line", () => {
     await proxy(request("/assets"));
     expect(logged()).toMatchObject({
       method: "error",
-      line: { level: "error", "plant.outcome": "no_auth_config" },
+      line: {
+        level: "error",
+        "plant.outcome": "no_auth_config",
+        "error.type": "no_auth_config",
+      },
     });
   });
 

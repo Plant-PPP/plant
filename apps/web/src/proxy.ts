@@ -12,7 +12,7 @@ import {
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
 import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
-import { type LogLevel, serverLog } from "@/lib/log/server-log";
+import { type LogFields, type LogLevel, serverLog } from "@/lib/log/server-log";
 import {
   createRequestId,
   REQUEST_ID_FIELD,
@@ -33,8 +33,9 @@ export async function proxy(request: NextRequest) {
     "http.request.method": request.method,
     "url.path": request.nextUrl.pathname,
   };
-  // In Next 16.4 only an edge proxy reaches onRequestError, so a throw here
-  // is logged here; onRequestError skips the proxy if that changes.
+  // Next 16.4 does not run onRequestError for the proxy, which is always
+  // Node, so a throw is logged here; onRequestError skips the proxy if that
+  // changes.
   try {
     const env = supabaseEnv();
     const csp = buildCsp({
@@ -49,17 +50,12 @@ export async function proxy(request: NextRequest) {
     const session = await sessionResponse(request);
     session.response.headers.set(CSP_HEADER, csp);
     session.response.headers.set(REQUEST_ID_HEADER, requestId);
-    // `error.type` only when Auth failed: a missing or broken session is the
-    // proxy doing its job, and its code is the reason.
-    const authError = authErrorType(session.authError);
     serverLog[LOG_LEVEL[session.outcome]]("proxy.request", {
       ...fields,
       "plant.outcome": session.outcome,
       "plant.auth.duration_ms": session.authDurationMs,
       "enduser.id": session.userId,
-      ...(session.outcome === "auth_unavailable"
-        ? { "error.type": authError }
-        : { "plant.auth.reason": authError }),
+      ...authFields(session),
     });
     return session.response;
   } catch (error) {
@@ -96,6 +92,16 @@ type SessionResult = {
   userId?: string;
   authError?: MaybeAuthError;
 };
+
+// `error.type` only when the session could not be checked: a missing or
+// broken session is the proxy doing its job, and its code is the reason.
+function authFields({ outcome, authError }: SessionResult): LogFields {
+  if (outcome === "no_auth_config") return { "error.type": outcome };
+  const code = authErrorType(authError);
+  return outcome === "auth_unavailable"
+    ? { "error.type": code }
+    : { "plant.auth.reason": code };
+}
 
 // Checks the session on every page request, refreshes it before it nears
 // expiry and sends anyone without one to /login. Server Components cannot

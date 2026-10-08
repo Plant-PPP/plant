@@ -55,7 +55,8 @@ SELECT throws_ok(
 RESET ROLE;
 
 SELECT ok(
-  NOT has_any_column_privilege('service_role', 'private.audit_log', 'SELECT, INSERT, UPDATE'),
+  NOT has_any_column_privilege('service_role', 'private.audit_log', 'SELECT, INSERT, UPDATE, REFERENCES')
+    AND NOT has_table_privilege('service_role', 'private.audit_log', 'DELETE, TRUNCATE, TRIGGER, MAINTAIN'),
   'service_role has no privilege on the audit log until a server-side writer needs one'
 );
 

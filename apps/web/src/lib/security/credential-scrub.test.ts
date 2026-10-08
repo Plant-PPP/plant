@@ -49,6 +49,23 @@ describe("scrubSensitiveText", () => {
       `{"access_token":"${MASK}","refresh_token": "${MASK}"}`,
     ],
     ["a token after a colon", "access_token: abc", `access_token: ${MASK}`],
+    ["a bare token in JSON", '{"token":"abc"}', `{"token":"${MASK}"}`],
+    [
+      "a quoted password with spaces",
+      '{"password":"p@ss w0rd, x"}',
+      `{"password":"${MASK}"}`,
+    ],
+    ["an API key header", "x-api-key: abc", `x-api-key: ${MASK}`],
+    [
+      "a JWT cut after its payload",
+      "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0",
+      `jwt ${MASK}`,
+    ],
+    [
+      "Supabase's auth cookie",
+      "sb-abc-auth-token.1=eHl6MTIz; Path=/",
+      `sb-abc-auth-token.1=${MASK}; Path=/`,
+    ],
     ["a password param", "/x?a=1&password=hunter2", `/x?a=1&password=${MASK}`],
     ["an API key param", "/x?apikey=abc", `/x?apikey=${MASK}`],
     ["a bearer header", "Bearer abc.def", `Bearer ${MASK}`],
@@ -74,6 +91,8 @@ describe("scrubSensitiveText", () => {
       "/auth/callback?code=abc&token_hash=def",
       "CUIT 20-12345678-9, DNI 12.345.678, ana@example.com",
       '{"access_token":"abc"} Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc',
+      "12345678Bearer abc 12345678sb_secret_x 12345678eyJhbGciOiJ9",
+      '{"password":"a b"} password=""',
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -112,6 +131,15 @@ describe("scrubSensitiveText", () => {
     ],
     ["a DNI in a file name", "dni_12345678.jpg", `dni_${MASK}.jpg`],
     ["a CUIT glued to a word", "CUIT20123456789", `CUIT${MASK}`],
+    ["a CUIT with dots", "CUIT 20.12345678.9", `CUIT ${MASK}`],
+    ["a DNI after an abbreviation", "DNI nro.12345678", `DNI nro.${MASK}`],
+    ["a dotted file name", "dni.12345678.jpg", `dni.${MASK}.jpg`],
+    [
+      "a twice-encoded email with an accent",
+      "jos%25C3%25A9%2540example.com",
+      MASK,
+    ],
+    ["a twice-encoded email with a plus", "ana%252Bx%2540example.com", MASK],
   ])("masks %s", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -141,6 +169,10 @@ describe("scrubSensitiveText", () => {
     ["an ISO date", "on 2026-10-08T16:00:00Z"],
     ["an epoch", "at 1791475200000"],
     ["a pnpm path", "node_modules/.pnpm/@supabase+auth-js@2.71.1/node_modules"],
+    ["a trace id", "trace 0af7651916cd43dd8448eb211c80319c"],
+    ["a commit SHA", "sha 3f2a12345678bc9d0e1f2a3b4c5d6e7f80912345"],
+    ["a chunk name", "/_next/static/chunks/2017-87654321abcdef.js:1:2345"],
+    ["a word with eyJ inside", "keyJsonParser failed"],
   ])("leaves %s", (_label, text) => {
     expect(scrubSensitiveText(text)).toBe(text);
   });
@@ -158,6 +190,8 @@ describe("scrubSensitiveText", () => {
         .slice(0, 4096),
     ],
     ["a long JWT prefix", "eyJ" + "a".repeat(16000)],
+    ["repeated JWT prefixes", "eyJ-".repeat(4000)],
+    ["repeated named secrets", 'password:"'.repeat(1600)],
   ])("stays fast on %s", (_label, text) => {
     scrubSensitiveText(text);
     const runs = [0, 1, 2].map(() => {
@@ -186,6 +220,9 @@ describe("isSensitiveKey", () => {
     "service_role_key",
     "plant.auth.jwt",
     "user.phone",
+    "cuit_id",
+    "token.id",
+    "emailId",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });

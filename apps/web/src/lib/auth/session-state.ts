@@ -15,7 +15,7 @@ const SESSION_GONE_CODES = new Set([
 
 export type MaybeAuthError = { name?: string; code?: string } | null;
 
-// Auth's own error code, else the error's class name, for `error.type`.
+// Auth's own error code, else the error's class name.
 export function authErrorType(
   error: MaybeAuthError | undefined,
 ): string | undefined {

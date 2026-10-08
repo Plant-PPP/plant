@@ -4,8 +4,8 @@
 -- - Every public table has RLS enabled AND some grant to authenticated: the
 --   app reads it through PostgREST, and auto_expose_new_tables is off.
 -- - Every private table has RLS enabled and no grant to authenticated.
--- - anon holds no privilege on any relation in either schema, and neither
---   anon nor authenticated can use the private schema.
+-- - anon holds no privilege on any relation in either schema, and no API
+--   role, service_role included, can use the private schema.
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
@@ -13,7 +13,8 @@
 --   and foreign tables grant authenticated nothing.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
---   authenticated can execute any function in them, the only SECURITY DEFINER
+--   authenticated can execute any function in them, service_role none in
+--   private, the only SECURITY DEFINER
 --   functions are the signup and session triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
@@ -83,8 +84,9 @@ SELECT is_empty(
 
 SELECT ok(
   NOT has_schema_privilege('anon', 'private', 'USAGE')
-    AND NOT has_schema_privilege('authenticated', 'private', 'USAGE'),
-  'anon and authenticated cannot use the private schema'
+    AND NOT has_schema_privilege('authenticated', 'private', 'USAGE')
+    AND NOT has_schema_privilege('service_role', 'private', 'USAGE'),
+  'no API role, service_role included, can use the private schema'
 );
 
 -- Extensions live in the extensions schema, which the API does not expose:
@@ -100,8 +102,10 @@ SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
-            OR has_function_privilege('authenticated', p.oid, 'EXECUTE')) $$,
-  'anon, authenticated and PUBLIC cannot execute any function in public or private'
+            OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+            OR (p.pronamespace = 'private'::regnamespace
+                AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
+  'anon, authenticated and PUBLIC cannot execute any function in public or private, nor service_role in private'
 );
 
 SELECT is_empty(
