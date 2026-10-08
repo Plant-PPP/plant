@@ -84,8 +84,9 @@ THE FIVE CO-EQUAL LAWS — check and REPORT each (an unstated law is UNCHECKED, 
 5. VERIFIED-TO-FAIL — a security test never OBSERVED to fail proves nothing. Every fix in this taxonomy
    ships a test verified to fail against the PRE-FIX state AND asserting the LEGITIMATE path still works
    (else a "fix" that merely breaks the feature passes). DB-layer regressions go in supabase/tests/
-   (pgTAP, run in CI), with two users: B cannot read, insert into, update, reassign, or reference A's
-   rows. A spec that `return`s when its target is unreachable prints PASS while asserting nothing.
+   (pgTAP) and their HTTP view in security-tests/ (`pnpm test:security`), both run in CI, with two
+   users: B cannot read, insert into, update, reassign, or reference A's rows. A spec
+   that `return`s when its target is unreachable prints PASS while asserting nothing.
    Matcher discriminator: a USING violation filters SILENTLY (0 rows, no error) while a WITH CHECK
    violation raises 42501 — the wrong matcher passes vacuously either way.
 

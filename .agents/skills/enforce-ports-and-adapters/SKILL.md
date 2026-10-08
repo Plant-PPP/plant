@@ -275,7 +275,7 @@ entry in the script's `allowed` map, or the check fails with "unknown package".
 - "Defect — wrong placement; contract/adapter/wiring does not sit where the sibling hexagon puts it."
 - "Defect — infra-bearing adapter placed in an infra-free package; move to the composition root and inject."
 - "Defect — import points up/sideways in the repo DAG; a package may import only packages below it."
-- "Defect — a package depends on `evals`; evals is a leaf consumer (nothing imports it)."
+- "Defect — a package depends on `evals` or `security-tests`; both are leaf consumers (nothing imports them)."
 - "Defect — engine import (`inngest`) in a step or outside `packages/jobs` and the composition root; steps stay pure."
 - "Defect — the port imports an adapter or something external; the port must know nothing."
 - "Defect — consumer checks which source it holds instead of the port's capability matrix."
