@@ -4,7 +4,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-08 · CSP and security headers (PLA-19)
 
-- **`proxy.ts` sends the CSP, with a fresh nonce on every request.** Next reads the nonce from the request's CSP and stamps it on its own scripts; the root layout passes it to `ThemeProvider` for next-themes' inline script. Reading the request makes every page dynamic, which a nonce needs: a static page would ship one nonce to everyone.
+- **`proxy.ts` sends the CSP, with a fresh nonce on every request.** Next reads the nonce from the request's CSP and stamps it on its own scripts; the root layout passes it to `ThemeProvider` for next-themes' inline script. Reading the request makes every page dynamic, which a nonce needs: a static page is built with no nonce, so the CSP would block its scripts.
 - **`script-src 'self' 'nonce-…'`, no `'strict-dynamic'`.** Every script Plant loads is its own; `'strict-dynamic'` would let any nonced script load others from anywhere. `'unsafe-eval'` only under `next dev`, which needs it. The e2e fails if production allows eval.
 - **`style-src 'unsafe-inline'`.** The sidebar renders `style` attributes with its CSS variables, which a nonce cannot cover. Styles cannot run code.
 - **`connect-src` adds Supabase** (HTTP and WebSocket), because the browser calls Auth directly (PLA-17).

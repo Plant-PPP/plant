@@ -36,6 +36,28 @@ it("keeps every other source and form target same-origin", () => {
   expect(directive(csp, "style-src")).toEqual(["'self'", "'unsafe-inline'"]);
 });
 
+// A directive added later (script-src-elem, worker-src) would override or
+// widen the ones pinned above without failing them.
+it("sets only these directives", () => {
+  const names = buildCsp({ ...base, dev: false })
+    .split("; ")
+    .map((d) => d.split(" ")[0]);
+  expect(names.sort()).toEqual(
+    [
+      "base-uri",
+      "connect-src",
+      "default-src",
+      "font-src",
+      "form-action",
+      "frame-ancestors",
+      "img-src",
+      "object-src",
+      "script-src",
+      "style-src",
+    ].sort(),
+  );
+});
+
 it("lets the browser reach the given origins", () => {
   const csp = buildCsp({
     ...base,

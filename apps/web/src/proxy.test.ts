@@ -341,9 +341,8 @@ describe("the CSP and request id", () => {
         [REQUEST_ID_HEADER]: "attacker",
       }),
     );
-    expect(forwarded(res, NONCE_HEADER)).not.toBe("attacker");
+    expectForwarded(res);
     expect(forwarded(res, CSP_HEADER)).not.toContain("attacker");
-    expect(forwarded(res, REQUEST_ID_HEADER)).not.toBe("attacker");
   });
 
   it("let the browser reach Supabase", async () => {
