@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(26);
+SELECT plan(30);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -133,7 +133,7 @@ SELECT throws_ok(
      VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction',
              'gemini-3.5-flash-lite', 0, -1, 0, 0, 0) $$,
   '23514', NULL,
-  'a token count is never negative'
+  'an input token count is never negative'
 );
 
 RESET ROLE;
@@ -247,6 +247,39 @@ DELETE FROM auth.users WHERE id = 'a0000000-0000-4000-8000-00000000000a';
 SELECT is_empty(
   $$ SELECT 1 FROM public.ai_costs WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' $$,
   'deleting the account deletes its costs'
+);
+
+-- ── Remaining column checks ────────────────────────────────────────────────
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('b0000000-0000-4000-8000-00000000000b', 'import_extraction',
+             'gemini-3.5-flash-lite', 0, 0, -1, 0, 0) $$,
+  '23514', NULL,
+  'a cache read count is never negative'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('b0000000-0000-4000-8000-00000000000b', 'import_extraction',
+             'gemini-3.5-flash-lite', 0, 0, 0, -1, 0) $$,
+  '23514', NULL,
+  'a cache write count is never negative'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('b0000000-0000-4000-8000-00000000000b', 'import_extraction',
+             'gemini-3.5-flash-lite', 0, 0, 0, 0, -1) $$,
+  '23514', NULL,
+  'an output token count is never negative'
+);
+
+SELECT col_type_is(
+  'public', 'ai_costs', 'amount_usd', 'numeric(20,8)',
+  'amount_usd keeps the 8 decimals costUsd produces'
 );
 
 SELECT * FROM finish();
