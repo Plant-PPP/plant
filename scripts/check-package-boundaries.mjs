@@ -6,6 +6,8 @@
 // only links declared dependencies, but Node and TypeScript also resolve the
 // root node_modules from every package, so the root manifest is checked too.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const allowed = {
   "@plant/shared": [],
@@ -69,6 +71,14 @@ const manifests = globs.flatMap((glob) => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => `${glob.slice(0, -2)}/${entry.name}`)
     : [glob];
+  for (const dir of dirs) {
+    for (const other of ["package.yaml", "package.json5"]) {
+      if (existsSync(new URL(`${dir}/${other}`, root))) {
+        console.error(`${dir}/${other}: this script reads only package.json`);
+        process.exit(1);
+      }
+    }
+  }
   const found = dirs.filter((dir) =>
     existsSync(new URL(`${dir}/package.json`, root)),
   );
@@ -93,10 +103,8 @@ function installedName(dir, spec) {
     /^workspace:([./].*)$/.exec(spec)?.[1] ??
     /^(\.{1,2}(?:\/.*)?|\/.*)$/.exec(spec)?.[1];
   if (path !== undefined) {
-    const manifest = new URL(
-      `${path.replace(/\/?$/, "/")}package.json`,
-      new URL(`${dir}/`, root),
-    );
+    // A path, not a URL: pnpm reads "%61" literally.
+    const manifest = resolve(fileURLToPath(root), dir, path, "package.json");
     return existsSync(manifest)
       ? (JSON.parse(readFileSync(manifest, "utf8")).name ?? null)
       : null;
@@ -124,25 +132,29 @@ for (const dir of manifests) {
     peerDependencies = {},
     optionalDependencies = {},
   } = JSON.parse(readFileSync(new URL(`${dir}/package.json`, root), "utf8"));
-  const deps = Object.entries({
-    ...dependencies,
-    ...devDependencies,
-    ...peerDependencies,
-    ...optionalDependencies,
-  }).flatMap(([key, spec]) => {
-    const target = installedName(dir, spec);
-    if (target === null) {
-      violations.push(
-        `${name}: cannot tell which package ${key} (${spec}) installs`,
-      );
-    }
-    return target && target !== key
-      ? [
-          { dep: key, label: key },
-          { dep: target, label: `${key} (${target})` },
-        ]
-      : [{ dep: key, label: key }];
-  });
+  // Field by field: a key in one field must not hide the same key's spec in
+  // another, which pnpm may install instead.
+  const deps = [
+    dependencies,
+    devDependencies,
+    peerDependencies,
+    optionalDependencies,
+  ]
+    .flatMap((field) => Object.entries(field))
+    .flatMap(([key, spec]) => {
+      const target = installedName(dir, spec);
+      if (target === null) {
+        violations.push(
+          `${name}: cannot tell which package ${key} (${spec}) installs`,
+        );
+      }
+      return target && target !== key
+        ? [
+            { dep: key, label: key },
+            { dep: target, label: `${key} (${target})` },
+          ]
+        : [{ dep: key, label: key }];
+    });
   if (!(name in allowed)) violations.push(`${dir}: unknown package ${name}`);
   for (const { dep, label } of deps) {
     if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {

@@ -33,8 +33,10 @@ const PACKAGES = {
 
 /**
  * Runs the script over a workspace where `deps` maps a package name to the
- * dependencies it declares (a name, or a [name, spec] pair), under `field` in
- * every manifest, plus `files` (path to contents) outside the packages.
+ * dependencies it declares (a name, or a [name, spec] or [name, spec, field]
+ * entry), under `field` unless the entry names its own, plus `files` (path to
+ * contents) outside the packages. `files` may also be a function of the
+ * workspace's root.
  */
 function check(deps, field = "dependencies", files = {}) {
   const root = mkdtempSync(join(tmpdir(), "boundaries-"));
@@ -47,17 +49,15 @@ function check(deps, field = "dependencies", files = {}) {
     );
     for (const [dir, name] of Object.entries(PACKAGES)) {
       mkdirSync(join(root, dir), { recursive: true });
-      const dependencies = Object.fromEntries(
-        (deps[name] ?? []).map((dep) =>
-          Array.isArray(dep) ? dep : [dep, "*"],
-        ),
-      );
-      writeFileSync(
-        join(root, dir, "package.json"),
-        JSON.stringify({ name, [field]: dependencies }),
-      );
+      const manifest = { name };
+      for (const dep of deps[name] ?? []) {
+        const [key, spec, own = field] = Array.isArray(dep) ? dep : [dep, "*"];
+        manifest[own] = { ...manifest[own], [key]: spec };
+      }
+      writeFileSync(join(root, dir, "package.json"), JSON.stringify(manifest));
     }
-    for (const [path, contents] of Object.entries(files)) {
+    const extra = typeof files === "function" ? files(root) : files;
+    for (const [path, contents] of Object.entries(extra)) {
       mkdirSync(join(root, path, ".."), { recursive: true });
       writeFileSync(join(root, path), contents);
     }
@@ -209,6 +209,65 @@ for (const spec of [
   });
 }
 
+test("an alias is checked when another field declares the same key", () => {
+  const r = check({
+    "@plant/core": [
+      ["llm", "npm:ai@6", "devDependencies"],
+      ["llm", "*", "peerDependencies"],
+    ],
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /@plant\/core may not depend on llm \(ai\)/);
+});
+
+test("an absolute path is read", () => {
+  const r = check({}, "dependencies", (root) => ({
+    "package.json": JSON.stringify({
+      name: "plant",
+      dependencies: { llm: join(root, "vendor/ai") },
+    }),
+    "vendor/ai/package.json": JSON.stringify({ name: "ai" }),
+  }));
+  assert.equal(r.status, 1);
+  assert.match(r.output, /plant may not depend on llm \(ai\), the AI SDK/);
+});
+
+test("a path is read as written, not as a URL", () => {
+  const r = check(
+    { "@plant/core": [["llm", "link:../../vendor/%61i"]] },
+    "dependencies",
+    {
+      "vendor/%61i/package.json": JSON.stringify({ name: "ai" }),
+      "vendor/ai/package.json": JSON.stringify({ name: "benign" }),
+    },
+  );
+  assert.equal(r.status, 1);
+  assert.match(r.output, /@plant\/core may not depend on llm \(ai\)/);
+});
+
+for (const other of ["package.yaml", "package.json5"]) {
+  test(`a workspace package with a ${other} fails`, () => {
+    const r = check({}, "dependencies", {
+      [`packages/x/${other}`]: "name: llmkit\n",
+    });
+    assert.equal(r.status, 1);
+    assert.match(
+      r.output,
+      new RegExp(`packages/x/${other}: this script reads only package.json`),
+    );
+  });
+}
+
+test("a workspace glob that matches no package fails", () => {
+  const r = check({}, "dependencies", {
+    "pnpm-workspace.yaml":
+      'packages:\n  - "apps/*"\n  - "packages/*"\n  - "evals"\n  - "security-tests"\n  - "tools/*"\n',
+    "tools/.keep": "",
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /No package matches "tools\/\*"/);
+});
+
 test("a path whose manifest has no name fails", () => {
   const r = check({ plant: [["llm", "link:vendor/ai"]] }, "dependencies", {
     "vendor/ai/package.json": "{}",
@@ -248,6 +307,7 @@ test("the repo's own specs pass", () => {
       ["runner", "workspace:@plant/jobs@*"],
       ["@plant/core", "workspace:^"],
       ["zod", "4.1.0-beta.1+build || latest"],
+      ["typescript", ">=5 <7"],
     ],
   });
   assert.equal(r.status, 0, r.output);
