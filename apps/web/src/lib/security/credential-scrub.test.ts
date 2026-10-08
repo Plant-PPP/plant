@@ -277,6 +277,16 @@ describe("scrubSensitiveText", () => {
       `/files/DNI%20${MASK}.pdf /DNI%2520${MASK}`,
     ],
     [
+      "a CUIT with a spreadsheet's thousands dots",
+      "Fila 3;Perez Juan;20.123.456.789;AL30",
+      `Fila 3;Perez Juan;${MASK};AL30`,
+    ],
+    [
+      "a zero-padded DNI",
+      "Doc: 012345678, nro 0012345678",
+      `Doc: ${MASK}, nro ${MASK}`,
+    ],
+    [
       "two dotted DNIs after an encoded accent or quote",
       "Jos%C3%A9.12345678.87654321.pdf %2212345678.87654321%22",
       `Jos%C3%A9.${MASK}.pdf %22${MASK}%22`,
