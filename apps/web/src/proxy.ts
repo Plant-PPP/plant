@@ -5,6 +5,7 @@ import {
   LOGIN_PATH,
   loginPath,
 } from "@/lib/auth/routes";
+import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { isSessionMissing } from "@/lib/auth/session-state";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
@@ -22,7 +23,10 @@ export async function proxy(request: NextRequest) {
   if (session.claims) {
     // A signed-in user on /login goes where they were headed, unless /login
     // is showing an error from the callback.
-    if (pathname === LOGIN_PATH && !searchParams.has("error")) {
+    if (
+      pathname === LOGIN_PATH &&
+      !loginErrorMessage(searchParams.get("error"))
+    ) {
       return session.redirect(
         new URL(afterLoginPath(searchParams.get("next")), request.url),
       );

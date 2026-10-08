@@ -30,14 +30,18 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { next, error } = await searchParams;
+  const params = await searchParams;
+  // A repeated parameter counts by its first value, as in proxy.ts.
+  const [next, error] = [params.next, params.error].map((value) =>
+    Array.isArray(value) ? value[0] : value,
+  );
   return (
     <main className="flex min-h-svh flex-col items-center justify-center p-6">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <BrandLogo variant="logotype" className="h-8 w-auto" />
         <h1 className="text-xl font-semibold">Entrá a Plant</h1>
         <LoginForm
-          next={afterLoginPath(Array.isArray(next) ? next[0] : next)}
+          next={afterLoginPath(next)}
           error={loginErrorMessage(error)}
           googleEnabled={await googleEnabled()}
         />

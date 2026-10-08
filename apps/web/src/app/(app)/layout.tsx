@@ -18,7 +18,7 @@ export default async function AppLayout({
       defaultOpen={defaultOpen}
       className="h-svh min-h-0 overflow-hidden"
     >
-      <AppSidebar user={toSessionUser(claims.email ?? "")} />
+      <AppSidebar user={toSessionUser(claims.sub, claims.email ?? "")} />
       {/* A collapsed sidebar leaves no gutter of its own, so the Sidebar's DOM
           peer supplies the canvas's left margin. */}
       <div className="flex min-w-0 flex-1 md:peer-data-[state=collapsed]:ml-2">

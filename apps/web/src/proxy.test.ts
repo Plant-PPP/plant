@@ -84,6 +84,7 @@ it.each([
   ["/login?next=//evil.example", "http://localhost:3000/"],
   ["/login", "http://localhost:3000/"],
   ["/login?next=%2Fauth%2Fcallback", "http://localhost:3000/"],
+  ["/login?error=unknown&next=%2Fassets", "http://localhost:3000/assets"],
 ])("sends a signed-in user on %s to %s", async (path, location) => {
   getClaims = signedIn;
   const res = await proxy(request(path));
