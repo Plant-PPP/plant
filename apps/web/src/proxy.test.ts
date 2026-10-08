@@ -165,6 +165,15 @@ it("treats a token auth-js cannot decode as no session", async () => {
   );
 });
 
+it("treats any other throw as Auth being unavailable", async () => {
+  getClaims = async () => {
+    throw new TypeError("importKey failed");
+  };
+  const res = await proxy(request("/assets"));
+  expect(res.headers.get("location")).toBeNull();
+  expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+});
+
 it("does not forward a client's own x-plant-auth", async () => {
   getClaims = signedIn;
   const res = await proxy(

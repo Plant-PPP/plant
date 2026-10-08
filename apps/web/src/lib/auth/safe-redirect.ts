@@ -6,7 +6,6 @@ const BASE = "http://plant.invalid";
 const RAW_UNSAFE = /[\\\x00-\x1f]/;
 const ENCODED_UNSAFE = /%(2f|5c|09|0a|0d)/i;
 
-// The path of a path with an optional query and fragment.
 export function pathOf(path: string): string {
   return path.split(/[?#]/, 1)[0] ?? "";
 }
