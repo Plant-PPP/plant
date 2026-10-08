@@ -5,7 +5,7 @@
 // depend on the AI SDK; nothing depends on evals or the security tests. pnpm
 // only links declared dependencies, but Node and TypeScript also resolve the
 // root node_modules from every package, so the root manifest is checked too.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,7 +45,6 @@ const sdkFences = [
 // Every workspace package, from the `packages:` globs in pnpm-workspace.yaml
 // (the "dir/*" and plain "dir" forms), so a new one without an entry in
 // `allowed` fails.
-// Paths, not URLs: pnpm reads a "%61" in a directory name literally.
 const root = fileURLToPath(new URL("../", import.meta.url));
 const workspaceLines = readFileSync(
   resolve(root, "pnpm-workspace.yaml"),
@@ -72,7 +71,12 @@ const manifests = globs.flatMap((glob) => {
     ? readdirSync(resolve(root, glob.slice(0, -2)), {
         withFileTypes: true,
       })
-        .filter((entry) => entry.isDirectory())
+        // pnpm follows a symlinked package; a Dirent reports it as a link.
+        .filter((entry) =>
+          statSync(resolve(root, glob.slice(0, -2), entry.name), {
+            throwIfNoEntry: false,
+          })?.isDirectory(),
+        )
         .map((entry) => `${glob.slice(0, -2)}/${entry.name}`)
     : [glob];
   for (const dir of dirs) {
@@ -114,6 +118,7 @@ function installedName(dir, spec) {
     /^workspace:([./].*)$/.exec(spec)?.[1] ??
     /^(\.{1,2}(?:\/.*)?|\/.*)$/.exec(spec)?.[1];
   if (path !== undefined) {
+    // A path, not a URL: pnpm reads a "%61" in a directory name literally.
     const target = resolve(root, dir, path);
     return workspaceDirs.has(target)
       ? (JSON.parse(readFileSync(resolve(target, "package.json"), "utf8"))
@@ -129,6 +134,7 @@ function installedName(dir, spec) {
     ?.slice(1)
     .find(Boolean);
   if (alias !== undefined) return alias;
+  if (/\.(tgz|tar|tar\.gz)$/i.test(spec)) return null;
   return new RegExp(`^(?:catalog:|(?:workspace:)?${range}$)`).test(spec)
     ? undefined
     : null;
@@ -166,9 +172,13 @@ for (const dir of manifests) {
           ]
         : [{ dep: key, label: key }];
     });
-  if (!(name in allowed)) violations.push(`${dir}: unknown package ${name}`);
+  if (!Object.hasOwn(allowed, name))
+    violations.push(`${dir}: unknown package ${name}`);
   for (const { dep, label } of deps) {
-    if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {
+    if (
+      dep.startsWith("@plant/") &&
+      !(Object.hasOwn(allowed, name) && allowed[name].includes(dep))
+    ) {
       violations.push(`${name} may not depend on ${label}`);
     }
     for (const fence of sdkFences) {

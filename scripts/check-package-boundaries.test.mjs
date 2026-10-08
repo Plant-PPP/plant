@@ -10,6 +10,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -206,6 +207,9 @@ for (const spec of [
   "vendor/x/ai",
   "~/vendor/ai",
   "npm:ai@github:vercel/ai",
+  "ai-6.0.301.tgz",
+  "ai-6.0.301.tar",
+  "ai-6.0.301.tar.gz",
 ]) {
   test(`llm: ${spec} in @plant/core fails`, () => {
     const r = check({ "@plant/core": [["llm", spec]] });
@@ -299,6 +303,40 @@ test("a path whose manifest has no name fails", () => {
   });
   assert.equal(r.status, 1);
   assert.match(r.output, /x \(link:..\/x\) is not a version/);
+});
+
+test("a path to the repo root fails", () => {
+  const r = check({ "@plant/core": [["r", "link:../.."]] });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /r \(link:\.\.\/\.\.\) is not a version/);
+});
+
+test("a symlinked workspace package is read", () => {
+  const r = check(
+    { "@plant/core": [["llmkit", "workspace:*"]] },
+    "dependencies",
+    (root) => {
+      mkdirSync(join(root, "tools/llmkit"), { recursive: true });
+      symlinkSync("../tools/llmkit", join(root, "packages/llmkit"));
+      return {
+        "tools/llmkit/package.json": JSON.stringify({
+          name: "llmkit",
+          dependencies: { ai: "^6" },
+        }),
+      };
+    },
+  );
+  assert.equal(r.status, 1);
+  assert.match(r.output, /packages\/llmkit: unknown package llmkit/);
+  assert.match(r.output, /llmkit may not depend on ai, the AI SDK/);
+});
+
+test("a package named after an Object property is unknown", () => {
+  const r = check({}, "dependencies", {
+    "packages/x/package.json": JSON.stringify({ name: "constructor" }),
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /packages\/x: unknown package constructor/);
 });
 
 test("a workspace package the graph does not list fails", () => {
