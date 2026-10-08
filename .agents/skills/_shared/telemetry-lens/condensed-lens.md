@@ -77,7 +77,7 @@ THE TEN CO-EQUAL LAWS — check and REPORT each (an unstated law is UNCHECKED, n
    may not ride). Attribute KEYS are bounded: never build a key from data (`plant.holding.<id>`) —
    the id goes in the VALUE. Model-call spans (Gemini extraction, Claude Haiku assistant) speak
    gen_ai.* semconv (model, token counts, finish reason); cost is derived at query time from
-   `ai-cost.ts` rates — a cost attribute is a defect. PostHog event names: one closed, documented
+   `pricing.ts` (`MODEL_PRICING`) rates — a cost attribute is a defect. PostHog event names: one closed, documented
    set (`object_action`), never built from data.
 6. STRUCTURED-CORRELATED-LOGS — single-line structured JSON via the house logger; never string
    interpolation, never multi-line (stack trace serializes into exception.stacktrace with
