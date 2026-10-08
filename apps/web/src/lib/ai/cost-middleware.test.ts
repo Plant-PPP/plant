@@ -473,8 +473,7 @@ describe("stream", () => {
     await reader.read();
     await reader.cancel();
     finish();
-    await result.consumeStream();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await result.finishReason;
     expect(record.mock.calls).toEqual([[ROW]]);
   });
 

@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(30);
+SELECT plan(34);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -281,6 +281,9 @@ SELECT col_type_is(
   'public', 'ai_costs', 'amount_usd', 'numeric(20,8)',
   'amount_usd keeps the 8 decimals costUsd produces'
 );
+
+SELECT col_type_is('public', 'ai_costs', c, 'bigint', c || ' holds any safe-integer token count')
+  FROM unnest(ARRAY['input_tokens', 'cache_read_tokens', 'cache_write_tokens', 'output_tokens']) AS c;
 
 SELECT * FROM finish();
 ROLLBACK;
