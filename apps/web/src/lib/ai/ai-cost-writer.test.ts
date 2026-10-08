@@ -132,8 +132,16 @@ it("throws fetch_error when the request fails", async () => {
 it("times out a request that ignores the abort", async () => {
   const fetch = jest.fn(() => new Promise<Response>(() => {}));
   const write = writerWith(fetch)(row);
+  let done = false;
+  void write
+    .catch(() => {})
+    .finally(() => {
+      done = true;
+    });
   const settled = failure(write, true);
-  await jest.advanceTimersByTimeAsync(1500);
+  await jest.advanceTimersByTimeAsync(1499);
+  expect(done).toBe(false);
+  await jest.advanceTimersByTimeAsync(1);
   expect((await settled).message).toBe("timeout");
   expect(fetch).toHaveBeenCalledTimes(1);
   const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];

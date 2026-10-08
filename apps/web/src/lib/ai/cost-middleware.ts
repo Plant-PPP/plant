@@ -88,9 +88,8 @@ export function costMiddleware(options: {
     });
   }
 
-  // The SDK retries each attempt through the middleware. A provider that
-  // answered with an error status did not bill it; the caller logs the final
-  // failure.
+  // The SDK retries each attempt through the middleware; the caller logs the
+  // final failure.
   function callFailed(params: CallParams, error: unknown) {
     if (params.abortSignal?.aborted) unbilled("aborted", error);
     else if (!providerRefused(error)) unbilled("call_error", error);

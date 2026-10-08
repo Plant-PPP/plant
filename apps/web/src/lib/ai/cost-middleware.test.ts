@@ -336,6 +336,19 @@ describe("generate", () => {
     expect(events()).toEqual([["ai_cost.unbilled", "aborted"]]);
   });
 
+  it("logs the type of the abort reason", async () => {
+    const controller = new AbortController();
+    const call = generateText({
+      model: model({ doGenerate: hangsUntilAborted() }),
+      prompt: "hi",
+      abortSignal: controller.signal,
+    });
+    await started();
+    controller.abort(new RangeError("stop"));
+    await expect(call).rejects.toBeDefined();
+    expect(lines[0]?.["error.type"]).toBe("RangeError");
+  });
+
   it("logs a call that hit its step timeout as aborted", async () => {
     await expect(
       generateText({
@@ -401,6 +414,7 @@ describe("generate", () => {
     ["both totals", usage(undefined, undefined)],
     ["the output total", usage(10_000, undefined)],
     ["a total that is not a number", usage(NaN, 5)],
+    ["an output total that is not finite", usage(10_000, Infinity)],
   ])("writes no row and logs a call missing %s", async (_, missing) => {
     await generateText({
       model: model({ doGenerate: { ...TEXT, usage: missing } }),
@@ -563,6 +577,7 @@ describe("stream", () => {
   });
 
   it.each([
+    [400, []],
     [429, []],
     [503, []],
     [200, [["ai_cost.unbilled", "call_error"]]],
