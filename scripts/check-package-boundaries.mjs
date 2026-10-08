@@ -96,11 +96,19 @@ for (const dir of manifests) {
     ...devDependencies,
     ...peerDependencies,
     ...optionalDependencies,
-  }).map(([key, spec]) => {
-    // An alias ("llm": "npm:ai@6") installs the package its spec names.
-    const alias = /^(?:npm|workspace):((?:@[^/@]+\/)?[^@]+)(?:@|$)/.exec(spec);
-    const dep = alias?.[1] ?? key;
-    return { dep, label: dep === key ? dep : `${key} (${dep})` };
+  }).flatMap(([key, spec]) => {
+    // An alias ("llm": "npm:ai@6") installs the package its spec names;
+    // "workspace:*" and "workspace:../x" name none.
+    const target =
+      /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
+        spec,
+      )?.[1];
+    return target && target !== key
+      ? [
+          { dep: key, label: key },
+          { dep: target, label: `${key} (${target})` },
+        ]
+      : [{ dep: key, label: key }];
   });
   if (!(name in allowed)) violations.push(`${dir}: unknown package ${name}`);
   for (const { dep, label } of deps) {

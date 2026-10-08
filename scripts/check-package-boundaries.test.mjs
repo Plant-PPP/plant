@@ -139,3 +139,22 @@ for (const [name, alias, message] of [
     assert.match(r.output, message);
   });
 }
+
+for (const spec of ["workspace:*", "workspace:^", "workspace:../jobs"]) {
+  test(`@plant/jobs as ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["@plant/jobs", spec]] });
+    assert.equal(r.status, 1);
+    assert.match(r.output, /@plant\/core may not depend on @plant\/jobs$/m);
+  });
+}
+
+test("the repo's own specs pass", () => {
+  const r = check({
+    "@plant/web": [
+      ["@plant/shared", "workspace:*"],
+      ["inngest", "catalog:"],
+      ["ai", "^6.0.301"],
+    ],
+  });
+  assert.equal(r.status, 0, r.output);
+});
