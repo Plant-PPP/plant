@@ -32,10 +32,10 @@
 -- - authenticated writes public tables only through column grants, none on
 --   user_id.
 -- - authenticated_aal1, the role the access token hook gives an enrolled
---   user's aal1 token, uses no schema but public and holds no privilege there,
---   is a member of no role, and only authenticator can switch to it. Only
---   supabase_auth_admin can execute the hook, which runs as the caller with an
---   empty search_path. Canaries prove each is_empty assert can fail.
+--   user's token below aal2, uses no schema but public and holds no privilege
+--   there, is a member of no role, and only authenticator can switch to it.
+--   Only supabase_auth_admin can execute the hook, which runs as the caller
+--   with an empty search_path. Canaries prove each is_empty assert can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them; RLS and the revokes still apply. It covers public and private:
@@ -411,7 +411,8 @@ CREATE TEMP TABLE aal1_floor (name text PRIMARY KEY, canaries text[] NOT NULL, q
 INSERT INTO aal1_floor VALUES
 ('authenticated_aal1 uses no schema but public and holds no privilege on any relation, column or function there',
  ARRAY['schema private', 'schema graphql_public', 'profiles', 'consents', 'pgtap_canary_insert',
-       'pgtap_canary_update', 'private.audit_log_id_seq', 'private.audit_log', 'private.set_updated_at()'],
+       'pgtap_canary_update', 'pgtap_canary_partitioned', 'pgtap_canary_matview',
+       'private.audit_log_id_seq', 'private.audit_log', 'private.set_updated_at()'],
  $$ SELECT 'schema ' || n.nspname FROM pg_namespace n
     WHERE n.nspname NOT IN ('public', 'pg_catalog', 'information_schema')
       AND n.nspname !~ '^pg_(toast_)?temp_'
@@ -477,7 +478,7 @@ CREATE TEMP SEQUENCE aal1_floor_misses MINVALUE -1 START -1;
 CREATE FUNCTION pg_temp.misses(query text, canaries text[]) RETURNS bigint LANGUAGE plpgsql AS $f$
 DECLARE n bigint;
 BEGIN
-  EXECUTE format('SELECT count(*) FROM unnest($1) c WHERE c NOT IN (SELECT * FROM (%s) q)', query)
+  EXECUTE format('SELECT count(*) FROM (SELECT unnest($1) EXCEPT SELECT * FROM (%s) q) d', query)
     USING canaries INTO n;
   RETURN n;
 END
@@ -490,6 +491,10 @@ CREATE VIEW public.pgtap_canary_insert WITH (security_invoker) AS SELECT 1 AS x;
 CREATE VIEW public.pgtap_canary_update WITH (security_invoker) AS SELECT 1 AS x;
 GRANT INSERT (x) ON public.pgtap_canary_insert TO authenticated_aal1;
 GRANT UPDATE (x) ON public.pgtap_canary_update TO authenticated_aal1;
+CREATE TABLE public.pgtap_canary_partitioned (x int) PARTITION BY RANGE (x);
+GRANT SELECT ON public.pgtap_canary_partitioned TO authenticated_aal1;
+CREATE MATERIALIZED VIEW public.pgtap_canary_matview AS SELECT 1 AS x;
+GRANT SELECT ON public.pgtap_canary_matview TO authenticated_aal1;
 GRANT EXECUTE ON FUNCTION private.set_updated_at() TO authenticated_aal1;
 GRANT USAGE ON SCHEMA private TO authenticated_aal1;
 GRANT USAGE ON SEQUENCE private.audit_log_id_seq TO authenticated_aal1;

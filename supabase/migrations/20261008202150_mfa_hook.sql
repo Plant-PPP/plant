@@ -1,7 +1,7 @@
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
--- The role an enrolled user's aal1 token gets instead of authenticated
+-- The role an enrolled user's token below aal2 gets instead of authenticated
 -- (custom_access_token_hook). It holds no grant and USAGE on no schema but
 -- public, so PostgREST answers 42501 on every table, view and function, Storage
 -- and GraphQL refuse it, and Realtime gives it no private channel. Roles are

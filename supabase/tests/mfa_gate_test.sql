@@ -26,7 +26,7 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
   (NULL, NULL, 'verify');
 -- truth-table:end
 
-SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 2);
+SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 3);
 
 SELECT ok((SELECT count(*) = 9 AND count(DISTINCT (aal, mfa_enrolled)) = 9 FROM truth),
           'the truth table has exactly one row for each aal and claim');
@@ -51,7 +51,8 @@ VALUES ('f0000000-0000-4000-8000-00000000000e', 'e0000000-0000-4000-8000-0000000
 SET LOCAL request.jwt.claims = '{"sub": "e0000000-0000-4000-8000-00000000000e"}';
 
 CREATE TEMP TABLE hooked ON COMMIT DROP AS
-SELECT t.*, e.event, private.custom_access_token_hook(e.event) AS result
+SELECT t.*, e.event, private.custom_access_token_hook(e.event) AS result,
+       CASE t.expected WHEN 'verify' THEN 'authenticated_aal1' ELSE 'authenticated' END AS role
 FROM truth t
 CROSS JOIN LATERAL (
   SELECT jsonb_build_object(
@@ -73,10 +74,9 @@ SELECT is(
   jsonb_set(event, '{claims}', event->'claims'
     || jsonb_build_object(
          'mfa_enrolled', mfa_enrolled,
-         'role', CASE expected WHEN 'verify' THEN 'authenticated_aal1' ELSE 'authenticated' END)),
+         'role', role)),
   format('aal %s, enrolled %s: the hook adds the claim and the role is %s',
-         COALESCE(aal, 'absent'), mfa_enrolled::text,
-         CASE expected WHEN 'verify' THEN 'authenticated_aal1' ELSE 'authenticated' END)
+         COALESCE(aal, 'absent'), mfa_enrolled::text, role)
 )
 FROM hooked
 ORDER BY aal NULLS LAST, mfa_enrolled;
@@ -88,6 +88,24 @@ SELECT is(
   )->'claims'->>'role',
   'anon',
   'the hook leaves a role other than authenticated alone'
+);
+
+-- Any verified factor counts, whatever its type: Pia's only one is a phone factor.
+INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
+                        email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+                        created_at, updated_at)
+VALUES ('c0000000-0000-4000-8000-00000000000c', '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated', 'pia@pgtap.invalid', NULL, now(), '{}', '{}', now(), now());
+INSERT INTO auth.mfa_factors (id, user_id, friendly_name, factor_type, status, phone, created_at, updated_at)
+VALUES ('f0000000-0000-4000-8000-00000000000c', 'c0000000-0000-4000-8000-00000000000c',
+        'phone', 'phone', 'verified', '+5491100000000', now(), now());
+SELECT is(
+  (private.custom_access_token_hook(
+    '{"user_id": "c0000000-0000-4000-8000-00000000000c",
+      "claims": {"sub": "c0000000-0000-4000-8000-00000000000c", "role": "authenticated", "aal": "aal1"}}'::jsonb
+  )->'claims') - 'sub'::text - 'aal'::text,
+  '{"role": "authenticated_aal1", "mfa_enrolled": true}'::jsonb,
+  'a verified factor of any type demotes an aal1 token'
 );
 
 SELECT * FROM finish();

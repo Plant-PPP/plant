@@ -77,7 +77,7 @@ describe("the sign-in mail", () => {
 // Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts). The
 // hosted project keeps its own copy of each setting in the dashboard.
 describe("the Auth settings the MFA rules rely on", () => {
-  it("offers TOTP as the only MFA factor", () => {
+  it("allows no MFA factor or passkey but TOTP", () => {
     expect(value("auth.mfa.phone", "enroll_enabled")).toBe("false");
     expect(value("auth.mfa.phone", "verify_enabled")).toBe("false");
     expect(value("auth.mfa.web_authn", "enroll_enabled")).toBe("false");

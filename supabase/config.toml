@@ -299,7 +299,7 @@ inactivity_timeout = "8h"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # Adds mfa_enrolled to every access token and demotes an enrolled user's token below aal2 (PLA-18).
-# Staging and production turn it on in the dashboard (Authentication > Hooks).
+# The hosted project turns it on in the dashboard (Authentication > Hooks).
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/private/custom_access_token_hook"
@@ -317,8 +317,8 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 # Control how many MFA factors can be enrolled at once per user.
 max_enrolled_factors = 10
 
-# Control MFA via App Authenticator (TOTP). On locally for the pentest; staging and production keep
-# enrollment off until the MFA screens ship (PLA-76).
+# Control MFA via App Authenticator (TOTP). On locally for the pentest; the hosted project keeps every
+# MFA factor off until the MFA screens ship (PLA-76).
 [auth.mfa.totp]
 enroll_enabled = true
 verify_enabled = true
