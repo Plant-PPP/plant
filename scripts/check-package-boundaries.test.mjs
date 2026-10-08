@@ -148,6 +148,31 @@ for (const spec of ["workspace:*", "workspace:^", "workspace:../jobs"]) {
   });
 }
 
+for (const spec of ["workspace:../jobs", "link:../jobs", "file:../jobs"]) {
+  test(`runner: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["runner", spec]] });
+    assert.equal(r.status, 1);
+    assert.match(
+      r.output,
+      /@plant\/core may not depend on runner \(@plant\/jobs\)/,
+    );
+  });
+}
+
+test("ai from the catalog in @plant/core fails", () => {
+  const r = check({ "@plant/core": [["ai", "catalog:"]] });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /@plant\/core may not depend on ai, the AI SDK/);
+});
+
+test("aliases of the AI SDK where it is allowed pass", () => {
+  const r = check({
+    "@plant/web": [["llm", "npm:ai@6"]],
+    "@plant/evals": [["gai", "npm:@ai-sdk/google"]],
+  });
+  assert.equal(r.status, 0, r.output);
+});
+
 test("the repo's own specs pass", () => {
   const r = check({
     "@plant/web": [

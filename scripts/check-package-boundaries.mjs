@@ -97,12 +97,17 @@ for (const dir of manifests) {
     ...peerDependencies,
     ...optionalDependencies,
   }).flatMap(([key, spec]) => {
-    // An alias ("llm": "npm:ai@6") installs the package its spec names;
-    // "workspace:*" and "workspace:../x" name none.
+    // A spec can install a package other than its key: an alias
+    // ("llm": "npm:ai@6", "workspace:@plant/jobs@*") names it, and a path
+    // ("workspace:../jobs", "link:../jobs", "file:../jobs") holds it.
+    const path = /^(?:workspace|link|file):(\..*)$/.exec(spec)?.[1];
+    const manifest = path && new URL(`${dir}/${path}/package.json`, root);
     const target =
-      /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
-        spec,
-      )?.[1];
+      manifest && existsSync(manifest)
+        ? JSON.parse(readFileSync(manifest, "utf8")).name
+        : /^(?:npm|workspace):((?:@[^/@]+\/)?[a-z0-9][^/@]*)(?:@|$)/i.exec(
+            spec,
+          )?.[1];
     return target && target !== key
       ? [
           { dep: key, label: key },
