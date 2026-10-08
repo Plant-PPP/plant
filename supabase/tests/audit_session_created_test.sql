@@ -18,9 +18,9 @@ SELECT ok(
 );
 
 SELECT ok(
-  NOT has_table_privilege('anon', 'auth.sessions', 'INSERT')
-    AND NOT has_table_privilege('authenticated', 'auth.sessions', 'INSERT')
-    AND NOT has_table_privilege('service_role', 'auth.sessions', 'INSERT'),
+  NOT has_any_column_privilege('anon', 'auth.sessions', 'INSERT')
+    AND NOT has_any_column_privilege('authenticated', 'auth.sessions', 'INSERT')
+    AND NOT has_any_column_privilege('service_role', 'auth.sessions', 'INSERT'),
   'no API role can insert a session to write an audit row'
 );
 

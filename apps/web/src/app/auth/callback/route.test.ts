@@ -120,7 +120,12 @@ describe("the callback line", () => {
         "plant.auth.error_code": "other",
       },
     ],
-    ["no code", "", "warn", { "plant.outcome": "missing_code" }],
+    [
+      "no code",
+      "",
+      "warn",
+      { "plant.outcome": "missing_code", "error.type": "missing_code" },
+    ],
   ])("records %s", async (_label, query, level, fields) => {
     await callback(query, "/assets");
     const { level: loggedLevel, line } = logged();
@@ -134,7 +139,7 @@ describe("the callback line", () => {
   });
 
   it("drops a request id that is not a UUID", async () => {
-    await callback("", "/assets", "not-a-uuid");
+    await callback("", "/assets", `${REQUEST_ID}x`);
     expect(JSON.parse(logged().line)).not.toHaveProperty("plant.request_id");
   });
 

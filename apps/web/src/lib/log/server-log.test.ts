@@ -135,6 +135,7 @@ it("cuts a long stack", () => {
 it("logs only the type of something thrown that is not an Error", () => {
   serverLog.error("x", {}, "ana@example.com");
   expect(lineOf(error)).toEqual({
+    "error.type": "string",
     "exception.type": "string",
     level: "error",
     event: "x",

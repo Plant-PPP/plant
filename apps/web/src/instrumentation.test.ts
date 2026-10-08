@@ -98,7 +98,11 @@ describe("onRequestError", () => {
   });
 
   it("drops a request id that is not a UUID", async () => {
-    await onRequestError(new Error("x"), request("attacker\nvalue"), context);
+    await onRequestError(
+      new Error("x"),
+      request(`${REQUEST_ID}\n{"forged":1}`),
+      context,
+    );
     expect(lineOf(error)).not.toHaveProperty("plant.request_id");
   });
 

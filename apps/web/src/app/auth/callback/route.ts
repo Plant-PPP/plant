@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     });
   } else if (!code) {
     target = loginErrorPath("callback");
-    log("warn", "missing_code");
+    log("warn", "missing_code", { "error.type": "missing_code" });
   } else {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);

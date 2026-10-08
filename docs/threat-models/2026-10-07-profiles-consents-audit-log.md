@@ -35,7 +35,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 | **T** | Editing or deleting a consent or an audit row | No UPDATE or DELETE on `consents`; append-only triggers on `audit_log`                                                     |
 | **R** | Denying having accepted the terms             | Append-only `consents` with `accepted_at` set by the database                                                              |
 | **I** | Reading someone else's profile or consents    | RLS by `user_id`; `anon` without privileges                                                                                |
-| **D** | Huge texts in the profile or the version      | Length `CHECK` on `display_name`, `version`, `action` and `request_id`                                                     |
+| **D** | Huge texts in the profile or the version      | Length `CHECK` on `display_name`, `version` and `request_id`; `action` is a closed enum (PLA-21)                           |
 | **E** | Functions callable from the API               | Functions in `private`, no EXECUTE for `PUBLIC`, `anon` or `authenticated`; `SECURITY DEFINER` with an empty `search_path` |
 
 ## Controls as built

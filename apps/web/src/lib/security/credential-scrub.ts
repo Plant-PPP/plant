@@ -17,32 +17,39 @@ const SECRET_PARAM = new RegExp(
   "gi",
 );
 
-// Credentials outside a query: a credential named in JSON or `name: value`
-// form (a quoted value runs to its closing quote), a bearer value, a JWT
-// (whole or cut), Supabase's auth cookie and secret keys. A letter before
-// `Bearer` or `eyJ` means another word; a digit may be a mask's neighbour.
+// Credentials outside a query: a credential named in JSON, escaped JSON or
+// `name: value` form (a quoted value runs to its closing quote), the PKCE
+// code as a named UUID, a bearer or basic value, a JWT (whole or cut),
+// Supabase's auth and verifier cookies and its secret keys. A letter before
+// `code`, `Bearer` or `eyJ` means another word; a digit may be a mask's
+// neighbour.
 const NAMED_SECRET = new RegExp(
-  `((?:${AUTH_TOKEN}|api[_-]?key|password|client_secret)"?\\s{0,8}[:=]\\s{0,8})("[^"]*|[^"\\s,}&<]+)`,
+  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'[^']*|[^"'\\\s,}&<]+)`,
   "gi",
 );
-const BEARER = /((?<![A-Za-z])Bearer\s+)[^\s"',<]+/gi;
+const NAMED_CODE =
+  /((?<![A-Za-z])(?:auth_)?code(?:\\?")?\s{0,8}[:=]\s{0,8}(?:\\?"|')?)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const AUTHORIZATION = /((?<![A-Za-z])(?:Bearer|Basic)\s+)[^\s"',<]+/gi;
 const JWT = /(?<![A-Za-z])eyJ[\w.-]{6,}/g;
-const SUPABASE_AUTH_COOKIE = /(sb-[\w-]{1,64}-auth-token(?:\.\d+)?=)[^;\s"<]+/g;
+const SUPABASE_AUTH_COOKIE =
+  /(sb-[\w-]{1,64}-auth-token(?:-code-verifier)?(?:\.\d+)?=)[^;\s"<]+/g;
 const SUPABASE_SECRET_KEY = /sb_secret_[\w-]+/g;
 
-// Not followed by `@`: a UUID used as an email's local part is not an id. A
-// UUID inside a longer local part still splits it, and the part before it
-// passes.
-const UUID =
-  /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?!@|%(?:25)?40)/i;
+// Kept whole: ids and times, whose digit groups would otherwise read as a
+// DNI. A UUID, a hex run of 16 or more with a letter (a trace id, a hash, a
+// chunk name), a time with its fraction, a basic ISO timestamp. Not followed
+// by `@`: an id used as an email's local part is not an id. An id inside a
+// longer local part still splits it, and the part before it passes.
+const KEPT =
+  /((?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?<![0-9a-z])(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?|\d{8}T\d{6})(?!\d))(?!@|%(?:25)?40))/i;
 
-// Bounded by hex digits, not `\b`, so a number glued to `_` or a word, as in
-// a file name, is masked, while digits inside a trace id or a hash are not. A
-// DNI may follow a dot (`nro.12345678`) but not a digit and a dot.
-const CBU = /(?<![\dA-Fa-f])\d{22}(?![\dA-Fa-f])/g;
-const CUIT =
-  /(?<![\dA-Fa-f])(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?![\dA-Fa-f])/g;
-const DNI = /(?<![\dA-Fa-f]|\d\.)\d{1,2}\.?\d{3}\.?\d{3}(?![\dA-Fa-f]|\.\d)/g;
+// Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
+// file name, is masked. A DNI may follow a dot (`nro.12345678`) but not sit
+// between a digit and a dot. Any other 7 or 8 digits, a byte count or a date
+// in a file name, read as a DNI.
+const CBU = /(?<!\d)\d{22}(?!\d)/g;
+const CUIT = /(?<!\d)(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?!\d)/g;
+const DNI = /(?<!\d|\d\.)\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)/g;
 // The lookbehind keeps the hex digits of a percent escape, raw or encoded
 // (`%3Djohn%40…`, `%253Djohn%2540…`), out of the local part; an escape inside
 // it, encoded once or twice, is a `+` or a byte of a non-ASCII letter. The
@@ -80,6 +87,8 @@ const SECRET_SEGMENTS = new Set([
   "password",
   "passwd",
   "secret",
+  "otp",
+  "verifier",
   "credential",
   "credentials",
   "cookie",
@@ -110,16 +119,16 @@ export function scrubSensitiveText(text: string): string {
     .replace(
       NAMED_SECRET,
       (_match, name: string, value: string) =>
-        `${name}${value.startsWith('"') ? '"' : ""}${MASK}`,
+        `${name}${/^(?:\\?"|')/.exec(value)?.[0] ?? ""}${MASK}`,
     )
-    .replace(BEARER, `$1${MASK}`)
+    .replace(NAMED_CODE, `$1${MASK}`)
+    .replace(AUTHORIZATION, `$1${MASK}`)
     .replace(SUPABASE_AUTH_COOKIE, `$1${MASK}`)
     .replace(JWT, MASK)
     .replace(SUPABASE_SECRET_KEY, MASK);
-  // Odd parts are UUIDs (ids, not personal data) and are kept: their digit
-  // groups would otherwise read as a DNI.
+  // Odd parts are kept ids.
   return withoutSecrets
-    .split(UUID)
+    .split(KEPT)
     .map((part, index) => (index % 2 === 1 ? part : scrubPersonalData(part)))
     .join("");
 }
@@ -145,5 +154,8 @@ export function isSensitiveKey(key: string): boolean {
       (segment, index) =>
         set.has(segment) || set.has(segment + (segments[index + 1] ?? "")),
     );
-  return names(SECRET_SEGMENTS) || (last !== "id" && names(VALUE_SEGMENTS));
+  return (
+    names(SECRET_SEGMENTS) ||
+    (last !== "id" && last !== "ids" && names(VALUE_SEGMENTS))
+  );
 }

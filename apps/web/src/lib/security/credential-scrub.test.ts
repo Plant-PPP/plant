@@ -57,6 +57,38 @@ describe("scrubSensitiveText", () => {
     ],
     ["an API key header", "x-api-key: abc", `x-api-key: ${MASK}`],
     [
+      "a password in escaped JSON",
+      String.raw`body: "{\"password\":\"hunter2\"}"`,
+      String.raw`body: "{\"password\":\"${MASK}\"}"`,
+    ],
+    [
+      "a quoted password with an escaped quote",
+      String.raw`{"password":"he said \"hi\" ok"}`,
+      `{"password":"${MASK}"}`,
+    ],
+    [
+      "a single-quoted password",
+      "{ password: 'correct horse, battery' }",
+      `{ password: '${MASK}' }`,
+    ],
+    ["a secret", "secret: abc", `secret: ${MASK}`],
+    [
+      "a basic header",
+      "Authorization: Basic YWxhZGRpbg==",
+      `Authorization: Basic ${MASK}`,
+    ],
+    ["the PKCE code in JSON", `{"code":"${UUID}"}`, `{"code":"${MASK}"}`],
+    [
+      "the PKCE verifier cookie",
+      "sb-abc-auth-token-code-verifier=base64-IjNmYTJi; Path=/",
+      `sb-abc-auth-token-code-verifier=${MASK}; Path=/`,
+    ],
+    [
+      "Auth's refresh token message, keeping its shape",
+      "Invalid Refresh Token: Already Used",
+      `Invalid Refresh Token: ${MASK} Used`,
+    ],
+    [
       "a JWT cut after its payload",
       "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0",
       `jwt ${MASK}`,
@@ -93,6 +125,7 @@ describe("scrubSensitiveText", () => {
       '{"access_token":"abc"} Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc',
       "12345678Bearer abc 12345678sb_secret_x 12345678eyJhbGciOiJ9",
       '{"password":"a b"} password=""',
+      String.raw`{\"password\":\"x\"} password: 'y' {"code":"${UUID}"}`,
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -131,6 +164,14 @@ describe("scrubSensitiveText", () => {
     ],
     ["a DNI in a file name", "dni_12345678.jpg", `dni_${MASK}.jpg`],
     ["a CUIT glued to a word", "CUIT20123456789", `CUIT${MASK}`],
+    [
+      "a CUIT after a word ending in a hex letter",
+      "Comprobante20123456789.pdf",
+      `Comprobante${MASK}.pdf`,
+    ],
+    ["a DNI before a word", "12345678frente.jpg", `${MASK}frente.jpg`],
+    ["a DNI after a word", "unidad12345678", `unidad${MASK}`],
+    ["a CBU after a word", "cuenta0170099220000067797370", `cuenta${MASK}`],
     ["a CUIT with dots", "CUIT 20.12345678.9", `CUIT ${MASK}`],
     ["a DNI after an abbreviation", "DNI nro.12345678", `DNI nro.${MASK}`],
     ["a dotted file name", "dni.12345678.jpg", `dni.${MASK}.jpg`],
@@ -166,12 +207,15 @@ describe("scrubSensitiveText", () => {
 
   it.each([
     ["a six-digit number", "code 123456 sent"],
+    ["a Postgres error code", '{"code":"23502","message":"null value"}'],
     ["an ISO date", "on 2026-10-08T16:00:00Z"],
     ["an epoch", "at 1791475200000"],
     ["a pnpm path", "node_modules/.pnpm/@supabase+auth-js@2.71.1/node_modules"],
     ["a trace id", "trace 0af7651916cd43dd8448eb211c80319c"],
     ["a commit SHA", "sha 3f2a12345678bc9d0e1f2a3b4c5d6e7f80912345"],
-    ["a chunk name", "/_next/static/chunks/2017-87654321abcdef.js:1:2345"],
+    ["a chunk name", "/_next/static/chunks/page-4f3a87654321bc9d.js:1:2345"],
+    ["a timestamp with microseconds", "at 2026-10-08T16:00:00.123456+00:00"],
+    ["a basic ISO timestamp", "X-Amz-Date=20261008T160000Z"],
     ["a word with eyJ inside", "keyJsonParser failed"],
   ])("leaves %s", (_label, text) => {
     expect(scrubSensitiveText(text)).toBe(text);
@@ -223,6 +267,8 @@ describe("isSensitiveKey", () => {
     "cuit_id",
     "token.id",
     "emailId",
+    "plant.code_verifier",
+    "plant.auth.otp",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
@@ -231,6 +277,7 @@ describe("isSensitiveKey", () => {
     "plant.holdings.count",
     "plant.holding.id",
     "plant.debt.id",
+    "plant.holding.ids",
     "gen_ai.usage.input_tokens",
     "plant.price.duration_ms",
     "plant.auth.duration_ms",

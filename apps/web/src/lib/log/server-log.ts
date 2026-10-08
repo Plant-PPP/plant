@@ -43,7 +43,9 @@ function cleanFields(fields: LogFields | undefined): Record<string, LogValue> {
 }
 
 function exceptionFields(error: unknown): Record<string, LogValue> {
-  if (!(error instanceof Error)) return { "exception.type": typeof error };
+  if (!(error instanceof Error)) {
+    return { "error.type": typeof error, "exception.type": typeof error };
+  }
   const type = clean(error.name, FIELD_LIMITS);
   return {
     "error.type": type,

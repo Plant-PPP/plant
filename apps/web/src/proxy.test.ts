@@ -441,6 +441,19 @@ describe("the request line", () => {
     expect(line).not.toHaveProperty("enduser.id");
   });
 
+  it("records a broken cookie on a public page as a reason, not an error", async () => {
+    getClaims = async () => {
+      throw new SyntaxError("Unexpected token");
+    };
+    await proxy(request("/login"));
+    const { line } = logged();
+    expect(line).toMatchObject({
+      "plant.outcome": "anonymous",
+      "plant.auth.reason": "invalid_jwt",
+    });
+    expect(line).not.toHaveProperty("error.type");
+  });
+
   it("records the code of a cookie auth-js cannot decode", async () => {
     getClaims = async () => {
       throw new SyntaxError("Unexpected token");
