@@ -4,27 +4,16 @@ import { defineConfig, globalIgnores } from "eslint/config";
 
 import { moneyRules } from "../../eslint.money.mjs";
 import {
+  AI,
+  AI_PROVIDERS,
   asSelector,
+  COST_SINK,
   fence,
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
+  SERVICE_ROLE,
   SOURCE,
 } from "../../eslint.fences.mjs";
-
-// Who may reach a model and the secret key. Each fenced module is a regex
-// over the import specifier, with or without a file extension.
-const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?`;
-const AI_MESSAGE = "Only src/lib/ai may call a model, so every call is costed.";
-const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
-const AI_PROVIDERS = { regex: "^@ai-sdk/(?!react(/|$))", message: AI_MESSAGE };
-const SERVICE_ROLE = {
-  regex: `(^|/)service-role${EXTENSION}$`,
-  message: "The secret key bypasses RLS; only the AI cost sink holds it.",
-};
-const COST_SINK = {
-  regex: `(^|/)ai-cost-sink${EXTENSION}$`,
-  message: "The cost sink writes past RLS; only route handlers may use it.",
-};
 
 // A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>

@@ -2,9 +2,13 @@
 import tseslint from "typescript-eslint";
 
 import {
+  AI,
+  AI_PROVIDERS,
+  COST_SINK,
   fence,
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
+  SERVICE_ROLE,
   SOURCE,
 } from "./eslint.fences.mjs";
 import { moneyRules } from "./eslint.money.mjs";
@@ -22,6 +26,12 @@ export default tseslint.config(
   { rules: { "no-console": "error" } },
   {
     files: [`**/*.${SOURCE}`],
-    rules: fence([APPS], [...LITERAL_IMPORTS_ONLY, ...secretKeyReads]),
+    // The AI SDK and the web app's modules by name too: a hoisted package or a
+    // symlinked directory reaches them without a manifest entry or an `apps`
+    // segment.
+    rules: fence(
+      [APPS, AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK],
+      [...LITERAL_IMPORTS_ONLY, ...secretKeyReads],
+    ),
   },
 );

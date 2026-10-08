@@ -35,6 +35,14 @@ const flagged = [
     '"use server";\nexport const s = (require as NodeRequire)("@/lib/ai/ai-cost-sink");',
   ],
   ["src/app/actions.ts", 'export const s = require!("@/lib/ai/ai-cost-sink");'],
+  [
+    "src/app/api/x/route.ts",
+    'export const f = ({ step }) => step["ai" as const].infer("x", {});',
+  ],
+  [
+    "src/app/api/x/route.ts",
+    "export const f = ({ step }) => step[`ai` satisfies string].infer;",
+  ],
   ["src/components/x.ts", 'export const s = (<NodeRequire>require)("ai");'],
   [
     "src/components/x.ts",
@@ -317,6 +325,8 @@ for (const code of [
   'import { createAgent } from "@inngest/agent-kit";',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
   'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
+  'export const f = ({ step }) => step["ai" as const].infer("x", {});',
+  'export const f = ({ step }) => { const { ["ai" as const]: m } = step; return m; };',
 ]) {
   test(`packages/jobs: ${code} is flagged`, async () => {
     assert.notDeepEqual(await fenced("src/x.ts", code, jobs), []);
@@ -338,6 +348,10 @@ for (const [dir, up] of [
     "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;",
     `import "${up}/apps/web/src/lib/supabase/service-role";`,
     `import "${up}/apps/web/node_modules/ai";`,
+    'import "ai";',
+    'import "@ai-sdk/google";',
+    'import "./web/supabase/service-role";',
+    'import "./web/ai/ai-cost-sink";',
   ]) {
     for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {
       test(`${dir}: ${code} in a .${ext} file is flagged`, async () => {

@@ -18,6 +18,25 @@ export const secretKeyReads = [
     "Only apps/web/src/lib/supabase/service-role.ts names SUPABASE_SERVICE_ROLE_KEY.",
 }));
 
+// Who may reach a model and the secret key. Each fenced module is a regex
+// over the import specifier, with or without a file extension.
+const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?`;
+const AI_MESSAGE =
+  "Only apps/web/src/lib/ai may call a model, so every call is costed.";
+export const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
+export const AI_PROVIDERS = {
+  regex: "^@ai-sdk/(?!react(/|$))",
+  message: AI_MESSAGE,
+};
+export const SERVICE_ROLE = {
+  regex: `(^|/)service-role${EXTENSION}$`,
+  message: "The secret key bypasses RLS; only the AI cost sink holds it.",
+};
+export const COST_SINK = {
+  regex: `(^|/)ai-cost-sink${EXTENSION}$`,
+  message: "The cost sink writes past RLS; only route handlers may use it.",
+};
+
 // A path into node_modules reaches a package without naming it.
 const NODE_MODULES = {
   regex: "(^|/)node_modules(/|$)",
@@ -32,11 +51,13 @@ const INNGEST_AI = {
     "Models are called only through src/lib/ai, which records their cost.",
 };
 // A property or destructured key named `name`, written bare, quoted or as a
-// template literal.
+// template literal, or quoted inside a type cast.
 const named = (node, key, name) => [
   `${node}[${key}.name="${name}"]`,
   `${node}[${key}.value="${name}"]`,
   `${node}[${key}.quasis.0.value.cooked="${name}"]`,
+  `${node}[${key}.expression.value="${name}"]`,
+  `${node}[${key}.expression.quasis.0.value.cooked="${name}"]`,
 ];
 const STEP_AI = [
   ...named("MemberExpression", "property", "ai"),
