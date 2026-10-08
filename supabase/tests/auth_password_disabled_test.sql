@@ -39,8 +39,8 @@ SELECT is(
   'a confirmed user cannot set a password'
 );
 
--- The admin API confirms a new user with an UPDATE of email_confirmed_at
--- alone, which the statements above cannot isolate.
+-- An UPDATE of email_confirmed_at alone carries no password to clear, so only
+-- the definition shows that arm is there.
 SELECT is(
   (SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t
    WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'clear_password' AND t.tgenabled = 'O'),

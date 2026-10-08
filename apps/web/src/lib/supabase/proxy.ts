@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { AUTH_UNAVAILABLE_HEADER } from "@/lib/auth/session-state";
-import { requireSupabaseEnv } from "./env";
+import { requireSupabaseEnv, SESSION_COOKIE_OPTIONS } from "./env";
 
 function withoutUnavailable(headers: Headers): Headers {
   const copy = new Headers(headers);
@@ -26,6 +26,7 @@ export async function updateSession(request: NextRequest) {
   const cacheHeaders = new Headers();
 
   const supabase = createServerClient(env.url, env.anonKey, {
+    cookieOptions: SESSION_COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return request.cookies.getAll();

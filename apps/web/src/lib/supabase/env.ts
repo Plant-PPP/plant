@@ -15,3 +15,9 @@ export function requireSupabaseEnv() {
   }
   return env;
 }
+
+// The session cookies carry the refresh token, so they never travel over
+// plain http once deployed; `next dev` serves http on localhost.
+export const SESSION_COOKIE_OPTIONS = {
+  secure: process.env.NODE_ENV === "production",
+};

@@ -36,17 +36,31 @@ export function LoginForm({
   }, [cooldown]);
 
   // The callback reads where to go from this cookie (Google, mail link).
-  function rememberNext() {
+  function writeNextCookie(value: string, maxAge: number) {
     const secure = location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `${NEXT_COOKIE.name}=${encodeURIComponent(next)}; Path=${NEXT_COOKIE.path}; Max-Age=${NEXT_COOKIE.maxAge}; SameSite=${NEXT_COOKIE.sameSite}${secure}`;
+    document.cookie = `${NEXT_COOKIE.name}=${value}; Path=${NEXT_COOKIE.path}; Max-Age=${maxAge}; SameSite=${NEXT_COOKIE.sameSite}${secure}`;
   }
 
+  function rememberNext() {
+    writeNextCookie(encodeURIComponent(next), NEXT_COOKIE.maxAge);
+  }
+
+  // The buttons stay disabled after a success: verifying and Google navigate
+  // away, and a second click would reuse a spent code or start a second
+  // Google flow.
   async function run(action: () => Promise<{ code?: string } | null>) {
     setPending(true);
     setError(undefined);
-    const failure = await action();
-    setPending(false);
-    if (failure) setError(loginErrorMessage(authErrorSlug(failure)));
+    let failure: { code?: string } | null;
+    try {
+      failure = await action();
+    } catch {
+      failure = {};
+    }
+    if (failure) {
+      setPending(false);
+      setError(loginErrorMessage(authErrorSlug(failure)));
+    }
     return !failure;
   }
 
@@ -63,6 +77,7 @@ export function LoginForm({
       return error;
     });
     if (sent) {
+      setPending(false);
       setStep("code");
       setCode("");
       setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -79,6 +94,8 @@ export function LoginForm({
       return error;
     });
     if (verified) {
+      // A later Google sign-in in this browser must not land on this `next`.
+      writeNextCookie("", 0);
       router.replace(next);
       router.refresh();
     }

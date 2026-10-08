@@ -7,19 +7,19 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The browser talks to Auth for the code and Google.** Auth rate-limits by caller IP; from server actions every user would share the server's IP, so one person guessing codes would lock everyone out. Forwarding the user's IP needs a secret key, so it waits for the beta (PLA-73). The session cookies are readable by JavaScript either way (`@supabase/ssr`), which is why the CSP (PLA-19) ships before anyone outside the team signs in.
 - **`next` rides in a cookie scoped to `/auth/callback`**, not in the redirect URL, so `additional_redirect_urls` holds exact URLs only. `sanitizeNextPath` is the one function that turns an outside value into a path.
 - **One mail template for new and known addresses**, with a 10-minute code. `otp-config.test.ts` keeps `config.toml`, the template and the form in step.
-- **No passwords.** A trigger blanks `auth.users.encrypted_password` on every insert, password change and confirmation: a password set before the owner confirms the address, or with a stolen session, would otherwise keep working. Passwords stored before this migration stay until that row's next change, so the PR's staging checklist reviews existing users.
+- **No passwords.** A trigger blanks `auth.users.encrypted_password` on every insert, password change and confirmation: a password set before the owner confirms the address, or with a stolen session, would otherwise keep working. The same migration blanks the passwords already stored.
 - **Staging sends a link, not the code, until Resend (PLA-75).** On the Free plan the default sender cannot use custom templates and only mails team members, 2 per hour. The link signs you in through `/auth/callback` when opened in the same browser. Session limits (`timebox`, `inactivity_timeout`) are Pro-only and apply on staging from PLA-73.
 - **Every page, server action and route handler that touches user data calls `getSessionClaims()` itself.** The `(app)` layout's call guards the UI only. Identity comes from the verified `sub` and `email` claims; `user_metadata` is never read.
 - **An Auth failure is not a logout.** Only Auth's session-gone codes send the user to `/login`; a rate limit, conflict or outage keeps the cookies and shows the retry page.
 - **The name shown is the email's local part** until there is a name editor; then the layout reads `profiles.display_name`.
 - **"Cerrar sesión" signs out this device** (`scope: "local"`). An access token already issued stays valid until it expires (1 h).
-- **A local test user, `test@plant.test`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit. `.test` is reserved, so no real inbox receives it.
+- **A local test user, `test@plantia.io`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit.
 - **No telemetry or audit rows yet** (PLA-21): sign-in, sign-out, callback failures and Auth unavailability are the surfaces it instruments.
 
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
 
 - **Raw `fetch`, no Supabase client.** The specs assert PostgREST's exact status and code (401 vs 403, `42501`, `PGRST205`), which the client hides behind `{ data, error }`.
-- **Real Auth users, two per run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
+- **Real Auth users, created and deleted on each run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
 - **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
 - **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway, so a red spec also holds `deploy-migrations`. `audit_log` has no positive case until it has a writer (PLA-21).
 - **Tables and views must have a spec; functions don't yet.** The pgTAP floor forbids executable functions in `public`, so the first RPC adds its own spec and widens the map in `security-tests/src/pentest-specs.ts`.

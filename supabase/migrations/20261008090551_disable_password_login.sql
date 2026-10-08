@@ -19,8 +19,10 @@ $$;
 
 REVOKE ALL ON FUNCTION private.clear_password() FROM PUBLIC, anon, authenticated;
 
--- email_confirmed_at too: the admin API inserts a user and then confirms it
--- with a second UPDATE.
+-- email_confirmed_at too: whatever password an unconfirmed row holds goes when
+-- its owner confirms the address.
 CREATE TRIGGER clear_password
   BEFORE INSERT OR UPDATE OF encrypted_password, email_confirmed_at ON auth.users
   FOR EACH ROW EXECUTE FUNCTION private.clear_password();
+
+UPDATE auth.users SET encrypted_password = NULL WHERE encrypted_password IS NOT NULL;

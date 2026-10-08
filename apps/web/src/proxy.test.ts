@@ -1,4 +1,6 @@
 import { AuthApiError } from "@supabase/supabase-js";
+// The parser Next compiles `config.matcher` with.
+import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
 import { NextRequest } from "next/server";
 
 type GetClaims = (cookies: {
@@ -20,7 +22,7 @@ jest.mock("@supabase/ssr", () => ({
   }),
 }));
 
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate, max-age=0",
@@ -120,10 +122,41 @@ it("does not forward a client's own x-plant-auth", async () => {
   const res = await proxy(
     request("/assets", { "x-plant-auth": "unavailable" }),
   );
+  const overridden = res.headers.get("x-middleware-override-headers");
+  expect(overridden).not.toBeNull();
+  expect(overridden).not.toContain("x-plant-auth");
   expect(forwarded(res, "x-plant-auth")).toBeNull();
-  expect(res.headers.get("x-middleware-override-headers")).not.toContain(
-    "x-plant-auth",
+});
+
+it("forwards a refreshed session to the page and the browser", async () => {
+  getClaims = async ({ setAll }) => {
+    setAll(
+      [{ name: "sb-x-auth-token", value: "new", options: {} }],
+      CACHE_HEADERS,
+    );
+    return { data: { claims: { sub: "u" } }, error: null };
+  };
+  const res = await proxy(
+    request("/assets", { cookie: "sb-x-auth-token=old" }),
   );
+  expect(res.headers.get("location")).toBeNull();
+  expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=new");
+  expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+  for (const [key, value] of Object.entries(CACHE_HEADERS)) {
+    expect(res.headers.get(key)).toBe(value);
+  }
+});
+
+it.each([
+  ["/assets", true],
+  ["/api/inngest", false],
+  ["/api/inngest/fn", false],
+  ["/api/inngest-admin", true],
+  ["/brand/logotipo-mail.png", false],
+])("runs on %s: %p", (path, runs) => {
+  const [matcher = ""] = config.matcher;
+  const parsed = tryToParsePath(matcher);
+  expect(new RegExp(parsed.regexStr ?? "").test(path)).toBe(runs);
 });
 
 it("passes through without Supabase", async () => {

@@ -10,8 +10,8 @@ import { AUTH_UNAVAILABLE_HEADER, isSessionMissing } from "./session-state";
 // page, server action and route handler that touches user data calls it
 // itself: the (app) layout's call only guards the UI.
 export const getSessionClaims = cache(async () => {
-  // proxy.ts already failed to refresh; refreshing again could burn the
-  // rotated token.
+  // proxy.ts already failed to refresh. A second attempt in a route handler
+  // or server action would delete the session cookies on the same failure.
   if ((await headers()).get(AUTH_UNAVAILABLE_HEADER)) {
     throw new Error("Auth unavailable");
   }
