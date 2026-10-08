@@ -42,7 +42,7 @@ export const MODEL_PRICING = {
 
 export type PricedModelId = keyof typeof MODEL_PRICING;
 
-// input excludes cached input; output includes reasoning.
+// input excludes cache reads and cache writes; output includes reasoning.
 export type TokenUsage = {
   input: number;
   cacheRead: number;
@@ -66,8 +66,8 @@ function tokens(count: number): bigint {
   return BigInt(count);
 }
 
-// Exact cost in USD as a decimal string with at most 8 decimals (numeric(20, 8)),
-// rounded half-up.
+// Cost in USD as a decimal string, rounded half-up to 8 decimals
+// (numeric(20, 8)).
 export function costUsd(modelId: PricedModelId, usage: TokenUsage): string {
   const price = MODEL_PRICING[modelId];
   const perMillion =

@@ -17,13 +17,15 @@ VALUES
 
 -- ── The service role (the server's cost writer) ─────────────────────────────
 -- It bypasses RLS, so its grants are the whole boundary: exactly INSERT on
--- the data columns, on the table and on every column.
+-- the data columns, without the grant option, on the table and on every column.
 SELECT set_eq(
   $$ SELECT a.attname || ':' || acl.privilege_type
+              || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
      FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
      WHERE a.attrelid = 'public.ai_costs'::regclass AND acl.grantee = 'service_role'::regrole
      UNION ALL
      SELECT '(table):' || acl.privilege_type
+              || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
      FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
      WHERE c.oid = 'public.ai_costs'::regclass AND acl.grantee = 'service_role'::regrole $$,
   ARRAY['user_id:INSERT', 'cost_type:INSERT', 'model_id:INSERT', 'amount_usd:INSERT',

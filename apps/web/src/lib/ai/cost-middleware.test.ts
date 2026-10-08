@@ -597,6 +597,50 @@ describe("stream", () => {
     expect(lines).toEqual([]);
   });
 
+  it("writes the row when the call is aborted while it is recorded", async () => {
+    let written!: Promise<void>;
+    record.mockImplementation(() => {
+      written = new Promise((resolve) => setTimeout(resolve, 50));
+      return written;
+    });
+    const controller = new AbortController();
+    const result = streamText({
+      model: model({
+        doStream: async ({ abortSignal }) => ({
+          stream: new ReadableStream<StreamPart>({
+            start(stream) {
+              for (const part of [...TEXT_PARTS, FINISH]) stream.enqueue(part);
+              abortSignal?.addEventListener("abort", () =>
+                stream.error(abortSignal.reason),
+              );
+            },
+          }),
+        }),
+      }),
+      prompt: "hi",
+      abortSignal: controller.signal,
+      onError: () => {},
+    });
+    const done = result.consumeStream({ onError: () => {} });
+    setTimeout(() => controller.abort(), 10);
+    await done;
+    await written;
+    expect(record.mock.calls).toEqual([[ROW]]);
+    expect(lines).toEqual([]);
+  });
+
+  it("resolves the stream and logs when the row is not written", async () => {
+    record.mockRejectedValue(new AiCostWriteError("timeout", true));
+    const result = streamText({
+      model: model({
+        doStream: async () => ({ stream: streamOf([...TEXT_PARTS, FINISH]) }),
+      }),
+      prompt: "hi",
+    });
+    expect(await result.text).toBe("ok");
+    expect(events()).toEqual([["ai_cost.record_failed", "unknown"]]);
+  });
+
   it.each([
     [400, []],
     [429, []],
