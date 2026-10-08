@@ -13,7 +13,14 @@ const SESSION_GONE_CODES = new Set([
   "bad_jwt",
 ]);
 
-type MaybeAuthError = { name?: string; code?: string } | null;
+export type MaybeAuthError = { name?: string; code?: string } | null;
+
+// Auth's own error code, else the error's class name, for `error.type`.
+export function authErrorType(
+  error: MaybeAuthError | undefined,
+): string | undefined {
+  return error?.code || error?.name || undefined;
+}
 
 export function isSessionMissing(error: MaybeAuthError): boolean {
   if (!error) return true;

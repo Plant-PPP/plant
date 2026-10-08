@@ -12,22 +12,26 @@ type GetClaims = (cookies: {
 
 let getClaims: GetClaims;
 let refreshSession: GetClaims = async () => ({ data: null, error: null });
+let clientError: Error | undefined;
 
 jest.mock("@supabase/ssr", () => ({
   createServerClient: (
     _url: string,
     _key: string,
     options: { cookies: never },
-  ) => ({
-    auth: {
-      getClaims: () => getClaims(options.cookies),
-      refreshSession: () => refreshSession(options.cookies),
-    },
-  }),
+  ) => {
+    if (clientError) throw clientError;
+    return {
+      auth: {
+        getClaims: () => getClaims(options.cookies),
+        refreshSession: () => refreshSession(options.cookies),
+      },
+    };
+  },
 }));
 
 import { CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
-import { REQUEST_ID_HEADER } from "@/lib/request-id";
+import { REQUEST_ID_FIELD, REQUEST_ID_HEADER } from "@/lib/request-id";
 import { config, proxy } from "./proxy";
 
 const CACHE_HEADERS = {
@@ -41,10 +45,33 @@ const ENV = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
 };
 
-beforeEach(() => Object.assign(process.env, ENV));
+let consoleSpies: Record<"log" | "warn" | "error", jest.SpyInstance>;
+
+beforeEach(() => {
+  Object.assign(process.env, ENV);
+  consoleSpies = {
+    log: jest.spyOn(console, "log").mockImplementation(() => {}),
+    warn: jest.spyOn(console, "warn").mockImplementation(() => {}),
+    error: jest.spyOn(console, "error").mockImplementation(() => {}),
+  };
+});
 afterEach(() => {
   for (const key of Object.keys(ENV)) delete process.env[key];
+  clientError = undefined;
+  jest.restoreAllMocks();
 });
+
+// The only line logged for the request, and the console method it went to.
+function logged(): { method: string; line: Record<string, unknown> } {
+  const calls = Object.entries(consoleSpies).flatMap(([method, spy]) =>
+    spy.mock.calls.map(([line]) => ({
+      method,
+      line: JSON.parse(line as string),
+    })),
+  );
+  expect(calls).toHaveLength(1);
+  return calls[0]!;
+}
 
 function request(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(new URL(path, "http://localhost:3000"), { headers });
@@ -370,5 +397,122 @@ describe("the CSP and request id", () => {
     expect(res.headers.get(CSP_HEADER)).toContain(
       "connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321",
     );
+  });
+});
+
+describe("the request line", () => {
+  const UUID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
+
+  it.each([
+    ["a signed-in page", signedIn, "/assets", "signed_in", "log"],
+    [
+      "a signed-in user on /login",
+      signedIn,
+      "/login",
+      "redirect_signed_in",
+      "log",
+    ],
+  ])("records %s", async (_label, claims, path, outcome, method) => {
+    getClaims = claims;
+    const res = await proxy(request(path));
+    expect(logged()).toEqual({
+      method,
+      line: {
+        level: "info",
+        event: "proxy.request",
+        [REQUEST_ID_FIELD]: res.headers.get(REQUEST_ID_HEADER),
+        "http.request.method": "GET",
+        "url.path": path,
+        "plant.outcome": outcome,
+        "plant.auth.duration_ms": expect.any(Number),
+        "enduser.id": "u",
+      },
+    });
+  });
+
+  it("records a signed-out visitor on a public page and on a private one", async () => {
+    getClaims = async () => ({ data: null, error: null });
+    await proxy(request("/login"));
+    expect(logged().line).toMatchObject({ "plant.outcome": "anonymous" });
+    consoleSpies.log.mockClear();
+    await proxy(request("/assets"));
+    const { line } = logged();
+    expect(line).toMatchObject({ "plant.outcome": "redirect_login" });
+    expect(line).not.toHaveProperty("enduser.id");
+  });
+
+  it("records the code of a cookie auth-js cannot decode", async () => {
+    getClaims = async () => {
+      throw new SyntaxError("Unexpected token");
+    };
+    await proxy(request("/assets"));
+    expect(logged().line).toMatchObject({
+      "plant.outcome": "redirect_login",
+      "error.type": "invalid_jwt",
+    });
+  });
+
+  it("warns with Auth's code when Auth is unavailable", async () => {
+    getClaims = async () => ({
+      data: null,
+      error: new AuthApiError("rate limit", 429, "over_request_rate_limit"),
+    });
+    await proxy(request("/assets"));
+    expect(logged()).toMatchObject({
+      method: "warn",
+      line: {
+        level: "warn",
+        "plant.outcome": "auth_unavailable",
+        "error.type": "over_request_rate_limit",
+      },
+    });
+  });
+
+  it("warns with a timeout when Auth does not answer", async () => {
+    jest.useFakeTimers();
+    try {
+      getClaims = () => new Promise(() => {});
+      const pending = proxy(request("/assets"));
+      await jest.advanceTimersByTimeAsync(5000);
+      await pending;
+      expect(logged().line).toMatchObject({
+        "plant.outcome": "auth_unavailable",
+        "error.type": "timeout",
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("is an error without Supabase", async () => {
+    for (const key of Object.keys(ENV)) delete process.env[key];
+    await proxy(request("/assets"));
+    expect(logged()).toMatchObject({
+      method: "error",
+      line: { level: "error", "plant.outcome": "no_auth_config" },
+    });
+  });
+
+  it("logs the path without its query, and keeps a UUID in it", async () => {
+    getClaims = signedIn;
+    await proxy(request(`/x/${UUID}?code=s3cr3t&email=ana@example.com`));
+    const { line } = logged();
+    expect(line["url.path"]).toBe(`/x/${UUID}`);
+    expect(JSON.stringify(line)).not.toMatch(/s3cr3t|ana@/);
+  });
+
+  it("logs a throw once and rethrows it", async () => {
+    clientError = new Error("boom");
+    await expect(proxy(request("/assets"))).rejects.toBe(clientError);
+    expect(logged()).toMatchObject({
+      method: "error",
+      line: {
+        event: "proxy.request",
+        "plant.outcome": "error",
+        "error.type": "Error",
+        "exception.message": "boom",
+        [REQUEST_ID_FIELD]: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      },
+    });
   });
 });
