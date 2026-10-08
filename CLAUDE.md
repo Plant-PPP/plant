@@ -37,7 +37,7 @@ Packages export their TypeScript sources and `apps/web` compiles them with `tran
 ```bash
 pnpm check          # typecheck + lint of every package
 pnpm test           # package tests
-pnpm test:scripts   # scripts/ tests (squawk and migration checks)
+pnpm test:scripts   # scripts/ tests (squawk, migrations, package boundaries, web import fences)
 pnpm test:security  # pentest specs against local PostgREST (needs `supabase start`)
 pnpm test:e2e       # Playwright against a production build of apps/web
 pnpm turbo:affected # only what changed against origin/staging

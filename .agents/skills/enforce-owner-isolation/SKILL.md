@@ -208,7 +208,7 @@ standing `authenticated` grant (an unused verb) the diff does not touch.
 CONDITIONAL, unlike the ports/DRY/perf/comment/telemetry lenses. It activates when the diff touches
 any of: `supabase/migrations/**`; a `CREATE POLICY` / `GRANT` / `REVOKE` / `SECURITY DEFINER` /
 `CREATE OR REPLACE FUNCTION`; a storage bucket or its policies; a client built from
-`SUPABASE_SERVICE_ROLE_KEY` (in practice, `packages/jobs/**`); a `"use server"` file;
+`SUPABASE_SERVICE_ROLE_KEY` (in practice, `apps/web/src/lib/supabase/service-role.ts`); a `"use server"` file;
 `apps/web/**/route.ts` (including `/api/inngest` and the chat route) or any other HTTP route handler;
 an assistant tool definition. It is a **no-op otherwise** — a diff with none of that surface passes
 this lens clean, and does not pay for it.
