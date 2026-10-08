@@ -14,8 +14,8 @@
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, the only SECURITY DEFINER
---   function is the signup trigger, and no trigger on public, private or auth
---   runs another definer. No table in either schema has rewrite rules.
+--   functions are the signup and session triggers, and no trigger on public,
+--   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
 -- - plpgsql_check finds no error in any function, trigger functions checked
 --   against each table they fire on.
@@ -40,7 +40,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(26);
+SELECT plan(27);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -161,8 +161,8 @@ SELECT set_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND p.prosecdef $$,
-  ARRAY['private.create_profile_for_new_user()'],
-  'the signup trigger is the only SECURITY DEFINER function'
+  ARRAY['private.create_profile_for_new_user()', 'private.record_session_created()'],
+  'the signup and session triggers are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
@@ -174,6 +174,17 @@ SELECT ok(
   'the signup trigger runs as the owner of profiles, with an empty search_path, and is enabled'
 );
 
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.record_session_created()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_created AFTER INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_created()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_created'),
+  'the session trigger runs as the owner of audit_log, with an empty search_path, is enabled and fires only on insert'
+);
+
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
 -- any schema runs as its owner, past RLS, on every write that fires it.
 SELECT is_empty(
@@ -183,8 +194,10 @@ SELECT is_empty(
      WHERE NOT t.tgisinternal
        AND c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace, 'auth'::regnamespace)
        AND p.prosecdef
-       AND t.tgfoid <> 'private.create_profile_for_new_user()'::regprocedure $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup trigger'
+       AND (t.tgfoid, t.tgrelid) NOT IN (
+             ('private.create_profile_for_new_user()'::regprocedure, 'auth.users'::regclass),
+             ('private.record_session_created()'::regprocedure, 'auth.sessions'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup and session triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.
