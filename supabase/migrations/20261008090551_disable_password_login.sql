@@ -5,7 +5,8 @@ SET statement_timeout = '5min';
 -- password. A stored one would let whoever set it sign in: a /signup with a
 -- password before the real owner confirms the address with a code, or a
 -- PUT /user with a stolen access token that outlives sign-out. Auth stores no
--- password as NULL. Passwords come back only by dropping this trigger.
+-- password as NULL. Passwords come back only if this trigger is dropped,
+-- disabled or bypassed by a write with triggers off.
 CREATE FUNCTION private.clear_password()
   RETURNS trigger
   LANGUAGE plpgsql
