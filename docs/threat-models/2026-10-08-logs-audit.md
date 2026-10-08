@@ -13,7 +13,7 @@ The request path and query, every request header (including a client's own `x-re
 ## Data flow
 
 1. `proxy.ts` mints a request id, checks the session and writes one `proxy.request` line to the function's console, which Vercel collects.
-2. `/auth/callback` writes one `auth.callback` line per request.
+2. `/auth/callback` writes one `auth.callback` line per request it handles; a throw is logged by `onRequestError` as `request.error`.
 3. An uncaught error in a page, route handler or server action reaches Next's `onRequestError`, which writes one `request.error` line.
 4. Auth inserts an `auth.sessions` row on every new session; the `record_session_created` trigger inserts one `audit_log` row in the same transaction.
 5. With `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` set (not before PLA-73), `@vercel/otel` exports traces.
@@ -50,7 +50,7 @@ The request path and query, every request header (including a client's own `x-re
 - **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read through `to_jsonb`, so dropping it cannot.
 - **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.
 - **Next prints its own unscrubbed line for uncaught errors**, next to ours. Our code does not put personal data in error messages.
-- **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does a DNI (7 or 8 digits) inside a hex id of 16 or more characters, glued to a UUID, after a time's dot (read as its fraction) or after a version number and a dot, and a CUIT or CBU inside a hex id that holds other digits too; the rule is still never to log values.
+- **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does a DNI (7 or 8 digits) inside a hex id of 16 or more characters, glued to a UUID that ends in a digit, after a time's dot (read as its fraction) or after a version number and a dot, and a CUIT or CBU inside a hex id that holds other digits too; the rule is still never to log values.
 - **A failed sign-in writes no `audit_log` row**: a wrong or expired code or a failed exchange creates no session. Auth's own logs and, for Google and the mail link, the `auth.callback` line are its record.
 - **Once traces are exported (PLA-73), a client chooses its `trace_id`**: Next adopts an incoming `traceparent`, so a log line's `trace_id` can name another request, as a client's `x-request-id` can outside the proxy's matcher. `@vercel/otel`'s fetch spans also carry the outbound URL in the span name; PLA-73's span processor scrubs it along with `http.target` and `http.url`.
 - **Vercel Hobby keeps logs for one hour.** Enough for the done condition; retention arrives with Dash0 (PLA-73).
