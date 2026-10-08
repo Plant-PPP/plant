@@ -44,6 +44,18 @@ describe("scrubSensitiveText", () => {
       'password: `he said "it\'s" ok`, x',
       `password: \`${MASK}\`, x`,
     ],
+    [
+      "an escaped single-quoted value",
+      "password: \\'hunter2\\' ok",
+      `password: \\'${MASK}\\' ok`,
+    ],
+    ["a secret key", "secret_key=abc123 ok", `secret_key=${MASK} ok`],
+    ["a private key", "privateKey: abc123 ok", `privateKey: ${MASK} ok`],
+    [
+      "a PKCE code named in camel case",
+      `{"authCode":"${UUID}"}`,
+      `{"authCode":"${MASK}"}`,
+    ],
   ])("masks %s whole", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -142,6 +154,8 @@ describe("scrubSensitiveText", () => {
       '{"password":"a b"} password=""',
       String.raw`{\"password\":\"x\"} password: 'y' {"code":"${UUID}"}`,
       "token:'=aa'x@y.com;",
+      "v 2012.345.678deadbeefcafebabe20123456789",
+      "x 1.234.567.890abcdefabcdefa20123456789",
     ]) {
       const once = scrubSensitiveText(text);
       expect(scrubSensitiveText(once)).toBe(once);
@@ -233,6 +247,17 @@ describe("scrubSensitiveText", () => {
       "at 16:00:00,12345678,ana",
       `at 16:00:00,${MASK},ana`,
     ],
+    ["a DNI after a CUIT and a dot", "20123456789.12345678", `${MASK}.${MASK}`],
+    [
+      "a dotted DNI after a comma time",
+      "16:00:00,12.345.678,ana",
+      `16:00:00,${MASK},ana`,
+    ],
+    [
+      "a DNI after an encoded accent and a dot",
+      "/tmp/uploads/Jos%C3%A9.12345678.pdf",
+      `/tmp/uploads/Jos%C3%A9.${MASK}.pdf`,
+    ],
   ])("masks %s", (_label, text, expected) => {
     expect(scrubSensitiveText(text)).toBe(expected);
   });
@@ -273,6 +298,11 @@ describe("scrubSensitiveText", () => {
       "a hex id after an encoded slash",
       "/x%2F0af7651916cd43dd8448eb211c80319c",
     ],
+    [
+      "a trace id with 11 digits in a row",
+      "id 8533594127572b4035953ecf07800e41 x",
+    ],
+    ["a span id that holds a CUIT's digits", "id e23190104525f268 x"],
     ["a word with eyJ inside", "keyJsonParser failed"],
   ])("leaves %s", (_label, text) => {
     expect(scrubSensitiveText(text)).toBe(text);

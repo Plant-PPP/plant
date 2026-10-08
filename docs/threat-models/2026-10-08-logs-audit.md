@@ -50,5 +50,5 @@ The request path and query, every request header (including a client's own `x-re
 - **The trigger depends on Auth's schema** (`auth.sessions.id` and `user_id`). An Auth upgrade that renames them breaks sign-in; `aal` is read through `to_jsonb`, so dropping it cannot.
 - **The callback's `?code=` is in Vercel's request log**, and once traces are exported, in Next's root span (`http.target`). The code is single-use, short-lived and bound to the browser's PKCE verifier. PLA-73 adds a span processor that scrubs it before setting an endpoint.
 - **Next prints its own unscrubbed line for uncaught errors**, next to ours. Our code does not put personal data in error messages.
-- **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does a DNI (7 or 8 digits) inside a hex id of 16 or more characters; the rule is still never to log values.
+- **The masks are a net.** A value with no recognisable shape (a name, an amount in a free-text message) passes, and so does a DNI (7 or 8 digits) inside a hex id of 16 or more characters, after a time's dot (read as its fraction) or after a version number and a dot; the rule is still never to log values.
 - **Vercel Hobby keeps logs for one hour.** Enough for the done condition; retention arrives with Dash0 (PLA-73).

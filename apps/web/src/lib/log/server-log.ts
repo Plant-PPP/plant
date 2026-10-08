@@ -8,7 +8,8 @@ import {
 
 // The one way server code logs: a single JSON line per call, flat fields,
 // every string scrubbed. Never pass amounts, holdings or extracted data, only
-// ids and counts; the masks are a net, not a license.
+// ids and counts; the masks are a net, not a license. A number passes as it
+// is: only its key is checked.
 
 export type LogValue = string | number | boolean | null | undefined;
 export type LogFields = Readonly<Record<string, LogValue>>;
