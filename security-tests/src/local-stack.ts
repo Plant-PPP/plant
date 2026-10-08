@@ -6,6 +6,9 @@ export type LocalStack = {
   serviceRoleKey: string;
 };
 
+// What the specs get: the service role key stays in global setup.
+export type PublicStack = Pick<LocalStack, "apiUrl" | "anonKey">;
+
 const notRunning =
   "Local Supabase is not running. Run: pnpm exec supabase start";
 

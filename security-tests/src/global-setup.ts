@@ -1,5 +1,9 @@
-import { type LocalStack, readLocalStack } from "./local-stack";
-import { createUser, deleteUsers } from "./pentest-users";
+import {
+  type LocalStack,
+  type PublicStack,
+  readLocalStack,
+} from "./local-stack";
+import { createUser, deleteUsers, runEnv } from "./pentest-users";
 
 // Kong answers 502/503 while PostgREST is still loading its schema cache.
 async function waitForRest(stack: LocalStack): Promise<void> {
@@ -27,16 +31,17 @@ export default async function globalSetup(): Promise<void> {
   const ids: string[] = [];
   const track = (id: string) => {
     ids.push(id);
-    process.env.PENTEST_USER_IDS = JSON.stringify(ids);
+    process.env[runEnv.userIds] = JSON.stringify(ids);
   };
   try {
     const a = await createUser(stack, track);
     const b = await createUser(stack, track);
-    process.env.PENTEST_STACK = JSON.stringify({
+    const publicStack: PublicStack = {
       apiUrl: stack.apiUrl,
       anonKey: stack.anonKey,
-    });
-    process.env.PENTEST_USERS = JSON.stringify({ a, b });
+    };
+    process.env[runEnv.stack] = JSON.stringify(publicStack);
+    process.env[runEnv.users] = JSON.stringify({ a, b });
   } catch (error) {
     // Jest skips globalTeardown when globalSetup throws.
     await deleteUsers(stack, ids).catch(() => undefined);

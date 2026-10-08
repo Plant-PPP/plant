@@ -176,7 +176,7 @@ domain:     sources (@plant/sources) → shared
 orchestr.:  jobs    (@plant/jobs)    → { sources, core, shared }
 app:        apps/web                 → { jobs, core, sources, shared }   (composition root)
 off-spine:  evals                    → may import packages; NOTHING imports evals
-            security-tests           → shared (types only); NOTHING imports it
+            security-tests           → shared; NOTHING imports it
 ```
 
 - **`shared` is the leaf and is deliberately infra-free** — pure types and pure functions
@@ -213,7 +213,7 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 | `jobs` | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state | step logic itself (it lives in `sources`/`core`); UI knowledge |
 | `apps/web` | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools | domain logic that belongs in `core`; branching on a concrete source or engine |
 | `evals` | extraction and assistant evals | being imported by anything |
-| `security-tests` | pentest specs against local PostgREST, their Auth fixtures | being imported by anything; runtime code of other packages |
+| `security-tests` | pentest specs against local PostgREST, their Auth fixtures | being imported by anything |
 
 ### The live hexagons
 

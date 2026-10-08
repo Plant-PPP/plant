@@ -5,9 +5,9 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
 
 - **Raw `fetch`, no Supabase client.** The specs assert PostgREST's exact status and code (401 vs 403, `42501`, `PGRST205`), which the client hides behind `{ data, error }`.
-- **Real Auth users, two per run.** Jest's global setup creates them with the Auth admin API and signs them in; the teardown deletes them. It refuses to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
-- **Writes default to `return=minimal`.** With `return=representation` Postgres also applies the SELECT policy to the returned row, which hides a loose INSERT policy behind the same 403. Cases that read the written row ask for representation.
-- **They run in the CI `database` job, after pgTAP,** on the same local stack, which now also starts Auth, PostgREST and the gateway. `audit_log` has no positive case until it has a writer (PLA-21).
+- **Real Auth users, two per run, local only.** The specs refuse to run unless the API is on `127.0.0.1` or `localhost`, because `plant-staging` is also production's database until the beta.
+- **Writes default to `return=minimal`,** as an attacker sends them; with `return=representation` the SELECT policy also applies and hides a loose INSERT policy.
+- **They run in the CI `database` job, after pgTAP,** on a local stack with Auth, PostgREST and the gateway. `audit_log` has no positive case until it has a writer (PLA-21).
 
 ## 2026-10-07 · App layout, themes and brand (PLA-20)
 

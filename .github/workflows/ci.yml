@@ -129,8 +129,9 @@ jobs:
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
 
   # Every PR and push: the new-migration checks and script tests, then a fresh
-  # local Postgres with every migration applied, the types check and pgTAP. On
-  # PRs, last, the append-only check.
+  # local stack (Postgres with every migration applied, Auth, PostgREST), the
+  # types check, pgTAP and the pentest specs. On PRs, last, the append-only
+  # check.
   database:
     # The staging ruleset requires a check with this name.
     name: database
@@ -229,9 +230,7 @@ jobs:
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm exec supabase test db --local
 
-      # Anon and a second user against every public table, over HTTP with real
-      # Auth sessions (security-tests/).
-      - name: Pentest specs against PostgREST
+      - name: Pentest specs against PostgREST (security-tests/)
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm test:security
 

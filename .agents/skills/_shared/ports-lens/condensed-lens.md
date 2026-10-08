@@ -29,7 +29,7 @@ THE FOUR CO-EQUAL LAWS — check and REPORT each (an unstated law is UNCHECKED, 
      app:       apps/web → { jobs, core, sources, shared }   (the composition root — the only place
                 that wires concretes; hosts /api/inngest and the chat route)
      off-spine: evals → may import packages; NOTHING imports evals
-                security-tests → shared (types only); NOTHING imports it
+                security-tests → shared; NOTHING imports it
    An edge pointing up or sideways = defect. Engine rule: steps are pure functions in sources/core with
    NO engine import — `inngest` appears only in packages/jobs and the composition root. `pnpm
    check:boundaries` enforces the manifest graph (root included); relative-path climbs across package

@@ -60,7 +60,7 @@ preserving the rest of the body (do it — additive, draft-safe).
 
 ## A5 — Migration apply + DB quality  [BLOCKING, only if `supabase/migrations/` changed]
 On a fresh local database (`pnpm db:reset`), confirm every migration applies cleanly in order, the
-pgTAP suite in `supabase/tests` passes, and regenerating types (`pnpm db:generate:supabase-types`)
+pgTAP suite in `supabase/tests` and `pnpm test:security` pass, and regenerating types (`pnpm db:generate:supabase-types`)
 leaves no uncommitted diff, and `bash scripts/check-migrations.sh origin/staging` (name, order,
 atomicity, squawk) passes. Run the `enforce-owner-isolation` lens over every policy/grant/function
 the migration adds or changes (RLS `user_id = (select auth.uid())` in both `USING` and `WITH CHECK`,

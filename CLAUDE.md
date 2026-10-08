@@ -28,7 +28,7 @@ pnpm dev:up                         # local Supabase + web on :3000 + Inngest de
 | `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                              |
 | `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                           |
 | `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                                      |
-| `security-tests/`  | Pentest specs: `anon` and a second user on every `public` table over HTTP. A new table fails typecheck until it has a spec                                     |
+| `security-tests/`  | Pentest specs over HTTP: `anon`, another user and the owner on every `public` table; a new table fails typecheck without one                                   |
 
 Packages export their TypeScript sources and `apps/web` compiles them with `transpilePackages`, so they don't need a build before starting the web app. Which package may depend on which is checked by `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) over the `package.json` files, and `inngest` is declared only in `packages/jobs` and `apps/web`. The check includes the root `package.json`, because every package sees its `node_modules`; don't import another package through relative paths (`../../jobs/src`).
 
