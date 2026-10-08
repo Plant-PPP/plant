@@ -19,10 +19,12 @@ $$;
 
 REVOKE ALL ON FUNCTION private.clear_password() FROM PUBLIC, anon, authenticated;
 
--- email_confirmed_at too: a row written while triggers were off (a data-only
--- restore skips them) loses its password when its owner confirms the address.
+-- Every update, with no column list: a row written while triggers were off (a
+-- data-only restore skips them) loses its password on its next write, such as
+-- a sign-in, and a column list would block Auth's own upgrades from altering
+-- those columns.
 CREATE TRIGGER clear_password
-  BEFORE INSERT OR UPDATE OF encrypted_password, email_confirmed_at ON auth.users
+  BEFORE INSERT OR UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION private.clear_password();
 
 UPDATE auth.users SET encrypted_password = NULL WHERE encrypted_password IS NOT NULL;
