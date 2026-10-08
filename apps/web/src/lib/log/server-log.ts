@@ -57,13 +57,15 @@ function exceptionFields(error: unknown): Record<string, LogValue> {
   if (!(error instanceof Error)) {
     return { "error.type": typeof error, "exception.type": typeof error };
   }
-  const type = clean(error.name, FIELD_LIMITS);
+  // The logger runs on crash paths, so a malformed Error must not make it throw.
+  const name =
+    typeof error.name === "string" && error.name ? error.name : "Error";
   return {
-    "error.type": clean(errorType(error) ?? error.name, FIELD_LIMITS),
-    "exception.type": type,
-    "exception.message": clean(error.message, FIELD_LIMITS),
+    "error.type": clean(errorType(error) ?? name, FIELD_LIMITS),
+    "exception.type": clean(name, FIELD_LIMITS),
+    "exception.message": clean(String(error.message), FIELD_LIMITS),
     "exception.stacktrace": error.stack
-      ? clean(error.stack, STACK_LIMITS)
+      ? clean(String(error.stack), STACK_LIMITS)
       : undefined,
   };
 }

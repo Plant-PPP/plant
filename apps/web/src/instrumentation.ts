@@ -1,7 +1,7 @@
 import type { Instrumentation } from "next";
 
 import { isAuthUnavailable } from "@/lib/auth/session-state";
-import { serverLog } from "@/lib/log/server-log";
+import { errorType, serverLog } from "@/lib/log/server-log";
 import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
@@ -51,9 +51,13 @@ export const onRequestError: Instrumentation.onRequestError = (
     serverLog.warn("request.error", {
       ...fields,
       "plant.outcome": "auth_unavailable",
-      "error.type": error.name,
+      "error.type": errorType(error),
     });
     return;
   }
-  serverLog.error("request.error", fields, error);
+  serverLog.error(
+    "request.error",
+    { ...fields, "plant.outcome": "error" },
+    error,
+  );
 };

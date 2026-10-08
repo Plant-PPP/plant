@@ -41,8 +41,11 @@ export async function GET(request: NextRequest) {
     log("info", "link_expired", { "plant.auth.reason": "otp_expired" });
   } else if (searchParams.has("error")) {
     target = loginErrorPath("oauth");
-    // access_denied is the user saying no on Google's screen, not a fault.
-    const denied = searchParams.get("error") === "access_denied";
+    // The user saying no on Google's screen arrives as access_denied with no
+    // Auth code; Auth also sends access_denied for its own refusals, with one.
+    const denied =
+      searchParams.get("error") === "access_denied" &&
+      (errorCode === null || errorCode === "access_denied");
     log(denied ? "info" : "warn", "oauth_error", {
       ...(denied
         ? { "plant.auth.reason": "access_denied" }

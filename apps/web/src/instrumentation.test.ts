@@ -96,6 +96,7 @@ describe("onRequestError", () => {
       "http.request.method": "GET",
       "http.route": "/assets/[id]",
       "plant.route_type": "render",
+      "plant.outcome": "error",
       "error.type": "Error",
       "exception.message": "failed for <masked>",
     });

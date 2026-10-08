@@ -111,6 +111,16 @@ describe("the callback line", () => {
       },
     ],
     [
+      "a refusal by Auth",
+      "?error=access_denied&error_code=signup_disabled",
+      "warn",
+      {
+        "plant.outcome": "oauth_error",
+        "error.type": "_OTHER",
+        "plant.auth.error_code": "signup_disabled",
+      },
+    ],
+    [
       "an error code that is not Auth's",
       "?error=x&error_code=%3Cscript%3E",
       "warn",

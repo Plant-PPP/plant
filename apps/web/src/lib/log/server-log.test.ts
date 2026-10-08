@@ -135,6 +135,16 @@ it("logs an error's code as its type, and its class as the exception's", () => {
   });
 });
 
+it("logs an Error whose name and message are not strings", () => {
+  const thrown = Object.assign(new Error("x"), { name: undefined, message: 1 });
+  serverLog.error("x", {}, thrown);
+  expect(lineOf(error)).toMatchObject({
+    "error.type": "Error",
+    "exception.type": "Error",
+    "exception.message": "1",
+  });
+});
+
 describe("errorType", () => {
   it.each([
     [
