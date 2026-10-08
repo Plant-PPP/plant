@@ -65,8 +65,9 @@ function providerRefused(error: unknown): boolean {
 // Writes one ai_costs row per model call, priced by the requested model.
 // Recording never throws into the call; a row that may be missing is logged.
 // `record` must settle (createAiCostWriter gives up after 1.5 s), and a step
-// finishes only once its row is recorded, so a caller's step or chunk timeout
-// must leave room for it.
+// finishes only once its row is recorded, so a caller's total, step or chunk
+// timeout must leave room for it. `context` is fixed when the middleware is
+// built: wrap the model per request or run, never share it across users.
 export function costMiddleware(options: {
   modelId: PricedModelId;
   context: AiCostContext;
