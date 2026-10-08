@@ -17,7 +17,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { LOGIN_PATH, loginPath } from "@/lib/auth/routes";
-import { initials, type SessionUser } from "@/lib/auth/session-user";
+import {
+  initials,
+  sessionChange,
+  type SessionUser,
+} from "@/lib/auth/session-user";
 import { createClient } from "@/lib/supabase/client";
 
 function UserSummary({ user }: { user: SessionUser }) {
@@ -44,17 +48,19 @@ export function NavUser({ user }: { user: SessionUser }) {
   // a `next`.
   const signingOut = useRef(false);
 
-  // Another tab signed out.
   useEffect(() => {
-    const { data } = createClient().auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT" && !signingOut.current) {
+    const { data } = createClient().auth.onAuthStateChange((event, session) => {
+      const change = sessionChange(event, session, user);
+      if (change === "signed-out" && !signingOut.current) {
         window.location.assign(
           loginPath(window.location.pathname + window.location.search),
         );
+      } else if (change === "switched") {
+        window.location.reload();
       }
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [user]);
 
   async function signOut() {
     signingOut.current = true;

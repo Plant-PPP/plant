@@ -37,7 +37,7 @@ export default async function LoginPage({
         <BrandLogo variant="logotype" className="h-8 w-auto" />
         <h1 className="text-xl font-semibold">Entrá a Plant</h1>
         <LoginForm
-          next={afterLoginPath(next)}
+          next={afterLoginPath(Array.isArray(next) ? next[0] : next)}
           error={loginErrorMessage(error)}
           googleEnabled={await googleEnabled()}
         />

@@ -10,6 +10,9 @@ import { CALLBACK_PATH, NEXT_COOKIE } from "@/lib/auth/routes";
 import { sanitizeAuthCode } from "@/lib/auth/sanitize-auth-code";
 import { createClient } from "@/lib/supabase/client";
 
+// The only redirect the Auth allow-list holds, for mail links and Google.
+const callbackUrl = () => location.origin + CALLBACK_PATH;
+
 // The browser calls Auth directly, so its rate limits count per visitor and
 // not per server.
 export function LoginForm({
@@ -80,7 +83,7 @@ export function LoginForm({
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: location.origin + CALLBACK_PATH,
+          emailRedirectTo: callbackUrl(),
         },
       });
       return error;
@@ -115,7 +118,7 @@ export function LoginForm({
       rememberNext();
       const { error } = await createClient().auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: location.origin + CALLBACK_PATH },
+        options: { redirectTo: callbackUrl() },
       });
       return error;
     });
