@@ -101,6 +101,16 @@ describe("the callback line", () => {
       { "plant.outcome": "oauth_error", "plant.auth.reason": "access_denied" },
     ],
     [
+      "a refusal on Google with Auth's access_denied code",
+      "?error=access_denied&error_code=access_denied",
+      "info",
+      {
+        "plant.outcome": "oauth_error",
+        "plant.auth.reason": "access_denied",
+        "plant.auth.error_code": "access_denied",
+      },
+    ],
+    [
       "another OAuth error",
       "?error=server_error&error_code=unexpected_failure",
       "warn",

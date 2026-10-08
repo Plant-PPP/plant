@@ -42,7 +42,8 @@ export async function GET(request: NextRequest) {
   } else if (searchParams.has("error")) {
     target = loginErrorPath("oauth");
     // The user saying no on Google's screen arrives as access_denied with no
-    // Auth code; Auth also sends access_denied for its own refusals, with one.
+    // error_code, or with access_denied as the code; Auth's own refusals
+    // (signup_disabled, user_banned) carry another code.
     const denied =
       searchParams.get("error") === "access_denied" &&
       (errorCode === null || errorCode === "access_denied");

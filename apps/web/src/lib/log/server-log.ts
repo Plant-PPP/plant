@@ -57,7 +57,8 @@ function exceptionFields(error: unknown): Record<string, LogValue> {
   if (!(error instanceof Error)) {
     return { "error.type": typeof error, "exception.type": typeof error };
   }
-  // The logger runs on crash paths, so a malformed Error must not make it throw.
+  // The logger runs on crash paths: a name or message that is not a string
+  // must not make it throw.
   const name =
     typeof error.name === "string" && error.name ? error.name : "Error";
   return {
