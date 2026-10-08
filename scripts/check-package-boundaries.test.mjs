@@ -33,7 +33,8 @@ const PACKAGES = {
 
 /**
  * Runs the script over a workspace where `deps` maps a package name to the
- * dependencies it declares, under `field` in every manifest.
+ * dependencies it declares (a name, or a [name, spec] pair), under `field` in
+ * every manifest.
  */
 function check(deps, field = "dependencies") {
   const root = mkdtempSync(join(tmpdir(), "boundaries-"));
@@ -47,7 +48,9 @@ function check(deps, field = "dependencies") {
     for (const [dir, name] of Object.entries(PACKAGES)) {
       mkdirSync(join(root, dir), { recursive: true });
       const dependencies = Object.fromEntries(
-        (deps[name] ?? []).map((dep) => [dep, "*"]),
+        (deps[name] ?? []).map((dep) =>
+          Array.isArray(dep) ? dep : [dep, "*"],
+        ),
       );
       writeFileSync(
         join(root, dir, "package.json"),
@@ -110,5 +113,29 @@ for (const field of [
     const r = check({ plant: ["ai"] }, field);
     assert.equal(r.status, 1);
     assert.match(r.output, /plant may not depend on ai, the AI SDK/);
+  });
+}
+
+for (const [name, alias, message] of [
+  [
+    "@plant/core",
+    ["llm", "npm:ai@6"],
+    /@plant\/core may not depend on llm \(ai\), the AI SDK/,
+  ],
+  [
+    "@plant/shared",
+    ["gai", "npm:@ai-sdk/google"],
+    /@plant\/shared may not depend on gai \(@ai-sdk\/google\), the AI SDK/,
+  ],
+  [
+    "@plant/core",
+    ["runner", "workspace:@plant/jobs@*"],
+    /@plant\/core may not depend on runner \(@plant\/jobs\)/,
+  ],
+]) {
+  test(`the alias ${alias[0]}: ${alias[1]} in ${name} fails`, () => {
+    const r = check({ [name]: [alias] });
+    assert.equal(r.status, 1);
+    assert.match(r.output, message);
   });
 }

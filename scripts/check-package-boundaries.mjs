@@ -91,20 +91,25 @@ for (const dir of manifests) {
     peerDependencies = {},
     optionalDependencies = {},
   } = JSON.parse(readFileSync(new URL(`${dir}/package.json`, root), "utf8"));
-  const deps = Object.keys({
+  const deps = Object.entries({
     ...dependencies,
     ...devDependencies,
     ...peerDependencies,
     ...optionalDependencies,
+  }).map(([key, spec]) => {
+    // An alias ("llm": "npm:ai@6") installs the package its spec names.
+    const alias = /^(?:npm|workspace):((?:@[^/@]+\/)?[^@]+)(?:@|$)/.exec(spec);
+    const dep = alias?.[1] ?? key;
+    return { dep, label: dep === key ? dep : `${key} (${dep})` };
   });
   if (!(name in allowed)) violations.push(`${dir}: unknown package ${name}`);
-  for (const dep of deps) {
+  for (const { dep, label } of deps) {
     if (dep.startsWith("@plant/") && !allowed[name]?.includes(dep)) {
-      violations.push(`${name} may not depend on ${dep}`);
+      violations.push(`${name} may not depend on ${label}`);
     }
     for (const fence of sdkFences) {
       if (fence.matches(dep) && !fence.allowed.has(name)) {
-        violations.push(`${name} may not depend on ${dep}, ${fence.reason}`);
+        violations.push(`${name} may not depend on ${label}, ${fence.reason}`);
       }
     }
   }
