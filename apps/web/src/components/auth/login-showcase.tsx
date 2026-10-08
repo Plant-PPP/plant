@@ -74,7 +74,7 @@ export function LoginShowcase() {
   return (
     <div
       aria-hidden="true"
-      className="relative hidden overflow-hidden bg-brand/15 lg:block"
+      className="relative hidden min-h-[36rem] overflow-hidden bg-brand/15 lg:block"
     >
       <svg
         className="absolute top-1/2 left-1/2 size-[max(1100px,150%)] -translate-x-1/2 -translate-y-1/2 text-brand"
