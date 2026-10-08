@@ -69,8 +69,9 @@ export function NavUser({ user }: { user: SessionUser }) {
     const auth = createClient().auth;
     const { error } = await auth.signOut({ scope: "local" });
     // When only the revoke fails, auth-js has already cleared this device's
-    // session, so it is signed out all the same. A failure to load the session
-    // (Auth down with an expired token) leaves the cookies: report it.
+    // session, so it is signed out all the same; the server keeps that session
+    // until it expires. A failure to load the session (Auth down with an
+    // expired token) leaves the cookies: report it.
     const after = error ? await auth.getSession() : null;
     if (after && (after.data.session || after.error)) {
       signingOut.current = false;

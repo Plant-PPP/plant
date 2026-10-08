@@ -4,8 +4,8 @@ SET statement_timeout = '5min';
 -- Plant signs in with an email code or Google only, so no user may hold a
 -- password. A stored one would let whoever set it sign in: a /signup with a
 -- password before the real owner confirms the address with a code, or a
--- PUT /user with a stolen access token that outlives sign-out. Auth stores no
--- password as NULL. Passwords come back only if this trigger is dropped,
+-- PUT /user with a stolen access token that outlives sign-out. Auth reads NULL
+-- as no password. Passwords come back only if this trigger is dropped,
 -- disabled or bypassed by a write with triggers off.
 CREATE FUNCTION private.clear_password()
   RETURNS trigger

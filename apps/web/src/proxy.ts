@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
 
   if (session.claims) {
     // A signed-in user on /login goes where they were headed, unless /login
-    // is showing an error from the callback.
+    // is showing a sign-in error.
     if (
       pathname === LOGIN_PATH &&
       !loginErrorMessage(searchParams.get("error"))
