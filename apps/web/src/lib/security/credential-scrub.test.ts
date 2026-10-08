@@ -255,6 +255,12 @@ describe("scrubSensitiveText", () => {
     ],
     ["a DNI after a CUIT and a dot", "20123456789.12345678", `${MASK}.${MASK}`],
     [
+      "two DNIs joined by a dot",
+      "dni_12345678.87654321.pdf",
+      `dni_${MASK}.pdf`,
+    ],
+    ["a password named passwd", "passwd=hunter2 ok", `passwd=${MASK} ok`],
+    [
       "a dotted DNI after a comma time",
       "16:00:00,12.345.678,ana",
       `16:00:00,${MASK},ana`,
@@ -299,6 +305,8 @@ describe("scrubSensitiveText", () => {
     ["a chunk name", "/_next/static/chunks/page-4f3a87654321bc9d.js:1:2345"],
     ["a timestamp with microseconds", "at 2026-10-08T16:00:00.123456+00:00"],
     ["a basic ISO timestamp", "X-Amz-Date=20261008T160000Z"],
+    ["a basic ISO timestamp with a fraction", "at 20261008T160000.123Z"],
+    ["a dotted version", "Next.js 15.5.4 and 1.234.567.890"],
     ["a comma time with microseconds", "at 16:00:00,123456 done"],
     [
       "a hex id after an encoded slash",

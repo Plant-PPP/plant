@@ -30,7 +30,7 @@ const SECRET_PARAM = new RegExp(
 // Inngest's signing keys. A letter before `code`, `Bearer` or `eyJ` means
 // another word; a digit may be a mask's neighbour.
 const NAMED_SECRET = new RegExp(
-  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|password|(?:client_)?secret(?:[_-]?key)?|(?:private|signing|event)[_-]?key)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\\'[^'\\]*|\`[^\`]*|[^"'\\\s,}&<]+)`,
+  String.raw`((?:${AUTH_TOKEN}|code_verifier|api[_-]?key|passw(?:or)?d|service[_-]?role[_-]?key|(?:client_)?secret(?:[_-]?key)?|(?:private|signing|event)[_-]?key)(?:\\?")?\s{0,8}[:=]\s{0,8})("(?:[^"\\]|\\.)*|\\"[^"\\]*|'(?:[^'\\]|\\.)*|\\'[^'\\]*|\`[^\`]*|[^"'\\\s,}&<]+)`,
   "gi",
 );
 const NAMED_CODE = new RegExp(
@@ -50,8 +50,9 @@ const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 // a CBU or CUIT glued to a word; a time with its fraction (a comma one up to
 // microseconds, so a CSV's next field is not read as one); a basic ISO
 // timestamp. Not followed by `@`: an id used as an email's local part is not
-// an id. A DNI glued to hex letters reads as a hex id and passes.
-const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?[0-9a-f]?)(?![a-f]*\d{11,}[a-f]*(?![0-9a-z]))(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6})(?!\d|\.\d))(?!@|%(?:25)?40)`;
+// an id. A DNI glued to hex letters, or a CUIT or CBU in a hex run that holds
+// other digits too, reads as a hex id and passes.
+const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?[0-9a-f]?)(?![a-f]*\d{11,}[a-f]*(?![0-9a-z]))(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
 // file name, is masked; a percent escape's hex digits do not count. A DNI may
@@ -59,6 +60,9 @@ const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!%(?:25)?
 // other 7 or 8 digits, a byte count or a date in a file name, read as a DNI.
 const CBU = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})\d{22}(?!\d)`;
 const CUIT = String.raw`(?:(?<!\d)|${AFTER_ESCAPE})(?:20|23|24|27|30|33|34)[-. ]?\d{8}[-. ]?\d(?!\d)`;
+// Two DNIs joined by a dot, as in a file name or a CSV row, which the DNI's
+// own bounds read as one dotted number.
+const DNI_PAIR = String.raw`(?<!\d|\d\.)\d{7,8}(?:\.\d{7,8})+(?!\d|\.\d)`;
 const DNI = String.raw`(?:(?<!\d|\d\.)|${AFTER_ESCAPE}|(?<=%(?:25)?[0-9A-Fa-f]{2}\.))\d{1,2}\.?\d{3}\.?\d{3}(?!\d|\.\d)`;
 // The lookbehind keeps the hex digits of a percent escape, raw or encoded
 // (`%3Djohn%40…`, `%253Djohn%2540…`), out of the local part; an escape inside
@@ -70,7 +74,7 @@ const EMAIL = String.raw`(?<!%(?:25)?[0-9A-Fa-f]?)(?!')(?:[\p{L}\p{N}._+'-]|%(?:
 // One pass, so every pattern sees the whole text. At each position a kept id
 // wins, then an email over the numbers in its local part.
 const PERSONAL_DATA = new RegExp(
-  `(${KEPT})|${EMAIL}|${CBU}|${CUIT}|${DNI}`,
+  `(${KEPT})|${EMAIL}|${CBU}|${CUIT}|${DNI_PAIR}|${DNI}`,
   "giu",
 );
 
