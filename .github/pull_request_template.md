@@ -40,7 +40,7 @@ Linear: PLA-
 
 **How I tested it (commands, staging URL, screenshots):**
 
-- [ ] Per-user isolation tests (pgTAP) and a pentest spec (`security-tests/`) for every new table with user data (or `n/a`)
+- [ ] Per-user isolation tests (pgTAP) and a pentest spec (`security-tests/`) for every new table or view in `public` (or `n/a`)
 - [ ] No `.env`, keys, real documents or personal data in the diff
 
 ## Migration
