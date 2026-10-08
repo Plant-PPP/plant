@@ -30,7 +30,10 @@ function json(status: number, body: unknown) {
   });
 }
 
-async function failure(write: Promise<void>): Promise<AiCostWriteError> {
+async function failure(
+  write: Promise<void>,
+  mayHaveCommitted = false,
+): Promise<AiCostWriteError> {
   const error = await write.then(
     () => undefined,
     (e: unknown) => e,
@@ -38,6 +41,7 @@ async function failure(write: Promise<void>): Promise<AiCostWriteError> {
   expect(error).toBeInstanceOf(AiCostWriteError);
   expect((error as Error).name).toBe("AiCostWriteError");
   expect((error as AiCostWriteError).code).toBe((error as Error).message);
+  expect((error as AiCostWriteError).mayHaveCommitted).toBe(mayHaveCommitted);
   return error as AiCostWriteError;
 }
 
@@ -90,25 +94,31 @@ it("throws the status when the body is not JSON", async () => {
         headers: { "content-type": "text/html" },
       }),
   );
-  expect((await failure(writerWith(fetch)(row))).message).toBe("http_502");
+  expect((await failure(writerWith(fetch)(row), true)).message).toBe(
+    "http_502",
+  );
 });
 
 it("throws the status when a failed response's body is falsy", async () => {
   const fetch = jest.fn(async () => json(500, null));
-  expect((await failure(writerWith(fetch)(row))).message).toBe("http_500");
+  expect((await failure(writerWith(fetch)(row), true)).message).toBe(
+    "http_500",
+  );
 });
 
 it("throws fetch_error when the request fails", async () => {
   const fetch = jest.fn(async () => {
     throw new TypeError("fetch failed");
   });
-  expect((await failure(writerWith(fetch)(row))).message).toBe("fetch_error");
+  expect((await failure(writerWith(fetch)(row), true)).message).toBe(
+    "fetch_error",
+  );
 });
 
 it("times out a request that ignores the abort", async () => {
   const fetch = jest.fn(() => new Promise<Response>(() => {}));
   const write = writerWith(fetch)(row);
-  const settled = failure(write);
+  const settled = failure(write, true);
   await jest.advanceTimersByTimeAsync(1500);
   expect((await settled).message).toBe("timeout");
   expect(fetch).toHaveBeenCalledTimes(1);
@@ -116,14 +126,31 @@ it("times out a request that ignores the abort", async () => {
   expect(init.signal?.aborted).toBe(true);
 });
 
+it("may have committed when a 5xx carries a SQLSTATE", async () => {
+  const fetch = jest.fn(async () => json(503, { code: "08006" }));
+  expect((await failure(writerWith(fetch)(row), true)).message).toBe("08006");
+});
+
 it.each([
-  ["timeout", true],
-  ["fetch_error", true],
-  ["http_502", true],
-  ["http_401", false],
-  ["23503", false],
-  ["PGRST204", false],
-  ["missing_key", false],
-])("%s may have committed: %s", (code, expected) => {
-  expect(new AiCostWriteError(code).mayHaveCommitted).toBe(expected);
+  [
+    "a 404 with an empty body",
+    () => new Response("", { status: 404 }),
+    "http_204",
+  ],
+  ["a 404 with an array body", () => json(404, []), "http_200"],
+  ["a 200", () => json(200, []), "http_200"],
+])("does not count %s as written", async (_label, answer, code) => {
+  const fetch = jest.fn(async () => answer());
+  expect((await failure(writerWith(fetch)(row))).message).toBe(code);
+});
+
+it("counts a 201 as written whatever its body", async () => {
+  const fetch = jest.fn(
+    async () =>
+      new Response("created", {
+        status: 201,
+        headers: { "content-type": "text/plain" },
+      }),
+  );
+  await expect(writerWith(fetch)(row)).resolves.toBeUndefined();
 });
