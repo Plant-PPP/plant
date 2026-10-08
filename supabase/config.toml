@@ -299,7 +299,7 @@ inactivity_timeout = "8h"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # Adds mfa_enrolled to every access token and demotes an enrolled user's token below aal2 (PLA-18).
-# The hosted project turns it on in the dashboard (Authentication > Hooks).
+# The hosted project turns it on in the dashboard (Authentication > Auth Hooks).
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/private/custom_access_token_hook"

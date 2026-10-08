@@ -466,8 +466,9 @@ SELECT ok(
   (SELECT NOT p.prosecdef AND p.proconfig = ARRAY['search_path=""']
    FROM pg_proc p WHERE p.oid = 'private.custom_access_token_hook(jsonb)'::regprocedure)
     AND has_schema_privilege('supabase_auth_admin', 'private', 'USAGE')
+    AND has_function_privilege('supabase_auth_admin', 'private.custom_access_token_hook(jsonb)', 'EXECUTE')
     AND has_table_privilege('supabase_auth_admin', 'auth.mfa_factors', 'SELECT'),
-  'the access token hook runs as supabase_auth_admin, which can reach it and read the factors, with an empty search_path'
+  'the access token hook runs as supabase_auth_admin, which can reach and execute it and read the factors, with an empty search_path'
 );
 
 -- Each canary breaks one rule above, and each assert must name every canary
