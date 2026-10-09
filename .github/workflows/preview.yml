@@ -1,0 +1,52 @@
+name: Preview
+
+# Vercel builds claude/* branches only when asked (apps/web/vercel.json), so
+# agent review rounds spend no Hobby deployments. Marking the PR ready for
+# review, or pushing to a PR that is already ready, deploys a preview.
+on:
+  pull_request:
+    branches: [staging]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      ${{ !github.event.pull_request.draft
+      && startsWith(github.head_ref, 'claude/')
+      && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: vercel-preview
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      # A named branch, not the merge ref, so the deployment carries the
+      # branch name and apps/web/vercel.json skips turbo-ignore for it.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Deploy to Vercel
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_iSCRuTEvENjbffVzhuXeRy91
+          VERCEL_PROJECT_ID: prj_bz4FeAwk7vvhR7NPijAoeRKbE1Va
+        run: |
+          set -euo pipefail
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::The VERCEL_TOKEN secret is not set."
+            exit 1
+          fi
+          url="$(npx -y vercel@59.26.0 deploy --yes --token "$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"

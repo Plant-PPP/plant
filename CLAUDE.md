@@ -57,6 +57,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
 - PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Whoever merges uses Squash and merge, keeps the PR title as the commit title (GitHub's appended ` (#N)` may stay) and clears the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title, before any stacked-PR `(N/X)` marker, which is dropped from the squash commit title (see `nav-github`); the squash commit title keeps `[DESTRUCTIVE]`, the only prefix it may have before the type.
+- Branches named `claude/*` get no Vercel preview while their PR is a draft. Marking it ready for review deploys one (`.github/workflows/preview.yml`); post the link from the PR's `vercel-preview` deployment with the ready-for-review message.
 - The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase

@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "regions": ["gru1"],
+  "git": {
+    "deploymentEnabled": {
+      "claude/*": false
+    }
+  },
   "buildCommand": "TURBO_TELEMETRY_DISABLED=1 pnpm exec turbo run build --filter=@plant/web",
-  "ignoreCommand": "npx -y turbo-ignore@2.11.7 @plant/web --turbo-version=2.11.7"
+  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in claude/*) exit 1 ;; esac; npx -y turbo-ignore@2.11.7 @plant/web --turbo-version=2.11.7"
 }

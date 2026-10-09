@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Vercel previews on request for agent branches
+
+- **`claude/*` branches don't deploy on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns them off, so review fixes stop spending Vercel Hobby's daily deployment cap. `staging` and every other branch deploy on push as before.
+- **Marking the PR ready for review deploys it.** `.github/workflows/preview.yml` runs `vercel deploy` for a non-draft PR from a `claude/*` branch on open, reopen, ready for review and every later push, and links the preview from the PR's `vercel-preview` deployment. Review rounds happen while the PR is a draft. The Vercel connector cannot create deployments (403), so the workflow uses a Vercel token in the `VERCEL_TOKEN` repo secret.
+- **`claude/*` deployments skip `turbo-ignore`.** A deployment someone asked for always builds, even when the branch's last commit touches nothing `@plant/web` depends on.
+
 ## 2026-10-09 · MFA screens: verify at sign-in and turn TOTP on (PLA-76)
 
 - **`/auth/mfa` asks an enrolled session below `aal2` for its TOTP code**, then reloads the page it was going to (`afterLoginPath(next)`) in full, so the proxy and the server read the `aal2` cookie instead of claims or a prefetch cached at `aal1`. It reads claims through `readSessionClaims()` (`lib/auth/session-claims-unchecked.ts`), the same check as `getSessionClaims()` without the redirect to `/auth/mfa`; lint lets only that page and `session-claims.ts` (and their tests) import it, and the two only call it. The proxy lets such a session through under `/auth/mfa`, so the page defines no server action (lint checks it) and imports none. A user with no TOTP factor, or whose factors cannot be loaded, sees why and can only sign out (`auth.mfa_page` logs it); one whose session has already ended is sent to sign in again and back to `next`: by the proxy when the refresh fails, and with a token still in date by the page, or by the code form when its verify finds the session gone (another device's verify ends it). The TOTP setup in Ajustes does the same and comes back to Ajustes.
