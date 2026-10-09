@@ -92,6 +92,8 @@ describe("kraken parse", () => {
     ["EGeneral:Internal error", true],
     ["EGeneral:Too many requests", true],
     ["EQuery:Unknown asset pair", false],
+    ["EQuery:Unknown asset pair:WBTCUSD", false],
+    ["eService:Unavailable", false],
     ["EGeneral:Invalid arguments", false],
     ["Unavailable", false],
   ])("throws provider_error on %s, retryable %s", (error, retryable) => {
@@ -123,6 +125,10 @@ describe("kraken parse", () => {
 
   it.each([
     ["a numeric price", { error: [], result: { XXBTZUSD: { c: [1, "1"] } } }],
+    [
+      "a last trade with no volume",
+      { error: [], result: { XXBTZUSD: { c: ["1"] } } },
+    ],
     ["no error list", { result: {} }],
     ["a non-string error", { error: [{ detail: "x" }] }],
   ])("throws bad_shape on %s", (_label, json) => {

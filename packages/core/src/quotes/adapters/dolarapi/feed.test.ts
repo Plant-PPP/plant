@@ -33,6 +33,14 @@ describe("dolarapi parse", () => {
     expect(parse(late, "blue").rate_date).toBe("2026-10-09");
   });
 
+  it("reads a stamp with a Buenos Aires offset", () => {
+    const local = {
+      ...body("blue", 1, 2),
+      fechaActualizacion: "2026-10-09T23:30:00-03:00",
+    };
+    expect(parse(local, "blue").rate_date).toBe("2026-10-09");
+  });
+
   it.each([
     ["a zero buying rate", body("bolsa", 0, 1450)],
     ["a float with noise", body("bolsa", 0.1 + 0.2, 1450)],
@@ -100,6 +108,20 @@ describe("createDolarapiFeed", () => {
       "blue",
     ]);
     expect(rows.prices).toEqual([]);
+  });
+
+  it("requests the four houses at once", async () => {
+    const answers: (() => void)[] = [];
+    const feed = createDolarapiFeed(
+      () =>
+        new Promise((resolve) => {
+          answers.push(() => resolve(body("x", 1, 2)));
+        }),
+    );
+    const read = feed.readRaw(NOW);
+    expect(answers).toHaveLength(4);
+    answers.forEach((answer) => answer());
+    await read;
   });
 
   it("keeps the other houses when one changed shape", async () => {

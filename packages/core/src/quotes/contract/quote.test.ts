@@ -102,6 +102,7 @@ describe("checkBatch", () => {
     ["a date that is not a day", fx({ rate_date: "2026-10-9" })],
     ["an unknown kind", fx({ kind: "tarjeta" as RawFxRate["kind"] })],
     ["an instant without offset", fx({ quoted_at: "2026-10-09 20:00" })],
+    ["a local instant", fx({ quoted_at: "2026-10-09T20:00:00" })],
     // Postgres has no year 0.
     ["a quoted_at in the year 0", fx({ quoted_at: "0000-06-01T00:00:00Z" })],
     [

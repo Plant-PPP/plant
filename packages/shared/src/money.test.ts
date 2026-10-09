@@ -18,6 +18,13 @@ describe("moneySchema", () => {
       moneySchema.safeParse({ amount: 1234.5, currency: "USD" }).success,
     ).toBe(false);
   });
+
+  it.each([
+    ["an amount without its currency", { amount: "1" }],
+    ["a null amount", { amount: null, currency: "ARS" }],
+  ])("rejects %s", (_label, value) => {
+    expect(moneySchema.safeParse(value).success).toBe(false);
+  });
 });
 
 describe("decimalStringSchema", () => {
