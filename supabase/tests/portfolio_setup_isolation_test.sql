@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(41);
+SELECT plan(42);
 
 -- The hint a statement raises, or NULL if it succeeds. throws_ok checks only
 -- the code and the message, and the app maps the hint to its copy.
@@ -210,6 +210,13 @@ SELECT throws_ok(
   $$ INSERT INTO public.portfolios (name) VALUES ('CORTO PLAZO') $$,
   '23505', NULL,
   'two active portfolios of one user cannot share a name, in any case'
+);
+
+-- lower() follows the database's locale: accented capitals must fold too.
+SELECT throws_ok(
+  $$ INSERT INTO public.portfolios (name) VALUES ('Ñandú'), ('ÑANDÚ') $$,
+  '23505', NULL,
+  'names that differ only in accented capitals collide'
 );
 
 SELECT throws_ok(

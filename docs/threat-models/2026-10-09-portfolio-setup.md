@@ -53,6 +53,6 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 
 ## Residual risk
 
-- **A data migration over many users' rows takes one advisory lock per user until commit.** It disables the lock trigger around it or batches per user (`docs/decisions.md`).
+- **A data migration over many users' rows takes one advisory lock per user until commit.** It disables the lock trigger in the same transaction as its writes or commits per user (`docs/decisions.md`).
 - **A rejected action has no server-side signal** (network, version skew), as everywhere in the app until client telemetry exists.
 - **A failing "Principal" insert fails signup** with Auth's generic error and no Plant log, as the profile insert already does.

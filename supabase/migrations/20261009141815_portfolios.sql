@@ -79,9 +79,10 @@ WHERE NOT EXISTS (SELECT 1 FROM public.portfolios p WHERE p.user_id = u.id);
 -- Serializes one user's writes to the portfolio setup, so a guard that counts
 -- rows sees every committed write of that user. That needs READ COMMITTED,
 -- where each query takes a new snapshot after the lock: under REPEATABLE READ
--- the guard would count from a snapshot taken before it waited. A data migration touching many
--- users' rows disables this trigger around it or batches per user, since each
--- row holds its user's lock until commit. The lock is taken after the row's
+-- the guard would count from a snapshot taken before it waited. A data
+-- migration touching many users' rows disables this trigger in the same
+-- transaction as its writes, or commits per user, since each row holds its
+-- user's lock until commit. The lock is taken after the row's
 -- lock, so a statement or transaction writing several of one user's rows can
 -- deadlock (40P01) with a concurrent write of that user.
 CREATE FUNCTION private.lock_portfolio_setup()
