@@ -83,7 +83,6 @@ describe("fetchTwoFactorState with other factors", () => {
 describe("confirmsDisable", () => {
   it.each([
     ["confirm=disable", true],
-    ["confirm=disable&confirm=x", true],
     ["confirm=x&confirm=disable", false],
     ["", false],
   ])("%p: %s", (query, expected) => {

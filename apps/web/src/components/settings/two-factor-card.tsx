@@ -35,9 +35,9 @@ const DESCRIPTIONS: Record<TwoFactorStatus, string> = {
 
 const fetchState = () => fetchTwoFactorState(createClient());
 
-// ?confirm=disable opens the off dialog once TOTP shows on: the step-up's
-// sign-in comes back here with it. It is read from the URL on mount, not from
-// the server's render, which back and forward reuse after the URL is cleared.
+// ?confirm=disable opens the off dialog if TOTP shows on: the step-up's sign-in
+// comes back here with it. Read on mount: back and forward reuse a server
+// render of a URL that still had the flag.
 export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
   const searchParams = useSearchParams();
   const [confirmDisable] = useState(() => confirmsDisable(searchParams));
@@ -52,11 +52,10 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
     void fetchState().then((next) => {
       if (!active) return;
       setState(next);
-      if (confirmDisable && canDisable(next)) {
-        setPanel("disable");
-        // Once: a reload or a later sign-in back to this URL does not reopen it.
-        window.history.replaceState(null, "", SETTINGS_ITEM.href);
-      }
+      if (!confirmDisable) return;
+      if (canDisable(next)) setPanel("disable");
+      // Once: a reload or a later sign-in back to this URL does not reopen it.
+      window.history.replaceState(null, "", SETTINGS_ITEM.href);
     });
     return () => {
       active = false;

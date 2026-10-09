@@ -93,9 +93,9 @@ export async function unenrollForSession({
   const verified = (data.user.factors ?? []).filter(
     (factor) => factor.status === "verified",
   );
-  const counts = { ...log, verified: verified.length };
+  const fields = { ...log, verified: verified.length };
   if (!verified.some((factor) => factor.id === factorId)) {
-    return logDisable("factor_not_found", { ...counts, removed: 0 });
+    return logDisable("factor_not_found", { ...fields, removed: 0 });
   }
 
   const order = [
@@ -110,7 +110,7 @@ export async function unenrollForSession({
     if (unenrollError) {
       return logDisable(
         removed === 0 ? "error" : "partial",
-        { ...counts, removed },
+        { ...fields, removed },
         unenrollError,
       );
     }
@@ -122,9 +122,9 @@ export async function unenrollForSession({
   if (refreshError) {
     return logDisable(
       "session_refresh_failed",
-      { ...counts, removed },
+      { ...fields, removed },
       refreshError,
     );
   }
-  return logDisable("disabled", { ...counts, removed });
+  return logDisable("disabled", { ...fields, removed });
 }

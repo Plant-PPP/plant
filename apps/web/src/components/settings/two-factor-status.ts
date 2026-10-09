@@ -5,9 +5,7 @@ import { SETTINGS_ITEM } from "@/lib/navigation";
 // The parameter only opens the dialog.
 export const CONFIRM_DISABLE_PATH = `${SETTINGS_ITEM.href}?confirm=disable`;
 
-export function confirmsDisable(searchParams: {
-  get(name: string): string | null;
-}): boolean {
+export function confirmsDisable(searchParams: URLSearchParams): boolean {
   return searchParams.get("confirm") === "disable";
 }
 
