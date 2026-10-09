@@ -140,7 +140,6 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
     authDurationMs: Math.round(performance.now() - started),
     authError: session.error,
   };
-  // The header the page reads and the logged outcome are the same value.
   const unavailable = (reason: AuthUnavailableReason) => ({
     response: session.unavailable(reason),
     outcome: reason,
