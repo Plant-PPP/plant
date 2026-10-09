@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { OTP_LENGTH } from "@/lib/auth/otp-config";
-import { sanitizeAuthCode } from "@/lib/auth/sanitize-auth-code";
+import { nextAuthCode } from "@/lib/auth/sanitize-auth-code";
 import { cn } from "@/lib/utils";
 
 // One transparent input spans the boxes, so paste, one-time-code autofill and
@@ -10,11 +10,9 @@ import { cn } from "@/lib/utils";
 export function CodeInput({
   value,
   onChange,
-  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
-  disabled?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const active = Math.min(value.length, OTP_LENGTH - 1);
@@ -26,7 +24,8 @@ export function CodeInput({
           key={i}
           aria-hidden="true"
           className={cn(
-            "relative flex h-11 flex-1 items-center justify-center border-y border-r border-input font-mono text-lg font-medium first:rounded-l-md first:border-l last:rounded-r-md dark:bg-input/30",
+            "pointer-events-none relative flex h-11 flex-1 items-center justify-center border-y border-r border-input font-mono text-lg font-medium first:rounded-l-md first:border-l dark:bg-input/30",
+            i === OTP_LENGTH - 1 && "rounded-r-md",
             focused &&
               i === active &&
               "z-10 border-ring ring-[3px] ring-ring/50",
@@ -39,22 +38,25 @@ export function CodeInput({
         </div>
       ))}
       <input
-        aria-label="Código"
         inputMode="numeric"
         autoComplete="one-time-code"
         required
         autoFocus
-        disabled={disabled}
         value={value}
-        onChange={(event) => onChange(sanitizeAuthCode(event.target.value))}
-        // Typing always appends: the caret stays after the last digit.
+        onChange={(event) => onChange(nextAuthCode(value, event.target.value))}
+        // A bare caret always sits after the last digit, where the boxes show
+        // it; a selection is left alone so select-and-paste replaces it.
         onSelect={(event) => {
-          const end = event.currentTarget.value.length;
-          event.currentTarget.setSelectionRange(end, end);
+          const input = event.currentTarget;
+          if (input.selectionStart !== input.selectionEnd) return;
+          const end = input.value.length;
+          input.setSelectionRange(end, end);
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="absolute inset-0 size-full bg-transparent text-transparent caret-transparent outline-none selection:bg-transparent disabled:cursor-not-allowed"
+        // Browsers paint autofilled fields with !important colours; the text
+        // fill and a delayed background keep the boxes visible underneath.
+        className="absolute inset-0 size-full bg-transparent text-transparent caret-transparent outline-none selection:bg-transparent autofill:transition-[background-color] autofill:delay-[99999s] autofill:[-webkit-text-fill-color:transparent]"
       />
     </div>
   );

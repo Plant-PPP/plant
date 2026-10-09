@@ -184,7 +184,10 @@ export function LoginForm({
           <p className="text-sm text-muted-foreground">
             Te mandamos un código a {email}
           </p>
-          <CodeInput value={code} onChange={setCode} disabled={pending} />
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            Código
+            <CodeInput value={code} onChange={setCode} />
+          </label>
           <Button type="submit" disabled={pending || code.length < OTP_LENGTH}>
             Entrar
           </Button>
