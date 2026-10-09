@@ -829,5 +829,25 @@ describe("stream", () => {
     await result.consumeStream({ onError: () => {} });
     expect(record).not.toHaveBeenCalled();
     expect(events()).toEqual([["ai_cost.unbilled", "usage_missing"]]);
+    expect(lines[0]?.["error.type"]).toBe("Error");
+  });
+
+  it("logs only the failed write of a stream that errored before it finished", async () => {
+    record.mockRejectedValue(new AiCostWriteError("23503"));
+    const result = streamText({
+      model: model({
+        doStream: async () => ({
+          stream: streamOf([
+            ...TEXT_PARTS,
+            { type: "error", error: new TypeError("x") },
+            FINISH,
+          ]),
+        }),
+      }),
+      prompt: "hi",
+      onError: () => {},
+    });
+    await result.consumeStream({ onError: () => {} });
+    expect(events()).toEqual([["ai_cost.record_failed", "not_written"]]);
   });
 });

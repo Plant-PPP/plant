@@ -115,11 +115,11 @@ export function costMiddleware(options: {
     try {
       const tokens = tokenUsage(usage);
       if (!tokens) {
-        unbilled("usage_missing");
+        unbilled("usage_missing", partError);
         return;
       }
-      if (partError !== undefined) unbilled("usage_partial", partError);
       await record(aiCostRow(modelId, context, tokens));
+      if (partError !== undefined) unbilled("usage_partial", partError);
     } catch (error) {
       const unknown =
         error instanceof AiCostWriteError && error.mayHaveCommitted;
