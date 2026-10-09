@@ -43,15 +43,19 @@ export function CodeInput({
         required
         autoFocus
         value={value}
-        onChange={(event) =>
-          onChange(
-            mergeAuthCode(
-              value,
-              event.target.value,
-              (event.nativeEvent as InputEvent).inputType,
-            ),
-          )
-        }
+        onChange={(event) => {
+          const native = event.nativeEvent;
+          const autofill =
+            native instanceof InputEvent &&
+            native.inputType === "insertReplacementText";
+          onChange(mergeAuthCode(value, event.target.value, autofill));
+        }}
+        // A drop lands where the pointer is, not at the caret.
+        onDrop={(event) => {
+          event.preventDefault();
+          const text = event.dataTransfer.getData("text");
+          onChange(mergeAuthCode(value, value + text));
+        }}
         // The boxes show no selection, only a caret after the last digit, so
         // the caret is kept there.
         onSelect={(event) => {

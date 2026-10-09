@@ -53,21 +53,43 @@ describe("mergeAuthCode", () => {
   });
 
   it("takes an autofilled code that replaced the value", () => {
-    expect(mergeAuthCode("123", "654321", "insertReplacementText")).toBe(
+    expect(mergeAuthCode("123", "654321", true)).toBe("654321");
+  });
+
+  it("takes an autofill that starts with the digits already there", () => {
+    expect(mergeAuthCode("123", "123456123456", true)).toBe("123456");
+  });
+
+  it("takes the code, not the date of a mail copied with its header", () => {
+    expect(mergeAuthCode("", `9 oct 2026 10:15\n${mail("654321")}`)).toBe(
       "654321",
     );
   });
 
-  it("takes an autofill that starts with the digits already there", () => {
-    expect(mergeAuthCode("123", "123456123456", "insertReplacementText")).toBe(
+  it("appends the end of a code pasted with the mail's next line", () => {
+    expect(mergeAuthCode("12", "123456 El código vence en 10 minutos.")).toBe(
       "123456",
     );
   });
 
-  it("only ever yields up to six digits", () => {
+  it("deletes the last digit of a full field", () => {
+    expect(mergeAuthCode("123456", "12345")).toBe("12345");
+  });
+
+  it("clears the field on a word delete", () => {
+    expect(mergeAuthCode("1234", "")).toBe("");
+  });
+
+  it("ignores a partial paste into a full field", () => {
+    expect(mergeAuthCode("123456", "12345678")).toBe("123456");
+  });
+
+  it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
-      for (const raw of ["a1b2", "１２３", "12-34 56 78", "x".repeat(50)]) {
-        expect(mergeAuthCode(previous, previous + raw)).toMatch(/^\d{0,6}$/);
+      for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {
+        for (const text of [raw, previous + raw]) {
+          expect(mergeAuthCode(previous, text, all)).toMatch(/^\d{0,6}$/);
+        }
       }
     }
   });
