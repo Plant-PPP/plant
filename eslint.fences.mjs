@@ -31,12 +31,18 @@ export const AI_PROVIDERS = {
 };
 export const SERVICE_ROLE = {
   regex: `(^|/)service-role${EXTENSION}$`,
-  message: "The secret key bypasses RLS; only the AI cost sink holds it.",
+  message:
+    "The secret key bypasses RLS; only the AI cost sink and the quote sink hold it.",
 };
 export const COST_SINK = {
   regex: `(^|/)ai-cost-sink${EXTENSION}$`,
   message:
     "The cost sink writes past RLS; only route handlers under src/app/api may use it.",
+};
+export const QUOTE_SINK = {
+  regex: `(^|/)quote-sink${EXTENSION}$`,
+  message:
+    "The quote sink writes rows every user reads, past RLS; only the Inngest route may use it.",
 };
 
 // /auth/mfa reads claims without the MFA redirect; everything else must get
@@ -56,6 +62,7 @@ export const ALL_FENCED = [
   AI_PROVIDERS,
   SERVICE_ROLE,
   COST_SINK,
+  QUOTE_SINK,
   SESSION_CLAIMS_UNCHECKED,
 ];
 

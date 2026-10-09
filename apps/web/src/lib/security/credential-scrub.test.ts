@@ -311,6 +311,36 @@ describe("scrubSensitiveText", () => {
     );
   });
 
+  it("keeps an Inngest run id whose digits read as a DNI", () => {
+    const runId = "01M8Z3K4567890QWERTYXABCDE";
+    expect(scrubSensitiveText(runId)).toBe(runId);
+    expect(scrubSensitiveText(`run ${runId} DNI 12345678`)).toBe(
+      `run ${runId} DNI ${MASK}`,
+    );
+  });
+
+  it.each([
+    ["25 characters", "01M8Z3K45678901QWERTYXABC"],
+    ["27 characters", "01M8Z3K45678901QWERTYXABCDE"],
+  ])("masks the DNI in a run-id-like token of %s", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  it.each([
+    ["a CBU and 4 letters", "0170099220000067797370ABCD"],
+    ["a CUIT and 15 letters", "20123456789ABCDEFGHJKMNPQR"],
+    ["a DNI and 18 letters", "12345678abcdefghjkmnpqrstv"],
+  ])("masks %s in a run-id-shaped token", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  // Pin of current behavior: a run of 26 digits is no id and no number the
+  // patterns know.
+  it("leaves a 26-digit run as it is", () => {
+    const digits = "12345678901234567890123456";
+    expect(scrubSensitiveText(digits)).toBe(digits);
+  });
+
   it("still masks personal data next to a UUID", () => {
     expect(scrubSensitiveText(`${UUID} DNI 12345678`)).toBe(
       `${UUID} DNI ${MASK}`,

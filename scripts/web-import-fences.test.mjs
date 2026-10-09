@@ -1,5 +1,5 @@
 // Cases for the import fences in apps/web/eslint.config.mjs: who may reach a
-// model, the cost sink and the secret key. Each source is linted in memory
+// model, the sinks and the secret key. Each source is linted in memory
 // under the path it would have in apps/web, and the package fences
 // (eslint.packages.mjs) under every package that uses them.
 //
@@ -32,7 +32,6 @@ const flagged = [
   ["src/components/x.js", 'import { generateText } from "ai";'],
   ["src/lib/supabase/x.ts", 'import { generateText } from "ai";'],
   ["src/components/x.tsx", 'import "@ai-sdk/reactor";'],
-  ["src/app/api/x/helpers.ts", 'import "@/lib/ai/ai-cost-sink";'],
   [
     "src/app/page.tsx",
     'export const c = require["context"]("../lib/ai", false, /sink/);',
@@ -41,11 +40,6 @@ const flagged = [
     "src/app/page.tsx",
     'export const c = require["context" as const]("../lib/ai", false, /sink/);',
   ],
-  [
-    "src/app/actions.ts",
-    '"use server";\nexport const s = (require as NodeRequire)("@/lib/ai/ai-cost-sink");',
-  ],
-  ["src/app/actions.ts", 'export const s = require!("@/lib/ai/ai-cost-sink");'],
   [
     "src/app/api/x/route.ts",
     'export const f = ({ step }) => step["ai" as const].infer("x", {});',
@@ -63,10 +57,6 @@ const flagged = [
     "src/app/api/x/route.ts",
     'export async function POST() {\n  const f = async () => {\n    "use server";\n  };\n  return f;\n}',
   ],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'export const f = async () => {\n  "use server";\n};',
-  ],
   ["src/lib/supabase/service-role.test.ts", 'export * from "./service-role";'],
   [
     "src/lib/supabase/service-role.test.ts",
@@ -79,23 +69,11 @@ const flagged = [
     "src/app/page.tsx",
     'export const f = () => import("../lib/supabase/service-role.js");',
   ],
-  ["src/app/actions.ts", '"use server";\nimport "@/lib/ai/ai-cost-sink";'],
-  ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink.js";'],
-  [
-    "src/app/actions.ts",
-    'const m = "@/lib/ai/ai-cost-sink";\nexport const f = () => import(m);',
-  ],
-  [
-    "src/app/actions.ts",
-    "export const f = () => import(`@/lib/ai/ai-cost-sink`);",
-  ],
   ["src/app/page.tsx", 'import "@/lib/supabase/service-role.mjs";'],
-  ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink.tsx";'],
   [
     "src/lib/x.js",
     'export const s = require("@/lib/supabase/service-role?x");',
   ],
-  ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink#x";'],
   ["src/app/page.tsx", 'import "@/lib/supabase/service-role?";'],
   ["src/lib/supabase/service-role.ts", 'import "ai";'],
   ["src/lib/supabase/service-role.ts", 'import "@ai-sdk/google";'],
@@ -107,11 +85,6 @@ const flagged = [
   [
     "src/app/api/x/route.ts",
     '"use\\x20server";\nexport async function POST() {}',
-  ],
-  ["src/lib/ai/ai-cost-sink.ts", '"use\\x20server";\nexport const x = 1;'],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'export async function f() {\n  "use\\x20server";\n}',
   ],
   ...["mjs", "cjs", "mts", "cts", "jsx"].map((ext) => [
     `src/components/x.${ext}`,
@@ -195,10 +168,7 @@ const flagged = [
     [filePath, "export const k = process.env.SUPABASE_SERVICE_ROLE_KEY;"],
     [filePath, 'const m = "x";\nexport const f = () => import(m);'],
   ]),
-  ["src/lib/ai/x.ts", 'import "@/lib/ai/ai-cost-sink";'],
   ["src/lib/ai/x.ts", 'import "../supabase/service-role";'],
-  ["src/app/api/x/route.ts", 'import "@/lib/supabase/service-role";'],
-  ["src/app/api/x/route.ts", 'import { generateText } from "ai";'],
   ["src/lib/x.ts", "export const key = process.env.SUPABASE_SERVICE_ROLE_KEY;"],
   [
     "src/lib/x.ts",
@@ -217,58 +187,15 @@ const flagged = [
     "export default { env: { K: process.env.SUPABASE_SERVICE_ROLE_KEY } };",
   ],
   ["e2e/x.spec.ts", 'import "../src/lib/supabase/service-role";'],
-  [
-    "src/app/api/x/route.ts",
-    'export { aiCostSink } from "@/lib/ai/ai-cost-sink";',
-  ],
-  ["src/app/api/x/route.ts", 'export * from "@/lib/ai/ai-cost-sink";'],
-  [
-    "src/app/api/x/route.ts",
-    '"use server";\nimport { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {}',
-  ],
-  [
-    "src/app/api/x/route.ts",
-    'export async function POST() {\n  "use server";\n}',
-  ],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'export { createServiceRoleClient } from "@/lib/supabase/service-role";',
-  ],
   ["src/app/actions.ts", 'export * from "@/lib/supabase/service-role";'],
-  [
-    "src/app/api/x/route.ts",
-    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport { aiCostSink };',
-  ],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'import { createServiceRoleClient } from "@/lib/supabase/service-role";\nexport { createServiceRoleClient };',
-  ],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'import { createServiceRoleClient } from "@/lib/supabase/service-role";\nexport default createServiceRoleClient;',
-  ],
   ["src/lib/ai/x.ts", 'export { generateText } from "ai";'],
   ["src/lib/ai/x.ts", 'export * from "@ai-sdk/google";'],
   ["src/lib/ai/x.ts", 'export * as ai from "ai";'],
-  ["src/lib/ai/ai-cost-sink.ts", '"use server";\nexport const x = 1;'],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'export async function f() {\n  "use server";\n}',
-  ],
   [
     "src/lib/ai/x.ts",
     'import { generateText } from "ai";\nexport { generateText };',
   ],
   ["src/lib/ai/x.ts", 'import * as ai from "ai";\nexport { ai };'],
-  ["src/lib/ai/ai-cost-sink.ts", 'export * from "ai";'],
-  ["src/lib/ai/ai-cost-sink.ts", 'export { generateText } from "ai";'],
-  ["src/lib/ai/ai-cost-sink.test.ts", 'import "@/lib/supabase/service-role";'],
-  [
-    "src/lib/ai/ai-cost-sink.test.ts",
-    'import { aiCostSink } from "./ai-cost-sink";\nexport { aiCostSink };',
-  ],
-  ["src/lib/ai/x.test.ts", 'import "./ai-cost-sink";'],
-  ["src/app/auth/callback/route.ts", 'import "@/lib/ai/ai-cost-sink";'],
   ["src/components/x.tsx", 'export const m = require("ai");'],
   ["src/components/x.tsx", 'import "ai/rsc";'],
   [
@@ -288,23 +215,10 @@ const flagged = [
     "src/lib/ai/x.ts",
     'import { generateText } from "ai";\nexport default generateText as typeof generateText;',
   ],
-  [
-    "src/app/api/x/route.ts",
-    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport default { aiCostSink };',
-  ],
-  ["src/lib/supabase/service-role.test.ts", 'import "@/lib/ai/ai-cost-sink";'],
   ["src/lib/ai/x.cjs", 'module.exports = require("ai");'],
   ["src/lib/ai/y.ts", 'module.exports = require("ai");'],
   ["src/lib/ai/x.cjs", 'exports.generateText = require("ai").generateText;'],
   ["src/lib/ai/z.cjs", 'this.generateText = require("ai").generateText;'],
-  [
-    "src/app/api/x/route.cjs",
-    'module.exports = require("../../../lib/ai/ai-cost-sink");',
-  ],
-  [
-    "src/lib/ai/ai-cost-sink.test.ts",
-    'module.exports = require("./ai-cost-sink");',
-  ],
 ];
 
 // Only /auth/mfa reads claims without the MFA redirect, and only the factor
@@ -516,10 +430,108 @@ flagged.push(
   ],
 );
 
-// The cost sink may import the service-role client and no other fenced module.
+// Both sinks write past RLS, so every shape a file could use to reach one, and
+// every way a sink could hand on what it holds, is fenced for each. user is a
+// route that may import the sink.
+const SINKS = [
+  {
+    name: "aiCostSink",
+    spec: "@/lib/ai/ai-cost-sink",
+    file: "src/lib/ai/ai-cost-sink.ts",
+    user: "src/app/api/x/route.ts",
+  },
+  {
+    name: "quoteSink",
+    spec: "@/lib/quotes/quote-sink",
+    file: "src/lib/quotes/quote-sink.ts",
+    user: "src/app/api/inngest/route.ts",
+  },
+];
+const sinkParts = ({ spec, file }) => ({
+  dir: file.slice(0, file.lastIndexOf("/")),
+  base: spec.slice(spec.lastIndexOf("/") + 1),
+  test: file.replace(/\.ts$/, ".test.ts"),
+});
+const SERVICE_IMPORT =
+  'import { createServiceRoleClient } from "@/lib/supabase/service-role";';
+
+flagged.push(
+  ...SINKS.flatMap((sink) => {
+    const { name, spec, file, user } = sink;
+    const { dir, base, test } = sinkParts(sink);
+    const others = SINKS.filter((other) => other !== sink);
+    return [
+      ["src/app/api/x/helpers.ts", `import "${spec}";`],
+      ["src/app/auth/callback/route.ts", `import "${spec}";`],
+      [`${dir}/x.ts`, `import "${spec}";`],
+      [`${dir}/x.test.ts`, `import "./${base}";`],
+      ["src/lib/supabase/service-role.test.ts", `import "${spec}";`],
+      ["src/app/actions.ts", `"use server";\nimport "${spec}";`],
+      ...[".js", ".tsx", "#x"].map((suffix) => [
+        "src/app/actions.ts",
+        `import "${spec}${suffix}";`,
+      ]),
+      [
+        "src/app/actions.ts",
+        `const m = "${spec}";\nexport const f = () => import(m);`,
+      ],
+      ["src/app/actions.ts", `export const f = () => import(\`${spec}\`);`],
+      [
+        "src/app/actions.ts",
+        `"use server";\nexport const s = (require as NodeRequire)("${spec}");`,
+      ],
+      ["src/app/actions.ts", `export const s = require!("${spec}");`],
+      [
+        "src/app/api/x/route.cjs",
+        `module.exports = require("../../../${spec.slice(2)}");`,
+      ],
+      [user, `export { ${name} } from "${spec}";`],
+      [user, `export * from "${spec}";`],
+      [
+        user,
+        `"use server";\nimport { ${name} } from "${spec}";\nexport async function POST() {}`,
+      ],
+      [user, `import { ${name} } from "${spec}";\nexport { ${name} };`],
+      [user, `import { ${name} } from "${spec}";\nexport default { ${name} };`],
+      [user, 'export async function POST() {\n  "use server";\n}'],
+      [user, 'import "@/lib/supabase/service-role";'],
+      [user, 'import { generateText } from "ai";'],
+      [file, '"use server";\nexport const x = 1;'],
+      [file, 'export async function f() {\n  "use server";\n}'],
+      [file, 'export const f = async () => {\n  "use server";\n};'],
+      [file, '"use\\x20server";\nexport const x = 1;'],
+      [file, 'export async function f() {\n  "use\\x20server";\n}'],
+      [
+        file,
+        'export { createServiceRoleClient } from "@/lib/supabase/service-role";',
+      ],
+      [file, `${SERVICE_IMPORT}\nexport { createServiceRoleClient };`],
+      [file, `${SERVICE_IMPORT}\nexport default createServiceRoleClient;`],
+      [file, 'import "ai";'],
+      [file, 'import { google } from "@ai-sdk/google";'],
+      [file, 'export * from "ai";'],
+      [file, 'export { generateText } from "ai";'],
+      ...others.map(({ spec: other }) => [file, `import "${other}";`]),
+      [test, 'import "@/lib/supabase/service-role";'],
+      [test, `import { ${name} } from "./${base}";\nexport { ${name} };`],
+      [
+        test,
+        `import { ${name} } from "./${base}";\nexport default { ${name} };`,
+      ],
+      [test, `module.exports = require("./${base}");`],
+    ];
+  }),
+  // Only the Inngest route may use the quote sink.
+  ...[
+    "src/app/api/chat/route.ts",
+    "src/app/api/x/route.ts",
+    "src/app/(app)/page.tsx",
+  ].map((filePath) => [filePath, 'import "@/lib/quotes/quote-sink";']),
+);
+
 flagged.push([
-  "src/lib/ai/ai-cost-sink.ts",
-  'import { google } from "@ai-sdk/google";',
+  "src/lib/supabase/service-role.ts",
+  '"use server";\nexport const x = 1;',
 ]);
 
 for (const [filePath, code] of flagged) {
@@ -550,7 +562,15 @@ const allowed = [
   ["src/instrumentation.ts", 'export const f = () => import("@vercel/otel");'],
   [
     "src/app/api/inngest/route.ts",
-    'import { serveOptions } from "@plant/jobs";\nimport { serve } from "inngest/next";\nexport const { GET, POST, PUT } = serve(serveOptions);',
+    'import { createServeOptions } from "@plant/jobs";\nimport { serve } from "inngest/next";\nimport { quoteSink } from "@/lib/quotes/quote-sink";\nexport const { GET, POST, PUT } = serve(\n  createServeOptions({ quotes: () => ({ store: quoteSink() }) }),\n);',
+  ],
+  [
+    "src/lib/quotes/quote-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";',
+  ],
+  [
+    "src/lib/quotes/quote-sink.test.ts",
+    'import { quoteSink } from "./quote-sink";\nexport const s = quoteSink;',
   ],
   [
     "src/lib/ai/ai-cost-sink.test.ts",
@@ -646,8 +666,11 @@ const OVERRIDES = [
   ["src/lib/ai/x.ts", []],
   ["src/lib/ai/ai-cost-sink.ts", []],
   ["src/lib/ai/ai-cost-sink.test.ts", []],
+  ["src/lib/quotes/quote-sink.ts", []],
+  ["src/lib/quotes/quote-sink.test.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
+  ["src/app/api/inngest/route.ts", []],
   ["src/lib/auth/session-claims-unchecked.ts", []],
   ["src/lib/auth/session-claims.ts", ["reader", "claims"]],
   ["src/lib/auth/session-claims.test.ts", ["reader", "claims"]],
@@ -666,6 +689,7 @@ const PROBES = {
   service: 'import "@/lib/supabase/service-role";',
   ai: 'import { generateText } from "ai";',
   sink: 'import "@/lib/ai/ai-cost-sink";',
+  quoteSink: 'import "@/lib/quotes/quote-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
@@ -673,8 +697,9 @@ for (const [filePath, exempt] of OVERRIDES) {
   for (const [probe, code] of Object.entries(PROBES)) {
     if (exempt.includes(probe)) continue;
     // Each block's own allowances: src/lib/ai except the sink reaches models,
-    // the sink's test and route handlers reach the sink, and the sink and
-    // service-role.ts reach the client.
+    // each sink's test reaches its sink, route handlers reach the cost sink,
+    // the Inngest route the quote sink, and the sinks and service-role.ts the
+    // client.
     if (
       probe === "ai" &&
       filePath.startsWith("src/lib/ai/") &&
@@ -688,7 +713,16 @@ for (const [filePath, exempt] of OVERRIDES) {
     ) {
       continue;
     }
-    if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
+    if (
+      probe === "quoteSink" &&
+      /quote-sink\.test\.ts$|^src\/app\/api\/inngest\/route\.ts$/.test(filePath)
+    ) {
+      continue;
+    }
+    if (
+      probe === "service" &&
+      /service-role|ai-cost-sink\.ts|quote-sink\.ts/.test(filePath)
+    ) {
       continue;
     }
     test(`${filePath} keeps the ${probe} fence`, async () => {
@@ -749,6 +783,7 @@ for (const [dir, up] of [
     'import "@ai-sdk/react";',
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
+    'import "./web/quotes/quote-sink";',
     'import "./web/auth/session-claims-unchecked";',
     `import "${up}/apps/web/src/lib/supabase/server";`,
   ]) {

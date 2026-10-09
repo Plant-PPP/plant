@@ -24,5 +24,3 @@ export function createServeOptions(opts: { quotes?: () => QuoteJobDeps }) {
     enableUnauthedSync: false,
   } satisfies ServeHandlerOptions;
 }
-
-export const serveOptions = createServeOptions({});

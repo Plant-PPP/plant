@@ -7,7 +7,7 @@ Your whole net worth, in pesos and in dollars. Plant is a web app for Argentine 
 ```bash
 pnpm install
 pnpm preflight
-pnpm dev:up      # local Supabase, web on http://localhost:3000 and Inngest on http://localhost:8288
+pnpm dev:up      # local Supabase, web on http://localhost:3000 and Inngest on http://localhost:8288, both on 127.0.0.1 only
 ```
 
 You need Node 22 or newer, pnpm and Docker. Everything else (structure, commands, branches, migrations and rules) is in [`CLAUDE.md`](CLAUDE.md).

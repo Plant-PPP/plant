@@ -15,6 +15,7 @@ import {
   MFA_CALLS_BUT_LIST,
   MFA_CALLS_BUT_UNENROLL,
   MFA_PRIVATE_CALLS,
+  QUOTE_SINK,
   secretKeyReads,
   SERVICE_ROLE,
   SESSION_CLAIMS_UNCHECKED,
@@ -31,7 +32,7 @@ const noReexport = (modules) =>
       message,
     })),
   );
-// The service-role client, the sink, route handlers, src/lib/ai and
+// The service-role client, the sinks, route handlers, src/lib/ai and
 // session-claims.ts export values only through a named declaration, so an
 // imported sink, client, model or claims reader cannot be handed on through
 // an export list, a default export or CommonJS (module.exports, exports or a
@@ -66,8 +67,11 @@ const noServerAction = (message) =>
     message,
   }));
 const NO_SERVER_ACTION = noServerAction(
-  "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
+  "A sink writes past RLS; a server action would make it a public endpoint.",
 );
+// For every file that holds a service-role writer. Flat config replaces a
+// file's rules, so a fence added here reaches all of them.
+const SERVICE_WRITER_SYNTAX = [...NO_SERVER_ACTION, ...LIB_SYNTAX];
 
 // The files that may import the unchecked claims reader only call it: a
 // server action there would read an aal1 session's claims, and a value
@@ -127,10 +131,7 @@ export default defineConfig([
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: webRules({
-      allow: [SERVICE_ROLE],
-      syntax: [...NO_SERVER_ACTION, ...LIB_SYNTAX],
-    }),
+    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
   },
   {
     files: [
@@ -139,14 +140,26 @@ export default defineConfig([
     ],
     rules: webRules({
       allow: [SERVICE_ROLE],
-      syntax: [...LITERAL_IMPORTS_ONLY, ...NO_EXPORT_LIST],
+      syntax: [...NO_SERVER_ACTION, ...LITERAL_IMPORTS_ONLY, ...NO_EXPORT_LIST],
     }),
   },
   {
     files: [`src/app/api/**/route.${SOURCE}`],
+    rules: webRules({ allow: [COST_SINK], syntax: SERVICE_WRITER_SYNTAX }),
+  },
+  {
+    files: ["src/lib/quotes/quote-sink.ts"],
+    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
+  },
+  {
+    files: ["src/lib/quotes/quote-sink.test.ts"],
+    rules: webRules({ allow: [QUOTE_SINK], syntax: LIB_SYNTAX }),
+  },
+  {
+    files: ["src/app/api/inngest/route.ts"],
     rules: webRules({
-      allow: [COST_SINK],
-      syntax: [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
+      allow: [COST_SINK, QUOTE_SINK],
+      syntax: SERVICE_WRITER_SYNTAX,
     }),
   },
   {

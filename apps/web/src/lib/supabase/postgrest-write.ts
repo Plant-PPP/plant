@@ -3,7 +3,7 @@ import type {
   PostgrestSingleResponse,
 } from "@supabase/supabase-js";
 
-const ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d+)$/;
+export const ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d+)$/;
 
 // `code` is `timeout`, `fetch_error`, a SQLSTATE or PostgREST code, or
 // `http_<status>`: never the error's details or hint, which carry the failing
