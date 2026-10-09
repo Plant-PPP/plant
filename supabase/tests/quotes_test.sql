@@ -125,12 +125,13 @@ SELECT set_eq(
 -- The guards are triggers, so a role that owns the table, the guard function
 -- or the private schema, adds a trigger or turns triggers off gets past them.
 -- The owner of a quote enum can rename its values and relabel every row.
--- INSERT is left out: service_role holds it.
+-- Only service_role inserts.
 CREATE FUNCTION pg_temp.bypasses() RETURNS SETOF text LANGUAGE sql AS $f$
   SELECT r.rolname || ' ' || t
   FROM pg_roles r, unnest(ARRAY['public.fx_rates', 'public.prices']) t
   WHERE pg_has_role('authenticator', r.oid, 'MEMBER')
     AND (has_any_column_privilege(r.oid, t, 'UPDATE')
+         OR (r.rolname <> 'service_role' AND has_any_column_privilege(r.oid, t, 'INSERT'))
          OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
          OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
          OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
@@ -148,13 +149,14 @@ $f$;
 
 SELECT is_empty(
   $$ SELECT pg_temp.bypasses() $$,
-  'no role the API can become can change, delete, own or add a trigger to a quote table, own its enums, or switch triggers off'
+  'no role the API can become but service_role can insert into a quote table, and none can change, delete, own or add a trigger to one, own its enums, or switch triggers off'
 );
 
 -- Each canary breaks one clause in its own subtransaction, so no canary can
 -- stand in for another. Setting session_replication_role or holding the
--- privileged role takes a superuser to grant, and owning a table also holds
--- DELETE. A role needs CREATE on a schema to own a type or function there.
+-- privileged role takes a superuser to grant. An owner can revoke its own
+-- privileges and still disable the guard. A role needs CREATE on a schema to
+-- own a table, type or function there.
 CREATE FUNCTION pg_temp.bypass_misses() RETURNS int LANGUAGE plpgsql AS $f$
 DECLARE c record; misses int := 0;
 BEGIN
@@ -164,6 +166,10 @@ BEGIN
     ('GRANT DELETE ON public.prices TO anon', 'anon public.prices'),
     ('GRANT TRUNCATE ON public.prices TO authenticated_aal1', 'authenticated_aal1 public.prices'),
     ('ALTER SCHEMA private OWNER TO service_role', 'service_role public.fx_rates'),
+    ('GRANT CREATE ON SCHEMA public TO service_role;
+      ALTER TABLE public.prices OWNER TO service_role;
+      REVOKE ALL ON public.prices FROM service_role', 'service_role public.prices'),
+    ('GRANT INSERT (price) ON public.prices TO authenticated_aal1', 'authenticated_aal1 public.prices'),
     ('GRANT CREATE ON SCHEMA private TO authenticated_aal1;
       ALTER FUNCTION private.guard_fx_rate_insert() OWNER TO authenticated_aal1', 'authenticated_aal1 public.fx_rates'),
     ('GRANT CREATE ON SCHEMA public TO authenticated;
@@ -185,7 +191,7 @@ END
 $f$;
 
 SELECT is(pg_temp.bypass_misses(), 0,
-          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema, a guard function or a quote enum');
+          'the bypass assert catches INSERT, TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning a quote table, the private schema, a guard function or a quote enum');
 
 -- ── The table owner (a migration) ───────────────────────────────────────────
 ALTER TABLE public.fx_rates DISABLE TRIGGER fx_rates_guard;
@@ -232,7 +238,7 @@ SELECT throws_ok(
 SELECT set_config('request.jwt.claims', '{"role": "service_role"}', true);
 SET LOCAL ROLE service_role;
 
--- PostgREST's shape for upsert with ignoreDuplicates and a select. Each table
+-- The shape supabase-js's upsert(…, { ignoreDuplicates: true }) sends, with a select. Each table
 -- is written under both session time zones, and at any hour one of them puts
 -- the session's date on another day than Buenos Aires, so a guard that dated
 -- by the session would refuse one of its inserts.

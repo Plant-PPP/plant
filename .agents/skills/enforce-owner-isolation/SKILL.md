@@ -15,7 +15,7 @@ description: >-
 
 This is a **language guide**, not a workflow. Load it as the lens for a pass whose sole job is to
 prove a change cannot be driven across a user boundary. Plant is single-user ownership: no
-organizations, no tenants, no shared rows. Every row belongs to exactly one user (`user_id uuid`
+organizations, no tenants, no shared user data. Every row belongs to exactly one user (`user_id uuid`
 referencing `auth.users`), except the reference tables `fx_rates` and `prices` (market data every
 authenticated user reads and only `service_role` inserts; the pgTAP floor limits the exception to
 those two), and nothing one user does may read, write, or influence another user's
@@ -159,7 +159,8 @@ mention is UNCHECKED, not passed.
 > **Attack question:** once RLS is not the boundary, what is?
 
 - **Service-role clients (jobs).** Inngest steps in `packages/jobs` run with the service role, so RLS
-  is bypassed and the query's own `.eq("user_id", …)` is the ONLY boundary. Every service-role query
+  is bypassed and the query's own `.eq("user_id", …)` is the ONLY boundary. The reference tables
+  (`fx_rates`, `prices`) have no owner key; there the column grants are the boundary. Every service-role query
   carries its own `user_id` filter — including the "obviously scoped" ones that select by
   `import_id` — and every storage path is asserted against the owner's `<user_id>/` prefix before it
   is read. The `user_id` must come from a server-trusted source (the `imports` row the job owns, or
