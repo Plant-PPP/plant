@@ -3,8 +3,8 @@ import { pathOf, sanitizeNextPath } from "./safe-redirect";
 
 export const LOGIN_PATH = "/login";
 export const CALLBACK_PATH = "/auth/callback";
-// Where an enrolled user's session verifies its factor (the screen is
-// PLA-76's). It needs a session, so it is not public.
+// Where an enrolled user's session verifies its factor. It needs a session,
+// so it is not public.
 export const MFA_PATH = "/auth/mfa";
 const PUBLIC_PATHS = [LOGIN_PATH, CALLBACK_PATH];
 
@@ -24,6 +24,13 @@ export function afterLoginPath(raw: unknown): string {
 function withNext(base: string, next?: string): string {
   const safe = afterLoginPath(next);
   return safe === "/" ? base : `${base}?next=${encodeURIComponent(safe)}`;
+}
+
+// A repeated query parameter counts by its first value, as in proxy.ts.
+export function firstParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 export function loginPath(next?: string): string {
