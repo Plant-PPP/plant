@@ -30,7 +30,13 @@ export default tseslint.config(
     // symlinked directory reaches them without a manifest entry or an `apps`
     // segment.
     rules: fence(
-      [APPS, AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK],
+      [
+        APPS,
+        AI,
+        { ...AI_PROVIDERS, regex: "^@ai-sdk/" },
+        SERVICE_ROLE,
+        COST_SINK,
+      ],
       [...LITERAL_IMPORTS_ONLY, ...secretKeyReads],
     ),
   },

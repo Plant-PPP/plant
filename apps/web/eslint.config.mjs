@@ -28,10 +28,14 @@ const noReexport = (modules) =>
   );
 // The service-role client, the sink, route handlers and src/lib/ai export
 // values only through a named declaration, so an imported sink, client or
-// model cannot be handed on through an export list or a default export.
+// model cannot be handed on through an export list, a default export or
+// CommonJS (module.exports, exports or a top-level this).
 const NO_EXPORT_LIST = [
   'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
   "ExportDefaultDeclaration",
+  'MemberExpression[object.name="module"]',
+  'Identifier[name="exports"]:not(MemberExpression > .property):not(Property > .key)',
+  "ThisExpression:not(:function ThisExpression):not(PropertyDefinition ThisExpression):not(StaticBlock ThisExpression)",
 ].map((selector) => ({
   selector,
   message:

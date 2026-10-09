@@ -255,6 +255,18 @@ const flagged = [
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport default { aiCostSink };',
   ],
   ["src/lib/supabase/service-role.test.ts", 'import "@/lib/ai/ai-cost-sink";'],
+  ["src/lib/ai/x.cjs", 'module.exports = require("ai");'],
+  ["src/lib/ai/y.ts", 'module.exports = require("ai");'],
+  ["src/lib/ai/x.cjs", 'exports.generateText = require("ai").generateText;'],
+  ["src/lib/ai/z.cjs", 'this.generateText = require("ai").generateText;'],
+  [
+    "src/app/api/x/route.cjs",
+    'module.exports = require("../../../lib/ai/ai-cost-sink");',
+  ],
+  [
+    "src/lib/ai/ai-cost-sink.test.ts",
+    'module.exports = require("./ai-cost-sink");',
+  ],
 ];
 
 for (const [filePath, code] of flagged) {
@@ -313,6 +325,18 @@ const allowed = [
   ["src/lib/x.ts", "export const f = (o: { aim: number }) => o.aim;"],
   ["src/lib/ai/ai-cost-sink.ts", 'export const s = "use server";'],
   [
+    "src/app/api/x/route.js",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
+  ],
+  [
+    "src/lib/ai/x.ts",
+    "export class C {\n  a = 1;\n  b = this.a;\n  static {\n    this.name;\n  }\n  f() {\n    return this.a;\n  }\n}",
+  ],
+  [
+    "src/lib/ai/x.ts",
+    "export const o = { exports: 1 };\nexport const e = o.exports;",
+  ],
+  [
     "src/lib/ai/ai-cost-sink.ts",
     'export function f() {\n  f();\n  "use server";\n}',
   ],
@@ -348,6 +372,13 @@ for (const code of [
   });
 }
 
+// Files outside src/ and config files are fenced too.
+for (const filePath of ["lib/x.ts", "x.config.mjs"]) {
+  test(`packages/jobs: import "ai" in ${filePath} is flagged`, async () => {
+    assert.notDeepEqual(await fenced(filePath, 'import "ai";', jobs), []);
+  });
+}
+
 // Every package that shares eslint.packages.mjs, at its own depth.
 for (const [dir, up] of [
   ["packages/core", "../../.."],
@@ -365,6 +396,7 @@ for (const [dir, up] of [
     `import "${up}/apps/web/node_modules/ai";`,
     'import "ai";',
     'import "@ai-sdk/google";',
+    'import "@ai-sdk/react";',
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
     `import "${up}/apps/web/src/lib/supabase/server";`,
