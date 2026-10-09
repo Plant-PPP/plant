@@ -102,9 +102,10 @@ export const MFA_CALLS_BUT_LIST = [
     "mfa-factors.ts also runs on the server: it only lists factors. Enroll, challenge and verify go in mfa-browser.ts.",
 }));
 
-// auth-js's private methods behind the MFA API, reachable by a quoted key.
+// auth-js's private methods behind the MFA API and its recovery codes (2.117),
+// reachable by a quoted key.
 const PRIVATE_MFA =
-  "/^_(enroll|challenge|verify|challengeAndVerify|unenroll|listFactors|getAuthenticatorAssuranceLevel)$/";
+  "/^_(enroll|challenge|verify|challengeAndVerify|unenroll|listFactors|getAuthenticatorAssuranceLevel|getRecoveryCodesStatus|generateRecoveryCodes|verifyRecoveryCode|regenerateRecoveryCodes|unenrollRecoveryCodes)$/";
 export const MFA_PRIVATE_CALLS = [
   `MemberExpression[property.name=${PRIVATE_MFA}]`,
   `MemberExpression[property.value=${PRIVATE_MFA}]`,

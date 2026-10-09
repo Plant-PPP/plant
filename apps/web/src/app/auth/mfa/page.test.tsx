@@ -8,7 +8,10 @@ const redirect = jest.fn((url: string) => {
 const log = { warn: jest.fn(), error: jest.fn() };
 
 jest.mock("server-only", () => ({}), { virtual: true });
-jest.mock("next/headers", () => ({ headers: async () => new Headers() }));
+const REQUEST_ID = "6f1c2d3e-4a5b-4c7d-8e9f-0a1b2c3d4e5f";
+jest.mock("next/headers", () => ({
+  headers: async () => new Headers({ "x-request-id": REQUEST_ID }),
+}));
 jest.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
 }));
@@ -86,7 +89,7 @@ it("says so, and logs it, when the user has no TOTP factor", async () => {
   expect(html).not.toContain("<form");
   expect(html).toContain("sign out everywhere");
   expect(log.warn).toHaveBeenCalledWith("auth.mfa_page", {
-    "plant.request_id": undefined,
+    "plant.request_id": REQUEST_ID,
     "enduser.id": "u1",
     "plant.outcome": "no_totp_factor",
   });

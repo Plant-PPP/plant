@@ -160,7 +160,7 @@ export default defineConfig([
     files: ["src/lib/auth/session-claims.ts"],
     rules: webRules({
       allow: [SESSION_CLAIMS_UNCHECKED],
-      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY, ...NO_EXPORT_LIST],
+      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY],
     }),
   },
   {

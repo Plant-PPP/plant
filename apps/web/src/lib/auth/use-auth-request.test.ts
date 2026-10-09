@@ -1,7 +1,8 @@
 // The hook's state, as the last value each setter received.
 const mockState: unknown[] = [];
+const mockEffects: (() => (() => void) | void)[] = [];
 jest.mock("react", () => ({
-  useEffect: () => {},
+  useEffect: (effect: () => (() => void) | void) => mockEffects.push(effect),
   useState: (initial: unknown) => {
     const slot = mockState.length;
     mockState.push(initial);
@@ -13,6 +14,30 @@ import { attempt, useAuthRequest } from "./use-auth-request";
 
 beforeEach(() => {
   mockState.length = 0;
+  mockEffects.length = 0;
+});
+
+it("re-enables the buttons when Back restores the page from the cache", () => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  Object.assign(globalThis, {
+    window: {
+      addEventListener: (type: string, fn: (event: unknown) => void) =>
+        listeners.set(type, fn),
+      removeEventListener: (type: string) => listeners.delete(type),
+    },
+  });
+  useAuthRequest(() => undefined);
+  // [error, pending]
+  expect(mockState).toEqual([undefined, false]);
+  const cleanup = mockEffects[0]!();
+  mockState[1] = true;
+  listeners.get("pageshow")!({ persisted: false });
+  expect(mockState[1]).toBe(true);
+  listeners.get("pageshow")!({ persisted: true });
+  expect(mockState[1]).toBe(false);
+  cleanup?.();
+  expect(listeners.has("pageshow")).toBe(false);
+  delete (globalThis as { window?: unknown }).window;
 });
 
 describe("run", () => {

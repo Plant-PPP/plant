@@ -340,6 +340,42 @@ flagged.push(
     'import { "readSessionClaims" as r } from "./session-claims-unchecked";\nexport const getSessionClaims = r;',
   ],
   ["src/components/mfa/x.tsx", 'export const f = (s) => s.auth["_enroll"];'],
+  ...[
+    "_verify",
+    "_challenge",
+    "_listFactors",
+    "_getAuthenticatorAssuranceLevel",
+    "_verifyRecoveryCode",
+    "_unenrollRecoveryCodes",
+  ].map((method) => [
+    "src/components/mfa/x.tsx",
+    `export const f = (s) => s.auth.${method}({});`,
+  ]),
+  [
+    "src/components/mfa/x.tsx",
+    'export const f = (s) => {\n  const { "_challengeAndVerify": v } = s.auth;\n  return v;\n};',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import u from "@/lib/auth/session-claims-unchecked";\nexport const f = () => u;',
+  ],
+  ["src/lib/auth/session-claims.ts", 'export * from "./session-claims-unchecked";'],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'export * from "@/lib/auth/session-claims-unchecked";',
+  ],
+  [
+    "src/lib/auth/session-claims.test.ts",
+    'export * from "./session-claims-unchecked";',
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth[\"mfa\"].enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/app/(app)/page.tsx",
+    'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked.ts";',
+  ],
   ["src/lib/auth/mfa-browser.ts", "export const f = (s) => s.auth._unenroll;"],
   ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth._unenroll;"],
   [
