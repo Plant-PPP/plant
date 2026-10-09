@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(35);
+SELECT plan(41);
 
 -- The hint a statement raises, or NULL if it succeeds. throws_ok checks only
 -- the code and the message, and the app maps the hint to its copy.
@@ -40,6 +40,34 @@ VALUES
    'authenticated', 'authenticated', 'ana@pgtap.invalid', '', now(), '{}', '{}', now(), now()),
   ('b0000000-0000-4000-8000-00000000000b', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'beto@pgtap.invalid', '', now(), '{}', '{}', now(), now());
+
+-- ── What the API roles hold ─────────────────────────────────────────────────
+-- Only the user's name and the archive flag are theirs to write: an insert
+-- that could set archived_at or created_at would skip the stamp trigger.
+SELECT set_eq(
+  $$ SELECT '(table):' || acl.privilege_type
+              || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
+     FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+     WHERE c.oid = 'public.portfolios'::regclass AND acl.grantee = 'authenticated'::regrole
+     UNION ALL
+     SELECT a.attname || ':' || acl.privilege_type
+              || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
+     FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.portfolios'::regclass AND acl.grantee = 'authenticated'::regrole $$,
+  ARRAY['(table):SELECT', 'name:INSERT', 'name:UPDATE', 'archived_at:UPDATE'],
+  'a user reads portfolios, inserts a name and updates the name and the archive flag'
+);
+
+SELECT is_empty(
+  $$ SELECT acl.grantee::regrole::text FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+     WHERE c.oid = 'public.portfolios'::regclass
+       AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0)
+     UNION ALL
+     SELECT acl.grantee::regrole::text FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.portfolios'::regclass
+       AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0) $$,
+  'anon, the service role and PUBLIC hold nothing on the table or its columns'
+);
 
 -- ── Shape ───────────────────────────────────────────────────────────────────
 SELECT ok(
@@ -313,6 +341,50 @@ SELECT results_eq(
   $$ SELECT name FROM public.portfolios WHERE user_id = 'd0000000-0000-4000-8000-00000000000d' $$,
   ARRAY['Principal'],
   'a user who signs up while other claims are set still gets "Principal"'
+);
+
+-- ── The policy, past the column grants ──────────────────────────────────────
+-- The grants already stop a user from naming user_id or id, so these grant
+-- them (rolled back with the test) to prove the policy stops the writes on its
+-- own. Beto's row gets a fixed id and a name none of Ana's active rows has, so
+-- an open USING would let the takeover through instead of hitting 23505.
+UPDATE public.portfolios SET id = 'be000000-0000-4000-8000-0000000000be', name = 'De Beto'
+WHERE user_id = 'b0000000-0000-4000-8000-00000000000b' AND name = 'Corto plazo';
+GRANT INSERT (id, user_id), UPDATE (user_id) ON TABLE public.portfolios TO authenticated;
+
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
+SET LOCAL ROLE authenticated;
+
+SELECT throws_ok(
+  $$ INSERT INTO public.portfolios (user_id, name)
+     VALUES ('b0000000-0000-4000-8000-00000000000b', 'Ajena') $$,
+  '42501', 'new row violates row-level security policy for table "portfolios"',
+  'the insert policy rejects a portfolio for another user'
+);
+
+-- No WHERE: a WHERE needs SELECT, whose policy would also check the new row.
+SELECT throws_ok(
+  $$ UPDATE public.portfolios SET user_id = 'b0000000-0000-4000-8000-00000000000b' $$,
+  '42501', 'new row violates row-level security policy for table "portfolios"',
+  'the update policy rejects moving a portfolio to another user'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.portfolios (id, user_id, name)
+     VALUES ('be000000-0000-4000-8000-0000000000be', 'a0000000-0000-4000-8000-00000000000a', 'Tomada')
+     ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id $$,
+  '42501', 'new row violates row-level security policy (USING expression) for table "portfolios"',
+  'an upsert cannot take over another user''s portfolio by id'
+);
+
+RESET ROLE;
+
+SELECT is(
+  (SELECT user_id FROM public.portfolios WHERE id = 'be000000-0000-4000-8000-0000000000be'),
+  'b0000000-0000-4000-8000-00000000000b'::uuid,
+  'the other user''s portfolio stays theirs'
 );
 
 -- ── Account deletion ────────────────────────────────────────────────────────

@@ -26,9 +26,10 @@ export function keysetFilter(column: string, { at, id }: Keyset): string {
   return `${column}.lt."${at}",and(${column}.eq."${at}",id.lt.${id})`;
 }
 
-type Params = Record<string, string | string[] | undefined>;
+// A page's search params.
+export type KeysetParams = Record<string, string | string[] | undefined>;
 
-function otherParams(params: Params, key: string): URLSearchParams {
+function otherParams(params: KeysetParams, key: string): URLSearchParams {
   const search = new URLSearchParams();
   for (const [name, value] of Object.entries(params)) {
     if (name === key || value === undefined) continue;
@@ -38,13 +39,17 @@ function otherParams(params: Params, key: string): URLSearchParams {
 }
 
 // The href of the next page of one list, keeping the other lists' params.
-export function keysetHref(params: Params, key: string, { at, id }: Keyset) {
+export function keysetHref(
+  params: KeysetParams,
+  key: string,
+  { at, id }: Keyset,
+) {
   const search = otherParams(params, key);
   search.set(key, `${at},${id}`);
   return `?${search.toString()}`;
 }
 
 // The href of one list's first page, keeping the other lists' params.
-export function firstPageHref(params: Params, key: string): string {
+export function firstPageHref(params: KeysetParams, key: string): string {
   return `?${otherParams(params, key).toString()}`;
 }

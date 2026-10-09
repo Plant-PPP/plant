@@ -9,7 +9,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-// A side sheet for a form: full width on mobile, a column on wider screens.
 function AppSheet({
   open,
   onOpenChange,

@@ -2,15 +2,10 @@ import "server-only";
 import type { Database } from "@plant/shared";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import type { z } from "zod";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { serverLog } from "@/lib/log/server-log";
-import {
-  REQUEST_ID_FIELD,
-  REQUEST_ID_HEADER,
-  requestIdFrom,
-} from "@/lib/request-id";
+import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 import { PortfolioSetupError } from "./errors";
@@ -20,6 +15,7 @@ import {
   type WriteResult,
   type WriteResultCode,
 } from "./write-result";
+import { currentRequestId } from "@/lib/request-id-server";
 
 export type PortfolioSetupAction =
   | "create_portfolio"
@@ -89,9 +85,10 @@ function log(
   }
 }
 
-// claims → parse → write as the user (RLS) → classify → one log line →
-// revalidate the page. An insert must answer 201 with its row; an update must answer 200 with exactly one row, and none means the
-// id is not one of the user's.
+// An insert must answer 201 with its row; an update must answer 200 with
+// exactly one row, and none means the id is not one of the user's. Every
+// outcome but invalid input revalidates the page, so a write that failed after
+// committing shows before the user retries.
 async function run<I>(
   { action, schema, input }: Spec<I>,
   target: typeof INSERT | { id: unknown },
@@ -105,7 +102,7 @@ async function run<I>(
   // Outside any try: its redirect to /login or /auth/mfa must propagate.
   const claims = await getSessionClaims();
   const started = performance.now();
-  const requestId = requestIdFrom((await headers()).get(REQUEST_ID_HEADER));
+  const requestId = await currentRequestId();
   const userId = claims.sub;
   const isInsert = target === INSERT;
   const id = isInsert ? undefined : idSchema.safeParse(target.id);
@@ -151,7 +148,7 @@ async function run<I>(
     },
     error,
   );
-  revalidatePath(PAGE);
+  if (result.ok || result.code !== "invalid") revalidatePath(PAGE);
   return result;
 }
 

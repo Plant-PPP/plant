@@ -87,7 +87,12 @@ function onlyLine() {
   expect(lines).toHaveLength(1);
   const [line] = lines;
   expect(JSON.stringify(line)).not.toContain(SENTINEL);
-  expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+  // Invalid input wrote nothing, so the page is not re-rendered for it.
+  if (line!["plant.outcome"] === "invalid") {
+    expect(revalidatePath).not.toHaveBeenCalled();
+  } else {
+    expect(revalidatePath).toHaveBeenCalledWith("/accounts");
+  }
   return line!;
 }
 
@@ -140,20 +145,33 @@ describe("createPortfolio", () => {
     });
   });
 
-  it.each([[{ name: "" }], [{ name: "x".repeat(41) }], [{}], ["Otra"], [null]])(
-    "refuses %p without a write",
-    async (input) => {
-      await expect(createPortfolio(input)).resolves.toEqual({
-        ok: false,
-        code: "invalid",
-      });
-      expect(createClient).not.toHaveBeenCalled();
-      expect(onlyLine()).toMatchObject({
-        level: "warn",
-        "plant.outcome": "invalid",
-      });
-    },
-  );
+  it.each([
+    [{ name: "" }],
+    [{ name: "x".repeat(41) }],
+    [{ name: "\u0000x" }],
+    [{}],
+    ["Otra"],
+    [null],
+  ])("refuses %p without a write", async (input) => {
+    await expect(createPortfolio(input)).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+    const line = onlyLine();
+    expect(Object.keys(line).sort()).toEqual(
+      [
+        "enduser.id",
+        "event",
+        "level",
+        "plant.outcome",
+        "plant.portfolio_setup.action",
+        "plant.portfolio_setup.duration_ms",
+        "plant.request_id",
+      ].sort(),
+    );
+    expect(line).toMatchObject({ level: "warn", "plant.outcome": "invalid" });
+  });
 
   it("maps a duplicate name", async () => {
     fakeClient(refused(409, "23505"));
@@ -236,7 +254,24 @@ describe("renamePortfolio", () => {
       ok: false,
       code: "failed",
     });
-    expect(onlyLine()).toMatchObject({
+    const line = onlyLine();
+    expect(Object.keys(line).sort()).toEqual(
+      [
+        "enduser.id",
+        "error.type",
+        "event",
+        "exception.message",
+        "exception.stacktrace",
+        "exception.type",
+        "level",
+        "plant.outcome",
+        "plant.portfolio_setup.action",
+        "plant.portfolio_setup.duration_ms",
+        "plant.portfolio_setup.row_id",
+        "plant.request_id",
+      ].sort(),
+    );
+    expect(line).toMatchObject({
       level: "error",
       "plant.outcome": "error",
       "error.type": "XX000",
@@ -247,11 +282,17 @@ describe("renamePortfolio", () => {
 });
 
 describe("archivePortfolio", () => {
-  it("only says the row is archived", async () => {
+  it("only says an active row of the user is archived", async () => {
     const calls = fakeClient(ok(ID));
     await archivePortfolio(ID);
-    expect(calls[1]).toEqual(["update", { archived_at: expect.any(String) }]);
-    expect(calls).toContainEqual(["eq", "user_id", USER]);
+    expect(calls).toEqual([
+      ["from", "portfolios"],
+      ["update", { archived_at: expect.any(String) }],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["is", "archived_at", null],
+      ["select", "id"],
+    ]);
   });
 
   it("maps the last active portfolio's guard", async () => {
@@ -288,15 +329,44 @@ describe("restorePortfolio", () => {
       ok: true,
       id: ID,
     });
-    const updates = calls.filter(([method]) => method === "update");
-    expect(updates).toEqual([
-      ["update", { archived_at: null }],
-      ["update", { name: "Nueva", archived_at: null }],
+    const restore = (patch: object) => [
+      ["from", "portfolios"],
+      ["update", patch],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["not", "archived_at", "is", null],
+      ["select", "id"],
+    ];
+    expect(calls).toEqual([
+      ...restore({ archived_at: null }),
+      ...restore({ name: "Nueva", archived_at: null }),
     ]);
     expect(lines.map((line) => line["plant.portfolio_setup.action"])).toEqual([
       "restore_portfolio",
       "restore_rename_portfolio",
     ]);
+  });
+
+  it("writes only the new name, whatever else the caller sends", async () => {
+    const calls = fakeClient(ok(ID));
+    await restorePortfolio(ID, {
+      name: "Nueva",
+      user_id: OTHER,
+      id: OTHER,
+      archived_at: "2000-01-01T00:00:00Z",
+    });
+    expect(calls).toContainEqual([
+      "update",
+      { name: "Nueva", archived_at: null },
+    ]);
+  });
+
+  it("refuses a restore input without a name", async () => {
+    await expect(restorePortfolio(ID, { user_id: OTHER })).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(createClient).not.toHaveBeenCalled();
   });
 
   it("refuses a blank new name", async () => {

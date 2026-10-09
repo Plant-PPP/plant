@@ -1,13 +1,9 @@
 import "server-only";
-import { headers } from "next/headers";
 import { serverLog } from "@/lib/log/server-log";
-import {
-  REQUEST_ID_FIELD,
-  REQUEST_ID_HEADER,
-  requestIdFrom,
-} from "@/lib/request-id";
+import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { sensitiveRequirement, unixNow } from "./mfa-rules";
 import { getSessionClaims } from "./session-claims";
+import { currentRequestId } from "@/lib/request-id-server";
 
 export type SensitiveAction =
   "export" | "delete_account" | "change_email" | "disable_mfa";
@@ -35,7 +31,7 @@ export async function requireSensitiveSession(
     return { ok: true, session: { userId: claims.sub } as SensitiveSession };
   }
   serverLog.info("auth.step_up", {
-    [REQUEST_ID_FIELD]: requestIdFrom((await headers()).get(REQUEST_ID_HEADER)),
+    [REQUEST_ID_FIELD]: await currentRequestId(),
     "enduser.id": claims.sub,
     "plant.outcome": "step_up_required",
     "plant.auth.sensitive_action": action,

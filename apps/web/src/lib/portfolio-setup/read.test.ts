@@ -116,6 +116,13 @@ it("links the next page of archived rows from the last one shown", async () => {
   expect(next.get("titulares")).toBe("x");
 });
 
+it("links no next page when exactly a page of archived rows is left", async () => {
+  const { client } = fakeClient(ok([]), ok(rows(ARCHIVED_ROW_LIMIT, true)));
+  const view = await read(client);
+  expect(view.archived).toHaveLength(ARCHIVED_ROW_LIMIT);
+  expect(view.archivedNextHref).toBeNull();
+});
+
 it("reads archived rows after a cursor, bounded by its timestamp", async () => {
   const { client, calls } = fakeClient(ok([]), ok([]));
   const view = await read(client, { carteras: `${AT},${ID}` });
@@ -161,7 +168,20 @@ it("logs a failed read by its code and throws an error already logged", async ()
     level: "error",
     event: "portfolio_setup.read",
     "plant.outcome": "error",
+    "plant.portfolio_setup.list": "archived",
     "error.type": "57014",
   });
   expect(JSON.stringify(lines)).not.toContain(SENTINEL);
+});
+
+it("logs one line when both lists fail", async () => {
+  const lost: Response = { data: null, error: null, status: 0 };
+  const { client } = fakeClient(lost, lost);
+  await expect(read(client)).rejects.toThrow("portfolio_setup.read_failed");
+  expect(lines).toEqual([
+    expect.objectContaining({
+      "plant.portfolio_setup.list": "both",
+      "error.type": "fetch_error",
+    }),
+  ]);
 });

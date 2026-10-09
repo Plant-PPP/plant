@@ -20,9 +20,8 @@ import {
 } from "@/components/ui/card";
 import { FormAlert } from "@/components/ui/form-alert";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import { rowAnswer } from "./answers";
 import { NameSheet } from "./name-sheet";
 
 type SheetState =
@@ -34,22 +33,31 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [alert, setAlert] = useState<string>();
   const [pending, startTransition] = useTransition();
+  // Seeded once: paging back to the first archived page keeps it open.
+  const [archivedOpen, setArchivedOpen] = useState(
+    view.archivedFirstHref !== null,
+  );
 
-  // Archive and restore answer here; a restore whose name an active portfolio
-  // took asks for another one instead.
-  function rowAction(
-    act: () => Promise<WriteResult>,
-    onDuplicate?: () => void,
-  ) {
+  function openSheet(next: SheetState) {
+    setAlert(undefined);
+    setSheet(next);
+  }
+
+  function rowAction(row: PortfolioRow, action: "archive" | "restore") {
     setAlert(undefined);
     startTransition(async () => {
-      try {
-        const result = await act();
-        if (result.ok) return;
-        if (result.code === "duplicate_name" && onDuplicate) onDuplicate();
-        else setAlert(WRITE_MESSAGES[result.code]);
-      } catch {
-        setAlert(WRITE_MESSAGES.failed);
+      const call =
+        action === "archive"
+          ? archivePortfolio(row.id)
+          : restorePortfolio(row.id);
+      const answer = rowAnswer(
+        await call.catch(() => "rejected" as const),
+        action,
+      );
+      if (answer.kind === "alert") setAlert(answer.text);
+      // Never over a sheet the user opened meanwhile.
+      if (answer.kind === "ask_name") {
+        setSheet((open) => open ?? { kind: "restore", row });
       }
     });
   }
@@ -62,7 +70,11 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
         </CardTitle>
         <CardDescription>Agrupá tus inversiones como quieras</CardDescription>
         <CardAction>
-          <Button size="sm" onClick={() => setSheet({ kind: "create" })}>
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => openSheet({ kind: "create" })}
+          >
             <Plus />
             Nueva cartera
           </Button>
@@ -82,7 +94,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                   variant="ghost"
                   size="sm"
                   disabled={pending}
-                  onClick={() => setSheet({ kind: "rename", row })}
+                  onClick={() => openSheet({ kind: "rename", row })}
+                  aria-label={`Renombrar ${row.name}`}
                 >
                   <Pencil />
                   <span className="sr-only sm:not-sr-only">Renombrar</span>
@@ -91,7 +104,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                   variant="ghost"
                   size="sm"
                   disabled={pending}
-                  onClick={() => rowAction(() => archivePortfolio(row.id))}
+                  onClick={() => rowAction(row, "archive")}
+                  aria-label={`Archivar ${row.name}`}
                 >
                   <Archive />
                   <span className="sr-only sm:not-sr-only">Archivar</span>
@@ -106,7 +120,10 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           </p>
         )}
         {(view.archived.length > 0 || view.archivedFirstHref) && (
-          <details open={view.archivedFirstHref !== null} className="group">
+          <details
+            open={archivedOpen}
+            onToggle={(event) => setArchivedOpen(event.currentTarget.open)}
+          >
             <summary className="cursor-pointer text-sm font-medium">
               Archivadas
             </summary>
@@ -123,12 +140,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                     variant="ghost"
                     size="sm"
                     disabled={pending}
-                    onClick={() =>
-                      rowAction(
-                        () => restorePortfolio(row.id),
-                        () => setSheet({ kind: "restore", row }),
-                      )
-                    }
+                    onClick={() => rowAction(row, "restore")}
+                    aria-label={`Restaurar ${row.name}`}
                   >
                     <ArchiveRestore />
                     <span className="sr-only sm:not-sr-only">Restaurar</span>
@@ -138,12 +151,20 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
             </ul>
             <div className="mt-2 flex gap-4 text-sm">
               {view.archivedFirstHref && (
-                <Link className="underline" href={view.archivedFirstHref}>
+                <Link
+                  className="underline"
+                  href={view.archivedFirstHref}
+                  scroll={false}
+                >
                   Ver las más recientes
                 </Link>
               )}
               {view.archivedNextHref && (
-                <Link className="underline" href={view.archivedNextHref}>
+                <Link
+                  className="underline"
+                  href={view.archivedNextHref}
+                  scroll={false}
+                >
                   Ver más
                 </Link>
               )}

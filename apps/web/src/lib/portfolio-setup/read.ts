@@ -7,6 +7,7 @@ import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import {
   firstPageHref,
   type Keyset,
+  type KeysetParams,
   keysetFilter,
   keysetHref,
   parseKeyset,
@@ -14,8 +15,6 @@ import {
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { PortfolioSetupError } from "./errors";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
-
-type Params = Record<string, string | string[] | undefined>;
 
 export type PortfolioRow = { id: string; name: string };
 
@@ -47,7 +46,7 @@ export async function readPortfolios(
   }: {
     userId: string;
     requestId: string | undefined;
-    params: Params;
+    params: KeysetParams;
   },
 ): Promise<PortfoliosView> {
   const fields = { [REQUEST_ID_FIELD]: requestId, "enduser.id": userId };
@@ -90,19 +89,24 @@ export async function readPortfolios(
   const failures = [active, archived].map((result) =>
     classifyPostgrestResult(result, 200),
   );
-  if (failures.some(Boolean)) {
-    for (const failure of failures) {
-      if (!failure) continue;
-      serverLog.error(
-        EVENT,
-        {
-          ...fields,
-          "plant.portfolio_setup.table": "portfolios",
-          "plant.outcome": "error",
-        },
-        new PortfolioSetupError(failure.code),
-      );
-    }
+  const [activeFailure, archivedFailure] = failures;
+  const failure = activeFailure ?? archivedFailure;
+  if (failure) {
+    serverLog.error(
+      EVENT,
+      {
+        ...fields,
+        "plant.portfolio_setup.table": "portfolios",
+        "plant.portfolio_setup.list":
+          activeFailure && archivedFailure
+            ? "both"
+            : activeFailure
+              ? "active"
+              : "archived",
+        "plant.outcome": "error",
+      },
+      new PortfolioSetupError(failure.code),
+    );
     throw new LoggedError("portfolio_setup.read_failed");
   }
 

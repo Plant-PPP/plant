@@ -24,6 +24,25 @@ describe("nameInputSchema", () => {
     expect(schema.safeParse({ name: "🌱".repeat(41) }).success).toBe(false);
   });
 
+  test("normalizes to NFC and single spaces", () => {
+    expect(schema.parse({ name: "Jubilacio\u0301n  de\tlargo plazo" })).toEqual(
+      {
+        name: "Jubilación de largo plazo",
+      },
+    );
+  });
+
+  test.each(["\u0000x", "\ud800", "a\u0007b", "a\u202eb", "Trading\u200b"])(
+    "refuses %j",
+    (name) => {
+      expect(schema.safeParse({ name }).success).toBe(false);
+    },
+  );
+
+  test("keeps emoji joined by ZWJ", () => {
+    expect(schema.safeParse({ name: "👨‍👩‍👧" }).success).toBe(true);
+  });
+
   test("refuses a missing name", () => {
     expect(schema.safeParse({}).success).toBe(false);
   });

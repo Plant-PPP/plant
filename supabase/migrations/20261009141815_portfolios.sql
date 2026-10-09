@@ -1,6 +1,6 @@
 -- Portfolios: a user's named groups of holdings. Every user starts with
--- "Principal" and always keeps at least one active portfolio. Portfolios are
--- archived, never deleted.
+-- "Principal" and always keeps at least one active portfolio. Users archive
+-- portfolios; a portfolio is deleted only with its account.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
@@ -76,7 +76,9 @@ WHERE NOT EXISTS (SELECT 1 FROM public.portfolios p WHERE p.user_id = u.id);
 -- order: lock, then stamp, then guard.
 
 -- Serializes one user's writes to the portfolio setup, so a guard that counts
--- rows sees every committed write of that user. A data migration touching many
+-- rows sees every committed write of that user. That needs READ COMMITTED,
+-- where each query takes a new snapshot after the lock: under REPEATABLE READ
+-- the guard would count from a snapshot taken before it waited. A data migration touching many
 -- users' rows disables this trigger around it or batches per user, since each
 -- row holds its user's lock until commit.
 CREATE FUNCTION private.lock_portfolio_setup()
@@ -91,8 +93,8 @@ BEGIN
 END;
 $$;
 
--- archived_at is the server's time of the first archive: the client only says
--- whether the row is archived.
+-- archived_at is the server's time the row was archived, kept when an archived
+-- row is archived again: the client only says whether the row is archived.
 CREATE FUNCTION private.stamp_archived_at()
   RETURNS trigger
   LANGUAGE plpgsql

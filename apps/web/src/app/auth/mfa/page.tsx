@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignOutEverywhere } from "@/components/auth/sign-out-everywhere";
@@ -22,12 +21,9 @@ import {
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
 import { serverLog } from "@/lib/log/server-log";
-import {
-  REQUEST_ID_FIELD,
-  REQUEST_ID_HEADER,
-  requestIdFrom,
-} from "@/lib/request-id";
+import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { createClient } from "@/lib/supabase/server";
+import { currentRequestId } from "@/lib/request-id-server";
 
 export const metadata: Metadata = { title: "Verificación" };
 
@@ -100,7 +96,7 @@ export default async function MfaPage({
 
 async function logFields(userId: string, outcome: Outcome) {
   return {
-    [REQUEST_ID_FIELD]: requestIdFrom((await headers()).get(REQUEST_ID_HEADER)),
+    [REQUEST_ID_FIELD]: await currentRequestId(),
     "enduser.id": userId,
     "plant.outcome": outcome,
   };

@@ -13,8 +13,9 @@ import { z } from "zod";
 const portfolioName = nameInputSchema(NAME_LIMITS.portfolios.name);
 const noInput = z.object({});
 
-// Every write filters by the session's user besides RLS, and by the parsed id.
-// The arguments come from the browser and are parsed before any write.
+// The arguments come from the browser and are parsed before any write. Updates
+// filter by the session's user besides RLS and by the parsed id; an insert's
+// user_id is the column default, which RLS checks.
 
 export async function createPortfolio(input: unknown): Promise<WriteResult> {
   return runInsert(
@@ -72,7 +73,11 @@ export async function restorePortfolio(
   }: UpdateArgs<{ name?: string }>) =>
     client
       .from("portfolios")
-      .update({ ...input, archived_at: null })
+      .update(
+        input.name === undefined
+          ? { archived_at: null }
+          : { name: input.name, archived_at: null },
+      )
       .eq("user_id", userId)
       .eq("id", id)
       .not("archived_at", "is", null)

@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import {
   type DisableOutcome,
   logDisable,
@@ -8,8 +7,8 @@ import {
 } from "@/lib/auth/mfa-disable";
 import { requireSensitiveSession } from "@/lib/auth/sensitive-session";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { REQUEST_ID_HEADER, requestIdFrom } from "@/lib/request-id";
 import { createClient } from "@/lib/supabase/server";
+import { currentRequestId } from "@/lib/request-id-server";
 
 export type DisableResult =
   { outcome: DisableOutcome } | { stepUp: "sign_in_again" };
@@ -18,7 +17,7 @@ export type DisableResult =
 // dialog verified a TOTP code just before. factorId comes from the browser:
 // unenrollForSession accepts only one of the session user's own factors.
 export async function disableTotp(factorId: unknown): Promise<DisableResult> {
-  const requestId = requestIdFrom((await headers()).get(REQUEST_ID_HEADER));
+  const requestId = await currentRequestId();
   if (typeof factorId !== "string") {
     return logDisable("invalid_input", { requestId });
   }

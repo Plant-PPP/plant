@@ -7,8 +7,8 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SheetFooter } from "@/components/ui/sheet";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import { sheetAnswer } from "./answers";
 
 // A sheet that asks for one name and saves it with `onSubmit`: creating,
 // renaming, or restoring under a new name.
@@ -36,13 +36,11 @@ export function NameSheet({
     const name = String(new FormData(form).get("name") ?? "");
     setError(undefined);
     startTransition(async () => {
-      try {
-        const result = await onSubmit(name);
-        if (result.ok) onClose();
-        else setError(WRITE_MESSAGES[result.code]);
-      } catch {
-        setError(WRITE_MESSAGES.failed);
-      }
+      const answer = sheetAnswer(
+        await onSubmit(name).catch(() => "rejected" as const),
+      );
+      if (answer.kind === "done") onClose();
+      else setError(answer.text);
     });
   }
 
