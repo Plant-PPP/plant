@@ -1,5 +1,5 @@
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
-import { rowAnswer, sheetAnswer } from "./answers";
+import { rowAnswer, dialogAnswer } from "./answers";
 
 const ID = "22222222-2222-4222-8222-222222222222";
 
@@ -39,14 +39,14 @@ describe("rowAnswer", () => {
   });
 });
 
-describe("sheetAnswer", () => {
+describe("dialogAnswer", () => {
   test("closes on success and keeps the copy otherwise", () => {
-    expect(sheetAnswer({ ok: true, id: ID })).toEqual({ kind: "done" });
-    expect(sheetAnswer({ ok: false, code: "duplicate_name" })).toEqual({
+    expect(dialogAnswer({ ok: true, id: ID })).toEqual({ kind: "done" });
+    expect(dialogAnswer({ ok: false, code: "duplicate_name" })).toEqual({
       kind: "alert",
       text: "Ya tenés una cartera con ese nombre.",
     });
-    expect(sheetAnswer("rejected")).toEqual({
+    expect(dialogAnswer("rejected")).toEqual({
       kind: "alert",
       text: WRITE_MESSAGES.failed,
     });

@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · UI conventions (PLA-96)
+
+- **The rules live in `docs/ui.md`**, so each screen issue follows them instead of rediscovering them. They follow the reference app's patterns on Plant's own theme.
+- **Every form opens in a centered Dialog, not a Sheet**, replacing "forms in a Sheet" (PLA-20). A long form scrolls inside the dialog. `ui/sheet.tsx` stays only for the sidebar on mobile.
+- **An action's result is a toast** (sonner), replacing the inline `StatusNotice`; sonner's own live region announces it. Field errors stay inline in `FormAlert`.
+- **Row actions are icons with a tooltip**, through `IconButton`, with the row in the accessible name.
+
 ## 2026-10-09 · Portfolios (PLA-95)
 
 - **"Portfolio setup" is the user's portfolios, and from PLA-24 their holders and accounts.** It names the shared pieces: the module `lib/portfolio-setup`, the log events `portfolio_setup.*`, the advisory lock key and `PORTFOLIO_SETUP_GUARD` in `@plant/shared`. "Cuenta" is UI copy; in code "account" stays the user's Plant account, except for the `/accounts` route.
