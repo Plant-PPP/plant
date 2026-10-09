@@ -14,7 +14,7 @@ import {
 } from "@/lib/supabase/keyset";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { PortfolioSetupError } from "./errors";
-import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
+import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT, type SetupTable } from "./limits";
 
 export type PortfolioRow = { id: string; name: string };
 export type HolderRow = PortfolioRow;
@@ -52,7 +52,7 @@ type ReadContext = {
 };
 
 type ListSpec<Row> = {
-  table: "portfolios" | "holders" | "source_connections";
+  table: SetupTable;
   // The search param that pages the archived rows.
   param: string;
   columns: string;

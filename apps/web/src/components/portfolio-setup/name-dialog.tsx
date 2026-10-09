@@ -2,11 +2,11 @@
 
 import { useRef } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { WriteMessages } from "./answers";
 import { NameField, useNameSubmit } from "./name-field";
+import { PendingButton } from "./pending-button";
 
 // A dialog that asks for one name and saves it with `onSubmit`: creating,
 // renaming, or restoring under a new name.
@@ -71,16 +71,10 @@ export function NameDialog({
           required
           autoFocus
         />
-        {/* aria-disabled while pending, not disabled: a disabled button drops
-            its focus to the page. */}
         <DialogFooter>
-          <Button
-            type="submit"
-            aria-disabled={field.pending}
-            className="aria-disabled:opacity-50"
-          >
+          <PendingButton type="submit" pending={field.pending}>
             {field.pending ? "Guardando…" : submitLabel}
-          </Button>
+          </PendingButton>
         </DialogFooter>
       </form>
     </AppDialog>

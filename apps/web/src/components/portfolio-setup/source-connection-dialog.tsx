@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  accountLabel,
   CHOICE_MESSAGES,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
@@ -26,10 +27,12 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import { SELF_HOLDER } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
 import { dialogAnswer } from "./answers";
 import { NewHolderField } from "./new-holder-field";
+import { PendingButton } from "./pending-button";
 
 // Suggestions only: any institution can be typed.
 const INSTITUTIONS = [
@@ -69,7 +72,7 @@ export function initialFields(
   if (!row) {
     return {
       institution: "",
-      holder: "self",
+      holder: SELF_HOLDER,
       includeInTaxReport: true,
       // The oldest active portfolio, "Principal" unless the user archived it.
       defaultPortfolioId: portfolios.at(-1)?.id ?? "",
@@ -77,7 +80,11 @@ export function initialFields(
   }
   return {
     institution: row.institution,
-    holder: row.holder ? (row.holder.archived ? "" : row.holder.id) : "self",
+    holder: row.holder
+      ? row.holder.archived
+        ? ""
+        : row.holder.id
+      : SELF_HOLDER,
     includeInTaxReport: row.includeInTaxReport,
     defaultPortfolioId: row.portfolio.archived ? "" : row.portfolio.id,
   };
@@ -95,10 +102,22 @@ export function missingChoice(
 
 // Radix's hidden native select reports "" when the value is set before its
 // option renders, as for a holder just created here; no option is "".
-function choose(set: (value: string) => void) {
+export function choose(set: (value: string) => void) {
   return (value: string) => {
     if (value !== "") set(value);
   };
+}
+
+// The holders to offer: the page's, then those created here that the page
+// does not list yet.
+export function holderChoices(
+  holders: HolderRow[],
+  added: HolderRow[],
+): HolderRow[] {
+  return [
+    ...holders,
+    ...added.filter((row) => !holders.some(({ id }) => id === row.id)),
+  ];
 }
 
 // Creates, edits or restores an account. A new holder can be added from the
@@ -125,7 +144,7 @@ export function SourceConnectionDialog({
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   onSubmit: (fields: SourceConnectionFields) => Promise<WriteResult>;
-  onSaved: (institution: string) => void;
+  onSaved: (label: string) => void;
 }) {
   const ids = {
     institution: useId(),
@@ -142,6 +161,7 @@ export function SourceConnectionDialog({
   );
   // Holders created here, until the page's refresh lists them.
   const [added, setAdded] = useState<HolderRow[]>([]);
+  const [listed, setListed] = useState(holders);
   const [addingHolder, setAddingHolder] = useState(false);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -150,20 +170,37 @@ export function SourceConnectionDialog({
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const saved = useRef(false);
 
-  const holderOptions = [
-    ...holders,
-    ...added.filter((row) => !holders.some(({ id }) => id === row.id)),
-  ];
+  // Once the page lists a holder created here, the page decides: one it
+  // stops listing, archived elsewhere, is not offered again.
+  if (listed !== holders) {
+    setListed(holders);
+    setAdded((rows) =>
+      rows.filter(
+        ({ id }) =>
+          !listed.some((row) => row.id === id) &&
+          !holders.some((row) => row.id === id),
+      ),
+    );
+  }
 
-  // The submit button is aria-disabled while pending, not disabled: a
-  // disabled button drops its focus to the page.
+  const holderOptions = holderChoices(holders, added);
+  // A choice the page no longer offers, archived from another tab, is
+  // unchosen.
+  const chosenHolder =
+    holder === SELF_HOLDER || holderOptions.some(({ id }) => id === holder)
+      ? holder
+      : "";
+  const chosenPortfolio = portfolios.some(({ id }) => id === portfolio)
+    ? portfolio
+    : "";
+
   function submit() {
     if (pending) return;
     const fields = {
       institution: institution.current?.value ?? "",
-      holder,
+      holder: chosenHolder,
       includeInTaxReport,
-      defaultPortfolioId: portfolio,
+      defaultPortfolioId: chosenPortfolio,
     };
     const missing = missingChoice(fields);
     if (missing) {
@@ -182,7 +219,9 @@ export function SourceConnectionDialog({
       );
       if (answer.kind === "done") {
         saved.current = true;
-        onSaved(normalizeName(fields.institution));
+        const holderName =
+          holderOptions.find(({ id }) => id === fields.holder)?.name ?? null;
+        onSaved(accountLabel(normalizeName(fields.institution), holderName));
         onClose();
       } else {
         setError(answer.text);
@@ -198,6 +237,13 @@ export function SourceConnectionDialog({
       returnFocusTo={(opener) =>
         saved.current || !opener ? returnFocusTo() : opener
       }
+      onEscapeKeyDown={(event) => {
+        // Escape in the new holder's field closes that field, not the dialog.
+        if (!addingHolder) return;
+        event.preventDefault();
+        setAddingHolder(false);
+        holderTrigger.current?.focus();
+      }}
     >
       <form
         className="grid gap-4"
@@ -228,17 +274,17 @@ export function SourceConnectionDialog({
           <div className="grid gap-2">
             <Label htmlFor={ids.holder}>Titular</Label>
             <div className="flex gap-2">
-              <Select value={holder} onValueChange={choose(setHolder)}>
+              <Select value={chosenHolder} onValueChange={choose(setHolder)}>
                 <SelectTrigger
                   ref={holderTrigger}
                   id={ids.holder}
                   className="min-w-0 flex-1"
-                  aria-invalid={error && !holder ? true : undefined}
+                  aria-invalid={error && !chosenHolder ? true : undefined}
                 >
                   <SelectValue placeholder="Elegí un titular" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="self">Vos</SelectItem>
+                  <SelectItem value={SELF_HOLDER}>Vos</SelectItem>
                   {holderOptions.map((row) => (
                     <SelectItem key={row.id} value={row.id}>
                       {row.name}
@@ -275,12 +321,15 @@ export function SourceConnectionDialog({
 
           <div className="grid gap-2">
             <Label htmlFor={ids.portfolio}>Cartera por defecto</Label>
-            <Select value={portfolio} onValueChange={choose(setPortfolio)}>
+            <Select
+              value={chosenPortfolio}
+              onValueChange={choose(setPortfolio)}
+            >
               <SelectTrigger
                 ref={portfolioTrigger}
                 id={ids.portfolio}
                 className="w-full"
-                aria-invalid={error && !portfolio ? true : undefined}
+                aria-invalid={error && !chosenPortfolio ? true : undefined}
               >
                 <SelectValue placeholder="Elegí una cartera" />
               </SelectTrigger>
@@ -309,14 +358,13 @@ export function SourceConnectionDialog({
           {error && <FormAlert id={ids.alert}>{error}</FormAlert>}
         </div>
         <DialogFooter>
-          <Button
+          <PendingButton
             type="submit"
-            aria-disabled={pending}
+            pending={pending}
             aria-describedby={error ? ids.alert : undefined}
-            className="aria-disabled:opacity-50"
           >
             {pending ? "Guardando…" : submitLabel}
-          </Button>
+          </PendingButton>
         </DialogFooter>
       </form>
     </AppDialog>

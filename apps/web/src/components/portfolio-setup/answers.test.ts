@@ -43,23 +43,43 @@ describe("rowAnswer", () => {
     });
   });
 
+  const inUse = (usedBy: string[]) =>
+    rowAnswer(
+      { ok: false, code: "portfolio_in_use" },
+      "archive",
+      PORTFOLIOS,
+      usedBy,
+    );
+
   test.each([
-    [[], "Esa cartera es la de una cuenta activa."],
-    [["IOL"], "Esa cartera es la de una cuenta activa: IOL."],
-    [["IOL", "Balanz"], "Esa cartera es la de cuentas activas: IOL y Balanz."],
     [
-      ["IOL", "Balanz", "Cocos"],
-      "Esa cartera es la de cuentas activas: IOL, Balanz y Cocos.",
+      [],
+      "Para archivar esta cartera, primero elegí otra en las cuentas que la usan o archivalas.",
+    ],
+    [
+      ["tu IOL"],
+      "Para archivar esta cartera, primero elegí otra o archivá esta cuenta: tu IOL.",
+    ],
+    [
+      ["tu IOL", "Balanz de Lucía"],
+      "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu IOL, Balanz de Lucía.",
     ],
   ])("a portfolio in use by %j says so", (usedBy, text) => {
-    expect(
-      rowAnswer(
-        { ok: false, code: "portfolio_in_use" },
-        "archive",
-        PORTFOLIOS,
-        usedBy,
-      ),
-    ).toEqual({ kind: "alert", text });
+    expect(inUse(usedBy)).toEqual({ kind: "alert", text });
+  });
+
+  test("names each account once", () => {
+    expect(inUse(["tu IOL", "tu IOL"])).toEqual({
+      kind: "alert",
+      text: "Para archivar esta cartera, primero elegí otra o archivá esta cuenta: tu IOL.",
+    });
+  });
+
+  test("names the first three accounts and counts the rest", () => {
+    expect(inUse(["tu A", "tu B", "tu C", "tu D", "tu E"])).toEqual({
+      kind: "alert",
+      text: "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu A, tu B, tu C y 2 más.",
+    });
   });
 
   test("a holder in use names its accounts", () => {
@@ -68,11 +88,11 @@ describe("rowAnswer", () => {
         { ok: false, code: "holder_in_use" },
         "archive",
         WRITE_MESSAGES.holders,
-        ["IOL"],
+        ["IOL de Lucía"],
       ),
     ).toEqual({
       kind: "alert",
-      text: "Ese titular es el de una cuenta activa: IOL.",
+      text: "Para archivar este titular, primero elegí otro o archivá esta cuenta: IOL de Lucía.",
     });
   });
 });

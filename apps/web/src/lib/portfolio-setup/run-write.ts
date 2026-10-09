@@ -9,6 +9,7 @@ import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 import { PortfolioSetupError } from "./errors";
+import type { SetupTable } from "./limits";
 import { idSchema, noInput } from "./schemas";
 import {
   toWriteResult,
@@ -169,7 +170,7 @@ export function runUpdate<I>(
 // Archives one active row of the user. The trigger stamps the server's time;
 // the value sent only says "archived".
 export function runArchive(
-  table: "portfolios" | "holders" | "source_connections",
+  table: SetupTable,
   action: PortfolioSetupAction,
   id: unknown,
 ): Promise<WriteResult> {

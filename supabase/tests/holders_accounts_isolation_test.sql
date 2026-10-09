@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(69);
+SELECT plan(70);
 
 -- The hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.hint_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -418,6 +418,24 @@ SELECT lives_ok(
      WHERE id = 'a5000000-0000-4000-8000-0000000000a5' $$,
   'an archived account onto an archived portfolio can still be edited while archived'
 );
+
+-- With the holder unchanged, only the restore itself makes the guard check it.
+UPDATE public.source_connections
+SET holder_id = 'a3000000-0000-4000-8000-0000000000a3',
+    default_portfolio_id = 'a1000000-0000-4000-8000-0000000000a1'
+WHERE id = 'a5000000-0000-4000-8000-0000000000a5';
+
+SELECT is(
+  pg_temp.hint_of($$ UPDATE public.source_connections SET archived_at = NULL
+                     WHERE id = 'a5000000-0000-4000-8000-0000000000a5' $$),
+  'holder_archived',
+  'restoring an account whose holder was archived meanwhile is refused'
+);
+
+UPDATE public.source_connections
+SET holder_id = NULL,
+    default_portfolio_id = (SELECT id FROM public.portfolios WHERE name = 'Largo plazo')
+WHERE id = 'a5000000-0000-4000-8000-0000000000a5';
 
 SELECT is(
   pg_temp.hint_of($$ UPDATE public.source_connections SET archived_at = NULL

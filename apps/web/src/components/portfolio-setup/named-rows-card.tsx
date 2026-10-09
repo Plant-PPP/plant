@@ -8,7 +8,12 @@ import type { ListView, PortfolioRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type WriteMessages, rowAnswer } from "./answers";
 import { NameDialog } from "./name-dialog";
-import { ArchivedList, SetupCard, useSetupCard } from "./setup-card";
+import {
+  ActiveList,
+  ArchivedList,
+  SetupCard,
+  useSetupCard,
+} from "./setup-card";
 
 type NamedRow = PortfolioRow;
 
@@ -54,7 +59,7 @@ export function NamedRowsCard({
   copy: NamedRowsCopy;
   actions: NamedRowsActions;
   messages: WriteMessages;
-  // The institutions of the active accounts that use a row.
+  // How the active accounts that use a row are named.
   usedBy: (id: string) => string[];
 }) {
   const card = useSetupCard();
@@ -89,39 +94,32 @@ export function NamedRowsCard({
       addLabel={copy.addLabel}
       onAdd={() => openDialog({ kind: "create" })}
     >
-      {view.active.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{copy.emptyText}</p>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {view.active.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <span className="min-w-0 truncate text-sm">{row.name}</span>
-              <span className="flex shrink-0 gap-1">
-                <IconButton
-                  icon={Pencil}
-                  tooltip="Renombrar"
-                  label={`Renombrar ${row.name}`}
-                  pending={card.pending}
-                  onClick={() => openDialog({ kind: "rename", row })}
-                />
-                <IconButton
-                  icon={Archive}
-                  tooltip="Archivar"
-                  label={`Archivar ${row.name}`}
-                  pending={card.pending}
-                  onClick={() => rowAction(row, "archive")}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {view.activeTruncated && (
-        <p className="text-xs text-muted-foreground">{copy.truncated}</p>
-      )}
+      <ActiveList
+        view={view}
+        emptyText={copy.emptyText}
+        truncatedText={copy.truncated}
+        renderRow={(row) => (
+          <>
+            <span className="min-w-0 truncate text-sm">{row.name}</span>
+            <span className="flex shrink-0 gap-1">
+              <IconButton
+                icon={Pencil}
+                tooltip="Renombrar"
+                label={`Renombrar ${row.name}`}
+                pending={card.pending}
+                onClick={() => openDialog({ kind: "rename", row })}
+              />
+              <IconButton
+                icon={Archive}
+                tooltip="Archivar"
+                label={`Archivar ${row.name}`}
+                pending={card.pending}
+                onClick={() => rowAction(row, "archive")}
+              />
+            </span>
+          </>
+        )}
+      />
       <ArchivedList
         view={view}
         label={copy.archivedLabel}

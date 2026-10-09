@@ -6,6 +6,8 @@ export const NAME_LIMITS = {
   source_connections: { institution: 60 },
 } as const;
 
+export type SetupTable = keyof typeof NAME_LIMITS;
+
 // The most active rows a card lists, and the archived rows one page shows.
 export const PAGE_ROW_LIMIT = 300;
 export const ARCHIVED_ROW_LIMIT = 50;

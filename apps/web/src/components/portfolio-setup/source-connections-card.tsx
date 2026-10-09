@@ -18,8 +18,14 @@ import type {
   SourceConnectionRow,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
+import { sourceConnectionLabel } from "./accounts-using";
 import { rowAnswer } from "./answers";
-import { ArchivedList, SetupCard, useSetupCard } from "./setup-card";
+import {
+  ActiveList,
+  ArchivedList,
+  SetupCard,
+  useSetupCard,
+} from "./setup-card";
 import {
   SourceConnectionDialog,
   initialFields,
@@ -31,14 +37,6 @@ type DialogState =
   | { kind: "create" }
   | { kind: "edit"; row: SourceConnectionRow }
   | { kind: "restore"; row: SourceConnectionRow };
-
-function holderName(row: SourceConnectionRow): string {
-  return row.holder?.name ?? "Vos";
-}
-
-function rowLabel(row: SourceConnectionRow): string {
-  return `${row.institution} de ${holderName(row)}`;
-}
 
 function SourceConnectionSummary({
   row,
@@ -52,7 +50,7 @@ function SourceConnectionSummary({
       <span
         className={`truncate text-sm ${muted ? "text-muted-foreground" : ""}`}
       >
-        {row.institution} · {holderName(row)}
+        {row.institution} · {row.holder?.name ?? "Vos"}
       </span>
       <span className="truncate text-xs text-muted-foreground">
         {row.portfolio.name}
@@ -85,7 +83,7 @@ export function SourceConnectionsCard({
     card.rowAction(
       () => archiveSourceConnection(row.id),
       (result) => rowAnswer(result, "archive", MESSAGES),
-      { done: `Archivaste ${rowLabel(row)}` },
+      { done: `Archivaste ${sourceConnectionLabel(row)}` },
     );
   }
 
@@ -98,43 +96,32 @@ export function SourceConnectionsCard({
       addLabel="Agregar cuenta"
       onAdd={() => openDialog({ kind: "create" })}
     >
-      {view.active.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Todavía no agregaste cuentas.
-        </p>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {view.active.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between gap-2 px-3 py-2"
-            >
-              <SourceConnectionSummary row={row} />
-              <span className="flex shrink-0 gap-1">
-                <IconButton
-                  icon={Pencil}
-                  tooltip="Editar"
-                  label={`Editar ${rowLabel(row)}`}
-                  pending={card.pending}
-                  onClick={() => openDialog({ kind: "edit", row })}
-                />
-                <IconButton
-                  icon={Archive}
-                  tooltip="Archivar"
-                  label={`Archivar ${rowLabel(row)}`}
-                  pending={card.pending}
-                  onClick={() => archive(row)}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {view.activeTruncated && (
-        <p className="text-xs text-muted-foreground">
-          Mostrando las {PAGE_ROW_LIMIT} más recientes.
-        </p>
-      )}
+      <ActiveList
+        view={view}
+        emptyText="Todavía no agregaste cuentas."
+        truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
+        renderRow={(row) => (
+          <>
+            <SourceConnectionSummary row={row} />
+            <span className="flex shrink-0 gap-1">
+              <IconButton
+                icon={Pencil}
+                tooltip="Editar"
+                label={`Editar ${sourceConnectionLabel(row)}`}
+                pending={card.pending}
+                onClick={() => openDialog({ kind: "edit", row })}
+              />
+              <IconButton
+                icon={Archive}
+                tooltip="Archivar"
+                label={`Archivar ${sourceConnectionLabel(row)}`}
+                pending={card.pending}
+                onClick={() => archive(row)}
+              />
+            </span>
+          </>
+        )}
+      />
       <ArchivedList
         view={view}
         label="Archivadas"
@@ -146,7 +133,7 @@ export function SourceConnectionsCard({
             <IconButton
               icon={ArchiveRestore}
               tooltip="Restaurar"
-              label={`Restaurar ${rowLabel(row)}`}
+              label={`Restaurar ${sourceConnectionLabel(row)}`}
               pending={card.pending}
               onClick={() => openDialog({ kind: "restore", row })}
             />
@@ -164,7 +151,7 @@ export function SourceConnectionsCard({
           returnFocusTo={card.focusHeading}
           onClose={() => setDialog(null)}
           onSubmit={(fields) => createSourceConnection(fields)}
-          onSaved={(institution) => toast.success(`Agregaste ${institution}`)}
+          onSaved={(label) => toast.success(`Agregaste ${label}`)}
         />
       )}
       {dialog?.kind === "edit" && (
@@ -179,7 +166,7 @@ export function SourceConnectionsCard({
           returnFocusTo={card.focusHeading}
           onClose={() => setDialog(null)}
           onSubmit={(fields) => updateSourceConnection(dialog.row.id, fields)}
-          onSaved={(institution) => toast.success(`Guardaste ${institution}`)}
+          onSaved={(label) => toast.success(`Guardaste ${label}`)}
         />
       )}
       {dialog?.kind === "restore" && (
@@ -194,7 +181,7 @@ export function SourceConnectionsCard({
           returnFocusTo={card.focusHeading}
           onClose={() => setDialog(null)}
           onSubmit={(fields) => restoreSourceConnection(dialog.row.id, fields)}
-          onSaved={(institution) => toast.success(`Restauraste ${institution}`)}
+          onSaved={(label) => toast.success(`Restauraste ${label}`)}
         />
       )}
     </SetupCard>

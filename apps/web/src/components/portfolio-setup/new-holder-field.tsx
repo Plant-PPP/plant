@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { HolderRow } from "@/lib/portfolio-setup/read";
 import { NameField, useNameSubmit } from "./name-field";
+import { PendingButton } from "./pending-button";
 
 // Enter saves the holder instead of submitting the form around the field.
 export function submitOnEnter(submit: () => void) {
@@ -42,15 +43,14 @@ export function NewHolderField({
         onKeyDown={submitOnEnter(field.submit)}
       />
       <div className="flex gap-2">
-        <Button
+        <PendingButton
           type="button"
           size="sm"
-          aria-disabled={field.pending}
-          className="aria-disabled:opacity-50"
+          pending={field.pending}
           onClick={field.submit}
         >
           {field.pending ? "Agregando…" : "Agregar titular"}
-        </Button>
+        </PendingButton>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
           Cancelar
         </Button>

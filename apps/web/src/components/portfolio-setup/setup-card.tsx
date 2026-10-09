@@ -92,6 +92,42 @@ export function SetupCard({
   );
 }
 
+// The active rows, or a line when there are none, and a note when only the
+// most recent are shown.
+export function ActiveList<Row extends { id: string }>({
+  view,
+  emptyText,
+  truncatedText,
+  renderRow,
+}: {
+  view: ListView<Row>;
+  emptyText: string;
+  truncatedText: string;
+  renderRow: (row: Row) => React.ReactNode;
+}) {
+  return (
+    <>
+      {view.active.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      ) : (
+        <ul className="divide-y rounded-md border">
+          {view.active.map((row) => (
+            <li
+              key={row.id}
+              className="flex items-center justify-between gap-2 px-3 py-2"
+            >
+              {renderRow(row)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {view.activeTruncated && (
+        <p className="text-xs text-muted-foreground">{truncatedText}</p>
+      )}
+    </>
+  );
+}
+
 // The archived rows, one page at a time, in a group closed until opened or
 // paged.
 export function ArchivedList<Row extends { id: string }>({

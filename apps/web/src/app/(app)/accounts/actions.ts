@@ -8,6 +8,7 @@ import {
   runUpdate,
 } from "@/lib/portfolio-setup/run-write";
 import {
+  SELF_HOLDER,
   type SourceConnectionInput,
   sourceConnectionInputSchema,
 } from "@/lib/portfolio-setup/schemas";
@@ -17,8 +18,8 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 // filter by the session's user besides RLS and by the parsed id; an insert's
 // user_id is the column default, which RLS checks.
 
-const portfolios = namedRowWrites("portfolios", "portfolio");
-const holders = namedRowWrites("holders", "holder");
+const portfolios = namedRowWrites("portfolios");
+const holders = namedRowWrites("holders");
 
 export async function createPortfolio(input: unknown): Promise<WriteResult> {
   return portfolios.create(input);
@@ -71,7 +72,7 @@ const sourceConnection = sourceConnectionInputSchema(
 function sourceConnectionRow(input: SourceConnectionInput) {
   return {
     institution: input.institution,
-    holder_id: input.holder === "self" ? null : input.holder,
+    holder_id: input.holder === SELF_HOLDER ? null : input.holder,
     include_in_tax_report: input.includeInTaxReport,
     default_portfolio_id: input.defaultPortfolioId,
   };

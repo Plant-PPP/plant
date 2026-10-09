@@ -1,17 +1,17 @@
 import type { PortfolioSetupGuardHint } from "@plant/shared";
-import { NAME_LIMITS } from "./limits";
+import { NAME_LIMITS, type SetupTable } from "./limits";
 import type { WriteResultCode } from "./write-result";
-
-export type SetupTable = keyof typeof NAME_LIMITS;
 
 const FAILED = "No pudimos guardar. Probá de nuevo.";
 
 // A guard's hint names the row it refused for, whichever table was written.
 const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
   last_active_portfolio: "Necesitás al menos una cartera activa.",
-  portfolio_in_use: "Esa cartera es la de una cuenta activa.",
+  portfolio_in_use:
+    "Para archivar esta cartera, primero elegí otra en las cuentas que la usan o archivalas.",
   portfolio_archived: "Esa cartera está archivada.",
-  holder_in_use: "Ese titular es el de una cuenta activa.",
+  holder_in_use:
+    "Para archivar este titular, primero elegí otro en las cuentas que lo usan o archivalas.",
   holder_archived: "Ese titular está archivado.",
 };
 
@@ -52,22 +52,33 @@ export const CHOICE_MESSAGES = {
   portfolio: "Elegí una cartera por defecto.",
 } as const;
 
-// "IOL", "IOL y Balanz", "IOL, Balanz y Cocos".
-function listOf(names: string[]): string {
-  return names.length < 2
-    ? names.join("")
-    : `${names.slice(0, -1).join(", ")} y ${names.at(-1)}`;
+// How an account is named in copy: "tu IOL", or "IOL de Lucía".
+export function accountLabel(
+  institution: string,
+  holderName: string | null,
+): string {
+  return holderName === null
+    ? `tu ${institution}`
+    : `${institution} de ${holderName}`;
 }
 
-// The in-use refusals name the accounts behind them, when the page has them.
+// The most accounts an in-use refusal names before "y N más".
+const LISTED_ACCOUNTS = 3;
+
+// The in-use refusals name the accounts behind them, when the page has them:
+// each once, the first few, after a colon so no "y" has to agree with them.
 export function inUseMessage(
   hint: "portfolio_in_use" | "holder_in_use",
-  institutions: string[],
+  accounts: string[],
 ): string {
-  if (institutions.length === 0) return GUARD_MESSAGES[hint];
-  const subject =
-    hint === "portfolio_in_use" ? "Esa cartera es la" : "Ese titular es el";
-  const accounts =
-    institutions.length === 1 ? "una cuenta activa" : "cuentas activas";
-  return `${subject} de ${accounts}: ${listOf(institutions)}.`;
+  const labels = [...new Set(accounts)];
+  if (labels.length === 0) return GUARD_MESSAGES[hint];
+  const shown = labels.slice(0, LISTED_ACCOUNTS).join(", ");
+  const more = labels.length - LISTED_ACCOUNTS;
+  const list = more > 0 ? `${shown} y ${more} más` : shown;
+  const which =
+    labels.length === 1 ? "archivá esta cuenta" : "archivá estas cuentas";
+  return hint === "portfolio_in_use"
+    ? `Para archivar esta cartera, primero elegí otra o ${which}: ${list}.`
+    : `Para archivar este titular, primero elegí otro o ${which}: ${list}.`;
 }

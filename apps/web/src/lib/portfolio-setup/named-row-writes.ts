@@ -7,10 +7,11 @@ import type { WriteResult } from "./write-result";
 // The writes of a table whose rows are a name the user archives and restores:
 // portfolios and holders. The table is fixed by the server action that calls
 // it, never chosen by the browser.
-export function namedRowWrites(
-  table: "portfolios" | "holders",
-  noun: "portfolio" | "holder",
-) {
+// The singular in each write's logged action name.
+const NOUNS = { portfolios: "portfolio", holders: "holder" } as const;
+
+export function namedRowWrites(table: keyof typeof NOUNS) {
+  const noun = NOUNS[table];
   const schema = nameInputSchema(NAME_LIMITS[table].name);
 
   const restore = ({

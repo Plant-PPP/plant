@@ -47,12 +47,15 @@ export const idSchema = z.uuid();
 // The input of a write that takes none, such as an archive.
 export const noInput = z.object({});
 
-// An account's fields. The holder is required, "self" being the user, so a
-// form that never chose one cannot save it as the user's.
+// The holder value that stands for the user, stored as a NULL holder_id.
+export const SELF_HOLDER = "self";
+
+// An account's fields. The holder is required, so a form that never chose one
+// cannot save it as the user's.
 export function sourceConnectionInputSchema(institutionMax: number) {
   return z.object({
     institution: trimmedName(institutionMax),
-    holder: z.union([z.literal("self"), idSchema]),
+    holder: z.union([z.literal(SELF_HOLDER), idSchema]),
     includeInTaxReport: z.boolean(),
     defaultPortfolioId: idSchema,
   });

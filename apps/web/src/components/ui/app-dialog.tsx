@@ -16,6 +16,7 @@ function AppDialog({
   title,
   description,
   returnFocusTo,
+  onEscapeKeyDown,
   children,
 }: {
   onOpenChange: (open: boolean) => void;
@@ -24,6 +25,8 @@ function AppDialog({
   // Where focus goes on close, given the element that opened the dialog when
   // it is still on the page.
   returnFocusTo?: (opener: HTMLElement | null) => HTMLElement | null;
+  // Escape closes the dialog unless this prevents the event's default.
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
   children: React.ReactNode;
 }) {
   // Opened by state with no DialogTrigger, so Radix has no trigger to return
@@ -38,6 +41,7 @@ function AppDialog({
       <DialogContent
         data-slot="app-dialog"
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"
+        onEscapeKeyDown={onEscapeKeyDown}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           // A click does not focus a button in Safari or Firefox on macOS,

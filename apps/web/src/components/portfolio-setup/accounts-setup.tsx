@@ -5,6 +5,7 @@ import type {
   PortfoliosView,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
+import { accountsUsing } from "./accounts-using";
 import { HoldersCard } from "./holders-card";
 import { PortfoliosCard } from "./portfolios-card";
 import { SourceConnectionsCard } from "./source-connections-card";
@@ -20,12 +21,8 @@ export function AccountsSetup({
   portfolios: PortfoliosView;
   holders: HoldersView;
 }) {
-  const usedBy =
-    (key: "portfolio" | "holder") =>
-    (id: string): string[] =>
-      sourceConnections.active
-        .filter((row) => row[key]?.id === id)
-        .map((row) => row.institution);
+  const usedBy = (key: "portfolio" | "holder") => (id: string) =>
+    accountsUsing(sourceConnections.active, key, id);
 
   return (
     <div className="grid gap-6">
