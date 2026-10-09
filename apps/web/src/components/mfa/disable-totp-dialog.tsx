@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormAlert } from "@/components/ui/form-alert";
 import { verifyTotp } from "@/lib/auth/mfa-browser";
 import type { DisableOutcome } from "@/lib/auth/mfa-disable";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
@@ -133,11 +134,7 @@ export function DisableTotpDialog({
               : "Ingresá el código que muestra tu app de autenticación."}
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FormAlert>{error}</FormAlert>}
         {stepUp ? (
           <DialogFooter>
             <Button

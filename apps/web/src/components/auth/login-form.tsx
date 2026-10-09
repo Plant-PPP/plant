@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { CodeInput } from "./code-input";
@@ -105,11 +106,7 @@ export function LoginForm({
 
   return (
     <div className="flex flex-col gap-4">
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FormAlert>{error}</FormAlert>}
       {step === "email" ? (
         <>
           {googleEnabled && (

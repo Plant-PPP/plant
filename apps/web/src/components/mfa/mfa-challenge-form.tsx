@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
+import { FormAlert } from "@/components/ui/form-alert";
 import { verifyTotp } from "@/lib/auth/mfa-browser";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
@@ -43,11 +44,7 @@ export function MfaChallengeForm({
         void verify();
       }}
     >
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FormAlert>{error}</FormAlert>}
       <div className="flex flex-col gap-1.5">
         <label htmlFor={codeId} className="text-sm font-medium">
           Código

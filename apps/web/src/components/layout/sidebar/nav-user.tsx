@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FormAlert } from "@/components/ui/form-alert";
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -120,9 +121,9 @@ export function NavUser({ user }: { user: SessionUser }) {
               Cerrar sesión
             </DropdownMenuItem>
             {failed && (
-              <p role="alert" className="px-2 py-1.5 text-xs text-destructive">
+              <FormAlert className="px-2 py-1.5 text-xs">
                 {SIGN_OUT_FAILED}
-              </p>
+              </FormAlert>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
