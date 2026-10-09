@@ -154,7 +154,7 @@ describe("onRequestError", () => {
     });
   });
 
-  it("warns on an Auth outage thrown from another bundle's class", async () => {
+  it("warns on an unavailable session thrown from another bundle's class", async () => {
     const foreign = Object.assign(new Error("Auth unavailable"), {
       name: "AuthUnavailableError",
       reason: "mfa_claim_missing",

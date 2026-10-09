@@ -113,6 +113,16 @@ describe("sensitiveRequirement", () => {
     expect(sensitiveRequirement(claims, now)).toBe("met");
   });
 
+  it("does not count a fresh TOTP verify next to a stale first factor", () => {
+    const claims = {
+      amr: [
+        { method: "totp", timestamp: now },
+        { method: "otp", timestamp: now - STEP_UP_WINDOW_S - 1 },
+      ],
+    };
+    expect(sensitiveRequirement(claims, now)).toBe("sign_in_again");
+  });
+
   it.each([
     ["no amr", {}],
     ["a string amr", { amr: ["otp"] }],
