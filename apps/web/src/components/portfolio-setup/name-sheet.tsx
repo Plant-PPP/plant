@@ -19,6 +19,7 @@ export function NameSheet({
   submitLabel,
   defaultValue = "",
   returnFocusTo,
+  savedRemovesOpener = false,
   onSubmit,
   onSaved,
 }: {
@@ -27,9 +28,10 @@ export function NameSheet({
   description: string;
   submitLabel: string;
   defaultValue?: string;
-  // Where focus goes once the name is saved; a cancel returns it to the
-  // opener.
-  returnFocusTo?: () => HTMLElement | null;
+  // Where focus goes when the opener is gone, and after a save that removes
+  // it (savedRemovesOpener): the save's refresh may land after the close.
+  returnFocusTo: () => HTMLElement | null;
+  savedRemovesOpener?: boolean;
   onSubmit: (name: string) => Promise<WriteResult>;
   onSaved: (name: string) => void;
 }) {
@@ -38,6 +40,7 @@ export function NameSheet({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const saved = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
 
   function submit(form: HTMLFormElement) {
     const name = String(new FormData(form).get("name") ?? "");
@@ -48,7 +51,10 @@ export function NameSheet({
         saved.current = true;
         onSaved(name.trim());
         onClose();
-      } else setError(answer.text);
+      } else {
+        setError(answer.text);
+        input.current?.focus();
+      }
     });
   }
 
@@ -57,7 +63,11 @@ export function NameSheet({
       onOpenChange={(open) => !open && !pending && onClose()}
       title={title}
       description={description}
-      returnFocusTo={() => (saved.current ? (returnFocusTo?.() ?? null) : null)}
+      returnFocusTo={(opener) =>
+        (saved.current && savedRemovesOpener) || !opener
+          ? returnFocusTo()
+          : opener
+      }
     >
       <form
         className="flex flex-1 flex-col"
@@ -69,6 +79,7 @@ export function NameSheet({
         <div className="grid gap-2 p-4">
           <Label htmlFor={inputId}>Nombre</Label>
           <Input
+            ref={input}
             id={inputId}
             name="name"
             defaultValue={defaultValue}

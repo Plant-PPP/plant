@@ -29,7 +29,7 @@ export type PortfoliosView = {
 };
 
 // The param that pages the archived portfolios.
-export const ARCHIVED_PORTFOLIOS_PARAM = "carteras";
+const ARCHIVED_PORTFOLIOS_PARAM = "carteras";
 
 const EVENT = "portfolio_setup.read";
 

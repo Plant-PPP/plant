@@ -34,7 +34,7 @@ function trimmedName(max: number) {
     .overwrite((name) =>
       name
         .replace(/\s+/gu, " ")
-        .replace(/(\p{Emoji_Presentation})\uFE0F/gu, "$1"),
+        .replace(/(\p{Emoji_Presentation})\uFE0F+/gu, "$1"),
     )
     .min(1)
     .max(max)

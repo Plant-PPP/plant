@@ -17,7 +17,7 @@ import {
 } from "./write-result";
 import { currentRequestId } from "@/lib/request-id-server";
 
-export type PortfolioSetupAction =
+type PortfolioSetupAction =
   | "create_portfolio"
   | "rename_portfolio"
   | "archive_portfolio"

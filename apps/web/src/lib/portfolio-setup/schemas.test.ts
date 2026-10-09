@@ -72,6 +72,9 @@ describe("nameInputSchema", () => {
     expect(schema.parse({ name: "Ahorro \u{1F44D}\ufe0f" })).toEqual({
       name: "Ahorro \u{1F44D}",
     });
+    expect(schema.parse({ name: "Ahorro \u{1F44D}\ufe0f\ufe0f" })).toEqual({
+      name: "Ahorro \u{1F44D}",
+    });
     expect(schema.parse({ name: "Ahorro \u2764\ufe0f" })).toEqual({
       name: "Ahorro \u2764\ufe0f",
     });

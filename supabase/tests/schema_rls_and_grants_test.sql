@@ -30,6 +30,8 @@
 --   private, the only SECURITY DEFINER
 --   functions are the signup, session and MFA factor triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
+-- - Every SECURITY DEFINER function, and every function in private, sets its
+--   search_path.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
 -- - plpgsql_check finds no error in any function, trigger functions checked
 --   against each table they fire on.

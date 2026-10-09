@@ -21,9 +21,9 @@ function AppSheet({
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  // Where focus goes on close instead of the element that opened the sheet,
-  // when it returns one.
-  returnFocusTo?: () => HTMLElement | null;
+  // Where focus goes on close, given the element that opened the sheet when
+  // it is still on the page.
+  returnFocusTo?: (opener: HTMLElement | null) => HTMLElement | null;
   children: React.ReactNode;
 }) {
   // Opened by state rather than a SheetTrigger, so Radix has no trigger to
@@ -40,10 +40,10 @@ function AppSheet({
         className="w-full gap-0 sm:max-w-md"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          const target = returnFocusTo?.() ?? opener;
-          if (target instanceof HTMLElement && target.isConnected) {
-            target.focus();
-          }
+          const present =
+            opener instanceof HTMLElement && opener.isConnected ? opener : null;
+          const target = returnFocusTo ? returnFocusTo(present) : present;
+          if (target?.isConnected) target.focus();
         }}
       >
         <SheetHeader className="border-b pr-10">

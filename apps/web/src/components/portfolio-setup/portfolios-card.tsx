@@ -206,6 +206,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
       {sheet?.kind === "create" && (
         <NameSheet
           onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
           title="Nueva cartera"
           description="Elegí un nombre para la cartera."
           submitLabel="Crear"
@@ -217,12 +218,14 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
         <NameSheet
           key={sheet.row.id}
           onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
           title="Renombrar cartera"
           description="Elegí el nuevo nombre."
           submitLabel="Guardar"
           defaultValue={sheet.row.name}
           onSubmit={(name) => renamePortfolio(sheet.row.id, { name })}
           onSaved={(name) =>
+            name !== sheet.row.name &&
             setNotice(`Renombraste ${sheet.row.name} a ${name}.`)
           }
         />
@@ -232,6 +235,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           key={sheet.row.id}
           onClose={() => setSheet(null)}
           returnFocusTo={focusHeading}
+          savedRemovesOpener
           title="Restaurar cartera"
           description="Ya tenés una cartera activa con ese nombre. Elegí otro para restaurarla."
           submitLabel="Restaurar"
