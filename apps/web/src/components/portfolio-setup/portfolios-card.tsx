@@ -22,7 +22,8 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { StatusNotice } from "@/components/ui/status-notice";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
-import { rowAnswer, settle } from "./answers";
+import { settle } from "@/lib/server-action-call";
+import { rowAnswer } from "./answers";
 import { NameSheet } from "./name-sheet";
 
 const PENDING_ROW_BUTTON = "aria-disabled:opacity-50";
