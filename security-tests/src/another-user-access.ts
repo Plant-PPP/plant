@@ -1,6 +1,7 @@
 import {
-  expectError,
+  expectNoAuthUsersEmbed,
   expectOnlyOwnRows,
+  expectRelationDenied,
   rest,
   rowsOf,
   users,
@@ -9,13 +10,14 @@ import type { OwnedTable } from "./reference-rows";
 
 const { a, b } = users;
 
-// What another user can try on any owned table, whatever its grants: A reads
-// and deletes B's rows. Both users need rows before it runs. The cases that
-// depend on the table's grants go in `writes`, which shares the check that B's
-// rows never change.
+// What another user can try on every owned table: A reads and deletes B's
+// rows. Both users need rows before it runs. The DELETE case expects the table
+// refused because no owned table grants DELETE; under a grant RLS would answer
+// 204 and leave B's rows alone. The cases specific to the table go in `cases`,
+// which shares the check that B's rows never change.
 export function describeAnotherUserAccess(
   table: OwnedTable,
-  writes: () => void = () => {},
+  cases: () => void,
 ): void {
   describe(`another user on ${table}`, () => {
     let before: string[];
@@ -36,21 +38,20 @@ export function describeAnotherUserAccess(
     });
 
     test("DELETE of B's rows is denied", async () => {
-      expectError(await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`), 403);
+      expectRelationDenied(
+        await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`),
+        table,
+      );
     });
 
     test("embedding auth users is not possible", async () => {
-      expectError(
-        await rest(a, "GET", `${table}?select=*,users(*)`),
-        400,
-        "PGRST200",
-      );
+      await expectNoAuthUsersEmbed(a, table);
     });
 
     test("an unfiltered GET returns only its own rows", async () => {
       await expectOnlyOwnRows(a, table);
     });
 
-    writes();
+    cases();
   });
 }

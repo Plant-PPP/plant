@@ -1,5 +1,6 @@
 import {
   expectError,
+  expectNoAuthUsersEmbed,
   expectRelationDenied,
   readEnv,
   rest,
@@ -71,11 +72,7 @@ export function describeReferenceTable(table: ReferenceTable): void {
     });
 
     test("embedding auth users is not possible", async () => {
-      expectError(
-        await rest(a, "GET", `${table}?select=*,users(*)`),
-        400,
-        "PGRST200",
-      );
+      await expectNoAuthUsersEmbed(a, table);
     });
   });
 
