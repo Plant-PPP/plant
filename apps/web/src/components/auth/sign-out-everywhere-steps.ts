@@ -8,8 +8,9 @@ export type SignOutEverywhereOutcome =
 
 // Other devices first, then this one the way the user menu signs out. When
 // this session had already ended (another device, a timeout), nothing was
-// revoked and the user signs in again to retry. auth-js reports Auth's refusal of a dead
-// session's revoke as a success, so Auth is asked about the session after it.
+// revoked and the user signs in again to retry. auth-js reports Auth's
+// refusal of a dead session's revoke as a success, so Auth is asked about the
+// session after it.
 // Any other failure, of the revoke or of that check, keeps this session for a
 // retry: the revoke cannot be confirmed.
 export async function signOutEverywhere(

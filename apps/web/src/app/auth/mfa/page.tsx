@@ -69,7 +69,7 @@ export default async function MfaPage({
   if (problem === "no_totp_factor" || problem === "session_ended") {
     serverLog.warn("auth.mfa_page", await logFields(claims.sub, problem));
   }
-  if (problem === "session_ended") redirect(loginErrorPath("session_ended"));
+  if (problem === "session_ended") redirect(loginErrorPath("signed_out", next));
 
   return (
     <AuthShell>

@@ -1,4 +1,5 @@
 import { authErrorSlug, loginErrorMessage } from "./login-errors";
+import { isSessionMissing } from "./session-state";
 import type { AuthFailure } from "./use-auth-request";
 
 const WRONG_CODE =
@@ -24,6 +25,7 @@ const MFA_ERRORS: ReadonlyMap<string, string> = new Map([
 
 // Rate limits and anything else read as they do at sign-in.
 export function mfaErrorMessage(failure: AuthFailure): string {
+  if (isSessionMissing(failure)) return loginErrorMessage("signed_out")!;
   return (
     MFA_ERRORS.get(failure.code ?? "") ??
     loginErrorMessage(authErrorSlug(failure))!

@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { verifyTotp } from "@/lib/auth/mfa-browser";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
-import { useAuthRequest } from "@/lib/auth/use-auth-request";
+import { loginErrorPath } from "@/lib/auth/login-errors";
+import { isSessionMissing } from "@/lib/auth/session-state";
+import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 
 export function MfaChallengeForm({
@@ -21,13 +23,20 @@ export function MfaChallengeForm({
   const { run, pending, error } = useAuthRequest(mfaErrorMessage);
 
   async function verify() {
+    let ended = false;
     const verified = await run(async () => {
-      await verifyTotp(createClient(), factorId, code);
-      return null;
+      const failure = await attempt(async () => {
+        await verifyTotp(createClient(), factorId, code);
+        return null;
+      });
+      // Another device's verify, or a timeout, ended this session.
+      ended = failure !== null && isSessionMissing(failure);
+      return failure;
     });
     // A full load, so the proxy and the server read the aal2 session instead
     // of claims or a prefetch cached at aal1.
     if (verified) window.location.assign(next);
+    else if (ended) window.location.assign(loginErrorPath("signed_out", next));
     else setCode("");
   }
 

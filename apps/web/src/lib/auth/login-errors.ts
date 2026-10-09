@@ -9,6 +9,7 @@ export const LOGIN_ERROR_SLUGS = [
   "callback",
   "oauth",
   "session_ended",
+  "signed_out",
   "generic",
 ] as const;
 
@@ -26,6 +27,7 @@ const COPY: Record<LoginErrorSlug, string> = {
   oauth: "No pudimos entrar con Google. Probá de nuevo.",
   session_ended:
     "Tu sesión ya se había cerrado. Ingresá de nuevo y cerrá la sesión en todos tus dispositivos.",
+  signed_out: "Tu sesión se cerró. Ingresá de nuevo.",
   generic: "Algo salió mal. Probá de nuevo.",
 };
 
@@ -36,8 +38,10 @@ export function loginErrorMessage(slug: unknown): string | undefined {
   return typeof slug === "string" ? LOGIN_ERRORS.get(slug) : undefined;
 }
 
-export function loginErrorPath(slug: LoginErrorSlug): string {
-  return `${LOGIN_PATH}?error=${slug}`;
+// next is where to go after signing in again.
+export function loginErrorPath(slug: LoginErrorSlug, next?: string): string {
+  const path = `${LOGIN_PATH}?error=${slug}`;
+  return next ? `${path}&next=${encodeURIComponent(next)}` : path;
 }
 
 // Sign-in errors from Auth, by code. session-state.ts reads the refresh codes.

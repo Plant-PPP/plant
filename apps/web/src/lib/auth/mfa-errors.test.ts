@@ -16,6 +16,15 @@ it.each(["mfa_totp_enroll_not_enabled", "mfa_totp_verify_not_enabled"])(
   },
 );
 
+it.each([{ name: "AuthSessionMissingError" }, { code: "session_not_found" }])(
+  "asks to sign in again when the session has ended (%p)",
+  (failure) => {
+    expect(mfaErrorMessage(failure)).toBe(
+      "Tu sesión se cerró. Ingresá de nuevo.",
+    );
+  },
+);
+
 it("reads a rate limit as the sign-in does", () => {
   expect(mfaErrorMessage({ code: "over_request_rate_limit" })).toBe(
     "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo.",

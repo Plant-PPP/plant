@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export type AuthFailure = { code?: string };
+export type AuthFailure = { code?: string; name?: string };
 
 // One request to Auth at a time, with its error as Spanish copy. pending stays
 // true after a success, so a second click cannot reuse a spent code; a caller
@@ -40,15 +40,18 @@ export function useAuthRequest(
   return { run, pending, setPending, error, setError };
 }
 
-// The action's failure, or null on success. A thrown error keeps its code, so
-// a helper that throws Auth's error reads like one that returns it.
+// The action's failure, or null on success. A thrown error keeps its code and
+// name, so a helper that throws Auth's error reads like one that returns it.
 export async function attempt(
   action: () => Promise<AuthFailure | null>,
 ): Promise<AuthFailure | null> {
   try {
     return await action();
   } catch (thrown) {
-    const code = (thrown as { code?: unknown } | null)?.code;
-    return { code: typeof code === "string" ? code : undefined };
+    const { code, name } = (thrown ?? {}) as { code?: unknown; name?: unknown };
+    return {
+      code: typeof code === "string" ? code : undefined,
+      name: typeof name === "string" ? name : undefined,
+    };
   }
 }

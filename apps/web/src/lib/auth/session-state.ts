@@ -19,6 +19,8 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
   if (!error) return true;
   return (
     isAuthSessionMissingError(error) ||
+    // By name too: a failure copied out of a thrown error keeps only that.
+    error.name === "AuthSessionMissingError" ||
     error.name === "AuthInvalidJwtError" ||
     SESSION_GONE_CODES.has(error.code ?? "")
   );

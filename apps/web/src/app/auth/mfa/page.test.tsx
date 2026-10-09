@@ -1,4 +1,4 @@
-import { AuthSessionMissingError } from "@supabase/supabase-js";
+import { AuthApiError, AuthSessionMissingError } from "@supabase/supabase-js";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const readSessionClaims = jest.fn();
@@ -96,12 +96,14 @@ it("says so, and logs it, when the user has no TOTP factor", async () => {
   });
 });
 
-it("sends a session that has ended to sign in again", async () => {
-  listFactors.mockResolvedValue({
-    data: null,
-    error: new AuthSessionMissingError(),
-  });
-  await expect(render()).rejects.toThrow("redirect /login?error=session_ended");
+it.each([
+  new AuthSessionMissingError(),
+  new AuthApiError("User not found", 403, "user_not_found"),
+])("sends a session that has ended to sign in again (%p)", async (error) => {
+  listFactors.mockResolvedValue({ data: null, error });
+  await expect(render("/debts")).rejects.toThrow(
+    "redirect /login?error=signed_out&next=%2Fdebts",
+  );
   expect(log.warn).toHaveBeenCalledWith(
     "auth.mfa_page",
     expect.objectContaining({ "plant.outcome": "session_ended" }),

@@ -73,7 +73,7 @@ it("keeps the code of a thrown Auth error", async () => {
         code: "mfa_verification_failed",
       });
     }),
-  ).resolves.toEqual({ code: "mfa_verification_failed" });
+  ).resolves.toEqual({ code: "mfa_verification_failed", name: "Error" });
 });
 
 it.each([new Error("network"), null, "text", { code: 42 }])(
@@ -83,7 +83,7 @@ it.each([new Error("network"), null, "text", { code: 42 }])(
       attempt(async () => {
         throw thrown;
       }),
-    ).resolves.toEqual({ code: undefined });
+    ).resolves.toEqual(expect.objectContaining({ code: undefined }));
   },
 );
 
