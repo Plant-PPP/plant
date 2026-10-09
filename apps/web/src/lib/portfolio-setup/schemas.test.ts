@@ -1,0 +1,40 @@
+import { idSchema, nameInputSchema } from "./schemas";
+
+const schema = nameInputSchema(40);
+
+describe("nameInputSchema", () => {
+  test("trims the name", () => {
+    expect(schema.parse({ name: "  Largo plazo " })).toEqual({
+      name: "Largo plazo",
+    });
+  });
+
+  test.each(["", "   ", "　"])("refuses a blank name %j", (name) => {
+    expect(schema.safeParse({ name }).success).toBe(false);
+  });
+
+  test("accepts a name at the limit and refuses one past it", () => {
+    expect(schema.safeParse({ name: "a".repeat(40) }).success).toBe(true);
+    expect(schema.safeParse({ name: "a".repeat(41) }).success).toBe(false);
+  });
+
+  // char_length counts code points, so an emoji is one character.
+  test("counts an emoji as one character", () => {
+    expect(schema.safeParse({ name: "🌱".repeat(40) }).success).toBe(true);
+    expect(schema.safeParse({ name: "🌱".repeat(41) }).success).toBe(false);
+  });
+
+  test("refuses a missing name", () => {
+    expect(schema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("idSchema", () => {
+  test("accepts a uuid and refuses anything else", () => {
+    expect(
+      idSchema.safeParse("6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b").success,
+    ).toBe(true);
+    expect(idSchema.safeParse("1").success).toBe(false);
+    expect(idSchema.safeParse("eq.1").success).toBe(false);
+  });
+});
