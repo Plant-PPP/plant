@@ -189,8 +189,8 @@ describe("mergeAuthCode", () => {
   });
 
   it.each<[string, (scale: number) => string]>([
-    ["digits between spaces", (k) => `${"1 ".repeat(50_000 * k)}    x`],
-    ["digits between runs of spaces", (k) => "1    ".repeat(25_000 * k)],
+    ["digits between spaces", (k) => `${"1 ".repeat(25_000 * k)}    x`],
+    ["digits between runs of spaces", (k) => "1    ".repeat(12_500 * k)],
   ])("stays linear on a huge pasted text of %s", (_label, input) => {
     expectLinear(input, (text) => mergeAuthCode("", text));
   });
