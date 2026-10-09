@@ -10,7 +10,7 @@
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
 -- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
---   table copies it from the mfa_gate migration. The first Storage bucket or
+--   table copies it from enforce-owner-isolation's house form. The first Storage bucket or
 --   private Realtime channel adds the same predicate and its assert here, and a
 --   sensitive check written in SQL joins the truth table in mfa_gate_test.sql.
 -- - Views granted to authenticated run as the caller, and materialized views

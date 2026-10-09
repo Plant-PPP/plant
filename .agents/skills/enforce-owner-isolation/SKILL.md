@@ -150,7 +150,7 @@ mention is UNCHECKED, not passed.
   leaks over the socket as well as over REST. Storage objects (uploaded broker files) need bucket
   policies that pin the path's `<user_id>/` prefix to `(select auth.uid())`; a private bucket with an
   `authenticated`-wide policy is a shared bucket. The first bucket also gets the house form's MFA gate on
-  `storage.objects` and its floor assert: the floor checks only `public`.
+  `storage.objects` and its floor assert: the floor's gate assert checks only `public`.
 
 ## Law 4 — Bypass-carries-its-own-boundary
 
