@@ -248,6 +248,9 @@ it.each([
   ["/api/inngest/fn", false],
   ["/api/inngest-admin", true],
   ["/brand/logotipo-mail.png", false],
+  ["/login", true],
+  ["/auth/callback", true],
+  ["/auth/mfa", true],
 ])("runs on %s: %p", (path, runs) => {
   const [matcher = ""] = config.matcher;
   const parsed = tryToParsePath(matcher);
@@ -565,7 +568,11 @@ describe("the MFA check", () => {
 
   it("lets an unverified session reach the MFA step", async () => {
     getClaims = unverified;
-    const res = await proxy(request("/auth/mfa?next=%2Fassets"));
+    const res = await proxy(
+      request("/auth/mfa?next=%2Fassets", {
+        "x-plant-auth": "auth_unavailable",
+      }),
+    );
     expect(res.headers.get("location")).toBeNull();
     expect(forwarded(res, "x-plant-auth")).toBeNull();
     expect(logged()).toMatchObject({
@@ -592,6 +599,24 @@ describe("the MFA check", () => {
       "http://localhost:3000/auth/mfa?next=%2Fassets",
     );
     expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+    for (const [key, value] of Object.entries(CACHE_HEADERS)) {
+      expect(res.headers.get(key)).toBe(value);
+    }
+  });
+
+  it("shows the retry on the MFA step for a token without the claim, whatever the client sent", async () => {
+    getClaims = async () => ({
+      data: { claims: { sub: "u", aal: "aal1" } },
+      error: null,
+    });
+    const res = await proxy(
+      request("/auth/mfa", { "x-plant-auth": "auth_unavailable" }),
+    );
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBe("mfa_claim_missing");
+    expect(logged().line).toMatchObject({
+      "plant.outcome": "mfa_claim_missing",
+    });
   });
 
   it.each([
