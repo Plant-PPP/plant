@@ -23,9 +23,26 @@ describe("buenosAiresHour", () => {
     ["2026-10-09T20:59:59.999Z", 17],
     ["2026-10-09T21:00:00.000Z", 18],
     ["2026-10-10T02:59:59.999Z", 23],
+    // Summer time, UTC-2.
+    ["2008-12-01T20:00:00.000Z", 18],
   ])("reads %s as hour %i", (instant, hour) => {
     expect(buenosAiresHour(new Date(instant))).toBe(hour);
   });
+});
+
+describe("an invalid Date", () => {
+  it.each([
+    ["buenosAiresDate", buenosAiresDate],
+    ["buenosAiresHour", buenosAiresHour],
+  ])("makes %s throw", (_name, read) => {
+    expect(() => read(new Date(Number.NaN))).toThrow(RangeError);
+  });
+});
+
+// jest.config.cjs sets the process time zone, so these tests fail if the
+// helpers read local time.
+it("runs in a process time zone other than UTC and Buenos Aires", () => {
+  expect(new Date(0).getTimezoneOffset()).toBe(-540);
 });
 
 describe("startOfBuenosAiresDay", () => {
