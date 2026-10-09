@@ -150,10 +150,6 @@ describe("mergeAuthCode", () => {
     }
   });
 
-  it("takes a whole code dropped after digits", () => {
-    expect(mergeAuthCode("12", `12${mail("654321")}`)).toBe("654321");
-  });
-
   it("keeps only the first group past a long separator", () => {
     expect(mergeAuthCode("", "123 -- 456")).toBe("123");
   });
@@ -166,6 +162,15 @@ describe("mergeAuthCode", () => {
         );
       }
     }
+  });
+
+  it("takes a code that a date or reference precedes on its line", () => {
+    expect(mergeAuthCode("", "10/10/2026 654321")).toBe("654321");
+    expect(mergeAuthCode("", "Ref 12 654321")).toBe("654321");
+  });
+
+  it("replaces a full wrong code with a split code pasted after it", () => {
+    expect(mergeAuthCode("111111", "111111654-321")).toBe("654321");
   });
 
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {

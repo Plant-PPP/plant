@@ -7,7 +7,8 @@ const WORD = /[0-9A-Za-zÀ-ɏ@_]/;
 const HALVES = [Math.floor(OTP_LENGTH / 2), Math.ceil(OTP_LENGTH / 2)];
 
 // Pasted text can carry the mail's other numbers (a date, "10 minutos", an
-// address), so a whole code in it wins, written plainly or split in halves;
+// address), so a whole code in it wins: written plainly or split in halves,
+// then a code-length group inside a longer number ("10/10/2026 654321");
 // otherwise its first number counts.
 function codeIn(text: string): string {
   const numbers = [...text.matchAll(NUMBER)].map((match) => {
@@ -22,9 +23,12 @@ function codeIn(text: string): string {
     n.groups.map((g) => g.length).join();
   const code =
     numbers.find((n) => n.alone && sizes(n) === `${OTP_LENGTH}`) ??
-    numbers.find((n) => n.alone && sizes(n) === HALVES.join()) ??
-    numbers[0];
-  return code ? code.groups.join("") : "";
+    numbers.find((n) => n.alone && sizes(n) === HALVES.join());
+  if (code) return code.groups.join("");
+  const group = numbers
+    .flatMap((n) => n.groups)
+    .find((g) => g.length === OTP_LENGTH);
+  return group ?? numbers[0]?.groups.join("") ?? "";
 }
 
 // The field's new text after an edit at the end, where its caret always is.

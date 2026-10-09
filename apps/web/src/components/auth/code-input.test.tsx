@@ -12,7 +12,7 @@ it("is one field the phone can fill with the mailed code", () => {
   expect(html).toContain('inputMode="numeric"');
   // A length cap would drop a code pasted after the digits already there, and
   // disabling it while the code is checked would drop focus and the keyboard.
-  expect(html).not.toMatch(/maxLength|disabled/);
+  expect(html).not.toMatch(/<input[^>]*\s(maxLength|disabled)[=\s>]/);
 });
 
 it("takes the id its label points at", () => {
@@ -25,4 +25,8 @@ it("is 16px, so iOS does not zoom into it", () => {
 
 it("hides the boxes from screen readers", () => {
   expect(html.match(/aria-hidden="true"/g)).toHaveLength(OTP_LENGTH);
+});
+
+it("takes its name only from its label", () => {
+  expect(html).not.toMatch(/aria-label/);
 });
