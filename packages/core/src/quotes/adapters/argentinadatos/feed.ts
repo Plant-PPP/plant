@@ -13,14 +13,14 @@ const responseSchema = z.array(
 );
 
 // The series runs ahead of today, so the row is the latest entry not after
-// today; a series that lags yields an older row, which the window drops.
+// today (the last one listed, if a day repeats); a series that lags yields an older row, which the window drops.
 export function parse(json: unknown, now: Date): RawQuoteRows {
   const parsed = responseSchema.safeParse(json);
   if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
   const today = buenosAiresDate(now);
   let latest: { fecha: string; valor: number } | undefined;
   for (const entry of parsed.data) {
-    if (entry.fecha <= today && (!latest || entry.fecha > latest.fecha)) {
+    if (entry.fecha <= today && (!latest || entry.fecha >= latest.fecha)) {
       latest = entry;
     }
   }

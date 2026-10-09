@@ -1,5 +1,30 @@
 import { createArgentinadatosFeed, parse } from "./feed";
 
+describe("argentinadatos parse edges", () => {
+  const now = new Date("2026-10-09T13:00:00.000Z");
+
+  it("keeps the last of two entries for today", () => {
+    const rows = parse(
+      [
+        { fecha: "2026-10-09", valor: 1 },
+        { fecha: "2026-10-09", valor: 2 },
+      ],
+      now,
+    );
+    expect(rows.fxRates.map((row) => row.sell)).toEqual(["2"]);
+  });
+
+  it("returns no row for an empty series", () => {
+    expect(parse([], now)).toEqual({ fxRates: [], prices: [] });
+  });
+
+  it("throws bad_shape on an impossible date", () => {
+    expect(() => parse([{ fecha: "2026-02-30", valor: 1 }], now)).toThrow(
+      expect.objectContaining({ code: "bad_shape" }),
+    );
+  });
+});
+
 // 2026-10-09 10:00 in Buenos Aires.
 const NOW = new Date("2026-10-09T13:00:00.000Z");
 
@@ -60,5 +85,25 @@ describe("createArgentinadatosFeed", () => {
     expect(urls).toEqual([
       "https://api.argentinadatos.com/v1/finanzas/indices/uva",
     ]);
+  });
+});
+
+describe("argentinadatos parse on a hostile answer", () => {
+  it("leaves an exponent valor for the schemas to refuse", () => {
+    const rows = parse([{ fecha: "2026-10-09", valor: 1e-7 }], NOW);
+    expect(rows.fxRates[0]?.sell).toBe("1e-7");
+  });
+
+  it("ignores an entry dated far in the future", () => {
+    const rows = parse([...SERIES, { fecha: "9999-12-31", valor: 1 }], NOW);
+    expect(rows.fxRates[0]?.rate_date).toBe("2026-10-09");
+  });
+
+  it("reads a series of 200 000 entries", () => {
+    const series = Array.from({ length: 200_000 }, (_, i) => ({
+      fecha: "2000-01-01",
+      valor: i + 1,
+    }));
+    expect(parse(series, NOW).fxRates[0]?.sell).toBe("200000");
   });
 });

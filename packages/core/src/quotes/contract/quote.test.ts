@@ -173,3 +173,114 @@ describe("QuoteFeedError", () => {
     ]);
   });
 });
+
+describe("checkBatch against the quotes table", () => {
+  // Postgres refuses a time zone offset beyond ±15:59, which would fail the
+  // whole insert.
+  it.each(["+16:00", "+23:59", "-23:59"])(
+    "never keeps a quoted_at offset of %s",
+    (offset) => {
+      const batch = checkBatch(
+        {
+          fxRates: [fx({ quoted_at: `2026-10-09T20:00:00${offset}` })],
+          prices: [],
+        },
+        NOW,
+      );
+      for (const row of batch.fxRates) {
+        expect(row.quoted_at).not.toMatch(/[+-](1[6-9]|2\d):\d\d$/);
+      }
+    },
+  );
+
+  it.each(["1e-7", "1e+21", "Infinity", "0.30000000000000004"])(
+    "counts a price of %s as invalid",
+    (value) => {
+      const batch = checkBatch(
+        { fxRates: [], prices: [price({ price: value })] },
+        NOW,
+      );
+      expect(counts(batch)).toEqual({
+        fxRates: 0,
+        prices: 0,
+        staleCount: 0,
+        invalidCount: 1,
+      });
+    },
+  );
+});
+
+describe("quote edges", () => {
+  it.each([
+    ["equal with padding", "1000.00000000", "1000", true],
+    ["0.09 below 0.1", "0.09", "0.1", true],
+    ["0.1 above 0.09", "0.1", "0.09", false],
+    ["9.99999999 below 10", "9.99999999", "10", true],
+    ["10 above 9.99999999", "10", "9.99999999", false],
+    ["one unit in the last decimal", "1.00000001", "1", false],
+  ])("buy vs sell, %s", (_label, buy, sell, kept) => {
+    const batch = checkBatch({ fxRates: [fx({ buy, sell })], prices: [] }, NOW);
+    expect(batch.fxRates).toHaveLength(kept ? 1 : 0);
+    expect(batch.invalidCount).toBe(kept ? 0 : 1);
+  });
+
+  it("counts a row both invalid and stale only as invalid", () => {
+    const batch = checkBatch(
+      {
+        fxRates: [fx({ rate_date: "2026-10-08", sell: "0" })],
+        prices: [price({ price_date: "2026-10-08", price: "" })],
+      },
+      NOW,
+    );
+    expect(counts(batch)).toEqual({
+      fxRates: 0,
+      prices: 0,
+      staleCount: 0,
+      invalidCount: 2,
+    });
+  });
+
+  it("keeps a fresh row when a later duplicate is invalid", () => {
+    const batch = checkBatch(
+      { fxRates: [fx({ sell: "1450" }), fx({ sell: "0" })], prices: [] },
+      NOW,
+    );
+    expect(batch.fxRates.map((row) => row.sell)).toEqual(["1450"]);
+    expect(batch.invalidCount).toBe(1);
+  });
+
+  it("dedupes only the rows left after the stale ones", () => {
+    const batch = checkBatch(
+      {
+        fxRates: [
+          fx({ sell: "1450" }),
+          fx({ rate_date: "2026-10-08", sell: "1500" }),
+          fx({ sell: "1460" }),
+        ],
+        prices: [],
+      },
+      NOW,
+    );
+    expect(batch.fxRates.map((row) => row.sell)).toEqual(["1460"]);
+    expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
+  });
+
+  it.each([
+    ["yesterday", "2026-10-08"],
+    ["tomorrow", "2026-10-10"],
+  ])("leaves 18:00 rows dated %s out of the window", (_label, date) => {
+    const sixPm = new Date("2026-10-09T21:00:00.000Z");
+    expect(inQuoteWindow("mep", date, sixPm)).toBe(false);
+    expect(inQuoteWindow("price", date, sixPm)).toBe(false);
+    expect(inQuoteWindow("uva", date, sixPm)).toBe(false);
+  });
+
+  it("closes the window at midnight in Buenos Aires", () => {
+    const lastMs = new Date("2026-10-10T02:59:59.999Z");
+    const midnight = new Date("2026-10-10T03:00:00.000Z");
+    expect(inQuoteWindow("mep", TODAY, lastMs)).toBe(true);
+    expect(inQuoteWindow("mep", TODAY, midnight)).toBe(false);
+    expect(inQuoteWindow("mep", "2026-10-10", midnight)).toBe(false);
+    expect(inQuoteWindow("uva", "2026-10-10", midnight)).toBe(true);
+  });
+});

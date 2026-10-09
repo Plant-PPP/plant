@@ -1,5 +1,30 @@
 import { createKrakenFeed, parse } from "./feed";
 
+describe("kraken parse edges", () => {
+  const now = new Date("2026-10-09T21:30:00.000Z");
+
+  it("ignores unknown keys and pairs it did not ask for", () => {
+    const rows = parse(
+      {
+        error: [],
+        extra: { anything: 1 },
+        result: {
+          XXBTZUSD: { c: ["100.5", "1"], z: "unknown" },
+          DOGEUSD: { c: ["0.1", "1"] },
+        },
+      },
+      now,
+    );
+    expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual([
+      ["BTC", "100.5"],
+      ["ETH", ""],
+      ["SOL", ""],
+      ["USDT", ""],
+      ["USDC", ""],
+    ]);
+  });
+});
+
 const NOW = new Date("2026-10-09T21:30:00.000Z");
 
 const ticker = (last: string) => ({ a: ["1", "1", "1"], c: [last, "0.001"] });
@@ -72,5 +97,28 @@ describe("createKrakenFeed", () => {
     expect(urls).toEqual([
       "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,USDTUSD,USDCUSD",
     ]);
+  });
+});
+
+describe("kraken parse on a hostile answer", () => {
+  it("does not read a pair through a __proto__ key", () => {
+    const json: unknown = JSON.parse(
+      '{"error":[],"result":{"__proto__":{"c":["9","9"],"XXBTZUSD":{"c":["9","9"]}}}}',
+    );
+    const rows = parse(json, NOW);
+    expect(rows.prices.map((row) => row.price)).toEqual(["", "", "", "", ""]);
+    expect(Object.prototype).not.toHaveProperty("c");
+  });
+
+  it("keeps Kraken's error text out of the message", () => {
+    expect(() => parse({ error: ["EGeneral:secret detail"] }, NOW)).toThrow(
+      expect.objectContaining({ message: "provider_error" }),
+    );
+  });
+
+  it("throws bad_shape on a non-string error", () => {
+    expect(() => parse({ error: [{ detail: "x" }] }, NOW)).toThrow(
+      expect.objectContaining({ code: "bad_shape" }),
+    );
   });
 });

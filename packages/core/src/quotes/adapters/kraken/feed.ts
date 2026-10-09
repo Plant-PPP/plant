@@ -31,13 +31,14 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
   }
   const result = parsed.data.result ?? {};
   const instant = now.toISOString();
+  const today = buenosAiresDate(now);
   return {
     fxRates: [],
     // A pair missing from the answer gets an empty price, which the schemas
     // count as invalid.
     prices: PAIRS.map(({ symbol, resultKey }) => ({
       symbol,
-      price_date: buenosAiresDate(now),
+      price_date: today,
       price: result[resultKey]?.c[0] ?? "",
       currency: "USD",
       source: "kraken",

@@ -1,6 +1,7 @@
 import {
   buenosAiresDate,
   buenosAiresHour,
+  compareDecimals,
   Constants,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -8,8 +9,8 @@ import { z } from "zod";
 
 const { currency, fx_rate_kind, quote_source } = Constants.public.Enums;
 
-export const quoteSourceSchema = z.enum(quote_source);
-export type QuoteSource = z.infer<typeof quoteSourceSchema>;
+const quoteSourceSchema = z.enum(quote_source);
+export type QuoteSource = (typeof quote_source)[number];
 export type FxRateKind = (typeof fx_rate_kind)[number];
 
 // The prices.symbol CHECK in the quotes migration uses the same pattern.
@@ -19,20 +20,18 @@ export const SYMBOL_PATTERN = /^[A-Z0-9]{1,15}$/;
 // day keeps its closing value; MEP and CCL close at 17:00.
 export const QUOTE_CLOSE_HOUR = 18;
 
-// Compares two positive decimal strings exactly; a float would round 20 digits.
-function compareDecimals(a: string, b: string): number {
-  const [aInt = "", aFrac = ""] = a.split(".");
-  const [bInt = "", bFrac = ""] = b.split(".");
-  if (aInt.length !== bInt.length) return aInt.length - bInt.length;
-  if (aInt !== bInt) return aInt < bInt ? -1 : 1;
-  const af = aFrac.padEnd(8, "0");
-  const bf = bFrac.padEnd(8, "0");
-  return af === bf ? 0 : af < bf ? -1 : 1;
-}
+// Stored in UTC: a provider's stamp may carry any offset, and Postgres refuses
+// one beyond ±15:59, which would fail the whole insert.
+const isoInstant = z.iso
+  .datetime({ offset: true })
+  .transform((value) => new Date(value).toISOString());
 
-const isoInstant = z.iso.datetime({ offset: true });
+// The object's refinements run even when a field failed; a row whose fields
+// failed is already invalid, and compareDecimals expects valid decimals.
+const fieldsPassed = (payload: { issues: readonly unknown[] }) =>
+  payload.issues.length === 0;
 
-export const fxRateSchema = z
+const fxRateSchema = z
   .object({
     kind: z.enum(fx_rate_kind),
     rate_date: z.iso.date(),
@@ -44,16 +43,14 @@ export const fxRateSchema = z
   })
   .refine(
     (row) => row.buy === null || compareDecimals(row.buy, row.sell) <= 0,
-    {
-      message: "buy must not exceed sell",
-    },
+    { message: "buy must not exceed sell", when: fieldsPassed },
   )
   .refine((row) => row.kind !== "uva" || row.buy === null, {
     message: "UVA has no buying rate",
   });
-export type FxRate = z.infer<typeof fxRateSchema>;
+export type FxRate = z.output<typeof fxRateSchema>;
 
-export const priceSchema = z.object({
+const priceSchema = z.object({
   symbol: z.string().regex(SYMBOL_PATTERN),
   price_date: z.iso.date(),
   price: positiveDecimalSchema,
@@ -62,7 +59,7 @@ export const priceSchema = z.object({
   quoted_at: isoInstant,
   fetched_at: isoInstant,
 });
-export type Price = z.infer<typeof priceSchema>;
+export type Price = z.output<typeof priceSchema>;
 
 export type RawFxRate = Omit<FxRate, "fetched_at">;
 export type RawPrice = Omit<Price, "fetched_at">;
@@ -96,7 +93,8 @@ export function isQuoteFeedCode(value: unknown): value is QuoteFeedCode {
   return (QUOTE_FEED_CODES as readonly unknown[]).includes(value);
 }
 
-// The message is the code, so it never carries a provider's text.
+// Both errors carry only their code as the message, so no provider or
+// PostgREST text reaches a log line.
 export class QuoteFeedError extends Error {
   override readonly name = "QuoteFeedError";
   constructor(

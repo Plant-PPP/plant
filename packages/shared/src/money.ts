@@ -18,11 +18,33 @@ export const decimalStringSchema = z
   )
   .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
 
-// A price or rate: greater than zero.
 export const positiveDecimalSchema = decimalStringSchema.refine(
   (value) => !/^(-|0(\.0+)?$)/.test(value),
   "Must be greater than 0",
 );
+
+// numeric(20, 8): every amount has at most 8 decimals.
+export const DECIMAL_SCALE_DIGITS = 8;
+export const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
+
+// A decimal string as an integer count of 10^-8 units, exact for every value
+// decimalStringSchema accepts.
+export function toScaled(decimal: string): bigint {
+  const negative = decimal.startsWith("-");
+  const [whole = "0", fraction = ""] = (
+    negative ? decimal.slice(1) : decimal
+  ).split(".");
+  const scaled =
+    BigInt(whole) * DECIMAL_SCALE +
+    BigInt(fraction.padEnd(DECIMAL_SCALE_DIGITS, "0"));
+  return negative ? -scaled : scaled;
+}
+
+// Negative, zero or positive, like a sort comparator.
+export function compareDecimals(a: string, b: string): number {
+  const difference = toScaled(a) - toScaled(b);
+  return difference < 0n ? -1 : difference > 0n ? 1 : 0;
+}
 
 export const moneySchema = z.object({
   amount: decimalStringSchema,

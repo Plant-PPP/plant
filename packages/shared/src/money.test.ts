@@ -1,7 +1,9 @@
 import {
+  compareDecimals,
   decimalStringSchema,
   moneySchema,
   positiveDecimalSchema,
+  toScaled,
 } from "./money";
 
 describe("moneySchema", () => {
@@ -58,4 +60,28 @@ describe("positiveDecimalSchema", () => {
       expect(positiveDecimalSchema.safeParse(value).success).toBe(false);
     },
   );
+});
+
+describe("toScaled", () => {
+  it.each([
+    ["0", 0n],
+    ["1", 100000000n],
+    ["0.00000001", 1n],
+    ["-1.5", -150000000n],
+    ["999999999999.99999999", 99999999999999999999n],
+  ])("scales %s", (value, scaled) => {
+    expect(toScaled(value)).toBe(scaled);
+  });
+});
+
+describe("compareDecimals", () => {
+  it.each([
+    ["1.5", "1.50", 0],
+    ["999.99", "1000", -1],
+    ["0.1", "0.09", 1],
+    ["-1", "0.5", -1],
+    ["999999999999.99999999", "999999999999.99999998", 1],
+  ])("compares %s with %s as %i", (a, b, sign) => {
+    expect(compareDecimals(a, b)).toBe(sign);
+  });
 });
