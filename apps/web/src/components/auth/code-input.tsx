@@ -18,9 +18,9 @@ export function CodeInput({
   const active = Math.min(value.length, OTP_LENGTH - 1);
 
   return (
-    <div className="relative flex">
+    <span className="relative flex">
       {Array.from({ length: OTP_LENGTH }, (_, i) => (
-        <div
+        <span
           key={i}
           aria-hidden="true"
           className={cn(
@@ -28,14 +28,14 @@ export function CodeInput({
             i === OTP_LENGTH - 1 && "rounded-r-md",
             focused &&
               i === active &&
-              "z-10 border-ring ring-[3px] ring-ring/50",
+              "z-10 border-ring ring-[3px] ring-ring/50 forced-colors:outline-2 forced-colors:outline-[Highlight]",
           )}
         >
           {value[i]}
           {focused && i === value.length && (
             <span className="h-5 w-px animate-pulse bg-foreground" />
           )}
-        </div>
+        </span>
       ))}
       <input
         inputMode="numeric"
@@ -44,20 +44,20 @@ export function CodeInput({
         autoFocus
         value={value}
         onChange={(event) => onChange(nextAuthCode(value, event.target.value))}
-        // A bare caret always sits after the last digit, where the boxes show
-        // it; a selection is left alone so select-and-paste replaces it.
+        // Only a caret after the last digit or a select-all survives: the boxes
+        // can't show a partial selection, and a paste over one splices codes.
         onSelect={(event) => {
           const input = event.currentTarget;
-          if (input.selectionStart !== input.selectionEnd) return;
           const end = input.value.length;
-          input.setSelectionRange(end, end);
+          const all = input.selectionStart === 0 && input.selectionEnd === end;
+          if (!all) input.setSelectionRange(end, end);
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         // Browsers paint autofilled fields with !important colours; the text
         // fill and a delayed background keep the boxes visible underneath.
-        className="absolute inset-0 size-full bg-transparent text-transparent caret-transparent outline-none selection:bg-transparent autofill:transition-[background-color] autofill:delay-[99999s] autofill:[-webkit-text-fill-color:transparent]"
+        className="absolute inset-0 size-full bg-transparent text-base text-transparent forced-color-adjust-none caret-transparent outline-none selection:bg-transparent autofill:transition-[background-color] autofill:delay-[99999s] autofill:[-webkit-text-fill-color:transparent]"
       />
-    </div>
+    </span>
   );
 }

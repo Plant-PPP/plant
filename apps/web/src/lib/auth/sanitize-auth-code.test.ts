@@ -33,6 +33,14 @@ describe("nextAuthCode", () => {
     expect(nextAuthCode("123", "12")).toBe("12");
   });
 
+  it("takes one copy of a code autofilled twice", () => {
+    expect(nextAuthCode("", "123456123456")).toBe("123456");
+  });
+
+  it("replaces a selected full field with a typed digit", () => {
+    expect(nextAuthCode("123456", "7")).toBe("7");
+  });
+
   it("finds the code inside pasted mail text", () => {
     expect(nextAuthCode("", "Tu código: 123456")).toBe("123456");
   });
