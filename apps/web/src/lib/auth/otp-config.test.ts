@@ -72,6 +72,20 @@ describe("the sign-in mail", () => {
     expect(template).toContain("{{ .Token }}");
     expect(template).toContain(`vence en ${OTP_EXPIRY_MINUTES} minutos`);
   });
+
+  // Pasting the whole mail must not hand the code field a number before the code.
+  it("has no digit in its text before the code", () => {
+    const body = template.slice(
+      template.indexOf("</head>"),
+      template.indexOf("{{ .Token }}"),
+    );
+    // The text between tags; comments and attributes sit inside them.
+    const text = body
+      .split("<")
+      .map((part) => part.slice(part.indexOf(">") + 1))
+      .join(" ");
+    expect(text).not.toMatch(/\d/);
+  });
 });
 
 // Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts), of TOTP

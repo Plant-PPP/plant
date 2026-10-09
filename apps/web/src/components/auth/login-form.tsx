@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { CodeInput } from "./code-input";
 import { authErrorSlug, loginErrorMessage } from "@/lib/auth/login-errors";
 import { OTP_LENGTH, RESEND_COOLDOWN_SECONDS } from "@/lib/auth/otp-config";
 import { CALLBACK_PATH, NEXT_COOKIE } from "@/lib/auth/routes";
-import { sanitizeAuthCode } from "@/lib/auth/sanitize-auth-code";
 import { createClient } from "@/lib/supabase/client";
 
 // The only redirect the Auth allow-list holds, for mail links and Google.
@@ -26,6 +26,7 @@ export function LoginForm({
   googleEnabled: boolean;
 }) {
   const router = useRouter();
+  const codeId = useId();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -184,20 +185,14 @@ export function LoginForm({
           <p className="text-sm text-muted-foreground">
             Te mandamos un código a {email}
           </p>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Código
-            <Input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              required
-              autoFocus
-              value={code}
-              onChange={(event) =>
-                setCode(sanitizeAuthCode(event.target.value))
-              }
-              className="font-mono tracking-widest"
-            />
-          </label>
+          {/* Not wrapped: the boxes show the digits, which would join the
+              field's name. */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={codeId} className="text-sm font-medium">
+              Código
+            </label>
+            <CodeInput id={codeId} value={code} onChange={setCode} />
+          </div>
           <Button type="submit" disabled={pending || code.length < OTP_LENGTH}>
             Entrar
           </Button>
