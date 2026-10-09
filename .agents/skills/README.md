@@ -17,6 +17,7 @@ copy of the same skill name under your home skills directory takes precedence ov
 shadows it silently, so keep one copy or the other, not both.
 
 Common entry points:
+
 - Review a change before merge → `/adv-review` (verdict-only, or converge-and-fix)
 - Plan and pressure-test an approach → `/adv-planning`
 - Falsify a design, claim or plan → `/adv-research`
@@ -27,11 +28,12 @@ Common entry points:
 - Check a change against the boundary / DRY / comment-value lens → `/enforce-ports-and-adapters`,
   `/enforce-clean-code`, `/enforce-comment-value`
 - Check a DB/authz change for a cross-user path (RLS policies, grants, `SECURITY DEFINER`,
-  service-role in jobs, `"use server"`, route handlers, assistant tools) → `/enforce-owner-isolation`
+  service-role clients (apps/web/src/lib/supabase, the AI cost sink and writer), `"use server"`, route handlers, assistant tools) → `/enforce-owner-isolation`
 - Write or review SQL → `supabase-postgres-best-practices`
 - Make text shorter without losing meaning → `/tighten`
 
 Prerequisites:
+
 - The lenses (`/adv-review` verdict-only, `/adv-research`, `/enforce-*`) need nothing but the repo and
   are read-only — except `/enforce-comment-value`, which EDITS the comments in its stated scope. A diff
   touching `supabase/migrations/` or any query, RPC, view or index puts `/adv-review` through its
@@ -49,23 +51,23 @@ Prerequisites:
 
 ## Plan / build / review / ship
 
-| Skill | What it does |
-|---|---|
-| `adv-planning` | Turns an ask into a plan and attacks it before any code is written |
-| `adv-research` | Tries to falsify a claim, design or plan with evidence from the repo and the web |
-| `auto-implement` | Implements an approved plan with parallel writers and a prove-it-runs gate |
-| `adv-review` | Adversarial review of a diff; verdict-only or converge-and-fix |
+| Skill            | What it does                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| `adv-planning`   | Turns an ask into a plan and attacks it before any code is written                              |
+| `adv-research`   | Tries to falsify a claim, design or plan with evidence from the repo and the web                |
+| `auto-implement` | Implements an approved plan with parallel writers and a prove-it-runs gate                      |
+| `adv-review`     | Adversarial review of a diff; verdict-only or converge-and-fix                                  |
 | `auto-ship-gate` | Readiness manifest (`_shared/pr-readiness/manifest.md`), then the bot/CI loop until merge-ready |
-| `auto-build` | The whole chain: plan → implement → review → ship gate |
+| `auto-build`     | The whole chain: plan → implement → review → ship gate                                          |
 
 ## Lenses
 
-| Skill | Shared condensed lens |
-|---|---|
-| `enforce-ports-and-adapters` | `_shared/ports-lens/condensed-lens.md` |
-| `enforce-clean-code` | `_shared/dry-lens/condensed-lens.md` |
-| `enforce-comment-value` | `_shared/comment-lens/condensed-lens.md` |
-| `enforce-owner-isolation` | `_shared/owner-lens/condensed-lens.md` |
+| Skill                                      | Shared condensed lens                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| `enforce-ports-and-adapters`               | `_shared/ports-lens/condensed-lens.md`                                    |
+| `enforce-clean-code`                       | `_shared/dry-lens/condensed-lens.md`                                      |
+| `enforce-comment-value`                    | `_shared/comment-lens/condensed-lens.md`                                  |
+| `enforce-owner-isolation`                  | `_shared/owner-lens/condensed-lens.md`                                    |
 | — (read by the review and planning skills) | `_shared/perf-lens/`, `_shared/telemetry-lens/`, `_shared/identity-lens/` |
 
 The orchestrators paste the condensed lens into each sub-agent's prompt; the full skill is the
