@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(56);
+SELECT plan(59);
 
 -- A local database may hold rows from a cron or pentest run.
 DELETE FROM public.fx_rates;
@@ -74,6 +74,37 @@ SELECT ok(
   'each guard dates today in Buenos Aires'
 );
 
+SELECT ok(
+  (SELECT bool_and(proconfig = ARRAY['search_path=""'])
+   FROM pg_proc WHERE oid IN ('private.guard_fx_rate_insert()'::regprocedure,
+                              'private.guard_price_insert()'::regprocedure)),
+  'each guard runs with an empty search_path'
+);
+
+-- ── The columns ─────────────────────────────────────────────────────────────
+SELECT set_eq(
+  $$ SELECT attrelid::regclass || '.' || attname || ' ' || format_type(atttypid, atttypmod)
+     FROM pg_attribute
+     WHERE attrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass)
+       AND attnum > 0 AND NOT attisdropped
+       AND (NOT attnotnull OR atttypid = 'numeric'::regtype) $$,
+  ARRAY['fx_rates.buy numeric(20,8)', 'fx_rates.sell numeric(20,8)', 'prices.price numeric(20,8)'],
+  'only buy may be null, and every amount is numeric(20,8)'
+);
+
+SELECT set_eq(
+  $$ SELECT conrelid::regclass || ' ' || pg_get_constraintdef(oid) FROM pg_constraint
+     WHERE conrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass) $$,
+  ARRAY['fx_rates CHECK (((buy IS NULL) OR (buy <= sell)))',
+        'fx_rates CHECK ((buy > (0)::numeric))',
+        'fx_rates CHECK ((sell > (0)::numeric))',
+        'fx_rates PRIMARY KEY (kind, rate_date)',
+        'prices CHECK ((price > (0)::numeric))',
+        $q$prices CHECK ((symbol ~ '^[A-Z0-9]{1,15}$'::text))$q$,
+        'prices PRIMARY KEY (symbol, price_date)'],
+  'each quote table has exactly its constraints'
+);
+
 -- The guards are triggers, so a role that owns the table, the guard function
 -- or the private schema, adds a trigger or turns triggers off gets past them.
 -- INSERT is left out: service_role holds it.
@@ -98,22 +129,27 @@ SELECT is_empty(
   'no role the API can become can change, delete, own or add a trigger to a quote table, or switch triggers off'
 );
 
--- Each canary breaks one clause. A sequence keeps its value through ROLLBACK
+-- Each canary breaks one clause; owning a table or a guard function, or
+-- setting session_replication_role, takes a superuser to grant. A sequence keeps its value through ROLLBACK
 -- TO, so it carries the number of missed canaries out of the savepoint.
 CREATE TEMP SEQUENCE bypass_misses MINVALUE -1 START -1;
 SAVEPOINT canary;
 GRANT TRIGGER ON public.fx_rates TO service_role;
 GRANT UPDATE (sell) ON public.fx_rates TO authenticated;
 GRANT DELETE ON public.prices TO anon;
+GRANT TRUNCATE ON public.prices TO authenticated_aal1;
+ALTER SCHEMA private OWNER TO service_role;
 SELECT setval('bypass_misses',
               (SELECT count(*) FROM (VALUES ('service_role public.fx_rates'),
+                                            ('service_role public.prices'),
                                             ('authenticated public.fx_rates'),
-                                            ('anon public.prices')) c(x)
+                                            ('anon public.prices'),
+                                            ('authenticated_aal1 public.prices')) c(x)
                WHERE x NOT IN (SELECT pg_temp.bypasses())));
 ROLLBACK TO SAVEPOINT canary;
 
 SELECT is((SELECT last_value FROM bypass_misses), 0::bigint,
-          'the bypass assert catches TRIGGER, UPDATE and DELETE grants');
+          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema');
 
 -- ── The table owner (a migration) ───────────────────────────────────────────
 ALTER TABLE public.fx_rates DISABLE TRIGGER fx_rates_guard;

@@ -480,7 +480,8 @@ INSERT INTO canaried VALUES
 ('a reference table only lets authenticated read every row, and no API role write it but service_role''s inserts',
  ARRAY['pgtap_canary_ref_all.pgtap_canary', 'pgtap_canary_ref_role.pgtap_canary',
        'pgtap_canary_ref_qual.pgtap_canary', 'pgtap_canary_ref_insert', 'pgtap_canary_ref_update',
-       'pgtap_canary_ref_delete', 'pgtap_canary_ref_service'],
+       'pgtap_canary_ref_delete', 'pgtap_canary_ref_service_update',
+       'pgtap_canary_ref_service_delete'],
  $$ SELECT p.tablename || '.' || p.policyname FROM pg_policies p
     JOIN reference_tables r ON r.relname = p.tablename
     WHERE p.schemaname = 'public' AND p.permissive = 'PERMISSIVE'
@@ -615,8 +616,10 @@ CREATE TABLE public.pgtap_canary_ref_update (x int);
 GRANT UPDATE (x) ON public.pgtap_canary_ref_update TO authenticated;
 CREATE TABLE public.pgtap_canary_ref_delete (x int);
 GRANT DELETE ON public.pgtap_canary_ref_delete TO authenticated;
-CREATE TABLE public.pgtap_canary_ref_service (x int);
-GRANT UPDATE (x) ON public.pgtap_canary_ref_service TO service_role;
+CREATE TABLE public.pgtap_canary_ref_service_update (x int);
+GRANT UPDATE (x) ON public.pgtap_canary_ref_service_update TO service_role;
+CREATE TABLE public.pgtap_canary_ref_service_delete (x int);
+GRANT DELETE ON public.pgtap_canary_ref_service_delete TO service_role;
 -- Each gate canary copies the gate on profiles and changes one thing.
 DO $$
 DECLARE

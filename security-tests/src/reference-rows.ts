@@ -12,9 +12,22 @@ type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
 
 type ReferenceRow<T extends ReferenceTable> = {
   key: [Column<T>, ...Column<T>[]];
-  filter: string;
   row: Tables[T]["Insert"];
 };
+
+// The PostgREST filter that selects exactly the row by its key.
+export function filterOf({
+  key,
+  row,
+}: {
+  key: readonly string[];
+  row: object;
+}): string {
+  const values = row as Record<string, unknown>;
+  return key
+    .map((column) => `${column}=eq.${String(values[column])}`)
+    .join("&");
+}
 
 // Made-up quotes. No real symbol is PENTEST; the UVA row can stand in for
 // that day's real one on a local database that is not reset.
@@ -25,7 +38,6 @@ export function referenceRows(date: string): {
   return {
     fx_rates: {
       key: ["kind", "rate_date"],
-      filter: `kind=eq.uva&rate_date=eq.${date}`,
       row: {
         kind: "uva",
         rate_date: date,
@@ -38,7 +50,6 @@ export function referenceRows(date: string): {
     },
     prices: {
       key: ["symbol", "price_date"],
-      filter: `symbol=eq.PENTEST&price_date=eq.${date}`,
       row: {
         symbol: "PENTEST",
         price_date: date,

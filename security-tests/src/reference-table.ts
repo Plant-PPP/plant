@@ -6,7 +6,7 @@ import {
   users,
 } from "./pentest-helpers";
 import { type QuoteCases, runEnv } from "./pentest-users";
-import { type ReferenceTable, referenceRows } from "./reference-rows";
+import { type ReferenceTable, filterOf, referenceRows } from "./reference-rows";
 
 const quotes = readEnv<QuoteCases>(runEnv.quotes);
 export const REFERENCE_TARGETS = referenceRows(quotes.date);
@@ -15,8 +15,8 @@ const { a, b } = users;
 
 // Global setup seeded the row through the service role.
 export function describeReferenceTable(table: ReferenceTable): void {
-  const { filter, row } = REFERENCE_TARGETS[table];
-  const target = `${table}?${filter}`;
+  const { row } = REFERENCE_TARGETS[table];
+  const target = `${table}?${filterOf(REFERENCE_TARGETS[table])}`;
   const writes = quotes.writes[table];
   let before: unknown;
 
@@ -89,19 +89,11 @@ export function describeReferenceTable(table: ReferenceTable): void {
     });
 
     test("cannot overwrite a row", () => {
-      expect(writes.merge).toMatchObject({
-        status: 403,
-        code: "42501",
-        body: { message: `permission denied for table ${table}` },
-      });
+      expectRelationDenied(writes.merge, table);
     });
 
     test("cannot delete a row", () => {
-      expect(writes.delete).toMatchObject({
-        status: 403,
-        code: "42501",
-        body: { message: `permission denied for table ${table}` },
-      });
+      expectRelationDenied(writes.delete, table);
     });
   });
 }
