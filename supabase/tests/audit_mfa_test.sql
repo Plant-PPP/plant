@@ -1,11 +1,22 @@
 -- A session raised to aal2 or deleted, and a factor verified or removed, each
--- write exactly one audit_log row for their owner; refreshes and unverified
--- factors write none.
+-- write exactly one audit_log row for their owner; refreshes, downgrades and
+-- unverified factors write none.
 --
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(14);
+SELECT plan(21);
+
+CREATE TEMP TABLE baseline AS SELECT coalesce(max(id), 0) AS last_id FROM private.audit_log;
+
+SELECT is_empty(
+  $$ SELECT r || ' ' || t
+     FROM unnest(ARRAY['anon', 'authenticated', 'authenticated_aal1', 'authenticator', 'service_role']) r,
+          unnest(ARRAY['auth.sessions', 'auth.mfa_factors']) t
+     WHERE has_any_column_privilege(r, t, 'INSERT, UPDATE')
+        OR has_table_privilege(r, t, 'DELETE, TRUNCATE, TRIGGER') $$,
+  'no API role can write, truncate or add a trigger to sessions or factors, so none can forge or skip an audit row'
+);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -53,9 +64,10 @@ SELECT is(
 DELETE FROM auth.sessions WHERE id = '5e550000-0000-4000-8000-0000000000a1';
 
 SELECT results_eq(
-  $$ SELECT metadata FROM private.audit_log
+  $$ SELECT outcome::text, request_id, metadata FROM private.audit_log
      WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.session.deleted' $$,
-  $$ VALUES ('{"session_id": "5e550000-0000-4000-8000-0000000000a1", "aal": "aal2"}'::jsonb) $$,
+  $$ VALUES ('success', NULL::text,
+             '{"session_id": "5e550000-0000-4000-8000-0000000000a1", "aal": "aal2"}'::jsonb) $$,
   'deleting a session writes one auth.session.deleted row with its session id and aal'
 );
 
@@ -99,17 +111,54 @@ SELECT is(
 DELETE FROM auth.mfa_factors WHERE id = 'fac00000-0000-4000-8000-0000000000a1';
 
 SELECT results_eq(
-  $$ SELECT metadata FROM private.audit_log
+  $$ SELECT outcome::text, metadata FROM private.audit_log
      WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.mfa.factor_removed' $$,
-  $$ VALUES ('{"factor_id": "fac00000-0000-4000-8000-0000000000a1", "factor_type": "totp"}'::jsonb) $$,
+  $$ VALUES ('success', '{"factor_id": "fac00000-0000-4000-8000-0000000000a1", "factor_type": "totp"}'::jsonb) $$,
   'removing a verified factor writes one auth.mfa.factor_removed row'
 );
 
+INSERT INTO auth.sessions (id, user_id, aal)
+VALUES ('5e550000-0000-4000-8000-0000000000a2', 'a0000000-0000-4000-8000-00000000000a', 'aal2'),
+       ('5e550000-0000-4000-8000-0000000000a3', 'a0000000-0000-4000-8000-00000000000a', NULL);
+
 SELECT is(
   (SELECT count(*)::int FROM private.audit_log
-   WHERE user_id = 'b0000000-0000-4000-8000-00000000000b'),
-  0,
-  'one user''s sessions and factors write no row for another user'
+   WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.mfa.verified'),
+  1,
+  'a session created at aal2 writes no auth.mfa.verified row'
+);
+
+-- Unenrolling the bound factor: Auth moves its sessions back to aal1.
+UPDATE auth.sessions SET aal = 'aal1'
+WHERE id = '5e550000-0000-4000-8000-0000000000a2';
+
+SELECT is(
+  (SELECT count(*)::int FROM private.audit_log
+   WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.mfa.verified'),
+  1,
+  'moving a session back to aal1 writes nothing'
+);
+
+UPDATE auth.sessions SET aal = 'aal2'
+WHERE id = '5e550000-0000-4000-8000-0000000000a2';
+
+SELECT is(
+  (SELECT count(*)::int FROM private.audit_log
+   WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.mfa.verified'
+     AND metadata ->> 'session_id' = '5e550000-0000-4000-8000-0000000000a2'),
+  1,
+  'raising it to aal2 again writes a new auth.mfa.verified row'
+);
+
+UPDATE auth.sessions SET aal = 'aal2'
+WHERE id = '5e550000-0000-4000-8000-0000000000a3';
+
+SELECT is(
+  (SELECT count(*)::int FROM private.audit_log
+   WHERE user_id = 'a0000000-0000-4000-8000-00000000000a' AND action = 'auth.mfa.verified'
+     AND metadata ->> 'session_id' = '5e550000-0000-4000-8000-0000000000a3'),
+  1,
+  'raising a session with no aal to aal2 writes an auth.mfa.verified row'
 );
 
 SELECT is_empty(
@@ -127,6 +176,13 @@ VALUES ('fac00000-0000-4000-8000-0000000000b1', 'b0000000-0000-4000-8000-0000000
         'Plant', 'totp', 'verified', 'NOTASECRET', now(), now()),
        ('fac00000-0000-4000-8000-0000000000b2', 'b0000000-0000-4000-8000-00000000000b',
         'Otro', 'totp', 'unverified', 'NOTASECRET', now(), now());
+
+SELECT is(
+  (SELECT count(*)::int FROM private.audit_log
+   WHERE user_id = 'b0000000-0000-4000-8000-00000000000b' AND action <> 'auth.session.created'),
+  0,
+  'creating sessions and factors writes nothing but the session rows'
+);
 
 SELECT lives_ok(
   $$ DELETE FROM auth.users WHERE id = 'b0000000-0000-4000-8000-00000000000b' $$,
@@ -148,6 +204,26 @@ SELECT is(
      AND action IN ('auth.session.deleted', 'auth.mfa.factor_removed')),
   2,
   'deleting one user writes nothing for another user'
+);
+
+SELECT is_empty(
+  $$ SELECT id FROM private.audit_log
+     WHERE id > (SELECT last_id FROM baseline)
+       AND (user_id IS NULL OR user_id NOT IN ('a0000000-0000-4000-8000-00000000000a',
+                                               'b0000000-0000-4000-8000-00000000000b')) $$,
+  'every row this test caused belongs to the user whose session or factor changed'
+);
+
+SELECT results_eq(
+  $$ SELECT user_id::text, metadata ->> 'session_id' FROM private.audit_log
+     WHERE id > (SELECT last_id FROM baseline) AND action = 'auth.session.created'
+     ORDER BY id $$,
+  $$ VALUES ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a1'),
+            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a2'),
+            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a3'),
+            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b1'),
+            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b2') $$,
+  'every new session still writes one auth.session.created row with its owner'
 );
 
 SELECT set_eq(

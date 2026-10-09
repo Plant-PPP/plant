@@ -13,12 +13,14 @@ ALTER FUNCTION private.record_session_created() RENAME TO record_session_event;
 
 -- One row per session created, raised to aal2 or deleted. Auth's own
 -- transaction runs the insert, so a failing insert fails the sign-in, sign-out,
--- TOTP verify, user deletion or session cleanup that fired it. Columns are read
--- through to_jsonb, so a column Auth renames stops the row instead of breaking
--- Auth. n and o hold the whole session, refresh_token_hmac_key included: only
--- the keys below may leave this function. A DELETE covers every way a session
--- ends (sign-out in any scope, the aal1 sessions a TOTP verify deletes, user
--- deletion, Auth's cleanup) without telling them apart.
+-- TOTP verify, user deletion or session cleanup that fired it. id and user_id
+-- are read as columns, so an Auth rename of either fails Auth's write rather
+-- than writing an ownerless row; aal goes through to_jsonb, so a rename of it
+-- only stops the auth.mfa.verified row. n and o hold the whole session,
+-- refresh_token_hmac_key included: only the keys below may leave this function.
+-- A DELETE covers sign-out in any scope, the aal1 sessions a TOTP verify
+-- deletes, user deletion and Auth's cleanup, without telling them apart; a
+-- TRUNCATE fires no row trigger.
 CREATE OR REPLACE FUNCTION private.record_session_event()
   RETURNS trigger
   LANGUAGE plpgsql
@@ -26,9 +28,9 @@ CREATE OR REPLACE FUNCTION private.record_session_event()
   SET search_path = ''
   AS $$
 DECLARE
+  session auth.sessions := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   n jsonb := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE to_jsonb(NEW) END;
   o jsonb := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE to_jsonb(OLD) END;
-  row_data jsonb := coalesce(n, o);
   event private.audit_action;
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -42,14 +44,17 @@ BEGIN
     RETURN NULL;
   END IF;
   INSERT INTO private.audit_log (user_id, action, outcome, metadata)
-  VALUES ((row_data ->> 'user_id')::uuid, event, 'success',
-          jsonb_build_object('session_id', row_data ->> 'id', 'aal', row_data ->> 'aal'));
+  VALUES (session.user_id, event, 'success',
+          jsonb_build_object('session_id', session.id, 'aal', coalesce(n, o) ->> 'aal'));
   RETURN NULL;
 END;
 $$;
 
--- One row per factor verified or verified factor removed. n and o hold the
--- factor's secret: only its id and type leave this function.
+-- One row per factor verified or verified factor removed, with id and user_id
+-- read as columns like the session's. n and o hold the factor's secret: only
+-- its id and type leave this function. A recovery-code factor is inserted
+-- already verified, so it would get a removal row and no verified row; those
+-- factors are off.
 CREATE FUNCTION private.record_mfa_factor_event()
   RETURNS trigger
   LANGUAGE plpgsql
@@ -57,9 +62,9 @@ CREATE FUNCTION private.record_mfa_factor_event()
   SET search_path = ''
   AS $$
 DECLARE
+  factor auth.mfa_factors := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   n jsonb := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE to_jsonb(NEW) END;
   o jsonb := to_jsonb(OLD);
-  row_data jsonb := coalesce(n, o);
   event private.audit_action;
 BEGIN
   IF TG_OP = 'UPDATE' AND n ->> 'status' = 'verified' AND o ->> 'status' IS DISTINCT FROM 'verified' THEN
@@ -70,8 +75,8 @@ BEGIN
     RETURN NULL;
   END IF;
   INSERT INTO private.audit_log (user_id, action, outcome, metadata)
-  VALUES ((row_data ->> 'user_id')::uuid, event, 'success',
-          jsonb_build_object('factor_id', row_data ->> 'id', 'factor_type', row_data ->> 'factor_type'));
+  VALUES (factor.user_id, event, 'success',
+          jsonb_build_object('factor_id', factor.id, 'factor_type', coalesce(n, o) ->> 'factor_type'));
   RETURN NULL;
 END;
 $$;
