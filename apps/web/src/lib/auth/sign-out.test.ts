@@ -16,7 +16,7 @@ function auth(
 }
 
 it("signs out this device only", async () => {
-  const client = auth(null);
+  const client = auth(null, { session: null, error: new Error("x") });
   await expect(signOutAndConfirm(client)).resolves.toBe(true);
   expect(client.signOut).toHaveBeenCalledWith({ scope: "local" });
 });

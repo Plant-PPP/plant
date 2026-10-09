@@ -48,6 +48,12 @@ export function TwoFactorCard() {
     void fetchStatus().then(setStatus);
   }
 
+  function closePanel(notice: string) {
+    setEnrolling(false);
+    setNotice(notice);
+    reload();
+  }
+
   return (
     <Card className="max-w-3xl gap-0">
       <CardHeader className="border-b">
@@ -83,18 +89,14 @@ export function TwoFactorCard() {
         )}
         {enrolling && (
           <TotpEnrollPanel
-            onSuccess={() => {
-              setEnrolling(false);
-              setNotice(
+            onSuccess={() =>
+              closePanel(
                 "Activaste la verificación en dos pasos. Cerramos tus otras sesiones.",
-              );
-              reload();
-            }}
-            onAlreadyOn={() => {
-              setEnrolling(false);
-              setNotice("La verificación en dos pasos ya estaba activada.");
-              reload();
-            }}
+              )
+            }
+            onAlreadyOn={() =>
+              closePanel("La verificación en dos pasos ya estaba activada.")
+            }
             onCancel={() => setEnrolling(false)}
           />
         )}
