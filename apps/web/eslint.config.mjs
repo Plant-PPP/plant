@@ -12,6 +12,7 @@ import {
   LITERAL_IMPORTS_ONLY,
   MFA_CALLS,
   MFA_CALLS_BUT_LIST,
+  MFA_CALLS_BUT_UNENROLL,
   MFA_PRIVATE_CALLS,
   secretKeyReads,
   SERVICE_ROLE,
@@ -214,6 +215,18 @@ export default defineConfig([
   {
     files: ["src/lib/auth/mfa-factors.ts", "src/lib/auth/mfa-factors.test.ts"],
     rules: webRules({ syntax: BASE_SYNTAX, mfaFence: MFA_CALLS_BUT_LIST }),
+  },
+  {
+    files: ["src/lib/auth/mfa-disable.ts", "src/lib/auth/mfa-disable.test.ts"],
+    rules: webRules({
+      syntax: [
+        ...BASE_SYNTAX,
+        ...noServerAction(
+          "unenrollForSession trusts its caller to have run the sensitive gate; a server action here would skip it.",
+        ),
+      ],
+      mfaFence: MFA_CALLS_BUT_UNENROLL,
+    }),
   },
   globalIgnores([
     ".next/**",

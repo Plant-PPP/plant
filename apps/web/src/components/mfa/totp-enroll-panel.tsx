@@ -10,22 +10,14 @@ import {
   verifyTotp,
   type TotpEnrollment,
 } from "@/lib/auth/mfa-browser";
-import { loginErrorPath } from "@/lib/auth/login-errors";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { qrDataUrl, withQrSvgViewBox } from "@/lib/auth/qr-svg";
 import { failedOnEndedSession } from "@/lib/auth/session-state";
+import { signInAgain } from "@/lib/auth/sign-in-again";
 import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 import { TotpHelpDialog } from "./totp-help-dialog";
-
-// A retry on an ended session can only fail again, so the user signs in and
-// comes back here.
-function signInAgain() {
-  window.location.assign(
-    loginErrorPath("signed_out", window.location.pathname),
-  );
-}
 
 // Clears abandoned attempts, enrolls, shows the QR and the setup key, and
 // verifies the first code. onSuccess runs once the factor is verified and the

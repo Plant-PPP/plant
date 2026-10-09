@@ -6,10 +6,11 @@ import {
   REQUEST_ID_HEADER,
   requestIdFrom,
 } from "@/lib/request-id";
-import { sensitiveRequirement } from "./mfa-rules";
+import { sensitiveRequirement, unixNow } from "./mfa-rules";
 import { getSessionClaims } from "./session-claims";
 
-export type SensitiveAction = "export" | "delete_account" | "change_email";
+export type SensitiveAction =
+  "export" | "delete_account" | "change_email" | "disable_mfa";
 
 declare const checked: unique symbol;
 
@@ -24,15 +25,13 @@ export type SensitiveAnswer =
   | { ok: true; session: SensitiveSession }
   | { ok: false; stepUp: "sign_in_again" };
 
-// Called by the server action, or the code that enqueues the job, behind an
-// export (PLA-58), an account deletion (PLA-84) or an email change. On
-// sign_in_again their UI asks the user to sign in again.
+// Called by the server action, or the code that enqueues the job, behind each
+// SensitiveAction. On sign_in_again its UI asks the user to sign in again.
 export async function requireSensitiveSession(
   action: SensitiveAction,
 ): Promise<SensitiveAnswer> {
   const claims = await getSessionClaims();
-  const nowS = Math.floor(Date.now() / 1000);
-  if (sensitiveRequirement(claims, nowS) === "met") {
+  if (sensitiveRequirement(claims, unixNow()) === "met") {
     return { ok: true, session: { userId: claims.sub } as SensitiveSession };
   }
   serverLog.info("auth.step_up", {
@@ -42,4 +41,10 @@ export async function requireSensitiveSession(
     "plant.auth.sensitive_action": action,
   });
   return { ok: false, stepUp: "sign_in_again" };
+}
+
+// For a screen choosing what to ask first; the action behind it still calls
+// requireSensitiveSession.
+export async function needsStepUp(): Promise<boolean> {
+  return sensitiveRequirement(await getSessionClaims(), unixNow()) !== "met";
 }

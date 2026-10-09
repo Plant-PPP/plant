@@ -1,23 +1,47 @@
 import { type AuthClient, listVerifiedFactors } from "@/lib/auth/mfa-factors";
+import { SETTINGS_ITEM } from "@/lib/navigation";
+
+// Where the step-up's sign-in comes back to: Ajustes with the off dialog open.
+// The parameter only opens the dialog.
+export const CONFIRM_DISABLE_PATH = `${SETTINGS_ITEM.href}?confirm=disable`;
+
+export function confirmsDisable(searchParams: URLSearchParams): boolean {
+  return searchParams.get("confirm") === "disable";
+}
 
 export type TwoFactorStatus = "loading" | "failed" | "on" | "off";
 
+// totpId is the factor the off switch asks a code for.
+export type TwoFactorState = { status: TwoFactorStatus; totpId?: string };
+
 // A failed load never reads as "off": an enrolled user would enroll again.
-export async function fetchTwoFactorStatus(
+export async function fetchTwoFactorState(
   client: AuthClient,
-): Promise<TwoFactorStatus> {
+): Promise<TwoFactorState> {
   try {
-    const { verified } = await listVerifiedFactors(client);
-    return verified.length > 0 ? "on" : "off";
+    const { verified, totp } = await listVerifiedFactors(client);
+    return verified.length > 0
+      ? { status: "on", totpId: totp[0]?.id }
+      : { status: "off" };
   } catch {
-    return "failed";
+    return { status: "failed" };
   }
 }
 
-// The switch only turns on, and only from a loaded "off".
-export function twoFactorSwitch(status: TwoFactorStatus, enrolling: boolean) {
+export type TwoFactorPanel = "none" | "enroll" | "disable";
+
+// Off needs a TOTP factor to ask a code for.
+export function canDisable(state: TwoFactorState): state is {
+  status: "on";
+  totpId: string;
+} {
+  return state.status === "on" && state.totpId !== undefined;
+}
+
+export function twoFactorSwitch(state: TwoFactorState, panel: TwoFactorPanel) {
+  const ready = state.status === "off" || canDisable(state);
   return {
-    checked: status === "on" || enrolling,
-    disabled: status !== "off" || enrolling,
+    checked: state.status === "on" || panel === "enroll",
+    disabled: panel !== "none" || !ready,
   };
 }
