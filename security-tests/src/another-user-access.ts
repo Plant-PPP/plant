@@ -68,13 +68,17 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
       test("upsert over B's row by id is denied", async () => {
         const id = await idOfB();
         const body = { ...rowForB, id, user_id: a.id };
-        expectError(
-          await rest(a, "POST", `${table}?on_conflict=id`, {
-            body,
-            headers: { Prefer: "resolution=merge-duplicates" },
-          }),
-          403,
-        );
+        // ignore-duplicates skips B's row without checking it, so only the grant
+        // keeps A from probing which ids exist.
+        for (const resolution of ["merge-duplicates", "ignore-duplicates"]) {
+          expectError(
+            await rest(a, "POST", `${table}?on_conflict=id`, {
+              body,
+              headers: { Prefer: `resolution=${resolution}` },
+            }),
+            403,
+          );
+        }
         expectError(
           await rest(a, "PUT", `${table}?id=eq.${id}`, { body }),
           403,

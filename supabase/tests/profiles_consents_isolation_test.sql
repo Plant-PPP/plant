@@ -173,8 +173,9 @@ SELECT throws_ok(
 RESET ROLE;
 
 -- ── The policies, past the column grants ────────────────────────────────────
--- The grants above already stop a user from naming user_id, so these grant it
--- (rolled back with the test) to prove WITH CHECK stops the write on its own.
+-- The grants above already stop a user from naming user_id or id, so these
+-- grant them (rolled back with the test) to prove the policies stop the writes
+-- on their own.
 -- Caro has no profile, so moving Ana's row to her breaks no unique key.
 DELETE FROM public.profiles WHERE user_id = 'c0000000-0000-4000-8000-00000000000c';
 GRANT INSERT (id, user_id) ON TABLE public.consents TO authenticated;
@@ -208,7 +209,7 @@ SELECT throws_ok(
      VALUES ('cb000000-0000-4000-8000-0000000000cb', 'a0000000-0000-4000-8000-00000000000a',
              'terms', '2026-10', true)
      ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id $$,
-  '42501', NULL,
+  '42501', 'new row violates row-level security policy (USING expression) for table "consents"',
   'an upsert cannot take over another user''s consent by id'
 );
 
