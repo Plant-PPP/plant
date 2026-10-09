@@ -299,6 +299,43 @@ flagged.push(
     "export const f = (supabase) => {\n  const { mfa } = supabase.auth;\n  return mfa;\n};",
   ],
   ["src/components/mfa/x.tsx", 'export const f = (s) => s.auth["mfa"].enroll;'],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport { readSessionClaims };`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const r = readSessionClaims;`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `${READER}\nexport { readSessionClaims };`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import { readSessionClaims as r } from "@/lib/auth/session-claims-unchecked";\nexport const f = () => r();',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `"use server";\n${READER}\nexport async function act() {\n  return readSessionClaims();\n}`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `${READER}\nexport default function Page() {\n  async function act() {\n    "use server";\n    return readSessionClaims();\n  }\n  return act;\n}`,
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => {\n  const { mfa } = s.auth;\n  return mfa.listFactors();\n};",
+  ],
+  ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth.mfa;"],
+  [
+    "src/lib/auth/mfa-factors.test.ts",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
 );
 
 for (const [filePath, code] of flagged) {
@@ -388,6 +425,18 @@ allowed.push(
     "export const f = (s) => s.auth.mfa.listFactors();",
   ],
   ["src/lib/x.ts", "export const f = (c) => c.mfa_enrolled;"],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const getSessionClaims = async () => readSessionClaims();`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `${READER}\nexport default async function Page() {\n  await readSessionClaims();\n  return null;\n}`,
+  ],
+  [
+    "src/app/auth/mfa/page.test.tsx",
+    'jest.mock("@/lib/auth/session-claims-unchecked", () => ({\n  readSessionClaims: () => null,\n}));',
+  ],
 );
 
 for (const [filePath, code] of allowed) {
@@ -405,20 +454,29 @@ const OVERRIDES = [
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/lib/auth/session-claims.ts", ["reader"]],
+  ["src/lib/auth/session-claims.test.ts", ["reader"]],
   ["src/app/auth/mfa/page.tsx", ["reader"]],
+  ["src/app/auth/mfa/page.test.tsx", ["reader"]],
   ["src/lib/auth/mfa-browser.ts", ["mfa"]],
-  ["src/lib/auth/mfa-factors.test.ts", ["mfa"]],
+  ["src/lib/auth/mfa-browser.test.ts", ["mfa"]],
+  ["src/lib/auth/mfa-factors.ts", []],
+  ["src/lib/auth/mfa-factors.test.ts", []],
 ];
 const PROBES = {
   reader: READER,
   mfa: "export const f = (s) => s.auth.mfa.challenge({ factorId: 'f' });",
   service: 'import "@/lib/supabase/service-role";',
+  ai: 'import { generateText } from "ai";',
+  sink: 'import "@/lib/ai/ai-cost-sink";',
+  dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
 for (const [filePath, exempt] of OVERRIDES) {
   for (const [probe, code] of Object.entries(PROBES)) {
     if (exempt.includes(probe)) continue;
-    // service-role.ts and the sink may reach the client; the probe is the
-    // reader and MFA fences there.
+    // Each block's own allowances: src/lib/ai reaches models, the sink and
+    // its test reach the sink, and the sink and service-role.ts the client.
+    if (probe === "ai" && filePath.startsWith("src/lib/ai/")) continue;
+    if (probe === "sink" && /ai-cost-sink|route\.ts$/.test(filePath)) continue;
     if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
       continue;
     }

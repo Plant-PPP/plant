@@ -11,6 +11,7 @@ import {
   fence,
   LITERAL_IMPORTS_ONLY,
   MFA_CALLS,
+  MFA_CALLS_BUT_LIST,
   secretKeyReads,
   SERVICE_ROLE,
   SESSION_CLAIMS_UNCHECKED,
@@ -64,19 +65,39 @@ const WEB_FENCES = [
   COST_SINK,
   SESSION_CLAIMS_UNCHECKED,
 ];
-const webRules = ({ allow = [], syntax, allowMfaCalls = false }) =>
+// `mfaFence` is the MFA API fence of the block's files.
+const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
   fence(
     WEB_FENCES.filter((module) => !allow.includes(module)),
-    [...syntax, ...(allowMfaCalls ? [] : MFA_CALLS)],
+    [...syntax, ...mfaFence],
   );
 
-const NO_SERVER_ACTION = ["Program", ":function > BlockStatement"].map(
-  (parent) => ({
+const noServerAction = (message) =>
+  ["Program", ":function > BlockStatement"].map((parent) => ({
     selector: `${parent} > ExpressionStatement[directive][expression.value="use server"]`,
-    message:
-      "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
-  }),
+    message,
+  }));
+const NO_SERVER_ACTION = noServerAction(
+  "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
 );
+
+// The files that may import the unchecked claims reader only call it: a
+// server action there would read an aal1 session's claims, and a value
+// handed on would reach a file the fence keeps it from.
+const READER = "readSessionClaims";
+const READER_CALLS_ONLY = [
+  ...noServerAction(
+    "This file reads claims without the MFA redirect; a server action here would accept a session that has not verified its code.",
+  ),
+  ...noReexport([SESSION_CLAIMS_UNCHECKED]),
+  ...[
+    `Identifier[name="${READER}"]:not(CallExpression > .callee):not(ImportSpecifier > Identifier)`,
+    `ImportSpecifier[imported.name="${READER}"][local.name!="${READER}"]`,
+  ].map((selector) => ({
+    selector,
+    message: `Only call ${READER}; pass its result on, not the function.`,
+  })),
+];
 
 export default defineConfig([
   ...nextVitals,
@@ -131,10 +152,22 @@ export default defineConfig([
     }),
   },
   {
+    files: ["src/lib/auth/session-claims.ts"],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY, ...NO_EXPORT_LIST],
+    }),
+  },
+  {
+    files: ["src/app/auth/mfa/page.tsx"],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY],
+    }),
+  },
+  {
     files: [
-      "src/lib/auth/session-claims.ts",
       "src/lib/auth/session-claims.test.ts",
-      "src/app/auth/mfa/page.tsx",
       "src/app/auth/mfa/page.test.tsx",
     ],
     rules: webRules({
@@ -143,13 +176,12 @@ export default defineConfig([
     }),
   },
   {
-    files: [
-      "src/lib/auth/mfa-browser.ts",
-      "src/lib/auth/mfa-browser.test.ts",
-      "src/lib/auth/mfa-factors.ts",
-      "src/lib/auth/mfa-factors.test.ts",
-    ],
-    rules: webRules({ syntax: BASE_SYNTAX, allowMfaCalls: true }),
+    files: ["src/lib/auth/mfa-browser.ts", "src/lib/auth/mfa-browser.test.ts"],
+    rules: webRules({ syntax: BASE_SYNTAX, mfaFence: [] }),
+  },
+  {
+    files: ["src/lib/auth/mfa-factors.ts", "src/lib/auth/mfa-factors.test.ts"],
+    rules: webRules({ syntax: BASE_SYNTAX, mfaFence: MFA_CALLS_BUT_LIST }),
   },
   globalIgnores([
     ".next/**",
