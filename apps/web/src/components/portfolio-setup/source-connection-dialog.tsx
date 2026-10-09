@@ -190,6 +190,7 @@ export function SourceConnectionDialog({
   const openHolderField = useRef<number | null>(null);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [holderPending, setHolderPending] = useState(false);
   const institution = useRef<HTMLInputElement>(null);
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
@@ -269,7 +270,7 @@ export function SourceConnectionDialog({
   return (
     <AppDialog
       onClose={onClose}
-      pending={pending}
+      pending={pending || holderPending}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -348,6 +349,7 @@ export function SourceConnectionDialog({
                 key={holderFieldKey}
                 onCreated={(row) => holderCreated(row, holderFieldKey)}
                 onCancel={closeHolderField}
+                onPendingChange={setHolderPending}
               />
             )}
           </div>
