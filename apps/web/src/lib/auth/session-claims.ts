@@ -24,8 +24,8 @@ export const getSessionClaims = cache(async () => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   if (data?.claims) {
-    // The proxy already redirected or flagged these; this covers routes
-    // outside its matcher.
+    // The proxy checks these on private paths; this covers the rest: routes
+    // outside its matcher, /login and the callback.
     const requirement = mfaRequirement(data.claims);
     if (requirement === "verify") redirect(MFA_PATH);
     if (requirement === "claim_missing") {

@@ -10,6 +10,7 @@ import {
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { mfaRequirement } from "@/lib/auth/mfa-rules";
 import {
+  AUTH_UNAVAILABLE_HEADER,
   type AuthUnavailableReason,
   isSessionMissing,
   type MaybeAuthError,
@@ -33,7 +34,7 @@ import { updateSession } from "@/lib/supabase/proxy";
 // Every page gets a CSP with a fresh nonce and a request id. Both go on the
 // request too: Next reads the nonce from the request's CSP and stamps its
 // own scripts, and the root layout passes it to next-themes. `set` replaces
-// any copy the client sent.
+// any copy the client sent, and the client's own x-plant-auth is dropped.
 export async function proxy(request: NextRequest) {
   const nonce = createNonce();
   const requestId = createRequestId();
@@ -55,6 +56,7 @@ export async function proxy(request: NextRequest) {
     request.headers.set(CSP_HEADER, csp);
     request.headers.set(NONCE_HEADER, nonce);
     request.headers.set(REQUEST_ID_HEADER, requestId);
+    request.headers.delete(AUTH_UNAVAILABLE_HEADER);
 
     const session = await sessionResponse(request);
     session.response.headers.set(CSP_HEADER, csp);

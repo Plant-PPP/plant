@@ -96,6 +96,12 @@ const unverified: GetClaims = async () => ({
   error: null,
 });
 
+// A token minted while the access token hook was off.
+const claimMissing: GetClaims = async () => ({
+  data: { claims: { sub: "u", aal: "aal1" } },
+  error: null,
+});
+
 it("sends a signed-out visitor to /login with the refresh's cookies and headers", async () => {
   getClaims = async ({ setAll }) => {
     setAll(
@@ -515,9 +521,14 @@ describe("the request line", () => {
     }
   });
 
-  it("is an error without Supabase", async () => {
+  it("is an error without Supabase, and drops the client's x-plant-auth", async () => {
     for (const key of Object.keys(ENV)) delete process.env[key];
-    await proxy(request("/assets"));
+    const res = await proxy(
+      request("/assets", { "x-plant-auth": "mfa_claim_missing" }),
+    );
+    const overridden = res.headers.get("x-middleware-override-headers");
+    expect(overridden).not.toBeNull();
+    expect(overridden).not.toContain("x-plant-auth");
     expect(logged()).toMatchObject({
       method: "error",
       line: {
@@ -574,7 +585,9 @@ describe("the MFA check", () => {
       }),
     );
     expect(res.headers.get("location")).toBeNull();
-    expect(forwarded(res, "x-plant-auth")).toBeNull();
+    const overridden = res.headers.get("x-middleware-override-headers");
+    expect(overridden).not.toBeNull();
+    expect(overridden).not.toContain("x-plant-auth");
     expect(logged()).toMatchObject({
       method: "log",
       line: { "plant.outcome": "mfa_required" },
@@ -605,10 +618,7 @@ describe("the MFA check", () => {
   });
 
   it("shows the retry on the MFA step for a token without the claim, whatever the client sent", async () => {
-    getClaims = async () => ({
-      data: { claims: { sub: "u", aal: "aal1" } },
-      error: null,
-    });
+    getClaims = claimMissing;
     const res = await proxy(
       request("/auth/mfa", { "x-plant-auth": "auth_unavailable" }),
     );
@@ -620,22 +630,24 @@ describe("the MFA check", () => {
   });
 
   it.each([
-    ["/login", "an unverified session", "http://localhost:3000/"],
-    ["/auth/callback?code=c", "an unverified session", null],
-    ["/login", "a token without the claim", "http://localhost:3000/"],
-    ["/auth/callback?code=c", "a token without the claim", null],
-  ])("leaves %s to its own handling for %s", async (path, label, location) => {
-    getClaims =
-      label === "an unverified session"
-        ? unverified
-        : async () => ({
-            data: { claims: { sub: "u", aal: "aal1" } },
-            error: null,
-          });
-    const res = await proxy(request(path));
-    expect(res.headers.get("location")).toBe(location);
-    expect(forwarded(res, "x-plant-auth")).toBeNull();
-  });
+    ["/login", "an unverified session", unverified, "http://localhost:3000/"],
+    ["/auth/callback?code=c", "an unverified session", unverified, null],
+    [
+      "/login",
+      "a token without the claim",
+      claimMissing,
+      "http://localhost:3000/",
+    ],
+    ["/auth/callback?code=c", "a token without the claim", claimMissing, null],
+  ])(
+    "leaves %s to its own handling for %s",
+    async (path, _label, fixture, location) => {
+      getClaims = fixture;
+      const res = await proxy(request(path));
+      expect(res.headers.get("location")).toBe(location);
+      expect(forwarded(res, "x-plant-auth")).toBeNull();
+    },
+  );
 
   it.each([
     ["a verified session", { ...CLAIMS, aal: "aal2", mfa_enrolled: true }],
@@ -655,7 +667,7 @@ describe("the MFA check", () => {
         [{ name: "sb-x-auth-token", value: "new", options: {} }],
         CACHE_HEADERS,
       );
-      return { data: { claims: { sub: "u", aal: "aal1" } }, error: null };
+      return claimMissing({ setAll });
     };
     const res = await proxy(
       request("/assets", { cookie: "sb-x-auth-token=old" }),

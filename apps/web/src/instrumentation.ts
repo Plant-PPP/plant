@@ -61,8 +61,8 @@ export const onRequestError: Instrumentation.onRequestError = (
   };
   const unavailable = authUnavailableReason(error);
   if (unavailable) {
-    // The proxy's line already records it: an Auth outage, or the access
-    // token hook off.
+    // An Auth outage, or the access token hook off. When the proxy set the
+    // header, its own line already records it at its level.
     serverLog.warn("request.error", {
       ...fields,
       "plant.outcome": unavailable,
