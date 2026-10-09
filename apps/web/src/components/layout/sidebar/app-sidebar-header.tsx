@@ -10,10 +10,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { navItemForPath } from "@/lib/navigation";
+import { routeItemForPath } from "@/lib/navigation";
 
 export function AppSidebarHeader() {
-  const title = navItemForPath(usePathname())?.title;
+  const title = routeItemForPath(usePathname())?.title;
 
   return (
     // Sticky over the scrolling canvas, with the canvas card's surface and

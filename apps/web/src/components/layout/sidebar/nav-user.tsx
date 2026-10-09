@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronsUpDown, LogOut } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   DropdownMenu,
@@ -22,6 +23,8 @@ import {
   sessionChange,
   type SessionUser,
 } from "@/lib/auth/session-user";
+import { signOutAndConfirm } from "@/lib/auth/sign-out";
+import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 function UserSummary({ user }: { user: SessionUser }) {
@@ -66,14 +69,7 @@ export function NavUser({ user }: { user: SessionUser }) {
     signingOut.current = true;
     setPending(true);
     setFailed(false);
-    const auth = createClient().auth;
-    const { error } = await auth.signOut({ scope: "local" });
-    // When only the revoke fails, auth-js has already cleared this device's
-    // session, so it is signed out all the same; the server keeps that session
-    // until it expires. A failure to load the session (Auth down with an
-    // expired token) leaves the cookies: report it.
-    const after = error ? await auth.getSession() : null;
-    if (after && (after.data.session || after.error)) {
+    if (!(await signOutAndConfirm(createClient().auth))) {
       signingOut.current = false;
       setPending(false);
       setFailed(true);
@@ -105,6 +101,12 @@ export function NavUser({ user }: { user: SessionUser }) {
               <UserSummary user={user} />
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={SETTINGS_ITEM.href}>
+                <SETTINGS_ITEM.icon />
+                {SETTINGS_ITEM.title}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
               disabled={pending}
               onSelect={(event) => {
