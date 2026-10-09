@@ -450,6 +450,10 @@ flagged.push(
     "src/lib/auth/mfa-disable.ts",
     "export const f = (s) => {\n  const { mfa } = s.auth;\n  return mfa.unenroll({ factorId: 'f' });\n};",
   ],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    "export const f = (s) => s.auth.mfa.listFactors();",
+  ],
   ["src/lib/auth/mfa-disable.ts", "export const f = (s) => s.auth._unenroll;"],
   ["src/lib/auth/mfa-disable.ts", '"use server";\nexport const x = 1;'],
   [

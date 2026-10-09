@@ -29,11 +29,14 @@ const LEVELS: Record<DisableOutcome, LogLevel> = {
   error: "error",
 };
 
-type Counts = { removed?: number; verified?: number };
-
 export function logDisable(
   outcome: DisableOutcome,
-  fields: { requestId?: string; userId?: string } & Counts,
+  fields: {
+    requestId?: string;
+    userId?: string;
+    removed?: number;
+    verified?: number;
+  },
   error?: Parameters<typeof errorType>[0],
 ): { outcome: DisableOutcome } {
   const line = {

@@ -82,17 +82,17 @@ describe("fetchTwoFactorState with other factors", () => {
 
 describe("confirmsDisable", () => {
   it.each([
-    [{ confirm: "disable" }, true],
-    [{ confirm: ["disable", "x"] }, true],
-    [{ confirm: ["x", "disable"] }, false],
-    [{}, false],
-  ])("%p: %s", (params, expected) => {
-    expect(confirmsDisable(params)).toBe(expected);
+    ["confirm=disable", true],
+    ["confirm=disable&confirm=x", true],
+    ["confirm=x&confirm=disable", false],
+    ["", false],
+  ])("%p: %s", (query, expected) => {
+    expect(confirmsDisable(new URLSearchParams(query))).toBe(expected);
   });
 
   it("is what the step-up comes back to", () => {
     const url = new URL(CONFIRM_DISABLE_PATH, "https://x");
     expect(url.pathname).toBe("/settings");
-    expect(confirmsDisable(Object.fromEntries(url.searchParams))).toBe(true);
+    expect(confirmsDisable(url.searchParams)).toBe(true);
   });
 });

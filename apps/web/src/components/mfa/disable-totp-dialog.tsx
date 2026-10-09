@@ -54,7 +54,7 @@ const ANSWERS: Record<
   error: { close: false, copy: RETRY },
 };
 
-// Turning TOTP off: a sign-in with the mailbox within the step-up window, then
+// Turning TOTP off: a sign-in by mail or Google within the step-up window, then
 // a current code. The server decides both; stepUp only saves typing a code the
 // server would refuse.
 export function DisableTotpDialog({
@@ -77,7 +77,7 @@ export function DisableTotpDialog({
   const { run, pending, setPending, error, setError } =
     useAuthRequest(mfaErrorMessage);
 
-  async function signInWithMail() {
+  async function stepUpSignIn() {
     setPending(true);
     setError(undefined);
     // The user menu also sends a signed-out tab to sign in and back to this
@@ -143,7 +143,7 @@ export function DisableTotpDialog({
             <Button
               type="button"
               disabled={pending}
-              onClick={() => void signInWithMail()}
+              onClick={() => void stepUpSignIn()}
             >
               Volver a ingresar
             </Button>

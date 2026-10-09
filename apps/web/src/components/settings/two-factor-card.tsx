@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DisableTotpDialog } from "@/components/mfa/disable-totp-dialog";
 import { TotpEnrollPanel } from "@/components/mfa/totp-enroll-panel";
@@ -17,6 +18,7 @@ import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   canDisable,
+  confirmsDisable,
   fetchTwoFactorState,
   twoFactorSwitch,
   type TwoFactorPanel,
@@ -33,15 +35,12 @@ const DESCRIPTIONS: Record<TwoFactorStatus, string> = {
 
 const fetchState = () => fetchTwoFactorState(createClient());
 
-// confirmDisable opens the off dialog once TOTP shows on: the step-up's
-// sign-in comes back here with it.
-export function TwoFactorCard({
-  stepUpNeeded,
-  confirmDisable,
-}: {
-  stepUpNeeded: boolean;
-  confirmDisable: boolean;
-}) {
+// ?confirm=disable opens the off dialog once TOTP shows on: the step-up's
+// sign-in comes back here with it. It is read from the URL on mount, not from
+// the server's render, which back and forward reuse after the URL is cleared.
+export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
+  const searchParams = useSearchParams();
+  const [confirmDisable] = useState(() => confirmsDisable(searchParams));
   const [state, setState] = useState<TwoFactorState>({ status: "loading" });
   const [panel, setPanel] = useState<TwoFactorPanel>("none");
   const [notice, setNotice] = useState<string>();

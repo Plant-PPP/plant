@@ -66,6 +66,7 @@ afterEach(() => {
 function line(): Record<string, unknown> {
   expect(lines).toHaveLength(1);
   expect(JSON.stringify(lines)).not.toMatch(/bound|other|half|someone-else/);
+  expect(lines[0]).toHaveProperty(["enduser.id"], "user-1");
   return lines[0] ?? {};
 }
 
@@ -147,6 +148,17 @@ it.each([
     "plant.outcome": "factor_not_found",
     "plant.auth.mfa_factors_removed.count": 0,
     "plant.auth.mfa_factors_verified.count": 1,
+  });
+});
+
+it("removes nothing when Auth's user has no factors left", async () => {
+  const { client, auth } = fakeClient({ user: { id: "user-1" } as never });
+  await expect(run(client, "bound")).resolves.toEqual({
+    outcome: "factor_not_found",
+  });
+  expect(auth.mfa.unenroll).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    "plant.auth.mfa_factors_verified.count": 0,
   });
 });
 

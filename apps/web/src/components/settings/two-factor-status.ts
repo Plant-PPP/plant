@@ -1,5 +1,4 @@
 import { type AuthClient, listVerifiedFactors } from "@/lib/auth/mfa-factors";
-import { firstParam } from "@/lib/auth/routes";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 
 // Where the step-up's sign-in comes back to: Ajustes with the off dialog open.
@@ -7,9 +6,9 @@ import { SETTINGS_ITEM } from "@/lib/navigation";
 export const CONFIRM_DISABLE_PATH = `${SETTINGS_ITEM.href}?confirm=disable`;
 
 export function confirmsDisable(searchParams: {
-  confirm?: string | string[];
+  get(name: string): string | null;
 }): boolean {
-  return firstParam(searchParams.confirm) === "disable";
+  return searchParams.get("confirm") === "disable";
 }
 
 export type TwoFactorStatus = "loading" | "failed" | "on" | "off";
