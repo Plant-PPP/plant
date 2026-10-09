@@ -12,13 +12,14 @@ CREATE TEMP TABLE baseline AS SELECT coalesce(max(id), 0) AS last_id FROM privat
 SELECT is_empty(
   $$ SELECT r.rolname || ' ' || t
      FROM pg_roles r,
-          unnest(ARRAY['auth.sessions', 'auth.mfa_factors']) t
+          unnest(ARRAY['auth.sessions', 'auth.mfa_factors', 'private.audit_log']) t
      WHERE pg_has_role('authenticator', r.oid, 'MEMBER')
        AND (has_any_column_privilege(r.oid, t, 'INSERT, UPDATE')
             OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
             OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
-            OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass), 'MEMBER')
-            OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')) $$,
+            OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
+            OR pg_has_role(r.oid, (SELECT oid FROM pg_roles
+                                   WHERE rolname = current_setting('supautils.privileged_role', true)), 'MEMBER')) $$,
   'no role the API can become can write, truncate, add a trigger to or own sessions, factors or audit_log, or switch triggers off, so none can forge or skip an audit row'
 );
 
