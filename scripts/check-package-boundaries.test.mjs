@@ -340,6 +340,23 @@ test("a flow-style packages list fails", () => {
   assert.match(r.output, /Could not read the packages globs/);
 });
 
+test("a packages list at column 0 fails", () => {
+  const r = check({ "@plant/core": ["ai"] }, "dependencies", {
+    "pnpm-workspace.yaml":
+      'packages:\n- "apps/*"\n- "packages/*"\n- "evals"\n- "security-tests"\n',
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.output, /Could not read the packages globs/);
+});
+
+test("comment lines in the packages list are skipped", () => {
+  const r = check({}, "dependencies", {
+    "pnpm-workspace.yaml":
+      'packages:\n  # apps\n  - "apps/*"\n# the rest\n  - "packages/*"\n  - "evals"\n  - "security-tests"\n',
+  });
+  assert.equal(r.status, 0, r.output);
+});
+
 // pnpm resolves "~/" under $HOME, wherever the spec names it.
 for (const spec of ["~/../../shared", "file:~/../../shared"]) {
   test(`x: ${spec} in @plant/core fails`, () => {
