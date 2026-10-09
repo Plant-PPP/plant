@@ -2,7 +2,7 @@
   "name": "@plant/core",
   "version": "0.0.0",
   "private": true,
-  "description": "Valuation and portfolio functions; they arrive with the \"Patrimonio manual\" stage.",
+  "description": "Domain functions: the quote feeds (dollar rates, UVA and crypto prices) behind QuoteFeedPort; valuation and portfolio functions arrive with the \"Patrimonio manual\" stage.",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -14,7 +14,8 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
-    "@plant/shared": "workspace:*"
+    "@plant/shared": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/jest": "catalog:",

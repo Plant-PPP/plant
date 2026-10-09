@@ -24,7 +24,7 @@ pnpm dev:up                         # local Supabase + web on :3000 + Inngest de
 | `apps/web`         | Next.js 16 (App Router) + React 19 on Vercel `gru1`. Includes `/api/inngest` (the chat arrives with the "Asistente" stage)                              |
 | `packages/shared`  | Money (`Money` as a decimal string with its currency). Database types generated in `src/db/generated/`. `pricing.ts`, `ai-cost.ts` and `prompt-text.ts` |
 | `packages/sources` | `PortfolioSourcePort` and the `file_upload` adapter (arrive with the "Carga con IA" stage)                                                              |
-| `packages/core`    | Valuation and portfolio functions used by the UI and the assistant (arrive with the "Patrimonio manual" stage)                                          |
+| `packages/core`    | The quote feeds behind `QuoteFeedPort`. Valuation and portfolio functions arrive with the "Patrimonio manual" stage                                     |
 | `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                       |
 | `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                    |
 | `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                               |

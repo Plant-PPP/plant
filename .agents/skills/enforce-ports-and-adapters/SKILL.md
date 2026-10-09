@@ -14,7 +14,7 @@ This is a **language guide**, not a workflow. Load it as the lens for a review p
 sole job is to prove a change respects ports-and-adapters / dependency injection. The bar
 is deliberately unforgiving.
 
-> The port is the boundary *special case* of a shared interface — the seam where a DRY-extraction lands
+> The port is the boundary _special case_ of a shared interface — the seam where a DRY-extraction lands
 > on an architecture boundary. The general "when must I extract a 2nd occurrence" law lives in
 > `enforce-clean-code`; this guide owns placement/naming/DAG once the seam is a boundary.
 
@@ -26,7 +26,7 @@ nothing else may branch on it. Everything flows through the port.**
 
 - The **port** is the shared contract (an interface / injected dependency / typed seam).
 - An **adapter** is one concrete implementation of that port, injected at call time.
-- Consumers (handlers, tests, components, helpers, scripts, seeds — *everything*) talk to
+- Consumers (handlers, tests, components, helpers, scripts, seeds — _everything_) talk to
   the **port only**. They receive the adapter by injection and never construct, import, or
   name a concrete one.
 
@@ -61,7 +61,7 @@ reaches each subagent.
 ## What is FORBIDDEN — remove on sight, do not tolerate
 
 Every violation below must be FIXED in this change. The ONLY thing you may defer is a fix that is
-*literally unexpressible* today (the seam does not yet exist) — and even then you must RAISE it and
+_literally unexpressible_ today (the seam does not yet exist) — and even then you must RAISE it and
 file a tracked follow-up (Linear), never silently tolerate it. "Hard to fix", "out of scope", "the
 architecture makes it awkward" are NOT exemptions. A pre-existing violation outside this change's
 blast radius is still RAISED + logged as a follow-up; it does not block this PR, but it never
@@ -185,8 +185,9 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 - **`sources` is the reference hexagon.** `PortfolioSourcePort` (the zod contract), a single
   `SourceError` carrying `retryable`, a capability matrix, a factory, and the `file_upload` adapter.
   Every new port copies this skeleton.
-- **`core` is pure domain** — valuation and portfolio functions consumed by both the UI and the
-  assistant. It knows nothing about where holdings came from (no `sources` edge) and nothing about
+- **`core` is pure domain** — the quote feeds behind `QuoteFeedPort`; the valuation and
+  portfolio functions the UI and the assistant will use arrive with the "Patrimonio manual"
+  stage. It knows nothing about where holdings came from (no `sources` edge) and nothing about
   how work is scheduled (no `jobs` edge).
 - **`jobs` owns the `JobRunner` port** (`startImport`, `cancelImport`) and its Inngest adapter: thin
   Inngest orchestrators that call steps. **Steps are pure functions in `sources`/`core` with no
@@ -205,15 +206,15 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 
 ### Per-package in-scope / out-of-scope
 
-| Package | IN scope (owns) | OUT of scope (must not hold) |
-|---|---|---|
-| `shared` | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts` | any runtime infra, any test fixture, any consumer knowledge |
-| `sources` | `PortfolioSourcePort` contract, `SourceError`, capability matrix, factory, `adapters/file_upload/` and its extraction steps | engine imports (`inngest`), valuation logic, UI knowledge, naming a consumer |
-| `core` | valuation and portfolio functions (ARS/USD MEP, net worth, debts) | knowing which source produced a holding; engine imports; I/O |
-| `jobs` | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state | step logic itself (it lives in `sources`/`core`); UI knowledge |
-| `apps/web` | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools | domain logic that belongs in `core`; branching on a concrete source or engine |
-| `evals` | extraction and assistant evals | being imported by anything |
-| `security-tests` | pentest specs against local PostgREST, their Auth fixtures | being imported by anything |
+| Package          | IN scope (owns)                                                                                                                                       | OUT of scope (must not hold)                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `shared`         | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`                                                                          | any runtime infra, any test fixture, any consumer knowledge                                            |
+| `sources`        | `PortfolioSourcePort` contract, `SourceError`, capability matrix, factory, `adapters/file_upload/` and its extraction steps                           | engine imports (`inngest`), valuation logic, UI knowledge, naming a consumer                           |
+| `core`           | `QuoteFeedPort` contract, `QuoteFeedError`, factory, `quotes/adapters/<provider>/`; valuation and portfolio functions (ARS/USD MEP, net worth, debts) | knowing which source produced a holding; engine imports; I/O (HTTP comes in as the injected `GetJson`) |
+| `jobs`           | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state                                                 | step logic itself (it lives in `sources`/`core`); UI knowledge                                         |
+| `apps/web`       | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools                                               | domain logic that belongs in `core`; branching on a concrete source or engine                          |
+| `evals`          | extraction and assistant evals                                                                                                                        | being imported by anything                                                                             |
+| `security-tests` | pentest specs against local PostgREST, their Auth fixtures                                                                                            | being imported by anything                                                                             |
 
 ### The live hexagons
 
@@ -224,6 +225,11 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   capability matrix the port declares: a consumer reads `capabilities.<x>`, it never checks which
   source it holds. Errors cross the boundary as `SourceError` with `retryable`; an adapter-specific
   error class or message parsed by a consumer is a leak.
+- **`QuoteFeedPort` (`packages/core/src/quotes`).** Same skeleton: `contract/port.ts` and
+  `contract/quote.ts` (schemas, the window, `QuoteFeedError` with `retryable`), one folder per
+  provider under `adapters/`, and `factory.ts`, the only place outside the adapters that names a
+  provider. An adapter maps its response; the factory checks every row the same way. HTTP is the
+  injected `GetJson`, which the composition root builds (PLA-93), so `core` stays infra-free.
 - **`JobRunner` (`packages/jobs`).** Callers say `startImport` / `cancelImport` and read the `imports`
   row; they never import `inngest`, send an Inngest event by name, or know a step id. Steps take plain
   inputs and return plain outputs; anything engine-shaped (`step.run`, retries, event payloads) stays

@@ -3,7 +3,7 @@
 This is the block review/planning/implementation skills paste into EVERY subagent prompt (a
 "see the ports skill" reference is inert — subagents inherit nothing but their prompt). The fat
 `enforce-ports-and-adapters/SKILL.md` (package tables, the live hexagons —
-PortfolioSourcePort and JobRunner — machine-enforcement, verdict encyclopedia) is the ORCHESTRATOR's step-1 Read; subagents get only the block below.
+PortfolioSourcePort, QuoteFeedPort and JobRunner — machine-enforcement, verdict encyclopedia) is the ORCHESTRATOR's step-1 Read; subagents get only the block below.
 
 ```
 === PORTS-AND-ADAPTERS LENS (attack every change for boundary violations) ===

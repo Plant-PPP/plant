@@ -1,3 +1,5 @@
+import { DECIMAL_SCALE, DECIMAL_SCALE_DIGITS, toScaled } from "./money";
+
 // USD per 1M tokens, Standard tier. Sources (checked 2026-10-08):
 // https://ai.google.dev/gemini-api/docs/pricing,
 // https://platform.claude.com/docs/en/about-claude/pricing.
@@ -53,14 +55,7 @@ export type TokenUsage = {
   output: number;
 };
 
-const SCALE_DIGITS = 8;
-const SCALE = 10n ** BigInt(SCALE_DIGITS);
 const TOKENS_PER_PRICE_UNIT = 1_000_000n;
-
-function toScaled(decimal: string): bigint {
-  const [whole = "0", fraction = ""] = decimal.split(".");
-  return BigInt(whole) * SCALE + BigInt(fraction.padEnd(SCALE_DIGITS, "0"));
-}
 
 function tokens(count: number): bigint {
   if (!Number.isSafeInteger(count) || count < 0) {
@@ -80,10 +75,10 @@ export function costUsd(modelId: PricedModelId, usage: TokenUsage): string {
     toScaled(price.output) * tokens(usage.output);
   const scaled =
     (perMillion + TOKENS_PER_PRICE_UNIT / 2n) / TOKENS_PER_PRICE_UNIT;
-  const whole = scaled / SCALE;
-  const fraction = (scaled % SCALE)
+  const whole = scaled / DECIMAL_SCALE;
+  const fraction = (scaled % DECIMAL_SCALE)
     .toString()
-    .padStart(SCALE_DIGITS, "0")
+    .padStart(DECIMAL_SCALE_DIGITS, "0")
     .replace(/0+$/, "");
   return fraction === "" ? whole.toString() : `${whole}.${fraction}`;
 }
