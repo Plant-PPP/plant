@@ -23,6 +23,8 @@ export type PortfoliosView = {
   // More active portfolios than PAGE_ROW_LIMIT; the oldest are not shown.
   activeTruncated: boolean;
   archived: PortfolioRow[];
+  // Which archived page is shown: null for the first.
+  archivedPage: string | null;
   // Set when the archived list is on a later page, or has one.
   archivedFirstHref: string | null;
   archivedNextHref: string | null;
@@ -122,6 +124,7 @@ export async function readPortfolios(
     archived: archivedRows
       .slice(0, ARCHIVED_ROW_LIMIT)
       .map(({ id, name }) => ({ id, name })),
+    archivedPage: cursor ? `${cursor.at},${cursor.id}` : null,
     archivedFirstHref: cursor
       ? firstPageHref(params, ARCHIVED_PORTFOLIOS_PARAM)
       : null,

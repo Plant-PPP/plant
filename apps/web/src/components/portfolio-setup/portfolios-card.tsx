@@ -46,6 +46,13 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   const [archivedOpen, setArchivedOpen] = useState(
     view.archivedFirstHref !== null,
   );
+  // Another archived page, by a link, Back or the sidebar, clears the messages
+  // about the one before; an action's refresh keeps the page and its message.
+  const [shownPage, setShownPage] = useState(view.archivedPage);
+  if (shownPage !== view.archivedPage) {
+    setShownPage(view.archivedPage);
+    clearMessages();
+  }
 
   // The page reached through an archived-list link may not have that link,
   // and focus would fall to the page: it goes to the list's summary instead.
@@ -66,11 +73,6 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
     if (pending) return;
     clearMessages();
     setSheet(next);
-  }
-
-  function pageArchived() {
-    paging.current = true;
-    clearMessages();
   }
 
   // The row's buttons are aria-disabled while pending, not disabled: a
@@ -209,7 +211,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedFirstHref}
-                  onClick={pageArchived}
+                  onNavigate={() => (paging.current = true)}
                   scroll={false}
                 >
                   Ver las más recientes
@@ -219,7 +221,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedNextHref}
-                  onClick={pageArchived}
+                  onNavigate={() => (paging.current = true)}
                   scroll={false}
                 >
                   Ver más

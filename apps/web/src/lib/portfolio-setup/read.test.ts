@@ -76,6 +76,7 @@ it("reads both lists by the user, newest first", async () => {
     active: rows(2).map(({ id, name }) => ({ id, name })),
     activeTruncated: false,
     archived: rows(1).map(({ id, name }) => ({ id, name })),
+    archivedPage: null,
     archivedFirstHref: null,
     archivedNextHref: null,
   });
@@ -132,6 +133,7 @@ it("reads archived rows after a cursor, bounded by its timestamp", async () => {
     `archived_at.lt."${AT}",and(archived_at.eq."${AT}",id.lt.${ID})`,
   ]);
   expect(view.archivedFirstHref).toBe("?");
+  expect(view.archivedPage).toBe(`${AT},${ID}`);
 });
 
 it("shows the first page and warns on an invalid cursor", async () => {

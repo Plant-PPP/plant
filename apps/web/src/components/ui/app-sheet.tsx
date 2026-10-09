@@ -40,8 +40,14 @@ function AppSheet({
         className="w-full gap-0 sm:max-w-md"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
+          // A click does not focus a button in Safari or Firefox on macOS,
+          // so the opener can be the page itself.
           const present =
-            opener instanceof HTMLElement && opener.isConnected ? opener : null;
+            opener instanceof HTMLElement &&
+            opener !== document.body &&
+            opener.isConnected
+              ? opener
+              : null;
           const target = returnFocusTo ? returnFocusTo(present) : present;
           if (target?.isConnected) target.focus();
         }}
