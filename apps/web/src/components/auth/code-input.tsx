@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { OTP_LENGTH } from "@/lib/auth/otp-config";
-import { nextAuthCode } from "@/lib/auth/next-auth-code";
+import { mergeAuthCode } from "@/lib/auth/merge-auth-code";
 import { cn } from "@/lib/utils";
 
 // One transparent input spans the boxes, so paste, one-time-code autofill and
@@ -43,14 +43,23 @@ export function CodeInput({
         required
         autoFocus
         value={value}
-        onChange={(event) => onChange(nextAuthCode(value, event.target.value))}
-        // Only a caret after the last digit or a select-all survives: the boxes
-        // can't show a partial selection, and a paste over one splices codes.
+        onChange={(event) =>
+          onChange(
+            mergeAuthCode(
+              value,
+              event.target.value,
+              (event.nativeEvent as InputEvent).inputType,
+            ),
+          )
+        }
+        // The boxes show no selection, only a caret after the last digit, so
+        // the caret is kept there.
         onSelect={(event) => {
           const input = event.currentTarget;
           const end = input.value.length;
-          const all = input.selectionStart === 0 && input.selectionEnd === end;
-          if (!all) input.setSelectionRange(end, end);
+          if (input.selectionStart !== end || input.selectionEnd !== end) {
+            input.setSelectionRange(end, end);
+          }
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
