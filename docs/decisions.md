@@ -5,7 +5,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-09 · Vercel previews on request for agent branches
 
 - **`claude/*` branches don't deploy on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns them off, so review fixes stop spending Vercel Hobby's daily deployment cap. `staging` and every other branch deploy on push as before.
-- **A thread deploys its branch when the PR is ready for review**, with the Vercel connector's `create_deployment`: project `plant`, `gitSource` `{ type: "github", org: "Plant-PPP", repo: "plant", ref: "<branch>" }`, no `target` (a preview). It posts the deployment's URL with the PR. A later push needs a new request.
+- **Marking the PR ready for review deploys it.** `.github/workflows/preview.yml` runs `vercel deploy` for a non-draft PR from a `claude/*` branch on open, reopen, ready for review and every later push, and links the preview from the PR's `vercel-preview` deployment. Review rounds happen while the PR is a draft. The Vercel connector cannot create deployments (403), so the workflow uses a Vercel token in the `VERCEL_TOKEN` repo secret.
 - **`claude/*` deployments skip `turbo-ignore`.** A deployment someone asked for always builds, even when the branch's last commit touches nothing `@plant/web` depends on.
 
 ## 2026-10-09 · Audit rows for MFA and session end (PLA-76)
