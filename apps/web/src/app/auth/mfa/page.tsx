@@ -35,6 +35,8 @@ const PROBLEMS = {
   factors_unavailable: "No pudimos cargar tu verificación. Recargá la página.",
 } as const;
 
+type Outcome = keyof typeof PROBLEMS | "session_ended";
+
 // The only page an enrolled session below aal2 may open. It reads claims
 // without the MFA redirect, so it defines no server action and imports none.
 export default async function MfaPage({
@@ -47,7 +49,7 @@ export default async function MfaPage({
   if (mfaRequirement(claims) === "met") redirect(next);
 
   let factorId: string | undefined;
-  let problem: keyof typeof PROBLEMS | "session_ended" | undefined;
+  let problem: Outcome | undefined;
   try {
     const { totp } = await listVerifiedFactors(await createClient());
     factorId = totp[0]?.id;
@@ -97,7 +99,7 @@ export default async function MfaPage({
   );
 }
 
-async function logFields(userId: string, outcome: string) {
+async function logFields(userId: string, outcome: Outcome) {
   return {
     [REQUEST_ID_FIELD]: requestIdFrom((await headers()).get(REQUEST_ID_HEADER)),
     "enduser.id": userId,

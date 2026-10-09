@@ -86,7 +86,7 @@ export function TwoFactorCard() {
             onSuccess={() => {
               setEnrolling(false);
               setNotice(
-                "Activaste la verificación en dos pasos. Cerramos tus otras sesiones que no la tenían.",
+                "Activaste la verificación en dos pasos. Cerramos tus otras sesiones.",
               );
               reload();
             }}

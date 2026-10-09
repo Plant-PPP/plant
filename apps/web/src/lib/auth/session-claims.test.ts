@@ -46,6 +46,14 @@ it("sends a missing session to /login", async () => {
   await expect(getSessionClaims()).rejects.toThrow("redirect /login");
 });
 
+it("sends a session Auth reports gone to /login", async () => {
+  getClaims.mockResolvedValue({
+    data: null,
+    error: new AuthApiError("x", 403, "session_not_found"),
+  });
+  await expect(getSessionClaims()).rejects.toThrow("redirect /login");
+});
+
 it("throws on a rate limit instead of signing the user out", async () => {
   const error = new AuthApiError("rate limit", 429, "over_request_rate_limit");
   getClaims.mockResolvedValue({ data: null, error });

@@ -93,6 +93,13 @@ describe("enrollTotp", () => {
     });
   });
 
+  it("throws Auth's error when enroll fails", async () => {
+    const error = { code: "mfa_totp_enroll_not_enabled" };
+    await expect(
+      enrollTotp(fakeClient({ enroll: async () => ({ data: null, error }) })),
+    ).rejects.toBe(error);
+  });
+
   it("rejects a QR that is not SVG markup", async () => {
     await expect(
       enrollTotp(enrolled("data:image/png;base64,abc")),

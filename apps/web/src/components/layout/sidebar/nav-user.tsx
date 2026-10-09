@@ -44,7 +44,7 @@ function UserSummary({ user }: { user: SessionUser }) {
 }
 
 export function NavUser({ user }: { user: SessionUser }) {
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
   // This tab's own sign-out also fires SIGNED_OUT; it goes to /login without
@@ -102,7 +102,10 @@ export function NavUser({ user }: { user: SessionUser }) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href={SETTINGS_ITEM.href}>
+              <Link
+                href={SETTINGS_ITEM.href}
+                onClick={() => setOpenMobile(false)}
+              >
                 <SETTINGS_ITEM.icon />
                 {SETTINGS_ITEM.title}
               </Link>

@@ -32,7 +32,7 @@ describe("withQrSvgViewBox", () => {
 
   it("leaves an existing viewBox alone", () => {
     const withBox =
-      '<svg width="123" height="123" viewBox="0 0 123 123"><rect width="3" height="3"/></svg>';
+      '<svg width="123" height="123" viewBox="0 0 123 123"><rect x="15" y="12" width="3" height="3"/></svg>';
     expect(withQrSvgViewBox(withBox)).toBe(withBox);
   });
 
