@@ -53,8 +53,8 @@ export function CodeInput({
             native.inputType === "insertReplacementText";
           onChange(mergeAuthCode(value, event.target.value, autofill));
         }}
-        // A paste reaches the field with its line breaks turned into spaces,
-        // and a drop lands where the pointer is; both read the raw text here.
+        // A paste reaches the field without its line breaks, and a drop lands
+        // where the pointer is; both read the raw text here.
         onPaste={(event) => {
           event.preventDefault();
           const text = event.clipboardData.getData("text");

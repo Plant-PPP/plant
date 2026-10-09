@@ -194,6 +194,22 @@ describe("mergeAuthCode", () => {
     expect(performance.now() - start).toBeLessThan(500);
   });
 
+  it("takes a code after a dated line flattened to spaces", () => {
+    expect(mergeAuthCode("", "9 oct 2026 10:15 654321")).toBe("654321");
+  });
+
+  // Accepted: a keyboard insert strips line breaks, so a header date joins a
+  // split code; the mail body alone still gives the code.
+  it("joins a header date to a split code whose line break was stripped", () => {
+    expect(mergeAuthCode("", "10/10/2026654 321")).toBe("101020");
+    expect(
+      mergeAuthCode(
+        "",
+        "Escribí este código en la pantalla de ingreso:654321El código vence en 10 minutos.",
+      ),
+    ).toBe("654321");
+  });
+
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
       for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {

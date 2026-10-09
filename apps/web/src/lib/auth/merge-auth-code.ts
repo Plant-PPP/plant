@@ -32,9 +32,8 @@ function codeIn(text: string): string {
 }
 
 // The field's new text after an edit at the end, where its caret always is.
-// A whole code added there replaces the digits already in the field, and a
-// browser autofill (replaceAll) replaces them outright; anything else is
-// appended. An autofill whose text starts with the old digits keeps them:
+// Six or more digits added there replace the digits already in the field, and
+// a browser autofill (replaceAll) replaces them outright; fewer are appended. An autofill whose text starts with the old digits keeps them:
 // it can't be told apart from one that sends the code twice.
 export function mergeAuthCode(
   previous: string,

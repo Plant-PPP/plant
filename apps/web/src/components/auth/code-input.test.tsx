@@ -10,8 +10,9 @@ it("is one field the phone can fill with the mailed code", () => {
   expect(html.match(/<input/g)).toHaveLength(1);
   expect(html).toContain('autoComplete="one-time-code"');
   expect(html).toContain('inputMode="numeric"');
-  // A length cap would drop a code pasted after the digits already there, and
-  // disabling it while the code is checked would drop focus and the keyboard.
+  // A length cap would cut a code the browser inserts after the digits already
+  // there (autofill, a keyboard's clipboard suggestion), and disabling the
+  // field while the code is checked would drop focus and the keyboard.
   expect(html).not.toMatch(/<input[^>]*\s(maxLength|disabled)[=\s>]/);
 });
 
@@ -43,4 +44,15 @@ it("lets taps through every box to the field", () => {
   for (const box of html.match(/<span aria-hidden="true"[^>]*>/g) ?? []) {
     expect(box).toMatch(/pointer-events-none/);
   }
+});
+
+it("is named by a label pointing at its id", () => {
+  const out = renderToStaticMarkup(
+    <>
+      <label htmlFor="c">Código</label>
+      <CodeInput id="c" value="1" onChange={() => {}} />
+    </>,
+  );
+  expect(out).toMatch(/<label for="c">Código<\/label>/);
+  expect(out).toMatch(/<input[^>]*id="c"/);
 });
