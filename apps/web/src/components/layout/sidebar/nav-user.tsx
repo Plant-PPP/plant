@@ -23,7 +23,7 @@ import {
   sessionChange,
   type SessionUser,
 } from "@/lib/auth/session-user";
-import { signOutAndConfirm } from "@/lib/auth/sign-out";
+import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -122,7 +122,7 @@ export function NavUser({ user }: { user: SessionUser }) {
             </DropdownMenuItem>
             {failed && (
               <p role="alert" className="px-2 py-1.5 text-xs text-destructive">
-                No pudimos cerrar la sesión. Probá de nuevo.
+                {SIGN_OUT_FAILED}
               </p>
             )}
           </DropdownMenuContent>

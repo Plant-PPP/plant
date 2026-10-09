@@ -1,4 +1,16 @@
 import { type AuthClient, listVerifiedFactors } from "@/lib/auth/mfa-factors";
+import { firstParam } from "@/lib/auth/routes";
+import { SETTINGS_ITEM } from "@/lib/navigation";
+
+// Where the step-up's sign-in comes back to: Ajustes with the off dialog open.
+// The parameter only opens the dialog.
+export const CONFIRM_DISABLE_PATH = `${SETTINGS_ITEM.href}?confirm=disable`;
+
+export function confirmsDisable(searchParams: {
+  confirm?: string | string[];
+}): boolean {
+  return firstParam(searchParams.confirm) === "disable";
+}
 
 export type TwoFactorStatus = "loading" | "failed" | "on" | "off";
 
@@ -21,12 +33,16 @@ export async function fetchTwoFactorState(
 
 export type TwoFactorPanel = "none" | "enroll" | "disable";
 
-// The switch turns on from a loaded "off" and off from an "on" with a TOTP
-// factor to ask a code for; it waits while either panel is open.
+// Off needs a TOTP factor to ask a code for.
+export function canDisable(state: TwoFactorState): state is {
+  status: "on";
+  totpId: string;
+} {
+  return state.status === "on" && state.totpId !== undefined;
+}
+
 export function twoFactorSwitch(state: TwoFactorState, panel: TwoFactorPanel) {
-  const ready =
-    state.status === "off" ||
-    (state.status === "on" && state.totpId !== undefined);
+  const ready = state.status === "off" || canDisable(state);
   return {
     checked: state.status === "on" || panel === "enroll",
     disabled: panel !== "none" || !ready,

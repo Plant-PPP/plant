@@ -1,5 +1,10 @@
 import type { AuthClient } from "@/lib/auth/mfa-factors";
-import { fetchTwoFactorState, twoFactorSwitch } from "./two-factor-status";
+import {
+  CONFIRM_DISABLE_PATH,
+  confirmsDisable,
+  fetchTwoFactorState,
+  twoFactorSwitch,
+} from "./two-factor-status";
 
 const client = (listFactors: () => Promise<unknown>) =>
   ({ auth: { mfa: { listFactors } } }) as unknown as AuthClient;
@@ -53,5 +58,41 @@ describe("twoFactorSwitch", () => {
     [{ status: "on" }, "none", { checked: true, disabled: true }],
   ] as const)("%p, panel %s", (state, panel, expected) => {
     expect(twoFactorSwitch(state, panel)).toEqual(expected);
+  });
+});
+
+describe("fetchTwoFactorState with other factors", () => {
+  it("names the TOTP factor, not the first verified one", async () => {
+    await expect(
+      fetchTwoFactorState(
+        client(listed(["verified", "verified"], [{ id: "f1" }])),
+      ),
+    ).resolves.toEqual({ status: "on", totpId: "f1" });
+  });
+
+  it("is on without a TOTP factor to turn off", async () => {
+    const state = await fetchTwoFactorState(client(listed(["verified"], [])));
+    expect(state).toStrictEqual({ status: "on", totpId: undefined });
+    expect(twoFactorSwitch(state, "none")).toEqual({
+      checked: true,
+      disabled: true,
+    });
+  });
+});
+
+describe("confirmsDisable", () => {
+  it.each([
+    [{ confirm: "disable" }, true],
+    [{ confirm: ["disable", "x"] }, true],
+    [{ confirm: ["x", "disable"] }, false],
+    [{}, false],
+  ])("%p: %s", (params, expected) => {
+    expect(confirmsDisable(params)).toBe(expected);
+  });
+
+  it("is what the step-up comes back to", () => {
+    const url = new URL(CONFIRM_DISABLE_PATH, "https://x");
+    expect(url.pathname).toBe("/settings");
+    expect(confirmsDisable(Object.fromEntries(url.searchParams))).toBe(true);
   });
 });

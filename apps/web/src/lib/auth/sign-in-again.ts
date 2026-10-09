@@ -4,6 +4,9 @@ import { loginErrorPath } from "./login-errors";
 // comes back to this page.
 export function signInAgain(): void {
   window.location.assign(
-    loginErrorPath("signed_out", window.location.pathname),
+    loginErrorPath(
+      "signed_out",
+      window.location.pathname + window.location.search,
+    ),
   );
 }

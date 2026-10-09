@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { createClient } from "@/lib/supabase/client";
 import {
+  canDisable,
   fetchTwoFactorState,
   twoFactorSwitch,
   type TwoFactorPanel,
@@ -43,13 +44,15 @@ export function TwoFactorCard({
   const [state, setState] = useState<TwoFactorState>({ status: "loading" });
   const [panel, setPanel] = useState<TwoFactorPanel>("none");
   const [notice, setNotice] = useState<string>();
+  // Once the action asks for the step-up, every later try starts there.
+  const [stepUp, setStepUp] = useState(stepUpNeeded);
 
   useEffect(() => {
     let active = true;
     void fetchState().then((next) => {
       if (!active) return;
       setState(next);
-      if (confirmDisable && next.status === "on" && next.totpId) {
+      if (confirmDisable && canDisable(next)) {
         setPanel("disable");
       }
     });
@@ -114,12 +117,13 @@ export function TwoFactorCard({
             onCancel={() => setPanel("none")}
           />
         )}
-        {panel === "disable" && state.totpId && (
+        {panel === "disable" && canDisable(state) && (
           <DisableTotpDialog
             open
             onOpenChange={(open) => !open && setPanel("none")}
             factorId={state.totpId}
-            stepUpNeeded={stepUpNeeded}
+            stepUp={stepUp}
+            onStepUp={() => setStepUp(true)}
             onDone={closePanel}
           />
         )}

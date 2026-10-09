@@ -1,5 +1,6 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
+import { captureServerLog } from "@/lib/log/capture-server-log";
 import { unenrollForSession } from "./mfa-disable";
 import type { AuthClient } from "./mfa-factors";
 import { TOTP_FRESH_S } from "./mfa-rules";
@@ -20,6 +21,7 @@ function fakeClient({
   refreshError = null as unknown,
 } = {}) {
   const unenrolled: string[] = [];
+  const settledAtBound: string[] = [];
   const auth = {
     getUser: jest.fn(async () =>
       getUserError
@@ -29,26 +31,29 @@ function fakeClient({
     refreshSession: jest.fn(async () => ({ error: refreshError })),
     mfa: {
       unenroll: jest.fn(async ({ factorId }: { factorId: string }) => {
+        if (factorId === "bound") settledAtBound.push(...unenrolled);
+        // Settles on a later tick, so a removal started before the previous
+        // one finished would see it unfinished.
+        await Promise.resolve();
         if (factorId === failOn) return { data: null, error: new Error("no") };
         unenrolled.push(factorId);
         return { data: {}, error: null };
       }),
     },
   };
-  return { client: { auth } as unknown as AuthClient, auth, unenrolled };
+  return {
+    client: { auth } as unknown as AuthClient,
+    auth,
+    unenrolled,
+    settledAtBound,
+  };
 }
 
-// serverLog writes one line per call, on console.log, warn or error by level.
-let lines: unknown[][] = [];
+let lines: Record<string, unknown>[];
 
 beforeEach(() => {
   jest.useFakeTimers({ now: NOW_S * 1000 });
-  lines = [];
-  for (const method of ["log", "warn", "error"] as const) {
-    jest
-      .spyOn(console, method)
-      .mockImplementation((...args: unknown[]) => void lines.push(args));
-  }
+  lines = captureServerLog();
 });
 
 afterEach(() => {
@@ -58,7 +63,12 @@ afterEach(() => {
 
 function line(): Record<string, unknown> {
   expect(lines).toHaveLength(1);
-  return JSON.parse(lines[0]?.[0] as string) as Record<string, unknown>;
+  return lines[0] ?? {};
+}
+
+// The factor ids the browser can send: none may reach the log.
+function expectNoFactorIds() {
+  expect(JSON.stringify(lines)).not.toMatch(/bound|other|half|someone-else/);
 }
 
 const run = (client: AuthClient, factorId = "bound", claims = fresh) =>
@@ -71,7 +81,7 @@ const run = (client: AuthClient, factorId = "bound", claims = fresh) =>
   });
 
 it("removes the other factors first and the verified one last", async () => {
-  const { client, auth, unenrolled } = fakeClient({
+  const { client, auth, unenrolled, settledAtBound } = fakeClient({
     user: {
       id: "user-1",
       factors: [factor("bound"), factor("other"), factor("half", "unverified")],
@@ -79,6 +89,7 @@ it("removes the other factors first and the verified one last", async () => {
   });
   await expect(run(client)).resolves.toEqual({ outcome: "disabled" });
   expect(unenrolled).toEqual(["other", "bound"]);
+  expect(settledAtBound).toEqual(["other"]);
   expect(auth.refreshSession).toHaveBeenCalledTimes(1);
   expect(line()).toMatchObject({
     level: "info",
@@ -89,7 +100,7 @@ it("removes the other factors first and the verified one last", async () => {
     "plant.auth.mfa_factors_removed.count": 2,
     "plant.auth.mfa_factors_verified.count": 2,
   });
-  expect(lines[0]?.[0]).not.toMatch(/bound|other|totp/);
+  expectNoFactorIds();
 });
 
 it("refuses a TOTP code older than two minutes without calling Auth", async () => {
@@ -139,6 +150,7 @@ it.each([
     "plant.auth.mfa_factors_removed.count": 0,
     "plant.auth.mfa_factors_verified.count": 1,
   });
+  expectNoFactorIds();
 });
 
 it("reports an ended session apart from an Auth failure", async () => {
@@ -149,6 +161,7 @@ it("reports an ended session apart from an Auth failure", async () => {
   expect(line()).toMatchObject({
     level: "info",
     "plant.outcome": "session_ended",
+    "error.type": "AuthSessionMissingError",
   });
 });
 
@@ -179,6 +192,7 @@ it("reports partial when a factor is left behind", async () => {
     "plant.auth.mfa_factors_removed.count": 1,
     "plant.auth.mfa_factors_verified.count": 2,
   });
+  expectNoFactorIds();
 });
 
 it("reports an error when the first removal fails", async () => {
@@ -188,10 +202,15 @@ it("reports an error when the first removal fails", async () => {
     level: "error",
     "plant.auth.mfa_factors_removed.count": 0,
   });
+  expectNoFactorIds();
 });
 
 it("says so when every factor is gone but the session did not refresh", async () => {
-  const { client } = fakeClient({ refreshError: new Error("down") });
+  const { client } = fakeClient({
+    refreshError: Object.assign(new Error("down"), {
+      code: "over_request_rate_limit",
+    }),
+  });
   await expect(run(client)).resolves.toEqual({
     outcome: "session_refresh_failed",
   });
@@ -199,5 +218,6 @@ it("says so when every factor is gone but the session did not refresh", async ()
     level: "warn",
     "plant.outcome": "session_refresh_failed",
     "plant.auth.mfa_factors_removed.count": 1,
+    "error.type": "over_request_rate_limit",
   });
 });

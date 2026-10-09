@@ -1,8 +1,8 @@
 import "server-only";
-import { serverLog, type LogLevel } from "@/lib/log/server-log";
+import { errorType, serverLog, type LogLevel } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import type { AuthClient } from "./mfa-factors";
-import { type MfaClaims, totpIsFresh } from "./mfa-rules";
+import { type MfaClaims, totpIsFresh, unixNow } from "./mfa-rules";
 import type { SensitiveSession } from "./sensitive-session";
 import { isSessionMissing, type MaybeAuthError } from "./session-state";
 
@@ -45,7 +45,12 @@ export function logDisable(
   };
   const level = LEVELS[outcome];
   if (level === "error") serverLog.error("auth.mfa.disable", line, error);
-  else serverLog[level]("auth.mfa.disable", line);
+  else {
+    serverLog[level]("auth.mfa.disable", {
+      ...line,
+      "error.type": errorType(error as MaybeAuthError),
+    });
+  }
   return { outcome };
 }
 
@@ -68,17 +73,18 @@ export async function unenrollForSession({
   requestId?: string;
 }): Promise<{ outcome: DisableOutcome }> {
   const log = { requestId, userId: session.userId };
-  if (!totpIsFresh(claims, Math.floor(Date.now() / 1000))) {
+  if (!totpIsFresh(claims, unixNow())) {
     return logDisable("totp_stale", log);
   }
 
   const { data, error } = await client.auth.getUser();
   if (error) {
     return isSessionMissing(error as MaybeAuthError)
-      ? logDisable("session_ended", log)
+      ? logDisable("session_ended", log, error)
       : logDisable("error", log, error);
   }
-  // Both come from the same cookie; this keeps it that way.
+  // The gate's claims and getUser read the same cookie; a mismatch means it
+  // changed in between.
   if (data.user.id !== session.userId) return logDisable("user_mismatch", log);
 
   const verified = (data.user.factors ?? []).filter(
@@ -111,7 +117,11 @@ export async function unenrollForSession({
   // The new token says the user has no factor, so the proxy stops asking.
   const { error: refreshError } = await client.auth.refreshSession();
   if (refreshError) {
-    return logDisable("session_refresh_failed", { ...counts, removed });
+    return logDisable(
+      "session_refresh_failed",
+      { ...counts, removed },
+      refreshError,
+    );
   }
   return logDisable("disabled", { ...counts, removed });
 }

@@ -26,10 +26,12 @@ export const STEP_UP_WINDOW_S = 15 * 60;
 
 const FIRST_FACTORS: ReadonlySet<unknown> = new Set(FIRST_FACTOR_METHODS);
 
+// Now in Unix seconds, the unit of amr timestamps.
+export const unixNow = () => Math.floor(Date.now() / 1000);
+
 // Whether the session has an amr entry for one of methods from the last
-// windowS seconds. Auth writes each entry as { method, timestamp } in Unix
-// seconds, from its own clock; nowS is in Unix seconds too. A timestamp ahead
-// of nowS is clock skew: the token is signed.
+// windowS seconds. Auth writes each entry as { method, timestamp } from its
+// own clock. A timestamp ahead of now is clock skew: the token is signed.
 function amrEntryWithin(
   claims: MfaClaims,
   methods: ReadonlySet<unknown>,
@@ -52,8 +54,7 @@ function amrEntryWithin(
   );
 }
 
-// Export, account deletion, email change and turning MFA off, on claims that
-// already passed mfaRequirement: they need a first-factor sign-in within
+// Every SensitiveAction, on claims that already passed mfaRequirement: they need a first-factor sign-in within
 // STEP_UP_WINDOW_S. A user with TOTP passed mfaRequirement by verifying it
 // after that sign-in, so the window covers both factors.
 export function sensitiveRequirement(

@@ -13,6 +13,7 @@ import { z } from "zod";
 
 jest.mock("server-only", () => ({}), { virtual: true });
 
+import { captureServerLog } from "@/lib/log/capture-server-log";
 import { AiCostWriteError } from "./ai-cost-writer";
 import { costMiddleware } from "./cost-middleware";
 
@@ -70,18 +71,8 @@ let lines: Record<string, unknown>[];
 
 beforeEach(() => {
   record = jest.fn<Promise<void>, [AiCostInsert]>(async () => {});
-  lines = [];
-  jest.spyOn(console, "log").mockImplementation(collect);
-  jest.spyOn(console, "warn").mockImplementation(collect);
-  jest.spyOn(console, "error").mockImplementation(collect);
+  lines = captureServerLog();
 });
-
-// serverLog's lines; the SDK's own warnings are not JSON.
-function collect(line?: unknown) {
-  if (typeof line === "string" && line.startsWith("{")) {
-    lines.push(JSON.parse(line) as Record<string, unknown>);
-  }
-}
 
 afterEach(() => {
   jest.restoreAllMocks();

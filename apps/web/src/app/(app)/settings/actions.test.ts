@@ -19,20 +19,17 @@ jest.mock("@/lib/auth/mfa-disable", () => ({
   unenrollForSession: (args: unknown) => unenrollForSession(args),
 }));
 
+import { captureServerLog } from "@/lib/log/capture-server-log";
 import { disableTotp } from "./actions";
 
-// serverLog writes one line per call, on console.log, warn or error by level.
-let lines: unknown[][] = [];
+const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
+
+let lines: Record<string, unknown>[];
 
 beforeEach(() => {
   jest.resetAllMocks();
-  requestHeaders.set("x-request-id", "12345678-aaaa-4bbb-8ccc-dddddddddddd");
-  lines = [];
-  for (const method of ["log", "warn", "error"] as const) {
-    jest
-      .spyOn(console, method)
-      .mockImplementation((...args: unknown[]) => void lines.push(args));
-  }
+  requestHeaders.set("x-request-id", REQUEST_ID);
+  lines = captureServerLog();
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -45,13 +42,14 @@ it.each([undefined, 1, { id: "f" }])(
     });
     expect(requireSensitiveSession).not.toHaveBeenCalled();
     expect(createClient).not.toHaveBeenCalled();
-    const line = JSON.parse(lines[0]?.[0] as string) as Record<string, unknown>;
-    expect(line).toMatchObject({
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
       level: "warn",
       event: "auth.mfa.disable",
+      "plant.request_id": REQUEST_ID,
       "plant.outcome": "invalid_input",
     });
-    expect(line).not.toHaveProperty(["enduser.id"]);
+    expect(lines[0]).not.toHaveProperty(["enduser.id"]);
   },
 );
 
@@ -78,6 +76,6 @@ it("hands the gate's proof, the claims and the client to the unenroll", async ()
     claims: { sub: "user-1" },
     client,
     factorId: "f",
-    requestId: "12345678-aaaa-4bbb-8ccc-dddddddddddd",
+    requestId: REQUEST_ID,
   });
 });

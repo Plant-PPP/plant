@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { disableTotp } from "@/app/(app)/settings/actions";
+import { type DisableResult, disableTotp } from "@/app/(app)/settings/actions";
+import { CONFIRM_DISABLE_PATH } from "@/components/settings/two-factor-status";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,63 +20,75 @@ import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { loginPath } from "@/lib/auth/routes";
 import { failedOnEndedSession } from "@/lib/auth/session-state";
 import { signInAgain } from "@/lib/auth/sign-in-again";
-import { signOutAndConfirm } from "@/lib/auth/sign-out";
+import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 
-// Where the step-up's sign-in comes back to: Ajustes with this dialog open.
-const CONFIRM_DISABLE_PATH = "/settings?confirm=disable";
-
 const RETRY = "No pudimos desactivarla. Probá de nuevo.";
 
-// Outcomes that keep the dialog open for another code.
-const RETRY_MESSAGES: Partial<Record<DisableOutcome, string>> = {
-  totp_stale: "El código venció. Probá de nuevo.",
-  factor_not_found: "Recargá la página y probá de nuevo.",
-  user_mismatch: RETRY,
-  invalid_input: RETRY,
-  error: RETRY,
+// What the dialog does with each answer of the action: stay open for another
+// code, or close and let the card reload the factors and show the notice.
+const ANSWERS: Record<
+  Exclude<DisableOutcome, "session_ended">,
+  { close: boolean; copy: string }
+> = {
+  disabled: {
+    close: true,
+    copy: "Desactivaste la verificación en dos pasos.",
+  },
+  session_refresh_failed: {
+    close: true,
+    copy: "Desactivamos la verificación. Recargá la página.",
+  },
+  partial: {
+    close: true,
+    copy: "Desactivamos parte de la verificación. Recargá la página y probá de nuevo.",
+  },
+  totp_stale: { close: false, copy: "El código venció. Probá de nuevo." },
+  factor_not_found: {
+    close: false,
+    copy: "Tu app de autenticación cambió. Recargá la página y probá de nuevo.",
+  },
+  user_mismatch: { close: false, copy: RETRY },
+  invalid_input: { close: false, copy: RETRY },
+  error: { close: false, copy: RETRY },
 };
 
-// Outcomes after which the factors changed: the card reloads and says how.
-const DONE_NOTICES: Partial<Record<DisableOutcome, string>> = {
-  disabled: "Desactivaste la verificación en dos pasos.",
-  session_refresh_failed: "Desactivamos la verificación. Recargá la página.",
-  partial:
-    "Desactivamos parte de la verificación. Recargá la página y probá de nuevo.",
-};
-
-// Turning TOTP off: a sign-in with the mailbox in the last 15 minutes, then a
-// current code. The server decides both; stepUpNeeded only saves typing a code
-// the server would refuse.
+// Turning TOTP off: a sign-in with the mailbox within the step-up window, then
+// a current code. The server decides both; stepUp only saves typing a code the
+// server would refuse.
 export function DisableTotpDialog({
   open,
   onOpenChange,
   factorId,
-  stepUpNeeded,
+  stepUp,
+  onStepUp,
   onDone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   factorId: string;
-  stepUpNeeded: boolean;
+  stepUp: boolean;
+  onStepUp: () => void;
   onDone: (notice: string) => void;
 }) {
   const codeId = useId();
   const [code, setCode] = useState("");
-  const [stepUp, setStepUp] = useState(stepUpNeeded);
   const { run, pending, setPending, error, setError } =
     useAuthRequest(mfaErrorMessage);
 
   async function signInWithMail() {
     setPending(true);
     setError(undefined);
+    // The user menu also sends a signed-out tab to sign in and back to this
+    // URL, so both land on the dialog.
+    window.history.replaceState(null, "", CONFIRM_DISABLE_PATH);
     if (await signOutAndConfirm(createClient().auth)) {
       window.location.assign(loginPath(CONFIRM_DISABLE_PATH));
       return;
     }
     setPending(false);
-    setError("No pudimos cerrar la sesión. Probá de nuevo.");
+    setError(SIGN_OUT_FAILED);
   }
 
   async function disable() {
@@ -87,7 +100,7 @@ export function DisableTotpDialog({
     setCode("");
     if (failure) return;
 
-    let result: Awaited<ReturnType<typeof disableTotp>>;
+    let result: DisableResult;
     try {
       result = await disableTotp(factorId);
     } catch {
@@ -97,14 +110,14 @@ export function DisableTotpDialog({
     }
     if ("stepUp" in result) {
       setPending(false);
-      setStepUp(true);
+      onStepUp();
       return;
     }
     if (result.outcome === "session_ended") return signInAgain();
-    const notice = DONE_NOTICES[result.outcome];
-    if (notice) return onDone(notice);
+    const answer = ANSWERS[result.outcome];
+    if (answer.close) return onDone(answer.copy);
     setPending(false);
-    setError(RETRY_MESSAGES[result.outcome] ?? RETRY);
+    setError(answer.copy);
   }
 
   return (
@@ -114,7 +127,7 @@ export function DisableTotpDialog({
           <DialogTitle>Desactivar la verificación en dos pasos</DialogTitle>
           <DialogDescription>
             {stepUp
-              ? "Por seguridad, volvé a ingresar con tu mail. Vamos a cerrar tu sesión en este dispositivo y te mandamos un código o un enlace."
+              ? "Por seguridad, volvé a ingresar con tu mail. Vamos a cerrar tu sesión en este dispositivo y te mandamos un código o un link."
               : "Ingresá el código que muestra tu app de autenticación."}
           </DialogDescription>
         </DialogHeader>
