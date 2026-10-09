@@ -568,7 +568,7 @@ BEGIN
     CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_role
       AS RESTRICTIVE FOR ALL TO authenticated, authenticated_aal1 USING (%1$s) WITH CHECK (%1$s);
     CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_cmd
-      AS RESTRICTIVE FOR SELECT TO authenticated USING (%1$s);
+      AS RESTRICTIVE FOR UPDATE TO authenticated USING (%1$s) WITH CHECK (%1$s);
     CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_using
       AS RESTRICTIVE FOR ALL TO authenticated USING (true) WITH CHECK (%1$s);
     CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_check

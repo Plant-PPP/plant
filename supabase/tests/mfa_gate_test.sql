@@ -184,14 +184,15 @@ FROM gated
 ORDER BY aal NULLS LAST, mfa_enrolled NULLS LAST;
 
 -- The policy compares the claim as JSON, so a claim that is not a JSON
--- boolean counts as missing, as mfaRequirement treats it.
+-- boolean counts as missing, as mfaRequirement treats it. The JSON false is
+-- the control: the same session with it reads its profile.
 CREATE TEMP TABLE odd_claims (claim jsonb, reads boolean) ON COMMIT DROP;
 DO $$
 DECLARE
   claim jsonb;
   reads boolean;
 BEGIN
-  FOREACH claim IN ARRAY ARRAY['"true"', '"false"', '1', '0', 'null']::jsonb[] LOOP
+  FOREACH claim IN ARRAY ARRAY['false', '"true"', '"false"', '1', '0', 'null']::jsonb[] LOOP
     PERFORM set_config('request.jwt.claims', jsonb_build_object(
       'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
       'aal', 'aal1', 'mfa_enrolled', claim)::text, true);
@@ -203,8 +204,10 @@ BEGIN
 END
 $$;
 
-SELECT is_empty(
-  $$SELECT claim::text FROM odd_claims WHERE reads$$,
+SELECT set_eq(
+  $$SELECT claim::text, reads FROM odd_claims$$,
+  $$VALUES ('false', true), ('"true"', false), ('"false"', false), ('1', false),
+           ('0', false), ('null', false)$$,
   'an aal1 session whose claim is not a JSON boolean reads nothing'
 );
 
