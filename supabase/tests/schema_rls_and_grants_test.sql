@@ -196,6 +196,7 @@ SELECT set_eq(
 SELECT ok(
   (SELECT p.proconfig = ARRAY['search_path=""']
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.profiles'::regclass)
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.portfolios'::regclass)
    FROM pg_proc p WHERE p.oid = 'private.create_profile_for_new_user()'::regprocedure)
     AND (SELECT t.tgenabled = 'O'
                 AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.create_profile_for_new_user()'
@@ -203,7 +204,7 @@ SELECT ok(
          WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created')
     AND (SELECT count(*) FROM pg_trigger t
          WHERE t.tgfoid = 'private.create_profile_for_new_user()'::regprocedure) = 1,
-  'the signup trigger runs as the owner of profiles, with an empty search_path, is enabled and is its function''s only trigger'
+  'the signup trigger runs as the owner of profiles and portfolios, with an empty search_path, is enabled and is its function''s only trigger'
 );
 
 SELECT ok(
