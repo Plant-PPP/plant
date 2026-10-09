@@ -50,29 +50,37 @@ export function hintOf(res: { body: unknown }): unknown {
   return (res.body as { hint?: unknown } | null)?.hint;
 }
 
-// Each request is its own transaction, so only the per-user lock keeps an
-// archive and a new account pointing at the same row from both passing their
-// guards: exactly one must win, the other refused with its hint. A race is not
-// certain to show in one round, hence several; each round undoes its winner.
+// Each request is its own transaction, so only the per-user lock keeps two
+// concurrent writes from both passing their guards. A race is not certain to
+// show in one round, hence several.
+export const RACE_ROUNDS = 10;
+
+const RACE_HINTS = {
+  portfolios: { inUse: "portfolio_in_use", archived: "portfolio_archived" },
+  holders: { inUse: "holder_in_use", archived: "holder_archived" },
+} as const satisfies Record<
+  string,
+  { inUse: PortfolioSetupGuardHint; archived: PortfolioSetupGuardHint }
+>;
+
+// An archive and a new account pointing at the same row: exactly one must win,
+// the other refused with its hint. Each round undoes its winner.
 export async function raceArchiveAgainstAccount(
   user: TestUser,
   {
     table,
     target,
     account,
-    inUse,
-    archived,
     afterRound,
   }: {
-    table: "portfolios" | "holders";
+    table: keyof typeof RACE_HINTS;
     target: (round: number) => Promise<string>;
     account: (id: string) => Insert<"source_connections">;
-    inUse: PortfolioSetupGuardHint;
-    archived: PortfolioSetupGuardHint;
     afterRound: (id: string) => Promise<void>;
   },
 ): Promise<void> {
-  for (let round = 0; round < 10; round++) {
+  const { inUse, archived } = RACE_HINTS[table];
+  for (let round = 0; round < RACE_ROUNDS; round++) {
     const id = await target(round);
     let accountId: string | undefined;
     try {
@@ -93,8 +101,12 @@ export async function raceArchiveAgainstAccount(
         expectError(create, 409, PORTFOLIO_SETUP_GUARD.sqlstate, archived);
       }
     } finally {
-      if (accountId) await archiveRow(user, "source_connections", accountId);
-      await afterRound(id);
+      // The account goes first: an active one keeps its row from archiving.
+      try {
+        if (accountId) await archiveRow(user, "source_connections", accountId);
+      } finally {
+        await afterRound(id);
+      }
     }
   }
 }
