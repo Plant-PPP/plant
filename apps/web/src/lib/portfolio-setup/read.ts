@@ -17,12 +17,23 @@ import { PortfolioSetupError } from "./errors";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
 
 export type PortfolioRow = { id: string; name: string };
+export type HolderRow = PortfolioRow;
 
-export type PortfoliosView = {
-  active: PortfolioRow[];
-  // More active portfolios than PAGE_ROW_LIMIT; the oldest are not shown.
+// An account with its holder (null is the user) and default portfolio, each
+// marked when archived: only an archived account can point at one.
+export type SourceConnectionRow = {
+  id: string;
+  institution: string;
+  includeInTaxReport: boolean;
+  holder: (HolderRow & { archived: boolean }) | null;
+  portfolio: PortfolioRow & { archived: boolean };
+};
+
+export type ListView<Row> = {
+  active: Row[];
+  // More active rows than PAGE_ROW_LIMIT; the oldest are not shown.
   activeTruncated: boolean;
-  archived: PortfolioRow[];
+  archived: Row[];
   // Which archived page is shown: null for the first.
   archivedPage: string | null;
   // Set when the archived list is on a later page, or has one.
@@ -30,49 +41,57 @@ export type PortfoliosView = {
   archivedNextHref: string | null;
 };
 
-// The param that pages the archived portfolios.
-const ARCHIVED_PORTFOLIOS_PARAM = "carteras";
+export type PortfoliosView = ListView<PortfolioRow>;
+export type HoldersView = ListView<HolderRow>;
+export type SourceConnectionsView = ListView<SourceConnectionRow>;
+
+type ReadContext = {
+  userId: string;
+  requestId: string | undefined;
+  params: KeysetParams;
+};
+
+type ListSpec<Row> = {
+  table: "portfolios" | "holders" | "source_connections";
+  // The search param that pages the archived rows.
+  param: string;
+  columns: string;
+  toRow: (data: Record<string, unknown>) => Row;
+};
 
 const EVENT = "portfolio_setup.read";
 
-// The user's active portfolios, newest first, and one page of the archived
-// ones, latest archive first. Both reads filter by the user besides RLS. A
-// failed read is logged here and thrown as a LoggedError, which the (app)
-// error page shows with a retry.
-export async function readPortfolios(
+// The user's active rows of a table, newest first, and one page of the
+// archived ones, latest archive first. Both reads filter by the user besides
+// RLS. A failed read is logged here and thrown as a LoggedError, which the
+// (app) error page shows with a retry.
+async function readList<Row>(
   client: SupabaseClient<Database>,
-  {
-    userId,
-    requestId,
-    params,
-  }: {
-    userId: string;
-    requestId: string | undefined;
-    params: KeysetParams;
-  },
-): Promise<PortfoliosView> {
-  const fields = { [REQUEST_ID_FIELD]: requestId, "enduser.id": userId };
-  const parsed = parseKeyset(params[ARCHIVED_PORTFOLIOS_PARAM]);
+  { table, param, columns, toRow }: ListSpec<Row>,
+  { userId, requestId, params }: ReadContext,
+): Promise<ListView<Row>> {
+  const fields = {
+    [REQUEST_ID_FIELD]: requestId,
+    "enduser.id": userId,
+    "plant.portfolio_setup.table": table,
+  };
+  const parsed = parseKeyset(params[param]);
   if (!parsed.ok) {
-    serverLog.warn(EVENT, {
-      ...fields,
-      "plant.portfolio_setup.table": "portfolios",
-      "plant.outcome": "invalid_cursor",
-    });
+    serverLog.warn(EVENT, { ...fields, "plant.outcome": "invalid_cursor" });
   }
   const cursor: Keyset | null = parsed.ok ? parsed.cursor : null;
 
   const activeQuery = client
-    .from("portfolios")
-    .select("id, name")
+    .from(table)
+    .select(columns)
     .eq("user_id", userId)
     .is("archived_at", null)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(PAGE_ROW_LIMIT + 1);
   let archivedQuery = client
-    .from("portfolios")
-    .select("id, name, archived_at")
+    .from(table)
+    .select(`${columns}, archived_at`)
     .eq("user_id", userId)
     .not("archived_at", "is", null);
   if (cursor) {
@@ -88,17 +107,15 @@ export async function readPortfolios(
       .limit(ARCHIVED_ROW_LIMIT + 1),
   ]);
 
-  const failures = [active, archived].map((result) =>
+  const [activeFailure, archivedFailure] = [active, archived].map((result) =>
     classifyPostgrestResult(result, 200),
   );
-  const [activeFailure, archivedFailure] = failures;
   const failure = activeFailure ?? archivedFailure;
   if (failure) {
     serverLog.error(
       EVENT,
       {
         ...fields,
-        "plant.portfolio_setup.table": "portfolios",
         "plant.portfolio_setup.list":
           activeFailure && archivedFailure
             ? "both"
@@ -112,28 +129,96 @@ export async function readPortfolios(
     throw new LoggedError("portfolio_setup.read_failed");
   }
 
-  const activeRows = active.data ?? [];
-  const archivedRows = archived.data ?? [];
+  // The select is built from strings, so the client cannot type its rows.
+  const activeRows = (active.data ?? []) as unknown as Record<
+    string,
+    unknown
+  >[];
+  const archivedRows = (archived.data ?? []) as unknown as (Record<
+    string,
+    unknown
+  > & { id: string; archived_at: string | null })[];
   const lastShown = archivedRows[ARCHIVED_ROW_LIMIT - 1];
   return {
-    active: activeRows.slice(0, PAGE_ROW_LIMIT).map(({ id, name }) => ({
-      id,
-      name,
-    })),
+    active: activeRows.slice(0, PAGE_ROW_LIMIT).map(toRow),
     activeTruncated: activeRows.length > PAGE_ROW_LIMIT,
-    archived: archivedRows
-      .slice(0, ARCHIVED_ROW_LIMIT)
-      .map(({ id, name }) => ({ id, name })),
+    archived: archivedRows.slice(0, ARCHIVED_ROW_LIMIT).map(toRow),
     archivedPage: cursor ? `${cursor.at},${cursor.id}` : null,
-    archivedFirstHref: cursor
-      ? firstPageHref(params, ARCHIVED_PORTFOLIOS_PARAM)
-      : null,
+    archivedFirstHref: cursor ? firstPageHref(params, param) : null,
     archivedNextHref:
       archivedRows.length > ARCHIVED_ROW_LIMIT && lastShown?.archived_at
-        ? keysetHref(params, ARCHIVED_PORTFOLIOS_PARAM, {
+        ? keysetHref(params, param, {
             at: lastShown.archived_at,
             id: lastShown.id,
           })
         : null,
   };
+}
+
+function namedRow(data: Record<string, unknown>): PortfolioRow {
+  return { id: String(data.id), name: String(data.name) };
+}
+
+function linkedRow(data: unknown): PortfolioRow & { archived: boolean } {
+  const row = data as { id: string; name: string; archived_at: string | null };
+  return { id: row.id, name: row.name, archived: row.archived_at !== null };
+}
+
+export function readPortfolios(
+  client: SupabaseClient<Database>,
+  context: ReadContext,
+): Promise<PortfoliosView> {
+  return readList(
+    client,
+    {
+      table: "portfolios",
+      param: "carteras",
+      columns: "id, name",
+      toRow: namedRow,
+    },
+    context,
+  );
+}
+
+export function readHolders(
+  client: SupabaseClient<Database>,
+  context: ReadContext,
+): Promise<HoldersView> {
+  return readList(
+    client,
+    {
+      table: "holders",
+      param: "titulares",
+      columns: "id, name",
+      toRow: namedRow,
+    },
+    context,
+  );
+}
+
+// The holder and the portfolio are embedded through the composite foreign
+// keys, so RLS on those tables applies to them too.
+export function readSourceConnections(
+  client: SupabaseClient<Database>,
+  context: ReadContext,
+): Promise<SourceConnectionsView> {
+  return readList(
+    client,
+    {
+      table: "source_connections",
+      param: "cuentas",
+      columns:
+        "id, institution, include_in_tax_report, " +
+        "holder:holders!source_connections_user_id_holder_id_fkey(id, name, archived_at), " +
+        "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
+      toRow: (data) => ({
+        id: String(data.id),
+        institution: String(data.institution),
+        includeInTaxReport: data.include_in_tax_report === true,
+        holder: data.holder ? linkedRow(data.holder) : null,
+        portfolio: linkedRow(data.portfolio),
+      }),
+    },
+    context,
+  );
 }

@@ -2,6 +2,8 @@
 // limits.test.ts.
 export const NAME_LIMITS = {
   portfolios: { name: 40 },
+  holders: { name: 80 },
+  source_connections: { institution: 60 },
 } as const;
 
 // The most active rows a card lists, and the archived rows one page shows.

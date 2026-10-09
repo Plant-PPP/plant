@@ -43,3 +43,21 @@ export function nameInputSchema(max: number) {
 }
 
 export const idSchema = z.uuid();
+
+// The input of a write that takes none, such as an archive.
+export const noInput = z.object({});
+
+// An account's fields. The holder is required, "self" being the user, so a
+// form that never chose one cannot save it as the user's.
+export function sourceConnectionInputSchema(institutionMax: number) {
+  return z.object({
+    institution: trimmedName(institutionMax),
+    holder: z.union([z.literal("self"), idSchema]),
+    includeInTaxReport: z.boolean(),
+    defaultPortfolioId: idSchema,
+  });
+}
+
+export type SourceConnectionInput = z.infer<
+  ReturnType<typeof sourceConnectionInputSchema>
+>;

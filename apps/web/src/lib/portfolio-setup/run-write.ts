@@ -9,7 +9,7 @@ import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 import { PortfolioSetupError } from "./errors";
-import { idSchema } from "./schemas";
+import { idSchema, noInput } from "./schemas";
 import {
   toWriteResult,
   type WriteResult,
@@ -18,11 +18,8 @@ import {
 import { currentRequestId } from "@/lib/request-id-server";
 
 type PortfolioSetupAction =
-  | "create_portfolio"
-  | "rename_portfolio"
-  | "archive_portfolio"
-  | "restore_portfolio"
-  | "restore_rename_portfolio";
+  | `${"create" | "rename" | "archive" | "restore" | "restore_rename"}_${"portfolio" | "holder"}`
+  | `${"create" | "update" | "archive" | "restore"}_source_connection`;
 
 type Client = SupabaseClient<Database>;
 
@@ -166,5 +163,26 @@ export function runUpdate<I>(
 ): Promise<WriteResult> {
   return run(spec, { id }, ({ id: parsedId, ...rest }) =>
     write({ ...rest, id: parsedId! }),
+  );
+}
+
+// Archives one active row of the user. The trigger stamps the server's time;
+// the value sent only says "archived".
+export function runArchive(
+  table: "portfolios" | "holders" | "source_connections",
+  action: PortfolioSetupAction,
+  id: unknown,
+): Promise<WriteResult> {
+  return runUpdate(
+    { action, schema: noInput, input: {} },
+    id,
+    ({ client, userId, id }) =>
+      client
+        .from(table)
+        .update({ archived_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("id", id)
+        .is("archived_at", null)
+        .select("id"),
   );
 }
