@@ -14,7 +14,10 @@
     ".npmrc",
     // Read by apps/web's otp-config.test.ts.
     "supabase/config.toml",
-    "supabase/templates/**"
+    "supabase/templates/**",
+    // Read by apps/web's mfa-rules.test.ts, which checks the app's MFA rule
+    // against its truth table; any edit to this pgTAP file re-runs everything.
+    "supabase/tests/mfa_gate_test.sql"
   ],
   "tasks": {
     // Workspace packages ship TypeScript sources with no build of their own,
