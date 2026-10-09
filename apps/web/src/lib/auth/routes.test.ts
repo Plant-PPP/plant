@@ -27,6 +27,7 @@ it.each([
   "/auth/callback",
   "/auth/mfa",
   "/auth/mfa?next=%2Fassets",
+  "/auth/mfa/x",
   "//evil",
   undefined,
 ])("lands on / after signing in for %p", (next) => {
@@ -37,7 +38,7 @@ it("lands where the user was going", () => {
   expect(afterLoginPath("/assets?x=1")).toBe("/assets?x=1");
 });
 
-it("sends an unverified session to the MFA step and back", () => {
+it("sends an unverified session to the MFA step", () => {
   expect(mfaPath("/assets?x=1")).toBe("/auth/mfa?next=%2Fassets%3Fx%3D1");
   expect(mfaPath("/")).toBe("/auth/mfa");
   expect(mfaPath("/auth/mfa")).toBe("/auth/mfa");

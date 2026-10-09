@@ -58,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const key of Object.keys(ENV)) delete process.env[key];
   clientError = undefined;
+  refreshSession = async () => ({ data: null, error: null });
   jest.restoreAllMocks();
 });
 
@@ -184,6 +185,31 @@ it("keeps a refresh that succeeded before Auth failed", async () => {
   expect(res.headers.get("location")).toBeNull();
   expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
   expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=new");
+  expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
+});
+
+it("keeps a refresh that also deletes a stale cookie chunk", async () => {
+  getClaims = async ({ setAll }) => {
+    // @supabase/ssr deletes stale chunks in the same call that sets new ones.
+    setAll(
+      [
+        { name: "sb-x-auth-token.1", value: "", options: { maxAge: 0 } },
+        { name: "sb-x-auth-token.0", value: "new", options: {} },
+      ],
+      CACHE_HEADERS,
+    );
+    return {
+      data: null,
+      error: new AuthApiError("unavailable", 503, "unexpected_failure"),
+    };
+  };
+  const res = await proxy(
+    request("/assets", {
+      cookie: "sb-x-auth-token.0=old; sb-x-auth-token.1=old",
+    }),
+  );
+  expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token.0=new");
+  expect(forwarded(res, "cookie")).toContain("sb-x-auth-token.0=new");
   expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
 });
 
@@ -590,9 +616,27 @@ describe("the MFA check", () => {
     expect(overridden).not.toContain("x-plant-auth");
     expect(logged()).toMatchObject({
       method: "log",
-      line: { "plant.outcome": "mfa_required" },
+      line: { "plant.outcome": "mfa_required", "enduser.id": "u" },
     });
   });
+
+  it.each([
+    ["/auth/mfa/x", null, "mfa_required"],
+    [
+      "/auth/mfax",
+      "http://localhost:3000/auth/mfa?next=%2Fauth%2Fmfax",
+      "redirect_mfa",
+    ],
+    ["/auth", "http://localhost:3000/auth/mfa?next=%2Fauth", "redirect_mfa"],
+  ])(
+    "treats %s as the MFA step only below it",
+    async (path, location, outcome) => {
+      getClaims = unverified;
+      const res = await proxy(request(path));
+      expect(res.headers.get("location")).toBe(location);
+      expect(logged().line).toMatchObject({ "plant.outcome": outcome });
+    },
+  );
 
   it("keeps the refreshed session on the way to the MFA step", async () => {
     getClaims = async ({ setAll }) => {

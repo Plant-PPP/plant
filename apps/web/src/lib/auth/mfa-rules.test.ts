@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { FIRST_FACTOR_METHODS, MFA_ENROLLED_CLAIM } from "@plant/shared";
+import { MFA_ENROLLED_CLAIM } from "@plant/shared";
 import {
   type MfaClaims,
   mfaRequirement,
@@ -69,6 +69,15 @@ describe("mfaRequirement", () => {
       );
     },
   );
+
+  it.each([["aal3"], ["AAL2"], ["aal2 "], [2]])(
+    "asks an enrolled session whose aal is %p for the code",
+    (aal) => {
+      expect(mfaRequirement({ aal, [MFA_ENROLLED_CLAIM]: true })).toBe(
+        "verify",
+      );
+    },
+  );
 });
 
 describe("sensitiveRequirement", () => {
@@ -77,11 +86,14 @@ describe("sensitiveRequirement", () => {
     amr: [{ method, timestamp: now - secondsAgo }],
   });
 
-  it.each(FIRST_FACTOR_METHODS)("accepts %s within the window", (method) => {
-    expect(sensitiveRequirement(signedIn(method, STEP_UP_WINDOW_S), now)).toBe(
-      "met",
-    );
-  });
+  it.each(["otp", "magiclink", "email/signup", "oauth"])(
+    "accepts %s within the window",
+    (method) => {
+      expect(
+        sensitiveRequirement(signedIn(method, STEP_UP_WINDOW_S), now),
+      ).toBe("met");
+    },
+  );
 
   it("asks to sign in again one second past the window", () => {
     expect(

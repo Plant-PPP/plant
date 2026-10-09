@@ -30,7 +30,7 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
   (NULL, NULL, 'verify');
 -- truth-table:end
 
-SELECT plan((SELECT count(*) + count(mfa_enrolled) FROM truth)::int + 5);
+SELECT plan((SELECT count(*) + count(mfa_enrolled) FROM truth)::int + 6);
 
 SELECT bag_eq(
   $$SELECT aal, mfa_enrolled FROM truth$$,
@@ -209,6 +209,33 @@ SELECT set_eq(
   $$VALUES ('false', true), ('"true"', false), ('"false"', false), ('1', false),
            ('0', false), ('null', false)$$,
   'an aal1 session whose claim is not a JSON boolean reads nothing'
+);
+
+-- Only the exact string aal2 counts as verified, as mfaRequirement compares
+-- it. aal2 is the control: the same enrolled session with it reads its profile.
+CREATE TEMP TABLE odd_aals (aal jsonb, reads boolean) ON COMMIT DROP;
+DO $$
+DECLARE
+  aal jsonb;
+  reads boolean;
+BEGIN
+  FOREACH aal IN ARRAY ARRAY['"aal2"', '"aal3"', '"AAL2"', '"aal2 "', '2']::jsonb[] LOOP
+    PERFORM set_config('request.jwt.claims', jsonb_build_object(
+      'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
+      'aal', aal, 'mfa_enrolled', true)::text, true);
+    SET LOCAL ROLE authenticated;
+    reads := EXISTS (SELECT 1 FROM public.profiles);
+    RESET ROLE;
+    INSERT INTO odd_aals VALUES (aal, reads);
+  END LOOP;
+END
+$$;
+
+SELECT set_eq(
+  $$SELECT aal::text, reads FROM odd_aals$$,
+  $$VALUES ('"aal2"', true), ('"aal3"', false), ('"AAL2"', false), ('"aal2 "', false),
+           ('2', false)$$,
+  'an enrolled session whose aal is not exactly aal2 reads nothing'
 );
 
 SELECT * FROM finish();
