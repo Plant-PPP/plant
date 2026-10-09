@@ -5,7 +5,8 @@ import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import {
   type FxRateKind,
   parseResponse,
-  QuoteFeedError,
+  type QuoteFeedCode,
+  quoteFailureOf,
   type RawFxRate,
 } from "../../contract/quote";
 
@@ -46,7 +47,7 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
 // factory fails a read where every house did.
 type HouseRead =
   | { ok: true; row: RawFxRate }
-  | { ok: false; kind: FxRateKind; error: QuoteFeedError };
+  | { ok: false; kind: FxRateKind; code: QuoteFeedCode };
 
 export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
   return {
@@ -58,8 +59,10 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
             const json = await getJson(`${BASE_URL}/${house}`);
             return { ok: true, row: parse(json, kind) };
           } catch (error) {
-            if (error instanceof QuoteFeedError) {
-              return { ok: false, kind, error };
+            // By name and code, as the job reads it.
+            const { known, stage, code } = quoteFailureOf(error);
+            if (known && stage === "read") {
+              return { ok: false, kind, code: code as QuoteFeedCode };
             }
             throw error;
           }
@@ -72,10 +75,7 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
       return {
         fxRates,
         prices: [],
-        unread: failed.map(({ kind, error }) => ({
-          key: kind,
-          code: error.code,
-        })),
+        unread: failed.map(({ kind, code }) => ({ key: kind, code })),
       };
     },
   };

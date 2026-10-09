@@ -51,15 +51,18 @@ const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 
 // An id of `first`, then `length` digits and `letters` holding at least one
 // letter, that is not one run of `digitRun` or more digits with only letters
-// around it (a DNI, CUIT or CBU glued to a word). Another digit run lets the
-// whole token pass, a number in it included.
+// around it (a DNI, CUIT or CBU glued to a word), checked from the token's
+// start and again after `first`. Another digit run lets the whole token pass,
+// a number in it included.
 const idToken = (
   letters: string,
   digitRun: number,
   first: string,
   length: string,
-) =>
-  String.raw`(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})${first}(?![${letters}]*\d{${digitRun},}[${letters}]*(?![0-9a-z]))(?=[0-9${letters}]*[${letters}])[0-9${letters}]${length}(?![0-9a-z])`;
+) => {
+  const oneRun = String.raw`(?![${letters}]*\d{${digitRun},}[${letters}]*(?![0-9a-z]))`;
+  return String.raw`(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})${first ? oneRun + first : ""}${oneRun}(?=[0-9${letters}]*[${letters}])[0-9${letters}]${length}(?![0-9a-z])`;
+};
 
 // Kept whole: ids and times, whose digit groups would otherwise read as a
 // DNI. A UUID; a hex run of 16 or more (a trace id, a hash, a chunk name),

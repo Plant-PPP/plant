@@ -104,6 +104,34 @@ describe("toQuoteFeed", () => {
     });
   });
 
+  it("keeps a read whose only row read is stale and the rest unread with a retryable code", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [
+          {
+            kind: "blue",
+            rate_date: "2026-10-08",
+            buy: "1",
+            sell: "2",
+            quoted_at: "2026-10-08T20:00:00.000Z",
+          },
+        ],
+        prices: [],
+        unread: [
+          { key: "official", code: "timeout" },
+          { key: "mep", code: "timeout" },
+          { key: "ccl", code: "http_5xx" },
+        ],
+      })),
+    );
+    const batch = await feed.read(NOW);
+    expect([batch.fxRates, batch.refused.stale, batch.unread]).toEqual([
+      [],
+      ["blue"],
+      ["official:timeout", "mep:timeout", "ccl:http_5xx"],
+    ]);
+  });
+
   it("keeps a read whose rows are all early", async () => {
     const morning = new Date("2026-10-09T13:00:00.000Z");
     const feed = toQuoteFeed(

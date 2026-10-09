@@ -225,6 +225,23 @@ describe("createDolarapiFeed", () => {
     });
   });
 
+  // Latent: the job reads a quote error by name and code because another copy
+  // of core builds the same errors from another class; a house failing with
+  // one must still leave the other houses kept.
+  it("keeps the other houses when one fails with a QuoteFeedError of another copy of core", async () => {
+    const copy = Object.assign(new Error("http_5xx"), {
+      name: "QuoteFeedError",
+      code: "http_5xx",
+    });
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw copy;
+      return body("x", 1, 2);
+    });
+    const rows = await feed.readRaw(NOW);
+    expect(rows.fxRates).toHaveLength(3);
+    expect(rows.unread).toEqual([{ key: "blue", code: "http_5xx" }]);
+  });
+
   it("passes an error that is not a QuoteFeedError through unchanged", async () => {
     const bug = new TypeError("boom");
     const feed = createDolarapiFeed(async (url) => {

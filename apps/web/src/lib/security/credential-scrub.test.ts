@@ -356,6 +356,15 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(token)).toContain(MASK);
   });
 
+  // A run id's second character is a letter until 2039, so a digit run that
+  // starts at the token's first character is the token's only one.
+  it.each([
+    ["a zero-padded DNI", "09123456ABCDEFGHJKMNPQRSTV"],
+    ["a zero-padded DNI in lower case", "01234567abcdefghjkmnpqrstv"],
+  ])("masks %s that opens a run-id-shaped token", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
   // Pin of current behavior: a run of 26 digits is no id and no number the
   // patterns know.
   it("leaves a 26-digit run as it is", () => {
@@ -417,6 +426,16 @@ describe("scrubSensitiveText", () => {
     ["a long JWT prefix", (k) => "eyJ" + "a".repeat(16000 * k)],
     ["repeated JWT prefixes", (k) => "eyJ-".repeat(4000 * k)],
     ["repeated named secrets", (k) => 'password:"'.repeat(1600 * k)],
+    ["run-id openings", (k) => "-0a".repeat(5000 * k)],
+    ["a run-id opening before letters", (k) => "0a" + "b".repeat(16000 * k)],
+    [
+      "run-id openings after percent escapes",
+      (k) => "%410ab1234567".repeat(1200 * k),
+    ],
+    [
+      "run-id openings before digits",
+      (k) => ("-01" + "2".repeat(30)).repeat(500 * k),
+    ],
   ])("stays linear on %s", (_label, input) => {
     expectLinear(input, scrubSensitiveText);
   });
