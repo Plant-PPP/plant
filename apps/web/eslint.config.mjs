@@ -10,8 +10,10 @@ import {
   COST_SINK,
   fence,
   LITERAL_IMPORTS_ONLY,
+  MFA_CALLS,
   secretKeyReads,
   SERVICE_ROLE,
+  SESSION_CLAIMS_UNCHECKED,
   SOURCE,
 } from "../../eslint.fences.mjs";
 
@@ -52,6 +54,22 @@ const LIB_AI_SYNTAX = [
   ...NO_EXPORT_LIST,
 ];
 
+// Every module fence of the web app. A block names the ones it may import and
+// keeps the rest, so an override cannot drop a fence by leaving it out (a
+// later block replaces a rule's whole options).
+const WEB_FENCES = [
+  AI,
+  AI_PROVIDERS,
+  SERVICE_ROLE,
+  COST_SINK,
+  SESSION_CLAIMS_UNCHECKED,
+];
+const webRules = ({ allow = [], syntax, allowMfaCalls = false }) =>
+  fence(
+    WEB_FENCES.filter((module) => !allow.includes(module)),
+    [...syntax, ...(allowMfaCalls ? [] : MFA_CALLS)],
+  );
+
 const NO_SERVER_ACTION = ["Program", ":function > BlockStatement"].map(
   (parent) => ({
     selector: `${parent} > ExpressionStatement[directive][expression.value="use server"]`,
@@ -71,40 +89,67 @@ export default defineConfig([
   },
   {
     files: [`**/*.${SOURCE}`],
-    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK], BASE_SYNTAX),
+    rules: webRules({ syntax: BASE_SYNTAX }),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
-    rules: fence([SERVICE_ROLE, COST_SINK], LIB_AI_SYNTAX),
+    rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_AI_SYNTAX }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.test.ts"],
-    rules: fence([SERVICE_ROLE], LIB_AI_SYNTAX),
+    rules: webRules({
+      allow: [AI, AI_PROVIDERS, COST_SINK],
+      syntax: LIB_AI_SYNTAX,
+    }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: fence([], [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX]),
+    rules: webRules({
+      allow: [AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK],
+      syntax: [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX],
+    }),
   },
   {
     files: [
       "src/lib/supabase/service-role.ts",
       "src/lib/supabase/service-role.test.ts",
     ],
-    rules: fence(
-      [AI, AI_PROVIDERS, COST_SINK],
-      [
+    rules: webRules({
+      allow: [SERVICE_ROLE],
+      syntax: [
         ...LITERAL_IMPORTS_ONLY,
         ...noReexport([SERVICE_ROLE]),
         ...NO_EXPORT_LIST,
       ],
-    ),
+    }),
   },
   {
     files: [`src/app/api/**/route.${SOURCE}`],
-    rules: fence(
-      [AI, AI_PROVIDERS, SERVICE_ROLE],
-      [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
-    ),
+    rules: webRules({
+      allow: [COST_SINK],
+      syntax: [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
+    }),
+  },
+  {
+    files: [
+      "src/lib/auth/session-claims.ts",
+      "src/lib/auth/session-claims.test.ts",
+      "src/app/auth/mfa/page.tsx",
+      "src/app/auth/mfa/page.test.tsx",
+    ],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [...BASE_SYNTAX, ...noReexport([SESSION_CLAIMS_UNCHECKED])],
+    }),
+  },
+  {
+    files: [
+      "src/lib/auth/mfa-browser.ts",
+      "src/lib/auth/mfa-browser.test.ts",
+      "src/lib/auth/mfa-factors.ts",
+      "src/lib/auth/mfa-factors.test.ts",
+    ],
+    rules: webRules({ syntax: BASE_SYNTAX, allowMfaCalls: true }),
   },
   globalIgnores([
     ".next/**",

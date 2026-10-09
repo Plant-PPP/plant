@@ -269,6 +269,38 @@ const flagged = [
   ],
 ];
 
+// Only /auth/mfa reads claims without the MFA redirect, and only the factor
+// helpers call Auth's MFA API.
+const READER =
+  'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked";';
+flagged.push(
+  ["src/app/(app)/page.tsx", READER],
+  ["src/app/api/x/route.ts", READER],
+  ["src/lib/ai/x.ts", READER],
+  ["src/app/auth/mfa/actions.ts", READER],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export { readSessionClaims } from "./session-claims-unchecked";',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'const m = "@/lib/auth/session-claims-unchecked";\nexport const f = () => import(m);',
+  ],
+  [
+    "src/app/(app)/settings/actions.ts",
+    "export const f = (s) => s.auth.mfa.verify({ factorId: 'f', code: '1' });",
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (supabase) => {\n  const { mfa } = supabase.auth;\n  return mfa;\n};",
+  ],
+  ["src/components/mfa/x.tsx", 'export const f = (s) => s.auth["mfa"].enroll;'],
+);
+
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
     assert.notDeepEqual(await fenced(filePath, code), []);
@@ -342,10 +374,58 @@ const allowed = [
   ],
 ];
 
+allowed.push(
+  ["src/lib/auth/session-claims.ts", READER],
+  ["src/lib/auth/session-claims.test.ts", READER],
+  ["src/app/auth/mfa/page.tsx", READER],
+  ["src/app/auth/mfa/page.test.tsx", READER],
+  [
+    "src/lib/auth/mfa-browser.ts",
+    "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth.mfa.listFactors();",
+  ],
+  ["src/lib/x.ts", "export const f = (c) => c.mfa_enrolled;"],
+);
+
 for (const [filePath, code] of allowed) {
   test(`${filePath}: ${code} is allowed`, async () => {
     assert.deepEqual(await fenced(filePath, code), []);
   });
+}
+
+// Each override replaces the global block's rules for its files, so it must
+// carry every fence it does not exempt.
+const OVERRIDES = [
+  ["src/lib/ai/x.ts", []],
+  ["src/lib/ai/ai-cost-sink.ts", []],
+  ["src/lib/ai/ai-cost-sink.test.ts", []],
+  ["src/lib/supabase/service-role.ts", []],
+  ["src/app/api/x/route.ts", []],
+  ["src/lib/auth/session-claims.ts", ["reader"]],
+  ["src/app/auth/mfa/page.tsx", ["reader"]],
+  ["src/lib/auth/mfa-browser.ts", ["mfa"]],
+  ["src/lib/auth/mfa-factors.test.ts", ["mfa"]],
+];
+const PROBES = {
+  reader: READER,
+  mfa: "export const f = (s) => s.auth.mfa.challenge({ factorId: 'f' });",
+  service: 'import "@/lib/supabase/service-role";',
+};
+for (const [filePath, exempt] of OVERRIDES) {
+  for (const [probe, code] of Object.entries(PROBES)) {
+    if (exempt.includes(probe)) continue;
+    // service-role.ts and the sink may reach the client; the probe is the
+    // reader and MFA fences there.
+    if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
+      continue;
+    }
+    test(`${filePath} keeps the ${probe} fence`, async () => {
+      assert.notDeepEqual(await fenced(filePath, code), []);
+    });
+  }
 }
 
 const jobs = new ESLint({

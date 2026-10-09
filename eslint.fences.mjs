@@ -38,6 +38,14 @@ export const COST_SINK = {
     "The cost sink writes past RLS; only route handlers under src/app/api may use it.",
 };
 
+// /auth/mfa reads claims without the MFA redirect; everything else must get
+// the redirect through getSessionClaims.
+export const SESSION_CLAIMS_UNCHECKED = {
+  regex: `(^|/)session-claims-unchecked${EXTENSION}$`,
+  message:
+    "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
+};
+
 // A path into node_modules reaches a package without naming it.
 const NODE_MODULES = {
   regex: "(^|/)node_modules(/|$)",
@@ -71,6 +79,18 @@ const STEP_AI = [
   ...named("MemberExpression", "property", "ai"),
   ...named("ObjectPattern > Property", "key", "ai"),
 ].map((selector) => ({ selector, message: INNGEST_AI.message }));
+
+// Enroll, challenge and verify run in the browser (Auth rate-limits them per
+// caller IP), and only the factor helpers list or unenroll: no other file
+// reads `mfa` off an Auth client.
+export const MFA_CALLS = [
+  ...named("MemberExpression", "property", "mfa"),
+  ...named("ObjectPattern > Property", "key", "mfa"),
+].map((selector) => ({
+  selector,
+  message:
+    "Call Auth's MFA API only through src/lib/auth/mfa-browser.ts or mfa-factors.ts.",
+}));
 
 // The fences read import specifiers, so a computed one, a bundler's
 // require.context, or a require wrapped in a type cast (which the fences'
