@@ -146,7 +146,7 @@ without naming the consumers it grepped has not run it, and that wave is NON-CLE
 
 Unlike the lenses above, this one is **not always on**. It activates when the diff touches
 `supabase/migrations/**`, an RLS policy, a `GRANT`/`REVOKE`, a `SECURITY DEFINER` function, a client
-built from `SUPABASE_SERVICE_ROLE_KEY` (in practice `apps/web/src/lib/supabase/service-role.ts` and the cost sink and writer in `apps/web/src/lib/ai` that use it), a storage bucket or its
+built from `SUPABASE_SERVICE_ROLE_KEY` (in practice `apps/web/src/lib/supabase/service-role.ts` and the cost sink and writer in `apps/web/src/lib/ai` and the quote sink and writer in `apps/web/src/lib/quotes` that use it), a storage bucket or its
 policies, a `"use server"` file, an HTTP route handler (`apps/web/src/app/api/**/route.ts` — including
 `/api/inngest` and the chat route — and peers), or an assistant tool definition; on any other diff it
 is a **no-op** and no wave pays for it. When it fires: Read
