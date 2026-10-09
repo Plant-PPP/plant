@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { OTP_LENGTH } from "@/lib/auth/otp-config";
-import { nextAuthCode } from "@/lib/auth/sanitize-auth-code";
+import { nextAuthCode } from "@/lib/auth/next-auth-code";
 import { cn } from "@/lib/utils";
 
 // One transparent input spans the boxes, so paste, one-time-code autofill and
@@ -33,7 +33,7 @@ export function CodeInput({
         >
           {value[i]}
           {focused && i === value.length && (
-            <span className="h-5 w-px animate-pulse bg-foreground" />
+            <span className="h-5 w-px bg-foreground forced-color-adjust-none motion-safe:animate-pulse forced-colors:bg-[CanvasText]" />
           )}
         </span>
       ))}

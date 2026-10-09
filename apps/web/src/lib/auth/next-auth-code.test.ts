@@ -1,11 +1,19 @@
-import { nextAuthCode, sanitizeAuthCode } from "./sanitize-auth-code";
+import { nextAuthCode } from "./next-auth-code";
 
 it("keeps only the code's digits", () => {
-  expect(sanitizeAuthCode(" 12 34-56 ")).toBe("123456");
+  expect(nextAuthCode("", " 12 34-56 ")).toBe("123456");
 });
 
 it("cuts a longer paste to the code's length", () => {
-  expect(sanitizeAuthCode("1234567")).toBe("123456");
+  expect(nextAuthCode("", "1234567")).toBe("123456");
+});
+
+it("only ever yields up to six digits", () => {
+  for (const previous of ["", "12", "123456"]) {
+    for (const raw of ["a1b2", "１２３", "12-34 56 78", "x".repeat(50)]) {
+      expect(nextAuthCode(previous, previous + raw)).toMatch(/^\d{0,6}$/);
+    }
+  }
 });
 
 describe("nextAuthCode", () => {
@@ -23,6 +31,14 @@ describe("nextAuthCode", () => {
 
   it("ignores a digit typed into a full field", () => {
     expect(nextAuthCode("123456", "1234567")).toBe("123456");
+  });
+
+  it("replaces a full field with a dashed code pasted after it", () => {
+    expect(nextAuthCode("111111", "111111222-222")).toBe("222222");
+  });
+
+  it("ignores a typed letter", () => {
+    expect(nextAuthCode("12", "12a")).toBe("12");
   });
 
   it("appends a typed digit", () => {

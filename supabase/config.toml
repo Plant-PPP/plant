@@ -201,7 +201,7 @@ enabled = false
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-# Raised for local testing with Mailpit; the hosted project sets its own limit in the dashboard.
+# 30 so local testing with Mailpit is not blocked; the hosted project sets its own limit in the dashboard.
 email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
