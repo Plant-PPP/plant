@@ -10,8 +10,7 @@ import { getSessionClaims } from "@/lib/auth/session-claims";
 import { createClient } from "@/lib/supabase/server";
 import { currentRequestId } from "@/lib/request-id-server";
 
-export type DisableResult =
-  { outcome: DisableOutcome } | { stepUp: "sign_in_again" };
+type DisableResult = { outcome: DisableOutcome } | { stepUp: "sign_in_again" };
 
 // Turns MFA off once the user signed in within the step-up window and the
 // dialog verified a TOTP code just before. factorId comes from the browser:
