@@ -173,6 +173,27 @@ describe("mergeAuthCode", () => {
     expect(mergeAuthCode("111111", "111111654-321")).toBe("654321");
   });
 
+  it("takes the code below a dated line", () => {
+    expect(mergeAuthCode("", "Enviado 10:15\n654 321")).toBe("654321");
+    expect(mergeAuthCode("", "10/10/2026\n654 321")).toBe("654321");
+  });
+
+  // Accepted: a split code after another number on its line joins that number.
+  it("joins a split code to a number before it on its line", () => {
+    expect(mergeAuthCode("", "10:15 654 321")).toBe("101565");
+  });
+
+  it("ignores non-ASCII digits", () => {
+    expect(mergeAuthCode("", "\uff11\uff12\uff13\uff14\uff15\uff16")).toBe("");
+  });
+
+  it("reads a huge pasted text quickly", () => {
+    const start = performance.now();
+    mergeAuthCode("", `${"1 ".repeat(200_000)}    x`);
+    mergeAuthCode("", `1${" ".repeat(4)}`.repeat(100_000));
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
       for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {

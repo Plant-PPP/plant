@@ -30,3 +30,17 @@ it("hides the boxes from screen readers", () => {
 it("takes its name only from its label", () => {
   expect(html).not.toMatch(/aria-label/);
 });
+
+it("shows one digit per box and no caret while unfocused", () => {
+  const full = renderToStaticMarkup(
+    <CodeInput id="code" value="654321" onChange={() => {}} />,
+  );
+  for (const digit of "654321") expect(full).toContain(`>${digit}<`);
+  expect(full).not.toMatch(/animate-pulse/);
+});
+
+it("lets taps through every box to the field", () => {
+  for (const box of html.match(/<span aria-hidden="true"[^>]*>/g) ?? []) {
+    expect(box).toMatch(/pointer-events-none/);
+  }
+});
