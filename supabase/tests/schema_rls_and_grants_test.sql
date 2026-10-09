@@ -494,9 +494,10 @@ INSERT INTO canaried VALUES
 -- The floor's other asserts stop at public and private, so a migration that
 -- put a table, a definer, a rule or a trigger in extensions would write public
 -- tables past all of them. Only extensions' own members and the platform's
--- functions (supabase_admin's) live there.
-('nothing in extensions but its extensions'' members and the platform''s own objects, and no rule or trigger there',
+-- objects (supabase_admin's) live there.
+('nothing in extensions but its extensions'' members and the platform''s own objects and default privileges, and no rule or trigger there',
  ARRAY['table pgtap_canary_relation', 'function pgtap_canary_fn', 'type pgtap_canary_type',
+       'operator ===', 'collation pgtap_canary_collation', 'default privileges postgres',
        'rule pgtap_canary_relation.pgtap_canary', 'trigger pgtap_canary_relation.pgtap_canary'],
  $$ SELECT 'table ' || c.relname FROM pg_class c
     WHERE c.relnamespace = 'extensions'::regnamespace AND c.relowner <> 'supabase_admin'::regrole
@@ -514,6 +515,20 @@ INSERT INTO canaried VALUES
       AND NOT EXISTS (SELECT 1 FROM pg_type e WHERE e.typarray = t.oid)
       AND NOT EXISTS (SELECT 1 FROM pg_depend d
                       WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'operator ' || o.oprname FROM pg_operator o
+    WHERE o.oprnamespace = 'extensions'::regnamespace AND o.oprowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_operator'::regclass AND d.objid = o.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'collation ' || co.collname FROM pg_collation co
+    WHERE co.collnamespace = 'extensions'::regnamespace AND co.collowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_collation'::regclass AND d.objid = co.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'default privileges ' || pg_get_userbyid(da.defaclrole) FROM pg_default_acl da
+    WHERE da.defaclnamespace = 'extensions'::regnamespace
+      AND da.defaclrole <> 'supabase_admin'::regrole
     UNION ALL
     SELECT 'rule ' || c.relname || '.' || r.rulename FROM pg_rewrite r
     JOIN pg_class c ON c.oid = r.ev_class
@@ -655,6 +670,9 @@ CREATE TABLE public.pgtap_canary_inherits () INHERITS (extensions.pgtap_canary_r
 CREATE TABLE extensions.pgtap_canary_inherits () INHERITS (public.pgtap_canary_reference);
 CREATE FUNCTION extensions.pgtap_canary_fn() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
 CREATE TYPE extensions.pgtap_canary_type AS ENUM ('x');
+CREATE OPERATOR extensions.=== (LEFTARG = int, RIGHTARG = int, FUNCTION = int4eq);
+CREATE COLLATION extensions.pgtap_canary_collation FROM "C";
+ALTER DEFAULT PRIVILEGES IN SCHEMA extensions GRANT EXECUTE ON FUNCTIONS TO anon;
 CREATE RULE pgtap_canary AS ON INSERT TO extensions.pgtap_canary_relation DO INSTEAD NOTHING;
 CREATE TRIGGER pgtap_canary BEFORE INSERT ON extensions.pgtap_canary_relation
   FOR EACH ROW EXECUTE FUNCTION extensions.pgtap_canary_fn();
