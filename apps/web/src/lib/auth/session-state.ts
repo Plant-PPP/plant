@@ -26,6 +26,11 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
   );
 }
 
+// A failed request whose session had ended, as opposed to no failure at all.
+export function failedOnEndedSession(failure: MaybeAuthError): boolean {
+  return failure !== null && isSessionMissing(failure);
+}
+
 // Set by proxy.ts on the forwarded request when it could not use the session,
 // so server code throws instead of refreshing again. Its value is the reason,
 // which is also the outcome both sides log: Auth could not refresh it, or the

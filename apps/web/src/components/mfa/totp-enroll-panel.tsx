@@ -9,12 +9,22 @@ import {
   verifyTotp,
   type TotpEnrollment,
 } from "@/lib/auth/mfa-browser";
+import { loginErrorPath } from "@/lib/auth/login-errors";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { qrDataUrl, withQrSvgViewBox } from "@/lib/auth/qr-svg";
+import { failedOnEndedSession } from "@/lib/auth/session-state";
 import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 import { TotpHelpDialog } from "./totp-help-dialog";
+
+// Another device's verify, or a timeout, ended this session: a retry can only
+// fail again, so the user signs in and comes back here.
+function signInAgain() {
+  window.location.assign(
+    loginErrorPath("signed_out", window.location.pathname),
+  );
+}
 
 // Clears abandoned attempts, enrolls, shows the QR and the setup key, and
 // verifies the first code. onSuccess runs once the factor is verified and the
@@ -38,7 +48,8 @@ export function TotpEnrollPanel({
       setEnrollment(await startEnrollment(createClient()));
       return null;
     });
-    if (failure) setError(mfaErrorMessage(failure));
+    if (failedOnEndedSession(failure)) signInAgain();
+    else if (failure) setError(mfaErrorMessage(failure));
   }, [setError]);
 
   // Enroll once per mount. React's dev double effect would otherwise send two
@@ -71,11 +82,17 @@ export function TotpEnrollPanel({
 
   async function verify() {
     if (!enrollment) return;
+    let ended = false;
     const verified = await run(async () => {
-      await verifyTotp(createClient(), enrollment.factorId, code);
-      return null;
+      const failure = await attempt(async () => {
+        await verifyTotp(createClient(), enrollment.factorId, code);
+        return null;
+      });
+      ended = failedOnEndedSession(failure);
+      return failure;
     });
     if (verified) onSuccess();
+    else if (ended) signInAgain();
     else setCode("");
   }
 

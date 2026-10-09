@@ -102,7 +102,7 @@ it.each([
 ])("sends a session that has ended to sign in again (%p)", async (error) => {
   listFactors.mockResolvedValue({ data: null, error });
   await expect(render("/debts")).rejects.toThrow(
-    "redirect /login?error=signed_out&next=%2Fdebts",
+    "redirect /login?next=%2Fdebts&error=signed_out",
   );
   expect(log.warn).toHaveBeenCalledWith(
     "auth.mfa_page",

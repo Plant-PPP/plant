@@ -7,7 +7,7 @@ import { verifyTotp } from "@/lib/auth/mfa-browser";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { loginErrorPath } from "@/lib/auth/login-errors";
-import { isSessionMissing } from "@/lib/auth/session-state";
+import { failedOnEndedSession } from "@/lib/auth/session-state";
 import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,7 +30,7 @@ export function MfaChallengeForm({
         return null;
       });
       // Another device's verify, or a timeout, ended this session.
-      ended = failure !== null && isSessionMissing(failure);
+      ended = failedOnEndedSession(failure);
       return failure;
     });
     // A full load, so the proxy and the server read the aal2 session instead

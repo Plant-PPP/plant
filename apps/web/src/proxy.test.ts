@@ -122,6 +122,18 @@ it("sends a signed-out visitor to /login with the refresh's cookies and headers"
   }
 });
 
+it.each([
+  ["/auth/mfa?next=%2Fdebts", "http://localhost:3000/login?next=%2Fdebts"],
+  ["/auth/mfa", "http://localhost:3000/login"],
+])(
+  "sends a signed-out %s to /login with its own next",
+  async (path, location) => {
+    getClaims = async () => ({ data: null, error: null });
+    const res = await proxy(request(path));
+    expect(res.headers.get("location")).toBe(location);
+  },
+);
+
 it("lets a signed-out visitor see /login", async () => {
   getClaims = async () => ({ data: null, error: null });
   const res = await proxy(request("/login"));

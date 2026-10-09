@@ -1,4 +1,4 @@
-import { LOGIN_PATH } from "./routes";
+import { loginPath } from "./routes";
 
 export const LOGIN_ERROR_SLUGS = [
   "invalid_email",
@@ -38,10 +38,9 @@ export function loginErrorMessage(slug: unknown): string | undefined {
   return typeof slug === "string" ? LOGIN_ERRORS.get(slug) : undefined;
 }
 
-// next is where to go after signing in again.
 export function loginErrorPath(slug: LoginErrorSlug, next?: string): string {
-  const path = `${LOGIN_PATH}?error=${slug}`;
-  return next ? `${path}&next=${encodeURIComponent(next)}` : path;
+  const path = loginPath(next);
+  return `${path}${path.includes("?") ? "&" : "?"}error=${slug}`;
 }
 
 // Sign-in errors from Auth, by code. session-state.ts reads the refresh codes.

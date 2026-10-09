@@ -7,6 +7,7 @@ import {
 import {
   AuthUnavailableError,
   authUnavailableReason,
+  failedOnEndedSession,
   isSessionMissing,
   unavailableReason,
 } from "./session-state";
@@ -114,4 +115,13 @@ describe("authUnavailableReason", () => {
   ])("is null for %s", (_, error) => {
     expect(authUnavailableReason(error)).toBeNull();
   });
+});
+
+it.each<[Parameters<typeof failedOnEndedSession>[0], boolean]>([
+  [null, false],
+  [{ name: "AuthSessionMissingError" }, true],
+  [{ code: "session_not_found" }, true],
+  [{ code: "mfa_verification_failed" }, false],
+])("reads %p as a failure on an ended session: %p", (failure, ended) => {
+  expect(failedOnEndedSession(failure)).toBe(ended);
 });

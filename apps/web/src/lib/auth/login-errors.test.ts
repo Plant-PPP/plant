@@ -25,8 +25,12 @@ it.each([
 
 it("builds the login URL for a slug, keeping where to go next", () => {
   expect(loginErrorPath("callback")).toBe("/login?error=callback");
+  expect(loginErrorPath("signed_out", "/")).toBe("/login?error=signed_out");
+  expect(loginErrorPath("signed_out", "//evil")).toBe(
+    "/login?error=signed_out",
+  );
   expect(loginErrorPath("signed_out", "/debts?x=1")).toBe(
-    "/login?error=signed_out&next=%2Fdebts%3Fx%3D1",
+    "/login?next=%2Fdebts%3Fx%3D1&error=signed_out",
   );
 });
 

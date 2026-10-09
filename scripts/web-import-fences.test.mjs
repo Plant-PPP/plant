@@ -307,10 +307,7 @@ flagged.push(
     "src/lib/auth/session-claims.ts",
     `${READER}\nexport const r = readSessionClaims;`,
   ],
-  [
-    "src/app/auth/mfa/page.tsx",
-    `${READER}\nexport { readSessionClaims };`,
-  ],
+  ["src/app/auth/mfa/page.tsx", `${READER}\nexport { readSessionClaims };`],
   [
     "src/app/auth/mfa/page.tsx",
     'import { readSessionClaims as r } from "@/lib/auth/session-claims-unchecked";\nexport const f = () => r();',
@@ -358,7 +355,10 @@ flagged.push(
     "src/components/mfa/x.tsx",
     'export const f = (s) => {\n  const { "_challengeAndVerify": v } = s.auth;\n  return v;\n};',
   ],
-  ["src/components/mfa/x.tsx", "export const f = (s) => s.auth[`_enroll`]({});"],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => s.auth[`_enroll`]({});",
+  ],
   [
     "src/lib/auth/session-claims.ts",
     `${READER}\nconst g = () => readSessionClaims();\nexport { g };`,
@@ -399,7 +399,10 @@ flagged.push(
     "src/app/auth/mfa/page.tsx",
     'import u from "@/lib/auth/session-claims-unchecked";\nexport const f = () => u;',
   ],
-  ["src/lib/auth/session-claims.ts", 'export * from "./session-claims-unchecked";'],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export * from "./session-claims-unchecked";',
+  ],
   [
     "src/app/auth/mfa/page.tsx",
     'export * from "@/lib/auth/session-claims-unchecked";',
@@ -552,6 +555,7 @@ const OVERRIDES = [
   ["src/lib/ai/ai-cost-sink.test.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
+  ["src/lib/auth/session-claims-unchecked.ts", []],
   ["src/lib/auth/session-claims.ts", ["reader"]],
   ["src/lib/auth/session-claims.test.ts", ["reader"]],
   ["src/app/auth/mfa/page.tsx", ["reader"]],

@@ -196,7 +196,15 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
     return {
       ...timing,
       response: session.redirect(
-        new URL(loginPath(pathname + search), request.url),
+        new URL(
+          // /auth/mfa is never a place to come back to; where it was headed is.
+          loginPath(
+            isUnder(MFA_PATH, pathname)
+              ? (searchParams.get("next") ?? undefined)
+              : pathname + search,
+          ),
+          request.url,
+        ),
       ),
       outcome: "redirect_login",
     };

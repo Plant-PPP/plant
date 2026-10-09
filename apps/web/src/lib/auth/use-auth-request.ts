@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { MaybeAuthError } from "./session-state";
 
-export type AuthFailure = { code?: string; name?: string };
+export type AuthFailure = NonNullable<MaybeAuthError>;
 
 // One request to Auth at a time, with its error as Spanish copy. pending stays
 // true after a success, so a second click cannot reuse a spent code; a caller
