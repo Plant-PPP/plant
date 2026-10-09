@@ -12,3 +12,5 @@ export async function signOutAndConfirm(
   const after = await auth.getSession();
   return !after.data.session && !after.error;
 }
+
+export const SIGN_OUT_FAILED = "No pudimos cerrar la sesión. Probá de nuevo.";

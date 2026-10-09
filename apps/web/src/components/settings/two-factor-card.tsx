@@ -1,6 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DisableTotpDialog } from "@/components/mfa/disable-totp-dialog";
 import { TotpEnrollPanel } from "@/components/mfa/totp-enroll-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,10 +14,15 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  fetchTwoFactorStatus,
+  canDisable,
+  confirmsDisable,
+  fetchTwoFactorState,
   twoFactorSwitch,
+  type TwoFactorPanel,
+  type TwoFactorState,
   type TwoFactorStatus,
 } from "./two-factor-status";
 
@@ -26,30 +33,42 @@ const DESCRIPTIONS: Record<TwoFactorStatus, string> = {
   off: "Al activarla, te pedimos un código de tu app al ingresar.",
 };
 
-const fetchStatus = () => fetchTwoFactorStatus(createClient());
+const fetchState = () => fetchTwoFactorState(createClient());
 
-export function TwoFactorCard() {
-  const [status, setStatus] = useState<TwoFactorStatus>("loading");
-  const [enrolling, setEnrolling] = useState(false);
+// ?confirm=disable opens the off dialog if TOTP shows on: the step-up's sign-in
+// comes back here with it. Read on mount: back and forward reuse a server
+// render of a URL that still had the flag.
+export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
+  const searchParams = useSearchParams();
+  const [confirmDisable] = useState(() => confirmsDisable(searchParams));
+  const [state, setState] = useState<TwoFactorState>({ status: "loading" });
+  const [panel, setPanel] = useState<TwoFactorPanel>("none");
   const [notice, setNotice] = useState<string>();
+  // Once the action asks for the step-up, every later try starts there.
+  const [stepUp, setStepUp] = useState(stepUpNeeded);
 
   useEffect(() => {
     let active = true;
-    void fetchStatus().then((next) => {
-      if (active) setStatus(next);
+    void fetchState().then((next) => {
+      if (!active) return;
+      setState(next);
+      if (!confirmDisable) return;
+      if (canDisable(next)) setPanel("disable");
+      // Once: a reload or a later sign-in back to this URL does not reopen it.
+      window.history.replaceState(null, "", SETTINGS_ITEM.href);
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [confirmDisable]);
 
   function reload() {
-    setStatus("loading");
-    void fetchStatus().then(setStatus);
+    setState({ status: "loading" });
+    void fetchState().then(setState);
   }
 
   function closePanel(notice: string) {
-    setEnrolling(false);
+    setPanel("none");
     setNotice(notice);
     reload();
   }
@@ -67,27 +86,26 @@ export function TwoFactorCard() {
           <div className="grid gap-1">
             <Label htmlFor="two-factor">Verificación en dos pasos</Label>
             <span className="text-xs text-muted-foreground">
-              {DESCRIPTIONS[status]}
+              {DESCRIPTIONS[state.status]}
             </span>
           </div>
           <Switch
             id="two-factor"
-            {...twoFactorSwitch(status, enrolling)}
+            {...twoFactorSwitch(state, panel)}
             onCheckedChange={(checked) => {
-              if (!checked) return;
               setNotice(undefined);
-              setEnrolling(true);
+              setPanel(checked ? "enroll" : "disable");
             }}
           />
         </div>
-        {status === "failed" && (
+        {state.status === "failed" && (
           <div className="flex justify-end">
             <Button variant="secondary" size="sm" onClick={reload}>
               Reintentar
             </Button>
           </div>
         )}
-        {enrolling && (
+        {panel === "enroll" && (
           <TotpEnrollPanel
             onSuccess={() =>
               closePanel(
@@ -97,7 +115,17 @@ export function TwoFactorCard() {
             onAlreadyOn={() =>
               closePanel("La verificación en dos pasos ya estaba activada.")
             }
-            onCancel={() => setEnrolling(false)}
+            onCancel={() => setPanel("none")}
+          />
+        )}
+        {panel === "disable" && canDisable(state) && (
+          <DisableTotpDialog
+            open
+            onOpenChange={(open) => !open && setPanel("none")}
+            factorId={state.totpId}
+            stepUp={stepUp}
+            onStepUp={() => setStepUp(true)}
+            onDone={closePanel}
           />
         )}
         {notice && (

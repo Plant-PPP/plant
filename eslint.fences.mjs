@@ -81,26 +81,31 @@ const STEP_AI = [
 ].map((selector) => ({ selector, message: INNGEST_AI.message }));
 
 // Enroll, challenge and verify run in the browser (Auth rate-limits them per
-// caller IP), and only the factor helpers list or unenroll: no other file
-// reads `mfa` off an Auth client.
+// caller IP); on the server the factor helpers only list and mfa-disable.ts
+// only unenrolls: no other file reads `mfa` off an Auth client.
 const MFA_MEMBER = named("MemberExpression", "property", "mfa");
 const MFA_PATTERN = named("ObjectPattern > Property", "key", "mfa");
 export const MFA_CALLS = [...MFA_MEMBER, ...MFA_PATTERN].map((selector) => ({
   selector,
   message:
-    "Call Auth's MFA API only through src/lib/auth/mfa-browser.ts or mfa-factors.ts.",
+    "Call Auth's MFA API only through src/lib/auth/mfa-browser.ts, mfa-factors.ts or mfa-disable.ts.",
 }));
-// mfa-factors.ts runs on the server too, where every user shares one IP: it
-// only lists. The first MFA_MEMBER selector is the bare `.mfa`.
-export const MFA_CALLS_BUT_LIST = [
-  `${MFA_MEMBER[0]}:not(MemberExpression[property.name="listFactors"] > .object)`,
-  ...MFA_MEMBER.slice(1),
-  ...MFA_PATTERN,
-].map((selector) => ({
-  selector,
-  message:
-    "mfa-factors.ts also runs on the server: it only lists factors. Enroll, challenge and verify go in mfa-browser.ts.",
-}));
+// A server-side file that may call one MFA method, written `….mfa.<method>`.
+// The first MFA_MEMBER selector is the bare `.mfa`.
+const mfaCallsBut = (method, message) =>
+  [
+    `${MFA_MEMBER[0]}:not(MemberExpression[property.name="${method}"] > .object)`,
+    ...MFA_MEMBER.slice(1),
+    ...MFA_PATTERN,
+  ].map((selector) => ({ selector, message }));
+export const MFA_CALLS_BUT_LIST = mfaCallsBut(
+  "listFactors",
+  "mfa-factors.ts also runs on the server: it only lists factors. Enroll, challenge and verify go in mfa-browser.ts.",
+);
+export const MFA_CALLS_BUT_UNENROLL = mfaCallsBut(
+  "unenroll",
+  "mfa-disable.ts runs on the server behind the sensitive gate: it only unenrolls. Enroll, challenge and verify go in mfa-browser.ts.",
+);
 
 // auth-js's private methods behind the MFA API and its recovery codes (2.117),
 // reachable by a quoted key.
