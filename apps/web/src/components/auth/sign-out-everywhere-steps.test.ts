@@ -69,12 +69,21 @@ it("asks for a retry when an ended session cannot be cleared here", async () => 
   ).resolves.toBe("others_failed");
 });
 
-it("trusts the revoke when Auth cannot check this session afterwards", async () => {
+it("keeps this session when Auth cannot confirm the revoke", async () => {
   const { client } = auth(
     null,
     new AuthApiError("Service unavailable", 503, "unexpected_failure"),
   );
-  await expect(signOutEverywhere(client, async () => true)).resolves.toBe(
-    "done",
+  const here = jest.fn();
+  await expect(signOutEverywhere(client, here)).resolves.toBe("others_failed");
+  expect(here).not.toHaveBeenCalled();
+});
+
+it("reads an ended session that failed to refresh as ended", async () => {
+  const { client } = auth(
+    new AuthApiError("Invalid Refresh Token", 400, "refresh_token_not_found"),
   );
+  const here = jest.fn(async () => true);
+  await expect(signOutEverywhere(client, here)).resolves.toBe("session_ended");
+  expect(client.getUser).not.toHaveBeenCalled();
 });

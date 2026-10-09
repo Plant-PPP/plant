@@ -15,7 +15,7 @@ export type TotpEnrollment = {
 
 // enroll() leaves a factor unverified until a code is verified, and a second
 // enroll cannot recover an abandoned factor's secret, so abandoned attempts are
-// removed first. Only unverified TOTP factors: a verified one is left alone.
+// removed first.
 export async function cleanupUnverifiedTotp(client: AuthClient): Promise<void> {
   const { data, error } = await client.auth.mfa.listFactors();
   if (error) throw error;

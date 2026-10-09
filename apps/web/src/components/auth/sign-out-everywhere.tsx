@@ -6,10 +6,15 @@ import { LOGIN_PATH } from "@/lib/auth/routes";
 import { signOutAndConfirm } from "@/lib/auth/sign-out";
 import { type AuthFailure, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
-import { signOutEverywhere } from "./sign-out-everywhere-steps";
+import {
+  signOutEverywhere,
+  type SignOutEverywhereOutcome,
+} from "./sign-out-everywhere-steps";
+
+const THIS_DEVICE_FAILED: SignOutEverywhereOutcome = "this_device_failed";
 
 const failureMessage = (failure: AuthFailure) =>
-  failure.code === "this_device_failed"
+  failure.code === THIS_DEVICE_FAILED
     ? "Cerramos tus otras sesiones, pero no esta. Probá de nuevo."
     : "No pudimos cerrar tus otras sesiones. Probá de nuevo.";
 

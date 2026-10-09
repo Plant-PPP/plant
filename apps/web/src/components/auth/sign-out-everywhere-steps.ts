@@ -3,20 +3,23 @@ import { isSessionMissing } from "@/lib/auth/session-state";
 
 type Auth = Pick<SupabaseClient["auth"], "signOut" | "getSession" | "getUser">;
 
-// Other devices first: auth-js keeps this session when that revoke fails, so
-// a retry still has a token to send. auth-js also reports a revoke that Auth
-// refused for a dead session as a success, so it then asks Auth about this
-// session: when another device had already ended it, nothing was revoked and
-// the user signs in again to retry. Then this device, the way the user menu
-// signs out.
+export type SignOutEverywhereOutcome =
+  "done" | "others_failed" | "session_ended" | "this_device_failed";
+
+// Other devices first, then this one the way the user menu signs out. When
+// this session is gone (another device ended it), nothing was revoked and the
+// user signs in again to retry. auth-js reports Auth's refusal of a dead
+// session's revoke as a success, so Auth is asked about the session after it.
+// Any other failure, of the revoke or of that check, keeps this session for a
+// retry: the revoke cannot be confirmed.
 export async function signOutEverywhere(
   auth: Auth,
   signOutHere: (auth: Auth) => Promise<boolean>,
-): Promise<"done" | "others_failed" | "session_ended" | "this_device_failed"> {
-  const { error } = await auth.signOut({ scope: "others" });
-  if (error) return "others_failed";
-  const { error: userError } = await auth.getUser();
-  const ended = userError !== null && isSessionMissing(userError);
+): Promise<SignOutEverywhereOutcome> {
+  const { error: revokeError } = await auth.signOut({ scope: "others" });
+  const { error } = revokeError ? { error: revokeError } : await auth.getUser();
+  if (error && !isSessionMissing(error)) return "others_failed";
+  const ended = error !== null;
   if (!(await signOutHere(auth))) {
     return ended ? "others_failed" : "this_device_failed";
   }
