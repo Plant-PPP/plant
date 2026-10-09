@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SheetFooter } from "@/components/ui/sheet";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { sheetAnswer } from "./answers";
+import { settle, sheetAnswer } from "./answers";
 
 // A sheet that asks for one name and saves it with `onSubmit`: creating,
 // renaming, or restoring under a new name.
@@ -18,6 +18,7 @@ export function NameSheet({
   description,
   submitLabel,
   defaultValue = "",
+  returnFocusTo,
   onSubmit,
 }: {
   onClose: () => void;
@@ -25,6 +26,7 @@ export function NameSheet({
   description: string;
   submitLabel: string;
   defaultValue?: string;
+  returnFocusTo?: () => HTMLElement | null;
   onSubmit: (name: string) => Promise<WriteResult>;
 }) {
   const inputId = useId();
@@ -36,9 +38,7 @@ export function NameSheet({
     const name = String(new FormData(form).get("name") ?? "");
     setError(undefined);
     startTransition(async () => {
-      const answer = sheetAnswer(
-        await onSubmit(name).catch(() => "rejected" as const),
-      );
+      const answer = sheetAnswer(await settle(onSubmit(name)));
       if (answer.kind === "done") onClose();
       else setError(answer.text);
     });
@@ -50,6 +50,7 @@ export function NameSheet({
       onOpenChange={(open) => !open && !pending && onClose()}
       title={title}
       description={description}
+      returnFocusTo={returnFocusTo}
     >
       <form
         className="flex flex-1 flex-col"

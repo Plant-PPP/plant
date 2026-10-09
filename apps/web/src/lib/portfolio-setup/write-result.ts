@@ -27,6 +27,5 @@ export function toWriteResult(
   if (code === PORTFOLIO_SETUP_GUARD.sqlstate)
     return guardHint(hint) ?? "failed";
   if (code === "23505") return "duplicate_name";
-  if (code === "23503") return "not_found";
   return "failed";
 }

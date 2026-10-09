@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 
@@ -31,4 +32,15 @@ export function sheetAnswer(
     return { kind: "alert", text: WRITE_MESSAGES.failed };
   if (result.ok) return { kind: "done" };
   return { kind: "alert", text: WRITE_MESSAGES[result.code] };
+}
+
+// An action's answer, or "rejected" when the call itself failed. The redirect
+// of an ended session is rethrown so Next navigates instead of an alert.
+export function settle(
+  call: Promise<WriteResult>,
+): Promise<WriteResult | "rejected"> {
+  return call.catch((error: unknown) => {
+    unstable_rethrow(error);
+    return "rejected" as const;
+  });
 }

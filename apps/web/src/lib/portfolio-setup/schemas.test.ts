@@ -42,13 +42,27 @@ describe("nameInputSchema", () => {
     "a\u200eb",
     "\u3164",
     "\u200d",
+    "\u0301",
+    "a\u061cb",
+    "Principal\u200d",
+    "Principal\ufe0f",
+    "Principal\u034f",
+    "Principal\u{e0100}",
+    "Principal\u{e0061}",
+    "a\u200cb",
   ])("refuses %j", (name) => {
     expect(schema.safeParse({ name }).success).toBe(false);
   });
 
-  test("keeps emoji joined by ZWJ or built from tags", () => {
-    expect(schema.safeParse({ name: "👨‍👩‍👧" }).success).toBe(true);
-    expect(schema.safeParse({ name: "🏴󠁧󠁢󠁳󠁣󠁴󠁿" }).success).toBe(true);
+  test.each([
+    "👨\u200d👩\u200d👧",
+    "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+    "Ahorro ❤\ufe0f",
+    "1\ufe0f\u20e3",
+    "👍🏽 Largo plazo",
+    "🇦🇷",
+  ])("keeps the emoji %j", (name) => {
+    expect(schema.safeParse({ name }).success).toBe(true);
   });
 
   test("collapses spaces before counting the limit", () => {

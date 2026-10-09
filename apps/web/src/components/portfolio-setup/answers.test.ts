@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
-import { rowAnswer, sheetAnswer } from "./answers";
+import { rowAnswer, settle, sheetAnswer } from "./answers";
 
 const ID = "22222222-2222-4222-8222-222222222222";
 
@@ -50,5 +51,30 @@ describe("sheetAnswer", () => {
       kind: "alert",
       text: WRITE_MESSAGES.failed,
     });
+  });
+});
+
+describe("settle", () => {
+  test("passes an answer through", async () => {
+    await expect(
+      settle(Promise.resolve({ ok: true, id: ID })),
+    ).resolves.toEqual({ ok: true, id: ID });
+  });
+
+  test("turns a failed call into rejected", async () => {
+    await expect(settle(Promise.reject(new Error("offline")))).resolves.toBe(
+      "rejected",
+    );
+  });
+
+  test("rethrows the redirect of an ended session", async () => {
+    let thrown: unknown;
+    try {
+      redirect("/login");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeDefined();
+    await expect(settle(Promise.reject(thrown))).rejects.toBe(thrown);
   });
 });

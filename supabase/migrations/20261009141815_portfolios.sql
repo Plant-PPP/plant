@@ -4,9 +4,10 @@
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
--- The foreign key to auth.users locks it until commit, so no signup runs the
--- old signup function between its replacement and the backfill below. Keep the
--- CREATE TABLE before the function replacement.
+-- The foreign key to auth.users locks it until commit, so no signup commits
+-- between the backfill below and this transaction's commit, when the new
+-- signup function takes effect. Keep the foreign key in the CREATE TABLE,
+-- before the backfill.
 CREATE TABLE public.portfolios (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users (id) ON DELETE CASCADE,

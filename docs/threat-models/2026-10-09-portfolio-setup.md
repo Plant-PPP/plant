@@ -11,7 +11,7 @@ Out of scope: holders and accounts (PLA-24) and holdings (PLA-25), which extend 
 
 ## Trust boundary
 
-The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, `archived_at` and filters.
+The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, `archived_at`, filters, and the `carteras` param that pages the archived list on `/accounts`.
 
 ## Data flow
 
@@ -27,6 +27,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - Triggers (`SECURITY INVOKER`, `search_path = ''`, not executable by the API roles): the lock serializes one user's writes, the stamp sets `archived_at` to the server's time the row was archived, the guard refuses archiving the last active portfolio with `PT409` and the hint `last_active_portfolio`. They key on the row's `user_id`, never on `auth.uid()`, because the signup function, the seed and the owner write past RLS.
 - `UNIQUE (user_id, id)`: the target of the composite foreign keys PLA-24 and PLA-25 add, so a row can only point at a portfolio of its own user.
 
+- The page: the `carteras` cursor is parsed to one Postgres-readable timestamp and one uuid before it reaches a filter (`lib/supabase/keyset.ts`); anything else reads the first page and logs `invalid_cursor`.
 - Server actions: each calls `getSessionClaims()`, parses every argument with zod (a uuid id, a trimmed name within the CHECK's limit), filters by the session's `user_id` and the id besides RLS, and logs one line without names or PostgREST's text.
 
 ## STRIDE
@@ -47,6 +48,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - **Floor** (`schema_rls_and_grants_test.sql`): the signup function's owner must also own `portfolios`, besides the owned-table shape every table passes.
 - **PostgREST** (`security-tests/src/portfolios.pentest.test.ts`): the shared cross-user cases, a PATCH and an archive of another user's portfolios that change nothing, moving one's own row to another user, archiving one's last active portfolio (409, `PT409`, the hint) and archiving the last two at once, which fails without the lock, a duplicate name in another case (409, `23505`), `DELETE` and the server's columns refused.
 
+- **The page** (`lib/supabase/keyset.test.ts`, `lib/portfolio-setup/read.test.ts`): a cursor carrying a PostgREST filter, a timestamp Postgres refuses or a non-uuid id is refused, and the read then adds no `or` filter and logs `invalid_cursor`.
 - **Server actions** (`app/(app)/accounts/actions.test.ts`): the filters by user and id, the zod refusals before any client, the mapping of every refusal, the session's redirect propagating, an update matching no row or two, and a log line with no name or PostgREST text on every outcome.
 
 ## Residual risk

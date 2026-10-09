@@ -2,7 +2,7 @@
 
 import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   archivePortfolio,
   createPortfolio,
@@ -21,8 +21,10 @@ import {
 import { FormAlert } from "@/components/ui/form-alert";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
-import { rowAnswer } from "./answers";
+import { rowAnswer, settle } from "./answers";
 import { NameSheet } from "./name-sheet";
+
+const PENDING_ROW_BUTTON = "aria-disabled:opacity-50";
 
 type SheetState =
   | { kind: "create" }
@@ -32,6 +34,9 @@ type SheetState =
 export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [alert, setAlert] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focusHeading = () => heading.current;
   const [pending, startTransition] = useTransition();
   // Seeded once: paging back to the first archived page keeps it open.
   const [archivedOpen, setArchivedOpen] = useState(
@@ -39,23 +44,33 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   );
 
   function openSheet(next: SheetState) {
+    if (pending) return;
     setAlert(undefined);
+    setNotice(undefined);
     setSheet(next);
   }
 
+  // The row's buttons stay focusable while pending (aria-disabled), so a
+  // keyboard user keeps their place when the action is refused.
   function rowAction(row: PortfolioRow, action: "archive" | "restore") {
+    if (pending) return;
     setAlert(undefined);
+    setNotice(undefined);
     startTransition(async () => {
       const call =
         action === "archive"
           ? archivePortfolio(row.id)
           : restorePortfolio(row.id);
-      const answer = rowAnswer(
-        await call.catch(() => "rejected" as const),
-        action,
-      );
+      const answer = rowAnswer(await settle(call), action);
       if (answer.kind === "alert") setAlert(answer.text);
-      // Never over a sheet the user opened meanwhile.
+      if (answer.kind === "done") {
+        setNotice(
+          `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}.`,
+        );
+        // The row moved to the other list, taking the focused button with it.
+        heading.current?.focus();
+      }
+      // Defensive: the openers ignore clicks while an action is pending.
       if (answer.kind === "ask_name") {
         setSheet((open) => open ?? { kind: "restore", row });
       }
@@ -66,7 +81,9 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
     <Card className="max-w-3xl gap-0">
       <CardHeader className="border-b">
         <CardTitle className="text-lg">
-          <h2>Carteras</h2>
+          <h2 ref={heading} tabIndex={-1} className="outline-none">
+            Carteras
+          </h2>
         </CardTitle>
         <CardDescription>Agrupá tus inversiones como quieras</CardDescription>
         <CardAction>
@@ -82,6 +99,12 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
       </CardHeader>
       <CardContent className="grid gap-4 pt-6">
         {alert && <FormAlert>{alert}</FormAlert>}
+        <p
+          role="status"
+          className={notice ? "text-sm text-muted-foreground" : "sr-only"}
+        >
+          {notice}
+        </p>
         <ul className="divide-y rounded-md border">
           {view.active.map((row) => (
             <li
@@ -93,7 +116,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={pending}
+                  aria-disabled={pending}
+                  className={PENDING_ROW_BUTTON}
                   onClick={() => openSheet({ kind: "rename", row })}
                   aria-label={`Renombrar ${row.name}`}
                 >
@@ -103,7 +127,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={pending}
+                  aria-disabled={pending}
+                  className={PENDING_ROW_BUTTON}
                   onClick={() => rowAction(row, "archive")}
                   aria-label={`Archivar ${row.name}`}
                 >
@@ -127,7 +152,12 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
             <summary className="cursor-pointer text-sm font-medium">
               Archivadas
             </summary>
-            <ul className="mt-2 divide-y rounded-md border">
+            {view.archived.length === 0 && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No hay más carteras archivadas.
+              </p>
+            )}
+            <ul className="mt-2 divide-y rounded-md border empty:hidden">
               {view.archived.map((row) => (
                 <li
                   key={row.id}
@@ -139,7 +169,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={pending}
+                    aria-disabled={pending}
+                    className={PENDING_ROW_BUTTON}
                     onClick={() => rowAction(row, "restore")}
                     aria-label={`Restaurar ${row.name}`}
                   >
@@ -196,6 +227,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
         <NameSheet
           key={sheet.row.id}
           onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
           title="Restaurar cartera"
           description="Ya tenés una cartera activa con ese nombre. Elegí otro para restaurarla."
           submitLabel="Restaurar"
