@@ -7,7 +7,7 @@ jest.mock("./session-claims", () => ({
   getSessionClaims: () => getSessionClaims(),
 }));
 
-import { requireSensitiveSession } from "./sensitive-session";
+import { needsStepUp, requireSensitiveSession } from "./sensitive-session";
 
 const NOW_S = 1_800_000_000;
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -90,4 +90,22 @@ it("lets the session check's redirect or error through", async () => {
   getSessionClaims.mockRejectedValue(thrown);
   await expect(requireSensitiveSession("export")).rejects.toBe(thrown);
   expect(log).not.toHaveBeenCalled();
+});
+
+it("logs a denied MFA turn-off under its own action", async () => {
+  signedInAt(NOW_S - 901);
+  await requireSensitiveSession("disable_mfa");
+  expect(JSON.parse(log.mock.calls[0][0] as string)).toMatchObject({
+    "plant.auth.sensitive_action": "disable_mfa",
+  });
+});
+
+describe("needsStepUp", () => {
+  it("is false within the window and true past it, logging nothing", async () => {
+    signedInAt(NOW_S - 900);
+    await expect(needsStepUp()).resolves.toBe(false);
+    signedInAt(NOW_S - 901);
+    await expect(needsStepUp()).resolves.toBe(true);
+    expect(log).not.toHaveBeenCalled();
+  });
 });

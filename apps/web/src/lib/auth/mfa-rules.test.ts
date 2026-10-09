@@ -6,6 +6,8 @@ import {
   mfaRequirement,
   sensitiveRequirement,
   STEP_UP_WINDOW_S,
+  TOTP_FRESH_S,
+  totpIsFresh,
 } from "./mfa-rules";
 
 // The truth table the hook and the RESTRICTIVE policy are tested on, parsed
@@ -149,5 +151,46 @@ describe("sensitiveRequirement", () => {
     ["a null entry", { amr: [null] }],
   ])("asks to sign in again with %s", (_, claims) => {
     expect(sensitiveRequirement(claims, now)).toBe("sign_in_again");
+  });
+});
+
+describe("totpIsFresh", () => {
+  const now = 1_800_000_000;
+  const verified = (method: string, secondsAgo: number) => ({
+    amr: [
+      { method: "otp", timestamp: now },
+      { method, timestamp: now - secondsAgo },
+    ],
+  });
+
+  it("accepts a TOTP code from the last two minutes", () => {
+    expect(totpIsFresh(verified("totp", TOTP_FRESH_S), now)).toBe(true);
+  });
+
+  it("refuses one a second older", () => {
+    expect(totpIsFresh(verified("totp", TOTP_FRESH_S + 1), now)).toBe(false);
+  });
+
+  it("accepts a timestamp ahead of the server's clock", () => {
+    expect(totpIsFresh(verified("totp", -30), now)).toBe(true);
+  });
+
+  it("does not count a fresh first-factor sign-in", () => {
+    expect(totpIsFresh(verified("mfa/phone", 0), now)).toBe(false);
+    expect(totpIsFresh({ amr: [{ method: "otp", timestamp: now }] }, now)).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ["no amr", {}],
+    ["a string amr", { amr: ["totp"] }],
+    [
+      "a timestamp as a string",
+      { amr: [{ method: "totp", timestamp: String(now) }] },
+    ],
+    ["a null entry", { amr: [null] }],
+  ])("refuses %s", (_, claims) => {
+    expect(totpIsFresh(claims, now)).toBe(false);
   });
 });
