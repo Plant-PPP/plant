@@ -22,6 +22,8 @@
 -- - Views granted to authenticated, or writable by service_role, run as the
 --   caller, and materialized views and foreign tables grant them nothing.
 -- - No table in public or private inherits or is inherited, besides partitions.
+-- - The extensions schema holds only its extensions' members and the
+--   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, service_role none in
@@ -61,7 +63,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(40);
+SELECT plan(41);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -489,6 +491,52 @@ INSERT INTO canaried VALUES
     WHERE NOT c.relispartition
       AND (c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)
            OR p.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)) $$),
+-- The floor's other asserts stop at public and private, so a migration that
+-- put a table, a definer, a rule or a trigger in extensions would write public
+-- tables past all of them. Only extensions' own members and the platform's
+-- objects (supabase_admin's) live there.
+('nothing in extensions but its extensions'' members and the platform''s own objects and default privileges, and no rule or trigger there',
+ ARRAY['table pgtap_canary_relation', 'function pgtap_canary_fn', 'type pgtap_canary_type',
+       'operator ===', 'collation pgtap_canary_collation', 'default privileges postgres',
+       'rule pgtap_canary_relation.pgtap_canary', 'trigger pgtap_canary_relation.pgtap_canary'],
+ $$ SELECT 'table ' || c.relname FROM pg_class c
+    WHERE c.relnamespace = 'extensions'::regnamespace AND c.relowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'function ' || p.proname FROM pg_proc p
+    WHERE p.pronamespace = 'extensions'::regnamespace AND p.proowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'type ' || t.typname FROM pg_type t
+    WHERE t.typnamespace = 'extensions'::regnamespace AND t.typowner <> 'supabase_admin'::regrole
+      AND t.typrelid = 0
+      AND NOT EXISTS (SELECT 1 FROM pg_type e WHERE e.typarray = t.oid)
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'operator ' || o.oprname FROM pg_operator o
+    WHERE o.oprnamespace = 'extensions'::regnamespace AND o.oprowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_operator'::regclass AND d.objid = o.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'collation ' || co.collname FROM pg_collation co
+    WHERE co.collnamespace = 'extensions'::regnamespace AND co.collowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_collation'::regclass AND d.objid = co.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'default privileges ' || pg_get_userbyid(da.defaclrole) FROM pg_default_acl da
+    WHERE da.defaclnamespace = 'extensions'::regnamespace
+      AND da.defaclrole <> 'supabase_admin'::regrole
+    UNION ALL
+    SELECT 'rule ' || c.relname || '.' || r.rulename FROM pg_rewrite r
+    JOIN pg_class c ON c.oid = r.ev_class
+    WHERE c.relnamespace = 'extensions'::regnamespace AND r.rulename <> '_RETURN'
+    UNION ALL
+    SELECT 'trigger ' || c.relname || '.' || tg.tgname FROM pg_trigger tg
+    JOIN pg_class c ON c.oid = tg.tgrelid
+    WHERE c.relnamespace = 'extensions'::regnamespace AND NOT tg.tgisinternal $$),
 ('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
  $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
 ('a reference table only lets authenticated read every row, no API role write it but service_role''s inserts, and points at no other table',
@@ -620,6 +668,14 @@ CREATE TABLE public.pgtap_canary_reference ();
 CREATE TABLE extensions.pgtap_canary_relation ();
 CREATE TABLE public.pgtap_canary_inherits () INHERITS (extensions.pgtap_canary_relation);
 CREATE TABLE extensions.pgtap_canary_inherits () INHERITS (public.pgtap_canary_reference);
+CREATE FUNCTION extensions.pgtap_canary_fn() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+CREATE TYPE extensions.pgtap_canary_type AS ENUM ('x');
+CREATE OPERATOR extensions.=== (LEFTARG = int, RIGHTARG = int, FUNCTION = int4eq);
+CREATE COLLATION extensions.pgtap_canary_collation FROM "C";
+ALTER DEFAULT PRIVILEGES IN SCHEMA extensions GRANT EXECUTE ON FUNCTIONS TO anon;
+CREATE RULE pgtap_canary AS ON INSERT TO extensions.pgtap_canary_relation DO INSTEAD NOTHING;
+CREATE TRIGGER pgtap_canary BEFORE INSERT ON extensions.pgtap_canary_relation
+  FOR EACH ROW EXECUTE FUNCTION extensions.pgtap_canary_fn();
 CREATE VIEW public.pgtap_canary_view_read AS SELECT 1 AS x;
 GRANT SELECT (x) ON public.pgtap_canary_view_read TO authenticated;
 CREATE VIEW public.pgtap_canary_view_insert AS SELECT 1 AS x;

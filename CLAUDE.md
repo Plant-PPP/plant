@@ -72,7 +72,7 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 
 - A migration applied on staging is read-only: changes go in a new migration.
 - Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. Any `... INDEX CONCURRENTLY` statement goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql`. The PLA-16 migration predates squawk: do not use it as a model.
-- RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`.
+- RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`. The only tables without `user_id` are the global reference tables `fx_rates` and `prices`: `authenticated` only reads them, `service_role` writes them only by insert, and they keep the MFA gate (see `docs/decisions.md`). A new one needs its own floor exception.
 - "Automatically expose new tables" is off (`auto_expose_new_tables = false` in `supabase/config.toml` and in the dashboard): every migration makes an explicit `GRANT` to `authenticated` with only the operations the app uses. Never to `anon`.
 - Every table starts with `REVOKE ALL`, and `authenticated` writes only through column-level grants, never on `user_id`. The full shape of owned tables is in `docs/decisions.md`; the pgTAP floor checks part of it and each table's two-user test checks the rest.
 - Explicit `REVOKE ... FROM PUBLIC, anon, authenticated` on functions, and `SECURITY DEFINER` always with `SET search_path`.
