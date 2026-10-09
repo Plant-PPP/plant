@@ -66,6 +66,7 @@ afterEach(() => {
 function line(): Record<string, unknown> {
   expect(lines).toHaveLength(1);
   expect(JSON.stringify(lines)).not.toMatch(/bound|other|half|someone-else/);
+  expect(lines[0]).toHaveProperty("event", "auth.mfa.disable");
   expect(lines[0]).toHaveProperty(["enduser.id"], "user-1");
   return lines[0] ?? {};
 }
