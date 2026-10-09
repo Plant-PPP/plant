@@ -6,6 +6,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { isUnder } from "./paths";
 
 export type NavItem = {
   href: string;
@@ -25,11 +26,7 @@ export const NAV_ITEMS = [
 export type NavHref = (typeof NAV_ITEMS)[number]["href"];
 
 export function navItemForPath(pathname: string): NavItem | undefined {
-  return NAV_ITEMS.find((item) =>
-    item.href === "/"
-      ? pathname === "/"
-      : pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  return NAV_ITEMS.find((item) => isUnder(item.href, pathname));
 }
 
 export function navTitle(href: NavHref): string {

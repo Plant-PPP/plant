@@ -1,3 +1,4 @@
+import { isUnder } from "@/lib/paths";
 import { pathOf, sanitizeNextPath } from "./safe-redirect";
 
 export const LOGIN_PATH = "/login";
@@ -5,9 +6,7 @@ export const CALLBACK_PATH = "/auth/callback";
 const PUBLIC_PATHS = [LOGIN_PATH, CALLBACK_PATH];
 
 export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
+  return PUBLIC_PATHS.some((p) => isUnder(p, pathname));
 }
 
 // Where to go after signing in: a same-origin path that is not /login or the
@@ -17,11 +16,13 @@ export function afterLoginPath(raw: unknown): string {
   return isPublicPath(pathOf(safe)) ? "/" : safe;
 }
 
-export function loginPath(next?: string): string {
+function withNext(base: string, next?: string): string {
   const safe = afterLoginPath(next);
-  return safe === "/"
-    ? LOGIN_PATH
-    : `${LOGIN_PATH}?next=${encodeURIComponent(safe)}`;
+  return safe === "/" ? base : `${base}?next=${encodeURIComponent(safe)}`;
+}
+
+export function loginPath(next?: string): string {
+  return withNext(LOGIN_PATH, next);
 }
 
 // Where to land after Google or a mail link. It rides in a cookie the callback
