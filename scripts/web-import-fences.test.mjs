@@ -442,6 +442,10 @@ flagged.push(
     'export * from "./session-claims-unchecked";',
   ],
   [
+    "src/lib/auth/session-claims.ts",
+    'export { default } from "./session-claims-unchecked";',
+  ],
+  [
     "src/app/auth/mfa/page.tsx",
     'export * from "@/lib/auth/session-claims-unchecked";',
   ],

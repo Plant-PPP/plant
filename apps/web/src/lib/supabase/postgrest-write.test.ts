@@ -27,6 +27,7 @@ describe("classifyPostgrestResult", () => {
   it.each([
     ["a failed connection", null, 0, "fetch_error", true],
     ["a SQLSTATE", pgError("23514"), 400, "23514", false],
+    ["a SQLSTATE with a letter", pgError("22P02"), 400, "22P02", false],
     ["a PostgREST code", pgError("PGRST204"), 400, "PGRST204", false],
     ["a 5xx with a SQLSTATE", pgError("57014"), 500, "57014", true],
     ["a code that is not one", pgError("not a code"), 409, "http_409", false],
