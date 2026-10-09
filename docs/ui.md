@@ -23,7 +23,9 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 
 ## Lists and amounts
 
-- Lists of records use the shared data table (PLA-97) rather than hand-built markup.
+- **Lists of records are a `DataTable`** (`components/ui/data-table.tsx`), one per list, named by a screen-reader caption ("Carteras", "Carteras archivadas"). Rows keep the server's order: a list is capped or paged by keyset, so sorting it in the browser would only reorder what is loaded.
+- Row actions are an `actionsColumn` of `IconButton`s, sized to its buttons. Single-line text cuts with an ellipsis and carries the whole text in a `title` (`TruncatedText`), which shows on hover; screen readers get the whole text.
+- Columns respond to the table's width, not the screen's: secondary columns use `hidden @2xl:table-cell`, and below that width their values ride inside the first column (on its first line or a muted second line), so nothing is lost on a narrow card.
 - Amounts are right-aligned with `tabular-nums`, formatted `es-AR` with their currency (`$ 1.234.567,89`, `US$ 12.345,67`), and never pass through a `number` to be summed.
 
 ## Density and type

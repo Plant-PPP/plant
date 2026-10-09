@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Data table (PLA-97)
+
+- **A small table on `@tanstack/react-table`, taken from the reference app's table**: the row model keyed by row id, header and body cells, the icon actions column and truncated cells. Left out until a screen needs them: sorting, expandable rows, a totals footer, loading skeletons, pagination, resizing and pinned columns. Amount cells and exact sums land with the first screen that shows amounts (PLA-28).
+- **No sorting in the browser.** The `/accounts` lists are capped (`PAGE_ROW_LIMIT`) or paged by keyset, so a click on a header would order only the rows on screen and suggest an order the list does not have. Sorting waits for the server to order and page by the chosen column.
+- **Cells are called, not mounted.** The cards build their columns on every render, since the cells close over the card's handlers; mounted as components, each new function would remount its cell and replace the button a dialog returns focus to. `DataTable` calls each header and cell as a function, so they must not use hooks.
+
 ## 2026-10-09 · Holders and accounts (PLA-24)
 
 - **A holder is a row, and an account with no holder is the user's.** `holders` holds the people whose assets the user tracks besides their own, with the same name rules, archive and restore as portfolios (`namedRowWrites` in `lib/portfolio-setup` serves both). A NULL `holder_id` shows as "Vos", and PLA-25 copies the account's holder onto each holding the same way. An account (`source_connections`) is an institution typed as a label, with suggestions but no list it must match and no provider column: where holdings come from is per holding (PLA-25).
