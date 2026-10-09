@@ -12,13 +12,13 @@ import { OWNED_KEYS, type OwnedTable } from "./reference-rows";
 
 const { a, b } = users;
 
-// What another user can try on every owned table: read B's rows, by id where
-// the table has one, write `rowForB`, delete B's rows, embed auth users and
-// read unfiltered. Both users need rows before it runs. The DELETE case expects
-// the table refused because no owned table grants DELETE; under a grant RLS
-// would answer 204 and leave B's rows alone. The cases specific to the table,
-// such as a PATCH of B's rows, go in `cases`, which shares the check that B's
-// rows never change.
+// What another user can try on every owned table: read B's rows, read and
+// upsert over B's row by id where the table has one, write `rowForB`, delete
+// B's rows, embed auth users and read unfiltered. Both users need rows before
+// it runs. The DELETE case expects the table refused because no owned table
+// grants DELETE; under a grant RLS would answer 204 and leave B's rows alone.
+// The cases specific to the table, such as a PATCH of B's rows, go in `cases`,
+// which shares the check that B's rows never change.
 export function describeAnotherUserAccess<T extends OwnedTable>(
   table: T,
   rowForB: Insert<T>,
@@ -43,7 +43,7 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
     });
 
     if (OWNED_KEYS[table] === "id") {
-      test("GET of B's row by id returns nothing", async () => {
+      const idOfB = async (): Promise<string> => {
         const own = await rest(
           b,
           "GET",
@@ -52,9 +52,32 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
         expect(own.status).toBe(200);
         const [row] = own.body as { id: string }[];
         expect(row).toBeDefined();
-        const res = await rest(a, "GET", `${table}?id=eq.${row!.id}`);
+        return row!.id;
+      };
+
+      test("GET of B's row by id returns nothing", async () => {
+        const res = await rest(a, "GET", `${table}?id=eq.${await idOfB()}`);
         expect(res.status).toBe(200);
         expect(res.body).toEqual([]);
+      });
+
+      // A claims B's row id under its own user_id: the INSERT check passes, so
+      // only the grants and the SELECT and UPDATE policies on B's row stop the
+      // takeover.
+      test("upsert over B's row by id is denied", async () => {
+        const id = await idOfB();
+        const body = { ...rowForB, id, user_id: a.id };
+        expectError(
+          await rest(a, "POST", `${table}?on_conflict=id`, {
+            body,
+            headers: { Prefer: "resolution=merge-duplicates" },
+          }),
+          403,
+        );
+        expectError(
+          await rest(a, "PUT", `${table}?id=eq.${id}`, { body }),
+          403,
+        );
       });
     }
 

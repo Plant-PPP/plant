@@ -3,9 +3,8 @@
 // that allocate per match (mergeAuthCode's runs of spaces); quadratic work
 // grows sixty-fourfold. 32 times splits them, and the 5 ms absorbs timer noise
 // on small inputs. Comparing the CPU time of the two keeps the check
-// independent of how fast or loaded the machine is. It stops once the larger
-// input takes over a second, so a regression fails instead of stalling the
-// suite.
+// independent of how fast or loaded the machine is. It stops after the first
+// larger run over a second, so a slow regression costs one run instead of five.
 export function expectLinear<T>(
   input: (scale: number) => T,
   run: (input: T) => unknown,
