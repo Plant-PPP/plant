@@ -417,7 +417,7 @@ CREATE TEMP TABLE canaried (name text PRIMARY KEY, canaries text[] NOT NULL, que
 INSERT INTO canaried VALUES
 -- pg_get_expr's rendering of the predicate in the mfa_gate migration, compared
 -- as text like the owner predicate above.
-('every public table has one RESTRICTIVE policy, the MFA gate for authenticated',
+('every public table has one RESTRICTIVE policy, the MFA gate for authenticated, copied from enforce-owner-isolation''s house form',
  ARRAY['pgtap_canary_no_gate', 'pgtap_canary_permissive_gate', 'pgtap_canary_two_gates',
        'pgtap_canary_two_gates.pgtap_canary', 'pgtap_canary_gate_name.pgtap_canary',
        'pgtap_canary_gate_role.Requires two-factor authentication',

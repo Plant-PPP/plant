@@ -44,8 +44,9 @@ create policy "Requires two-factor authentication" on public.<t>
   using      ((select auth.jwt() ->> 'aal') = 'aal2' or (select auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb)
   with check ((select auth.jwt() ->> 'aal') = 'aal2' or (select auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb);
 
-grant select, insert, update on public.<t> to authenticated;  -- only the verbs the app uses
-revoke all on public.<t> from anon;
+revoke all on public.<t> from public, anon, authenticated, service_role;
+grant select, delete on public.<t> to authenticated;  -- only the verbs the app uses
+grant insert (<cols>), update (<cols>) on public.<t> to authenticated;  -- never id, user_id or server-kept columns
 ```
 
 Helpers live in schema `private`; every `SECURITY DEFINER` function carries `SET search_path`; every
@@ -148,7 +149,8 @@ mention is UNCHECKED, not passed.
   Realtime, which delivers only the rows the subscriber's SELECT policy allows — a loose SELECT policy
   leaks over the socket as well as over REST. Storage objects (uploaded broker files) need bucket
   policies that pin the path's `<user_id>/` prefix to `(select auth.uid())`; a private bucket with an
-  `authenticated`-wide policy is a shared bucket.
+  `authenticated`-wide policy is a shared bucket. The first bucket also gets the house form's MFA gate on
+  `storage.objects` and its floor assert: the floor checks only `public`.
 
 ## Law 4 — Bypass-carries-its-own-boundary
 

@@ -38,7 +38,7 @@ set app.current_user_id = '123';
 select * from orders;  -- Only returns orders for user 123
 ```
 
-Policy for authenticated role (Supabase; the form Plant uses on every owned table):
+Policy for authenticated role (Supabase; the owner policy Plant uses on every owned table, next to the MFA gate in `enforce-owner-isolation`'s house form):
 
 ```sql
 create policy orders_user_policy on orders
