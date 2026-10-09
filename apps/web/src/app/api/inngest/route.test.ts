@@ -76,3 +76,27 @@ it("registers only ping outside development", async () => {
     1,
   );
 });
+
+// Under next dev the SDK checks no signature, so the URL it registers must not
+// come from the request: a DNS-rebound page in the developer's browser reaches
+// 127.0.0.1:3000 with its own Host and would move the cron to that host.
+it("registers the app at loopback whatever Host an unsigned dev sync sends", async () => {
+  jest.spyOn(console, "warn").mockImplementation(() => {});
+  jest.spyOn(console, "error").mockImplementation(() => {});
+  const outbound = jest.fn(
+    async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  );
+  global.fetch = outbound as unknown as typeof fetch;
+
+  const route = loadRoute({ NODE_ENV: "development" });
+  await call(
+    route.PUT,
+    new Request("http://evil.example:3000/api/inngest", {
+      method: "PUT",
+      headers: { host: "evil.example:3000" },
+    }),
+  );
+
+  const sent = outbound.mock.calls.map((args) => JSON.stringify(args));
+  expect(sent.join("\n")).not.toContain("evil.example");
+});

@@ -54,6 +54,31 @@ describe("toQuoteFeed", () => {
     await expect(feed.read(NOW)).rejects.toMatchObject({ code: "bad_shape" });
   });
 
+  it("throws a retryable unread code when nothing else was kept", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [],
+        prices: [
+          {
+            symbol: "BTC",
+            price_date: "2026-10-09",
+            price: "",
+            currency: "USD",
+            quoted_at: NOW.toISOString(),
+          },
+        ],
+        unread: [
+          { key: "blue", code: "http_4xx" },
+          { key: "bolsa", code: "http_5xx" },
+        ],
+      })),
+    );
+    await expect(feed.read(NOW)).rejects.toMatchObject({
+      code: "http_5xx",
+      retryable: true,
+    });
+  });
+
   it("keeps a read whose rows are all early", async () => {
     const morning = new Date("2026-10-09T13:00:00.000Z");
     const feed = toQuoteFeed(

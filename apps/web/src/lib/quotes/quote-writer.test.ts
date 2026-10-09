@@ -2,18 +2,21 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { type FxRate, type Price, QuoteStoreError } from "@plant/core";
+import { Constants } from "@plant/shared";
 import { createClient } from "@supabase/supabase-js";
 
 jest.mock("server-only", () => ({}), { virtual: true });
 
 import { createQuoteWriter, GUARD_SQLSTATE } from "./quote-writer";
 
+const [FX_SOURCE, , PRICE_SOURCE] = Constants.public.Enums.quote_source;
+
 const fxRate: FxRate = {
   kind: "mep",
   rate_date: "2026-10-09",
   buy: "1400.5",
   sell: "1450",
-  source: "dolarapi",
+  source: FX_SOURCE,
   quoted_at: "2026-10-09T21:00:00.000Z",
   fetched_at: "2026-10-09T21:05:00.000Z",
 };
@@ -23,7 +26,7 @@ const price: Price = {
   price_date: "2026-10-09",
   price: "112345.1",
   currency: "USD",
-  source: "kraken",
+  source: PRICE_SOURCE,
   quoted_at: "2026-10-09T21:05:00.000Z",
   fetched_at: "2026-10-09T21:05:00.000Z",
 };

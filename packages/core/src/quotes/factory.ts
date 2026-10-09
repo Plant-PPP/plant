@@ -2,7 +2,7 @@ import { createArgentinadatosFeed } from "./adapters/argentinadatos/feed";
 import { createDolarapiFeed } from "./adapters/dolarapi/feed";
 import { createKrakenFeed } from "./adapters/kraken/feed";
 import type { GetJson, QuoteFeedPort, RawQuoteFeed } from "./contract/port";
-import { checkBatch, QuoteFeedError } from "./contract/quote";
+import { checkBatch, QUOTE_FEED_CODES, QuoteFeedError } from "./contract/quote";
 
 export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
   return {
@@ -13,9 +13,12 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
         rows.fxRates.length + rows.prices.length + (rows.unread?.length ?? 0);
       if (count === 0) throw new QuoteFeedError("empty");
       const batch = checkBatch(rows, now, raw.id);
-      // Every row invalid: the source changed what it sends.
+      // Nothing kept and nothing out of its window: a part that failed for a
+      // passing reason makes the read retryable, else the source changed what
+      // it sends.
       if (batch.refused.invalid.length === count) {
-        throw new QuoteFeedError("bad_shape");
+        const passing = rows.unread?.find(({ code }) => QUOTE_FEED_CODES[code]);
+        throw new QuoteFeedError(passing?.code ?? "bad_shape");
       }
       return batch;
     },

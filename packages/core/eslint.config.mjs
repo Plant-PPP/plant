@@ -1,3 +1,4 @@
+import { moneyRules } from "../../eslint.money.mjs";
 import packages from "../../eslint.packages.mjs";
 
 // A quote's day and hour are Buenos Aires', from @plant/shared's time
@@ -18,7 +19,8 @@ export default [
     files: ["src/**/*.ts"],
     rules: {
       "no-restricted-properties": [
-        "error",
+        // This rule's options replace the shared ones, money's included.
+        ...moneyRules["no-restricted-properties"],
         ...HOST_ZONE_ACCESSORS.map((property) => ({
           property,
           message:

@@ -334,6 +334,15 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(token)).toContain(MASK);
   });
 
+  // A ULID's first character is 0 to 7 (its 48-bit time), so a token that
+  // starts any other way is no run id, even with a second digit run.
+  it.each([
+    ["a letter", "ABCDEFGHJK12345678MNPQRS9T"],
+    ["an 8", "8BCDEFGHJK12345678MNPQRS9T"],
+  ])("masks a DNI in a token that starts with %s", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
   // Pin of current behavior: a run of 26 digits is no id and no number the
   // patterns know.
   it("leaves a 26-digit run as it is", () => {

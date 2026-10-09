@@ -35,13 +35,15 @@ async function readCapped(response: Response): Promise<string> {
 }
 
 // The quote feeds' HTTP reader. Every error it throws is a QuoteFeedError, and
-// none carries the body or the parser's message. Inngest retries the step.
+// none carries the body or the parser's message. Inngest retries the step. A
+// redirect is answered by its status (`http_4xx`, not retried), so a moved
+// endpoint reads as moved rather than as a network failure.
 export const getJson: GetJson = async (url) => {
   let text: string;
   try {
     const response = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      redirect: "error",
+      redirect: "manual",
       cache: "no-store",
     });
     if (!response.ok) {

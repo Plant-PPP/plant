@@ -27,8 +27,7 @@ const responseSchema = z.object({
 });
 
 // On weekends and holidays the house still stamps its last business day, so
-// the row is dated that day: the window refuses it as closed on a weekend and
-// as stale on a holiday.
+// the row is dated that day and quoteWindow decides whether it is kept.
 export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   const { compra, venta, fechaActualizacion } = parseResponse(
     responseSchema,

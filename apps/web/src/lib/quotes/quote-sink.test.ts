@@ -7,8 +7,11 @@ jest.mock("@/lib/supabase/service-role", () => ({
 }));
 
 import { QuoteStoreError } from "@plant/core";
+import { Constants } from "@plant/shared";
 
 import { quoteSink } from "./quote-sink";
+
+const [, , SOURCE] = Constants.public.Enums.quote_source;
 
 const rows = { fxRates: [], prices: [] };
 
@@ -41,7 +44,7 @@ it("saves with the service-role client", async () => {
         price_date: "2026-10-09",
         price: "1",
         currency: "USD",
-        source: "kraken",
+        source: SOURCE,
         quoted_at: "2026-10-09T21:05:00.000Z",
         fetched_at: "2026-10-09T21:05:00.000Z",
       },

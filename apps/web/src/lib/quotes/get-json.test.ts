@@ -43,16 +43,24 @@ it("returns the parsed JSON", async () => {
   await expect(getJson(URL)).resolves.toEqual({ venta: 1450 });
 });
 
-it("refuses redirects and passes a timeout signal", async () => {
+it("follows no redirect and passes a timeout signal", async () => {
   answer(new Response("{}", { status: 200 }));
   await getJson(URL);
   expect(fetchMock).toHaveBeenCalledWith(
     URL,
     expect.objectContaining({
-      redirect: "error",
+      redirect: "manual",
       signal: expect.any(AbortSignal),
     }),
   );
+});
+
+it("refuses a redirect by its status, so it is not retried", async () => {
+  answer(new Response(null, { status: 301, headers: { location: URL } }));
+  await expect(failure(getJson(URL))).resolves.toMatchObject({
+    code: "http_4xx",
+    retryable: false,
+  });
 });
 
 it("refuses a body whose length is over the cap before reading it", async () => {

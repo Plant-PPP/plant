@@ -189,8 +189,8 @@ const FAILURES: Readonly<
 };
 
 // A serialized error keeps only its name and message, so the stage and code
-// are rebuilt from them. Anything else is a read failure with code _OTHER, so
-// the code is always one of the lists above.
+// are rebuilt from them: an unknown class is a read failure, and a message
+// outside its class's codes reads as _OTHER, so the code stays bounded.
 export function quoteFailureOf(error: unknown): {
   stage: QuoteStage;
   code: string;
