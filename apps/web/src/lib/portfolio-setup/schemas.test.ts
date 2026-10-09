@@ -1,5 +1,9 @@
 import { normalizeName } from "./normalize-name";
-import { idSchema, nameInputSchema } from "./schemas";
+import {
+  idSchema,
+  nameInputSchema,
+  sourceConnectionInputSchema,
+} from "./schemas";
 
 const schema = nameInputSchema(40);
 
@@ -112,5 +116,41 @@ describe("idSchema", () => {
     ).toBe(true);
     expect(idSchema.safeParse("1").success).toBe(false);
     expect(idSchema.safeParse("eq.1").success).toBe(false);
+  });
+});
+
+describe("sourceConnectionInputSchema", () => {
+  const account = sourceConnectionInputSchema(60);
+  const PORTFOLIO = "22222222-2222-4222-8222-222222222222";
+  const HOLDER = "33333333-3333-4333-8333-333333333333";
+  const valid = {
+    institution: " Bull  Market ",
+    holder: "self",
+    includeInTaxReport: true,
+    defaultPortfolioId: PORTFOLIO,
+  };
+
+  test("normalizes the institution like a name", () => {
+    expect(account.parse(valid)).toEqual({
+      ...valid,
+      institution: "Bull Market",
+    });
+  });
+
+  test("takes the user or a holder's id", () => {
+    expect(account.parse({ ...valid, holder: HOLDER }).holder).toBe(HOLDER);
+  });
+
+  test.each([
+    ["no holder", { holder: undefined }],
+    ["an empty holder", { holder: "" }],
+    ["a holder that is not an id", { holder: "Lucía" }],
+    ["no portfolio", { defaultPortfolioId: undefined }],
+    ["a portfolio that is not an id", { defaultPortfolioId: "Principal" }],
+    ["a text flag", { includeInTaxReport: "true" }],
+    ["an institution past the limit", { institution: "a".repeat(61) }],
+    ["a blank institution", { institution: " " }],
+  ])("refuses %s", (_, change) => {
+    expect(account.safeParse({ ...valid, ...change }).success).toBe(false);
   });
 });

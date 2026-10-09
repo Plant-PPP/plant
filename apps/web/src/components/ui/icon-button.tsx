@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PendingButton } from "@/components/ui/pending-button";
 import {
   Tooltip,
   TooltipContent,
@@ -23,28 +23,25 @@ function IconButton({
   tooltip: string;
   label: string;
   onClick: () => void;
-  // aria-disabled, not disabled: a disabled button drops its focus to the page.
   pending?: boolean;
   className?: string;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
+        <PendingButton
           variant="ghost"
           size="icon"
           aria-label={label}
-          aria-disabled={pending}
+          pending={pending}
           className={cn(
-            "size-7 text-muted-foreground hover:text-foreground aria-disabled:opacity-50",
+            "size-7 text-muted-foreground hover:text-foreground",
             className,
           )}
-          onClick={() => {
-            if (!pending) onClick();
-          }}
+          onClick={onClick}
         >
           <Icon className="size-3.5" />
-        </Button>
+        </PendingButton>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>

@@ -19,8 +19,9 @@
     // against its truth table; any edit to this pgTAP file re-runs everything.
     "supabase/tests/mfa_gate_test.sql",
     // Read by apps/web's limits.test.ts, which checks the name limits against
-    // the CHECKs this pgTAP file pins.
-    "supabase/tests/portfolio_setup_isolation_test.sql"
+    // the CHECKs these pgTAP files pin.
+    "supabase/tests/portfolio_setup_isolation_test.sql",
+    "supabase/tests/holders_accounts_isolation_test.sql"
   ],
   "tasks": {
     // Workspace packages ship TypeScript sources with no build of their own,
