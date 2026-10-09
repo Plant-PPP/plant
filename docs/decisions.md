@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Audit rows for MFA and session end (PLA-76)
+
+- **Four more `audit_log` actions, all from database triggers:** `auth.session.deleted`, `auth.mfa.verified` (a session raised to `aal2`), `auth.mfa.factor_verified` and `auth.mfa.factor_removed` (a verified factor deleted). Enroll, verify, unenroll and sign-out run between the browser and Auth, so only the database sees all of them. An unverified factor, a refresh and a failed TOTP attempt write nothing; Auth's logs keep the failed attempts.
+- **One definer per table.** PLA-21's `record_session_created()` is renamed `record_session_event()` and handles insert, update and delete, deciding the action from `TG_OP` and the row's `aal` transition; its insert trigger is kept and a second trigger fires on delete or update. `record_mfa_factor_event()` serves `auth.mfa_factors`. Neither takes a trigger argument, so the floor's exact trigger definitions pin what each one writes.
+- **No column list and no `WHEN` on the triggers**, extending PLA-21's `to_jsonb` rule: a column named there would make an Auth migration that changes it fail on a dependency. The cost is a plpgsql call on every session and factor update (a refresh is two session updates, a challenge updates the factor) that compares one field and inserts nothing.
+- **`auth.session.deleted` covers every way a session ends**: sign-out in any scope, the `aal1` sessions a TOTP verify deletes, user deletion and Auth's cleanup of expired sessions. It does not tell them apart; Auth's logs do, and account deletion (PLA-84) writes its own row. `metadata` holds `session_id` and `aal`, or `factor_id` and `factor_type`; never the factor's secret, its name or the session's key. `request_id` is always empty on trigger rows.
+- **The migration needs only the `TRIGGER` privilege PLA-21 already used.** `auth.sessions` and `auth.mfa_factors` belong to Auth's role, so nothing here drops or replaces a trigger on them. The factor trigger is created before the session trigger, the order Auth locks the two tables in verify and unenroll.
+
 ## 2026-10-08 · AI costs (PLA-22)
 
 - **One `ai_costs` row per model call**, written by `costMiddleware` (`apps/web/src/lib/ai/cost-middleware.ts`) around the model, priced by the model id the caller asked for, never the one the provider answers with. Each SDK retry and each tool step is its own call. Nothing else records costs: a second recorder in `onStepFinish` would count twice.
@@ -29,7 +37,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-08 · Logs and audit (PLA-21)
 
 - **Every new Auth session writes one `auth.session.created` row to `audit_log`**, from an `AFTER INSERT` trigger on `auth.sessions`. Auth creates the session: the email code is verified from the browser, and `/auth/callback` exchanges Google's and the mail link's code but sees only Auth's answer. The trigger sees every sign-in whatever the method, and also recovery, email change and identity linking, which create sessions too. A method-aware `auth.login` can be added later without narrowing it. A refresh updates the row and writes nothing.
-- **Sign-in is fail-closed.** The trigger's insert runs in Auth's transaction: if it fails, the sign-in fails, so a failing insert cannot leave a session unaudited. A trigger that does not fire (replica mode, or dropped by Auth's own role) fails open; the threat model records it. Any later change to `audit_log` is on the sign-in path; `audit_session_created_test.sql` and the pentest sign-ins in the CI `database` job pin that the insert stays valid. The trigger reads only `auth.sessions.id` and `user_id` directly; `aal` goes through `to_jsonb`, so an Auth upgrade that drops it cannot break sign-in.
+- **Sign-in is fail-closed.** The trigger's insert runs in Auth's transaction: if it fails, the sign-in fails, so a failing insert cannot leave a session unaudited. A trigger that does not fire (replica mode, or dropped by Auth's own role) fails open; the threat model records it. Any later change to `audit_log` is on the sign-in path, and since PLA-76 also on sign-out, TOTP verify, unenroll, user deletion and Auth's cleanup of expired sessions; `audit_session_created_test.sql` and the pentest sign-ins in the CI `database` job pin that the insert stays valid. The trigger reads only `auth.sessions.id` and `user_id` directly; `aal` goes through `to_jsonb`, so an Auth upgrade that drops it cannot break sign-in.
 - **`SECURITY DEFINER`, `search_path = ''`, owned by the owner of `audit_log`.** Auth's role holds nothing on `private`. No API role can insert into `auth.sessions` directly. The `service_role` key can still create a real session for any user through Auth's admin API, and its row looks like a sign-in. The pgTAP floor pins both definers to the table each fires on.
 - **`audit_log.action` and `outcome` are enums** (`private.audit_action`, `private.audit_outcome`), extend-only: a new value is `ALTER TYPE … ADD VALUE`, never a rename. `outcome` is `NOT NULL` with no default, so every writer states it; `failure` and `denied` are there for the MFA and upload rows to come. Changing `action`'s type and dropping its `CHECK` is the one exception to additive-only migrations: nothing had written to the table or read it. It drops no data, so the PR is not marked `[DESTRUCTIVE]`.
 - **`metadata` holds `session_id` and `aal`.** Its size cap arrives with the first writer that takes outside input. Retention waits for the lawyer review (PLA-56).
@@ -68,7 +76,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The name shown is the email's local part** until there is a name editor; then the layout reads `profiles.display_name`.
 - **"Cerrar sesión" signs out this device** (`scope: "local"`). An access token already issued stays valid until it expires (1 h).
 - **A local test user, `test@plantia.io`,** comes from `supabase/seed.sql`, which only `supabase start` and `pnpm db:reset` load; its code arrives in Mailpit.
-- **Sign-ins are audited from the database** (PLA-21): every new session writes an `audit_log` row, and the proxy and callback log their outcomes. Sign-out writes nothing yet (PLA-18).
+- **Sign-ins are audited from the database** (PLA-21): every new session writes an `audit_log` row, and the proxy and callback log their outcomes. Sign-outs and MFA changes write rows too (PLA-76).
 
 ## 2026-10-08 · Pentest specs against PostgREST (PLA-23)
 

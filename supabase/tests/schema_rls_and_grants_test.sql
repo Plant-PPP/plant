@@ -47,7 +47,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(33);
+SELECT plan(34);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -171,8 +171,9 @@ SELECT set_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND p.prosecdef $$,
-  ARRAY['private.create_profile_for_new_user()', 'private.record_session_created()'],
-  'the signup and session triggers are the only SECURITY DEFINER functions'
+  ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
+        'private.record_mfa_factor_event()'],
+  'the signup, session and MFA factor triggers are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
@@ -191,14 +192,31 @@ SELECT ok(
 SELECT ok(
   (SELECT p.proconfig = ARRAY['search_path=""']
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
-   FROM pg_proc p WHERE p.oid = 'private.record_session_created()'::regprocedure)
+   FROM pg_proc p WHERE p.oid = 'private.record_session_event()'::regprocedure)
     AND (SELECT t.tgenabled = 'O'
-                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_created AFTER INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_created()'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_created AFTER INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_event()'
          FROM pg_trigger t
          WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_created')
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_session_change AFTER DELETE OR UPDATE ON auth.sessions FOR EACH ROW EXECUTE FUNCTION private.record_session_event()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'auth.sessions'::regclass AND t.tgname = 'record_session_change')
     AND (SELECT count(*) FROM pg_trigger t
-         WHERE t.tgfoid = 'private.record_session_created()'::regprocedure) = 1,
-  'the session trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires only on insert and is its function''s only trigger'
+         WHERE t.tgfoid = 'private.record_session_event()'::regprocedure) = 2,
+  'the session triggers run as the owner of audit_log, with an empty search_path, are enabled, fire on insert and on delete or update, and are their function''s only triggers'
+);
+
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.record_mfa_factor_event()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER record_mfa_factor_event AFTER DELETE OR UPDATE ON auth.mfa_factors FOR EACH ROW EXECUTE FUNCTION private.record_mfa_factor_event()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'auth.mfa_factors'::regclass AND t.tgname = 'record_mfa_factor_event')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.record_mfa_factor_event()'::regprocedure) = 1,
+  'the MFA factor trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires on delete or update and is its function''s only trigger'
 );
 
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
@@ -212,8 +230,9 @@ SELECT is_empty(
        AND p.prosecdef
        AND (t.tgfoid, t.tgrelid) NOT IN (
              ('private.create_profile_for_new_user()'::regprocedure, 'auth.users'::regclass),
-             ('private.record_session_created()'::regprocedure, 'auth.sessions'::regclass)) $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup and session triggers'
+             ('private.record_session_event()'::regprocedure, 'auth.sessions'::regclass),
+             ('private.record_mfa_factor_event()'::regprocedure, 'auth.mfa_factors'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session and MFA factor triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.
