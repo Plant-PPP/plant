@@ -12,6 +12,7 @@ import {
   LITERAL_IMPORTS_ONLY,
   MFA_CALLS,
   MFA_CALLS_BUT_LIST,
+  MFA_PRIVATE_CALLS,
   secretKeyReads,
   SERVICE_ROLE,
   SESSION_CLAIMS_UNCHECKED,
@@ -68,7 +69,7 @@ const WEB_FENCES = [
 const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
   fence(
     WEB_FENCES.filter((module) => !allow.includes(module)),
-    [...syntax, ...mfaFence],
+    [...syntax, ...mfaFence, ...MFA_PRIVATE_CALLS],
   );
 
 const noServerAction = (message) =>
@@ -92,6 +93,8 @@ const READER_CALLS_ONLY = [
   ...[
     `Identifier[name="${READER}"]:not(CallExpression > .callee):not(ImportSpecifier > Identifier)`,
     `ImportSpecifier[imported.name="${READER}"][local.name!="${READER}"]`,
+    // import { "readSessionClaims" as r } names it by a string.
+    `ImportSpecifier[imported.type="Literal"]`,
     // A module object would carry the function with it.
     `ImportDeclaration[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
     `ImportExpression[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}]`,
