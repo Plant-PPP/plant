@@ -53,6 +53,12 @@ it.each([undefined, 1, { id: "f" }])(
   },
 );
 
+it("drops a request id that is not a UUID", async () => {
+  requestHeaders.set("x-request-id", "forged");
+  await disableTotp(undefined);
+  expect(lines[0]).not.toHaveProperty(["plant.request_id"]);
+});
+
 it("asks to sign in again when the gate refuses, without calling Auth", async () => {
   requireSensitiveSession.mockResolvedValue({
     ok: false,

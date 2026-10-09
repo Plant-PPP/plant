@@ -198,6 +198,7 @@ it("reports partial when a factor is left behind", async () => {
   expect(line()).toMatchObject({
     level: "error",
     "plant.outcome": "partial",
+    "exception.message": "no",
     "plant.auth.mfa_factors_removed.count": 1,
     "plant.auth.mfa_factors_verified.count": 2,
   });
