@@ -15,7 +15,6 @@ type ReferenceRow<T extends ReferenceTable> = {
   row: Tables[T]["Insert"];
 };
 
-// The PostgREST filter that selects exactly the row by its key.
 export function filterOf({
   key,
   row,

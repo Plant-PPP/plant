@@ -85,7 +85,7 @@ export function describeReferenceTable(table: ReferenceTable): void {
     });
 
     test("cannot insert yesterday's row", () => {
-      expect(writes.yesterday).toMatchObject({ status: 403, code: "PT403" });
+      expectError(writes.yesterday, 403, "PT403");
     });
 
     test("cannot overwrite a row", () => {

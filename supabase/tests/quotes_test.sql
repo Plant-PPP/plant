@@ -57,11 +57,11 @@ SELECT is_empty(
 );
 
 SELECT set_eq(
-  $$ SELECT t.tgrelid::regclass || ' ' || t.tgname || ' ' || t.tgenabled::text || ' ' || t.tgfoid::regprocedure
+  $$ SELECT t.tgenabled::text || ' ' || pg_get_triggerdef(t.oid)
      FROM pg_trigger t
      WHERE t.tgrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass) AND NOT t.tgisinternal $$,
-  ARRAY['fx_rates fx_rates_guard O private.guard_fx_rate_insert()',
-        'prices prices_guard O private.guard_price_insert()'],
+  ARRAY['O CREATE TRIGGER fx_rates_guard BEFORE INSERT ON public.fx_rates FOR EACH ROW EXECUTE FUNCTION private.guard_fx_rate_insert()',
+        'O CREATE TRIGGER prices_guard BEFORE INSERT ON public.prices FOR EACH ROW EXECUTE FUNCTION private.guard_price_insert()'],
   'each quote table has exactly its guard trigger, enabled'
 );
 
@@ -75,7 +75,7 @@ SELECT ok(
 );
 
 SELECT ok(
-  (SELECT bool_and(proconfig = ARRAY['search_path=""'])
+  (SELECT bool_and(proconfig IS NOT DISTINCT FROM ARRAY['search_path=""'])
    FROM pg_proc WHERE oid IN ('private.guard_fx_rate_insert()'::regprocedure,
                               'private.guard_price_insert()'::regprocedure)),
   'each guard runs with an empty search_path'
@@ -84,17 +84,31 @@ SELECT ok(
 -- ── The columns ─────────────────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT attrelid::regclass || '.' || attname || ' ' || format_type(atttypid, atttypmod)
+            || CASE WHEN attnotnull THEN ' not null' ELSE '' END
+            || CASE WHEN atthasdef THEN ' default' ELSE '' END
      FROM pg_attribute
      WHERE attrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass)
-       AND attnum > 0 AND NOT attisdropped
-       AND (NOT attnotnull OR atttypid = 'numeric'::regtype) $$,
-  ARRAY['fx_rates.buy numeric(20,8)', 'fx_rates.sell numeric(20,8)', 'prices.price numeric(20,8)'],
-  'only buy may be null, and every amount is numeric(20,8)'
+       AND attnum > 0 AND NOT attisdropped $$,
+  ARRAY['fx_rates.kind fx_rate_kind not null',
+        'fx_rates.rate_date date not null',
+        'fx_rates.buy numeric(20,8)',
+        'fx_rates.sell numeric(20,8) not null',
+        'fx_rates.source quote_source not null',
+        'fx_rates.quoted_at timestamp with time zone not null',
+        'fx_rates.fetched_at timestamp with time zone not null',
+        'prices.symbol text not null',
+        'prices.price_date date not null',
+        'prices.price numeric(20,8) not null',
+        'prices.currency currency not null',
+        'prices.source quote_source not null',
+        'prices.quoted_at timestamp with time zone not null',
+        'prices.fetched_at timestamp with time zone not null'],
+  'each quote table has exactly its columns, types and nullability, and no defaults'
 );
 
 SELECT set_eq(
   $$ SELECT conrelid::regclass || ' ' || pg_get_constraintdef(oid) FROM pg_constraint
-     WHERE conrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass) $$,
+     WHERE conrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass) AND contype <> 'n' $$,
   ARRAY['fx_rates CHECK (((buy IS NULL) OR (buy <= sell)))',
         'fx_rates CHECK ((buy > (0)::numeric))',
         'fx_rates CHECK ((sell > (0)::numeric))',
@@ -134,7 +148,7 @@ SELECT is_empty(
 -- TO, so it carries the number of missed canaries out of the savepoint.
 CREATE TEMP SEQUENCE bypass_misses MINVALUE -1 START -1;
 SAVEPOINT canary;
-GRANT TRIGGER ON public.fx_rates TO service_role;
+GRANT TRIGGER ON public.fx_rates TO anon;
 GRANT UPDATE (sell) ON public.fx_rates TO authenticated;
 GRANT DELETE ON public.prices TO anon;
 GRANT TRUNCATE ON public.prices TO authenticated_aal1;
@@ -143,6 +157,7 @@ SELECT setval('bypass_misses',
               (SELECT count(*) FROM (VALUES ('service_role public.fx_rates'),
                                             ('service_role public.prices'),
                                             ('authenticated public.fx_rates'),
+                                            ('anon public.fx_rates'),
                                             ('anon public.prices'),
                                             ('authenticated_aal1 public.prices')) c(x)
                WHERE x NOT IN (SELECT pg_temp.bypasses())));
@@ -196,9 +211,10 @@ SELECT throws_ok(
 SELECT set_config('request.jwt.claims', '{"role": "service_role"}', true);
 SET LOCAL ROLE service_role;
 
--- PostgREST's shape for upsert with ignoreDuplicates and a select. The session
--- time zones put the session's date on another day than Buenos Aires at any
--- hour, so a guard that dated by the session would refuse one of these.
+-- PostgREST's shape for upsert with ignoreDuplicates and a select. Each table
+-- is written under both session time zones, and at any hour one of them puts
+-- the session's date on another day than Buenos Aires, so a guard that dated
+-- by the session would refuse one of its inserts.
 SET LOCAL TIME ZONE 'Etc/GMT-14';
 SELECT lives_ok(
   $$ WITH ins AS (
@@ -207,6 +223,14 @@ SELECT lives_ok(
        ON CONFLICT (kind, rate_date) DO NOTHING RETURNING kind)
      INSERT INTO returned SELECT 'first', kind::text FROM ins $$,
   'the service role inserts today''s dollar rate'
+);
+SELECT lives_ok(
+  $$ WITH ins AS (
+       INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
+       VALUES ('BTC', (SELECT today FROM day), 62000.12345678, 'USD', 'kraken', now(), now())
+       ON CONFLICT (symbol, price_date) DO NOTHING RETURNING symbol)
+     INSERT INTO returned SELECT 'first', symbol FROM ins $$,
+  'the service role inserts today''s price'
 );
 SET LOCAL TIME ZONE 'Etc/GMT+12';
 
@@ -226,15 +250,6 @@ SELECT lives_ok(
        ON CONFLICT (kind, rate_date) DO NOTHING RETURNING kind)
      INSERT INTO returned SELECT 'first', kind::text FROM ins $$,
   'the service role inserts today''s UVA with only sell'
-);
-
-SELECT lives_ok(
-  $$ WITH ins AS (
-       INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
-       VALUES ('BTC', (SELECT today FROM day), 62000.12345678, 'USD', 'kraken', now(), now())
-       ON CONFLICT (symbol, price_date) DO NOTHING RETURNING symbol)
-     INSERT INTO returned SELECT 'first', symbol FROM ins $$,
-  'the service role inserts today''s price'
 );
 
 SELECT lives_ok(
