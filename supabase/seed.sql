@@ -19,3 +19,7 @@ VALUES ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-0000000
         '00000000-0000-4000-8000-000000000001',
         '{"sub": "00000000-0000-4000-8000-000000000001", "email": "test@plantia.io", "email_verified": true}',
         'email', now(), now());
+
+-- Signup already gave the user "Principal"; a second portfolio shows the list.
+INSERT INTO public.portfolios (user_id, name)
+VALUES ('00000000-0000-4000-8000-000000000001', 'Largo plazo');
