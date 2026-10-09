@@ -1,6 +1,6 @@
 # Threat model: logs and audit
 
-Branch `claude/pla-21-logs-audit-940b43` (PLA-21). Required by the PR template because the change adds a migration with a `SECURITY DEFINER` trigger on an `auth` table and new logging of request data.
+Branch `claude/pla-21-logs-audit-940b43` (PLA-21). Required by the PR template because the change adds a migration with a `SECURITY DEFINER` trigger on an `auth` table and new logging of request data. Updated for PLA-76: delete and update triggers on `auth.sessions` and a trigger on `auth.mfa_factors`.
 
 ## Scope and assets
 

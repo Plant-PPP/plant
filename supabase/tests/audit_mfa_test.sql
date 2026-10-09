@@ -17,6 +17,7 @@ SELECT is_empty(
        AND (has_any_column_privilege(r.oid, t, 'INSERT, UPDATE')
             OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
             OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
+            OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
             OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
             OR pg_has_role(r.oid, (SELECT oid FROM pg_roles
                                    WHERE rolname = current_setting('supautils.privileged_role', true)), 'MEMBER')) $$,
