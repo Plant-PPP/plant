@@ -9,6 +9,10 @@
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
+-- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
+--   table copies it from the mfa_gate migration. The first Storage bucket or
+--   private Realtime channel adds the same predicate and its assert here, and a
+--   sensitive check written in SQL joins the truth table in mfa_gate_test.sql.
 -- - Views granted to authenticated run as the caller, and materialized views
 --   and foreign tables grant authenticated nothing.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
@@ -47,7 +51,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(33);
+SELECT plan(34);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -133,6 +137,25 @@ SELECT is_empty(
             OR (cmd IN ('INSERT', 'UPDATE', 'ALL')
                 AND with_check IS DISTINCT FROM '(user_id = ( SELECT auth.uid() AS uid))')) $$,
   'every permissive policy in public pins user_id to auth.uid() for authenticated'
+);
+
+-- pg_get_expr's rendering of the predicate in the mfa_gate migration, compared
+-- as text like the owner predicate above.
+SELECT is_empty(
+  $$ SELECT c.relname FROM pg_class c
+     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+       AND NOT c.relispartition
+       AND (SELECT count(*) FROM pg_policies p
+            WHERE p.schemaname = 'public' AND p.tablename = c.relname
+              AND p.permissive = 'RESTRICTIVE') <> 1
+     UNION ALL
+     SELECT tablename || '.' || policyname FROM pg_policies
+     WHERE schemaname = 'public' AND permissive = 'RESTRICTIVE'
+       AND (policyname <> 'Requires two-factor authentication'
+            OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
+            OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
+            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$,
+  'every public table has one RESTRICTIVE policy, the MFA gate for authenticated'
 );
 
 -- A view reads as its owner, past RLS, unless security_invoker is set.
