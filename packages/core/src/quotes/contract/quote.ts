@@ -66,8 +66,9 @@ const priceSchema = z.object({
 });
 export type Price = z.output<typeof priceSchema>;
 
-export type RawFxRate = Omit<FxRate, "fetched_at">;
-export type RawPrice = Omit<Price, "fetched_at">;
+// The factory stamps source and fetched_at on every row.
+export type RawFxRate = Omit<FxRate, "source" | "fetched_at">;
+export type RawPrice = Omit<Price, "source" | "fetched_at">;
 export type RawQuoteRows = { fxRates: RawFxRate[]; prices: RawPrice[] };
 
 // staleCount: rows outside their window; invalidCount: rows that failed the
@@ -90,7 +91,7 @@ export type QuoteFeedCode =
   | "provider_error"
   | "empty";
 
-// The message is only the code, so no source's text reaches a log line.
+// The message is only the code, so no provider's text reaches a log line.
 export class QuoteFeedError extends Error {
   override readonly name = "QuoteFeedError";
   constructor(
@@ -127,18 +128,22 @@ function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
 function validRows<T>(
   schema: z.ZodType<T>,
   rows: readonly object[],
-  fetched_at: string,
+  stamp: { source: QuoteSource; fetched_at: string },
 ): T[] {
   return rows.flatMap((row) => {
-    const parsed = schema.safeParse({ ...row, fetched_at });
+    const parsed = schema.safeParse({ ...row, ...stamp });
     return parsed.success ? [parsed.data] : [];
   });
 }
 
-export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
-  const fetched_at = now.toISOString();
-  const fxRates = validRows(fxRateSchema, raw.fxRates, fetched_at);
-  const prices = validRows(priceSchema, raw.prices, fetched_at);
+export function checkBatch(
+  raw: RawQuoteRows,
+  now: Date,
+  source: QuoteSource,
+): QuoteBatch {
+  const stamp = { source, fetched_at: now.toISOString() };
+  const fxRates = validRows(fxRateSchema, raw.fxRates, stamp);
+  const prices = validRows(priceSchema, raw.prices, stamp);
   const fresh = {
     fxRates: fxRates.filter((row) =>
       inQuoteWindow(row.kind, row.rate_date, now),

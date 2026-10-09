@@ -17,7 +17,7 @@ const PAIRS: readonly { symbol: string; pair: string; resultKey: string }[] = [
   { symbol: "USDC", pair: "USDCUSD", resultKey: "USDCUSD" },
 ];
 
-const URL = `https://api.kraken.com/0/public/Ticker?pair=${PAIRS.map((p) => p.pair).join(",")}`;
+const ENDPOINT = `https://api.kraken.com/0/public/Ticker?pair=${PAIRS.map((p) => p.pair).join(",")}`;
 
 // c is the last trade: [price, lot volume], both decimal strings.
 const responseSchema = z.object({
@@ -54,7 +54,6 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
       price_date: today,
       price: result[resultKey]?.c[0] ?? "",
       currency: "USD",
-      source: "kraken",
       quoted_at: instant,
     })),
   };
@@ -64,7 +63,7 @@ export function createKrakenFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "kraken",
     async readRaw(now) {
-      return parse(await getJson(URL), now);
+      return parse(await getJson(ENDPOINT), now);
     },
   };
 }

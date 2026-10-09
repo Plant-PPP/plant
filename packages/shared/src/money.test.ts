@@ -72,6 +72,13 @@ describe("toScaled", () => {
   ])("scales %s", (value, scaled) => {
     expect(toScaled(value)).toBe(scaled);
   });
+
+  it.each(["", "-", "0x10", " 1", "1.123456789", "1.0x5", "1e5"])(
+    "refuses %j, which decimalStringSchema refuses",
+    (value) => {
+      expect(() => toScaled(value)).toThrow(RangeError);
+    },
+  );
 });
 
 describe("compareDecimals", () => {

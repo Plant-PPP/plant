@@ -10,12 +10,11 @@ export type Currency = z.infer<typeof currencySchema>;
 // decimals. Trailing zeros are allowed ("1.5" and "1.50"; Postgres returns the
 // column padded to 8 decimals), so amounts are compared as decimals, never as
 // strings.
+const DECIMAL_PATTERN = /^-?(0|[1-9]\d{0,11})(\.\d{1,8})?$/;
+
 export const decimalStringSchema = z
   .string()
-  .regex(
-    /^-?(0|[1-9]\d{0,11})(\.\d{1,8})?$/,
-    "Must be a decimal number, e.g. 1234.56",
-  )
+  .regex(DECIMAL_PATTERN, "Must be a decimal number, e.g. 1234.56")
   .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
 
 export const positiveDecimalSchema = decimalStringSchema.refine(
@@ -27,8 +26,11 @@ export const DECIMAL_SCALE_DIGITS = 8;
 export const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 
 // A decimal string as an integer count of 10^-DECIMAL_SCALE_DIGITS units, exact for every value
-// decimalStringSchema accepts.
+// decimalStringSchema accepts. Throws a RangeError on anything else.
 export function toScaled(decimal: string): bigint {
+  if (!DECIMAL_PATTERN.test(decimal)) {
+    throw new RangeError("Expected a decimal string");
+  }
   const negative = decimal.startsWith("-");
   const [whole = "0", fraction = ""] = (
     negative ? decimal.slice(1) : decimal

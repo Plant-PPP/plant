@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import { parseResponse, type RawQuoteRows } from "../../contract/quote";
 
-const URL = "https://api.argentinadatos.com/v1/finanzas/indices/uva";
+const ENDPOINT = "https://api.argentinadatos.com/v1/finanzas/indices/uva";
 
 // fecha is a Buenos Aires calendar day, kept as text: new Date("YYYY-MM-DD")
 // reads it as UTC midnight, the previous day in Buenos Aires.
@@ -35,7 +35,6 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
         rate_date: latest.fecha,
         buy: null,
         sell: String(latest.valor),
-        source: "argentinadatos",
         quoted_at: startOfBuenosAiresDay(latest.fecha).toISOString(),
       },
     ],
@@ -47,7 +46,7 @@ export function createArgentinadatosFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "argentinadatos",
     async readRaw(now) {
-      return parse(await getJson(URL), now);
+      return parse(await getJson(ENDPOINT), now);
     },
   };
 }

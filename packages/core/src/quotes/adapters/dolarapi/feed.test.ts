@@ -21,7 +21,6 @@ describe("dolarapi parse", () => {
       rate_date: "2026-10-09",
       buy: "1401.2",
       sell: "1415.9",
-      source: "dolarapi",
       quoted_at: "2026-10-09T20:57:00.000Z",
     });
   });
@@ -42,6 +41,7 @@ describe("dolarapi parse", () => {
     const batch = checkBatch(
       { fxRates: [parse(json, "mep")], prices: [] },
       NOW,
+      "dolarapi",
     );
     expect([batch.fxRates.length, batch.invalidCount]).toEqual([0, 1]);
   });
@@ -53,7 +53,7 @@ describe("dolarapi parse", () => {
     "maps a rate stamped %s to a dropped row, stale %i and invalid %i",
     (fechaActualizacion, stale, invalid) => {
       const row = parse({ ...body("bolsa", 1, 2), fechaActualizacion }, "mep");
-      const batch = checkBatch({ fxRates: [row], prices: [] }, NOW);
+      const batch = checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi");
       expect([
         batch.fxRates.length,
         batch.staleCount,
@@ -108,7 +108,7 @@ describe("createDolarapiFeed", () => {
         ? { ...body("blue", 1, 2), compra: null }
         : body("x", 1, 2),
     );
-    const batch = checkBatch(await feed.readRaw(NOW), NOW);
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
     expect(batch.fxRates.map((row) => row.kind)).toEqual([
       "official",
       "mep",
@@ -122,7 +122,7 @@ describe("createDolarapiFeed", () => {
       if (url.endsWith("/blue")) throw new QuoteFeedError("http_4xx", false);
       return body("x", 1, 2);
     });
-    const batch = checkBatch(await feed.readRaw(NOW), NOW);
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
     expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
   });
 

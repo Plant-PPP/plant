@@ -12,7 +12,7 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
       if (rows.fxRates.length + rows.prices.length === 0) {
         throw new QuoteFeedError("empty", true);
       }
-      const batch = checkBatch(rows, now);
+      const batch = checkBatch(rows, now, raw.id);
       // Every row refused: the source changed what it sends.
       if (batch.fxRates.length + batch.prices.length + batch.staleCount === 0) {
         throw new QuoteFeedError("bad_shape", false);

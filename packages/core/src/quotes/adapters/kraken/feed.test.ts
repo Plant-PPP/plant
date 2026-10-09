@@ -34,7 +34,6 @@ describe("kraken parse", () => {
       price_date: "2026-10-09",
       price: "112345.10000",
       currency: "USD",
-      source: "kraken",
       quoted_at: NOW.toISOString(),
     });
   });

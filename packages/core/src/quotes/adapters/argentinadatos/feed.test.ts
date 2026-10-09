@@ -22,7 +22,6 @@ describe("argentinadatos parse", () => {
           rate_date: "2026-10-09",
           buy: null,
           sell: "1603.33",
-          source: "argentinadatos",
           quoted_at: "2026-10-09T03:00:00.000Z",
         },
       ],
@@ -67,6 +66,7 @@ describe("argentinadatos parse", () => {
     const batch = checkBatch(
       parse([{ fecha: "0001-01-01", valor: 1 }], NOW),
       NOW,
+      "argentinadatos",
     );
     expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
   });

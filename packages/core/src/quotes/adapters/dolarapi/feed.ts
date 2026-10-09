@@ -38,7 +38,6 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
     rate_date: buenosAiresDate(new Date(fechaActualizacion)),
     buy: String(compra),
     sell: String(venta),
-    source: "dolarapi",
     quoted_at: fechaActualizacion,
   };
 }
@@ -51,7 +50,6 @@ function unreadable(kind: FxRateKind, now: Date): RawFxRate {
     rate_date: buenosAiresDate(now),
     buy: null,
     sell: "",
-    source: "dolarapi",
     quoted_at: now.toISOString(),
   };
 }
