@@ -4,6 +4,7 @@ import {
   OTP_EXPIRY_MINUTES,
   OTP_LENGTH,
   RESEND_COOLDOWN_SECONDS,
+  TOTP_CODE_LENGTH,
 } from "./otp-config";
 
 const root = join(__dirname, "../../../../..");
@@ -36,6 +37,10 @@ function tablesUnder(prefix: string): string[] {
 describe("supabase/config.toml [auth.email]", () => {
   it("sends codes of OTP_LENGTH digits", () => {
     expect(Number(value("auth.email", "otp_length"))).toBe(OTP_LENGTH);
+  });
+
+  it("sends codes as long as a TOTP code, so one field reads both", () => {
+    expect(OTP_LENGTH).toBe(TOTP_CODE_LENGTH);
   });
 
   it("expires codes after OTP_EXPIRY_MINUTES", () => {

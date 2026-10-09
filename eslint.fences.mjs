@@ -38,6 +38,14 @@ export const COST_SINK = {
     "The cost sink writes past RLS; only route handlers under src/app/api may use it.",
 };
 
+// /auth/mfa reads claims without the MFA redirect; everything else must get
+// the redirect through getSessionClaims.
+export const SESSION_CLAIMS_UNCHECKED = {
+  regex: `(^|/)session-claims-unchecked${EXTENSION}$`,
+  message:
+    "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
+};
+
 // A path into node_modules reaches a package without naming it.
 const NODE_MODULES = {
   regex: "(^|/)node_modules(/|$)",
@@ -71,6 +79,52 @@ const STEP_AI = [
   ...named("MemberExpression", "property", "ai"),
   ...named("ObjectPattern > Property", "key", "ai"),
 ].map((selector) => ({ selector, message: INNGEST_AI.message }));
+
+// Enroll, challenge and verify run in the browser (Auth rate-limits them per
+// caller IP), and only the factor helpers list or unenroll: no other file
+// reads `mfa` off an Auth client.
+const MFA_MEMBER = named("MemberExpression", "property", "mfa");
+const MFA_PATTERN = named("ObjectPattern > Property", "key", "mfa");
+export const MFA_CALLS = [...MFA_MEMBER, ...MFA_PATTERN].map((selector) => ({
+  selector,
+  message:
+    "Call Auth's MFA API only through src/lib/auth/mfa-browser.ts or mfa-factors.ts.",
+}));
+// mfa-factors.ts runs on the server too, where every user shares one IP: it
+// only lists. The first MFA_MEMBER selector is the bare `.mfa`.
+export const MFA_CALLS_BUT_LIST = [
+  `${MFA_MEMBER[0]}:not(MemberExpression[property.name="listFactors"] > .object)`,
+  ...MFA_MEMBER.slice(1),
+  ...MFA_PATTERN,
+].map((selector) => ({
+  selector,
+  message:
+    "mfa-factors.ts also runs on the server: it only lists factors. Enroll, challenge and verify go in mfa-browser.ts.",
+}));
+
+// auth-js's private methods behind the MFA API and its recovery codes (2.117),
+// reachable by a quoted key.
+const PRIVATE_MFA = [
+  "_enroll",
+  "_challenge",
+  "_verify",
+  "_challengeAndVerify",
+  "_unenroll",
+  "_listFactors",
+  "_getAuthenticatorAssuranceLevel",
+  "_getRecoveryCodesStatus",
+  "_generateRecoveryCodes",
+  "_verifyRecoveryCode",
+  "_regenerateRecoveryCodes",
+  "_unenrollRecoveryCodes",
+];
+export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
+  ...named("MemberExpression", "property", name),
+  ...named("ObjectPattern > Property", "key", name),
+]).map((selector) => ({
+  selector,
+  message: "Call Auth's MFA API through its public methods in mfa-browser.ts.",
+}));
 
 // The fences read import specifiers, so a computed one, a bundler's
 // require.context, or a require wrapped in a type cast (which the fences'

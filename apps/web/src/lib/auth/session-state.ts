@@ -19,9 +19,18 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
   if (!error) return true;
   return (
     isAuthSessionMissingError(error) ||
+    // By name too: a failure copied out of a thrown error keeps only that.
+    error.name === "AuthSessionMissingError" ||
     error.name === "AuthInvalidJwtError" ||
     SESSION_GONE_CODES.has(error.code ?? "")
   );
+}
+
+// A failed request whose session had ended: another device's verify ends the
+// session's aal1 siblings, and so does a timeout. null is a success here,
+// though isSessionMissing(null) is true.
+export function failedOnEndedSession(failure: MaybeAuthError): boolean {
+  return failure !== null && isSessionMissing(failure);
 }
 
 // Set by proxy.ts on the forwarded request when it could not use the session,

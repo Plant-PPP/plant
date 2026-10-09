@@ -17,6 +17,7 @@ jest.mock("@/lib/supabase/server", () => ({
 jest.mock("react", () => ({ cache: <T>(fn: T) => fn }));
 
 import { getSessionClaims } from "./session-claims";
+import { readSessionClaims } from "./session-claims-unchecked";
 import { AuthUnavailableError } from "./session-state";
 
 beforeEach(() => {
@@ -42,6 +43,14 @@ it.each([
 
 it("sends a missing session to /login", async () => {
   getClaims.mockResolvedValue({ data: null, error: null });
+  await expect(getSessionClaims()).rejects.toThrow("redirect /login");
+});
+
+it("sends a session Auth reports gone to /login", async () => {
+  getClaims.mockResolvedValue({
+    data: null,
+    error: new AuthApiError("x", 403, "session_not_found"),
+  });
   await expect(getSessionClaims()).rejects.toThrow("redirect /login");
 });
 
@@ -82,5 +91,20 @@ describe("the MFA check", () => {
       reason: "mfa_claim_missing",
     });
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("lets /auth/mfa read the claims of a user who has not verified", async () => {
+    signIn({ aal: "aal1", mfa_enrolled: true });
+    await expect(readSessionClaims()).resolves.toMatchObject({
+      mfa_enrolled: true,
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("throws on the reader too when the MFA claim is missing", async () => {
+    signIn({ aal: "aal1" });
+    await expect(readSessionClaims()).rejects.toMatchObject({
+      reason: "mfa_claim_missing",
+    });
   });
 });

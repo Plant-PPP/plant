@@ -1,4 +1,10 @@
-import { afterLoginPath, isPublicPath, loginPath, mfaPath } from "./routes";
+import {
+  afterLoginPath,
+  firstParam,
+  isPublicPath,
+  loginPath,
+  mfaPath,
+} from "./routes";
 
 it.each(["/login", "/login/x", "/auth/callback"])("%s is public", (path) => {
   expect(isPublicPath(path)).toBe(true);
@@ -42,4 +48,13 @@ it("sends an unverified session to the MFA step", () => {
   expect(mfaPath("/assets?x=1")).toBe("/auth/mfa?next=%2Fassets%3Fx%3D1");
   expect(mfaPath("/")).toBe("/auth/mfa");
   expect(mfaPath("/auth/mfa")).toBe("/auth/mfa");
+});
+
+it.each([
+  [undefined, undefined],
+  ["/a", "/a"],
+  [["/a", "/b"], "/a"],
+  [[], undefined],
+])("reads %p as %p", (value, expected) => {
+  expect(firstParam(value)).toBe(expected);
 });

@@ -10,7 +10,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { NAV_ITEMS, navItemForPath } from "@/lib/navigation";
+import { NAV_ITEMS, routeItemForPath } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_BUTTON =
@@ -21,7 +21,7 @@ type Item = (typeof NAV_ITEMS)[number];
 function NavLinks({ items }: { items: readonly Item[] }) {
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
-  const activeHref = navItemForPath(pathname)?.href;
+  const activeHref = routeItemForPath(pathname)?.href;
 
   return (
     <SidebarMenu>
