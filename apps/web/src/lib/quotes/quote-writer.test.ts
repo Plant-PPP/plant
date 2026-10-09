@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { type FxRate, type Price, QuoteStoreError } from "@plant/core";
@@ -196,15 +196,24 @@ it("stops at the first table that fails", async () => {
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
-it("is the SQLSTATE both quote guards raise", () => {
-  const migration = readFileSync(
-    join(
-      __dirname,
-      "../../../../../supabase/migrations/20261009094238_quotes.sql",
-    ),
-    "utf8",
-  );
-  expect(migration.split(`ERRCODE = '${GUARD_SQLSTATE}'`)).toHaveLength(3);
+it("is the SQLSTATE both quote guards raise, as last defined", () => {
+  const dir = join(__dirname, "../../../../../supabase/migrations");
+  const guards = new Map<string, string>();
+  for (const file of readdirSync(dir).sort()) {
+    const sql = readFileSync(join(dir, file), "utf8");
+    for (const [, name, body] of sql.matchAll(
+      /CREATE (?:OR REPLACE )?FUNCTION private\.(guard_\w+_insert)\(\)[\s\S]*?\$\$([\s\S]*?)\$\$/g,
+    )) {
+      if (name && body) guards.set(name, body);
+    }
+  }
+  expect([...guards.keys()].sort()).toEqual([
+    "guard_fx_rate_insert",
+    "guard_price_insert",
+  ]);
+  for (const body of guards.values()) {
+    expect(body).toContain(`ERRCODE = '${GUARD_SQLSTATE}'`);
+  }
 });
 
 describe("PostgREST answers captured from the local stack", () => {

@@ -55,6 +55,37 @@ it("follows no redirect and passes a timeout signal", async () => {
   );
 });
 
+// Jest's fake timers do not drive AbortSignal.timeout, so the spy hands the
+// request a signal the test aborts.
+it("times the request out after 10 seconds", async () => {
+  const deadline = new AbortController();
+  const timeout = jest
+    .spyOn(AbortSignal, "timeout")
+    .mockReturnValue(deadline.signal);
+  try {
+    fetchMock = jest.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          );
+        }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const pending = failure(getJson(URL));
+    expect(timeout).toHaveBeenCalledWith(10_000);
+    deadline.abort(
+      new DOMException("The operation timed out.", "TimeoutError"),
+    );
+    await expect(pending).resolves.toMatchObject({
+      code: "timeout",
+      retryable: true,
+    });
+  } finally {
+    timeout.mockRestore();
+  }
+});
+
 it("refuses a redirect by its status, so it is not retried", async () => {
   answer(new Response(null, { status: 301, headers: { location: URL } }));
   await expect(failure(getJson(URL))).resolves.toMatchObject({

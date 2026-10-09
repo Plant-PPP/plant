@@ -50,7 +50,7 @@ describe("toQuoteFeed", () => {
         prices: [],
         unread: [
           { key: "blue", code: "http_4xx" },
-          { key: "bolsa", code: "bad_json" },
+          { key: "mep", code: "bad_json" },
         ],
       })),
     );
@@ -94,7 +94,7 @@ describe("toQuoteFeed", () => {
         ],
         unread: [
           { key: "blue", code: "http_4xx" },
-          { key: "bolsa", code: "http_5xx" },
+          { key: "mep", code: "http_5xx" },
         ],
       })),
     );

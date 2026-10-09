@@ -59,8 +59,8 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
             const json = await getJson(`${BASE_URL}/${house}`);
             return { ok: true, row: parse(json, kind) };
           } catch (error) {
-            // By name and code, so a house error raised by another copy of core still
-            // counts.
+            // By name and code, so a house error raised by another copy of
+            // core still counts.
             const { known, stage, code } = quoteFailureOf(error);
             if (known && stage === "read") {
               return { ok: false, kind, code: code as QuoteFeedCode };

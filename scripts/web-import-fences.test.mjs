@@ -704,7 +704,7 @@ const PROBES = {
 for (const [filePath, exempt] of OVERRIDES) {
   for (const [probe, code] of Object.entries(PROBES)) {
     if (exempt.includes(probe)) continue;
-    // Each block's own allowances: src/lib/ai except the sink reaches models,
+    // Each block's own allowances: src/lib/ai except the cost sink reaches models,
     // each sink's test reaches its sink, route handlers reach the cost sink,
     // the Inngest route the quote sink, and the sinks and service-role.ts the
     // client.
