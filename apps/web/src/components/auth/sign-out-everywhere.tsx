@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FormAlert } from "@/components/ui/form-alert";
 import { loginErrorPath } from "@/lib/auth/login-errors";
 import { LOGIN_PATH } from "@/lib/auth/routes";
 import { signOutAndConfirm } from "@/lib/auth/sign-out";
@@ -49,11 +50,7 @@ export function SignOutEverywhere() {
       >
         Cerrar sesión en todos tus dispositivos
       </Button>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FormAlert>{error}</FormAlert>}
     </div>
   );
 }

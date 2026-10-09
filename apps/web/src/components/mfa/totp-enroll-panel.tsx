@@ -4,6 +4,7 @@ import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
+import { FormAlert } from "@/components/ui/form-alert";
 import {
   startEnrollment,
   TOTP_ALREADY_ON,
@@ -89,11 +90,7 @@ export function TotpEnrollPanel({
 
   return (
     <div className="mx-auto grid w-full max-w-sm gap-4">
-      {error && (
-        <p role="alert" className="text-center text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <FormAlert className="text-center">{error}</FormAlert>}
       {!enrollment ? (
         error ? (
           <Button

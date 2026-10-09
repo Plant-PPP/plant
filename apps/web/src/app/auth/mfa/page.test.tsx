@@ -86,7 +86,9 @@ it("drops a next that would land back on this step", async () => {
 it("says so, and logs it, when the user has no TOTP factor", async () => {
   listFactors.mockResolvedValue({ data: { all: [], totp: [] }, error: null });
   const html = await render();
-  expect(html).toContain("No encontramos tu app de autenticación.");
+  expect(html).toMatch(
+    /<p [^>]*role="alert"[^>]*>No encontramos tu app de autenticación\.<\/p>/,
+  );
   expect(html).not.toContain("<form");
   expect(html).toContain("sign out everywhere");
   expect(log.warn).toHaveBeenCalledWith("auth.mfa_page", {
@@ -115,7 +117,9 @@ it("never shows the form or 'no factor' when the list fails", async () => {
   const error = new Error("down");
   listFactors.mockResolvedValue({ data: null, error });
   const html = await render();
-  expect(html).toContain("No pudimos cargar tu verificación.");
+  expect(html).toMatch(
+    /<p [^>]*role="alert"[^>]*>No pudimos cargar tu verificación\. Recargá la página\.<\/p>/,
+  );
   expect(html).not.toContain("<form");
   expect(log.error).toHaveBeenCalledWith(
     "auth.mfa_page",

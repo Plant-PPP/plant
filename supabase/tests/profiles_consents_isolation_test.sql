@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(24);
+SELECT plan(26);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -24,8 +24,9 @@ SELECT is(
   'signing up creates a profile'
 );
 
-INSERT INTO public.consents (user_id, kind, version, granted)
-VALUES ('b0000000-0000-4000-8000-00000000000b', 'terms', '2026-10', true);
+INSERT INTO public.consents (id, user_id, kind, version, granted)
+VALUES ('cb000000-0000-4000-8000-0000000000cb', 'b0000000-0000-4000-8000-00000000000b',
+        'terms', '2026-10', true);
 
 -- ── Signed in as Ana ────────────────────────────────────────────────────────
 SELECT set_config('request.jwt.claims',
@@ -172,12 +173,13 @@ SELECT throws_ok(
 RESET ROLE;
 
 -- ── The policies, past the column grants ────────────────────────────────────
--- The grants above already stop a user from naming user_id, so these grant it
--- (rolled back with the test) to prove WITH CHECK stops the write on its own.
+-- The grants above already stop a user from naming user_id or id, so these
+-- grant them (rolled back with the test) to prove the policies stop the writes
+-- on their own.
 -- Caro has no profile, so moving Ana's row to her breaks no unique key.
 DELETE FROM public.profiles WHERE user_id = 'c0000000-0000-4000-8000-00000000000c';
-GRANT INSERT (user_id) ON TABLE public.consents TO authenticated;
-GRANT UPDATE (user_id) ON TABLE public.profiles TO authenticated;
+GRANT INSERT (id, user_id) ON TABLE public.consents TO authenticated;
+GRANT UPDATE (user_id) ON TABLE public.consents, public.profiles TO authenticated;
 
 SELECT set_config('request.jwt.claims',
   json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
@@ -200,7 +202,24 @@ SELECT throws_ok(
   'the update policy rejects moving a profile to another user'
 );
 
+-- Ana's own row passes the insert policy, so only the policies on Beto's
+-- existing row can stop the conflict update from taking it over.
+SELECT throws_ok(
+  $$ INSERT INTO public.consents (id, user_id, kind, version, granted)
+     VALUES ('cb000000-0000-4000-8000-0000000000cb', 'a0000000-0000-4000-8000-00000000000a',
+             'terms', '2026-10', true)
+     ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id $$,
+  '42501', 'new row violates row-level security policy (USING expression) for table "consents"',
+  'an upsert cannot take over another user''s consent by id'
+);
+
 RESET ROLE;
+
+SELECT is(
+  (SELECT user_id FROM public.consents WHERE id = 'cb000000-0000-4000-8000-0000000000cb'),
+  'b0000000-0000-4000-8000-00000000000b'::uuid,
+  'the consent stays the other user''s'
+);
 
 -- ── Account deletion ────────────────────────────────────────────────────────
 DELETE FROM auth.users WHERE id = 'b0000000-0000-4000-8000-00000000000b';

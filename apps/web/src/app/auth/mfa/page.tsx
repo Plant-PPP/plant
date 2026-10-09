@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FormAlert } from "@/components/ui/form-alert";
 import { loginErrorPath } from "@/lib/auth/login-errors";
 import { listVerifiedFactors } from "@/lib/auth/mfa-factors";
 import { mfaRequirement } from "@/lib/auth/mfa-rules";
@@ -88,9 +89,7 @@ export default async function MfaPage({
           {factorId ? (
             <MfaChallengeForm factorId={factorId} next={next} />
           ) : (
-            <p role="alert" className="text-sm text-destructive">
-              {PROBLEMS[problem ?? "factors_unavailable"]}
-            </p>
+            <FormAlert>{PROBLEMS[problem ?? "factors_unavailable"]}</FormAlert>
           )}
         </CardContent>
       </Card>
