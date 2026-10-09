@@ -65,7 +65,6 @@ const WEB_FENCES = [
   COST_SINK,
   SESSION_CLAIMS_UNCHECKED,
 ];
-// `mfaFence` is the MFA API fence of the block's files.
 const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
   fence(
     WEB_FENCES.filter((module) => !allow.includes(module)),
@@ -93,6 +92,9 @@ const READER_CALLS_ONLY = [
   ...[
     `Identifier[name="${READER}"]:not(CallExpression > .callee):not(ImportSpecifier > Identifier)`,
     `ImportSpecifier[imported.name="${READER}"][local.name!="${READER}"]`,
+    // A module object would carry the function with it.
+    `ImportDeclaration[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
+    `ImportExpression[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}]`,
   ].map((selector) => ({
     selector,
     message: `Only call ${READER}; pass its result on, not the function.`,

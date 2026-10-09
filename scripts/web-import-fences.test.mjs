@@ -324,6 +324,18 @@ flagged.push(
     `${READER}\nexport default function Page() {\n  async function act() {\n    "use server";\n    return readSessionClaims();\n  }\n  return act;\n}`,
   ],
   [
+    "src/lib/auth/session-claims.ts",
+    'import * as u from "./session-claims-unchecked";\nexport const r = u;',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import * as u from "@/lib/auth/session-claims-unchecked";\nexport const f = () => u["readSessionClaims"];',
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export const load = () => import("./session-claims-unchecked");',
+  ],
+  [
     "src/lib/auth/mfa-factors.ts",
     "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
   ],

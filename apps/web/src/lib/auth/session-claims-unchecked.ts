@@ -15,7 +15,7 @@ import {
 // sending a session that still has to verify its factor to /auth/mfa. Only
 // /auth/mfa itself reads claims this way (lint keeps everyone else on
 // getSessionClaims): the proxy lets such a session through there, so that
-// page defines and imports no server action.
+// page defines no server action (lint checks it) and imports none.
 export const readSessionClaims = cache(async () => {
   // proxy.ts already failed to refresh, or found the token without the MFA
   // claim. After a failed refresh, a second attempt in a route handler or
