@@ -56,7 +56,7 @@ export function LoginForm({
   }
 
   async function sendCode() {
-    const sent = await run(async () => {
+    const failure = await run(async () => {
       rememberNext();
       const { error } = await createClient().auth.signInWithOtp({
         email,
@@ -67,7 +67,7 @@ export function LoginForm({
       });
       return error;
     });
-    if (sent) {
+    if (!failure) {
       setPending(false);
       setStep("code");
       setCode("");
@@ -76,7 +76,7 @@ export function LoginForm({
   }
 
   async function verifyCode() {
-    const verified = await run(async () => {
+    const failure = await run(async () => {
       const { error } = await createClient().auth.verifyOtp({
         email,
         token: code,
@@ -84,7 +84,7 @@ export function LoginForm({
       });
       return error;
     });
-    if (verified) {
+    if (!failure) {
       // A later mail link opened in this browser must not land on this `next`.
       writeNextCookie("", 0);
       router.replace(next);

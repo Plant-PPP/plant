@@ -25,9 +25,10 @@ export function useAuthRequest(
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
+  // The action's failure, or null on success.
   async function run(
     action: () => Promise<AuthFailure | null>,
-  ): Promise<boolean> {
+  ): Promise<AuthFailure | null> {
     setPending(true);
     setError(undefined);
     const failure = await attempt(action);
@@ -35,7 +36,7 @@ export function useAuthRequest(
       setPending(false);
       setError(toMessage(failure));
     }
-    return !failure;
+    return failure;
   }
 
   return { run, pending, setPending, error, setError };

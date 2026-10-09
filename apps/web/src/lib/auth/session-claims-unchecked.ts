@@ -30,8 +30,8 @@ export const readSessionClaims = cache(async () => {
     }
     return data.claims;
   }
-  // The proxy already sent the visitor to /login with `next`; this covers a
-  // session that expired between the two.
+  // The proxy already sent the visitor to /login with `next`; a session that
+  // expired between the two lands on /login without it.
   if (isSessionMissing(error)) redirect(LOGIN_PATH);
   throw error;
 });

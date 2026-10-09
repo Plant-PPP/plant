@@ -50,7 +50,7 @@ describe("run", () => {
 
   it("keeps pending after a success and clears the error", async () => {
     const { run } = useAuthRequest(toMessage, "earlier");
-    await expect(run(async () => null)).resolves.toBe(true);
+    await expect(run(async () => null)).resolves.toBeNull();
     // [error, pending]
     expect(mockState).toEqual([undefined, true]);
   });
@@ -61,7 +61,7 @@ describe("run", () => {
       run(async () => {
         throw { code: "mfa_verification_failed" };
       }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ code: "mfa_verification_failed", name: undefined });
     expect(mockState).toEqual(["copy:mfa_verification_failed", false]);
   });
 });

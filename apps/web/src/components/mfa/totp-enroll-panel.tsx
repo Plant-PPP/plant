@@ -18,8 +18,8 @@ import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 import { TotpHelpDialog } from "./totp-help-dialog";
 
-// Another device's verify, or a timeout, ended this session: a retry can only
-// fail again, so the user signs in and comes back here.
+// A retry on an ended session can only fail again, so the user signs in and
+// comes back here.
 function signInAgain() {
   window.location.assign(
     loginErrorPath("signed_out", window.location.pathname),
@@ -82,17 +82,12 @@ export function TotpEnrollPanel({
 
   async function verify() {
     if (!enrollment) return;
-    let ended = false;
-    const verified = await run(async () => {
-      const failure = await attempt(async () => {
-        await verifyTotp(createClient(), enrollment.factorId, code);
-        return null;
-      });
-      ended = failedOnEndedSession(failure);
-      return failure;
+    const failure = await run(async () => {
+      await verifyTotp(createClient(), enrollment.factorId, code);
+      return null;
     });
-    if (verified) onSuccess();
-    else if (ended) signInAgain();
+    if (!failure) onSuccess();
+    else if (failedOnEndedSession(failure)) signInAgain();
     else setCode("");
   }
 
