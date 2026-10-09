@@ -1,6 +1,10 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { classifyPostgrestResult, postgrestInsert } from "./postgrest-write";
+import {
+  classifyPostgrestResult,
+  postgrestInsert,
+  type PostgrestFailure,
+} from "./postgrest-write";
 
 const pgError = (code: unknown): PostgrestError =>
   ({
@@ -44,6 +48,17 @@ describe("classifyPostgrestResult", () => {
       mayHaveCommitted,
     });
   });
+});
+
+it("types a failure as its code and whether it may have committed, nothing else", () => {
+  const failures: PostgrestFailure[] = [
+    { code: "timeout", mayHaveCommitted: true },
+    // @ts-expect-error without mayHaveCommitted
+    { code: "timeout" },
+    // @ts-expect-error with the row's details
+    { code: "23514", mayHaveCommitted: false, details: "Failing row" },
+  ];
+  expect(failures).toHaveLength(3);
 });
 
 describe("postgrestInsert", () => {
