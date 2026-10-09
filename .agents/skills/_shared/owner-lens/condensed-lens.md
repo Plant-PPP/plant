@@ -27,7 +27,7 @@ auth.users (except the reference tables `fx_rates` and `prices`: market data wit
 by every authenticated user and inserted only by `service_role`; the pgTAP floor limits the exception
 to those two, and they keep the MFA gate); the house policy is `for all to authenticated using (user_id = (select auth.uid())) with
 check (user_id = (select auth.uid()))`, plus the RESTRICTIVE MFA gate from the house form on every
-`public` table (the pgTAP floor pins its text).; `authenticated` is granted only the verbs the app uses, `anon`
+`public` table (the pgTAP floor pins its text); `authenticated` is granted only the verbs the app uses, `anon`
 nothing; DEFINER helpers live in schema `private` with `SET search_path`; the service-role key never
 reaches the frontend.
 

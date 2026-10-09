@@ -19,8 +19,8 @@
 --   Storage bucket or private Realtime channel adds the same predicate and its
 --   assert here, and a sensitive check written in SQL joins the truth table in
 --   mfa_gate_test.sql.
--- - Views granted to authenticated run as the caller, and materialized views
---   and foreign tables grant authenticated nothing.
+-- - Views granted to authenticated, or writable by service_role, run as the
+--   caller, and materialized views and foreign tables grant them nothing.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, service_role none in
@@ -162,17 +162,20 @@ SELECT ok(
   'fx_rates and prices are reference tables'
 );
 
--- A view reads as its owner, past RLS, unless security_invoker is set.
+-- A view reads as its owner, past RLS and past the grants service_role lacks
+-- on a quote table, unless security_invoker is set.
 -- reloptions keeps the spelling it was given (true, on, 1, yes).
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
      WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('v', 'm', 'f')
        AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE')
-            OR has_table_privilege('authenticated', c.oid, 'DELETE'))
+            OR has_table_privilege('authenticated', c.oid, 'DELETE')
+            OR has_any_column_privilege('service_role', c.oid, 'INSERT, UPDATE')
+            OR has_table_privilege('service_role', c.oid, 'DELETE'))
        AND (c.relkind <> 'v'
             OR NOT COALESCE((SELECT o.option_value::boolean FROM pg_options_to_table(c.reloptions) o
                              WHERE o.option_name = 'security_invoker'), false)) $$,
-  'views granted to authenticated are security_invoker; materialized views and foreign tables grant it nothing'
+  'views granted to authenticated, or writable by service_role, are security_invoker; materialized views and foreign tables grant them nothing'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.
