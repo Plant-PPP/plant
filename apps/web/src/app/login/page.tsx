@@ -3,7 +3,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { LoginShowcase } from "@/components/auth/login-showcase";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
-import { afterLoginPath } from "@/lib/auth/routes";
+import { afterLoginPath, firstParam } from "@/lib/auth/routes";
 import { SITE_NAME } from "@/lib/site";
 import { requireSupabaseEnv } from "@/lib/supabase/env";
 
@@ -33,10 +33,8 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  // A repeated parameter counts by its first value, as in proxy.ts.
-  const [next, error] = [params.next, params.error].map((value) =>
-    Array.isArray(value) ? value[0] : value,
-  );
+  const next = firstParam(params.next);
+  const error = firstParam(params.error);
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col p-6 md:p-10">

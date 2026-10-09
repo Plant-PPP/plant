@@ -9,10 +9,14 @@ import { CodeInput } from "./code-input";
 import { authErrorSlug, loginErrorMessage } from "@/lib/auth/login-errors";
 import { OTP_LENGTH, RESEND_COOLDOWN_SECONDS } from "@/lib/auth/otp-config";
 import { CALLBACK_PATH, NEXT_COOKIE } from "@/lib/auth/routes";
+import { useAuthRequest, type AuthFailure } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 
 // The only redirect the Auth allow-list holds, for mail links and Google.
 const callbackUrl = () => location.origin + CALLBACK_PATH;
+
+const loginFailureMessage = (failure: AuthFailure) =>
+  loginErrorMessage(authErrorSlug(failure));
 
 // The browser calls Auth directly, so its rate limits count per visitor and
 // not per server.
@@ -30,18 +34,11 @@ export function LoginForm({
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [error, setError] = useState(initialError);
-  const [pending, setPending] = useState(false);
+  const { run, pending, setPending, error, setError } = useAuthRequest(
+    loginFailureMessage,
+    initialError,
+  );
   const [cooldown, setCooldown] = useState(0);
-
-  // Back from Google can restore this page with the buttons still disabled.
-  useEffect(() => {
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) setPending(false);
-    };
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -56,25 +53,6 @@ export function LoginForm({
 
   function rememberNext() {
     writeNextCookie(encodeURIComponent(next), NEXT_COOKIE.maxAge);
-  }
-
-  // The buttons stay disabled after a success: verifying and Google navigate
-  // away, and a second click would reuse a spent code or start a second
-  // Google flow.
-  async function run(action: () => Promise<{ code?: string } | null>) {
-    setPending(true);
-    setError(undefined);
-    let failure: { code?: string } | null;
-    try {
-      failure = await action();
-    } catch {
-      failure = {};
-    }
-    if (failure) {
-      setPending(false);
-      setError(loginErrorMessage(authErrorSlug(failure)));
-    }
-    return !failure;
   }
 
   async function sendCode() {
