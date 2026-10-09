@@ -1,3 +1,4 @@
+import { expectLinear } from "@/test/expect-linear";
 import { mergeAuthCode } from "./merge-auth-code";
 
 const mail = (code: string) =>
@@ -187,11 +188,11 @@ describe("mergeAuthCode", () => {
     expect(mergeAuthCode("", "\uff11\uff12\uff13\uff14\uff15\uff16")).toBe("");
   });
 
-  it("reads a huge pasted text quickly", () => {
-    const start = performance.now();
-    mergeAuthCode("", `${"1 ".repeat(200_000)}    x`);
-    mergeAuthCode("", `1${" ".repeat(4)}`.repeat(100_000));
-    expect(performance.now() - start).toBeLessThan(500);
+  it.each<[string, (scale: number) => string]>([
+    ["digits between spaces", (k) => `${"1 ".repeat(50_000 * k)}    x`],
+    ["digits between runs of spaces", (k) => "1    ".repeat(25_000 * k)],
+  ])("stays linear on a huge pasted text of %s", (_label, input) => {
+    expectLinear(input, (text) => mergeAuthCode("", text));
   });
 
   it("takes a code after a dated line flattened to spaces", () => {

@@ -1,3 +1,4 @@
+import { expectLinear } from "@/test/expect-linear";
 import { MASK, isSensitiveKey, scrubSensitiveText } from "./credential-scrub";
 
 const UUID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -348,11 +349,6 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(text)).toBe(text);
   });
 
-  // Each input at its size and four times it: the linear passes take about
-  // four times as long on the larger one, while a pattern that backtracks
-  // across the input grows sixteenfold and fails the check once it outweighs
-  // them. Comparing the CPU time of the two keeps the check independent of
-  // how fast or loaded the machine is.
   it.each<[string, (scale: number) => string]>([
     ["encoded separators", (k) => "%25".repeat(5000 * k) + "code="],
     ["letters", (k) => "a".repeat(16000 * k)],
@@ -370,18 +366,7 @@ describe("scrubSensitiveText", () => {
     ["repeated JWT prefixes", (k) => "eyJ-".repeat(4000 * k)],
     ["repeated named secrets", (k) => 'password:"'.repeat(1600 * k)],
   ])("stays linear on %s", (_label, input) => {
-    const texts = [input(1), input(4)];
-    texts.forEach((text) => scrubSensitiveText(text));
-    const best = [Infinity, Infinity];
-    for (let run = 0; run < 5; run++) {
-      texts.forEach((text, i) => {
-        const start = process.cpuUsage();
-        scrubSensitiveText(text);
-        const { user, system } = process.cpuUsage(start);
-        best[i] = Math.min(best[i]!, (user + system) / 1000);
-      });
-    }
-    expect(best[1]).toBeLessThan(8 * best[0]! + 5);
+    expectLinear(input, scrubSensitiveText);
   });
 });
 
