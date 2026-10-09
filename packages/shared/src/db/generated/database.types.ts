@@ -5,7 +5,21 @@ export type Database = {
   
   "public": {
           Tables: {
-            "consents": {
+            "ai_costs": {
+                  Row: {
+                    "amount_usd": number,"cache_read_tokens": number,"cache_write_tokens": number,"cost_type": Database["public"]['Enums']["ai_cost_type"],"created_at": string,"id": string,"input_tokens": number,"model_id": string,"output_tokens": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_usd": number,"cache_read_tokens": number,"cache_write_tokens": number,"cost_type": Database["public"]['Enums']["ai_cost_type"],"created_at"?: string,"id"?: string,"input_tokens": number,"model_id": string,"output_tokens": number,"user_id": string
+                  }
+                  Update: {
+                    "amount_usd"?: number,"cache_read_tokens"?: number,"cache_write_tokens"?: number,"cost_type"?: Database["public"]['Enums']["ai_cost_type"],"created_at"?: string,"id"?: string,"input_tokens"?: number,"model_id"?: string,"output_tokens"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"consents": {
                   Row: {
                     "accepted_at": string,"granted": boolean,"id": string,"kind": Database["public"]['Enums']["consent_kind"],"user_id": string,"version": string
                   }
@@ -42,7 +56,7 @@ export type Database = {
             [_ in never]: never
           }
           Enums: {
-            "consent_kind": "terms"|"privacy"|"ai_providers","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","consent_kind": "terms"|"privacy"|"ai_providers","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -158,7 +172,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "consent_kind": ["terms", "privacy", "ai_providers"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"consent_kind": ["terms", "privacy", "ai_providers"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

@@ -18,19 +18,21 @@ exists?). One shared analysis spine feeds two terminal paths.
 ## Autonomy
 
 > **Runtime:** where a step says "spawn a wave" / "fan out subagents" (`Task`/`Explore`), that assumes a runtime with parallel sub-agents. For the tool-neutral contract and the sequential fallback (Cursor/Codex: run the passes serially, same lenses/gates/floors), see `.claude/skills/_shared/runtime/capabilities.md`.
-**MODE CHECK — do this first.** Read `.claude/skills/_shared/night-shift/detect.md` and follow it (`cat "<your scratchpad>/night-shift.state"` — substitute your real scratchpad path from your system prompt; `$SCRATCHPAD` is **not** a set variable, and **do not add `2>/dev/null`** — both turn a broken read into a confident, wrong `OFF`). If it records `night-shift: ON`, its **RULE ZERO** governs: never ask,
-never idle, resolve forks from the evidence and log the call. RULE ZERO cancels the *stopping*, not the selectivity: unattended there is nobody to surface to, so a genuine
-product/business call is recorded as `AWAITING-HUMAN: <the question>` in the summary and the run
-continues — never a turn that ends waiting. The restriction carried by "Surface to the user only a genuine
-product/business call" (below) and "reserve questions for business-logic calls" (under `## Rules`) is
-untouched: surfacing
-is still reserved for that narrow class and everything else is still yours to decide from the code. ⚠️ **Never give a read-only `Explore` agent autonomy** — no doctrine paste, no "decide and proceed": its contract is to report upward, it holds `Bash`, and telling one to act is how a read-only agent becomes a writing one. It overrides NONE of this skill's rails —
-the wave floors (≥4 subagents, ≥3 consecutive clean waves then one more), "any unresolved HIGH → DO NOT
-MERGE", the migration EXPLAIN HARD GATE, and the never-raise list. A stated minimum binds exactly as a
-cap does: exceed it freely, never go under, and report actual-vs-floor.
+> **MODE CHECK — do this first.** Read `.claude/skills/_shared/night-shift/detect.md` and follow it (`cat "<your scratchpad>/night-shift.state"` — substitute your real scratchpad path from your system prompt; `$SCRATCHPAD` is **not** a set variable, and **do not add `2>/dev/null`** — both turn a broken read into a confident, wrong `OFF`). If it records `night-shift: ON`, its **RULE ZERO** governs: never ask,
+> never idle, resolve forks from the evidence and log the call. RULE ZERO cancels the _stopping_, not the selectivity: unattended there is nobody to surface to, so a genuine
+> product/business call is recorded as `AWAITING-HUMAN: <the question>` in the summary and the run
+> continues — never a turn that ends waiting. The restriction carried by "Surface to the user only a genuine
+> product/business call" (below) and "reserve questions for business-logic calls" (under `## Rules`) is
+> untouched: surfacing
+> is still reserved for that narrow class and everything else is still yours to decide from the code. ⚠️ **Never give a read-only `Explore` agent autonomy** — no doctrine paste, no "decide and proceed": its contract is to report upward, it holds `Bash`, and telling one to act is how a read-only agent becomes a writing one. It overrides NONE of this skill's rails —
+> the wave floors (≥4 subagents, ≥3 consecutive clean waves then one more), "any unresolved HIGH → DO NOT
+> MERGE", the migration EXPLAIN HARD GATE, and the never-raise list. A stated minimum binds exactly as a
+> cap does: exceed it freely, never go under, and report actual-vs-floor.
 
 ## Two paths — routed by trigger, not a flag
+
 Pick the path from how you were invoked. There is **no `--mode`**; the trigger phrase selects it.
+
 - **PATH A — converge & fix** (default; "review this PR", "adversarial review", "attack this change").
   Run the spine in parallel waves, **fix everything fixable as you go**, loop to convergence.
 - **PATH B — verdict-only** ("reasons not to merge", "is this safe to merge", "senior review",
@@ -45,6 +47,7 @@ terminal step (fix-and-loop vs verdict-and-stop) and subagent tools (fixing vs E
 call you cannot resolve by reading the code. In PATH A, **Boy-Scout**: an obvious bug/dup — fix it.
 
 ## Scope the diff first
+
 - Identify the change: `git diff <base>...HEAD` (or staged diff, or `gh pr diff`), then `git status`
   and read the WORKING-TREE version of every file — a caller mid-build leaves edits uncommitted on
   purpose, and the committed diff would both hide them and re-flag what they already fixed.
@@ -53,6 +56,7 @@ call you cannot resolve by reading the code. In PATH A, **Boy-Scout**: an obviou
   pattern and learn the conventions (error handling, naming, data access, timezones, txns, locale).
 
 ## Step 0 — Load the calibration (before Wave 1 / Pass 1)
+
 Read the ENTIRE file `.claude/skills/_shared/review-calibration/defect-catalog.md` — every line —
 and **prepend it to EVERY subagent prompt** (pass the absolute path; worktrees are separate dirs). Also prepend `.claude/skills/_shared/subagent-constraints/working-location.md` (orientation) to every subagent prompt, and prepend `.claude/skills/_shared/subagent-constraints/hard-constraints.md` verbatim to every READ-ONLY subagent (Track-1 analysts and all of PATH B, which are `Explore`) — writers get orientation ONLY, never the read-only fence; when a PATH-A fix writer runs in its OWN separate worktree, fill its `ROOTS:` line with THAT writer's worktree path + branch (what pins it to its own tree); when writers share the review checkout, ROOTS names that checkout.
 Each subagent must, on its `catalog:` line in the load-proof header block (Step 0c), echo the count
@@ -62,6 +66,7 @@ hardest where the Curated classes recur; **never raise anything in the catalog's
 positives" section**. Cite catalog classes by their `**[bracket name]**`, not by line number.
 
 ## Step 0b — Load the ports lens (before Wave 1 / Pass 1)
+
 Read `.claude/skills/enforce-ports-and-adapters/SKILL.md` — every line, including the DAG — then
 **paste the condensed lens from `.claude/skills/_shared/ports-lens/condensed-lens.md` verbatim
 into EVERY subagent prompt** (a "see X" reference is inert; subagents inherit nothing). That block
@@ -70,6 +75,7 @@ line in the header block ("none" is a clean pass; a missing/garbled line = NON-C
 per-law verdict (four verdicts if a port surface is touched, else one `ports: N/A` line). Always on.
 
 ## Step 0c — Load the clean-code lens (before Wave 1 / Pass 1)
+
 Read `.claude/skills/enforce-clean-code/SKILL.md` — every line — then **paste the condensed lens
 from `.claude/skills/_shared/dry-lens/condensed-lens.md` verbatim into every subagent that runs the
 cleanliness/DRY pass — Track-1 in PATH A's waves, and every spine subagent in PATH B (verdict-only).** It enforces the DRY-progression law: the 2nd occurrence of a concept forces a mandatory
@@ -78,6 +84,7 @@ reuse an existing helper — including one found by `rg`-ing the repo outside th
 a missed extraction AND a forced/premature abstraction. Always on, like the ports lens.
 
 ## Step 0d — Load the algorithmic-performance lens (before Wave 1 / Pass 1)
+
 Read `.claude/skills/_shared/perf-lens/condensed-lens.md` — every line — then **paste it
 verbatim into every subagent that runs the
 cleanliness/perf pass — Track-1 in PATH A's waves, and every spine subagent in PATH B
@@ -89,6 +96,7 @@ lives in the DB (no N+1). It carries its own load-proof (`perf-lens loaded: … 
 `perf: N/A` line). Always on, like the ports and clean-code lenses.
 
 ## Step 0e — Load the comment-value lens (before Wave 1 / Pass 1)
+
 Read `.claude/skills/enforce-comment-value/SKILL.md` — every line — then **paste the condensed lens
 from `.claude/skills/_shared/comment-lens/condensed-lens.md` verbatim into every subagent that runs the
 cleanliness pass — Track-1 in PATH A's waves, and every spine subagent in PATH B (verdict-only).** It
@@ -101,6 +109,7 @@ comment-only edits: fix them in the wave, and per the consecutive-clean-counter 
 waves count as clean) they do NOT reset convergence.**
 
 ## Step 0f — Load the telemetry lens (before Wave 1 / Pass 1)
+
 Read `.claude/skills/_shared/telemetry-lens/condensed-lens.md` — every line — then **paste it
 verbatim into every subagent that runs the
 cleanliness pass — Track-1 in PATH A's waves, and every spine subagent in PATH B (verdict-only).** It
@@ -117,6 +126,7 @@ telemetry surface: <list|none>`) and a per-law verdict. Always on, like the port
 lenses — its findings are real defects that reset convergence.
 
 ## Step 0g — Load the identity & refactor-completeness lens (before Wave 1 / Pass 1)
+
 **Paste `.claude/skills/_shared/identity-lens/condensed-lens.md` verbatim into EVERY subagent —
 both tracks in PATH A, every spine subagent in PATH B.** It carries three laws no other lens covers:
 **(1) fork height** — where two representations of one identity coexist, the decision of which to use
@@ -133,9 +143,10 @@ Law 3 cannot be satisfied by reading the diff — a subagent that reports it CLE
 without naming the consumers it grepped has not run it, and that wave is NON-CLEAN.
 
 ## Step 0h — Load the owner-isolation lens (CONDITIONAL — only when the diff has a DB/authz surface)
+
 Unlike the lenses above, this one is **not always on**. It activates when the diff touches
 `supabase/migrations/**`, an RLS policy, a `GRANT`/`REVOKE`, a `SECURITY DEFINER` function, a client
-built from `SUPABASE_SERVICE_ROLE_KEY` (in practice `packages/jobs/**`), a storage bucket or its
+built from `SUPABASE_SERVICE_ROLE_KEY` (in practice `apps/web/src/lib/supabase/service-role.ts` and the cost sink and writer in `apps/web/src/lib/ai` that use it), a storage bucket or its
 policies, a `"use server"` file, an HTTP route handler (`apps/web/src/app/api/**/route.ts` — including
 `/api/inngest` and the chat route — and peers), or an assistant tool definition; on any other diff it
 is a **no-op** and no wave pays for it. When it fires: Read
@@ -157,6 +168,7 @@ real defects that reset convergence.
 **Load-proof header block** — every subagent opens its output with these labelled lines, in this
 order (emit only the lines for the lenses it carries); each lens's tripwire keys on its own prefix,
 NOT on being literally line 1, and a missing/garbled line for a lens it carries = NON-CLEAN:
+
 ```
 catalog: <N> classes read
 ports-lens loaded: … | touched packages: <list|none>
@@ -169,8 +181,10 @@ owner-lens loaded: owning the row is not owning the path | db/authz surface: <li
 ```
 
 ## The analysis spine — four ordered passes (shared by both paths)
+
 Run these four passes IN ORDER over the diff. The catalog (Step 0) is the encyclopedia of what
 recurs in each pass — go there for the defect shapes; the passes below are only the procedure.
+
 1. **Intent** — does the change do what the ticket asked, and only that? A refactor/port that
    silently reverts a shipped feature, drops a returned field, or resurrects debug logs is a
    finding. Reason about the MERGED result of a stacked chain. (Catalog: **[doc / PR-body over-claim]**.)
@@ -207,6 +221,7 @@ cleanliness/reuse + the ports lens + the clean-code (DRY-progression) lens; **Tr
 Track 1 surfaces, runs them, and runs the FULL suite. After each wave, synthesize into one ranked
 list, **fix everything fixable** (reusing the researched patterns), and re-run the suite green.
 Keep a **consecutive-clean counter** at 0:
+
 - Any finding → fix all, **reset to 0**.
 - Zero findings → increment.
 - **Comment-only** and **pure test-coverage-gap** waves count as clean (make the edits, don't reset).
@@ -227,16 +242,19 @@ convergence is not proof, and the waves exist to catch what earlier agents misse
 everything fixed, final test pass/fail, waves-to-converge.
 
 ## PATH B — verdict-only
+
 Run the spine once, read-only, over Explore-only subagents. Do NOT edit, push, or open anything.
 Prefer practicality over theoretical completeness; never trade silently-wrong for silently-broken.
 Out of scope: style/naming/lint/formatting (Prettier/ESLint own these). Emit the contract below.
 
 ## Synthesizer output rules (both paths)
+
 - **Red-test discipline.** Confirm a suspected bug with a TEMPORARY red test asserting the wrong
   current behavior. PATH A: keep it (it becomes the regression test). PATH B: prove, then DELETE it.
   Tag every finding **[CONFIRMED-BY-TEST]** or **[SUSPECTED]**. Distrust green specs on stale fixtures.
 - **Never-raise.** Never surface anything in the catalog's "Known false-positives" section.
 - **STRICT verdict (PATH B — match exactly).** Three single-line headers, then severity-sorted findings:
+
 ```
 Intent: <what the ticket asked, one sentence>
 Verified clean: <high-risk areas checked and found sound, one sentence>
@@ -245,10 +263,12 @@ Merge recommendation: <MERGE | MERGE WITH FOLLOW-UPS (#x) | DO NOT MERGE (#x)>
 N. [SEVERITY: high|medium|low] [CONFIRMED-BY-TEST|SUSPECTED] file:line
    Trigger: <input that breaks it>. Expected vs actual: <…>. Red test: <the assertion, or why none>. Fix: <minimal change>.
 ```
-  Any unresolved HIGH → recommendation MUST be **DO NOT MERGE**. Defer non-blocking issues to a
-  follow-up ticket. Zero findings → the three headers then `No findings.` and nothing else.
+
+Any unresolved HIGH → recommendation MUST be **DO NOT MERGE**. Defer non-blocking issues to a
+follow-up ticket. Zero findings → the three headers then `No findings.` and nothing else.
 
 ## Migration EXPLAIN — HARD GATE (executed here, not deferred to the catalog)
+
 Every migration or change to a query/RPC/function/view/trigger/index MUST be `EXPLAIN (ANALYZE)`'d
 against a realistic LARGE user (a local DB seeded with one user holding 100k+ rows across
 holdings/snapshots/imports, or the largest via read-only Supabase MCP; note row counts) and the plan pasted in. **DB-executed SQL without a plan is itself a
@@ -263,6 +283,7 @@ identical faster reformulation and verify equivalence (`EXCEPT` both directions 
 per-call cost by call frequency. Defect shapes: catalog **[migration EXPLAIN gate …]**, **[perf: cost × call frequency]**.
 
 ## Rules
+
 - Judge ACTUAL behavior, not whether tests match the code.
 - DRY-progression: apply the clean-code lens (Step 0c) — 2nd occurrence forces a mandatory recorded check; extract genuine same-concept duplication, else leave with a falsifiable rationale. Both a missed extraction and a forced/premature abstraction are defects.
 - Never WRITE to production/staging DBs — no DDL, no DML, no `supabase db push`. Read-only queries are the only remote access (that is what the EXPLAIN gate above uses when no large local dataset exists); schema changes go through migration files only.

@@ -348,29 +348,40 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(text)).toBe(text);
   });
 
-  it.each([
-    ["encoded separators", "%25".repeat(5000) + "code="],
-    ["letters", "a".repeat(16000)],
-    ["dotted letters", "a.".repeat(8000)],
-    ["digits before an at sign", "1".repeat(16000) + "@"],
-    ["a long secret", "?code=" + "a".repeat(16000)],
+  // Each input at its size and four times it: the linear passes take about
+  // four times as long on the larger one, while a pattern that backtracks
+  // across the input grows sixteenfold and fails the check once it outweighs
+  // them. Comparing the CPU time of the two keeps the check independent of
+  // how fast or loaded the machine is.
+  it.each<[string, (scale: number) => string]>([
+    ["encoded separators", (k) => "%25".repeat(5000 * k) + "code="],
+    ["letters", (k) => "a".repeat(16000 * k)],
+    ["dotted letters", (k) => "a.".repeat(8000 * k)],
+    ["digits before an at sign", (k) => "1".repeat(16000 * k) + "@"],
+    ["a long secret", (k) => "?code=" + "a".repeat(16000 * k)],
     [
       "long local parts and domains",
-      ("/" + "a".repeat(64) + "@" + ("b".repeat(63) + ".").repeat(9) + "1")
-        .repeat(7)
-        .slice(0, 4096),
+      (k) =>
+        ("/" + "a".repeat(64) + "@" + ("b".repeat(63) + ".").repeat(9) + "1")
+          .repeat(7 * k)
+          .slice(0, 4096 * k),
     ],
-    ["a long JWT prefix", "eyJ" + "a".repeat(16000)],
-    ["repeated JWT prefixes", "eyJ-".repeat(4000)],
-    ["repeated named secrets", 'password:"'.repeat(1600)],
-  ])("stays fast on %s", (_label, text) => {
-    scrubSensitiveText(text);
-    const runs = [0, 1, 2].map(() => {
-      const start = performance.now();
-      scrubSensitiveText(text);
-      return performance.now() - start;
-    });
-    expect(Math.min(...runs)).toBeLessThan(50);
+    ["a long JWT prefix", (k) => "eyJ" + "a".repeat(16000 * k)],
+    ["repeated JWT prefixes", (k) => "eyJ-".repeat(4000 * k)],
+    ["repeated named secrets", (k) => 'password:"'.repeat(1600 * k)],
+  ])("stays linear on %s", (_label, input) => {
+    const texts = [input(1), input(4)];
+    texts.forEach((text) => scrubSensitiveText(text));
+    const best = [Infinity, Infinity];
+    for (let run = 0; run < 5; run++) {
+      texts.forEach((text, i) => {
+        const start = process.cpuUsage();
+        scrubSensitiveText(text);
+        const { user, system } = process.cpuUsage(start);
+        best[i] = Math.min(best[i]!, (user + system) / 1000);
+      });
+    }
+    expect(best[1]).toBeLessThan(8 * best[0]! + 5);
   });
 });
 
