@@ -3,10 +3,10 @@ SET statement_timeout = '5min';
 
 -- Nothing in this transaction uses the new values: plpgsql resolves the casts
 -- below when a trigger fires.
-ALTER TYPE private.audit_action ADD VALUE 'auth.session.deleted';
-ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.verified';
-ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.factor_verified';
-ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.factor_removed';
+ALTER TYPE private.audit_action ADD VALUE 'auth.session.deleted' AFTER 'auth.session.created';
+ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.verified' AFTER 'auth.session.deleted';
+ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.factor_verified' AFTER 'auth.mfa.verified';
+ALTER TYPE private.audit_action ADD VALUE 'auth.mfa.factor_removed' AFTER 'auth.mfa.factor_verified';
 
 -- The INSERT trigger record_session_created follows the function's OID.
 ALTER FUNCTION private.record_session_created() RENAME TO record_session_event;
