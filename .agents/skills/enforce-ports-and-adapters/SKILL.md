@@ -206,15 +206,15 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 
 ### Per-package in-scope / out-of-scope
 
-| Package          | IN scope (owns)                                                                                                                                       | OUT of scope (must not hold)                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `shared`         | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`                                                                          | any runtime infra, any test fixture, any consumer knowledge                                            |
-| `sources`        | `PortfolioSourcePort` contract, `SourceError`, capability matrix, factory, `adapters/file_upload/` and its extraction steps                           | engine imports (`inngest`), valuation logic, UI knowledge, naming a consumer                           |
-| `core`           | `QuoteFeedPort` contract, `QuoteFeedError`, factory, `quotes/adapters/<provider>/`; valuation and portfolio functions (ARS/USD MEP, net worth, debts) | knowing which source produced a holding; engine imports; I/O (HTTP comes in as the injected `GetJson`) |
-| `jobs`           | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state                                                 | step logic itself (it lives in `sources`/`core`); UI knowledge                                         |
-| `apps/web`       | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools                                               | domain logic that belongs in `core`; branching on a concrete source or engine                          |
-| `evals`          | extraction and assistant evals                                                                                                                        | being imported by anything                                                                             |
-| `security-tests` | pentest specs against local PostgREST, their Auth fixtures                                                                                            | being imported by anything                                                                             |
+| Package          | IN scope (owns)                                                                                                                                                                                                        | OUT of scope (must not hold)                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared`         | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`                                                                                                                                           | any runtime infra, any test fixture, any consumer knowledge                                                                              |
+| `sources`        | `PortfolioSourcePort` contract, `SourceError`, capability matrix, factory, `adapters/file_upload/` and its extraction steps                                                                                            | engine imports (`inngest`), valuation logic, UI knowledge, naming a consumer                                                             |
+| `core`           | `QuoteFeedPort` contract, `QuoteFeedError`, factory, `quotes/adapters/<provider>/`; `QuoteStorePort` and `QuoteStoreError`, implemented at the root; valuation and portfolio functions (ARS/USD MEP, net worth, debts) | knowing which source produced a holding; engine imports; I/O (HTTP and the store come in as the injected `GetJson` and `QuoteStorePort`) |
+| `jobs`           | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state, orchestrators that read feeds and save through `QuoteStorePort`                                                 | step logic itself (it lives in `sources`/`core`); UI knowledge                                                                           |
+| `apps/web`       | Next app, the composition root, `/api/inngest`, the chat route handler, the assistant's read-only tools                                                                                                                | domain logic that belongs in `core`; branching on a concrete source or engine                                                            |
+| `evals`          | extraction and assistant evals                                                                                                                                                                                         | being imported by anything                                                                                                               |
+| `security-tests` | pentest specs against local PostgREST, their Auth fixtures                                                                                                                                                             | being imported by anything                                                                                                               |
 
 ### The live hexagons
 
@@ -229,7 +229,9 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   `contract/quote.ts` (schemas, the window, `QuoteFeedError` with `retryable`), one folder per
   provider under `adapters/`, and `factory.ts`, the only place outside the adapters that names a
   provider. An adapter maps its response; the factory checks every row the same way. HTTP is the
-  injected `GetJson`, which the composition root builds (PLA-93), so `core` stays infra-free.
+  injected `GetJson` and the store is `QuoteStorePort`, both built at the composition root
+  (`apps/web/src/lib/quotes/`), so `core` stays infra-free. `jobs`' `refresh-quotes` reads the feeds
+  and saves through the store port.
 - **`JobRunner` (`packages/jobs`).** Callers say `startImport` / `cancelImport` and read the `imports`
   row; they never import `inngest`, send an Inngest event by name, or know a step id. Steps take plain
   inputs and return plain outputs; anything engine-shaped (`step.run`, retries, event payloads) stays

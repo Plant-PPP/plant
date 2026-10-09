@@ -96,10 +96,10 @@ describe("kraken parse", () => {
     ["eService:Unavailable", false],
     ["EGeneral:Invalid arguments", false],
     ["Unavailable", false],
-  ])("throws provider_error on %s, retryable %s", (error, retryable) => {
+  ])("throws on %s, retryable %s", (error, retryable) => {
     expect(() => parse({ error: [error] }, NOW)).toThrow(
       expect.objectContaining({
-        code: "provider_error",
+        code: retryable ? "provider_busy" : "provider_error",
         retryable,
       }),
     );
@@ -109,9 +109,12 @@ describe("kraken parse", () => {
     [["EService:Unavailable", "EQuery:Unknown asset pair"], false],
     [["WGeneral:Deprecated", "EService:Unavailable"], true],
     [["EQuery:Unknown asset pair EService:Unavailable"], false],
-  ])("throws provider_error on %j, retryable %s", (error, retryable) => {
+  ])("throws on %j, retryable %s", (error, retryable) => {
     expect(() => parse({ error }, NOW)).toThrow(
-      expect.objectContaining({ code: "provider_error", retryable }),
+      expect.objectContaining({
+        code: retryable ? "provider_busy" : "provider_error",
+        retryable,
+      }),
     );
   });
 

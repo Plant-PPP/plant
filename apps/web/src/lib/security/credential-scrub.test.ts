@@ -311,6 +311,68 @@ describe("scrubSensitiveText", () => {
     );
   });
 
+  it("keeps an Inngest run id whose digits read as a DNI", () => {
+    const runId = "01M8Z3K4567890QWERTYXABCDE";
+    expect(scrubSensitiveText(runId)).toBe(runId);
+    expect(scrubSensitiveText(`run ${runId} DNI 12345678`)).toBe(
+      `run ${runId} DNI ${MASK}`,
+    );
+  });
+
+  it.each([
+    ["25 characters", "01M8Z3K45678901QWERTYXABC"],
+    ["27 characters", "01M8Z3K45678901QWERTYXABCDE"],
+  ])("masks the DNI in a run-id-like token of %s", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  it.each([
+    ["a CBU and 4 letters", "0170099220000067797370ABCD"],
+    ["a CUIT and 15 letters", "20123456789ABCDEFGHJKMNPQR"],
+    ["a DNI and 18 letters", "12345678abcdefghjkmnpqrstv"],
+  ])("masks %s in a run-id-shaped token", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  // A run id opens with 0 and one more character, so a digit run after those
+  // two is not another digit run that makes the token an id.
+  it.each([
+    ["a DNI", "0X12345678ABCDEFGHJKMNPQRS"],
+    ["a CUIT", "0X20123456789ABCDEFGHJKMNP"],
+    ["a CBU", "0X0170099220000067797370AB"],
+  ])(
+    "masks %s after the first two characters of a run-id-shaped token",
+    (_label, token) => {
+      expect(scrubSensitiveText(token)).toContain(MASK);
+    },
+  );
+
+  // A ULID's first character is 0 to 7 (its 48-bit time; the rule keeps only
+  // 0, until 3084), so a token that starts any other way is no run id, even
+  // with a second digit run.
+  it.each([
+    ["a letter", "ABCDEFGHJK12345678MNPQRS9T"],
+    ["an 8", "8BCDEFGHJK12345678MNPQRS9T"],
+  ])("masks a DNI in a token that starts with %s", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  // A run id's third character is a letter until 2039, so the digit run it
+  // opens with is at most two digits.
+  it.each([
+    ["a zero-padded DNI", "09123456ABCDEFGHJKMNPQRSTV"],
+    ["a zero-padded DNI in lower case", "01234567abcdefghjkmnpqrstv"],
+  ])("masks %s that opens a run-id-shaped token", (_label, token) => {
+    expect(scrubSensitiveText(token)).toContain(MASK);
+  });
+
+  // Pin of current behavior: a run of 26 digits is no id and no number the
+  // patterns know.
+  it("leaves a 26-digit run as it is", () => {
+    const digits = "12345678901234567890123456";
+    expect(scrubSensitiveText(digits)).toBe(digits);
+  });
+
   it("still masks personal data next to a UUID", () => {
     expect(scrubSensitiveText(`${UUID} DNI 12345678`)).toBe(
       `${UUID} DNI ${MASK}`,
@@ -365,6 +427,16 @@ describe("scrubSensitiveText", () => {
     ["a long JWT prefix", (k) => "eyJ" + "a".repeat(16000 * k)],
     ["repeated JWT prefixes", (k) => "eyJ-".repeat(4000 * k)],
     ["repeated named secrets", (k) => 'password:"'.repeat(1600 * k)],
+    ["run-id openings", (k) => "-0a".repeat(5000 * k)],
+    ["a run-id opening before letters", (k) => "0a" + "b".repeat(16000 * k)],
+    [
+      "run-id openings after percent escapes",
+      (k) => "%410ab1234567".repeat(1200 * k),
+    ],
+    [
+      "run-id openings before digits",
+      (k) => ("-01" + "2".repeat(30)).repeat(500 * k),
+    ],
   ])("stays linear on %s", (_label, input) => {
     expectLinear(input, scrubSensitiveText);
   });

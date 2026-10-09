@@ -1,4 +1,10 @@
-import { checkBatch, QuoteFeedError } from "../../contract/quote";
+import {
+  checkBatch,
+  QUOTE_FEED_CODES,
+  type QuoteFeedCode,
+  QuoteFeedError,
+} from "../../contract/quote";
+import { toQuoteFeed } from "../../factory";
 import { createDolarapiFeed, parse } from "./feed";
 
 // 2026-10-09 18:30 in Buenos Aires.
@@ -51,7 +57,7 @@ describe("dolarapi parse", () => {
       NOW,
       "dolarapi",
     );
-    expect([batch.fxRates.length, batch.invalidCount]).toEqual([0, 1]);
+    expect([batch.fxRates.length, batch.refused.invalid]).toEqual([0, ["mep"]]);
   });
 
   it.each([
@@ -64,8 +70,8 @@ describe("dolarapi parse", () => {
       const batch = checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi");
       expect([
         batch.fxRates.length,
-        batch.staleCount,
-        batch.invalidCount,
+        batch.refused.stale.length,
+        batch.refused.invalid.length,
       ]).toEqual([0, stale, invalid]);
     },
   );
@@ -136,20 +142,114 @@ describe("createDolarapiFeed", () => {
       "mep",
       "ccl",
     ]);
-    expect(batch.invalidCount).toBe(1);
+    expect(batch.refused.invalid).toEqual(["blue"]);
   });
 
-  it.each(["http_4xx", "too_large", "bad_json"] as const)(
+  const failing =
+    (failures: Record<string, QuoteFeedCode>) => async (url: string) => {
+      const house = url.split("/").pop() ?? "";
+      const code = failures[house];
+      if (code) throw new QuoteFeedError(code);
+      return body(house, 1, 2);
+    };
+
+  it.each(Object.keys(QUOTE_FEED_CODES) as QuoteFeedCode[])(
     "keeps the other houses when one fails with %s",
     async (code) => {
-      const feed = createDolarapiFeed(async (url) => {
-        if (url.endsWith("/blue")) throw new QuoteFeedError(code, false);
-        return body("x", 1, 2);
-      });
-      const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
-      expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
+      const feed = createDolarapiFeed(failing({ blue: code }));
+      const rows = await feed.readRaw(NOW);
+      expect(rows.fxRates.map((row) => row.kind)).toEqual([
+        "official",
+        "mep",
+        "ccl",
+      ]);
+      expect(rows.unread).toEqual([{ key: "blue", code }]);
+      const batch = checkBatch(rows, NOW, "dolarapi");
+      expect([batch.fxRates.length, batch.refused.invalid]).toEqual([
+        3,
+        ["blue"],
+      ]);
+      expect(batch.unread).toEqual([`blue:${code}`]);
     },
   );
+
+  it("keeps the one house that answered", async () => {
+    const feed = createDolarapiFeed(
+      failing({ oficial: "http_4xx", bolsa: "http_4xx", blue: "http_4xx" }),
+    );
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+    expect(batch.fxRates.map((row) => row.kind)).toEqual(["ccl"]);
+    expect(batch.refused.invalid).toEqual(["official", "mep", "blue"]);
+  });
+
+  it("lists each unread house with its code", async () => {
+    const feed = createDolarapiFeed(
+      failing({ contadoconliqui: "http_4xx", blue: "http_5xx" }),
+    );
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+    expect(batch.unread).toEqual(["ccl:http_4xx", "blue:http_5xx"]);
+  });
+
+  it.each([
+    ["http_4xx", "http_4xx", false],
+    ["http_5xx", "http_5xx", true],
+  ] as const)(
+    "fails the read when every house fails with %s",
+    async (failure, code, retryable) => {
+      const feed = toQuoteFeed(
+        createDolarapiFeed(async () => {
+          throw new QuoteFeedError(failure);
+        }),
+      );
+      await expect(feed.read(NOW)).rejects.toMatchObject({
+        code,
+        retryable,
+      });
+    },
+  );
+
+  it("fails with a retryable error when every house fails and one may pass on a retry", async () => {
+    const feed = toQuoteFeed(
+      createDolarapiFeed(
+        failing({
+          oficial: "http_4xx",
+          bolsa: "bad_json",
+          contadoconliqui: "timeout",
+          blue: "http_5xx",
+        }),
+      ),
+    );
+    await expect(feed.read(NOW)).rejects.toMatchObject({
+      code: "timeout",
+      retryable: true,
+    });
+  });
+
+  // Latent: the job reads a quote error by name and code because another copy
+  // of core builds the same errors from another class; a house failing with
+  // one must still leave the other houses kept.
+  it("keeps the other houses when one fails with a QuoteFeedError of another copy of core", async () => {
+    const copy = Object.assign(new Error("http_5xx"), {
+      name: "QuoteFeedError",
+      code: "http_5xx",
+    });
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw copy;
+      return body("x", 1, 2);
+    });
+    const rows = await feed.readRaw(NOW);
+    expect(rows.fxRates).toHaveLength(3);
+    expect(rows.unread).toEqual([{ key: "blue", code: "http_5xx" }]);
+  });
+
+  it("passes a QuoteFeedError-named error with an unknown code through", async () => {
+    const forged = Object.assign(new Error("boom"), { name: "QuoteFeedError" });
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw forged;
+      return body("x", 1, 2);
+    });
+    await expect(feed.readRaw(NOW)).rejects.toBe(forged);
+  });
 
   it("passes an error that is not a QuoteFeedError through unchanged", async () => {
     const bug = new TypeError("boom");
@@ -159,15 +259,4 @@ describe("createDolarapiFeed", () => {
     });
     await expect(feed.readRaw(NOW)).rejects.toBe(bug);
   });
-
-  it.each(["fetch_error", "http_429", "http_5xx"] as const)(
-    "fails the read when one house fails with %s",
-    async (code) => {
-      const feed = createDolarapiFeed(async (url) => {
-        if (url.endsWith("/blue")) throw new QuoteFeedError(code, true);
-        return body("x", 1, 2);
-      });
-      await expect(feed.readRaw(NOW)).rejects.toMatchObject({ code });
-    },
-  );
 });

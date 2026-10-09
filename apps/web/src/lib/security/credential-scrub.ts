@@ -49,15 +49,32 @@ const SUPABASE_AUTH_COOKIE =
 const SUPABASE_SECRET_KEY = /sb_secret_[\w-]+/g;
 const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 
+// An id of `first`, then `length` digits and `letters` holding at least one
+// letter, that is not one run of `digitRun` or more digits with only letters
+// around it (a DNI, CUIT or CBU glued to a word), checked from the token's
+// start and again after `first`. Another digit run lets the whole token pass,
+// a number in it included.
+const idToken = (
+  letters: string,
+  digitRun: number,
+  first: string,
+  length: string,
+) => {
+  const oneRun = String.raw`(?![${letters}]*\d{${digitRun},}[${letters}]*(?![0-9a-z]))`;
+  return String.raw`(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})${first ? oneRun + first : ""}${oneRun}(?=[0-9${letters}]*[${letters}])[0-9${letters}]${length}(?![0-9a-z])`;
+};
+
 // Kept whole: ids and times, whose digit groups would otherwise read as a
-// DNI. A UUID; a hex run of 16 or more with a letter (a trace id, a hash, a
-// chunk name), unless it is 11 or more digits with only letters around them,
-// a CBU or CUIT glued to a word; a time with its fraction (a comma one up to
+// DNI. A UUID; a hex run of 16 or more (a trace id, a hash, a chunk name),
+// whose guard looks for 11 digits, so a DNI glued to hex letters passes; a
+// ULID (an Inngest run id: 26 characters in Crockford's alphabet, opening
+// with a 48-bit time whose first character is 0 until 3084), whose guard
+// looks for 7 from the start and again after the first two, so a DNI glued
+// to ULID letters is masked; a time with its fraction (a comma one up to
 // microseconds, so a CSV's next field is not read as one); a basic ISO
 // timestamp. Not followed by `@`: an id used as an email's local part is not
-// an id. A DNI glued to hex letters, or a CUIT or CBU in a hex run that holds
-// other digits too, reads as a hex id and passes.
-const KEPT = String.raw`(?:${UUID}|(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})(?![a-f]*\d{11,}[a-f]*(?![0-9a-z]))(?=[0-9a-f]*[a-f])[0-9a-f]{16,}(?![0-9a-z])|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
+// an id.
+const KEPT = String.raw`(?:${UUID}|${idToken("a-f", 11, "", "{16,}")}|${idToken("a-hjkmnp-tv-z", 7, "0[0-9a-hjkmnp-tv-z]", "{24}")}|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
 // file name, is masked; a percent escape's hex digits do not count. A DNI may
