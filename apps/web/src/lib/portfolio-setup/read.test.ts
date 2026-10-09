@@ -138,8 +138,12 @@ it("reads archived rows after a cursor, bounded by its timestamp", async () => {
 
 it("shows the first page and warns on an invalid cursor", async () => {
   const { client, calls } = fakeClient(ok([]), ok([]));
-  await read(client, { carteras: `x),user_id.not.is.null,and(id.lt.${ID}` });
+  const view = await read(client, {
+    carteras: `x),user_id.not.is.null,and(id.lt.${ID}`,
+  });
   expect(calls[1]!.map(([method]) => method)).not.toContain("or");
+  expect(view.archivedPage).toBeNull();
+  expect(view.archivedFirstHref).toBeNull();
   expect(lines).toEqual([
     expect.objectContaining({
       level: "warn",
