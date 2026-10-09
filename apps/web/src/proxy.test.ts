@@ -82,8 +82,17 @@ function forwarded(res: Response, name: string) {
   return res.headers.get(`x-middleware-request-${name}`);
 }
 
+// A user without a factor, as the access token hook mints them.
+const CLAIMS = { sub: "u", aal: "aal1", mfa_enrolled: false };
+
 const signedIn: GetClaims = async () => ({
-  data: { claims: { sub: "u" } },
+  data: { claims: CLAIMS },
+  error: null,
+});
+
+// A user with a verified factor whose session signed in with the code only.
+const unverified: GetClaims = async () => ({
+  data: { claims: { ...CLAIMS, mfa_enrolled: true } },
   error: null,
 });
 
@@ -148,7 +157,7 @@ it("keeps the session when Auth is unavailable", async () => {
   );
   expect(res.headers.get("location")).toBeNull();
   expect(res.headers.get("set-cookie")).toBeNull();
-  expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+  expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
   expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=original");
 });
 
@@ -169,7 +178,7 @@ it("keeps a refresh that succeeded before Auth failed", async () => {
   expect(res.headers.get("location")).toBeNull();
   expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
   expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=new");
-  expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+  expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
 });
 
 it("shows the retry when Auth does not answer", async () => {
@@ -180,7 +189,7 @@ it("shows the retry when Auth does not answer", async () => {
     await jest.advanceTimersByTimeAsync(5000);
     const res = await pending;
     expect(res.headers.get("location")).toBeNull();
-    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
   } finally {
     jest.useRealTimers();
   }
@@ -220,7 +229,7 @@ it("forwards a refreshed session to the page and the browser", async () => {
       [{ name: "sb-x-auth-token", value: "new", options: {} }],
       CACHE_HEADERS,
     );
-    return { data: { claims: { sub: "u" } }, error: null };
+    return { data: { claims: CLAIMS }, error: null };
   };
   const res = await proxy(
     request("/assets", { cookie: "sb-x-auth-token=old" }),
@@ -257,7 +266,7 @@ describe("a token close to expiry", () => {
   const expiringIn =
     (seconds: number): GetClaims =>
     async () => ({
-      data: { claims: { sub: "u", exp: Date.now() / 1000 + seconds } },
+      data: { claims: { ...CLAIMS, exp: Date.now() / 1000 + seconds } },
       error: null,
     });
 
@@ -292,7 +301,7 @@ describe("a token close to expiry", () => {
     });
     const res = await proxy(request("/assets"));
     expect(res.headers.get("location")).toBeNull();
-    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
   });
 });
 
@@ -326,7 +335,7 @@ describe("the CSP and request id", () => {
       error: new AuthApiError("rate limit", 429, "over_request_rate_limit"),
     });
     const res = await proxy(request("/assets"));
-    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
     expectForwarded(res);
   });
 
@@ -344,7 +353,7 @@ describe("the CSP and request id", () => {
     const res = await proxy(
       request("/assets", { cookie: "sb-x-auth-token=old" }),
     );
-    expect(forwarded(res, "x-plant-auth")).toBe("unavailable");
+    expect(forwarded(res, "x-plant-auth")).toBe("auth_unavailable");
     expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
     expectForwarded(res);
   });
@@ -535,6 +544,78 @@ describe("the request line", () => {
         "error.type": "Error",
         "exception.message": "boom",
         [REQUEST_ID_FIELD]: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      },
+    });
+  });
+});
+
+describe("the MFA check", () => {
+  it("sends an unverified session to the MFA step, keeping where it was going", async () => {
+    getClaims = unverified;
+    const res = await proxy(request("/assets?x=1"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost:3000/auth/mfa?next=%2Fassets%3Fx%3D1",
+    );
+    expect(logged()).toMatchObject({
+      method: "log",
+      line: { "plant.outcome": "redirect_mfa", "enduser.id": "u" },
+    });
+  });
+
+  it("lets an unverified session reach the MFA step", async () => {
+    getClaims = unverified;
+    const res = await proxy(request("/auth/mfa?next=%2Fassets"));
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBeNull();
+    expect(logged()).toMatchObject({
+      method: "log",
+      line: { "plant.outcome": "mfa_required" },
+    });
+  });
+
+  it.each([
+    ["/login", "http://localhost:3000/"],
+    ["/auth/callback?code=c", null],
+  ])("leaves %s to its own handling", async (path, location) => {
+    getClaims = unverified;
+    const res = await proxy(request(path));
+    expect(res.headers.get("location")).toBe(location);
+  });
+
+  it.each([
+    ["a verified session", { ...CLAIMS, aal: "aal2", mfa_enrolled: true }],
+    ["a user without a factor", CLAIMS],
+    ["an aal2 token without the claim", { sub: "u", aal: "aal2" }],
+  ])("lets %s through", async (_label, claims) => {
+    getClaims = async () => ({ data: { claims }, error: null });
+    const res = await proxy(request("/assets"));
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBeNull();
+    expect(logged().line).toMatchObject({ "plant.outcome": "signed_in" });
+  });
+
+  it("shows the retry for a token without the claim, keeping its refresh", async () => {
+    getClaims = async ({ setAll }) => {
+      setAll(
+        [{ name: "sb-x-auth-token", value: "new", options: {} }],
+        CACHE_HEADERS,
+      );
+      return { data: { claims: { sub: "u", aal: "aal1" } }, error: null };
+    };
+    const res = await proxy(
+      request("/assets", { cookie: "sb-x-auth-token=old" }),
+    );
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "x-plant-auth")).toBe("mfa_claim_missing");
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+    expect(logged()).toMatchObject({
+      method: "error",
+      line: {
+        level: "error",
+        "plant.outcome": "mfa_claim_missing",
+        "error.type": "mfa_claim_missing",
+        "enduser.id": "u",
       },
     });
   });

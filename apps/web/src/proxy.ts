@@ -4,8 +4,11 @@ import {
   isPublicPath,
   LOGIN_PATH,
   loginPath,
+  MFA_PATH,
+  mfaPath,
 } from "@/lib/auth/routes";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
+import { mfaRequirement } from "@/lib/auth/mfa-rules";
 import {
   isSessionMissing,
   type MaybeAuthError,
@@ -22,6 +25,7 @@ import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
 } from "@/lib/request-id";
+import { isUnder } from "@/lib/paths";
 import { supabaseEnv, supabaseOrigins } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
 
@@ -78,7 +82,10 @@ type SessionOutcome =
   | "redirect_signed_in"
   | "anonymous"
   | "redirect_login"
-  | "auth_unavailable";
+  | "redirect_mfa"
+  | "mfa_required"
+  | "auth_unavailable"
+  | "mfa_claim_missing";
 
 const LOG_LEVEL = {
   no_auth_config: "error",
@@ -86,7 +93,10 @@ const LOG_LEVEL = {
   redirect_signed_in: "info",
   anonymous: "info",
   redirect_login: "info",
+  redirect_mfa: "info",
+  mfa_required: "info",
   auth_unavailable: "warn",
+  mfa_claim_missing: "error",
 } as const satisfies Record<SessionOutcome, LogLevel>;
 
 type SessionResult = {
@@ -97,10 +107,12 @@ type SessionResult = {
   authError?: MaybeAuthError;
 };
 
-// `error.type` only when the session could not be checked: a missing or
-// broken session is the proxy doing its job, and its code is the reason.
+// `error.type` only when the session could not be checked or used: a missing
+// or broken session is the proxy doing its job, and its code is the reason.
 function authFields({ outcome, authError }: SessionResult): LogFields {
-  if (outcome === "no_auth_config") return { "error.type": outcome };
+  if (outcome === "no_auth_config" || outcome === "mfa_claim_missing") {
+    return { "error.type": outcome };
+  }
   const code = errorType(authError);
   return outcome === "auth_unavailable"
     ? { "error.type": code }
@@ -129,6 +141,35 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
 
   if (session.claims) {
     const signedIn = { ...timing, userId: session.claims.sub };
+    // /login and the callback keep their own handling below: the callback
+    // finishes a sign-in, and /login sends a signed-in user on.
+    if (!isPublicPath(pathname)) {
+      const mfa = mfaRequirement(session.claims);
+      // The access token hook is off, so this token cannot say whether the
+      // user has a factor, and the database refuses it below aal2.
+      if (mfa === "claim_missing") {
+        return {
+          ...signedIn,
+          response: session.unavailable("mfa_claim_missing"),
+          outcome: "mfa_claim_missing",
+        };
+      }
+      if (mfa === "verify") {
+        return isUnder(MFA_PATH, pathname)
+          ? {
+              ...signedIn,
+              response: session.response(),
+              outcome: "mfa_required",
+            }
+          : {
+              ...signedIn,
+              response: session.redirect(
+                new URL(mfaPath(pathname + search), request.url),
+              ),
+              outcome: "redirect_mfa",
+            };
+      }
+    }
     // A signed-in user on /login goes where they were headed, unless /login
     // is showing a sign-in error.
     if (
@@ -163,7 +204,7 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
   // refresh deletes no cookie, and the page shows the retry.
   return {
     ...timing,
-    response: session.unavailable(),
+    response: session.unavailable("auth_unavailable"),
     outcome: "auth_unavailable",
   };
 }
