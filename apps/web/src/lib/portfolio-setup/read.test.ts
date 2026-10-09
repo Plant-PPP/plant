@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
-import { readPortfolios } from "./read";
+import { readHolders, readPortfolios, readSourceConnections } from "./read";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -13,7 +13,7 @@ const AT = "2026-10-09T14:18:15.123456+00:00";
 const ID = "22222222-2222-4222-8222-222222222222";
 const SENTINEL = "Cartera secreta";
 
-type Row = { id: string; name: string; archived_at?: string | null };
+type Row = Record<string, unknown> & { id: string };
 type Response = { data: Row[] | null; error: unknown; status: number };
 
 // Two queries, active first: each records its calls and answers when awaited.
@@ -200,5 +200,91 @@ it("names the active list when only it fails", async () => {
   await expect(read(client)).rejects.toThrow("portfolio_setup.read_failed");
   expect(lines).toEqual([
     expect.objectContaining({ "plant.portfolio_setup.list": "active" }),
+  ]);
+});
+
+it("pages archived holders by their own param", async () => {
+  const { client, calls } = fakeClient(ok([]), ok([]));
+  const view = await readHolders(client, {
+    userId: USER,
+    requestId: REQUEST_ID,
+    params: { titulares: `${AT},${ID}`, carteras: "x" },
+  });
+  expect(calls[0]![0]).toEqual(["select", "id, name"]);
+  expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
+  expect(view.archivedPage).toBe(`${AT},${ID}`);
+  expect(view.archivedFirstHref).toBe("?carteras=x");
+});
+
+it("reads accounts with their holder and portfolio", async () => {
+  const portfolio = { id: "p1", name: "Principal", archived_at: null };
+  const { client, calls } = fakeClient(
+    ok([
+      {
+        id: ID,
+        institution: "IOL",
+        include_in_tax_report: true,
+        holder: null,
+        portfolio,
+      },
+    ]),
+    ok([
+      {
+        id: "c2",
+        institution: "Balanz",
+        include_in_tax_report: false,
+        holder: { id: "h1", name: "Lucía", archived_at: AT },
+        portfolio: { ...portfolio, archived_at: AT },
+        archived_at: AT,
+      },
+    ]),
+  );
+  const view = await readSourceConnections(client, {
+    userId: USER,
+    requestId: REQUEST_ID,
+    params: {},
+  });
+  expect(calls[0]![0]).toEqual([
+    "select",
+    "id, institution, include_in_tax_report, " +
+      "holder:holders!source_connections_user_id_holder_id_fkey(id, name, archived_at), " +
+      "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
+  ]);
+  expect(view.active).toEqual([
+    {
+      id: ID,
+      institution: "IOL",
+      includeInTaxReport: true,
+      holder: null,
+      portfolio: { id: "p1", name: "Principal", archived: false },
+    },
+  ]);
+  expect(view.archived).toEqual([
+    {
+      id: "c2",
+      institution: "Balanz",
+      includeInTaxReport: false,
+      holder: { id: "h1", name: "Lucía", archived: true },
+      portfolio: { id: "p1", name: "Principal", archived: true },
+    },
+  ]);
+});
+
+it("names the table of a failed read", async () => {
+  const { client } = fakeClient(
+    { data: null, error: { code: "57014" }, status: 500 },
+    ok([]),
+  );
+  await expect(
+    readSourceConnections(client, {
+      userId: USER,
+      requestId: REQUEST_ID,
+      params: {},
+    }),
+  ).rejects.toThrow("portfolio_setup.read_failed");
+  expect(lines).toEqual([
+    expect.objectContaining({
+      "plant.portfolio_setup.table": "source_connections",
+    }),
   ]);
 });

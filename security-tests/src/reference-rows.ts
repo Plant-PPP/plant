@@ -15,8 +15,10 @@ export type OwnedTable = Exclude<keyof Tables, ReferenceTable>;
 export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
+  holders: "id",
   portfolios: "id",
   profiles: "user_id",
+  source_connections: "id",
 } as const satisfies {
   [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? "id" : "user_id";
 };

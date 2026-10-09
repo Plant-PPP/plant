@@ -17,10 +17,18 @@ jest.mock("@/lib/supabase/server", () => ({
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import {
+  archiveHolder,
   archivePortfolio,
+  archiveSourceConnection,
+  createHolder,
   createPortfolio,
+  createSourceConnection,
+  renameHolder,
   renamePortfolio,
+  restoreHolder,
   restorePortfolio,
+  restoreSourceConnection,
+  updateSourceConnection,
 } from "./actions";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -390,5 +398,178 @@ describe("restorePortfolio", () => {
       code: "invalid",
     });
     expect(createClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("holder actions", () => {
+  it("write the holders table under their own action names", async () => {
+    const calls = fakeClient(
+      { ...ok(ID), status: 201 },
+      ok(ID),
+      ok(ID),
+      ok(ID),
+    );
+    await createHolder({ name: " Lucía " });
+    await renameHolder(ID, { name: "Lucía P." });
+    await archiveHolder(ID);
+    await restoreHolder(ID, { name: "Lucía" });
+    expect(calls.filter(([method]) => method === "from")).toEqual(
+      Array(4).fill(["from", "holders"]),
+    );
+    expect(calls).toContainEqual(["insert", { name: "Lucía" }]);
+    expect(calls).toContainEqual([
+      "update",
+      { name: "Lucía", archived_at: null },
+    ]);
+    expect(lines.map((line) => line["plant.portfolio_setup.action"])).toEqual([
+      "create_holder",
+      "rename_holder",
+      "archive_holder",
+      "restore_rename_holder",
+    ]);
+  });
+
+  it("take a longer name than portfolios", async () => {
+    fakeClient({ ...ok(ID), status: 201 });
+    await expect(createHolder({ name: "x".repeat(80) })).resolves.toEqual({
+      ok: true,
+      id: ID,
+    });
+    await expect(createHolder({ name: "x".repeat(81) })).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+  });
+
+  it("map the holder in use guard", async () => {
+    fakeClient(refused(409, "PT409", "holder_in_use"));
+    await expect(archiveHolder(ID)).resolves.toEqual({
+      ok: false,
+      code: "holder_in_use",
+    });
+  });
+});
+
+describe("source connection actions", () => {
+  const PORTFOLIO = "44444444-4444-4444-8444-444444444444";
+  const fields = {
+    institution: " Bull  Market ",
+    holder: OTHER,
+    includeInTaxReport: false,
+    defaultPortfolioId: PORTFOLIO,
+  };
+  const row = {
+    institution: "Bull Market",
+    holder_id: OTHER,
+    include_in_tax_report: false,
+    default_portfolio_id: PORTFOLIO,
+  };
+
+  it("create the row from the parsed fields, the user as a null holder", async () => {
+    const calls = fakeClient(
+      { ...ok(ID), status: 201 },
+      { ...ok(ID), status: 201 },
+    );
+    await createSourceConnection({ ...fields, user_id: OTHER, id: OTHER });
+    await createSourceConnection({ ...fields, holder: "self" });
+    expect(calls).toEqual([
+      ["from", "source_connections"],
+      ["insert", row],
+      ["select", "id"],
+      ["from", "source_connections"],
+      ["insert", { ...row, holder_id: null }],
+      ["select", "id"],
+    ]);
+    expect(lines[0]).toMatchObject({
+      "plant.portfolio_setup.action": "create_source_connection",
+    });
+  });
+
+  it.each([
+    [{ ...fields, holder: undefined }],
+    [{ ...fields, holder: "" }],
+    [{ ...fields, defaultPortfolioId: undefined }],
+    [{ ...fields, includeInTaxReport: "false" }],
+  ])("refuse %p without a write", async (input) => {
+    await expect(createSourceConnection(input)).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("edit only an active account and never its archive", async () => {
+    const calls = fakeClient(ok(ID));
+    await updateSourceConnection(ID, { ...fields, archived_at: null });
+    expect(calls).toEqual([
+      ["from", "source_connections"],
+      ["update", row],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["is", "archived_at", null],
+      ["select", "id"],
+    ]);
+  });
+
+  it("is not_found when editing an account archived meanwhile", async () => {
+    fakeClient(ok());
+    await expect(updateSourceConnection(ID, fields)).resolves.toEqual({
+      ok: false,
+      code: "not_found",
+    });
+  });
+
+  it("restore an archived account with its fields in one write", async () => {
+    const calls = fakeClient(ok(ID));
+    await restoreSourceConnection(ID, fields);
+    expect(calls).toEqual([
+      ["from", "source_connections"],
+      ["update", { ...row, archived_at: null }],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["not", "archived_at", "is", null],
+      ["select", "id"],
+    ]);
+  });
+
+  it("refuse a restore without fields", async () => {
+    await expect(restoreSourceConnection(ID, undefined)).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("archive an active account", async () => {
+    const calls = fakeClient(ok(ID));
+    await archiveSourceConnection(ID);
+    expect(calls).toEqual([
+      ["from", "source_connections"],
+      ["update", { archived_at: expect.any(String) }],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["is", "archived_at", null],
+      ["select", "id"],
+    ]);
+  });
+
+  it.each(["portfolio_archived", "holder_archived"])(
+    "map the %s guard",
+    async (hint) => {
+      fakeClient(refused(409, "PT409", hint));
+      await expect(createSourceConnection(fields)).resolves.toEqual({
+        ok: false,
+        code: hint,
+      });
+    },
+  );
+
+  it("treat another user's portfolio as a failure", async () => {
+    fakeClient(refused(409, "23503"));
+    await expect(createSourceConnection(fields)).resolves.toEqual({
+      ok: false,
+      code: "failed",
+    });
+    expect(onlyLine()).toMatchObject({ "error.type": "23503" });
   });
 });
