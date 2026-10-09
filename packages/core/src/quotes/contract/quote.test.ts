@@ -1,14 +1,25 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { BUENOS_AIRES_TZ, Constants } from "@plant/shared";
 import { z } from "zod";
 
 import {
   checkBatch,
-  inQuoteWindow,
+  feedErrorForStatus,
+  isDailyIndex,
   parseResponse,
+  QUOTE_FEED_CODES,
+  QUOTE_FEED_ERROR_NAME,
+  QUOTE_KEYS,
+  QUOTE_STORE_CODES,
+  QUOTE_STORE_ERROR_NAME,
   type QuoteBatch,
+  QuoteError,
   QuoteFeedError,
+  quoteFailureOf,
+  QuoteStoreError,
+  quoteWindow,
   type RawFxRate,
   type RawPrice,
   SYMBOL_PATTERN,
@@ -39,29 +50,123 @@ const price = (overrides: Partial<RawPrice> = {}): RawPrice => ({
 const counts = (batch: QuoteBatch) => ({
   fxRates: batch.fxRates.length,
   prices: batch.prices.length,
-  staleCount: batch.staleCount,
-  invalidCount: batch.invalidCount,
+  stale: batch.refused.stale.length,
+  invalid: batch.refused.invalid.length,
 });
 
-describe("inQuoteWindow", () => {
+// Instants in Buenos Aires (UTC-3). 2026-10-09 is a Friday.
+const at = (local: string) => new Date(`${local}-03:00`);
+const FRIDAY = "2026-10-09";
+const THURSDAY = "2026-10-08";
+const SATURDAY = "2026-10-10";
+
+describe("the test zone", () => {
+  // Set in jest.config.cjs; a date string read in the host's zone lands on
+  // the day before only west of UTC.
+  it("is Buenos Aires", () => {
+    expect(new Date("2026-10-10T00:00:00").getTimezoneOffset()).toBe(180);
+  });
+});
+
+describe("quoteWindow", () => {
   it.each([
-    ["a dollar rate at 17:59", "mep", TODAY, "2026-10-09T20:59:59.999Z", false],
-    ["a dollar rate at 18:00", "mep", TODAY, "2026-10-09T21:00:00.000Z", true],
-    ["a price at 09:00", "price", TODAY, "2026-10-09T12:00:00.000Z", false],
-    ["UVA at 09:00", "uva", TODAY, "2026-10-09T12:00:00.000Z", true],
-    ["yesterday", "mep", "2026-10-08", NOW.toISOString(), false],
-    ["tomorrow", "uva", "2026-10-10", NOW.toISOString(), false],
-  ] as const)("%s → %s", (_label, kind, date, now, kept) => {
-    expect(inQuoteWindow(kind, date, new Date(now))).toBe(kept);
+    [
+      "a dollar rate at 17:59",
+      "mep",
+      FRIDAY,
+      "2026-10-09T17:59:59.999",
+      "early",
+    ],
+    ["a dollar rate at 18:00", "mep", FRIDAY, "2026-10-09T18:00:00", "kept"],
+    ["a price at 09:00", "price", FRIDAY, "2026-10-09T09:00:00", "early"],
+    ["a dollar rate at 15:00", "mep", FRIDAY, "2026-10-09T15:00:00", "early"],
+    ["a price at 15:00", "price", FRIDAY, "2026-10-09T15:00:00", "early"],
+    ["UVA at 09:00", "uva", FRIDAY, "2026-10-09T09:00:00", "kept"],
+    ["UVA at 15:00", "uva", FRIDAY, "2026-10-09T15:00:00", "kept"],
+    [
+      "yesterday's dollar rate",
+      "mep",
+      THURSDAY,
+      "2026-10-09T18:30:00",
+      "stale",
+    ],
+    ["tomorrow's UVA", "uva", SATURDAY, "2026-10-09T18:30:00", "stale"],
+    [
+      "Friday's MEP on Saturday",
+      "mep",
+      FRIDAY,
+      "2026-10-10T18:05:00",
+      "closed",
+    ],
+    ["Friday's MEP on Sunday", "mep", FRIDAY, "2026-10-11T18:05:00", "closed"],
+    [
+      "Friday's MEP on Sunday at 21:05",
+      "mep",
+      FRIDAY,
+      "2026-10-11T21:05:00",
+      "closed",
+    ],
+    [
+      "Friday's MEP on Saturday at 23:59",
+      "mep",
+      FRIDAY,
+      "2026-10-10T23:59:00",
+      "closed",
+    ],
+    [
+      "Thursday's MEP on Friday at 21:05",
+      "mep",
+      THURSDAY,
+      "2026-10-09T21:05:00",
+      "stale",
+    ],
+    [
+      "Wednesday's MEP on Saturday",
+      "mep",
+      "2026-10-07",
+      "2026-10-10T18:05:00",
+      "stale",
+    ],
+    [
+      "Monday's MEP on Tuesday",
+      "mep",
+      "2026-10-05",
+      "2026-10-06T18:05:00",
+      "stale",
+    ],
+    [
+      "Monday's MEP on Tuesday at 09:00",
+      "mep",
+      "2026-10-05",
+      "2026-10-06T09:00:00",
+      "early",
+    ],
+    [
+      "Friday's price on Saturday",
+      "price",
+      FRIDAY,
+      "2026-10-10T18:05:00",
+      "stale",
+    ],
+    [
+      "Saturday's UVA on Sunday at 09:00",
+      "uva",
+      SATURDAY,
+      "2026-10-11T09:00:00",
+      "stale",
+    ],
+    ["Friday's UVA on Saturday", "uva", FRIDAY, "2026-10-10T18:05:00", "stale"],
+  ] as const)("%s → %s", (_label, kind, date, local, window) => {
+    expect(quoteWindow(kind, date, at(local))).toBe(window);
   });
 
-  it("closes the window at midnight in Buenos Aires", () => {
-    const lastMs = new Date("2026-10-10T02:59:59.999Z");
-    const midnight = new Date("2026-10-10T03:00:00.000Z");
-    expect(inQuoteWindow("mep", TODAY, lastMs)).toBe(true);
-    expect(inQuoteWindow("mep", TODAY, midnight)).toBe(false);
-    expect(inQuoteWindow("mep", "2026-10-10", midnight)).toBe(false);
-    expect(inQuoteWindow("uva", "2026-10-10", midnight)).toBe(true);
+  it("starts a new day at midnight in Buenos Aires", () => {
+    const lastMs = at("2026-10-09T23:59:59.999");
+    const midnight = at("2026-10-10T00:00:00");
+    expect(quoteWindow("mep", FRIDAY, lastMs)).toBe("kept");
+    expect(quoteWindow("mep", FRIDAY, midnight)).toBe("early");
+    expect(quoteWindow("mep", SATURDAY, midnight)).toBe("early");
+    expect(quoteWindow("uva", SATURDAY, midnight)).toBe("kept");
   });
 });
 
@@ -81,8 +186,8 @@ describe("checkBatch", () => {
     expect(counts(batch)).toEqual({
       fxRates: 1,
       prices: 1,
-      staleCount: 0,
-      invalidCount: 0,
+      stale: 0,
+      invalid: 0,
     });
   });
 
@@ -96,6 +201,10 @@ describe("checkBatch", () => {
 
   it.each([
     ["a zero rate", fx({ sell: "0" })],
+    // numeric reads these; the NaN migration and numeric(20, 8) refuse them.
+    ["a NaN selling rate", fx({ sell: "NaN" })],
+    ["a NaN buying rate", fx({ buy: "NaN" })],
+    ["an infinite selling rate", fx({ sell: "Infinity" })],
     ["a negative buy", fx({ buy: "-1" })],
     ["no buy", { ...fx(), buy: undefined } as unknown as RawFxRate],
     ["a UVA buying rate", fx({ kind: "uva", buy: "1" })],
@@ -115,8 +224,8 @@ describe("checkBatch", () => {
     ).toEqual({
       fxRates: 0,
       prices: 0,
-      staleCount: 0,
-      invalidCount: 1,
+      stale: 0,
+      invalid: 1,
     });
   });
 
@@ -133,7 +242,7 @@ describe("checkBatch", () => {
       "dolarapi",
     );
     expect(batch.fxRates).toHaveLength(kept ? 1 : 0);
-    expect(batch.invalidCount).toBe(kept ? 0 : 1);
+    expect(batch.refused.invalid).toHaveLength(kept ? 0 : 1);
   });
 
   it.each([
@@ -144,6 +253,8 @@ describe("checkBatch", () => {
     ["an unknown currency", price({ currency: "EUR" as RawPrice["currency"] })],
     ["a date that is not a day", price({ price_date: "2026-10-9" })],
     ["an empty price", price({ price: "" })],
+    ["a NaN price", price({ price: "NaN" })],
+    ["an infinite price", price({ price: "Infinity" })],
     ["a float artifact", price({ price: "0.30000000000000004" })],
   ])("counts a price with %s as invalid", (_label, row) => {
     expect(
@@ -151,8 +262,8 @@ describe("checkBatch", () => {
     ).toEqual({
       fxRates: 0,
       prices: 0,
-      staleCount: 0,
-      invalidCount: 1,
+      stale: 0,
+      invalid: 1,
     });
   });
 
@@ -186,8 +297,8 @@ describe("checkBatch", () => {
     expect(counts(batch)).toEqual({
       fxRates: 0,
       prices: 0,
-      staleCount: 2,
-      invalidCount: 0,
+      stale: 2,
+      invalid: 0,
     });
   });
 
@@ -200,7 +311,7 @@ describe("checkBatch", () => {
       NOW,
       "dolarapi",
     );
-    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 2]);
+    expect(batch.refused).toMatchObject({ stale: [], invalid: ["mep", "BTC"] });
   });
 
   it("keeps the last row per primary key and counts the others as invalid", () => {
@@ -221,7 +332,7 @@ describe("checkBatch", () => {
       ["ccl", "1450"],
     ]);
     expect(batch.prices.map((row) => row.price)).toEqual(["2"]);
-    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 2]);
+    expect(batch.refused).toMatchObject({ stale: [], invalid: ["mep", "BTC"] });
   });
 
   it("keeps a price for each symbol", () => {
@@ -234,10 +345,10 @@ describe("checkBatch", () => {
       "dolarapi",
     );
     expect(batch.prices.map((row) => row.symbol)).toEqual(["BTC", "ETH"]);
-    expect(batch.invalidCount).toBe(0);
+    expect(batch.refused.invalid).toEqual([]);
   });
 
-  it("before 18:00 keeps only UVA and counts the rest as stale", () => {
+  it("before 18:00 keeps only UVA and counts the rest as early", () => {
     const morning = new Date("2026-10-09T13:00:00.000Z");
     const batch = checkBatch(
       { fxRates: [fx({ kind: "uva", buy: null }), fx()], prices: [price()] },
@@ -245,7 +356,13 @@ describe("checkBatch", () => {
       "dolarapi",
     );
     expect(batch.fxRates.map((row) => row.kind)).toEqual(["uva"]);
-    expect([batch.prices.length, batch.staleCount]).toEqual([0, 2]);
+    expect(batch.prices).toEqual([]);
+    expect(batch.refused).toEqual({
+      early: ["mep", "BTC"],
+      closed: [],
+      stale: [],
+      invalid: [],
+    });
   });
 
   it("keeps a fresh row when a later duplicate is invalid", () => {
@@ -255,7 +372,7 @@ describe("checkBatch", () => {
       "dolarapi",
     );
     expect(batch.fxRates.map((row) => row.sell)).toEqual(["1450"]);
-    expect(batch.invalidCount).toBe(1);
+    expect(batch.refused.invalid).toEqual(["mep"]);
   });
 
   it("dedupes only the rows left after the stale ones", () => {
@@ -272,7 +389,55 @@ describe("checkBatch", () => {
       "dolarapi",
     );
     expect(batch.fxRates.map((row) => row.sell)).toEqual(["1460"]);
-    expect([batch.staleCount, batch.invalidCount]).toEqual([1, 1]);
+    expect(batch.refused).toMatchObject({ stale: ["mep"], invalid: ["mep"] });
+  });
+
+  it.each([
+    ["an empty price", { fxRates: [], prices: [price({ price: "" })] }, "BTC"],
+    [
+      "an unknown kind",
+      { fxRates: [fx({ kind: "tarjeta" as RawFxRate["kind"] })], prices: [] },
+      "_unknown",
+    ],
+    [
+      "a lowercase symbol",
+      { fxRates: [], prices: [price({ symbol: "btc" })] },
+      "_unknown",
+    ],
+  ])("refuses %s as invalid under key %s", (_label, raw, key) => {
+    expect(checkBatch(raw, NOW, "dolarapi").refused.invalid).toEqual([key]);
+  });
+
+  it("refuses each unread part as invalid and lists it with its code", () => {
+    const batch = checkBatch(
+      {
+        fxRates: [fx()],
+        prices: [],
+        unread: [
+          { key: "blue", code: "http_5xx" },
+          { key: "ccl", code: "http_4xx" },
+        ],
+      },
+      NOW,
+      "dolarapi",
+    );
+    expect(batch.fxRates).toHaveLength(1);
+    expect(batch.refused.invalid).toEqual(["blue", "ccl"]);
+    expect(batch.unread).toEqual(["blue:http_5xx", "ccl:http_4xx"]);
+  });
+
+  it("refuses Friday's dollar rate on Saturday as closed", () => {
+    const batch = checkBatch(
+      { fxRates: [fx({ rate_date: FRIDAY })], prices: [] },
+      at("2026-10-10T18:05:00"),
+      "dolarapi",
+    );
+    expect(batch.refused).toEqual({
+      early: [],
+      closed: ["mep"],
+      stale: [],
+      invalid: [],
+    });
   });
 });
 
@@ -290,27 +455,248 @@ describe("parseResponse", () => {
   });
 });
 
-describe("QuoteFeedError", () => {
-  it("carries only its code as the message", () => {
-    const error = new QuoteFeedError("http_429", true);
-    expect([error.message, error.code, error.retryable, error.name]).toEqual([
-      "http_429",
-      "http_429",
-      true,
-      "QuoteFeedError",
-    ]);
+describe("the quote errors", () => {
+  it.each([
+    [
+      "feed",
+      QUOTE_FEED_CODES,
+      [
+        "fetch_error",
+        "timeout",
+        "http_429",
+        "http_5xx",
+        "provider_busy",
+        "empty",
+      ],
+    ],
+    ["store", QUOTE_STORE_CODES, ["timeout", "unavailable", "out_of_window"]],
+  ] as const)(
+    "retry only the %s codes a retry can help",
+    (_label, codes, retryable) => {
+      expect(
+        Object.keys(codes).filter((code) => codes[code as keyof typeof codes]),
+      ).toEqual(retryable);
+    },
+  );
+
+  it.each(Object.keys(QUOTE_FEED_CODES) as (keyof typeof QUOTE_FEED_CODES)[])(
+    "builds a QuoteFeedError %s with only its code as the message",
+    (code) => {
+      const error = new QuoteFeedError(code);
+      expect(error).toBeInstanceOf(QuoteError);
+      expect([error.message, error.code, error.retryable, error.name]).toEqual([
+        code,
+        code,
+        QUOTE_FEED_CODES[code],
+        QUOTE_FEED_ERROR_NAME,
+      ]);
+    },
+  );
+
+  it.each(Object.keys(QUOTE_STORE_CODES) as (keyof typeof QUOTE_STORE_CODES)[])(
+    "builds a QuoteStoreError %s with only its code as the message",
+    (code) => {
+      const error = new QuoteStoreError(code, "23514");
+      expect(error).toBeInstanceOf(QuoteError);
+      expect([
+        error.message,
+        error.code,
+        error.retryable,
+        error.name,
+        error.storeCode,
+      ]).toEqual([
+        code,
+        code,
+        QUOTE_STORE_CODES[code],
+        QUOTE_STORE_ERROR_NAME,
+        "23514",
+      ]);
+    },
+  );
+});
+
+describe("quoteFailureOf", () => {
+  const feedError = new QuoteFeedError("http_5xx");
+  const storeError = new QuoteStoreError("out_of_window", "PT403");
+  // What a serialized error keeps.
+  const copy = ({ name, message }: Error) => ({ name, message });
+
+  it.each([
+    [
+      "a feed error",
+      feedError,
+      { stage: "read", code: "http_5xx", known: true, retryable: true },
+    ],
+    [
+      "a copy of a feed error",
+      copy(feedError),
+      { stage: "read", code: "http_5xx", known: true, retryable: true },
+    ],
+    [
+      "a store error",
+      storeError,
+      { stage: "save", code: "out_of_window", known: true, retryable: true },
+    ],
+    [
+      "a copy of a store error",
+      copy(storeError),
+      { stage: "save", code: "out_of_window", known: true, retryable: true },
+    ],
+    [
+      "a store error that is not retried",
+      new QuoteStoreError("invalid_row", "23514"),
+      { stage: "save", code: "invalid_row", known: true, retryable: false },
+    ],
+    [
+      "a store error name with another message",
+      { name: QUOTE_STORE_ERROR_NAME, message: "provider text" },
+      { stage: "save", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "a feed error name with a store code",
+      { name: QUOTE_FEED_ERROR_NAME, message: "unavailable" },
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "a TypeError",
+      new TypeError("boom"),
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "an inherited name",
+      { name: "toString", message: "http_5xx" },
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "a string",
+      "http_5xx",
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "null",
+      null,
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+  ])("reads %s", (_label, error, failure) => {
+    expect(quoteFailureOf(error)).toEqual(failure);
   });
 });
 
-describe("SYMBOL_PATTERN", () => {
-  it("is the pattern the quotes migration gives the prices.symbol CHECK", () => {
-    const migration = readFileSync(
-      join(
-        __dirname,
-        "../../../../../supabase/migrations/20261009094238_quotes.sql",
-      ),
-      "utf8",
+describe("feedErrorForStatus", () => {
+  it.each([
+    [400, "http_4xx", false],
+    [403, "http_4xx", false],
+    [404, "http_4xx", false],
+    [429, "http_429", true],
+    [499, "http_4xx", false],
+    [500, "http_5xx", true],
+    [503, "http_5xx", true],
+    [599, "http_5xx", true],
+  ])("maps %i to %s, retryable %s", (status, code, retryable) => {
+    const error = feedErrorForStatus(status);
+    expect(error).toBeInstanceOf(QuoteFeedError);
+    expect([error.code, error.retryable]).toEqual([code, retryable]);
+  });
+});
+
+describe("the quotes migrations", () => {
+  const dir = join(__dirname, "../../../../../supabase/migrations");
+  const readMigrations = () =>
+    readdirSync(dir)
+      .filter((file) => file.endsWith(".sql"))
+      .map((file) => ({ file, sql: readFileSync(join(dir, file), "utf8") }));
+  const tableSql = (table: string) => {
+    const match = readMigrations()
+      .map(({ sql }) =>
+        sql.match(
+          new RegExp(`CREATE TABLE public\\.${table} \\(([\\s\\S]*?)\\n\\);`),
+        ),
+      )
+      .find(Boolean);
+    if (!match?.[1]) throw new Error(`no CREATE TABLE for ${table}`);
+    // Constraints a later migration adds count too.
+    const alters = readMigrations().flatMap(({ sql }) =>
+      [
+        ...sql.matchAll(
+          new RegExp(`ALTER TABLE public\\.${table}\\b[^;]*;`, "g"),
+        ),
+      ].map(([statement]) => statement),
     );
-    expect(migration).toContain(`CHECK (symbol ~ '${SYMBOL_PATTERN.source}')`);
+    return [match[1], ...alters].join("\n");
+  };
+
+  it("give prices.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
+    expect(tableSql("prices")).toContain(
+      `CHECK (symbol ~ '${SYMBOL_PATTERN.source}')`,
+    );
+  });
+
+  it.each([
+    ["fx_rates", QUOTE_KEYS.fxRates],
+    ["prices", QUOTE_KEYS.prices],
+  ])("key %s by QUOTE_KEYS", (table, keys) => {
+    expect(tableSql(table)).toContain(`PRIMARY KEY (${keys.join(", ")})`);
+  });
+
+  it("include the constraints a later migration added", () => {
+    expect(tableSql("fx_rates")).toContain("CHECK (sell <> 'NaN')");
+    expect(tableSql("prices")).toContain("CHECK (price <> 'NaN')");
+  });
+
+  // A value past the column's integer digits fails the whole insert (22003),
+  // and one past its scale is rounded, to 0 below the last digit.
+  it.each([
+    ["fx_rates", ["buy", "sell"]],
+    ["prices", ["price"]],
+  ])("store %s amounts in the digits the check keeps", (table, columns) => {
+    const amounts = [
+      ...tableSql(table).matchAll(/\n\s*(\w+) numeric\((\d+), (\d+)\)/g),
+    ];
+    expect(amounts.map(([, column]) => column)).toEqual(columns);
+    for (const [, column, precision, scale] of amounts) {
+      const whole = Number(precision) - Number(scale);
+      const decimals = Number(scale);
+      const amount = (value: string) =>
+        column === "price"
+          ? checkBatch(
+              { fxRates: [], prices: [price({ price: value })] },
+              NOW,
+              "kraken",
+            )
+          : checkBatch(
+              { fxRates: [fx({ buy: value, sell: value })], prices: [] },
+              NOW,
+              "dolarapi",
+            );
+      const kept = (value: string) => {
+        const batch = amount(value);
+        return batch.fxRates.length + batch.prices.length === 1;
+      };
+      expect(kept(`${"9".repeat(whole)}.${"9".repeat(decimals)}`)).toBe(true);
+      expect(kept(`0.${"0".repeat(decimals - 1)}1`)).toBe(true);
+      expect(kept(`1${"0".repeat(whole)}`)).toBe(false);
+      expect(kept(`1.${"0".repeat(decimals)}1`)).toBe(false);
+    }
+  });
+
+  it("refuse a buying rate for exactly the daily indexes", () => {
+    const kinds = [
+      ...tableSql("fx_rates").matchAll(
+        /CHECK \(kind <> '(\w+)' OR buy IS NULL\)/g,
+      ),
+    ].map((match) => match[1]);
+    expect(kinds).toEqual(
+      Constants.public.Enums.fx_rate_kind.filter(isDailyIndex),
+    );
+  });
+
+  it("date the quote guards in BUENOS_AIRES_TZ", () => {
+    const zones = readMigrations()
+      .filter(({ sql }) => sql.includes("'PT403'"))
+      .flatMap(({ sql }) =>
+        [...sql.matchAll(/AT TIME ZONE '([^']+)'/g)].map((match) => match[1]),
+      );
+    expect(zones.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(zones)).toEqual(new Set([BUENOS_AIRES_TZ]));
   });
 });

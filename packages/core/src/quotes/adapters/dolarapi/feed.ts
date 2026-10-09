@@ -5,7 +5,8 @@ import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import {
   type FxRateKind,
   parseResponse,
-  QuoteFeedError,
+  type QuoteFeedCode,
+  quoteFailureOf,
   type RawFxRate,
 } from "../../contract/quote";
 
@@ -27,7 +28,7 @@ const responseSchema = z.object({
 });
 
 // On weekends and holidays the house still stamps its last business day, so
-// the row is dated that day and the window drops it.
+// the row is dated that day and quoteWindow decides whether it is kept.
 export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   const { compra, venta, fechaActualizacion } = parseResponse(
     responseSchema,
@@ -42,35 +43,41 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   };
 }
 
-// A house that changed shape or went away becomes one row the schemas count as
-// invalid, so the other houses are kept.
-function unreadable(kind: FxRateKind, now: Date): RawFxRate {
-  return {
-    kind,
-    rate_date: buenosAiresDate(now),
-    buy: null,
-    sell: "",
-    quoted_at: now.toISOString(),
-  };
-}
+// A house that fails is recorded as unread and the others are kept; the
+// factory fails a read where every house did.
+type HouseRead =
+  | { ok: true; row: RawFxRate }
+  | { ok: false; kind: FxRateKind; code: QuoteFeedCode };
 
 export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "dolarapi",
-    async readRaw(now) {
-      const fxRates = await Promise.all(
-        HOUSES.map(async ({ house, kind }) => {
+    async readRaw() {
+      const results = await Promise.all(
+        HOUSES.map(async ({ house, kind }): Promise<HouseRead> => {
           try {
-            return parse(await getJson(`${BASE_URL}/${house}`), kind);
+            const json = await getJson(`${BASE_URL}/${house}`);
+            return { ok: true, row: parse(json, kind) };
           } catch (error) {
-            if (error instanceof QuoteFeedError && !error.retryable) {
-              return unreadable(kind, now);
+            // By name and code, so a house error raised by another copy of
+            // core still counts.
+            const { known, stage, code } = quoteFailureOf(error);
+            if (known && stage === "read") {
+              return { ok: false, kind, code: code as QuoteFeedCode };
             }
             throw error;
           }
         }),
       );
-      return { fxRates, prices: [] };
+      const fxRates = results.flatMap((result) =>
+        result.ok ? [result.row] : [],
+      );
+      const failed = results.flatMap((result) => (result.ok ? [] : [result]));
+      return {
+        fxRates,
+        prices: [],
+        unread: failed.map(({ kind, code }) => ({ key: kind, code })),
+      };
     },
   };
 }

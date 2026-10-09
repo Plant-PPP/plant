@@ -31,12 +31,18 @@ export const AI_PROVIDERS = {
 };
 export const SERVICE_ROLE = {
   regex: `(^|/)service-role${EXTENSION}$`,
-  message: "The secret key bypasses RLS; only the AI cost sink holds it.",
+  message:
+    "The secret key bypasses RLS; only the AI cost sink and the quote sink hold it.",
 };
 export const COST_SINK = {
   regex: `(^|/)ai-cost-sink${EXTENSION}$`,
   message:
     "The cost sink writes past RLS; only route handlers under src/app/api may use it.",
+};
+export const QUOTE_SINK = {
+  regex: `(^|/)quote-sink${EXTENSION}$`,
+  message:
+    "The quote sink writes rows every user reads, past RLS; only the Inngest route may use it.",
 };
 
 // /auth/mfa reads claims without the MFA redirect; everything else must get
@@ -56,6 +62,7 @@ export const ALL_FENCED = [
   AI_PROVIDERS,
   SERVICE_ROLE,
   COST_SINK,
+  QUOTE_SINK,
   SESSION_CLAIMS_UNCHECKED,
 ];
 
@@ -146,8 +153,9 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 
 // The fences read import specifiers, so a computed one, a bundler's
 // require.context or import.meta other than .url, .dirname and .filename
-// (import.meta.webpackContext), or a require wrapped in a type cast (which the
-// fences' callee match misses), cannot pass them.
+// (import.meta.webpackContext), a require wrapped in a type cast (which the
+// fences' callee match misses), or one built by createRequire (which the
+// bundler still bundles), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
@@ -157,6 +165,8 @@ export const LITERAL_IMPORTS_ONLY = [
     "property",
     "context",
   ),
+  'ImportSpecifier[imported.name="createRequire"]',
+  'MemberExpression[property.name="createRequire"]',
   'MetaProperty[meta.name="import"]:not(MemberExpression[computed=false][property.name=/^(url|dirname|filename)$/] > .object)',
 ].map((selector) => ({
   selector,

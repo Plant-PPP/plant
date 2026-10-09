@@ -1,6 +1,9 @@
-import { createHmac } from "node:crypto";
-
-import { loadWithEnv, restoreEnv, TEST_SIGNING_KEY as KEY } from "./testing";
+import {
+  loadWithEnv,
+  restoreEnv,
+  sign,
+  TEST_SIGNING_KEY as KEY,
+} from "./testing";
 
 const ORIGINAL_FETCH = global.fetch;
 
@@ -10,9 +13,10 @@ function loadHandler(env: Record<string, string | undefined>): Handler {
   return loadWithEnv({ NODE_ENV: "production", ...env }, () => {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { serve } = require("inngest/edge") as typeof import("inngest/edge");
-    const { serveOptions } = require("./index") as typeof import("./index");
+    const { createServeOptions } =
+      require("./index") as typeof import("./index");
     /* eslint-enable @typescript-eslint/no-require-imports */
-    return serve(serveOptions) as Handler;
+    return serve(createServeOptions({})) as Handler;
   });
 }
 
@@ -30,14 +34,6 @@ function request(
       ...headers,
     },
   });
-}
-
-function sign(body: string): string {
-  const timestamp = Math.round(Date.now() / 1000).toString();
-  const signature = createHmac("sha256", KEY.replace(/^signkey-\w+-/, ""))
-    .update(body + timestamp)
-    .digest("hex");
-  return `t=${timestamp}&s=${signature}`;
 }
 
 let outbound: jest.Mock;
@@ -86,6 +82,20 @@ describe("/api/inngest outside development", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-inngest-sync-kind")).toBe("in_band");
     expect(outbound).not.toHaveBeenCalled();
+  });
+
+  // The dev loopback origin must not reach a deployment: its syncs register
+  // the URL they were sent to.
+  it("registers a signed out-of-band sync at the request's URL", async () => {
+    const handler = loadHandler({ INNGEST_SIGNING_KEY: KEY });
+    await handler(
+      request("PUT", "", {
+        "x-inngest-signature": sign(""),
+      }),
+    );
+    const sent = outbound.mock.calls.map((args) => JSON.stringify(args));
+    expect(sent.join("\n")).toContain("https://plant.test/api/inngest");
+    expect(sent.join("\n")).not.toContain("127.0.0.1");
   });
 
   it("answers a signed introspection", async () => {

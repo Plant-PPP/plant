@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(36);
+SELECT plan(37);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -133,6 +133,15 @@ SELECT throws_ok(
              'gemini-3.5-flash-lite', -0.01, 0, 0, 0, 0) $$,
   '23514', NULL,
   'a cost is never negative'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                                  cache_read_tokens, cache_write_tokens, output_tokens)
+     VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction',
+             'gemini-3.5-flash-lite', 'NaN', 0, 0, 0, 0) $$,
+  '23514', 'new row for relation "ai_costs" violates check constraint "ai_costs_not_nan"',
+  'a cost is a number, not NaN'
 );
 
 SELECT throws_ok(
