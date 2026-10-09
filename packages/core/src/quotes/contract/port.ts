@@ -1,8 +1,8 @@
 import type { QuoteBatch, QuoteSource, RawQuoteRows } from "./quote";
 
 // One public quote source. read() returns the rows that passed the check, with
-// counts of the stale and invalid ones; it throws a QuoteFeedError when the source fails; any other error is a bug and passes
-// through unchanged.
+// counts of the stale and invalid ones. It throws a QuoteFeedError when the
+// source fails; any other error is a bug and passes through unchanged.
 export interface QuoteFeedPort {
   readonly id: QuoteSource;
   read(now: Date): Promise<QuoteBatch>;
@@ -16,5 +16,5 @@ export interface RawQuoteFeed {
 
 // The HTTP reader the composition root injects. It throws QuoteFeedError:
 // fetch_error, http_429 and http_5xx are retryable; http_4xx, too_large and
-// bad_json are not, and dolarapi keeps its other houses only on those.
+// bad_json are not.
 export type GetJson = (url: string) => Promise<unknown>;

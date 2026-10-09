@@ -139,14 +139,17 @@ describe("createDolarapiFeed", () => {
     expect(batch.invalidCount).toBe(1);
   });
 
-  it("keeps the other houses when one answers 404", async () => {
-    const feed = createDolarapiFeed(async (url) => {
-      if (url.endsWith("/blue")) throw new QuoteFeedError("http_4xx", false);
-      return body("x", 1, 2);
-    });
-    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
-    expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
-  });
+  it.each(["http_4xx", "too_large", "bad_json"] as const)(
+    "keeps the other houses when one fails with %s",
+    async (code) => {
+      const feed = createDolarapiFeed(async (url) => {
+        if (url.endsWith("/blue")) throw new QuoteFeedError(code, false);
+        return body("x", 1, 2);
+      });
+      const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+      expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
+    },
+  );
 
   it("passes an error that is not a QuoteFeedError through unchanged", async () => {
     const bug = new TypeError("boom");
@@ -157,13 +160,14 @@ describe("createDolarapiFeed", () => {
     await expect(feed.readRaw(NOW)).rejects.toBe(bug);
   });
 
-  it("fails the read when one house fails in a way a retry may fix", async () => {
-    const feed = createDolarapiFeed(async (url) => {
-      if (url.endsWith("/blue")) throw new QuoteFeedError("http_5xx", true);
-      return body("x", 1, 2);
-    });
-    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
-      code: "http_5xx",
-    });
-  });
+  it.each(["fetch_error", "http_429", "http_5xx"] as const)(
+    "fails the read when one house fails with %s",
+    async (code) => {
+      const feed = createDolarapiFeed(async (url) => {
+        if (url.endsWith("/blue")) throw new QuoteFeedError(code, true);
+        return body("x", 1, 2);
+      });
+      await expect(feed.readRaw(NOW)).rejects.toMatchObject({ code });
+    },
+  );
 });

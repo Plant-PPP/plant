@@ -1,10 +1,11 @@
 import { Constants } from "@plant/shared";
 
 import type { RawQuoteFeed } from "./contract/port";
+import type { RawPrice } from "./contract/quote";
 import { quoteFeeds, toQuoteFeed } from "./factory";
 
 const NOW = new Date("2026-10-09T21:30:00.000Z");
-const [SOURCE] = Constants.public.Enums.quote_source;
+const [SOURCE, , OTHER_SOURCE] = Constants.public.Enums.quote_source;
 
 const raw = (readRaw: RawQuoteFeed["readRaw"]): RawQuoteFeed => ({
   id: SOURCE,
@@ -59,6 +60,26 @@ describe("toQuoteFeed", () => {
     );
     const batch = await feed.read(NOW);
     expect([batch.fxRates.length, batch.staleCount]).toEqual([0, 1]);
+  });
+
+  it("stamps its own id and the read instant over what a row carries", async () => {
+    const carried = {
+      symbol: "BTC",
+      price_date: "2026-10-09",
+      price: "1",
+      currency: "USD",
+      quoted_at: NOW.toISOString(),
+      source: SOURCE,
+      fetched_at: "2020-01-01T00:00:00.000Z",
+    } as RawPrice;
+    const feed = toQuoteFeed({
+      id: OTHER_SOURCE,
+      readRaw: async () => ({ fxRates: [], prices: [carried] }),
+    });
+    const batch = await feed.read(NOW);
+    expect(batch.prices.map((row) => [row.source, row.fetched_at])).toEqual([
+      [OTHER_SOURCE, NOW.toISOString()],
+    ]);
   });
 
   it("passes any other error through", async () => {
@@ -154,5 +175,28 @@ describe("quoteFeeds", () => {
     expect(feeds.map((feed) => feed.id).sort()).toEqual(
       [...Constants.public.Enums.quote_source].sort(),
     );
+  });
+
+  // Invented answers in each provider's shape, all dated today.
+  const answer = (url: string): unknown => {
+    if (url.includes("dolarapi.com")) {
+      return { compra: 1, venta: 2, fechaActualizacion: NOW.toISOString() };
+    }
+    if (url.includes("argentinadatos.com")) {
+      return [{ fecha: "2026-10-09", valor: 1603.33 }];
+    }
+    return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
+  };
+
+  it("stamps every row with the feed that read it and the read instant", async () => {
+    const feeds = quoteFeeds({ getJson: async (url) => answer(url) });
+    for (const feed of feeds) {
+      const batch = await feed.read(NOW);
+      const rows = [...batch.fxRates, ...batch.prices];
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.map((row) => [row.source, row.fetched_at])).toEqual(
+        rows.map(() => [feed.id, NOW.toISOString()]),
+      );
+    }
   });
 });
