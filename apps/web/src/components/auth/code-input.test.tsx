@@ -15,6 +15,10 @@ it("is one field the phone can fill with the mailed code", () => {
   expect(html).not.toMatch(/maxLength|disabled/);
 });
 
+it("takes the id its label points at", () => {
+  expect(html).toMatch(/<input[^>]*id="code"/);
+});
+
 it("renders no inline style, which the CSP would block", () => {
   expect(html).not.toMatch(/\sstyle=/);
 });

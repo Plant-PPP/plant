@@ -112,6 +112,44 @@ describe("mergeAuthCode", () => {
     }
   });
 
+  it.each(["123/456", "123_456", "123,456", "123\u2212456"])(
+    "keeps a code split by other marks (%j)",
+    (raw) => {
+      expect(mergeAuthCode("", raw)).toBe("123456");
+    },
+  );
+
+  it("does not take a code from inside a longer number", () => {
+    expect(mergeAuthCode("", "DNI 12.345.678\n654 321")).toBe("654321");
+    expect(mergeAuthCode("", "123 456 789\n654321")).toBe("654321");
+  });
+
+  it("types and deletes one digit at a time", () => {
+    let code = "";
+    for (const digit of "654321") code = mergeAuthCode(code, code + digit);
+    expect(code).toBe("654321");
+    while (code) code = mergeAuthCode(code, code.slice(0, -1));
+    expect(code).toBe("");
+  });
+
+  it("never yields more than six ASCII digits for random text", () => {
+    let seed = 1;
+    const random = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    const alphabet = "0123456789 -.\u2013 @a\uff11\n";
+    for (let k = 0; k < 2000; k++) {
+      const previous = "123456".slice(0, Math.floor(random() * 7));
+      const text = Array.from(
+        { length: Math.floor(random() * 40) },
+        () => alphabet[Math.floor(random() * alphabet.length)],
+      ).join("");
+      for (const all of [false, true]) {
+        expect(mergeAuthCode(previous, previous + text, all)).toMatch(
+          /^\d{0,6}$/,
+        );
+      }
+    }
+  });
+
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
       for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {

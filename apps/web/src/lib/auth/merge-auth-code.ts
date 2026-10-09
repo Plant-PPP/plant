@@ -1,28 +1,30 @@
 import { OTP_LENGTH } from "./otp-config";
 
-// Spaces of any kind, dots and dashes (‐ to ―, and -).
-const SEP = "[\\s.\\u2010-\\u2015-]";
-// A code doesn't touch a letter, a digit or an "@", so numbers in an address
-// or inside a longer number are skipped.
-const START = "(?:^|[^A-Za-z0-9_@])";
-const END = "(?![A-Za-z0-9_@])";
-const half = OTP_LENGTH / 2;
-const WHOLE_CODE = new RegExp(`${START}(\\d{${OTP_LENGTH}})${END}`);
-const SPLIT_CODE = new RegExp(
-  `${START}(\\d{${half}}${SEP}{1,3}\\d{${half}})(?!${SEP}*\\d)${END}`,
-);
-const DIGIT_RUN = new RegExp(`\\d(?:${SEP}{0,3}\\d)*`);
+// A number in pasted text: groups of digits joined by up to three characters
+// that are not letters, digits, "@" or line breaks ("123 456", "12-34-56").
+const NUMBER = /\d+(?:[^0-9A-Za-zÀ-ɏ@\r\n]{1,3}\d+)*/g;
+const WORD = /[0-9A-Za-zÀ-ɏ@_]/;
+const HALVES = [Math.floor(OTP_LENGTH / 2), Math.ceil(OTP_LENGTH / 2)];
 
-// Pasted text can carry the mail's other numbers (a date, "10 minutos"), so a
-// whole code in it wins, written plainly or split in halves ("123 456");
-// otherwise its first run of digits counts.
+// Pasted text can carry the mail's other numbers (a date, "10 minutos", an
+// address), so a whole code in it wins, written plainly or split in halves;
+// otherwise its first number counts.
 function codeIn(text: string): string {
-  const run =
-    WHOLE_CODE.exec(text)?.[1] ??
-    SPLIT_CODE.exec(text)?.[1] ??
-    DIGIT_RUN.exec(text)?.[0] ??
-    "";
-  return run.replace(/\D/g, "");
+  const numbers = [...text.matchAll(NUMBER)].map((match) => {
+    const before = text[match.index - 1] ?? "";
+    const after = text[match.index + match[0].length] ?? "";
+    return {
+      groups: match[0].match(/\d+/g) ?? [],
+      alone: !WORD.test(before) && !WORD.test(after),
+    };
+  });
+  const sizes = (n: (typeof numbers)[number]) =>
+    n.groups.map((g) => g.length).join();
+  const code =
+    numbers.find((n) => n.alone && sizes(n) === `${OTP_LENGTH}`) ??
+    numbers.find((n) => n.alone && sizes(n) === HALVES.join()) ??
+    numbers[0];
+  return code ? code.groups.join("") : "";
 }
 
 // The field's new text after an edit at the end, where its caret always is.
