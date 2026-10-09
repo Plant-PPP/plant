@@ -195,8 +195,8 @@ export function SourceConnectionDialog({
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
-  // A new holder still saving holds the account back too: its save may be
-  // the holder the account is about to pick.
+  // A new holder still saving holds the dialog and its submit: the holder it
+  // saves may be the one the account picks.
   const busy = pending || holderPending;
 
   if (listed !== holders) {
