@@ -99,4 +99,5 @@ it("registers the app at loopback whatever Host an unsigned dev sync sends", asy
 
   const sent = outbound.mock.calls.map((args) => JSON.stringify(args));
   expect(sent.join("\n")).not.toContain("evil.example");
+  expect(sent.join("\n")).toContain("http://127.0.0.1:3000/api/inngest");
 });

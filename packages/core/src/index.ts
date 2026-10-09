@@ -12,7 +12,6 @@ export {
   QUOTE_CLOSE_HOUR,
   QUOTE_KEYS,
   type QuoteBatch,
-  QuoteError,
   type QuoteFeedCode,
   QuoteFeedError,
   quoteFailureOf,

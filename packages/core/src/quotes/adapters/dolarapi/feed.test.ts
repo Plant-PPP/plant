@@ -4,6 +4,7 @@ import {
   type QuoteFeedCode,
   QuoteFeedError,
 } from "../../contract/quote";
+import { toQuoteFeed } from "../../factory";
 import { createDolarapiFeed, parse } from "./feed";
 
 // 2026-10-09 18:30 in Buenos Aires.
@@ -195,10 +196,12 @@ describe("createDolarapiFeed", () => {
   ] as const)(
     "fails the read when every house fails with %s",
     async (failure, code, retryable) => {
-      const feed = createDolarapiFeed(async () => {
-        throw new QuoteFeedError(failure);
-      });
-      await expect(feed.readRaw(NOW)).rejects.toMatchObject({
+      const feed = toQuoteFeed(
+        createDolarapiFeed(async () => {
+          throw new QuoteFeedError(failure);
+        }),
+      );
+      await expect(feed.read(NOW)).rejects.toMatchObject({
         code,
         retryable,
       });
@@ -206,15 +209,17 @@ describe("createDolarapiFeed", () => {
   );
 
   it("fails with a retryable error when every house fails and one may pass on a retry", async () => {
-    const feed = createDolarapiFeed(
-      failing({
-        oficial: "http_4xx",
-        bolsa: "bad_json",
-        contadoconliqui: "timeout",
-        blue: "http_5xx",
-      }),
+    const feed = toQuoteFeed(
+      createDolarapiFeed(
+        failing({
+          oficial: "http_4xx",
+          bolsa: "bad_json",
+          contadoconliqui: "timeout",
+          blue: "http_5xx",
+        }),
+      ),
     );
-    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
+    await expect(feed.read(NOW)).rejects.toMatchObject({
       code: "timeout",
       retryable: true,
     });

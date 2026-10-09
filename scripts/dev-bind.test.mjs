@@ -1,6 +1,6 @@
 // In dev mode Inngest checks no signature, so the local servers listen on
 // loopback only: another device on the network could otherwise run the
-// quotes job or re-register the app at its own host.
+// quotes job. The jobs package registers the app at the same origin.
 //
 //   pnpm test:scripts
 
@@ -23,4 +23,12 @@ test("the Inngest dev server binds 127.0.0.1 and calls the app there", () => {
   assert.ok(command, "dev-up.sh runs inngest-cli dev");
   assert.match(command, /\s--host 127\.0\.0\.1(\s|")/);
   assert.match(command, /\s-u http:\/\/127\.0\.0\.1:3000\/api\/inngest(\s|")/);
+});
+
+test("the jobs package registers the app at the origin the dev server calls", () => {
+  const [, origin] =
+    /const DEV_SERVE_ORIGIN = "([^"]+)";/.exec(
+      read("packages/jobs/src/index.ts"),
+    ) ?? [];
+  assert.equal(origin, "http://127.0.0.1:3000");
 });

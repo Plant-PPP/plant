@@ -42,8 +42,8 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   };
 }
 
-// A house that fails is recorded as unread and the others are kept; only when
-// every house fails does the read fail, retryable if any house's error is.
+// A house that fails is recorded as unread and the others are kept; the
+// factory fails a read where every house did.
 type HouseRead =
   | { ok: true; row: RawFxRate }
   | { ok: false; kind: FxRateKind; error: QuoteFeedError };
@@ -69,10 +69,6 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
         result.ok ? [result.row] : [],
       );
       const failed = results.flatMap((result) => (result.ok ? [] : [result]));
-      const [first] = failed;
-      if (first && failed.length === HOUSES.length) {
-        throw (failed.find(({ error }) => error.retryable) ?? first).error;
-      }
       return {
         fxRates,
         prices: [],

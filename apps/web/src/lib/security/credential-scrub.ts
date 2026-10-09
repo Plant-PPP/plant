@@ -66,10 +66,10 @@ const idToken = (
 // whose guard looks for 11 digits, so a DNI glued to hex letters passes; a
 // ULID (an Inngest run id: 26 characters in Crockford's alphabet, the first
 // 0-7 since it opens with a 48-bit time), whose guard looks for 7, so a DNI
-// glued to ULID letters is masked; a time with
-// its fraction (a comma one up to microseconds, so a CSV's next field is not
-// read as one); a basic ISO timestamp. Not followed by `@`: an id used as an
-// email's local part is not an id.
+// glued to ULID letters is masked; a time with its fraction (a comma one up
+// to microseconds, so a CSV's next field is not read as one); a basic ISO
+// timestamp. Not followed by `@`: an id used as an email's local part is not
+// an id.
 const KEPT = String.raw`(?:${UUID}|${idToken("a-f", 11, "", "{16,}")}|${idToken("a-hjkmnp-tv-z", 7, "[0-7]", "{25}")}|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a

@@ -1,8 +1,10 @@
-import type {
-  FxRate,
-  QuoteBatch,
-  QuoteFeedPort,
-  QuoteStorePort,
+import {
+  type FxRate,
+  type QuoteBatch,
+  QuoteFeedError,
+  type QuoteFeedPort,
+  QuoteStoreError,
+  type QuoteStorePort,
 } from "@plant/core";
 import { Constants, type LogFields } from "@plant/shared";
 import { serve } from "inngest/edge";
@@ -34,13 +36,10 @@ const batch = (fxRates: FxRate[]): QuoteBatch => ({
   unread: [],
 });
 
-type Core = typeof import("@plant/core");
 type Line = { level: string; event: string; fields: LogFields };
 
-// The job and core load together under NODE_ENV=development, so the errors
-// the fakes throw are the classes the job checks.
 function harness(
-  build: (core: Core) => {
+  build: () => {
     feeds: QuoteFeedPort[];
     store: QuoteStorePort;
   },
@@ -57,11 +56,10 @@ function harness(
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { createServeOptions } =
       require("../index") as typeof import("../index");
-    const core = require("@plant/core") as Core;
     /* eslint-enable @typescript-eslint/no-require-imports */
     return createServeOptions({
       quotes: () => ({
-        ...build(core),
+        ...build(),
         log,
         now: () => new Date((tick += 10)),
       }),
@@ -180,8 +178,8 @@ describe("refresh-quotes under the SDK's executor", () => {
 
   it("rebuilds a save failure's stage and code from the SDK's StepError after the retries", async () => {
     const save = jest.fn();
-    const { lines, handler } = harness((core) => {
-      save.mockRejectedValue(new core.QuoteStoreError("unavailable"));
+    const { lines, handler } = harness(() => {
+      save.mockRejectedValue(new QuoteStoreError("unavailable"));
       return {
         feeds: [
           { id: INDEX, read: async () => batch([fxRate("uva")]) },
@@ -218,7 +216,7 @@ describe("refresh-quotes under the SDK's executor", () => {
       .fn<Promise<QuoteBatch>, [Date]>()
       .mockResolvedValueOnce(batch([fxRate("mep"), fxRate("ccl")]))
       .mockResolvedValue(batch([fxRate("mep"), fxRate("ccl"), fxRate("blue")]));
-    const { lines, handler } = harness((core) => {
+    const { lines, handler } = harness(() => {
       let calls = 0;
       return {
         feeds: [{ id: DOLLARS, read }],
@@ -228,7 +226,7 @@ describe("refresh-quotes under the SDK's executor", () => {
             const fresh = fxRates.filter((row) => !stored.has(row.kind));
             for (const row of fresh) stored.add(row.kind);
             // The first answer is lost after its rows committed.
-            if (calls === 1) throw new core.QuoteStoreError("unavailable");
+            if (calls === 1) throw new QuoteStoreError("unavailable");
             return { fxRates: fresh.length, prices: 0 };
           },
         },
@@ -243,18 +241,18 @@ describe("refresh-quotes under the SDK's executor", () => {
   });
 
   it("answers non-retriable after one run line when every feed failed", async () => {
-    const { lines, handler } = harness((core) => ({
+    const { lines, handler } = harness(() => ({
       feeds: [
         {
           id: DOLLARS,
           read: async () => {
-            throw new core.QuoteFeedError("http_4xx");
+            throw new QuoteFeedError("http_4xx");
           },
         },
         {
           id: INDEX,
           read: async () => {
-            throw new core.QuoteFeedError("timeout");
+            throw new QuoteFeedError("timeout");
           },
         },
       ],

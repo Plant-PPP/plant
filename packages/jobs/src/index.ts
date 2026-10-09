@@ -16,7 +16,7 @@ const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
 //
 // refresh-quotes registers only in dev-server mode, and only then are its
 // dependencies built. Dev mode checks no signature, so its registered URL is
-// fixed to the loopback `next dev` binds rather than taken from the request.
+// the loopback `next dev` binds, never the request's Host.
 export function createServeOptions(opts: { quotes?: () => QuoteJobDeps }) {
   return {
     client: inngest,

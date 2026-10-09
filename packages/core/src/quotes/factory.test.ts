@@ -43,11 +43,36 @@ describe("toQuoteFeed", () => {
     });
   });
 
-  it("throws bad_shape when every part was unread or invalid", async () => {
+  it("throws the first part's code when every part was unread", async () => {
     const feed = toQuoteFeed(
       raw(async () => ({
         fxRates: [],
         prices: [],
+        unread: [
+          { key: "blue", code: "http_4xx" },
+          { key: "bolsa", code: "bad_json" },
+        ],
+      })),
+    );
+    await expect(feed.read(NOW)).rejects.toMatchObject({
+      code: "http_4xx",
+      retryable: false,
+    });
+  });
+
+  it("throws bad_shape when the rows read were refused and the rest unread", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [],
+        prices: [
+          {
+            symbol: "BTC",
+            price_date: "2026-10-09",
+            price: "",
+            currency: "USD",
+            quoted_at: NOW.toISOString(),
+          },
+        ],
         unread: [{ key: "blue", code: "http_4xx" }],
       })),
     );

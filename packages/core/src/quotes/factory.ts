@@ -14,11 +14,17 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
       if (count === 0) throw new QuoteFeedError("empty");
       const batch = checkBatch(rows, now, raw.id);
       // Nothing kept and nothing out of its window: a part that failed for a
-      // passing reason makes the read retryable, else the source changed what
-      // it sends.
+      // passing reason makes the read retryable; else a read whose every part
+      // failed fails with the first part's code, and one whose rows the checks
+      // refused means the source changed what it sends.
       if (batch.refused.invalid.length === count) {
-        const passing = rows.unread?.find(({ code }) => QUOTE_FEED_CODES[code]);
-        throw new QuoteFeedError(passing?.code ?? "bad_shape");
+        const unread = rows.unread ?? [];
+        const passing = unread.find(({ code }) => QUOTE_FEED_CODES[code]);
+        const [first] = unread;
+        const nothingRead = rows.fxRates.length + rows.prices.length === 0;
+        throw new QuoteFeedError(
+          passing?.code ?? (nothingRead && first ? first.code : "bad_shape"),
+        );
       }
       return batch;
     },
