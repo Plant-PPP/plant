@@ -1,4 +1,8 @@
-import { decimalStringSchema, moneySchema } from "./money";
+import {
+  decimalStringSchema,
+  moneySchema,
+  positiveDecimalSchema,
+} from "./money";
 
 describe("moneySchema", () => {
   it("accepts a decimal string with its currency", () => {
@@ -38,4 +42,20 @@ describe("decimalStringSchema", () => {
   ])("rejects %s", (_label, value) => {
     expect(decimalStringSchema.safeParse(value).success).toBe(false);
   });
+});
+
+describe("positiveDecimalSchema", () => {
+  it.each(["0.00000001", "1", "1050.5", "999999999999.99999999"])(
+    "accepts %s",
+    (value) => {
+      expect(positiveDecimalSchema.safeParse(value).success).toBe(true);
+    },
+  );
+
+  it.each(["0", "0.00000000", "-1", "-0.5", "1e5", "1.123456789"])(
+    "rejects %s",
+    (value) => {
+      expect(positiveDecimalSchema.safeParse(value).success).toBe(false);
+    },
+  );
 });

@@ -1,0 +1,56 @@
+import { buenosAiresDate } from "@plant/shared";
+import { z } from "zod";
+
+import type { GetJson, RawQuoteFeed } from "../../contract/port";
+import { QuoteFeedError, type RawQuoteRows } from "../../contract/quote";
+
+// pair is what the request names; resultKey is how the answer names it.
+const PAIRS: readonly { symbol: string; pair: string; resultKey: string }[] = [
+  { symbol: "BTC", pair: "XBTUSD", resultKey: "XXBTZUSD" },
+  { symbol: "ETH", pair: "ETHUSD", resultKey: "XETHZUSD" },
+  { symbol: "SOL", pair: "SOLUSD", resultKey: "SOLUSD" },
+  { symbol: "USDT", pair: "USDTUSD", resultKey: "USDTZUSD" },
+  { symbol: "USDC", pair: "USDCUSD", resultKey: "USDCUSD" },
+];
+
+const URL = `https://api.kraken.com/0/public/Ticker?pair=${PAIRS.map((p) => p.pair).join(",")}`;
+
+// c is the last trade: [price, lot volume], both decimal strings.
+const responseSchema = z.object({
+  error: z.array(z.string()),
+  result: z
+    .record(z.string(), z.object({ c: z.tuple([z.string(), z.string()]) }))
+    .optional(),
+});
+
+export function parse(json: unknown, now: Date): RawQuoteRows {
+  const parsed = responseSchema.safeParse(json);
+  if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
+  if (parsed.data.error.length > 0) {
+    throw new QuoteFeedError("provider_error", true);
+  }
+  const result = parsed.data.result ?? {};
+  const instant = now.toISOString();
+  return {
+    fxRates: [],
+    // A pair missing from the answer gets an empty price, which the schemas
+    // count as invalid.
+    prices: PAIRS.map(({ symbol, resultKey }) => ({
+      symbol,
+      price_date: buenosAiresDate(now),
+      price: result[resultKey]?.c[0] ?? "",
+      currency: "USD",
+      source: "kraken",
+      quoted_at: instant,
+    })),
+  };
+}
+
+export function createKrakenFeed(getJson: GetJson): RawQuoteFeed {
+  return {
+    id: "kraken",
+    async readRaw(now) {
+      return parse(await getJson(URL), now);
+    },
+  };
+}

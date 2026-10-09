@@ -18,6 +18,12 @@ export const decimalStringSchema = z
   )
   .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
 
+// A price or rate: greater than zero.
+export const positiveDecimalSchema = decimalStringSchema.refine(
+  (value) => !/^(-|0(\.0+)?$)/.test(value),
+  "Must be greater than 0",
+);
+
 export const moneySchema = z.object({
   amount: decimalStringSchema,
   currency: currencySchema,
