@@ -91,6 +91,12 @@ const flagged = [
   ],
   ["src/app/page.tsx", 'import "@/lib/supabase/service-role.mjs";'],
   ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink.tsx";'],
+  [
+    "src/lib/x.js",
+    'export const s = require("@/lib/supabase/service-role?x");',
+  ],
+  ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink#x";'],
+  ["src/app/page.tsx", 'import "@/lib/supabase/service-role?";'],
   ["src/lib/supabase/service-role.ts", 'import "ai";'],
   ["src/lib/supabase/service-role.ts", 'import "@ai-sdk/google";'],
   [
@@ -145,6 +151,37 @@ const flagged = [
   [
     "src/app/actions.ts",
     'export const c = require.context("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta.webpackContext("../lib/ai", { regExp: /sink/ });',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta["webpackContext"]("../lib/ai", { regExp: /sink/ });',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = (import.meta as any).webpackContext("../lib/ai", { regExp: /sink/ });',
+  ],
+  [
+    "src/app/actions.ts",
+    "const { webpackContext } = import.meta;\nexport const c = webpackContext;",
+  ],
+  ["src/components/x.tsx", 'import { generateText } from "ai?x";'],
+  ["src/app/actions.ts", "export const c = import.meta.urlx;"],
+  ["src/components/x.tsx", 'import { generateText } from "ai#x";'],
+  [
+    "src/components/x.tsx",
+    'import { createAgent } from "@inngest/agent-kit#x";',
+  ],
+  [
+    "src/app/actions.ts",
+    'const url = "webpackContext";\nexport const c = import.meta[url];',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta.webpackContext("../lib/ai", { regExp: /sink/ }).url;',
   ],
   [
     "src/app/page.tsx",
@@ -212,6 +249,7 @@ const flagged = [
   ],
   ["src/lib/ai/x.ts", 'export { generateText } from "ai";'],
   ["src/lib/ai/x.ts", 'export * from "@ai-sdk/google";'],
+  ["src/lib/ai/x.ts", 'export * as ai from "ai";'],
   ["src/lib/ai/ai-cost-sink.ts", '"use server";\nexport const x = 1;'],
   [
     "src/lib/ai/ai-cost-sink.ts",
@@ -333,6 +371,10 @@ flagged.push(
     'export const load = () => import("./session-claims-unchecked");',
   ],
   [
+    "src/app/auth/mfa/page.tsx",
+    'export const load = () => import("@/lib/auth/session-claims-unchecked");',
+  ],
+  [
     "src/lib/auth/session-claims.ts",
     'import { "readSessionClaims" as r } from "./session-claims-unchecked";\nexport const getSessionClaims = r;',
   ],
@@ -404,6 +446,10 @@ flagged.push(
     'export * from "./session-claims-unchecked";',
   ],
   [
+    "src/lib/auth/session-claims.ts",
+    'export { default } from "./session-claims-unchecked";',
+  ],
+  [
     "src/app/auth/mfa/page.tsx",
     'export * from "@/lib/auth/session-claims-unchecked";',
   ],
@@ -418,6 +464,10 @@ flagged.push(
   [
     "src/app/(app)/page.tsx",
     'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked.ts";',
+  ],
+  [
+    "src/app/(app)/page.tsx",
+    'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked?x";',
   ],
   ["src/lib/auth/mfa-browser.ts", "export const f = (s) => s.auth._unenroll;"],
   ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth._unenroll;"],
@@ -465,6 +515,12 @@ flagged.push(
     "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
   ],
 );
+
+// The cost sink may import the service-role client and no other fenced module.
+flagged.push([
+  "src/lib/ai/ai-cost-sink.ts",
+  'import { google } from "@ai-sdk/google";',
+]);
 
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
@@ -520,6 +576,13 @@ const allowed = [
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
   ],
   ["src/lib/x.ts", "export const f = (o: { aim: number }) => o.aim;"],
+  ["src/lib/x.ts", 'export const u = new URL("./x.json", import.meta.url);'],
+  [
+    "src/lib/x.mjs",
+    "export const p = [import.meta.dirname, import.meta.filename];",
+  ],
+  ["src/lib/x.ts", 'import "@/lib/foo/service-role-x";'],
+  ["src/lib/x.ts", 'import "./session-claims-unchecked.d";'],
   ["src/lib/ai/ai-cost-sink.ts", 'export const s = "use server";'],
   [
     "src/app/api/x/route.js",
@@ -586,10 +649,10 @@ const OVERRIDES = [
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/lib/auth/session-claims-unchecked.ts", []],
-  ["src/lib/auth/session-claims.ts", ["reader"]],
-  ["src/lib/auth/session-claims.test.ts", ["reader"]],
-  ["src/app/auth/mfa/page.tsx", ["reader"]],
-  ["src/app/auth/mfa/page.test.tsx", ["reader"]],
+  ["src/lib/auth/session-claims.ts", ["reader", "claims"]],
+  ["src/lib/auth/session-claims.test.ts", ["reader", "claims"]],
+  ["src/app/auth/mfa/page.tsx", ["reader", "claims"]],
+  ["src/app/auth/mfa/page.test.tsx", ["reader", "claims"]],
   ["src/lib/auth/mfa-browser.ts", ["mfa"]],
   ["src/lib/auth/mfa-browser.test.ts", ["mfa"]],
   ["src/lib/auth/mfa-factors.ts", []],
@@ -603,15 +666,28 @@ const PROBES = {
   service: 'import "@/lib/supabase/service-role";',
   ai: 'import { generateText } from "ai";',
   sink: 'import "@/lib/ai/ai-cost-sink";',
+  claims: 'import "@/lib/auth/session-claims-unchecked";',
   dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
 for (const [filePath, exempt] of OVERRIDES) {
   for (const [probe, code] of Object.entries(PROBES)) {
     if (exempt.includes(probe)) continue;
-    // Each block's own allowances: src/lib/ai reaches models, the sink and
-    // its test reach the sink, and the sink and service-role.ts the client.
-    if (probe === "ai" && filePath.startsWith("src/lib/ai/")) continue;
-    if (probe === "sink" && /ai-cost-sink|route\.ts$/.test(filePath)) continue;
+    // Each block's own allowances: src/lib/ai except the sink reaches models,
+    // the sink's test and route handlers reach the sink, and the sink and
+    // service-role.ts reach the client.
+    if (
+      probe === "ai" &&
+      filePath.startsWith("src/lib/ai/") &&
+      !filePath.endsWith("/ai-cost-sink.ts")
+    ) {
+      continue;
+    }
+    if (
+      probe === "sink" &&
+      /ai-cost-sink\.test\.ts|route\.ts$/.test(filePath)
+    ) {
+      continue;
+    }
     if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
       continue;
     }
@@ -632,6 +708,7 @@ for (const code of [
   'export const f = ({ step }) => step.ai.infer("x", {});',
   'import { gemini } from "@inngest/ai";',
   'import { createAgent } from "@inngest/agent-kit";',
+  'export const c = import.meta.webpackContext("x", {});',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
   'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
   'export const f = ({ step }) => step["ai" as const].infer("x", {});',
@@ -672,6 +749,7 @@ for (const [dir, up] of [
     'import "@ai-sdk/react";',
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
+    'import "./web/auth/session-claims-unchecked";',
     `import "${up}/apps/web/src/lib/supabase/server";`,
   ]) {
     for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {

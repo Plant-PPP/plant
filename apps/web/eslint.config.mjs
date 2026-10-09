@@ -6,9 +6,10 @@ import { moneyRules } from "../../eslint.money.mjs";
 import {
   AI,
   AI_PROVIDERS,
+  ALL_FENCED,
   asSelector,
   COST_SINK,
-  fence,
+  fenceExcept,
   LITERAL_IMPORTS_ONLY,
   MFA_CALLS,
   MFA_CALLS_BUT_LIST,
@@ -20,7 +21,6 @@ import {
   SOURCE,
 } from "../../eslint.fences.mjs";
 
-// A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>
   modules.flatMap(({ regex, message }) =>
     [
@@ -47,32 +47,18 @@ const NO_EXPORT_LIST = [
   message:
     "Export through a declaration (export function, export const), so the fences see who uses what.",
 }));
-const BASE_SYNTAX = [
-  ...LITERAL_IMPORTS_ONLY,
-  ...secretKeyReads,
-  ...noReexport([SERVICE_ROLE, COST_SINK]),
-];
-const LIB_AI_SYNTAX = [
-  ...BASE_SYNTAX,
-  ...noReexport([AI, AI_PROVIDERS]),
-  ...NO_EXPORT_LIST,
-];
+const BASE_SYNTAX = [...LITERAL_IMPORTS_ONLY, ...secretKeyReads];
+const LIB_SYNTAX = [...BASE_SYNTAX, ...NO_EXPORT_LIST];
 
-// Every module fence of the web app. A block names the ones it may import and
-// keeps the rest, so an override cannot drop a fence by leaving it out (a
-// later block replaces a rule's whole options).
-const WEB_FENCES = [
-  AI,
-  AI_PROVIDERS,
-  SERVICE_ROLE,
-  COST_SINK,
-  SESSION_CLAIMS_UNCHECKED,
-];
+// Every block bans re-exporting a fenced module, so one it is allowed to
+// import cannot be handed on to the files fenced from it.
 const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
-  fence(
-    WEB_FENCES.filter((module) => !allow.includes(module)),
-    [...syntax, ...mfaFence, ...MFA_PRIVATE_CALLS],
-  );
+  fenceExcept(allow, [
+    ...noReexport(ALL_FENCED),
+    ...syntax,
+    ...mfaFence,
+    ...MFA_PRIVATE_CALLS,
+  ]);
 
 const noServerAction = (message) =>
   ["Program", ":function > BlockStatement"].map((parent) => ({
@@ -91,7 +77,6 @@ const READER_CALLS_ONLY = [
   ...noServerAction(
     "This file reads claims without the MFA redirect; a server action here would accept a session that has not verified its code.",
   ),
-  ...noReexport([SESSION_CLAIMS_UNCHECKED]),
   ...[
     `Identifier[name="${READER}"]:not(CallExpression > .callee):not(ImportSpecifier > Identifier)`,
     `ImportSpecifier[imported.name="${READER}"][local.name!="${READER}"]`,
@@ -131,20 +116,20 @@ export default defineConfig([
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
-    rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_AI_SYNTAX }),
+    rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_SYNTAX }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.test.ts"],
     rules: webRules({
       allow: [AI, AI_PROVIDERS, COST_SINK],
-      syntax: LIB_AI_SYNTAX,
+      syntax: LIB_SYNTAX,
     }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
     rules: webRules({
-      allow: [AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK],
-      syntax: [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX],
+      allow: [SERVICE_ROLE],
+      syntax: [...NO_SERVER_ACTION, ...LIB_SYNTAX],
     }),
   },
   {
@@ -154,11 +139,7 @@ export default defineConfig([
     ],
     rules: webRules({
       allow: [SERVICE_ROLE],
-      syntax: [
-        ...LITERAL_IMPORTS_ONLY,
-        ...noReexport([SERVICE_ROLE]),
-        ...NO_EXPORT_LIST,
-      ],
+      syntax: [...LITERAL_IMPORTS_ONLY, ...NO_EXPORT_LIST],
     }),
   },
   {
@@ -205,7 +186,7 @@ export default defineConfig([
     ],
     rules: webRules({
       allow: [SESSION_CLAIMS_UNCHECKED],
-      syntax: [...BASE_SYNTAX, ...noReexport([SESSION_CLAIMS_UNCHECKED])],
+      syntax: BASE_SYNTAX,
     }),
   },
   {

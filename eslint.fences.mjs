@@ -18,12 +18,13 @@ export const secretKeyReads = [
     "Only apps/web/src/lib/supabase/service-role.ts names SUPABASE_SERVICE_ROLE_KEY.",
 }));
 
-// Who may reach a model and the secret key. Each fenced module is a regex
-// over the import specifier, with or without a file extension.
-const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?`;
+// Who may reach a model, the secret key and the unchecked claims reader. Each
+// fenced module is a regex over the import specifier, with or without a file
+// extension, query or hash.
+const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?([?#].*)?`;
 const AI_MESSAGE =
-  "Only apps/web/src/lib/ai may call a model, so every call is costed.";
-export const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
+  "Only apps/web/src/lib/ai, except the cost sink, may call a model, so every call is costed.";
+export const AI = { regex: "^ai([/?#].*)?$", message: AI_MESSAGE };
 export const AI_PROVIDERS = {
   regex: "^@ai-sdk/(?!react(/|$))",
   message: AI_MESSAGE,
@@ -46,6 +47,18 @@ export const SESSION_CLAIMS_UNCHECKED = {
     "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
 };
 
+// The modules a block can be allowed to import. Every web block fences each
+// one it does not allow (through fenceExcept) and every package fences them
+// all, so a new fence goes here; fence() also bans node_modules paths and
+// Inngest's model packages in every block.
+export const ALL_FENCED = [
+  AI,
+  AI_PROVIDERS,
+  SERVICE_ROLE,
+  COST_SINK,
+  SESSION_CLAIMS_UNCHECKED,
+];
+
 // A path into node_modules reaches a package without naming it.
 const NODE_MODULES = {
   regex: "(^|/)node_modules(/|$)",
@@ -55,7 +68,7 @@ const NODE_MODULES = {
 // Inngest's step.ai and @inngest/agent-kit call a model themselves, past the
 // cost middleware; inngest re-exports @inngest/ai's model helpers for step.ai.
 const INNGEST_AI = {
-  regex: "^@inngest/(ai|agent-kit)(/|$)",
+  regex: "^@inngest/(ai|agent-kit)([/?#]|$)",
   message:
     "Models are called only through src/lib/ai, which records their cost.",
 };
@@ -132,8 +145,9 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 }));
 
 // The fences read import specifiers, so a computed one, a bundler's
-// require.context, or a require wrapped in a type cast (which the fences'
-// callee match misses), cannot pass them.
+// require.context or import.meta other than .url, .dirname and .filename
+// (import.meta.webpackContext), or a require wrapped in a type cast (which the
+// fences' callee match misses), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
@@ -143,6 +157,7 @@ export const LITERAL_IMPORTS_ONLY = [
     "property",
     "context",
   ),
+  'MetaProperty[meta.name="import"]:not(MemberExpression[computed=false][property.name=/^(url|dirname|filename)$/] > .object)',
 ].map((selector) => ({
   selector,
   message: "Import a module by a string literal so the import fences see it.",
@@ -180,3 +195,11 @@ export function fence(fenced, syntax) {
     ],
   };
 }
+
+// A block names the modules it may import and keeps the rest fenced, so an
+// override cannot drop a fence by leaving it out.
+export const fenceExcept = (allowed, syntax) =>
+  fence(
+    ALL_FENCED.filter((module) => !allowed.includes(module)),
+    syntax,
+  );
