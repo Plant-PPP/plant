@@ -24,24 +24,48 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
   );
 }
 
-// Set by proxy.ts on the forwarded request when Auth could not refresh the
-// session, so server code throws instead of refreshing again.
+// Set by proxy.ts on the forwarded request when it could not use the session,
+// so server code throws instead of refreshing again. Its value is the reason,
+// which is also the outcome both sides log: Auth could not refresh it, or the
+// token lacks the MFA claim because the access token hook is off.
 export const AUTH_UNAVAILABLE_HEADER = "x-plant-auth";
 
-const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError";
+const REASONS = ["auth_unavailable", "mfa_claim_missing"] as const;
+export type AuthUnavailableReason = (typeof REASONS)[number];
+
+function toReason(value: unknown): AuthUnavailableReason {
+  return REASONS.find((reason) => reason === value) ?? "auth_unavailable";
+}
+
+// The reason proxy.ts recorded, or null when it found the session usable.
+// Outside the proxy's matcher the header is whatever the client sent, so any
+// value it does not know reads as auth_unavailable.
+export function unavailableReason(
+  headers: Headers,
+): AuthUnavailableReason | null {
+  const value = headers.get(AUTH_UNAVAILABLE_HEADER);
+  return value === null ? null : toReason(value);
+}
+
+export const AUTH_UNAVAILABLE_ERROR = "AuthUnavailableError";
 
 export class AuthUnavailableError extends Error {
   override readonly name = AUTH_UNAVAILABLE_ERROR;
 
-  constructor() {
+  constructor(readonly reason: AuthUnavailableReason = "auth_unavailable") {
     super("Auth unavailable");
   }
 }
 
-// By name, not instanceof: the instrumentation hook and the pages are built as
-// separate bundles, which need not share the class.
-export function isAuthUnavailable(
+// The reason an AuthUnavailableError carries, or null for any other error. By
+// name, not instanceof: the instrumentation hook and the pages are built as
+// separate bundles, which need not share the class, so the reason is checked
+// too.
+export function authUnavailableReason(
   error: unknown,
-): error is AuthUnavailableError {
-  return error instanceof Error && error.name === AUTH_UNAVAILABLE_ERROR;
+): AuthUnavailableReason | null {
+  if (!(error instanceof Error) || error.name !== AUTH_UNAVAILABLE_ERROR) {
+    return null;
+  }
+  return toReason((error as { reason?: unknown }).reason);
 }

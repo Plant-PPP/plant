@@ -28,7 +28,8 @@ SELECT throws_ok(
 );
 
 SELECT set_config('request.jwt.claims',
-  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated')::text, true);
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
 SET LOCAL ROLE authenticated;
 
 SELECT throws_ok(

@@ -4,9 +4,14 @@ import {
   isPublicPath,
   LOGIN_PATH,
   loginPath,
+  MFA_PATH,
+  mfaPath,
 } from "@/lib/auth/routes";
 import { loginErrorMessage } from "@/lib/auth/login-errors";
+import { mfaRequirement } from "@/lib/auth/mfa-rules";
 import {
+  AUTH_UNAVAILABLE_HEADER,
+  type AuthUnavailableReason,
   isSessionMissing,
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
@@ -22,13 +27,14 @@ import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
 } from "@/lib/request-id";
+import { isUnder } from "@/lib/paths";
 import { supabaseEnv, supabaseOrigins } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/proxy";
 
 // Every page gets a CSP with a fresh nonce and a request id. Both go on the
 // request too: Next reads the nonce from the request's CSP and stamps its
 // own scripts, and the root layout passes it to next-themes. `set` replaces
-// any copy the client sent.
+// any copy the client sent, and the client's own x-plant-auth is dropped.
 export async function proxy(request: NextRequest) {
   const nonce = createNonce();
   const requestId = createRequestId();
@@ -50,6 +56,7 @@ export async function proxy(request: NextRequest) {
     request.headers.set(CSP_HEADER, csp);
     request.headers.set(NONCE_HEADER, nonce);
     request.headers.set(REQUEST_ID_HEADER, requestId);
+    request.headers.delete(AUTH_UNAVAILABLE_HEADER);
 
     const session = await sessionResponse(request);
     session.response.headers.set(CSP_HEADER, csp);
@@ -78,7 +85,9 @@ type SessionOutcome =
   | "redirect_signed_in"
   | "anonymous"
   | "redirect_login"
-  | "auth_unavailable";
+  | "redirect_mfa"
+  | "mfa_required"
+  | AuthUnavailableReason;
 
 const LOG_LEVEL = {
   no_auth_config: "error",
@@ -86,7 +95,10 @@ const LOG_LEVEL = {
   redirect_signed_in: "info",
   anonymous: "info",
   redirect_login: "info",
+  redirect_mfa: "info",
+  mfa_required: "info",
   auth_unavailable: "warn",
+  mfa_claim_missing: "error",
 } as const satisfies Record<SessionOutcome, LogLevel>;
 
 type SessionResult = {
@@ -97,10 +109,12 @@ type SessionResult = {
   authError?: MaybeAuthError;
 };
 
-// `error.type` only when the session could not be checked: a missing or
-// broken session is the proxy doing its job, and its code is the reason.
+// `error.type` only when the session could not be checked or used: a missing
+// or broken session is the proxy doing its job, and its code is the reason.
 function authFields({ outcome, authError }: SessionResult): LogFields {
-  if (outcome === "no_auth_config") return { "error.type": outcome };
+  if (outcome === "no_auth_config" || outcome === "mfa_claim_missing") {
+    return { "error.type": outcome };
+  }
   const code = errorType(authError);
   return outcome === "auth_unavailable"
     ? { "error.type": code }
@@ -126,9 +140,38 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
     authDurationMs: Math.round(performance.now() - started),
     authError: session.error,
   };
+  const unavailable = (reason: AuthUnavailableReason) => ({
+    response: session.unavailable(reason),
+    outcome: reason,
+  });
 
   if (session.claims) {
     const signedIn = { ...timing, userId: session.claims.sub };
+    // /login and the callback keep their own handling below: the callback
+    // finishes a sign-in, and /login sends a signed-in user on.
+    if (!isPublicPath(pathname)) {
+      const mfa = mfaRequirement(session.claims);
+      // The access token hook is off, so this token cannot say whether the
+      // user has a factor, and the database refuses it below aal2.
+      if (mfa === "claim_missing") {
+        return { ...signedIn, ...unavailable("mfa_claim_missing") };
+      }
+      if (mfa === "verify") {
+        return isUnder(MFA_PATH, pathname)
+          ? {
+              ...signedIn,
+              response: session.response(),
+              outcome: "mfa_required",
+            }
+          : {
+              ...signedIn,
+              response: session.redirect(
+                new URL(mfaPath(pathname + search), request.url),
+              ),
+              outcome: "redirect_mfa",
+            };
+      }
+    }
     // A signed-in user on /login goes where they were headed, unless /login
     // is showing a sign-in error.
     if (
@@ -161,11 +204,7 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
 
   // Auth is unavailable (rate limit, conflict, outage, timeout): a failed
   // refresh deletes no cookie, and the page shows the retry.
-  return {
-    ...timing,
-    response: session.unavailable(),
-    outcome: "auth_unavailable",
-  };
+  return { ...timing, ...unavailable("auth_unavailable") };
 }
 
 export const config = {

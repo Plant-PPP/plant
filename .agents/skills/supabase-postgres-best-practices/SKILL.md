@@ -64,7 +64,9 @@ conventions win:
 
 - **Single-user ownership, no organizations or teams.** Every owned table has `user_id uuid not null
   references auth.users`, and its policy pins `user_id = (select auth.uid())` in BOTH `using` and
-  `with check`, `to authenticated`. Index `user_id`.
+  `with check`, `to authenticated`. Index `user_id`. Every `public` table also gets the RESTRICTIVE
+  MFA gate, copied from the house form in `.agents/skills/enforce-owner-isolation/SKILL.md` (the
+  pgTAP floor compares its text).
 - **Grants are explicit.** `authenticated` gets only the operations the app uses; `anon` gets
   nothing. Functions get `revoke all ... from public, anon, authenticated` before any targeted grant
   (on Supabase, `from public` alone leaves the default per-role grants standing).

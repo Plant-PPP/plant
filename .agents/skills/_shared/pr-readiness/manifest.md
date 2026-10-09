@@ -64,7 +64,7 @@ pgTAP suite in `supabase/tests` and `pnpm test:security` pass, and regenerating 
 leaves no uncommitted diff, and `bash scripts/check-migrations.sh origin/staging` (name, order,
 atomicity, squawk) passes. Run the `enforce-owner-isolation` lens over every policy/grant/function
 the migration adds or changes (RLS `user_id = (select auth.uid())` in both `USING` and `WITH CHECK`,
-explicit grants to `authenticated` only, nothing to `anon`, `SECURITY DEFINER` with `SET search_path`).
+the MFA gate on every `public` table, explicit grants to `authenticated` only, nothing to `anon`, `SECURITY DEFINER` with `SET search_path`).
 For a new index/FK/RLS/query, also Read the relevant reference file(s) under
 `.agents/skills/supabase-postgres-best-practices/` (the index plus only the matched `references/*.md`), and apply any generic PG-perf finding — additive to the defect catalog.
 

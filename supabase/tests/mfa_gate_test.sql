@@ -1,9 +1,10 @@
 -- The MFA rule over its truth table: a user with a verified factor needs an
 -- aal2 session. A token's mfa_enrolled claim says whether the user has one,
--- and a token without the claim counts as enrolled. Here the access token hook
--- runs on each row that carries the claim: it adds the claim and gives the role
--- the row expects. The hook always adds the claim, so the rows without it
--- describe tokens minted before the hook was on.
+-- and a token without the claim counts as enrolled. The access token hook runs
+-- on each row that carries the claim: it adds the claim and gives the role the
+-- row expects. The hook always adds the claim, so the rows without it describe
+-- tokens minted before the hook was on. The RESTRICTIVE policy runs on every
+-- row, and apps/web's mfa-rules.test.ts reads the same rows.
 --
 -- Run with: pnpm exec supabase test db --local
 
@@ -29,7 +30,7 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
   (NULL, NULL, 'verify');
 -- truth-table:end
 
-SELECT plan((SELECT count(*) FROM truth WHERE mfa_enrolled IS NOT NULL)::int + 4);
+SELECT plan((SELECT count(*) + count(mfa_enrolled) FROM truth)::int + 6);
 
 SELECT bag_eq(
   $$SELECT aal, mfa_enrolled FROM truth$$,
@@ -120,6 +121,121 @@ SELECT is(
   )->'claims') - 'sub'::text - 'aal'::text,
   '{"role": "authenticated_aal1", "mfa_enrolled": true}'::jsonb,
   'a verified factor of any type demotes an aal1 token'
+);
+
+-- The policy, as authenticated with each row's claims: a met session reads,
+-- updates and adds its own rows; any other reads nothing, updates nothing and
+-- is refused on insert. Ena has an AI cost row and her profile; her verified
+-- factor does not matter here, only the claims do.
+INSERT INTO public.ai_costs (user_id, cost_type, model_id, amount_usd, input_tokens,
+                             cache_read_tokens, cache_write_tokens, output_tokens)
+VALUES ('e0000000-0000-4000-8000-00000000000e', 'import_extraction', 'model', 0, 1, 0, 0, 1);
+
+CREATE TEMP TABLE gated (aal text, mfa_enrolled boolean, expected text, observed jsonb)
+  ON COMMIT DROP;
+DO $$
+DECLARE
+  t record;
+  n int := 0;
+  reads_profile boolean;
+  consent text;
+  reads_costs boolean;
+BEGIN
+  FOR t IN SELECT * FROM truth ORDER BY aal NULLS LAST, mfa_enrolled NULLS LAST LOOP
+    n := n + 1;
+    PERFORM set_config('request.jwt.claims', jsonb_strip_nulls(jsonb_build_object(
+      'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
+      'aal', t.aal, 'mfa_enrolled', t.mfa_enrolled))::text, true);
+    SET LOCAL ROLE authenticated;
+    reads_profile := EXISTS (SELECT 1 FROM public.profiles);
+    UPDATE public.profiles SET display_name = 'row ' || n;
+    BEGIN
+      INSERT INTO public.consents (kind, version, granted) VALUES ('terms', 'row ' || n, true);
+      consent := 'added';
+    EXCEPTION WHEN insufficient_privilege THEN
+      consent := SQLERRM;
+    END;
+    reads_costs := EXISTS (SELECT 1 FROM public.ai_costs);
+    RESET ROLE;
+    INSERT INTO gated VALUES (t.aal, t.mfa_enrolled, t.expected, jsonb_build_object(
+      'reads its profile', reads_profile,
+      'updates its profile', (SELECT display_name IS NOT DISTINCT FROM 'row ' || n FROM public.profiles
+                              WHERE user_id = 'e0000000-0000-4000-8000-00000000000e'),
+      'adds a consent', consent,
+      'reads its AI costs', reads_costs));
+  END LOOP;
+END
+$$;
+
+SELECT is(
+  observed,
+  CASE expected
+    WHEN 'met' THEN '{"reads its profile": true, "updates its profile": true,
+                      "adds a consent": "added", "reads its AI costs": true}'::jsonb
+    ELSE '{"reads its profile": false, "updates its profile": false,
+           "adds a consent": "new row violates row-level security policy \"Requires two-factor authentication\" for table \"consents\"",
+           "reads its AI costs": false}'::jsonb
+  END,
+  format('aal %s, claim %s: the policy %s', COALESCE(aal, 'absent'),
+         COALESCE(mfa_enrolled::text, 'absent'),
+         CASE expected WHEN 'met' THEN 'lets the session use its rows' ELSE 'shuts the session out' END)
+)
+FROM gated
+ORDER BY aal NULLS LAST, mfa_enrolled NULLS LAST;
+
+-- The policy compares the claim as JSON, so a claim that is not a JSON
+-- boolean counts as missing, as mfaRequirement treats it. The JSON false is
+-- the control: the same session with it reads its profile.
+CREATE TEMP TABLE odd_claims (claim jsonb, reads boolean) ON COMMIT DROP;
+DO $$
+DECLARE
+  claim jsonb;
+  reads boolean;
+BEGIN
+  FOREACH claim IN ARRAY ARRAY['false', '"true"', '"false"', '1', '0', 'null']::jsonb[] LOOP
+    PERFORM set_config('request.jwt.claims', jsonb_build_object(
+      'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
+      'aal', 'aal1', 'mfa_enrolled', claim)::text, true);
+    SET LOCAL ROLE authenticated;
+    reads := EXISTS (SELECT 1 FROM public.profiles);
+    RESET ROLE;
+    INSERT INTO odd_claims VALUES (claim, reads);
+  END LOOP;
+END
+$$;
+
+SELECT set_eq(
+  $$SELECT claim::text, reads FROM odd_claims$$,
+  $$VALUES ('false', true), ('"true"', false), ('"false"', false), ('1', false),
+           ('0', false), ('null', false)$$,
+  'an aal1 session whose claim is not a JSON boolean reads nothing'
+);
+
+-- Only the exact string aal2 counts as verified, as mfaRequirement compares
+-- it. aal2 is the control: the same enrolled session with it reads its profile.
+CREATE TEMP TABLE odd_aals (aal jsonb, reads boolean) ON COMMIT DROP;
+DO $$
+DECLARE
+  aal jsonb;
+  reads boolean;
+BEGIN
+  FOREACH aal IN ARRAY ARRAY['"aal2"', '"aal3"', '"AAL2"', '"aal2 "', '2']::jsonb[] LOOP
+    PERFORM set_config('request.jwt.claims', jsonb_build_object(
+      'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
+      'aal', aal, 'mfa_enrolled', true)::text, true);
+    SET LOCAL ROLE authenticated;
+    reads := EXISTS (SELECT 1 FROM public.profiles);
+    RESET ROLE;
+    INSERT INTO odd_aals VALUES (aal, reads);
+  END LOOP;
+END
+$$;
+
+SELECT set_eq(
+  $$SELECT aal::text, reads FROM odd_aals$$,
+  $$VALUES ('"aal2"', true), ('"aal3"', false), ('"AAL2"', false), ('"aal2 "', false),
+           ('2', false)$$,
+  'an enrolled session whose aal is not exactly aal2 reads nothing'
 );
 
 SELECT * FROM finish();
