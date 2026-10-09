@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { StatusNotice } from "@/components/ui/status-notice";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -128,11 +129,7 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
             onDone={closePanel}
           />
         )}
-        {notice && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {notice}
-          </p>
-        )}
+        <StatusNotice>{notice}</StatusNotice>
       </CardContent>
     </Card>
   );

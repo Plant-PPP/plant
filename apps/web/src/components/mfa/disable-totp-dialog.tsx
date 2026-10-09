@@ -1,5 +1,6 @@
 "use client";
 
+import { unstable_rethrow } from "next/navigation";
 import { useId, useState } from "react";
 import { type DisableResult, disableTotp } from "@/app/(app)/settings/actions";
 import { CONFIRM_DISABLE_PATH } from "@/components/settings/two-factor-status";
@@ -106,7 +107,8 @@ export function DisableTotpDialog({
     let result: DisableResult;
     try {
       result = await disableTotp(factorId);
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       setPending(false);
       setError(RETRY);
       return;

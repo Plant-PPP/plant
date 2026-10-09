@@ -10,20 +10,19 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
+// Open while mounted: a caller mounts it to open it.
 function AppSheet({
-  open,
   onOpenChange,
   title,
   description,
   returnFocusTo,
   children,
 }: {
-  open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  // Where focus goes on close, for a sheet whose save removes the element
-  // that opened it.
+  // Where focus goes on close instead of the element that opened the sheet,
+  // when it returns one.
   returnFocusTo?: () => HTMLElement | null;
   children: React.ReactNode;
 }) {
@@ -35,13 +34,13 @@ function AppSheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open onOpenChange={onOpenChange}>
       <SheetContent
         data-slot="app-sheet"
         className="w-full gap-0 sm:max-w-md"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          const target = returnFocusTo ? returnFocusTo() : opener;
+          const target = returnFocusTo?.() ?? opener;
           if (target instanceof HTMLElement && target.isConnected) {
             target.focus();
           }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { AppSheet } from "@/components/ui/app-sheet";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
@@ -20,37 +20,44 @@ export function NameSheet({
   defaultValue = "",
   returnFocusTo,
   onSubmit,
+  onSaved,
 }: {
   onClose: () => void;
   title: string;
   description: string;
   submitLabel: string;
   defaultValue?: string;
+  // Where focus goes once the name is saved; a cancel returns it to the
+  // opener.
   returnFocusTo?: () => HTMLElement | null;
   onSubmit: (name: string) => Promise<WriteResult>;
+  onSaved: (name: string) => void;
 }) {
   const inputId = useId();
   const alertId = useId();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
+  const saved = useRef(false);
 
   function submit(form: HTMLFormElement) {
     const name = String(new FormData(form).get("name") ?? "");
     setError(undefined);
     startTransition(async () => {
       const answer = sheetAnswer(await settle(onSubmit(name)));
-      if (answer.kind === "done") onClose();
-      else setError(answer.text);
+      if (answer.kind === "done") {
+        saved.current = true;
+        onSaved(name.trim());
+        onClose();
+      } else setError(answer.text);
     });
   }
 
   return (
     <AppSheet
-      open
       onOpenChange={(open) => !open && !pending && onClose()}
       title={title}
       description={description}
-      returnFocusTo={returnFocusTo}
+      returnFocusTo={() => (saved.current ? (returnFocusTo?.() ?? null) : null)}
     >
       <form
         className="flex flex-1 flex-col"

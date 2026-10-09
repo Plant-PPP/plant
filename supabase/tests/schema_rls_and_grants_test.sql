@@ -141,9 +141,9 @@ SELECT is_empty(
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
-       AND p.prosecdef
+       AND (p.prosecdef OR p.pronamespace = 'private'::regnamespace)
        AND NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) cfg WHERE cfg LIKE 'search_path=%') $$,
-  'every SECURITY DEFINER function sets its search_path'
+  'every SECURITY DEFINER function, and every function in private, sets its search_path'
 );
 
 -- Compared as text: this is pg_get_expr's rendering of

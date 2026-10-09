@@ -5,11 +5,15 @@ import { z } from "zod";
 // the next page would repeat or skip rows.
 export type Keyset = { at: string; id: string };
 
-// Postgres refuses the year 0 and an offset beyond ±15:59, which ISO allows.
+// Postgres refuses the year 0, an offset beyond ±15:59 and a long enough
+// fraction, which ISO allows. PostgREST writes at most microseconds.
 const timestampSchema = z.iso
   .datetime({ offset: true })
   .refine(
-    (at) => !at.startsWith("0000") && !/[+-](1[6-9]|2\d):\d{2}$/.test(at),
+    (at) =>
+      !at.startsWith("0000") &&
+      !/[+-](1[6-9]|2\d):\d{2}$/.test(at) &&
+      !/\.\d{7}/.test(at),
   );
 
 const keysetSchema = z.tuple([timestampSchema, z.uuid()]);

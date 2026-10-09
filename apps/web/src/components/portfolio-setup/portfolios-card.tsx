@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FormAlert } from "@/components/ui/form-alert";
+import { StatusNotice } from "@/components/ui/status-notice";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
 import { rowAnswer, settle } from "./answers";
@@ -50,8 +51,8 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
     setSheet(next);
   }
 
-  // The row's buttons stay focusable while pending (aria-disabled), so a
-  // keyboard user keeps their place when the action is refused.
+  // The row's buttons are aria-disabled while pending, not disabled: a
+  // disabled button drops its focus to the page.
   function rowAction(row: PortfolioRow, action: "archive" | "restore") {
     if (pending) return;
     setAlert(undefined);
@@ -62,12 +63,16 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           ? archivePortfolio(row.id)
           : restorePortfolio(row.id);
       const answer = rowAnswer(await settle(call), action);
-      if (answer.kind === "alert") setAlert(answer.text);
+      // A done row moved to the other list and an alert shows above both, so
+      // focus goes to the heading right above the alert or the notice.
+      if (answer.kind === "alert") {
+        setAlert(answer.text);
+        heading.current?.focus();
+      }
       if (answer.kind === "done") {
         setNotice(
           `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}.`,
         );
-        // The row moved to the other list, taking the focused button with it.
         heading.current?.focus();
       }
       // Defensive: the openers ignore clicks while an action is pending.
@@ -99,12 +104,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
       </CardHeader>
       <CardContent className="grid gap-4 pt-6">
         {alert && <FormAlert>{alert}</FormAlert>}
-        <p
-          role="status"
-          className={notice ? "text-sm text-muted-foreground" : "sr-only"}
-        >
-          {notice}
-        </p>
+        <StatusNotice>{notice}</StatusNotice>
         <ul className="divide-y rounded-md border">
           {view.active.map((row) => (
             <li
@@ -210,6 +210,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           description="Elegí un nombre para la cartera."
           submitLabel="Crear"
           onSubmit={(name) => createPortfolio({ name })}
+          onSaved={(name) => setNotice(`Creaste ${name}.`)}
         />
       )}
       {sheet?.kind === "rename" && (
@@ -221,6 +222,9 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           submitLabel="Guardar"
           defaultValue={sheet.row.name}
           onSubmit={(name) => renamePortfolio(sheet.row.id, { name })}
+          onSaved={(name) =>
+            setNotice(`Renombraste ${sheet.row.name} a ${name}.`)
+          }
         />
       )}
       {sheet?.kind === "restore" && (
@@ -233,6 +237,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           submitLabel="Restaurar"
           defaultValue={sheet.row.name}
           onSubmit={(name) => restorePortfolio(sheet.row.id, { name })}
+          onSaved={(name) => setNotice(`Restauraste ${name}.`)}
         />
       )}
     </Card>

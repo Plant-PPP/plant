@@ -50,6 +50,9 @@ describe("nameInputSchema", () => {
     "Principal\u{e0100}",
     "Principal\u{e0061}",
     "a\u200cb",
+    "\u{1D159}",
+    "Principal\u{1D159}",
+    "Principal\u{16FE4}",
   ])("refuses %j", (name) => {
     expect(schema.safeParse({ name }).success).toBe(false);
   });
@@ -63,6 +66,15 @@ describe("nameInputSchema", () => {
     "🇦🇷",
   ])("keeps the emoji %j", (name) => {
     expect(schema.safeParse({ name }).success).toBe(true);
+  });
+
+  test("drops the variation selector after an emoji shown as one", () => {
+    expect(schema.parse({ name: "Ahorro \u{1F44D}\ufe0f" })).toEqual({
+      name: "Ahorro \u{1F44D}",
+    });
+    expect(schema.parse({ name: "Ahorro \u2764\ufe0f" })).toEqual({
+      name: "Ahorro \u2764\ufe0f",
+    });
   });
 
   test("collapses spaces before counting the limit", () => {
