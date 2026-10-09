@@ -574,13 +574,42 @@ describe("the MFA check", () => {
     });
   });
 
+  it("keeps the refreshed session on the way to the MFA step", async () => {
+    getClaims = async ({ setAll }) => {
+      setAll(
+        [{ name: "sb-x-auth-token", value: "new", options: {} }],
+        CACHE_HEADERS,
+      );
+      return {
+        data: { claims: { ...CLAIMS, mfa_enrolled: true } },
+        error: null,
+      };
+    };
+    const res = await proxy(
+      request("/assets", { cookie: "sb-x-auth-token=old" }),
+    );
+    expect(res.headers.get("location")).toBe(
+      "http://localhost:3000/auth/mfa?next=%2Fassets",
+    );
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+  });
+
   it.each([
-    ["/login", "http://localhost:3000/"],
-    ["/auth/callback?code=c", null],
-  ])("leaves %s to its own handling", async (path, location) => {
-    getClaims = unverified;
+    ["/login", "an unverified session", "http://localhost:3000/"],
+    ["/auth/callback?code=c", "an unverified session", null],
+    ["/login", "a token without the claim", "http://localhost:3000/"],
+    ["/auth/callback?code=c", "a token without the claim", null],
+  ])("leaves %s to its own handling for %s", async (path, label, location) => {
+    getClaims =
+      label === "an unverified session"
+        ? unverified
+        : async () => ({
+            data: { claims: { sub: "u", aal: "aal1" } },
+            error: null,
+          });
     const res = await proxy(request(path));
     expect(res.headers.get("location")).toBe(location);
+    expect(forwarded(res, "x-plant-auth")).toBeNull();
   });
 
   it.each([

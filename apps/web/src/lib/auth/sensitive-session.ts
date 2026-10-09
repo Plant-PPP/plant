@@ -14,7 +14,7 @@ export type SensitiveAction = "export" | "delete_account" | "change_email";
 declare const checked: unique symbol;
 
 // Proof that requireSensitiveSession let this request through: an action that
-// needs it takes one, so it cannot run without the check.
+// takes one cannot be called without the check, short of a cast.
 export type SensitiveSession = {
   readonly userId: string;
   readonly [checked]: true;
@@ -25,8 +25,8 @@ export type SensitiveAnswer =
   | { ok: false; stepUp: "sign_in_again" };
 
 // Called by the server action, or the code that enqueues the job, behind an
-// export, an account deletion or an email change. On sign_in_again the UI asks
-// the user to sign in again.
+// export (PLA-58), an account deletion (PLA-84) or an email change. On
+// sign_in_again their UI asks the user to sign in again.
 export async function requireSensitiveSession(
   action: SensitiveAction,
 ): Promise<SensitiveAnswer> {

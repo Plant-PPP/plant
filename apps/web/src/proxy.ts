@@ -10,6 +10,7 @@ import {
 import { loginErrorMessage } from "@/lib/auth/login-errors";
 import { mfaRequirement } from "@/lib/auth/mfa-rules";
 import {
+  type AuthUnavailableReason,
   isSessionMissing,
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
@@ -84,8 +85,7 @@ type SessionOutcome =
   | "redirect_login"
   | "redirect_mfa"
   | "mfa_required"
-  | "auth_unavailable"
-  | "mfa_claim_missing";
+  | AuthUnavailableReason;
 
 const LOG_LEVEL = {
   no_auth_config: "error",
@@ -138,6 +138,11 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
     authDurationMs: Math.round(performance.now() - started),
     authError: session.error,
   };
+  // The header the page reads and the logged outcome are the same value.
+  const unavailable = (reason: AuthUnavailableReason) => ({
+    response: session.unavailable(reason),
+    outcome: reason,
+  });
 
   if (session.claims) {
     const signedIn = { ...timing, userId: session.claims.sub };
@@ -148,11 +153,7 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
       // The access token hook is off, so this token cannot say whether the
       // user has a factor, and the database refuses it below aal2.
       if (mfa === "claim_missing") {
-        return {
-          ...signedIn,
-          response: session.unavailable("mfa_claim_missing"),
-          outcome: "mfa_claim_missing",
-        };
+        return { ...signedIn, ...unavailable("mfa_claim_missing") };
       }
       if (mfa === "verify") {
         return isUnder(MFA_PATH, pathname)
@@ -202,11 +203,7 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
 
   // Auth is unavailable (rate limit, conflict, outage, timeout): a failed
   // refresh deletes no cookie, and the page shows the retry.
-  return {
-    ...timing,
-    response: session.unavailable("auth_unavailable"),
-    outcome: "auth_unavailable",
-  };
+  return { ...timing, ...unavailable("auth_unavailable") };
 }
 
 export const config = {

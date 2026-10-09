@@ -17,15 +17,15 @@ import {
 // itself: the (app) layout's call only guards the UI.
 export const getSessionClaims = cache(async () => {
   // proxy.ts already failed to refresh, or found the token without the MFA
-  // claim. A second attempt in a route handler or server action would delete
-  // the session cookies on the same failure.
+  // claim. After a failed refresh, a second attempt in a route handler or
+  // server action would delete the session cookies on the same failure.
   const reason = unavailableReason(await headers());
   if (reason) throw new AuthUnavailableError(reason);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   if (data?.claims) {
     // The proxy already redirected or flagged these; this covers routes
-    // outside its matcher and a token refreshed between the two.
+    // outside its matcher.
     const requirement = mfaRequirement(data.claims);
     if (requirement === "verify") redirect(MFA_PATH);
     if (requirement === "claim_missing") {
