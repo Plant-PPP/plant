@@ -179,10 +179,11 @@ describe("quoteFeeds", () => {
 
   // Invented answers in each provider's shape, all dated today.
   const answer = (url: string): unknown => {
-    if (url.includes("dolarapi.com")) {
+    const { hostname } = new URL(url);
+    if (hostname === "dolarapi.com") {
       return { compra: 1, venta: 2, fechaActualizacion: NOW.toISOString() };
     }
-    if (url.includes("argentinadatos.com")) {
+    if (hostname === "api.argentinadatos.com") {
       return [{ fecha: "2026-10-09", valor: 1603.33 }];
     }
     return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
