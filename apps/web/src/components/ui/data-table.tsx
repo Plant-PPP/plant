@@ -42,10 +42,14 @@ function slot<P extends object>(
   return typeof template === "function" ? template(props) : template;
 }
 
-// Rows in the order given. The column with no `size` takes the width the
+// A row of a DataTable. `unsaved` marks a row the page shows before the
+// server has confirmed it.
+type DataTableRow = { id: string; unsaved?: true };
+
+// Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
 // the table's width with `@`-variants.
-function DataTable<T extends { id: string }>({
+function DataTable<T extends DataTableRow>({
   columns,
   data,
   caption,
@@ -93,7 +97,12 @@ function DataTable<T extends { id: string }>({
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow
+              key={row.id}
+              data-row-id={row.id}
+              aria-busy={row.original.unsaved || undefined}
+              className={row.original.unsaved ? "opacity-60" : undefined}
+            >
               {row.getVisibleCells().map((cell) => (
                 <TableCell
                   key={cell.id}
@@ -147,6 +156,7 @@ function actionsColumn<T>(
         {actions.map((action) => (
           <IconButton
             key={action.id}
+            actionId={action.id}
             icon={action.icon}
             tooltip={action.tooltip}
             label={action.label(row.original)}
@@ -159,4 +169,22 @@ function actionsColumn<T>(
   };
 }
 
-export { DataTable, TruncatedText, actionsColumn };
+// A row's action button, found by the row and action ids `actionsColumn`
+// renders, so focus can return to it when the row comes back.
+function rowActionButton(
+  root: ParentNode,
+  rowId: string,
+  actionId: string,
+): HTMLElement | null {
+  return root.querySelector<HTMLElement>(
+    `tr[data-row-id="${CSS.escape(rowId)}"] [data-action="${CSS.escape(actionId)}"]`,
+  );
+}
+
+export {
+  DataTable,
+  type DataTableRow,
+  TruncatedText,
+  actionsColumn,
+  rowActionButton,
+};

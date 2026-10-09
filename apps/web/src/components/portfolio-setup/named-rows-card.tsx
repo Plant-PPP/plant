@@ -2,24 +2,26 @@
 
 import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type WriteMessages, rowAnswer } from "./answers";
+import { type ListChange, temporaryId } from "./list-change";
 import { NameDialog } from "./name-dialog";
 import {
   ActiveList,
   ArchivedList,
+  type Retry,
   SetupCard,
   useSetupCard,
 } from "./setup-card";
+import type { SetupRun } from "./setup-actions";
 
 type DialogState =
-  | { kind: "create" }
-  | { kind: "rename"; row: NamedRow }
-  | { kind: "restore"; row: NamedRow };
+  | ({ kind: "create" } & Retry<string>)
+  | ({ kind: "rename"; row: NamedRow } & Retry<string>)
+  | ({ kind: "restore"; row: NamedRow } & Retry<string>);
 
 type DialogCopy = { title: string; description: string };
 
@@ -56,29 +58,42 @@ const DATA_COLUMNS: ColumnDef<NamedRow>[] = [
 
 // A card of rows that are only a name: create, rename, archive and restore.
 export function NamedRowsCard({
+  list,
   view,
+  pending,
+  run,
   copy,
   actions,
   messages,
   usedBy,
 }: {
+  list: "portfolios" | "holders";
   view: ListView<NamedRow>;
+  pending: boolean;
+  run: SetupRun;
   copy: NamedRowsCopy;
   actions: NamedRowsActions;
   messages: WriteMessages;
   // How the active accounts that use a row are named.
   usedBy: (id: string) => string[];
 }) {
-  const card = useSetupCard();
+  const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
 
   function openDialog(next: DialogState) {
-    if (card.pending) return;
+    if (pending) return;
     setDialog(next);
   }
 
   function rowAction(row: NamedRow, action: "archive" | "restore") {
     card.rowAction(
+      {
+        list,
+        change:
+          action === "archive"
+            ? { kind: "archive", id: row.id }
+            : { kind: "restore", row },
+      },
       () =>
         action === "archive"
           ? actions.archive(row.id)
@@ -86,16 +101,31 @@ export function NamedRowsCard({
       (result) => rowAnswer(result, action, messages, usedBy(row.id)),
       {
         done: `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}`,
-        // Defensive: the openers ignore clicks while an action is pending.
-        askName: () => setDialog((open) => open ?? { kind: "restore", row }),
+        rowId: row.id,
+        actionId: action,
+        askName: () => setDialog({ kind: "restore", row }),
       },
     );
+  }
+
+  function submit(
+    dialog: DialogState,
+    name: string,
+    change: ListChange<NamedRow>,
+    call: () => Promise<WriteResult>,
+    done: string,
+  ): boolean {
+    return card.dialogAction({ list, change }, call, messages, {
+      done,
+      reopen: (error) =>
+        setDialog({ ...dialog, initial: name, initialError: error }),
+    });
   }
 
   return (
     <SetupCard
       heading={card.heading}
-      pending={card.pending}
+      pending={pending}
       title={copy.title}
       description={copy.description}
       addLabel={copy.addLabel}
@@ -125,7 +155,7 @@ export function NamedRowsCard({
                 onClick: (row) => rowAction(row, "archive"),
               },
             ],
-            { pending: card.pending },
+            { pending },
           ),
         ]}
       />
@@ -135,6 +165,7 @@ export function NamedRowsCard({
         label={copy.archivedLabel}
         emptyText={copy.noMoreArchived}
         firstPageLabel={copy.firstPageLabel}
+        pending={pending}
         columns={[
           ...DATA_COLUMNS,
           actionsColumn<NamedRow>(
@@ -147,7 +178,7 @@ export function NamedRowsCard({
                 onClick: (row) => rowAction(row, "restore"),
               },
             ],
-            { pending: card.pending },
+            { pending },
           ),
         ]}
       />
@@ -158,9 +189,18 @@ export function NamedRowsCard({
           title={copy.createDialog.title}
           description={copy.createDialog.description}
           submitLabel="Crear"
-          messages={messages}
-          onSubmit={(name) => actions.create({ name })}
-          onSaved={(name) => toast.success(`Creaste ${name}`)}
+          initial={dialog.initial}
+          initialError={dialog.initialError}
+          blankError={messages.invalid}
+          onSubmit={(name) =>
+            submit(
+              dialog,
+              name,
+              { kind: "create", row: { id: temporaryId(), name } },
+              () => actions.create({ name }),
+              `Creaste ${name}`,
+            )
+          }
         />
       )}
       {dialog?.kind === "rename" && (
@@ -171,12 +211,21 @@ export function NamedRowsCard({
           title={copy.renameDialog.title}
           description={copy.renameDialog.description}
           submitLabel="Guardar"
-          defaultValue={dialog.row.name}
-          messages={messages}
-          onSubmit={(name) => actions.rename(dialog.row.id, { name })}
-          onSaved={(name) =>
-            name !== dialog.row.name &&
-            toast.success(`Renombraste ${dialog.row.name} a ${name}`)
+          initial={dialog.initial ?? dialog.row.name}
+          initialError={dialog.initialError}
+          blankError={messages.invalid}
+          onSubmit={(name) =>
+            // The same name sends no write, so nothing reports a row archived
+            // from another tab meanwhile. A refused rename may have committed,
+            // so once reopened the old name is a real write.
+            (dialog.initialError === undefined && name === dialog.row.name) ||
+            submit(
+              dialog,
+              name,
+              { kind: "update", row: { ...dialog.row, name } },
+              () => actions.rename(dialog.row.id, { name }),
+              `Renombraste ${dialog.row.name} a ${name}`,
+            )
           }
         />
       )}
@@ -189,10 +238,18 @@ export function NamedRowsCard({
           title={copy.restoreDialog.title}
           description={copy.restoreDialog.description}
           submitLabel="Restaurar"
-          defaultValue={dialog.row.name}
-          messages={messages}
-          onSubmit={(name) => actions.restore(dialog.row.id, { name })}
-          onSaved={(name) => toast.success(`Restauraste ${name}`)}
+          initial={dialog.initial ?? dialog.row.name}
+          initialError={dialog.initialError}
+          blankError={messages.invalid}
+          onSubmit={(name) =>
+            submit(
+              dialog,
+              name,
+              { kind: "restore", row: { ...dialog.row, name } },
+              () => actions.restore(dialog.row.id, { name }),
+              `Restauraste ${name}`,
+            )
+          }
         />
       )}
     </SetupCard>

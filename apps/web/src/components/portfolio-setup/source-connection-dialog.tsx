@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  accountLabel,
   CHOICE_MESSAGES,
   SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
@@ -29,9 +28,6 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import { SELF_HOLDER } from "@/lib/portfolio-setup/schemas";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { settle } from "@/lib/server-action-call";
-import { dialogAnswer } from "./answers";
 import { NewHolderField } from "./new-holder-field";
 import { useSavedFocus } from "./saved-focus";
 import { PendingButton } from "@/components/ui/pending-button";
@@ -65,8 +61,9 @@ export type SourceConnectionFields = {
   defaultPortfolioId: string;
 };
 
-// The dialog's starting values. An archived holder or portfolio starts
-// unselected, so a restore makes the user choose an active one.
+// The dialog's starting values. An archived holder or portfolio is not among
+// the page's choices, so it starts unchosen (offeredChoices) and a restore
+// makes the user choose an active one.
 export function initialFields(
   row: SourceConnectionRow | null,
   portfolios: PortfolioRow[],
@@ -83,20 +80,48 @@ export function initialFields(
   }
   return {
     institution: row.institution,
-    holder: row.holder
-      ? row.holder.archived
-        ? ""
-        : row.holder.id
-      : SELF_HOLDER,
+    holder: row.holder?.id ?? SELF_HOLDER,
     includeInTaxReport: row.includeInTaxReport,
-    defaultPortfolioId: row.portfolio.archived ? "" : row.portfolio.id,
+    defaultPortfolioId: row.portfolio.id,
   };
 }
 
-// The select left unchosen, which a restore starts with when the account's
-// holder or portfolio was archived.
-export function missingChoice(
+type AccountField = "institution" | "holder" | "portfolio";
+
+const MESSAGES = WRITE_MESSAGES.source_connections;
+
+// The field a refused write's alert is about; none for an alert about the
+// write itself, such as a failed save.
+function refusedField(text: string): AccountField | null {
+  if (text === MESSAGES.invalid) return "institution";
+  if (text === MESSAGES.holder_archived) return "holder";
+  if (text === MESSAGES.portfolio_archived) return "portfolio";
+  return null;
+}
+
+// The holder and portfolio an account's fields chose, as the page lists them.
+export type ChosenRows = { holder: HolderRow | null; portfolio: PortfolioRow };
+
+// The row the fields describe, as the page shows it until the server's
+// refresh: inverse to initialFields.
+export function accountRow(
+  id: string,
   fields: SourceConnectionFields,
+  { holder, portfolio }: ChosenRows,
+): SourceConnectionRow {
+  return {
+    id,
+    institution: normalizeName(fields.institution),
+    includeInTaxReport: fields.includeInTaxReport,
+    holder: holder && { ...holder, archived: false },
+    portfolio: { ...portfolio, archived: false },
+  };
+}
+
+// The select the user left unchosen, or that offeredChoices unchose because
+// the page no longer lists the account's holder or portfolio.
+export function missingChoice(
+  fields: Pick<SourceConnectionFields, "holder" | "defaultPortfolioId">,
 ): "holder" | "portfolio" | undefined {
   if (fields.holder === "") return "holder";
   if (fields.defaultPortfolioId === "") return "portfolio";
@@ -138,34 +163,55 @@ export function pruneAdded(
   );
 }
 
-// Creates, edits or restores an account. A new holder can be added from the
-// dialog without leaving it: its field has no form of its own, so Enter there
-// saves the holder and never the account.
+// The holder and portfolio the dialog can submit: a choice the page no longer
+// offers, archived from another tab, is unchosen.
+function offeredChoices(
+  holder: string,
+  portfolio: string,
+  holderOptions: HolderRow[],
+  portfolios: PortfolioRow[],
+) {
+  return {
+    holder:
+      holder === SELF_HOLDER || holderOptions.some(({ id }) => id === holder)
+        ? holder
+        : "",
+    defaultPortfolioId: portfolios.some(({ id }) => id === portfolio)
+      ? portfolio
+      : "",
+  };
+}
+
+// Creates, edits or restores an account, handing its fields to `onSubmit` as
+// it closes; a refused write opens it again with the fields and the alert. A
+// new holder can be added from the dialog without leaving it: its field has no
+// form of its own, so Enter there saves the holder and never the account.
 export function SourceConnectionDialog({
   title,
   description,
   submitLabel,
   initial,
+  initialError,
   holders,
   portfolios,
   returnFocusTo,
   savedRemovesOpener = false,
   onClose,
   onSubmit,
-  onSaved,
 }: {
   title: string;
   description: string;
   submitLabel: string;
   initial: SourceConnectionFields;
+  initialError?: string;
   holders: HolderRow[];
   portfolios: PortfolioRow[];
   // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
   savedRemovesOpener?: boolean;
   onClose: () => void;
-  onSubmit: (fields: SourceConnectionFields) => Promise<WriteResult>;
-  onSaved: (label: string) => void;
+  // False when the write could not start; the dialog stays open.
+  onSubmit: (fields: SourceConnectionFields, chosen: ChosenRows) => boolean;
 }) {
   const ids = {
     institution: useId(),
@@ -188,16 +234,22 @@ export function SourceConnectionDialog({
   // after its field was closed only adds the holder, without choosing it.
   const [holderFieldKey, setHolderFieldKey] = useState(0);
   const openHolderField = useRef<number | null>(null);
-  const [error, setError] = useState<string>();
-  const [pending, startTransition] = useTransition();
+  const [alert, setAlert] = useState<
+    { text: string; field: AccountField | null } | undefined
+  >(() =>
+    initialError
+      ? { text: initialError, field: refusedField(initialError) }
+      : undefined,
+  );
+  // A reopened dialog starts on the field its alert is about.
+  const [firstField] = useState(() => alert?.field ?? "institution");
+  // A new holder still saving holds the dialog and its submit: the holder it
+  // saves may be the one the account picks.
   const [holderPending, setHolderPending] = useState(false);
   const institution = useRef<HTMLInputElement>(null);
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
-  // A new holder still saving holds the dialog and its submit: the holder it
-  // saves may be the one the account picks.
-  const busy = pending || holderPending;
 
   if (listed !== holders) {
     setListed(holders);
@@ -221,59 +273,66 @@ export function SourceConnectionDialog({
     setAdded((rows) => [...rows, row]);
     if (openHolderField.current !== key) return;
     setHolder(row.id);
+    settle("holder");
     closeHolderField();
   }
 
   const holderOptions = holderChoices(holders, added);
-  // A choice the page no longer offers, archived from another tab, is
-  // unchosen.
-  const chosenHolder =
-    holder === SELF_HOLDER || holderOptions.some(({ id }) => id === holder)
-      ? holder
-      : "";
-  const chosenPortfolio = portfolios.some(({ id }) => id === portfolio)
-    ? portfolio
-    : "";
+  const { holder: chosenHolder, defaultPortfolioId: chosenPortfolio } =
+    offeredChoices(holder, portfolio, holderOptions, portfolios);
+  const invalid = (field: AccountField) =>
+    alert?.field === field ? true : undefined;
+  function settle(field: AccountField) {
+    if (alert?.field === field) setAlert(undefined);
+  }
+  const pick = (field: AccountField, set: (value: string) => void) =>
+    choose((value) => {
+      set(value);
+      settle(field);
+    });
 
   function submit() {
-    if (busy) return;
+    if (holderPending) return;
     const fields = {
       institution: institution.current?.value ?? "",
       holder: chosenHolder,
       includeInTaxReport,
       defaultPortfolioId: chosenPortfolio,
     };
+    if (normalizeName(fields.institution) === "") {
+      setAlert({ text: MESSAGES.invalid, field: "institution" });
+      institution.current?.focus();
+      return;
+    }
     const missing = missingChoice(fields);
     if (missing) {
-      setError(CHOICE_MESSAGES[missing]);
+      setAlert({ text: CHOICE_MESSAGES[missing], field: missing });
       (missing === "holder"
         ? holderTrigger
         : portfolioTrigger
       ).current?.focus();
       return;
     }
-    setError(undefined);
-    startTransition(async () => {
-      const answer = dialogAnswer(
-        await settle(onSubmit(fields)),
-        WRITE_MESSAGES.source_connections,
-      );
-      if (answer.kind === "done") {
-        focus.markSaved();
-        const holderName =
-          holderOptions.find(({ id }) => id === fields.holder)?.name ?? null;
-        onSaved(accountLabel(normalizeName(fields.institution), holderName));
-        onClose();
-      } else {
-        setError(answer.text);
-      }
-    });
+    // offeredChoices keeps only a listed portfolio; the user's own holder has
+    // no row.
+    const holderRow =
+      holderOptions.find(({ id }) => id === fields.holder) ?? null;
+    const portfolioRow = portfolios.find(
+      ({ id }) => id === fields.defaultPortfolioId,
+    );
+    if (!portfolioRow) return;
+    setAlert(undefined);
+    if (!onSubmit(fields, { holder: holderRow, portfolio: portfolioRow })) {
+      return;
+    }
+    focus.markSaved();
+    onClose();
   }
 
   return (
     <AppDialog
       onClose={onClose}
-      pending={busy}
+      pending={holderPending}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -300,8 +359,11 @@ export function SourceConnectionDialog({
               id={ids.institution}
               list={ids.institutions}
               defaultValue={initial.institution}
+              onChange={() => settle("institution")}
+              aria-invalid={invalid("institution")}
+              aria-describedby={invalid("institution") && ids.alert}
               autoComplete="off"
-              autoFocus
+              autoFocus={firstField === "institution"}
               required
             />
             <datalist id={ids.institutions}>
@@ -314,12 +376,17 @@ export function SourceConnectionDialog({
           <div className="grid gap-2">
             <Label htmlFor={ids.holder}>Titular</Label>
             <div className="flex gap-2">
-              <Select value={chosenHolder} onValueChange={choose(setHolder)}>
+              <Select
+                value={chosenHolder}
+                onValueChange={pick("holder", setHolder)}
+              >
                 <SelectTrigger
                   ref={holderTrigger}
                   id={ids.holder}
                   className="min-w-0 flex-1"
-                  aria-invalid={error && !chosenHolder ? true : undefined}
+                  aria-invalid={invalid("holder")}
+                  aria-describedby={invalid("holder") && ids.alert}
+                  autoFocus={firstField === "holder"}
                 >
                   <SelectValue placeholder="Elegí un titular" />
                 </SelectTrigger>
@@ -361,13 +428,15 @@ export function SourceConnectionDialog({
             <Label htmlFor={ids.portfolio}>Cartera por defecto</Label>
             <Select
               value={chosenPortfolio}
-              onValueChange={choose(setPortfolio)}
+              onValueChange={pick("portfolio", setPortfolio)}
             >
               <SelectTrigger
                 ref={portfolioTrigger}
                 id={ids.portfolio}
                 className="w-full"
-                aria-invalid={error && !chosenPortfolio ? true : undefined}
+                aria-invalid={invalid("portfolio")}
+                aria-describedby={invalid("portfolio") && ids.alert}
+                autoFocus={firstField === "portfolio"}
               >
                 <SelectValue placeholder="Elegí una cartera" />
               </SelectTrigger>
@@ -393,16 +462,16 @@ export function SourceConnectionDialog({
             />
           </div>
 
-          {error && <FormAlert id={ids.alert}>{error}</FormAlert>}
+          {alert && <FormAlert id={ids.alert}>{alert.text}</FormAlert>}
         </div>
         <DialogFooter>
           <PendingButton
             type="submit"
             size="sm"
-            pending={busy}
-            aria-describedby={error ? ids.alert : undefined}
+            pending={holderPending}
+            aria-describedby={alert ? ids.alert : undefined}
           >
-            {pending ? "Guardando…" : submitLabel}
+            {submitLabel}
           </PendingButton>
         </DialogFooter>
       </form>

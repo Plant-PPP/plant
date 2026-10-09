@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 // accessible name adds the row ("Archivar Principal").
 function IconButton({
   icon: Icon,
+  actionId,
   tooltip,
   label,
   onClick,
@@ -20,6 +21,8 @@ function IconButton({
   className,
 }: {
   icon: LucideIcon;
+  // Rendered as `data-action`, so the button can be found again by its row.
+  actionId?: string;
   tooltip: string;
   label: string;
   onClick: () => void;
@@ -33,6 +36,7 @@ function IconButton({
           variant="ghost"
           size="icon"
           aria-label={label}
+          data-action={actionId}
           pending={pending}
           className={cn(
             "size-7 text-muted-foreground hover:text-foreground",

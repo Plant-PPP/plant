@@ -25,7 +25,7 @@ function active(view: ListView<NamedRow>) {
   );
 }
 
-function archived(view: ListView<NamedRow>) {
+function archived(view: ListView<NamedRow>, pending = false) {
   return renderToStaticMarkup(
     <ArchivedList
       view={view}
@@ -34,6 +34,7 @@ function archived(view: ListView<NamedRow>) {
       emptyText="No hay más carteras archivadas."
       firstPageLabel="Ver las más recientes"
       columns={columns}
+      pending={pending}
     />,
   );
 }
@@ -82,5 +83,17 @@ describe("ArchivedList", () => {
     expect(html).toContain("No hay más carteras archivadas.");
     expect(html).not.toContain("<table");
     expect(html).toContain("Ver las más recientes");
+  });
+
+  it("holds the archived pages' links while a write runs", () => {
+    const paged = listView<NamedRow>({
+      archived: rows,
+      archivedFirstHref: "/accounts",
+      archivedNextHref: "/accounts?carteras=x",
+    });
+    expect(archived(paged)).not.toMatch(/<a [^>]*aria-disabled=/);
+    expect(
+      archived(paged, true).match(/<a [^>]*aria-disabled="true"/g),
+    ).toHaveLength(2);
   });
 });

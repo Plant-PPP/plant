@@ -10,6 +10,7 @@ import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { HoldersView } from "@/lib/portfolio-setup/read";
 import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
+import type { SetupRun } from "./setup-actions";
 
 const COPY: NamedRowsCopy = {
   title: "Titulares",
@@ -45,14 +46,21 @@ const ACTIONS = {
 
 export function HoldersCard({
   view,
+  pending,
+  run,
   usedBy,
 }: {
   view: HoldersView;
+  pending: boolean;
+  run: SetupRun;
   usedBy: (id: string) => string[];
 }) {
   return (
     <NamedRowsCard
+      list="holders"
       view={view}
+      pending={pending}
+      run={run}
       copy={COPY}
       actions={ACTIONS}
       messages={WRITE_MESSAGES.holders}

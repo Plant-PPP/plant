@@ -2,6 +2,17 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Optimistic lists (PLA-98)
+
+- **The accounts page holds one optimistic state for its three lists** (`useSetupActions` in `AccountsSetup`, `useOptimistic` over Cuentas, Carteras and Titulares) and runs one write at a time. A change shows when the user acts; when the write ends, the page's refresh replaces it in the same commit, or the lists go back if it was refused. A portfolio's or holder's new name also reaches the accounts that show it, and the account dialog's choices and the in-use alert read the same lists.
+- **A list dialog closes on submit and opens again when refused**, with what the user typed and the alert. Keeping it open while it saves would hide the change behind the dialog, on a phone the whole list. If the user left the page meanwhile, the alert is a toast.
+- **A restored row goes on top until the refresh places it by creation date**; at the active cap (`PAGE_ROW_LIMIT`) it can then fall past it. An archive at either cap shows the cap's note and links as they were until the refresh. A created row carries a temporary id (`temporaryId`) until the server's row replaces it.
+- **Archived page links wait while a write runs**, since a page read before the write would show the rows as they were.
+- **Renaming to the same name sends no write**, so a row archived from another tab is not reported there.
+- **The new holder field inside the account dialog still waits for the server**: the account needs the holder's id.
+- **A call that never reaches the server (network, a deploy's version skew) still has no server-side signal** (`docs/threat-models/2026-10-09-portfolio-setup.md`); optimistic lists make it look done for one round trip before the rollback and its alert.
+- **The accounts cards span the content width.** From the card's `@2xl` width the account column is fixed and short (`@2xl:w-28`) and Titular and Cartera share the rest; the report column reads "Incluida" or "No incluida" under its header, and the narrow second line, with no header, adds "en el reporte".
+
 ## 2026-10-09 · Data table (PLA-97)
 
 - **A small table on `@tanstack/react-table`, taken from the reference app's table**: the row model keyed by row id, header and body cells, the icon actions column and truncated cells. Left out until a screen needs them: sorting, expandable rows, a totals footer, loading skeletons, pagination, resizing and pinned columns. Amount cells and exact sums land with the first screen that shows amounts (PLA-28).

@@ -10,8 +10,6 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
 import { type WriteMessages, dialogAnswer } from "./answers";
 
-export type NameSubmit = ReturnType<typeof useNameSubmit>;
-
 // Saves the name typed in its field with `onSubmit`; a refusal shows next to
 // the field and puts focus back in it.
 export function useNameSubmit({
@@ -54,7 +52,7 @@ export function NameField({
   label = "Nombre",
   ...props
 }: {
-  inputRef: NameSubmit["input"];
+  inputRef: React.RefObject<HTMLInputElement | null>;
   error: string | undefined;
   label?: string;
 } & Omit<React.ComponentProps<typeof Input>, "ref" | "id">) {

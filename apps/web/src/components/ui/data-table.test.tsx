@@ -2,9 +2,14 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Archive, Pencil } from "lucide-react";
 import type * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DataTable, TruncatedText, actionsColumn } from "./data-table";
+import {
+  DataTable,
+  TruncatedText,
+  actionsColumn,
+  rowActionButton,
+} from "./data-table";
 
-type Row = { id: string; name: string };
+type Row = { id: string; name: string; unsaved?: true };
 
 const rows: Row[] = [
   { id: "a", name: "Principal" },
@@ -91,6 +96,19 @@ it("calls each cell with its context instead of mounting it", () => {
   for (const call of cell.mock.calls) expect(call).toHaveLength(1);
 });
 
+it("fades an unsaved row and marks it busy", () => {
+  const html = render(
+    [nameColumn],
+    [{ id: "n", name: "Nueva", unsaved: true }, rows[0]!],
+  );
+  expect(html).toContain(
+    '<tr data-slot="table-row" class="border-b opacity-60" data-row-id="n" aria-busy="true">',
+  );
+  expect(html).toContain(
+    '<tr data-slot="table-row" class="border-b" data-row-id="a">',
+  );
+});
+
 describe("actionsColumn", () => {
   const actions = [
     {
@@ -123,6 +141,8 @@ describe("actionsColumn", () => {
       expect(html).toContain(`aria-label="${label}"`);
     }
     expect(html).not.toContain('aria-disabled="true"');
+    expect(html.match(/data-action="rename"/g)).toHaveLength(2);
+    expect(html.match(/data-action="archive"/g)).toHaveLength(2);
   });
 
   it("holds every button while an action runs", () => {
@@ -159,5 +179,37 @@ describe("actionsColumn", () => {
     expect(actionsColumn(actions.slice(0, 1), { pending: false }).size).toBe(
       52,
     );
+  });
+});
+
+describe("rowActionButton", () => {
+  const button = {} as HTMLElement;
+
+  function rootFinding(found: HTMLElement | null) {
+    const querySelector = jest.fn<HTMLElement | null, [string]>(() => found);
+    return { root: { querySelector } as unknown as ParentNode, querySelector };
+  }
+
+  beforeEach(() => {
+    // Node has no CSS global; the stub marks what went through CSS.escape.
+    globalThis.CSS = {
+      escape: (value: string) => `<${value}>`,
+    } as unknown as typeof CSS;
+  });
+
+  afterEach(() => {
+    delete (globalThis as { CSS?: unknown }).CSS;
+  });
+
+  it("finds an action's button inside its row, both ids escaped", () => {
+    const { root, querySelector } = rootFinding(button);
+    expect(rowActionButton(root, 'a"b', "archive")).toBe(button);
+    expect(querySelector.mock.calls).toEqual([
+      ['tr[data-row-id="<a"b>"] [data-action="<archive>"]'],
+    ]);
+  });
+
+  it("finds nothing when the row has no such button", () => {
+    expect(rowActionButton(rootFinding(null).root, "a", "restore")).toBeNull();
   });
 });

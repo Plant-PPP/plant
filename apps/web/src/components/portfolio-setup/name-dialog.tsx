@@ -1,54 +1,49 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import type { WriteMessages } from "./answers";
-import { NameField, useNameSubmit } from "./name-field";
+import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
+import { NameField } from "./name-field";
 import { useSavedFocus } from "./saved-focus";
-import { PendingButton } from "@/components/ui/pending-button";
 
-// A dialog that asks for one name and saves it with `onSubmit`: creating,
-// renaming, or restoring under a new name.
+// A dialog that asks for one name and hands it to `onSubmit` as it closes:
+// creating, renaming, or restoring under a new name. A refused write opens it
+// again with the name and the alert (`initial`, `initialError`). It stays open
+// when the name is blank or `onSubmit` could not start the write.
 export function NameDialog({
   onClose,
   title,
   description,
   submitLabel,
-  defaultValue = "",
+  initial = "",
+  initialError,
+  blankError,
   returnFocusTo,
   savedRemovesOpener = false,
-  messages,
   onSubmit,
-  onSaved,
 }: {
   onClose: () => void;
   title: string;
   description: string;
   submitLabel: string;
-  defaultValue?: string;
+  initial?: string;
+  initialError?: string;
+  // Shown when the name is only spaces.
+  blankError: string;
   // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
   savedRemovesOpener?: boolean;
-  messages: WriteMessages;
-  onSubmit: (name: string) => Promise<WriteResult>;
-  onSaved: (name: string) => void;
+  onSubmit: (name: string) => boolean;
 }) {
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
-  const field = useNameSubmit({
-    onSubmit,
-    messages,
-    onSaved: (name) => {
-      focus.markSaved();
-      onSaved(name);
-      onClose();
-    },
-  });
+  const input = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState(initialError);
 
   return (
     <AppDialog
       onClose={onClose}
-      pending={field.pending}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -57,20 +52,29 @@ export function NameDialog({
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          field.submit();
+          const name = normalizeName(input.current?.value ?? "");
+          if (name === "") {
+            setError(blankError);
+            input.current?.focus();
+            return;
+          }
+          setError(undefined);
+          if (!onSubmit(name)) return;
+          focus.markSaved();
+          onClose();
         }}
       >
         <NameField
-          inputRef={field.input}
-          error={field.error}
-          defaultValue={defaultValue}
+          inputRef={input}
+          error={error}
+          defaultValue={initial}
           required
           autoFocus
         />
         <DialogFooter>
-          <PendingButton type="submit" size="sm" pending={field.pending}>
-            {field.pending ? "Guardando…" : submitLabel}
-          </PendingButton>
+          <Button type="submit" size="sm">
+            {submitLabel}
+          </Button>
         </DialogFooter>
       </form>
     </AppDialog>

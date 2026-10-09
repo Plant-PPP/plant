@@ -6,11 +6,12 @@ import {
   sourceConnectionInputSchema,
 } from "@/lib/portfolio-setup/schemas";
 import {
+  accountRow,
   choose,
   holderChoices,
   initialFields,
-  pruneAdded,
   missingChoice,
+  pruneAdded,
 } from "./source-connection-dialog";
 
 const PRINCIPAL = { id: "p1", name: "Principal" };
@@ -51,14 +52,14 @@ describe("initialFields", () => {
     expect(initialFields(row({ holder: null }), []).holder).toBe(SELF_HOLDER);
   });
 
-  it("leaves an archived holder or portfolio unselected", () => {
+  it("keeps an archived holder and portfolio for the dialog to unchoose", () => {
     const archived = row({
       holder: { id: "h1", name: "Lucía", archived: true },
       portfolio: { id: "p3", name: "Vieja", archived: true },
     });
     expect(initialFields(archived, [PRINCIPAL])).toMatchObject({
-      holder: "",
-      defaultPortfolioId: "",
+      holder: "h1",
+      defaultPortfolioId: "p3",
     });
   });
 });
@@ -77,6 +78,12 @@ describe("missingChoice", () => {
     expect(missingChoice({ ...fields, defaultPortfolioId: "" })).toBe(
       "portfolio",
     );
+  });
+
+  it("needs only the holder and the portfolio", () => {
+    expect(
+      missingChoice({ holder: SELF_HOLDER, defaultPortfolioId: "p1" }),
+    ).toBeUndefined();
   });
 });
 
@@ -122,5 +129,46 @@ describe("pruneAdded", () => {
 
   it("does not offer again a holder the page listed and then dropped", () => {
     expect(pruneAdded([LUCIA], [], [LUCIA])).toEqual([]);
+  });
+});
+
+describe("accountRow", () => {
+  it("is the row its fields describe, with the chosen holder and portfolio", () => {
+    expect(
+      accountRow(
+        "c9",
+        {
+          institution: "  Banco   Uno ",
+          holder: "h1",
+          includeInTaxReport: false,
+          defaultPortfolioId: "p2",
+        },
+        {
+          holder: { id: "h1", name: "Ana" },
+          portfolio: { id: "p2", name: "Largo plazo" },
+        },
+      ),
+    ).toEqual({
+      id: "c9",
+      institution: "Banco Uno",
+      includeInTaxReport: false,
+      holder: { id: "h1", name: "Ana", archived: false },
+      portfolio: { id: "p2", name: "Largo plazo", archived: false },
+    });
+  });
+
+  it("belongs to the user when no holder was chosen", () => {
+    expect(
+      accountRow(
+        "c9",
+        {
+          institution: "IOL",
+          holder: "self",
+          includeInTaxReport: true,
+          defaultPortfolioId: "p1",
+        },
+        { holder: null, portfolio: { id: "p1", name: "Principal" } },
+      ).holder,
+    ).toBeNull();
   });
 });
