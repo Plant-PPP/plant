@@ -22,7 +22,8 @@ const REFRESH_AHEAD_MS = 120_000;
 // cookies(), which can neither rebuild NextResponse.next({ request }) with
 // refreshed cookies nor set the no-cache headers Supabase sends with them.
 export async function updateSession(request: NextRequest) {
-  // The headers as they arrived, before a refresh rewrites the cookies.
+  // The headers before a refresh rewrites the cookies. proxy.ts has already
+  // dropped a client's x-plant-auth.
   const original = new Headers(request.headers);
   const forward = () =>
     NextResponse.next({ request: { headers: new Headers(request.headers) } });
