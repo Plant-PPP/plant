@@ -10,14 +10,16 @@ SELECT plan(21);
 CREATE TEMP TABLE baseline AS SELECT coalesce(max(id), 0) AS last_id FROM private.audit_log;
 
 SELECT is_empty(
-  $$ SELECT r || ' ' || t
-     FROM unnest(ARRAY['anon', 'authenticated', 'authenticated_aal1', 'authenticator', 'service_role']) r,
+  $$ SELECT r.rolname || ' ' || t
+     FROM pg_roles r,
           unnest(ARRAY['auth.sessions', 'auth.mfa_factors']) t
-     WHERE has_any_column_privilege(r, t, 'INSERT, UPDATE')
-        OR has_table_privilege(r, t, 'DELETE, TRUNCATE, TRIGGER')
-        OR pg_has_role(r, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
-        OR pg_has_role(r, (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass), 'MEMBER') $$,
-  'no API role can write, truncate, add a trigger to or become the owner of sessions, factors or audit_log, so none can forge or skip an audit row'
+     WHERE pg_has_role('authenticator', r.oid, 'MEMBER')
+       AND (has_any_column_privilege(r.oid, t, 'INSERT, UPDATE')
+            OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
+            OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
+            OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass), 'MEMBER')
+            OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')) $$,
+  'no role the API can become can write, truncate, add a trigger to or own sessions, factors or audit_log, or switch triggers off, so none can forge or skip an audit row'
 );
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,

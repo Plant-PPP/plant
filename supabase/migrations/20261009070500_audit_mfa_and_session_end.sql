@@ -86,8 +86,8 @@ REVOKE ALL ON FUNCTION private.record_mfa_factor_event() FROM PUBLIC, anon, auth
 -- Last, factors before sessions, the order Auth locks them in unenroll and a
 -- first verify; a verify of an already verified factor locks sessions first.
 -- Each takes SHARE ROW EXCLUSIVE (reads go on) under lock_timeout; a request
--- that crosses the migration in the other order deadlocks, the waiting
--- migration is the side aborted, and the deploy is re-run. No column list and no
+-- that crosses the migration in the other order deadlocks, and Postgres aborts
+-- one side: that request once, or the deploy, which is re-run. No column list and no
 -- WHEN: those would make an Auth migration that changes status or aal fail on
 -- a dependency.
 CREATE TRIGGER record_mfa_factor_event
