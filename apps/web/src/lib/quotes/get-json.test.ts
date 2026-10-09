@@ -64,7 +64,8 @@ it("refuses a redirect by its status, so it is not retried", async () => {
 });
 
 it("refuses a body whose length is over the cap before reading it", async () => {
-  const body = stream([new Uint8Array(1)]);
+  const cancel = jest.fn();
+  const body = stream([new Uint8Array(1)], cancel);
   answer(
     new Response(body, {
       status: 200,
@@ -72,6 +73,7 @@ it("refuses a body whose length is over the cap before reading it", async () => 
     }),
   );
   await expect(getJson(URL)).rejects.toMatchObject({ code: "too_large" });
+  expect(cancel).toHaveBeenCalled();
 });
 
 it("stops reading a body that grows past the cap with no length", async () => {

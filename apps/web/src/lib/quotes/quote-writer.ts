@@ -54,14 +54,14 @@ const CODE_BY_SQLSTATE: Readonly<Record<string, QuoteStoreCode>> = {
 };
 
 function storeError({ code, mayHaveCommitted }: PostgrestFailure) {
-  const storeCode: QuoteStoreCode =
+  const quoteCode: QuoteStoreCode =
     code === "timeout"
       ? "timeout"
       : mayHaveCommitted
         ? "unavailable"
         : (CODE_BY_SQLSTATE[code] ?? "rejected");
   return new QuoteStoreError(
-    storeCode,
+    quoteCode,
     ERROR_CODE.test(code) ? code : undefined,
   );
 }

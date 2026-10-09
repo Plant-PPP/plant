@@ -201,6 +201,10 @@ describe("checkBatch", () => {
 
   it.each([
     ["a zero rate", fx({ sell: "0" })],
+    // numeric reads these; the NaN migration and numeric(20, 8) refuse them.
+    ["a NaN selling rate", fx({ sell: "NaN" })],
+    ["a NaN buying rate", fx({ buy: "NaN" })],
+    ["an infinite selling rate", fx({ sell: "Infinity" })],
     ["a negative buy", fx({ buy: "-1" })],
     ["no buy", { ...fx(), buy: undefined } as unknown as RawFxRate],
     ["a UVA buying rate", fx({ kind: "uva", buy: "1" })],
@@ -249,6 +253,8 @@ describe("checkBatch", () => {
     ["an unknown currency", price({ currency: "EUR" as RawPrice["currency"] })],
     ["a date that is not a day", price({ price_date: "2026-10-9" })],
     ["an empty price", price({ price: "" })],
+    ["a NaN price", price({ price: "NaN" })],
+    ["an infinite price", price({ price: "Infinity" })],
     ["a float artifact", price({ price: "0.30000000000000004" })],
   ])("counts a price with %s as invalid", (_label, row) => {
     expect(
@@ -608,7 +614,15 @@ describe("the quotes migrations", () => {
       )
       .find(Boolean);
     if (!match?.[1]) throw new Error(`no CREATE TABLE for ${table}`);
-    return match[1];
+    // Constraints a later migration adds count too.
+    const alters = readMigrations().flatMap(({ sql }) =>
+      [
+        ...sql.matchAll(
+          new RegExp(`ALTER TABLE public\\.${table}\\b[^;]*;`, "g"),
+        ),
+      ].map(([statement]) => statement),
+    );
+    return [match[1], ...alters].join("\n");
   };
 
   it("give prices.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
@@ -622,6 +636,11 @@ describe("the quotes migrations", () => {
     ["prices", QUOTE_KEYS.prices],
   ])("key %s by QUOTE_KEYS", (table, keys) => {
     expect(tableSql(table)).toContain(`PRIMARY KEY (${keys.join(", ")})`);
+  });
+
+  it("include the constraints a later migration added", () => {
+    expect(tableSql("fx_rates")).toContain("CHECK (sell <> 'NaN')");
+    expect(tableSql("prices")).toContain("CHECK (price <> 'NaN')");
   });
 
   it("refuse a buying rate for exactly the daily indexes", () => {

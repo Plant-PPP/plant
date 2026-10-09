@@ -300,6 +300,74 @@ describe("quoteFeeds", () => {
     return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
   };
 
+  const feedOf = (
+    id: string,
+    override: (url: string) => unknown = () => undefined,
+  ) => {
+    const feed = quoteFeeds({
+      getJson: async (url) => override(url) ?? answer(url),
+    }).find((port) => port.id === id);
+    if (!feed) throw new Error(`no feed ${id}`);
+    return feed;
+  };
+
+  it("keeps the other houses and lists one that changed shape as unread", async () => {
+    const batch = await feedOf("dolarapi", (url) =>
+      url.endsWith("/blue") ? { compra: null } : undefined,
+    ).read(NOW);
+    expect(batch.fxRates.map((row) => row.kind)).toEqual([
+      "official",
+      "mep",
+      "ccl",
+    ]);
+    expect(batch.unread).toEqual(["blue:bad_shape"]);
+  });
+
+  it.each([
+    [
+      "no entry up to today",
+      [{ fecha: "2026-10-10", valor: 1 }],
+      "empty",
+      true,
+    ],
+    [
+      "only an invalid row",
+      [{ fecha: "2026-10-09", valor: 0 }],
+      "bad_shape",
+      false,
+    ],
+  ])(
+    "fails an index series with %s as %s",
+    async (_label, series, code, retryable) => {
+      await expect(
+        feedOf("argentinadatos", () => series).read(NOW),
+      ).rejects.toMatchObject({ code, retryable });
+    },
+  );
+
+  it.each([
+    [
+      "EService:Unavailable",
+      { error: ["EService:Unavailable"] },
+      "provider_busy",
+      true,
+    ],
+    [
+      "EQuery:Unknown asset pair",
+      { error: ["EQuery:Unknown asset pair"] },
+      "provider_error",
+      false,
+    ],
+    ["no pair", { error: [], result: {} }, "bad_shape", false],
+  ])(
+    "fails a ticker answer with %s as %s",
+    async (_label, body, code, retryable) => {
+      await expect(
+        feedOf("kraken", () => body).read(NOW),
+      ).rejects.toMatchObject({ code, retryable });
+    },
+  );
+
   it("stamps every row with the feed that read it and the read instant", async () => {
     const feeds = quoteFeeds({ getJson: async (url) => answer(url) });
     for (const feed of feeds) {

@@ -16,7 +16,10 @@ const isTimeout = (error: unknown) =>
 // sends no length or a wrong one cannot fill memory.
 async function readCapped(response: Response): Promise<string> {
   const length = Number(response.headers.get("content-length"));
-  if (length > MAX_BYTES) throw new QuoteFeedError("too_large");
+  if (length > MAX_BYTES) {
+    await response.body?.cancel();
+    throw new QuoteFeedError("too_large");
+  }
   const reader = response.body?.getReader();
   if (!reader) return "";
   const chunks: Uint8Array[] = [];

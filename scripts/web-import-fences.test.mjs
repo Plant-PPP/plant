@@ -461,9 +461,17 @@ flagged.push(
     const { dir, base, test } = sinkParts(sink);
     const others = SINKS.filter((other) => other !== sink);
     return [
-      ["src/app/api/x/helpers.ts", `import "${spec}";`],
+      // A file beside a route that may use the sink.
+      ...[
+        ...new Set([
+          "src/app/api/x/helpers.ts",
+          `${user.slice(0, user.lastIndexOf("/"))}/helpers.ts`,
+        ]),
+      ].map((helper) => [helper, `import "${spec}";`]),
       ["src/app/auth/callback/route.ts", `import "${spec}";`],
       [`${dir}/x.ts`, `import "${spec}";`],
+      // A file beside the sink, such as its writer, holds no client.
+      [`${dir}/x.ts`, SERVICE_IMPORT],
       [`${dir}/x.test.ts`, `import "./${base}";`],
       ["src/lib/supabase/service-role.test.ts", `import "${spec}";`],
       ["src/app/actions.ts", `"use server";\nimport "${spec}";`],

@@ -334,14 +334,14 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(token)).toContain(MASK);
   });
 
-  // A run id's first character is always a digit, so a digit run after it is
-  // not "another" digit run that makes the token an id.
+  // A run id opens with 0 and one more character, so a digit run after those
+  // two is not another digit run that makes the token an id.
   it.each([
-    ["a DNI", "1X12345678ABCDEFGHJKMNPQRS"],
-    ["a CUIT", "2X20123456789ABCDEFGHJKMNP"],
+    ["a DNI", "0X12345678ABCDEFGHJKMNPQRS"],
+    ["a CUIT", "0X20123456789ABCDEFGHJKMNP"],
     ["a CBU", "0X0170099220000067797370AB"],
   ])(
-    "masks %s after the first character of a run-id-shaped token",
+    "masks %s after the first two characters of a run-id-shaped token",
     (_label, token) => {
       expect(scrubSensitiveText(token)).toContain(MASK);
     },

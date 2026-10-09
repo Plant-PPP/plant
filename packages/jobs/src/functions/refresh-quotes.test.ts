@@ -2,8 +2,6 @@ import {
   type FxRate,
   type Price,
   type QuoteBatch,
-  type QuoteFeedCode,
-  type GetJson,
   QuoteFeedError,
   type QuoteFeedPort,
   quoteFeeds,
@@ -668,166 +666,80 @@ describe("refresh-quotes registration", () => {
   });
 });
 
-// The real feeds, built by the factory over an injected reader, through the
-// job: what each adapter records, rethrows or fails reaches the run line.
+// The real feeds, built by the factory over a reader that fails every
+// request, through the job: what the adapters rethrow and the factory throws
+// reaches the run line. How each provider's answers are classified is core's,
+// tested there.
 describe("runRefreshQuotes over the factory's feeds", () => {
-  const stamp = "2026-10-09T20:57:00.000Z";
-  // Invented answers in each provider's shape, all dated today.
-  const answer = (url: string): unknown => {
-    const { hostname } = new URL(url);
-    if (hostname === "dolarapi.com") {
-      return { compra: 1, venta: 2, fechaActualizacion: stamp };
-    }
-    if (hostname === "api.argentinadatos.com") {
-      return [{ fecha: TODAY, valor: 1603.33 }];
-    }
-    const result = Object.fromEntries(
-      ["XXBTZUSD", "XETHZUSD", "SOLUSD", "USDTZUSD", "USDCUSD"].map((key) => [
-        key,
-        { c: ["1", "1"] },
-      ]),
-    );
-    return { error: [], result };
+  const failing = (error: Error) => {
+    const reads = new Map<string, number>();
+    const feeds = quoteFeeds({
+      getJson: async () => {
+        throw error;
+      },
+    }).map((feed): QuoteFeedPort => ({
+      id: feed.id,
+      read: (now) => {
+        reads.set(feed.id, (reads.get(feed.id) ?? 0) + 1);
+        return feed.read(now);
+      },
+    }));
+    return { feeds, reads };
   };
-  const reader = (
-    override: (url: string) => unknown = () => undefined,
-  ): GetJson & jest.Mock =>
-    jest.fn(async (url: string) => {
-      const value = override(url);
-      if (value instanceof Error) throw value;
-      return value ?? answer(url);
-    });
-  const forOne = (suffix: string, value: unknown) => (url: string) =>
-    url.endsWith(suffix) ? value : undefined;
-  const callsTo = (getJson: jest.Mock, suffix: string) =>
-    getJson.mock.calls.filter(([url]) => String(url).endsWith(suffix)).length;
+  const everyFeed = (code: string) =>
+    [DOLLARS, INDEX, CRYPTO]
+      .map((id) => `${id}:read:${code}`)
+      .sort()
+      .join(",");
 
-  it("saves every feed once when every source answers", async () => {
-    const getJson = reader();
-    const d = deps([...quoteFeeds({ getJson })]);
-    const { result } = await drive(d);
-    expect(result).toEqual({ outcome: "ok", fxRates: 5, prices: 5 });
-    // Four houses, one index, one ticker.
-    expect(getJson).toHaveBeenCalledTimes(6);
-  });
-
-  it("records a house that changed shape as unread and keeps the others, without a retry", async () => {
-    const getJson = reader(forOne("/blue", { compra: null }));
-    const d = deps([...quoteFeeds({ getJson })]);
-    const { result } = await drive(d);
-    expect(result).toMatchObject({ outcome: "partial", fxRates: 4 });
-    expect(callsTo(getJson, "/blue")).toBe(1);
-    expect(feedLines(d.lines)).toEqual([]);
-    expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.unread": "blue:bad_shape",
-      "plant.quotes.failed_codes": "",
-    });
-  });
-
-  it("fails the dollar feed with an unknown class, at error level and once, when a house throws a bug", async () => {
+  it("fails every feed with an unknown class, at error level and once, on a bug", async () => {
     const bug = new TypeError("boom");
-    const getJson = reader(forOne("/blue", bug));
-    const d = deps([...quoteFeeds({ getJson })]);
-    await drive(d);
-    expect(callsTo(getJson, "/blue")).toBe(1);
-    const [line] = feedLines(d.lines);
-    expect([line?.level, line?.error]).toEqual(["error", bug]);
+    const { feeds, reads } = failing(bug);
+    const d = deps(feeds);
+    const { thrown } = await drive(d);
+    expect(thrown).toBeInstanceOf(NonRetriableError);
+    expect([...reads.values()]).toEqual([1, 1, 1]);
+    expect(feedLines(d.lines).map((line) => [line.level, line.error])).toEqual(
+      [DOLLARS, INDEX, CRYPTO].map(() => ["error", bug]),
+    );
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "dolarapi:read:_OTHER",
-      "plant.quotes.fx_rate_count": 1,
+      "plant.quotes.failed_codes": everyFeed("_OTHER"),
+      "plant.quotes.unread": "",
     });
   });
 
-  it("reads a QuoteFeedError name with a message outside the codes as a bug, not a house", async () => {
+  it("reads a QuoteFeedError name with a message outside the codes as a bug", async () => {
     const forged = Object.assign(new Error("provider said no"), {
       name: "QuoteFeedError",
     });
-    const getJson = reader(forOne("/blue", forged));
-    const d = deps([...quoteFeeds({ getJson })]);
+    const { feeds, reads } = failing(forged);
+    const d = deps(feeds);
     await drive(d);
-    expect(callsTo(getJson, "/blue")).toBe(1);
-    const [line] = feedLines(d.lines);
-    expect([line?.level, line?.error]).toEqual(["error", forged]);
+    expect([...reads.values()]).toEqual([1, 1, 1]);
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "dolarapi:read:_OTHER",
+      "plant.quotes.failed_codes": everyFeed("_OTHER"),
       "plant.quotes.unread": "",
     });
   });
 
-  it("does not record a store error a house threw as an unread house", async () => {
-    const getJson = reader(forOne("/blue", new QuoteStoreError("forbidden")));
-    const d = deps([...quoteFeeds({ getJson })]);
+  it("does not record a store error the reader threw as an unread part", async () => {
+    const { feeds } = failing(new QuoteStoreError("forbidden"));
+    const d = deps(feeds);
     await drive(d);
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
+      "plant.quotes.failed_codes": everyFeed("forbidden"),
       "plant.quotes.unread": "",
-      "plant.quotes.failed_codes": "dolarapi:read:forbidden",
     });
   });
 
-  it("retries the dollar feed and ends with the retryable code when every house fails", async () => {
-    const codes: Record<string, QuoteFeedCode> = {
-      oficial: "http_4xx",
-      bolsa: "bad_json",
-      contadoconliqui: "timeout",
-      blue: "http_5xx",
-    };
-    const getJson = reader((url) => {
-      const code = codes[url.split("/").pop() ?? ""];
-      return code ? new QuoteFeedError(code) : undefined;
-    });
-    const d = deps([...quoteFeeds({ getJson })]);
-    const { result } = await drive(d);
-    expect(result).toMatchObject({ outcome: "partial", fxRates: 1 });
-    expect(callsTo(getJson, "/blue")).toBe(RETRIES + 1);
+  it("retries every feed and ends with the reader's code when it times out", async () => {
+    const { feeds, reads } = failing(new QuoteFeedError("timeout"));
+    const d = deps(feeds);
+    await drive(d);
+    expect([...reads.values()]).toEqual(Array(3).fill(RETRIES + 1));
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "dolarapi:read:timeout",
+      "plant.quotes.failed_codes": everyFeed("timeout"),
       "plant.quotes.stage": "read",
-    });
-  });
-
-  it("retries an index series with no entry up to today as empty", async () => {
-    const getJson = reader(forOne("/uva", [{ fecha: "2026-10-10", valor: 1 }]));
-    const d = deps([...quoteFeeds({ getJson })]);
-    await drive(d);
-    expect(callsTo(getJson, "/uva")).toBe(RETRIES + 1);
-    expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "argentinadatos:read:empty",
-    });
-  });
-
-  it("fails an index whose only row is invalid as bad_shape, without a retry", async () => {
-    const getJson = reader(forOne("/uva", [{ fecha: TODAY, valor: 0 }]));
-    const d = deps([...quoteFeeds({ getJson })]);
-    await drive(d);
-    expect(callsTo(getJson, "/uva")).toBe(1);
-    expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "argentinadatos:read:bad_shape",
-    });
-  });
-
-  it.each([
-    ["EService:Unavailable", "provider_busy", RETRIES + 1],
-    ["EQuery:Unknown asset pair", "provider_error", 1],
-  ] as const)("reads a ticker error %s as %s", async (entry, code, calls) => {
-    const getJson = reader((url) =>
-      url.includes("kraken") ? { error: [entry] } : undefined,
-    );
-    const d = deps([...quoteFeeds({ getJson })]);
-    await drive(d);
-    expect(callsTo(getJson, "SOLUSD,USDTUSD,USDCUSD")).toBe(calls);
-    expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": `kraken:read:${code}`,
-    });
-  });
-
-  it("fails a ticker that named no pair as bad_shape", async () => {
-    const getJson = reader((url) =>
-      url.includes("kraken") ? { error: [], result: {} } : undefined,
-    );
-    const d = deps([...quoteFeeds({ getJson })]);
-    await drive(d);
-    expect(runLines(d.lines)[0]?.fields).toMatchObject({
-      "plant.quotes.failed_codes": "kraken:read:bad_shape",
     });
   });
 });
