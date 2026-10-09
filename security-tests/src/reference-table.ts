@@ -26,7 +26,7 @@ export function describeReferenceTable(table: ReferenceTable): void {
     return res.body;
   }
 
-  const expectDenied = (res: Awaited<ReturnType<typeof rest>>) =>
+  const expectDenied = (res: Parameters<typeof expectRelationDenied>[0]) =>
     expectRelationDenied(res, table);
 
   beforeAll(async () => {
@@ -89,11 +89,11 @@ export function describeReferenceTable(table: ReferenceTable): void {
     });
 
     test("cannot overwrite a row", () => {
-      expectRelationDenied(writes.merge, table);
+      expectDenied(writes.merge);
     });
 
     test("cannot delete a row", () => {
-      expectRelationDenied(writes.delete, table);
+      expectDenied(writes.delete);
     });
   });
 }

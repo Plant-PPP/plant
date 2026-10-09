@@ -21,7 +21,8 @@ CREATE TABLE public.fx_rates (
   quoted_at timestamptz NOT NULL,
   fetched_at timestamptz NOT NULL,
   PRIMARY KEY (kind, rate_date),
-  CHECK (buy IS NULL OR buy <= sell)
+  CHECK (buy IS NULL OR buy <= sell),
+  CHECK (kind <> 'uva' OR buy IS NULL)
 );
 
 CREATE TABLE public.prices (

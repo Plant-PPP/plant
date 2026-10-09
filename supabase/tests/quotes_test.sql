@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(59);
+SELECT plan(60);
 
 -- A local database may hold rows from a cron or pentest run.
 DELETE FROM public.fx_rates;
@@ -65,13 +65,15 @@ SELECT set_eq(
   'each quote table has exactly its guard trigger, enabled'
 );
 
--- A guard on UTC or any other zone would pass the date asserts below for most
--- of the day.
-SELECT ok(
-  (SELECT bool_and(prosrc LIKE '%(now() AT TIME ZONE ''America/Argentina/Buenos_Aires'')::date%')
-   FROM pg_proc WHERE oid IN ('private.guard_fx_rate_insert()'::regprocedure,
-                              'private.guard_price_insert()'::regprocedure)),
-  'each guard dates today in Buenos Aires'
+-- A guard on UTC or any other zone, in either bound, would pass the date
+-- asserts below for most of the day.
+SELECT set_eq(
+  $$ SELECT proname || ': ' || btrim(regexp_replace(prosrc, '\s+', ' ', 'g')) FROM pg_proc
+     WHERE oid IN ('private.guard_fx_rate_insert()'::regprocedure,
+                   'private.guard_price_insert()'::regprocedure) $$,
+  ARRAY(SELECT format($b$%s: BEGIN IF NEW.%s <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$, g, c)
+        FROM (VALUES ('guard_fx_rate_insert', 'rate_date'), ('guard_price_insert', 'price_date')) v(g, c)),
+  'each guard refuses any day but today in Buenos Aires'
 );
 
 SELECT ok(
@@ -111,6 +113,7 @@ SELECT set_eq(
      WHERE conrelid IN ('public.fx_rates'::regclass, 'public.prices'::regclass) AND contype <> 'n' $$,
   ARRAY['fx_rates CHECK (((buy IS NULL) OR (buy <= sell)))',
         'fx_rates CHECK ((buy > (0)::numeric))',
+        $q$fx_rates CHECK (((kind <> 'uva'::fx_rate_kind) OR (buy IS NULL)))$q$,
         'fx_rates CHECK ((sell > (0)::numeric))',
         'fx_rates PRIMARY KEY (kind, rate_date)',
         'prices CHECK ((price > (0)::numeric))',
@@ -121,6 +124,7 @@ SELECT set_eq(
 
 -- The guards are triggers, so a role that owns the table, the guard function
 -- or the private schema, adds a trigger or turns triggers off gets past them.
+-- The owner of a quote enum can rename its values and relabel every row.
 -- INSERT is left out: service_role holds it.
 CREATE FUNCTION pg_temp.bypasses() RETURNS SETOF text LANGUAGE sql AS $f$
   SELECT r.rolname || ' ' || t
@@ -130,6 +134,10 @@ CREATE FUNCTION pg_temp.bypasses() RETURNS SETOF text LANGUAGE sql AS $f$
          OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
          OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
          OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
+         OR EXISTS (SELECT 1 FROM pg_type ty
+                    WHERE ty.oid IN ('public.fx_rate_kind'::regtype, 'public.quote_source'::regtype,
+                                     'public.currency'::regtype)
+                      AND pg_has_role(r.oid, ty.typowner, 'MEMBER'))
          OR EXISTS (SELECT 1 FROM pg_trigger tg JOIN pg_proc p ON p.oid = tg.tgfoid
                     WHERE tg.tgrelid = t::regclass AND pg_has_role(r.oid, p.proowner, 'MEMBER'))
          OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
@@ -140,7 +148,7 @@ $f$;
 
 SELECT is_empty(
   $$ SELECT pg_temp.bypasses() $$,
-  'no role the API can become can change, delete, own or add a trigger to a quote table, or switch triggers off'
+  'no role the API can become can change, delete, own or add a trigger to a quote table, own its enums, or switch triggers off'
 );
 
 -- Each canary breaks one clause; owning a table or a guard function, or
@@ -153,10 +161,13 @@ GRANT UPDATE (sell) ON public.fx_rates TO authenticated;
 GRANT DELETE ON public.prices TO anon;
 GRANT TRUNCATE ON public.prices TO authenticated_aal1;
 ALTER SCHEMA private OWNER TO service_role;
+GRANT CREATE ON SCHEMA public TO authenticated;
+ALTER TYPE public.quote_source OWNER TO authenticated;
 SELECT setval('bypass_misses',
               (SELECT count(*) FROM (VALUES ('service_role public.fx_rates'),
                                             ('service_role public.prices'),
                                             ('authenticated public.fx_rates'),
+                                            ('authenticated public.prices'),
                                             ('anon public.fx_rates'),
                                             ('anon public.prices'),
                                             ('authenticated_aal1 public.prices')) c(x)
@@ -164,7 +175,7 @@ SELECT setval('bypass_misses',
 ROLLBACK TO SAVEPOINT canary;
 
 SELECT is((SELECT last_value FROM bypass_misses), 0::bigint,
-          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema');
+          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema or a quote enum');
 
 -- ── The table owner (a migration) ───────────────────────────────────────────
 ALTER TABLE public.fx_rates DISABLE TRIGGER fx_rates_guard;
@@ -475,6 +486,13 @@ SELECT throws_ok(
      VALUES ('blue', (SELECT today FROM day), 1201, 1200, 'dolarapi', now(), now()) $$,
   '23514', NULL,
   'buy is never above sell'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.fx_rates (kind, rate_date, buy, sell, source, quoted_at, fetched_at)
+     VALUES ('uva', (SELECT today FROM day), 1600, 1650.5, 'argentinadatos', now(), now()) $$,
+  '23514', NULL,
+  'UVA has no buying rate'
 );
 
 SELECT throws_ok(
