@@ -13,11 +13,12 @@ import { OWNED_KEYS, type OwnedTable } from "./reference-rows";
 const { a, b } = users;
 
 // What another user can try on every owned table: read B's rows, by id where
-// the table has one, write `rowForB`, delete B's rows, embed auth users and read
-// unfiltered. Both users need rows before it runs. The DELETE case expects the table refused
-// because no owned table grants DELETE; under a grant RLS would answer 204 and
-// leave B's rows alone. The cases specific to the table go in `cases`, which
-// shares the check that B's rows never change.
+// the table has one, write `rowForB`, delete B's rows, embed auth users and
+// read unfiltered. Both users need rows before it runs. The DELETE case expects
+// the table refused because no owned table grants DELETE; under a grant RLS
+// would answer 204 and leave B's rows alone. The cases specific to the table,
+// such as a PATCH of B's rows, go in `cases`, which shares the check that B's
+// rows never change.
 export function describeAnotherUserAccess<T extends OwnedTable>(
   table: T,
   rowForB: Insert<T>,
@@ -57,7 +58,9 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
       });
     }
 
-    // A missing grant and a WITH CHECK both answer 403 42501.
+    // A missing grant and a WITH CHECK both answer 403 42501, so this cannot
+    // tell which one stopped it; each table's supabase/tests/*_isolation_test.sql
+    // covers the policy.
     test("POST of a row for B is denied", async () => {
       expect((rowForB as { user_id?: unknown }).user_id).toBe(b.id);
       expectError(await rest(a, "POST", table, { body: rowForB }), 403);
