@@ -466,6 +466,16 @@ flagged.push(
   ],
 );
 
+// The cost sink may import the service-role client and no other fenced module.
+flagged.push(
+  ["src/lib/ai/ai-cost-sink.ts", 'import { generateText } from "ai";'],
+  ["src/lib/ai/ai-cost-sink.ts", 'import { google } from "@ai-sdk/google";'],
+  [
+    "src/lib/ai/ai-cost-sink.ts",
+    'import "@/lib/auth/session-claims-unchecked";',
+  ],
+);
+
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
     assert.notDeepEqual(await fenced(filePath, code), []);

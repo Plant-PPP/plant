@@ -148,6 +148,16 @@ export const LITERAL_IMPORTS_ONLY = [
   message: "Import a module by a string literal so the import fences see it.",
 }));
 
+// Every fenced module. A block names the ones it may import and keeps the
+// rest, so an override cannot drop a fence by leaving it out.
+export const ALL_FENCED = [
+  AI,
+  AI_PROVIDERS,
+  SERVICE_ROLE,
+  COST_SINK,
+  SESSION_CLAIMS_UNCHECKED,
+];
+
 export const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
 
 // The rules for one config block: `fenced` lists the modules it may not
@@ -180,3 +190,9 @@ export function fence(fenced, syntax) {
     ],
   };
 }
+
+export const fenceExcept = (allowed, syntax) =>
+  fence(
+    ALL_FENCED.filter((module) => !allowed.includes(module)),
+    syntax,
+  );

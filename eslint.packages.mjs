@@ -2,13 +2,11 @@
 import tseslint from "typescript-eslint";
 
 import {
-  AI,
   AI_PROVIDERS,
-  COST_SINK,
+  ALL_FENCED,
   fence,
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
-  SERVICE_ROLE,
   SOURCE,
 } from "./eslint.fences.mjs";
 import { moneyRules } from "./eslint.money.mjs";
@@ -32,10 +30,9 @@ export default tseslint.config(
     rules: fence(
       [
         APPS,
-        AI,
-        { ...AI_PROVIDERS, regex: "^@ai-sdk/" },
-        SERVICE_ROLE,
-        COST_SINK,
+        ...ALL_FENCED.map((module) =>
+          module === AI_PROVIDERS ? { ...module, regex: "^@ai-sdk/" } : module,
+        ),
       ],
       [...LITERAL_IMPORTS_ONLY, ...secretKeyReads],
     ),

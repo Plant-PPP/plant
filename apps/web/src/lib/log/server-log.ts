@@ -1,4 +1,5 @@
 import { isSpanContextValid, trace } from "@opentelemetry/api";
+import type { LogFields, Logger, LogValue } from "@plant/shared";
 
 import {
   MASK,
@@ -6,13 +7,12 @@ import {
   scrubSensitiveText,
 } from "@/lib/security/credential-scrub";
 
-// The one way server code logs: a single JSON line per call, flat fields,
-// every field's string value scrubbed (event names are static literals). Never pass amounts, holdings or extracted data, only
-// ids and counts; the masks are a net, not a license. A number passes as it
-// is: only its key is checked.
+export type { LogFields, Logger, LogValue } from "@plant/shared";
 
-export type LogValue = string | number | boolean | null | undefined;
-export type LogFields = Readonly<Record<string, LogValue>>;
+// The one way server code logs: a single JSON line per call, flat fields,
+// every field's string value scrubbed (event names are static literals). The
+// masks are a net for Logger's contract, not a license. A number passes as it
+// is: only its key is checked.
 
 export type LogLevel = "info" | "warn" | "error";
 
@@ -114,4 +114,4 @@ export const serverLog = {
       error === undefined ? {} : exceptionFields(error),
     );
   },
-};
+} satisfies Logger;
