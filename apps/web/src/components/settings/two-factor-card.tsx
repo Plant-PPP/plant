@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   canDisable,
@@ -54,6 +55,8 @@ export function TwoFactorCard({
       setState(next);
       if (confirmDisable && canDisable(next)) {
         setPanel("disable");
+        // Once: a reload or a later sign-in back to this URL does not reopen it.
+        window.history.replaceState(null, "", SETTINGS_ITEM.href);
       }
     });
     return () => {

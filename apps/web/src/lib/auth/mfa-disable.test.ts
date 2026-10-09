@@ -61,14 +61,12 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+// The one line a call logs. The factor ids the browser can send never reach
+// it.
 function line(): Record<string, unknown> {
   expect(lines).toHaveLength(1);
-  return lines[0] ?? {};
-}
-
-// The factor ids the browser can send: none may reach the log.
-function expectNoFactorIds() {
   expect(JSON.stringify(lines)).not.toMatch(/bound|other|half|someone-else/);
+  return lines[0] ?? {};
 }
 
 const run = (client: AuthClient, factorId = "bound", claims = fresh) =>
@@ -100,7 +98,6 @@ it("removes the other factors first and the verified one last", async () => {
     "plant.auth.mfa_factors_removed.count": 2,
     "plant.auth.mfa_factors_verified.count": 2,
   });
-  expectNoFactorIds();
 });
 
 it("refuses a TOTP code older than two minutes without calling Auth", async () => {
@@ -114,6 +111,7 @@ it("refuses a TOTP code older than two minutes without calling Auth", async () =
   expect(auth.getUser).not.toHaveBeenCalled();
   expect(line()).toMatchObject({
     level: "info",
+    "enduser.id": "user-1",
     "plant.outcome": "totp_stale",
   });
 });
@@ -150,7 +148,6 @@ it.each([
     "plant.auth.mfa_factors_removed.count": 0,
     "plant.auth.mfa_factors_verified.count": 1,
   });
-  expectNoFactorIds();
 });
 
 it("reports an ended session apart from an Auth failure", async () => {
@@ -192,7 +189,6 @@ it("reports partial when a factor is left behind", async () => {
     "plant.auth.mfa_factors_removed.count": 1,
     "plant.auth.mfa_factors_verified.count": 2,
   });
-  expectNoFactorIds();
 });
 
 it("reports an error when the first removal fails", async () => {
@@ -202,7 +198,6 @@ it("reports an error when the first removal fails", async () => {
     level: "error",
     "plant.auth.mfa_factors_removed.count": 0,
   });
-  expectNoFactorIds();
 });
 
 it("says so when every factor is gone but the session did not refresh", async () => {

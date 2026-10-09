@@ -164,6 +164,7 @@ describe("totpIsFresh", () => {
   });
 
   it("accepts a TOTP code from the last two minutes", () => {
+    expect(TOTP_FRESH_S).toBe(120);
     expect(totpIsFresh(verified("totp", TOTP_FRESH_S), now)).toBe(true);
   });
 

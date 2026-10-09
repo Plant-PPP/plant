@@ -19,7 +19,7 @@ import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { loginPath } from "@/lib/auth/routes";
 import { failedOnEndedSession } from "@/lib/auth/session-state";
-import { signInAgain } from "@/lib/auth/sign-in-again";
+import { currentPath, signInAgain } from "@/lib/auth/sign-in-again";
 import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
@@ -82,11 +82,13 @@ export function DisableTotpDialog({
     setError(undefined);
     // The user menu also sends a signed-out tab to sign in and back to this
     // URL, so both land on the dialog.
+    const url = currentPath();
     window.history.replaceState(null, "", CONFIRM_DISABLE_PATH);
     if (await signOutAndConfirm(createClient().auth)) {
       window.location.assign(loginPath(CONFIRM_DISABLE_PATH));
       return;
     }
+    window.history.replaceState(null, "", url);
     setPending(false);
     setError(SIGN_OUT_FAILED);
   }
@@ -127,7 +129,7 @@ export function DisableTotpDialog({
           <DialogTitle>Desactivar la verificación en dos pasos</DialogTitle>
           <DialogDescription>
             {stepUp
-              ? "Por seguridad, volvé a ingresar con tu mail. Vamos a cerrar tu sesión en este dispositivo y te mandamos un código o un link."
+              ? "Por seguridad, volvé a ingresar. Vamos a cerrar tu sesión en este dispositivo."
               : "Ingresá el código que muestra tu app de autenticación."}
           </DialogDescription>
         </DialogHeader>

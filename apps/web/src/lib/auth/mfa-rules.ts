@@ -54,9 +54,10 @@ function amrEntryWithin(
   );
 }
 
-// Every SensitiveAction, on claims that already passed mfaRequirement: they need a first-factor sign-in within
-// STEP_UP_WINDOW_S. A user with TOTP passed mfaRequirement by verifying it
-// after that sign-in, so the window covers both factors.
+// Every SensitiveAction needs, on claims that already passed mfaRequirement, a
+// first-factor sign-in within STEP_UP_WINDOW_S. A user with TOTP passed
+// mfaRequirement by verifying it after that sign-in, so the window covers both
+// factors.
 export function sensitiveRequirement(
   claims: MfaClaims,
   nowS: number,

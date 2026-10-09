@@ -23,6 +23,7 @@ import {
   sessionChange,
   type SessionUser,
 } from "@/lib/auth/session-user";
+import { currentPath } from "@/lib/auth/sign-in-again";
 import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -55,9 +56,7 @@ export function NavUser({ user }: { user: SessionUser }) {
     const { data } = createClient().auth.onAuthStateChange((event, session) => {
       const change = sessionChange(event, session, user);
       if (change === "signed-out" && !signingOut.current) {
-        window.location.assign(
-          loginPath(window.location.pathname + window.location.search),
-        );
+        window.location.assign(loginPath(currentPath()));
       } else if (change === "switched") {
         window.location.reload();
       }

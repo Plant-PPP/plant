@@ -34,7 +34,7 @@ type Counts = { removed?: number; verified?: number };
 export function logDisable(
   outcome: DisableOutcome,
   fields: { requestId?: string; userId?: string } & Counts,
-  error?: unknown,
+  error?: Parameters<typeof errorType>[0],
 ): { outcome: DisableOutcome } {
   const line = {
     [REQUEST_ID_FIELD]: fields.requestId,
@@ -48,7 +48,7 @@ export function logDisable(
   else {
     serverLog[level]("auth.mfa.disable", {
       ...line,
-      "error.type": errorType(error as MaybeAuthError),
+      "error.type": errorType(error),
     });
   }
   return { outcome };
