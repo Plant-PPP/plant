@@ -17,6 +17,11 @@ beforeEach(() => {
   mockEffects.length = 0;
 });
 
+it("starts with the error it was given", () => {
+  useAuthRequest(() => undefined, "copy");
+  expect(mockState).toEqual(["copy", false]);
+});
+
 it("re-enables the buttons when Back restores the page from the cache", () => {
   const listeners = new Map<string, (event: unknown) => void>();
   Object.assign(globalThis, {

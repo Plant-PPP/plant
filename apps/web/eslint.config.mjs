@@ -30,10 +30,11 @@ const noReexport = (modules) =>
       message,
     })),
   );
-// The service-role client, the sink, route handlers and src/lib/ai export
-// values only through a named declaration, so an imported sink, client or
-// model cannot be handed on through an export list, a default export or
-// CommonJS (module.exports, exports or a top-level this).
+// The service-role client, the sink, route handlers, src/lib/ai and
+// session-claims.ts export values only through a named declaration, so an
+// imported sink, client, model or claims reader cannot be handed on through
+// an export list, a default export or CommonJS (module.exports, exports or a
+// top-level this).
 const NO_EXPORT_LIST = [
   'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
   "ExportDefaultDeclaration",
@@ -104,6 +105,16 @@ const READER_CALLS_ONLY = [
   })),
 ];
 
+// session-claims.ts exports getSessionClaims alone, so no other export can
+// wrap the unchecked reader without the redirect.
+const ONLY_GET_SESSION_CLAIMS = [
+  "ExportNamedDeclaration > :matches(FunctionDeclaration, ClassDeclaration)",
+  'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name!="getSessionClaims"]',
+].map((selector) => ({
+  selector,
+  message: "session-claims.ts exports only getSessionClaims.",
+}));
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -160,7 +171,12 @@ export default defineConfig([
     files: ["src/lib/auth/session-claims.ts"],
     rules: webRules({
       allow: [SESSION_CLAIMS_UNCHECKED],
-      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY],
+      syntax: [
+        ...BASE_SYNTAX,
+        ...READER_CALLS_ONLY,
+        ...NO_EXPORT_LIST,
+        ...ONLY_GET_SESSION_CLAIMS,
+      ],
     }),
   },
   {

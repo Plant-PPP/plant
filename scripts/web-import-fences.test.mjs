@@ -347,6 +347,9 @@ flagged.push(
     "_getAuthenticatorAssuranceLevel",
     "_verifyRecoveryCode",
     "_unenrollRecoveryCodes",
+    "_getRecoveryCodesStatus",
+    "_generateRecoveryCodes",
+    "_regenerateRecoveryCodes",
   ].map((method) => [
     "src/components/mfa/x.tsx",
     `export const f = (s) => s.auth.${method}({});`,
@@ -354,6 +357,27 @@ flagged.push(
   [
     "src/components/mfa/x.tsx",
     'export const f = (s) => {\n  const { "_challengeAndVerify": v } = s.auth;\n  return v;\n};',
+  ],
+  ["src/components/mfa/x.tsx", "export const f = (s) => s.auth[`_enroll`]({});"],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth[`_listFactors` satisfies string]();",
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const getUncheckedClaims = () => readSessionClaims();`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport async function getUncheckedClaims() {\n  return readSessionClaims();\n}`,
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    'export const f = (s) => s.auth["_enroll" as const]({});',
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => {\n  const { [`_verify`]: v } = s.auth;\n  return v;\n};",
   ],
   [
     "src/app/auth/mfa/page.tsx",

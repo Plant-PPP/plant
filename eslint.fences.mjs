@@ -104,14 +104,24 @@ export const MFA_CALLS_BUT_LIST = [
 
 // auth-js's private methods behind the MFA API and its recovery codes (2.117),
 // reachable by a quoted key.
-const PRIVATE_MFA =
-  "/^_(enroll|challenge|verify|challengeAndVerify|unenroll|listFactors|getAuthenticatorAssuranceLevel|getRecoveryCodesStatus|generateRecoveryCodes|verifyRecoveryCode|regenerateRecoveryCodes|unenrollRecoveryCodes)$/";
-export const MFA_PRIVATE_CALLS = [
-  `MemberExpression[property.name=${PRIVATE_MFA}]`,
-  `MemberExpression[property.value=${PRIVATE_MFA}]`,
-  `ObjectPattern > Property[key.name=${PRIVATE_MFA}]`,
-  `ObjectPattern > Property[key.value=${PRIVATE_MFA}]`,
-].map((selector) => ({
+const PRIVATE_MFA = [
+  "_enroll",
+  "_challenge",
+  "_verify",
+  "_challengeAndVerify",
+  "_unenroll",
+  "_listFactors",
+  "_getAuthenticatorAssuranceLevel",
+  "_getRecoveryCodesStatus",
+  "_generateRecoveryCodes",
+  "_verifyRecoveryCode",
+  "_regenerateRecoveryCodes",
+  "_unenrollRecoveryCodes",
+];
+export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
+  ...named("MemberExpression", "property", name),
+  ...named("ObjectPattern > Property", "key", name),
+]).map((selector) => ({
   selector,
   message: "Call Auth's MFA API through its public methods in mfa-browser.ts.",
 }));
