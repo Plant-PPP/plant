@@ -43,7 +43,8 @@ VALUES
 
 -- ── What the API roles hold ─────────────────────────────────────────────────
 -- Only the user's name and the archive flag are theirs to write: an insert
--- that could set archived_at or created_at would skip the stamp trigger.
+-- that could set archived_at would skip the stamp trigger, which fires on
+-- update only, and created_at would no longer be the server's.
 SELECT set_eq(
   $$ SELECT '(table):' || acl.privilege_type
               || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
