@@ -1,17 +1,25 @@
 import { OTP_LENGTH } from "./otp-config";
 
-const n = OTP_LENGTH - 1;
-const WHOLE_CODE = new RegExp(`(?:^|\\D)(\\d{${OTP_LENGTH}})(?!\\d)`);
-const SPACED_CODE = new RegExp(`(?:^|\\D)(\\d(?:[ -]?\\d){${n}})(?![ -]?\\d)`);
-const DIGIT_RUN = /\d(?:[ -]?\d)*/;
+// Spaces of any kind, dots and dashes (‐ to ―, and -).
+const SEP = "[\\s.\\u2010-\\u2015-]";
+// A code doesn't touch a letter, a digit or an "@", so numbers in an address
+// or inside a longer number are skipped.
+const START = "(?:^|[^A-Za-z0-9_@])";
+const END = "(?![A-Za-z0-9_@])";
+const half = OTP_LENGTH / 2;
+const WHOLE_CODE = new RegExp(`${START}(\\d{${OTP_LENGTH}})${END}`);
+const SPLIT_CODE = new RegExp(
+  `${START}(\\d{${half}}${SEP}{1,3}\\d{${half}})(?!${SEP}*\\d)${END}`,
+);
+const DIGIT_RUN = new RegExp(`\\d(?:${SEP}{0,3}\\d)*`);
 
 // Pasted text can carry the mail's other numbers (a date, "10 minutos"), so a
-// whole code in it wins, written plainly or as "123 456" / "123-456";
+// whole code in it wins, written plainly or split in halves ("123 456");
 // otherwise its first run of digits counts.
 function codeIn(text: string): string {
   const run =
     WHOLE_CODE.exec(text)?.[1] ??
-    SPACED_CODE.exec(text)?.[1] ??
+    SPLIT_CODE.exec(text)?.[1] ??
     DIGIT_RUN.exec(text)?.[0] ??
     "";
   return run.replace(/\D/g, "");

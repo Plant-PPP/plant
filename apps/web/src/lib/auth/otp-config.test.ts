@@ -73,7 +73,7 @@ describe("the sign-in mail", () => {
     expect(template).toContain(`vence en ${OTP_EXPIRY_MINUTES} minutos`);
   });
 
-  // Pasting the whole mail into the code field keeps its first six digits.
+  // Pasting the whole mail must not hand the code field a number before the code.
   it("has no digit in its text before the code", () => {
     const text = template
       .replace(/<head[\s\S]*?<\/head>/i, "")

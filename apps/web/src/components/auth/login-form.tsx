@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -26,6 +26,7 @@ export function LoginForm({
   googleEnabled: boolean;
 }) {
   const router = useRouter();
+  const codeId = useId();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -184,10 +185,14 @@ export function LoginForm({
           <p className="text-sm text-muted-foreground">
             Te mandamos un código a {email}
           </p>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Código
-            <CodeInput value={code} onChange={setCode} />
-          </label>
+          {/* Not wrapped: the boxes show the digits, which would join the
+              field's name. */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={codeId} className="text-sm font-medium">
+              Código
+            </label>
+            <CodeInput id={codeId} value={code} onChange={setCode} />
+          </div>
           <Button type="submit" disabled={pending || code.length < OTP_LENGTH}>
             Entrar
           </Button>

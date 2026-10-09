@@ -84,6 +84,34 @@ describe("mergeAuthCode", () => {
     expect(mergeAuthCode("123456", "12345678")).toBe("123456");
   });
 
+  it.each([
+    "123 456",
+    "123\u00a0456",
+    "123  456",
+    "123 - 456",
+    "123\t456",
+    "123.456",
+    "123\u2013456",
+  ])("keeps a code split by separators (%j)", (raw) => {
+    expect(mergeAuthCode("", raw)).toBe("123456");
+  });
+
+  it("takes a split code, not the date before it", () => {
+    expect(mergeAuthCode("", "9 oct 2026 10:15 Código 654 321")).toBe("654321");
+  });
+
+  it("skips the digits of a mail address", () => {
+    expect(mergeAuthCode("", "Para: juan123456@x.com\n654321")).toBe("654321");
+  });
+
+  it("lets a whole code win over any digits already there", () => {
+    for (const previous of ["", "1", "12345", "111111"]) {
+      expect(mergeAuthCode(previous, `${previous}654321`)).toBe("654321");
+      expect(mergeAuthCode(previous, `${previous}654 321`)).toBe("654321");
+      expect(mergeAuthCode(previous, "654321", true)).toBe("654321");
+    }
+  });
+
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
       for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {

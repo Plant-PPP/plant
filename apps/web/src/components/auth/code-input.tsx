@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils";
 // One transparent input spans the boxes, so paste, one-time-code autofill and
 // screen readers see a single field.
 export function CodeInput({
+  id,
   value,
   onChange,
 }: {
+  id: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -38,6 +40,7 @@ export function CodeInput({
         </span>
       ))}
       <input
+        id={id}
         inputMode="numeric"
         autoComplete="one-time-code"
         required
@@ -53,6 +56,7 @@ export function CodeInput({
         // A drop lands where the pointer is, not at the caret.
         onDrop={(event) => {
           event.preventDefault();
+          event.currentTarget.focus();
           const text = event.dataTransfer.getData("text");
           onChange(mergeAuthCode(value, value + text));
         }}
