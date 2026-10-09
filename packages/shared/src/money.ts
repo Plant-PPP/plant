@@ -26,7 +26,7 @@ export const positiveDecimalSchema = decimalStringSchema.refine(
 export const DECIMAL_SCALE_DIGITS = 8;
 export const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 
-// A decimal string as an integer count of 10^-8 units, exact for every value
+// A decimal string as an integer count of 10^-DECIMAL_SCALE_DIGITS units, exact for every value
 // decimalStringSchema accepts.
 export function toScaled(decimal: string): bigint {
   const negative = decimal.startsWith("-");

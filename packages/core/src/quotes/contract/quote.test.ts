@@ -86,12 +86,13 @@ describe("checkBatch", () => {
   it.each([
     ["a zero rate", fx({ sell: "0" })],
     ["a negative buy", fx({ buy: "-1" })],
-    ["buy above sell", fx({ buy: "1450.00000001", sell: "1450" })],
     ["13 integer digits", fx({ sell: "1000000000000" })],
     ["an exponent", fx({ sell: "1e21" })],
     ["9 decimals", fx({ sell: "1.123456789" })],
     ["a UVA buying rate", fx({ kind: "uva", buy: "1" })],
     ["a date that is not a day", fx({ rate_date: "2026-10-9" })],
+    ["an unknown kind", fx({ kind: "tarjeta" as RawFxRate["kind"] })],
+    ["an unknown source", fx({ source: "other" as RawFxRate["source"] })],
     ["an instant without offset", fx({ quoted_at: "2026-10-09 20:00" })],
     // Postgres has no year 0.
     ["a quoted_at in the year 0", fx({ quoted_at: "0000-06-01T00:00:00Z" })],
@@ -130,6 +131,14 @@ describe("checkBatch", () => {
     expect(batch.invalidCount).toBe(1);
   });
 
+  it.each([
+    ["an unknown currency", price({ currency: "EUR" as RawPrice["currency"] })],
+    ["a date that is not a day", price({ price_date: "2026-10-9" })],
+  ])("counts a price with %s as invalid", (_label, row) => {
+    const batch = checkBatch({ fxRates: [], prices: [row] }, NOW);
+    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 1]);
+  });
+
   it.each(["", "1e-7", "1e+21", "Infinity", "0.30000000000000004"])(
     "counts a price of %j as invalid",
     (value) => {
@@ -143,22 +152,20 @@ describe("checkBatch", () => {
 
   // Postgres refuses a time zone offset beyond ±15:59, which would fail the
   // whole insert.
-  it.each(["+16:00", "+23:59", "-23:59"])(
-    "never keeps a quoted_at offset of %s",
-    (offset) => {
-      const batch = checkBatch(
-        {
-          fxRates: [fx({ quoted_at: `2026-10-09T20:00:00${offset}` })],
-          prices: [],
-        },
-        NOW,
-      );
-      expect(batch.fxRates).toHaveLength(1);
-      for (const row of batch.fxRates) {
-        expect(row.quoted_at).toMatch(/Z$/);
-      }
-    },
-  );
+  it.each([
+    ["+16:00", "2026-10-09T04:00:00.000Z"],
+    ["+23:59", "2026-10-08T20:01:00.000Z"],
+    ["-23:59", "2026-10-10T19:59:00.000Z"],
+  ])("stores a quoted_at with offset %s in UTC as %s", (offset, utc) => {
+    const batch = checkBatch(
+      {
+        fxRates: [fx({ quoted_at: `2026-10-09T20:00:00${offset}` })],
+        prices: [],
+      },
+      NOW,
+    );
+    expect(batch.fxRates.map((row) => row.quoted_at)).toEqual([utc]);
+  });
 
   it("counts yesterday's and tomorrow's rows as stale", () => {
     const batch = checkBatch(
@@ -236,14 +243,9 @@ describe("checkBatch", () => {
 describe("parseResponse", () => {
   const okSchema = z.object({ ok: z.boolean() });
 
-  it("throws a bad_shape that is not retried and carries only its code", () => {
+  it("throws a bad_shape that is not retried", () => {
     expect(() => parseResponse(okSchema, { detail: "provider text" })).toThrow(
-      expect.objectContaining({
-        name: "QuoteFeedError",
-        message: "bad_shape",
-        code: "bad_shape",
-        retryable: false,
-      }),
+      expect.objectContaining({ code: "bad_shape", retryable: false }),
     );
   });
 

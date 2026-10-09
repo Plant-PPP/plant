@@ -21,7 +21,7 @@ function wallClockParts(instant: Date): Record<string, string> {
 
 // The calendar day in Buenos Aires as YYYY-MM-DD, the date a quote is stored
 // under (the quote guards in the quotes migration compute the same day). Only
-// for the years 1 to 9999: the formatter drops the era of earlier years.
+// for the years 1 to 9999: it ignores the era, so 1 BC reads as 0001.
 export function buenosAiresDate(instant: Date): string {
   const parts = wallClockParts(instant);
   return `${parts.year?.padStart(4, "0")}-${parts.month}-${parts.day}`;

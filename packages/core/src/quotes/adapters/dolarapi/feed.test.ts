@@ -126,6 +126,15 @@ describe("createDolarapiFeed", () => {
     expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
   });
 
+  it("passes an error that is not a QuoteFeedError through unchanged", async () => {
+    const bug = new TypeError("boom");
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw bug;
+      return body("x", 1, 2);
+    });
+    await expect(feed.readRaw(NOW)).rejects.toBe(bug);
+  });
+
   it("fails the read when one house fails in a way a retry may fix", async () => {
     const feed = createDolarapiFeed(async (url) => {
       if (url.endsWith("/blue")) throw new QuoteFeedError("http_5xx", true);

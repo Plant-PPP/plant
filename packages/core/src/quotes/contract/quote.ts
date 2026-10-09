@@ -18,7 +18,7 @@ export const SYMBOL_PATTERN = /^[A-Z0-9]{1,15}$/;
 
 // Dollar rates and prices are kept from this hour on, Buenos Aires time, so a
 // day keeps its closing value; MEP and CCL close at 17:00.
-export const QUOTE_CLOSE_HOUR = 18;
+const QUOTE_CLOSE_HOUR = 18;
 
 // Stored in UTC: a provider's stamp may carry any offset, and Postgres refuses
 // one beyond ±15:59, which would fail the whole insert. Postgres has no year 0
@@ -71,7 +71,7 @@ export type RawPrice = Omit<Price, "fetched_at">;
 export type RawQuoteRows = { fxRates: RawFxRate[]; prices: RawPrice[] };
 
 // staleCount: rows outside their window; invalidCount: rows that failed the
-// schemas or share their primary key with a later row.
+// schemas, or that share their primary key with a later row in the window.
 export type QuoteBatch = {
   fxRates: FxRate[];
   prices: Price[];
@@ -119,11 +119,11 @@ export function inQuoteWindow(
   return kind === "uva" || buenosAiresHour(now) >= QUOTE_CLOSE_HOUR;
 }
 
+// One row per table primary key; the last one wins.
 function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
   return [...new Map(rows.map((row) => [key(row), row])).values()];
 }
 
-// One row per table primary key; the last one wins.
 export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
   const fetched_at = now.toISOString();
   let invalidCount = 0;

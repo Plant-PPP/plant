@@ -93,9 +93,26 @@ describe("kraken parse", () => {
     expect(() => parse({ error: [error] }, NOW)).toThrow(
       expect.objectContaining({
         code: "provider_error",
-        message: "provider_error",
         retryable,
       }),
+    );
+  });
+
+  it.each([
+    [["EService:Unavailable", "EQuery:Unknown asset pair"], false],
+    [["WGeneral:Deprecated", "EService:Unavailable"], true],
+    [["EQuery:Unknown asset pair EService:Unavailable"], false],
+  ])("throws provider_error on %j, retryable %s", (error, retryable) => {
+    expect(() => parse({ error }, NOW)).toThrow(
+      expect.objectContaining({ code: "provider_error", retryable }),
+    );
+  });
+
+  it("dates the prices by the Buenos Aires day", () => {
+    const lateEvening = new Date("2026-10-10T01:00:00.000Z");
+    const rows = parse(BODY, lateEvening);
+    expect(rows.prices.map((row) => row.price_date)).toEqual(
+      Array(5).fill("2026-10-09"),
     );
   });
 

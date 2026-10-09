@@ -41,6 +41,11 @@ describe("argentinadatos parse", () => {
     expect(rows.fxRates.map((row) => row.sell)).toEqual(["2"]);
   });
 
+  it("takes today from the Buenos Aires day", () => {
+    const lateEvening = new Date("2026-10-10T01:00:00.000Z");
+    expect(parse(SERIES, lateEvening).fxRates[0]?.rate_date).toBe("2026-10-09");
+  });
+
   it("returns the latest past entry when the series lags", () => {
     const rows = parse(SERIES.slice(0, 1), NOW);
     expect(rows.fxRates[0]?.rate_date).toBe("2026-10-07");
@@ -66,7 +71,7 @@ describe("argentinadatos parse", () => {
     expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
   });
 
-  it("reads a series of 200 000 entries", () => {
+  it("picks the latest entry of a 200 000-entry series without spreading it", () => {
     const series = Array.from({ length: 200_000 }, (_, i) => ({
       fecha: "2000-01-01",
       valor: i + 1,

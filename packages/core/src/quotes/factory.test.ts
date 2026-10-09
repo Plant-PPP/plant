@@ -43,6 +43,26 @@ describe("toQuoteFeed", () => {
     });
   });
 
+  it("keeps a read whose rows are all stale", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [
+          {
+            kind: "uva",
+            rate_date: "2026-10-08",
+            buy: null,
+            sell: "1602.22",
+            source: SOURCE,
+            quoted_at: "2026-10-08T03:00:00.000Z",
+          },
+        ],
+        prices: [],
+      })),
+    );
+    const batch = await feed.read(NOW);
+    expect([batch.fxRates.length, batch.staleCount]).toEqual([0, 1]);
+  });
+
   it("passes any other error through", async () => {
     const bug = new TypeError("boom");
     const feed = toQuoteFeed(
