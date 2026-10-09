@@ -29,8 +29,20 @@ it.each([{}, { code: "constructor" }, { code: "something_new" }])(
   },
 );
 
-it("asks to start over when the factor is gone", () => {
-  expect(mfaErrorMessage({ code: "mfa_factor_not_found" })).toBe(
-    "Esta configuración ya no es válida. Recargá la página y empezá de nuevo.",
-  );
+it.each([
+  [
+    "mfa_factor_name_conflict",
+    "No pudimos preparar la configuración. Reintentá.",
+  ],
+  [
+    "too_many_enrolled_mfa_factors",
+    "No pudimos preparar la configuración. Reintentá.",
+  ],
+  ["insufficient_aal", "Tu sesión cambió. Recargá la página y probá de nuevo."],
+  [
+    "mfa_factor_not_found",
+    "Tu app de autenticación cambió. Recargá la página y probá de nuevo.",
+  ],
+])("maps %s to its copy", (code, copy) => {
+  expect(mfaErrorMessage({ code })).toBe(copy);
 });
