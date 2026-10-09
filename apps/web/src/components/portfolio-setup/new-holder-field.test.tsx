@@ -4,7 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { NewHolderField, submitOnEnter } from "./new-holder-field";
 
 const html = renderToStaticMarkup(
-  <NewHolderField onCreated={() => {}} onCancel={() => {}} />,
+  <NewHolderField
+    onCreated={() => {}}
+    onCancel={() => {}}
+    onPendingChange={() => {}}
+  />,
 );
 
 it("has no form of its own and nothing the account's form would send", () => {

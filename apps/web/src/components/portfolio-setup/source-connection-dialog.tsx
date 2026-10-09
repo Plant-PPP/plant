@@ -190,10 +190,14 @@ export function SourceConnectionDialog({
   const openHolderField = useRef<number | null>(null);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [holderPending, setHolderPending] = useState(false);
   const institution = useRef<HTMLInputElement>(null);
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
+  // A new holder still saving holds the dialog and its submit: the holder it
+  // saves may be the one the account picks.
+  const busy = pending || holderPending;
 
   if (listed !== holders) {
     setListed(holders);
@@ -232,7 +236,7 @@ export function SourceConnectionDialog({
     : "";
 
   function submit() {
-    if (pending) return;
+    if (busy) return;
     const fields = {
       institution: institution.current?.value ?? "",
       holder: chosenHolder,
@@ -269,7 +273,7 @@ export function SourceConnectionDialog({
   return (
     <AppDialog
       onClose={onClose}
-      pending={pending}
+      pending={busy}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -348,6 +352,7 @@ export function SourceConnectionDialog({
                 key={holderFieldKey}
                 onCreated={(row) => holderCreated(row, holderFieldKey)}
                 onCancel={closeHolderField}
+                onPendingChange={setHolderPending}
               />
             )}
           </div>
@@ -394,7 +399,7 @@ export function SourceConnectionDialog({
           <PendingButton
             type="submit"
             size="sm"
-            pending={pending}
+            pending={busy}
             aria-describedby={error ? ids.alert : undefined}
           >
             {pending ? "Guardando…" : submitLabel}
