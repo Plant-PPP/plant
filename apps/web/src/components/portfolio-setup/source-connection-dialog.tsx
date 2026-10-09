@@ -398,7 +398,7 @@ export function SourceConnectionDialog({
           <PendingButton
             type="submit"
             size="sm"
-            pending={pending}
+            pending={pending || holderPending}
             aria-describedby={error ? ids.alert : undefined}
           >
             {pending ? "Guardando…" : submitLabel}

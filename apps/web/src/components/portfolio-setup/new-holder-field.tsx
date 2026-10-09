@@ -37,7 +37,7 @@ export function NewHolderField({
     onSaved: (name, id) => onCreated({ id, name }),
   });
 
-  // Closing the field mid-save must not leave the dialog held open.
+  // Else an unmount mid-save would hold the dialog open.
   useEffect(() => {
     onPendingChange(field.pending);
     return () => onPendingChange(false);
