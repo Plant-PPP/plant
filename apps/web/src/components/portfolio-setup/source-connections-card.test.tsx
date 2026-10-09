@@ -6,6 +6,7 @@ import type {
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
 import { listView } from "@/test/list-view";
+import { applyChange } from "./list-change";
 import { SourceConnectionsCard } from "./source-connections-card";
 
 const own: SourceConnectionRow = {
@@ -24,10 +25,12 @@ const shared: SourceConnectionRow = {
   portfolio: { id: "p2", name: "Largo plazo", archived: false },
 };
 
-function render(change: Partial<SourceConnectionsView> = {}) {
+function render(change: Partial<SourceConnectionsView> = {}, pending = false) {
   return renderToStaticMarkup(
     <SourceConnectionsCard
       view={listView({ active: [own, shared], ...change })}
+      pending={pending}
+      run={() => true}
       holders={[]}
       portfolios={[]}
     />,
@@ -51,7 +54,7 @@ it("shows the holder, portfolio and report status under the institution", () => 
   expect(html).toContain(
     'class="block truncate text-xs text-muted-foreground @2xl:hidden" title="Principal · Incluida en el reporte"',
   );
-  expect(html).toContain('title="Largo plazo · Fuera del reporte"');
+  expect(html).toContain('title="Largo plazo · No incluida en el reporte"');
 });
 
 it("heads the account column at every width", () => {
@@ -66,12 +69,7 @@ it("gives the holder, portfolio and report status their own wide columns", () =>
       ),
     );
   }
-  for (const text of [
-    "Ana",
-    "Largo plazo",
-    "Incluida en el reporte",
-    "Fuera del reporte",
-  ]) {
+  for (const text of ["Ana", "Largo plazo", "Incluida", "No incluida"]) {
     expect(html).toContain(`title="${text}">${text}</span>`);
   }
 });
@@ -86,4 +84,25 @@ it("lists archived accounts in their own table with a restore button", () => {
   expect(archived).toMatch(/<caption[^>]*>Cuentas archivadas<\/caption>/);
   expect(archived).toContain('aria-label="Restaurar Broker Dos de Ana"');
   expect(archived).toContain("Todavía no agregaste cuentas.");
+});
+
+it("fades an account the server has not confirmed yet", () => {
+  const { active } = applyChange(listView({ active: [shared] }), {
+    kind: "create",
+    row: own,
+  });
+  const unsaved = render({ active });
+  expect(unsaved).toMatch(
+    /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="c1"[^>]*aria-busy="true"/,
+  );
+  expect(unsaved).toMatch(/<tr[^>]*class="border-b" data-row-id="c2">/);
+});
+
+it("passes the page's pending to its archived list", () => {
+  const paged = {
+    archived: [shared],
+    archivedFirstHref: "/accounts",
+    archivedNextHref: "/accounts?cuentas=x",
+  };
+  expect(render(paged, true)).toMatch(/<a [^>]*aria-disabled="true"/);
 });

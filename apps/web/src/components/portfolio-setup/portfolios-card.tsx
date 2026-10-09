@@ -10,6 +10,7 @@ import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { PortfoliosView } from "@/lib/portfolio-setup/read";
 import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
+import type { SetupRun } from "./setup-actions";
 
 const COPY: NamedRowsCopy = {
   title: "Carteras",
@@ -44,14 +45,21 @@ const ACTIONS = {
 
 export function PortfoliosCard({
   view,
+  pending,
+  run,
   usedBy,
 }: {
   view: PortfoliosView;
+  pending: boolean;
+  run: SetupRun;
   usedBy: (id: string) => string[];
 }) {
   return (
     <NamedRowsCard
+      list="portfolios"
       view={view}
+      pending={pending}
+      run={run}
       copy={COPY}
       actions={ACTIONS}
       messages={WRITE_MESSAGES.portfolios}

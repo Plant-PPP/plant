@@ -4,9 +4,8 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type * as React from "react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -15,44 +14,133 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableRow,
+  rowActionButton,
+} from "@/components/ui/data-table";
+import { PendingButton } from "@/components/ui/pending-button";
 import type { ListView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { settle } from "@/lib/server-action-call";
-import type { Answer } from "./answers";
+import { type Answer, type WriteMessages, dialogAnswer } from "./answers";
+import type { SetupChange } from "./list-change";
+import type { SetupRun } from "./setup-actions";
 
-export type SetupCardState = ReturnType<typeof useSetupCard>;
+type SetupCardState = ReturnType<typeof useSetupCard>;
 
-// The heading and pending state of one card on the accounts page.
-export function useSetupCard() {
+// A dialog a refused write opens again, with what the user typed and the
+// alert.
+export type Retry<Initial> = { initial?: Initial; initialError?: string };
+
+type RowChange = SetupChange & {
+  change: { kind: "archive" | "restore" };
+};
+
+// The heading of one card on the accounts page and the feedback of its
+// actions, which the page runs.
+export function useSetupCard({
+  run,
+  pending,
+}: {
+  run: SetupRun;
+  pending: boolean;
+}) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const [pending, startTransition] = useTransition();
+  // The row button to return focus to once a refused row action is back.
+  const refocus = useRef<{ rowId: string; actionId: string } | null>(null);
+  // A refused dialog write's alert until the commit that ends the write, which
+  // shows the dialog again. When the page is left mid-write, or a navigation
+  // that waited for the write commits with the reopen, the card is gone and
+  // the alert is a toast.
+  const unshown = useRef<string | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!pending) unshown.current = null;
+  });
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (unshown.current) toast.error(unshown.current);
+      unshown.current = null;
+    };
+  }, []);
 
-  // Runs a row's action and toasts its result. A done row moved to the other
-  // list, so its button is gone: focus goes to the card's heading instead of
-  // falling to the page.
+  // Returns focus to a refused row action's button on the commit that ends the
+  // write, where the lists' rollback has brought the row back.
+  useEffect(() => {
+    const target = refocus.current;
+    if (!target || pending) return;
+    refocus.current = null;
+    const card = heading.current?.closest<HTMLElement>('[data-slot="card"]');
+    const button = card && rowActionButton(card, target.rowId, target.actionId);
+    if (!button) return;
+    // The user may have moved on while the action ran.
+    const active = document.activeElement;
+    if (active !== heading.current && active !== document.body) return;
+    // A restore button may sit in an archived group mounted closed again.
+    const group = button.closest("details");
+    if (group) group.open = true;
+    button.focus();
+  });
+
+  // Runs a row's action. The row leaves its list at once, taking its button,
+  // so focus goes to the card's heading, never the page; a refusal brings the
+  // row back and focus returns to its button.
   function rowAction(
+    change: RowChange,
     call: () => Promise<WriteResult>,
     answerOf: (result: WriteResult | "rejected") => Answer,
-    { done, askName }: { done: string; askName?: () => void },
+    {
+      done,
+      rowId,
+      actionId,
+      askName,
+    }: { done: string; rowId: string; actionId: string; askName?: () => void },
   ) {
     if (pending) return;
-    startTransition(async () => {
-      const answer = answerOf(await settle(call()));
-      if (answer.kind === "alert") toast.error(answer.text);
-      if (answer.kind === "done") {
-        toast.success(done);
-        heading.current?.focus();
+    heading.current?.focus();
+    run(change, call, answerOf, (answer) => {
+      if (answer.kind === "done") toast.success(done);
+      if (answer.kind === "alert") {
+        toast.error(answer.text);
+        refocus.current = { rowId, actionId };
       }
       if (answer.kind === "ask_name") askName?.();
     });
   }
 
+  // Runs a dialog's write as the dialog closes: a toast when done, or the
+  // dialog again with its alert (a toast once the card is gone). False when
+  // another write is running, so the dialog stays open with what the user typed.
+  function dialogAction(
+    change: SetupChange,
+    call: () => Promise<WriteResult>,
+    messages: WriteMessages,
+    { done, reopen }: { done: string; reopen: (error: string) => void },
+  ): boolean {
+    return run(
+      change,
+      call,
+      (result) => dialogAnswer(result, messages),
+      (answer) => {
+        if (answer.kind === "done") toast.success(done);
+        else if (answer.kind === "alert") {
+          if (!mounted.current) toast.error(answer.text);
+          else {
+            unshown.current = answer.text;
+            reopen(answer.text);
+          }
+        }
+      },
+    );
+  }
+
   return {
     heading,
     focusHeading: () => heading.current,
-    pending,
     rowAction,
+    dialogAction,
   };
 }
 
@@ -74,7 +162,7 @@ export function SetupCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="max-w-3xl gap-0">
+    <Card className="gap-0">
       <CardHeader className="border-b">
         <CardTitle className="text-lg">
           <h2 ref={heading} tabIndex={-1} className="outline-none">
@@ -83,10 +171,10 @@ export function SetupCard({
         </CardTitle>
         <CardDescription>{description}</CardDescription>
         <CardAction>
-          <Button size="sm" disabled={pending} onClick={onAdd}>
+          <PendingButton size="sm" pending={pending} onClick={onAdd}>
             <Plus />
             {addLabel}
-          </Button>
+          </PendingButton>
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4 pt-6">{children}</CardContent>
@@ -96,7 +184,7 @@ export function SetupCard({
 
 // The active rows, or a line when there are none, and a note when only the
 // most recent are shown.
-export function ActiveList<Row extends { id: string }>({
+export function ActiveList<Row extends DataTableRow>({
   view,
   title,
   emptyText,
@@ -125,13 +213,14 @@ export function ActiveList<Row extends { id: string }>({
 
 // The archived rows, one page at a time, in a group closed until opened or
 // paged.
-export function ArchivedList<Row extends { id: string }>({
+export function ArchivedList<Row extends DataTableRow>({
   view,
   title,
   label,
   emptyText,
   firstPageLabel,
   columns,
+  pending,
 }: {
   view: ListView<Row>;
   title: string;
@@ -139,6 +228,7 @@ export function ArchivedList<Row extends { id: string }>({
   emptyText: string;
   firstPageLabel: string;
   columns: ColumnDef<Row>[];
+  pending: boolean;
 }) {
   const summary = useRef<HTMLElement>(null);
   const paging = useRef(false);
@@ -152,6 +242,25 @@ export function ArchivedList<Row extends { id: string }>({
     paging.current = false;
     if (document.activeElement === document.body) summary.current?.focus();
   }, [view.archivedFirstHref, view.archivedNextHref]);
+
+  // Paging while a write runs would render a page read before the write, so
+  // the links wait for it.
+  function pageLink(href: string, text: string) {
+    return (
+      <Link
+        className="underline aria-disabled:opacity-50"
+        href={href}
+        aria-disabled={pending || undefined}
+        onNavigate={(event) => {
+          if (pending) event.preventDefault();
+          else paging.current = true;
+        }}
+        scroll={false}
+      >
+        {text}
+      </Link>
+    );
+  }
 
   if (view.archived.length === 0 && !view.archivedFirstHref) return null;
   return (
@@ -174,26 +283,9 @@ export function ArchivedList<Row extends { id: string }>({
         </div>
       )}
       <div className="mt-2 flex gap-4 text-sm">
-        {view.archivedFirstHref && (
-          <Link
-            className="underline"
-            href={view.archivedFirstHref}
-            onNavigate={() => (paging.current = true)}
-            scroll={false}
-          >
-            {firstPageLabel}
-          </Link>
-        )}
-        {view.archivedNextHref && (
-          <Link
-            className="underline"
-            href={view.archivedNextHref}
-            onNavigate={() => (paging.current = true)}
-            scroll={false}
-          >
-            Ver más
-          </Link>
-        )}
+        {view.archivedFirstHref &&
+          pageLink(view.archivedFirstHref, firstPageLabel)}
+        {view.archivedNextHref && pageLink(view.archivedNextHref, "Ver más")}
       </div>
     </details>
   );

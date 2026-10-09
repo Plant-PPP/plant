@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import { listView } from "@/test/list-view";
+import { applyChange } from "./list-change";
 import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
 
 const dialog = { title: "t", description: "d" };
@@ -22,9 +23,12 @@ const copy: NamedRowsCopy = {
 
 const unused = () => Promise.reject(new Error("not called"));
 
-function render(change: Partial<ListView<NamedRow>> = {}) {
+function render(change: Partial<ListView<NamedRow>> = {}, pending = false) {
   return renderToStaticMarkup(
     <NamedRowsCard
+      list="portfolios"
+      pending={pending}
+      run={() => true}
       view={listView({
         active: [
           { id: "p1", name: "Principal" },
@@ -72,4 +76,31 @@ it("lists archived rows in their own table with only a restore button", () => {
   expect(html).not.toContain('aria-label="Archivar Vieja"');
   expect(html).not.toContain('aria-label="Renombrar Vieja"');
   expect(html).toContain("No tenés carteras activas.");
+});
+
+it("keeps the add button focusable while a write runs", () => {
+  const html = render({}, true);
+  expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>.*Nueva cartera/);
+  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Nueva cartera/);
+});
+
+it("fades a row the server has not confirmed yet", () => {
+  const { active } = applyChange(
+    listView({ active: [{ id: "p1", name: "Principal" }] }),
+    { kind: "create", row: { id: "new-1", name: "Nueva" } },
+  );
+  const html = render({ active });
+  expect(html).toMatch(
+    /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="new-1"[^>]*aria-busy="true"/,
+  );
+  expect(html).toMatch(/<tr[^>]*class="border-b" data-row-id="p1">/);
+});
+
+it("passes the page's pending to its archived list", () => {
+  const paged = {
+    archived: [{ id: "p3", name: "Vieja" }],
+    archivedFirstHref: "/accounts",
+    archivedNextHref: "/accounts?carteras=x",
+  };
+  expect(render(paged, true)).toMatch(/<a [^>]*aria-disabled="true"/);
 });

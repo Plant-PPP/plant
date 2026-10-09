@@ -31,7 +31,6 @@ export function rowAnswer(
   return dialogAnswer(result, messages);
 }
 
-// A dialog closes on success and otherwise stays open with the alert.
 export function dialogAnswer(
   result: WriteResult | "rejected",
   messages: WriteMessages,

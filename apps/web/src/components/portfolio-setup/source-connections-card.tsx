@@ -2,7 +2,6 @@
 
 import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   archiveSourceConnection,
   createSourceConnection,
@@ -16,6 +15,7 @@ import {
   SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type {
   HolderRow,
   PortfolioRow,
@@ -24,32 +24,40 @@ import type {
 } from "@/lib/portfolio-setup/read";
 import { sourceConnectionLabel } from "./accounts-using";
 import { rowAnswer } from "./answers";
+import { temporaryId } from "./list-change";
 import {
   ActiveList,
   ArchivedList,
+  type Retry,
   SetupCard,
   useSetupCard,
 } from "./setup-card";
+import type { SetupRun } from "./setup-actions";
 import {
   SourceConnectionDialog,
+  type SourceConnectionFields,
+  accountRow,
   initialFields,
 } from "./source-connection-dialog";
 
 const MESSAGES = WRITE_MESSAGES.source_connections;
 
 type DialogState =
-  | { kind: "create" }
-  | { kind: "edit"; row: SourceConnectionRow }
-  | { kind: "restore"; row: SourceConnectionRow };
+  | ({ kind: "create" } & Retry<SourceConnectionFields>)
+  | ({ kind: "edit"; row: SourceConnectionRow } & Retry<SourceConnectionFields>)
+  | ({
+      kind: "restore";
+      row: SourceConnectionRow;
+    } & Retry<SourceConnectionFields>);
 
 function holderName(row: SourceConnectionRow): string {
   return row.holder?.name ?? SELF_HOLDER_LABEL;
 }
 
+// The report column's header names the report, so it shows only the status;
+// the narrow second line, with no header, adds it.
 function reportStatus(row: SourceConnectionRow): string {
-  return row.includeInTaxReport
-    ? "Incluida en el reporte"
-    : "Fuera del reporte";
+  return row.includeInTaxReport ? "Incluida" : "No incluida";
 }
 
 // Below @2xl the holder follows the institution and the portfolio and report
@@ -58,6 +66,7 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
   {
     id: "institution",
     header: "Cuenta",
+    meta: { className: "@2xl:w-28" },
     cell: ({ row: { original: row } }) => (
       <>
         <span
@@ -69,7 +78,7 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
         </span>
         <TruncatedText
           className="text-xs text-muted-foreground @2xl:hidden"
-          text={`${row.portfolio.name} · ${reportStatus(row)}`}
+          text={`${row.portfolio.name} · ${reportStatus(row)} en el reporte`}
         />
       </>
     ),
@@ -77,21 +86,19 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
   {
     id: "holder",
     header: "Titular",
-    size: 128,
     meta: { className: "hidden @2xl:table-cell" },
     cell: ({ row }) => <TruncatedText text={holderName(row.original)} />,
   },
   {
     id: "portfolio",
     header: "Cartera",
-    size: 128,
     meta: { className: "hidden @2xl:table-cell" },
     cell: ({ row }) => <TruncatedText text={row.original.portfolio.name} />,
   },
   {
     id: "report",
     header: "Reporte",
-    size: 184,
+    size: 120,
     meta: { className: "hidden @2xl:table-cell" },
     cell: ({ row }) => <TruncatedText text={reportStatus(row.original)} />,
   },
@@ -99,33 +106,73 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
 
 export function SourceConnectionsCard({
   view,
+  pending,
+  run,
   holders,
   portfolios,
 }: {
   view: SourceConnectionsView;
+  pending: boolean;
+  run: SetupRun;
   holders: HolderRow[];
   portfolios: PortfolioRow[];
 }) {
-  const card = useSetupCard();
+  const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
 
   function openDialog(next: DialogState) {
-    if (card.pending) return;
+    if (pending) return;
     setDialog(next);
   }
 
   function archive(row: SourceConnectionRow) {
     card.rowAction(
+      { list: "sourceConnections", change: { kind: "archive", id: row.id } },
       () => archiveSourceConnection(row.id),
       (result) => rowAnswer(result, "archive", MESSAGES),
-      { done: `Archivaste ${sourceConnectionLabel(row)}` },
+      {
+        done: `Archivaste ${sourceConnectionLabel(row)}`,
+        rowId: row.id,
+        actionId: "archive",
+      },
     );
+  }
+
+  function submit(
+    dialog: DialogState,
+    fields: SourceConnectionFields,
+    kind: "create" | "update" | "restore",
+    row: SourceConnectionRow,
+    call: () => Promise<WriteResult>,
+    done: string,
+  ): boolean {
+    return card.dialogAction(
+      { list: "sourceConnections", change: { kind, row } },
+      call,
+      MESSAGES,
+      {
+        done: `${done} ${sourceConnectionLabel(row)}`,
+        reopen: (error) =>
+          setDialog({ ...dialog, initial: fields, initialError: error }),
+      },
+    );
+  }
+
+  function dialogProps(dialog: DialogState, row: SourceConnectionRow | null) {
+    return {
+      initial: dialog.initial ?? initialFields(row, portfolios),
+      initialError: dialog.initialError,
+      holders,
+      portfolios,
+      returnFocusTo: card.focusHeading,
+      onClose: () => setDialog(null),
+    };
   }
 
   return (
     <SetupCard
       heading={card.heading}
-      pending={card.pending}
+      pending={pending}
       title="Cuentas"
       description="Dónde tenés tus inversiones, y de quién son"
       addLabel="Agregar cuenta"
@@ -155,7 +202,7 @@ export function SourceConnectionsCard({
                 onClick: archive,
               },
             ],
-            { pending: card.pending },
+            { pending },
           ),
         ]}
       />
@@ -165,6 +212,7 @@ export function SourceConnectionsCard({
         label="Archivadas"
         emptyText="No hay más cuentas archivadas."
         firstPageLabel="Ver las más recientes"
+        pending={pending}
         columns={[
           ...DATA_COLUMNS,
           actionsColumn<SourceConnectionRow>(
@@ -177,7 +225,7 @@ export function SourceConnectionsCard({
                 onClick: (row) => openDialog({ kind: "restore", row }),
               },
             ],
-            { pending: card.pending },
+            { pending },
           ),
         ]}
       />
@@ -186,13 +234,17 @@ export function SourceConnectionsCard({
           title="Agregar cuenta"
           description="Contanos dónde tenés inversiones."
           submitLabel="Agregar"
-          initial={initialFields(null, portfolios)}
-          holders={holders}
-          portfolios={portfolios}
-          returnFocusTo={card.focusHeading}
-          onClose={() => setDialog(null)}
-          onSubmit={(fields) => createSourceConnection(fields)}
-          onSaved={(label) => toast.success(`Agregaste ${label}`)}
+          {...dialogProps(dialog, null)}
+          onSubmit={(fields, chosen) =>
+            submit(
+              dialog,
+              fields,
+              "create",
+              accountRow(temporaryId(), fields, chosen),
+              () => createSourceConnection(fields),
+              "Agregaste",
+            )
+          }
         />
       )}
       {dialog?.kind === "edit" && (
@@ -201,13 +253,17 @@ export function SourceConnectionsCard({
           title="Editar cuenta"
           description="Cambiá los datos de la cuenta."
           submitLabel="Guardar"
-          initial={initialFields(dialog.row, portfolios)}
-          holders={holders}
-          portfolios={portfolios}
-          returnFocusTo={card.focusHeading}
-          onClose={() => setDialog(null)}
-          onSubmit={(fields) => updateSourceConnection(dialog.row.id, fields)}
-          onSaved={(label) => toast.success(`Guardaste ${label}`)}
+          {...dialogProps(dialog, dialog.row)}
+          onSubmit={(fields, chosen) =>
+            submit(
+              dialog,
+              fields,
+              "update",
+              accountRow(dialog.row.id, fields, chosen),
+              () => updateSourceConnection(dialog.row.id, fields),
+              "Guardaste",
+            )
+          }
         />
       )}
       {dialog?.kind === "restore" && (
@@ -216,14 +272,18 @@ export function SourceConnectionsCard({
           title="Restaurar cuenta"
           description="Revisá los datos antes de restaurarla."
           submitLabel="Restaurar"
-          initial={initialFields(dialog.row, portfolios)}
-          holders={holders}
-          portfolios={portfolios}
-          returnFocusTo={card.focusHeading}
+          {...dialogProps(dialog, dialog.row)}
           savedRemovesOpener
-          onClose={() => setDialog(null)}
-          onSubmit={(fields) => restoreSourceConnection(dialog.row.id, fields)}
-          onSaved={(label) => toast.success(`Restauraste ${label}`)}
+          onSubmit={(fields, chosen) =>
+            submit(
+              dialog,
+              fields,
+              "restore",
+              accountRow(dialog.row.id, fields, chosen),
+              () => restoreSourceConnection(dialog.row.id, fields),
+              "Restauraste",
+            )
+          }
         />
       )}
     </SetupCard>
