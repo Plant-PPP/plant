@@ -1,16 +1,16 @@
 "use client";
 
 import { useRef } from "react";
-import { AppSheet } from "@/components/ui/app-sheet";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
-import { SheetFooter } from "@/components/ui/sheet";
+import { DialogFooter } from "@/components/ui/dialog";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { WriteMessages } from "./answers";
 import { NameField, useNameSubmit } from "./name-field";
 
-// A sheet that asks for one name and saves it with `onSubmit`: creating,
+// A dialog that asks for one name and saves it with `onSubmit`: creating,
 // renaming, or restoring under a new name.
-export function NameSheet({
+export function NameDialog({
   onClose,
   title,
   description,
@@ -47,7 +47,7 @@ export function NameSheet({
   });
 
   return (
-    <AppSheet
+    <AppDialog
       onOpenChange={(open) => !open && !field.pending && onClose()}
       title={title}
       description={description}
@@ -58,24 +58,22 @@ export function NameSheet({
       }
     >
       <form
-        className="flex flex-1 flex-col"
+        className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           field.submit();
         }}
       >
-        <div className="p-4">
-          <NameField
-            inputRef={field.input}
-            error={field.error}
-            defaultValue={defaultValue}
-            required
-            autoFocus
-          />
-        </div>
+        <NameField
+          inputRef={field.input}
+          error={field.error}
+          defaultValue={defaultValue}
+          required
+          autoFocus
+        />
         {/* aria-disabled while pending, not disabled: a disabled button drops
             its focus to the page. */}
-        <SheetFooter className="border-t">
+        <DialogFooter>
           <Button
             type="submit"
             aria-disabled={field.pending}
@@ -83,8 +81,8 @@ export function NameSheet({
           >
             {field.pending ? "Guardando…" : submitLabel}
           </Button>
-        </SheetFooter>
+        </DialogFooter>
       </form>
-    </AppSheet>
+    </AppDialog>
   );
 }

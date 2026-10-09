@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import type * as React from "react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FormAlert } from "@/components/ui/form-alert";
-import { StatusNotice } from "@/components/ui/status-notice";
 import type { ListView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
@@ -22,44 +21,25 @@ import type { Answer } from "./answers";
 
 export type SetupCardState = ReturnType<typeof useSetupCard>;
 
-// The messages and pending state of one card on the accounts page.
-export function useSetupCard(archivedPage: string | null) {
-  const [alert, setAlert] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+// The heading and pending state of one card on the accounts page.
+export function useSetupCard() {
   const heading = useRef<HTMLHeadingElement>(null);
   const [pending, startTransition] = useTransition();
-  // Another archived page, by a link, Back or the sidebar, clears the messages
-  // about the one before; an action's refresh keeps the page and its message.
-  const [shownPage, setShownPage] = useState(archivedPage);
-  if (shownPage !== archivedPage) {
-    setShownPage(archivedPage);
-    clearMessages();
-  }
 
-  function clearMessages() {
-    setAlert(undefined);
-    setNotice(undefined);
-  }
-
-  // Runs a row's action. A done row moved to the other list and an alert
-  // shows above both, so focus goes to the heading right above the alert or
-  // the notice. The row's buttons are aria-disabled while pending, not
-  // disabled: a disabled button drops its focus to the page.
+  // Runs a row's action and toasts its result. A done row moved to the other
+  // list, so its button is gone: focus goes to the card's heading instead of
+  // falling to the page.
   function rowAction(
     call: () => Promise<WriteResult>,
     answerOf: (result: WriteResult | "rejected") => Answer,
     { done, askName }: { done: string; askName?: () => void },
   ) {
     if (pending) return;
-    clearMessages();
     startTransition(async () => {
       const answer = answerOf(await settle(call()));
-      if (answer.kind === "alert") {
-        setAlert(answer.text);
-        heading.current?.focus();
-      }
+      if (answer.kind === "alert") toast.error(answer.text);
       if (answer.kind === "done") {
-        setNotice(done);
+        toast.success(done);
         heading.current?.focus();
       }
       if (answer.kind === "ask_name") askName?.();
@@ -67,21 +47,15 @@ export function useSetupCard(archivedPage: string | null) {
   }
 
   return {
-    alert,
-    notice,
-    setNotice,
     heading,
     focusHeading: () => heading.current,
     pending,
-    clearMessages,
     rowAction,
   };
 }
 
 export function SetupCard({
   heading,
-  alert,
-  notice,
   pending,
   title,
   description,
@@ -90,8 +64,6 @@ export function SetupCard({
   children,
 }: {
   heading: SetupCardState["heading"];
-  alert: string | undefined;
-  notice: string | undefined;
   pending: boolean;
   title: string;
   description: string;
@@ -115,42 +87,8 @@ export function SetupCard({
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-4 pt-6">
-        {alert && <FormAlert>{alert}</FormAlert>}
-        <StatusNotice>{notice}</StatusNotice>
-        {children}
-      </CardContent>
+      <CardContent className="grid gap-4 pt-6">{children}</CardContent>
     </Card>
-  );
-}
-
-// A row's action button: the icon and a label that only screen readers get on
-// a phone.
-export function RowButton({
-  pending,
-  icon,
-  label,
-  rowName,
-  onClick,
-}: {
-  pending: boolean;
-  icon: React.ReactNode;
-  label: string;
-  rowName: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      aria-disabled={pending}
-      className="aria-disabled:opacity-50"
-      onClick={onClick}
-      aria-label={`${label} ${rowName}`}
-    >
-      {icon}
-      <span className="sr-only sm:not-sr-only">{label}</span>
-    </Button>
   );
 }
 

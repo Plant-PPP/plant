@@ -1,5 +1,5 @@
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
-import { rowAnswer, sheetAnswer } from "./answers";
+import { rowAnswer, dialogAnswer } from "./answers";
 
 const ID = "22222222-2222-4222-8222-222222222222";
 const PORTFOLIOS = WRITE_MESSAGES.portfolios;
@@ -77,18 +77,18 @@ describe("rowAnswer", () => {
   });
 });
 
-describe("sheetAnswer", () => {
+describe("dialogAnswer", () => {
   test("closes on success and keeps the copy otherwise", () => {
-    expect(sheetAnswer({ ok: true, id: ID }, PORTFOLIOS)).toEqual({
+    expect(dialogAnswer({ ok: true, id: ID }, PORTFOLIOS)).toEqual({
       kind: "done",
     });
     expect(
-      sheetAnswer({ ok: false, code: "duplicate_name" }, PORTFOLIOS),
+      dialogAnswer({ ok: false, code: "duplicate_name" }, PORTFOLIOS),
     ).toEqual({
       kind: "alert",
       text: "Ya tenés una cartera con ese nombre.",
     });
-    expect(sheetAnswer("rejected", PORTFOLIOS)).toEqual({
+    expect(dialogAnswer("rejected", PORTFOLIOS)).toEqual({
       kind: "alert",
       text: PORTFOLIOS.failed,
     });
@@ -96,13 +96,13 @@ describe("sheetAnswer", () => {
 
   test("uses the copy of the table it wrote", () => {
     expect(
-      sheetAnswer(
+      dialogAnswer(
         { ok: false, code: "duplicate_name" },
         WRITE_MESSAGES.holders,
       ),
     ).toEqual({ kind: "alert", text: "Ya tenés un titular con ese nombre." });
     expect(
-      sheetAnswer(
+      dialogAnswer(
         { ok: false, code: "holder_archived" },
         WRITE_MESSAGES.source_connections,
       ),

@@ -1,7 +1,7 @@
 jest.mock("@/app/(app)/accounts/actions", () => ({}));
 
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
-import { initialFields, missingChoice } from "./source-connection-sheet";
+import { initialFields, missingChoice } from "./source-connection-dialog";
 
 const PRINCIPAL = { id: "p1", name: "Principal" };
 const LARGO = { id: "p2", name: "Largo plazo" };

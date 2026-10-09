@@ -20,15 +20,15 @@ const COPY: NamedRowsCopy = {
   noMoreArchived: "No hay más carteras archivadas.",
   firstPageLabel: "Ver las más recientes",
   truncated: `Mostrando las ${PAGE_ROW_LIMIT} más recientes.`,
-  createSheet: {
+  createDialog: {
     title: "Nueva cartera",
     description: "Elegí un nombre para la cartera.",
   },
-  renameSheet: {
+  renameDialog: {
     title: "Renombrar cartera",
     description: "Elegí el nuevo nombre.",
   },
-  restoreSheet: {
+  restoreDialog: {
     title: "Restaurar cartera",
     description:
       "Ya tenés una cartera activa con ese nombre. Elegí otro para restaurarla.",

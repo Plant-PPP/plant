@@ -8,8 +8,15 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **An account points only at its own user's portfolio and holder**, through composite foreign keys to `UNIQUE (user_id, id)`. Another user's id and a random one fail alike with `23503` and no hint, so they reveal nothing, and the app shows them as a failure.
 - **The guards keep every active account pointing at an active portfolio and holder.** Archiving a portfolio or holder that an active account uses is refused (`portfolio_in_use`, `holder_in_use`), after the last-portfolio check; creating, restoring or re-pointing an active account at an archived one is refused (`portfolio_archived`, `holder_archived`). The card's alert names the active accounts that use the row, from the ones the page shows. Both tables take the same per-user lock and archive stamp as portfolios.
 - **An account's holder is required in its input**, `"self"` or a holder's id, so a form that never chose one cannot save it as the user's; a restore whose holder or portfolio was archived starts with that select empty and asks for it before writing. Editing writes only an active account and never `archived_at`; restoring writes the fields the user confirmed and clears `archived_at` in one update.
-- **A holder can be created from the account sheet.** Its field sits inside the account's form with no form, `name` or submit button of its own, and Enter there saves the holder and selects it. Radix's Select reports an empty value when its value is set before the new option renders; the sheet ignores an empty value, which no option has.
+- **A holder can be created from the account dialog.** Its field sits inside the account's form with no form, `name` or submit button of its own, and Enter there saves the holder and selects it. Radix's Select reports an empty value when its value is set before the new option renders; the dialog ignores an empty value, which no option has.
 - **The accounts page shows Cuentas, Carteras and Titulares**, each read like portfolios (up to 300 active, archived pages of 50 by keyset) with its own param: `cuentas`, `carteras`, `titulares`.
+
+## 2026-10-09 · UI conventions (PLA-96)
+
+- **The rules live in `docs/ui.md`**, so each screen issue follows them instead of rediscovering them. They follow the reference app's patterns on Plant's own theme.
+- **Every form opens in a centered Dialog, not a Sheet**, replacing "forms in a Sheet" (PLA-20). A long form scrolls inside the dialog. `ui/sheet.tsx` stays only for the sidebar on mobile.
+- **An action's result is a toast** (sonner), replacing the inline `StatusNotice`; sonner's own live region announces it. Field errors stay inline in `FormAlert`.
+- **Row actions are icons with a tooltip**, through `IconButton`, with the row in the accessible name.
 
 ## 2026-10-09 · Portfolios (PLA-95)
 

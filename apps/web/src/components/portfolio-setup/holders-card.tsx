@@ -21,15 +21,15 @@ const COPY: NamedRowsCopy = {
   noMoreArchived: "No hay más titulares archivados.",
   firstPageLabel: "Ver los más recientes",
   truncated: `Mostrando los ${PAGE_ROW_LIMIT} más recientes.`,
-  createSheet: {
+  createDialog: {
     title: "Nuevo titular",
     description: "Escribí el nombre de la persona.",
   },
-  renameSheet: {
+  renameDialog: {
     title: "Renombrar titular",
     description: "Elegí el nuevo nombre.",
   },
-  restoreSheet: {
+  restoreDialog: {
     title: "Restaurar titular",
     description:
       "Ya tenés un titular activo con ese nombre. Elegí otro para restaurarlo.",

@@ -2,12 +2,14 @@
 
 import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   archiveSourceConnection,
   createSourceConnection,
   restoreSourceConnection,
   updateSourceConnection,
 } from "@/app/(app)/accounts/actions";
+import { IconButton } from "@/components/ui/icon-button";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type {
@@ -17,15 +19,15 @@ import type {
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
 import { rowAnswer } from "./answers";
-import { ArchivedList, RowButton, SetupCard, useSetupCard } from "./setup-card";
+import { ArchivedList, SetupCard, useSetupCard } from "./setup-card";
 import {
-  SourceConnectionSheet,
+  SourceConnectionDialog,
   initialFields,
-} from "./source-connection-sheet";
+} from "./source-connection-dialog";
 
 const MESSAGES = WRITE_MESSAGES.source_connections;
 
-type SheetState =
+type DialogState =
   | { kind: "create" }
   | { kind: "edit"; row: SourceConnectionRow }
   | { kind: "restore"; row: SourceConnectionRow };
@@ -71,33 +73,30 @@ export function SourceConnectionsCard({
   holders: HolderRow[];
   portfolios: PortfolioRow[];
 }) {
-  const card = useSetupCard(view.archivedPage);
-  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const card = useSetupCard();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
 
-  function openSheet(next: SheetState) {
+  function openDialog(next: DialogState) {
     if (card.pending) return;
-    card.clearMessages();
-    setSheet(next);
+    setDialog(next);
   }
 
   function archive(row: SourceConnectionRow) {
     card.rowAction(
       () => archiveSourceConnection(row.id),
       (result) => rowAnswer(result, "archive", MESSAGES),
-      { done: `Archivaste ${rowLabel(row)}.` },
+      { done: `Archivaste ${rowLabel(row)}` },
     );
   }
 
   return (
     <SetupCard
       heading={card.heading}
-      alert={card.alert}
-      notice={card.notice}
       pending={card.pending}
       title="Cuentas"
       description="Dónde tenés tus inversiones, y de quién son"
       addLabel="Agregar cuenta"
-      onAdd={() => openSheet({ kind: "create" })}
+      onAdd={() => openDialog({ kind: "create" })}
     >
       {view.active.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -112,18 +111,18 @@ export function SourceConnectionsCard({
             >
               <SourceConnectionSummary row={row} />
               <span className="flex shrink-0 gap-1">
-                <RowButton
+                <IconButton
+                  icon={Pencil}
+                  tooltip="Editar"
+                  label={`Editar ${rowLabel(row)}`}
                   pending={card.pending}
-                  icon={<Pencil />}
-                  label="Editar"
-                  rowName={rowLabel(row)}
-                  onClick={() => openSheet({ kind: "edit", row })}
+                  onClick={() => openDialog({ kind: "edit", row })}
                 />
-                <RowButton
+                <IconButton
+                  icon={Archive}
+                  tooltip="Archivar"
+                  label={`Archivar ${rowLabel(row)}`}
                   pending={card.pending}
-                  icon={<Archive />}
-                  label="Archivar"
-                  rowName={rowLabel(row)}
                   onClick={() => archive(row)}
                 />
               </span>
@@ -144,18 +143,18 @@ export function SourceConnectionsCard({
         renderRow={(row) => (
           <>
             <SourceConnectionSummary row={row} muted />
-            <RowButton
+            <IconButton
+              icon={ArchiveRestore}
+              tooltip="Restaurar"
+              label={`Restaurar ${rowLabel(row)}`}
               pending={card.pending}
-              icon={<ArchiveRestore />}
-              label="Restaurar"
-              rowName={rowLabel(row)}
-              onClick={() => openSheet({ kind: "restore", row })}
+              onClick={() => openDialog({ kind: "restore", row })}
             />
           </>
         )}
       />
-      {sheet?.kind === "create" && (
-        <SourceConnectionSheet
+      {dialog?.kind === "create" && (
+        <SourceConnectionDialog
           title="Agregar cuenta"
           description="Contanos dónde tenés inversiones."
           submitLabel="Agregar"
@@ -163,41 +162,39 @@ export function SourceConnectionsCard({
           holders={holders}
           portfolios={portfolios}
           returnFocusTo={card.focusHeading}
-          onClose={() => setSheet(null)}
+          onClose={() => setDialog(null)}
           onSubmit={(fields) => createSourceConnection(fields)}
-          onSaved={(institution) => card.setNotice(`Agregaste ${institution}.`)}
+          onSaved={(institution) => toast.success(`Agregaste ${institution}`)}
         />
       )}
-      {sheet?.kind === "edit" && (
-        <SourceConnectionSheet
-          key={sheet.row.id}
+      {dialog?.kind === "edit" && (
+        <SourceConnectionDialog
+          key={dialog.row.id}
           title="Editar cuenta"
           description="Cambiá los datos de la cuenta."
           submitLabel="Guardar"
-          initial={initialFields(sheet.row, portfolios)}
+          initial={initialFields(dialog.row, portfolios)}
           holders={holders}
           portfolios={portfolios}
           returnFocusTo={card.focusHeading}
-          onClose={() => setSheet(null)}
-          onSubmit={(fields) => updateSourceConnection(sheet.row.id, fields)}
-          onSaved={(institution) => card.setNotice(`Guardaste ${institution}.`)}
+          onClose={() => setDialog(null)}
+          onSubmit={(fields) => updateSourceConnection(dialog.row.id, fields)}
+          onSaved={(institution) => toast.success(`Guardaste ${institution}`)}
         />
       )}
-      {sheet?.kind === "restore" && (
-        <SourceConnectionSheet
-          key={sheet.row.id}
+      {dialog?.kind === "restore" && (
+        <SourceConnectionDialog
+          key={dialog.row.id}
           title="Restaurar cuenta"
           description="Revisá los datos antes de restaurarla."
           submitLabel="Restaurar"
-          initial={initialFields(sheet.row, portfolios)}
+          initial={initialFields(dialog.row, portfolios)}
           holders={holders}
           portfolios={portfolios}
           returnFocusTo={card.focusHeading}
-          onClose={() => setSheet(null)}
-          onSubmit={(fields) => restoreSourceConnection(sheet.row.id, fields)}
-          onSaved={(institution) =>
-            card.setNotice(`Restauraste ${institution}.`)
-          }
+          onClose={() => setDialog(null)}
+          onSubmit={(fields) => restoreSourceConnection(dialog.row.id, fields)}
+          onSaved={(institution) => toast.success(`Restauraste ${institution}`)}
         />
       )}
     </SetupCard>

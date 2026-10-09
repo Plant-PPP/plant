@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { NONCE_HEADER } from "@/lib/csp";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="antialiased">
-        <ThemeProvider nonce={nonce}>{children}</ThemeProvider>
+        <ThemeProvider nonce={nonce}>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -2,8 +2,9 @@
 
 import { Plus } from "lucide-react";
 import { useId, useRef, useState, useTransition } from "react";
-import { AppSheet } from "@/components/ui/app-sheet";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SheetFooter } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import {
   CHOICE_MESSAGES,
@@ -28,7 +28,7 @@ import type {
 } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
-import { sheetAnswer } from "./answers";
+import { dialogAnswer } from "./answers";
 import { NewHolderField } from "./new-holder-field";
 
 // Suggestions only: any institution can be typed.
@@ -60,7 +60,7 @@ export type SourceConnectionFields = {
   defaultPortfolioId: string;
 };
 
-// The sheet's starting values. An archived holder or portfolio starts
+// The dialog's starting values. An archived holder or portfolio starts
 // unselected, so a restore makes the user choose an active one.
 export function initialFields(
   row: SourceConnectionRow | null,
@@ -102,9 +102,9 @@ function choose(set: (value: string) => void) {
 }
 
 // Creates, edits or restores an account. A new holder can be added from the
-// sheet without leaving it: its field has no form of its own, so Enter there
+// dialog without leaving it: its field has no form of its own, so Enter there
 // saves the holder and never the account.
-export function SourceConnectionSheet({
+export function SourceConnectionDialog({
   title,
   description,
   submitLabel,
@@ -176,7 +176,7 @@ export function SourceConnectionSheet({
     }
     setError(undefined);
     startTransition(async () => {
-      const answer = sheetAnswer(
+      const answer = dialogAnswer(
         await settle(onSubmit(fields)),
         WRITE_MESSAGES.source_connections,
       );
@@ -191,7 +191,7 @@ export function SourceConnectionSheet({
   }
 
   return (
-    <AppSheet
+    <AppDialog
       onOpenChange={(open) => !open && !pending && onClose()}
       title={title}
       description={description}
@@ -200,13 +200,13 @@ export function SourceConnectionSheet({
       }
     >
       <form
-        className="flex flex-1 flex-col"
+        className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        <div className="grid gap-5 p-4">
+        <div className="grid gap-5">
           <div className="grid gap-2">
             <Label htmlFor={ids.institution}>Institución</Label>
             <Input
@@ -308,7 +308,7 @@ export function SourceConnectionSheet({
 
           {error && <FormAlert id={ids.alert}>{error}</FormAlert>}
         </div>
-        <SheetFooter className="border-t">
+        <DialogFooter>
           <Button
             type="submit"
             aria-disabled={pending}
@@ -317,8 +317,8 @@ export function SourceConnectionSheet({
           >
             {pending ? "Guardando…" : submitLabel}
           </Button>
-        </SheetFooter>
+        </DialogFooter>
       </form>
-    </AppSheet>
+    </AppDialog>
   );
 }

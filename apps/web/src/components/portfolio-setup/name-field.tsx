@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
-import { type WriteMessages, sheetAnswer } from "./answers";
+import { type WriteMessages, dialogAnswer } from "./answers";
 
 export type NameSubmit = ReturnType<typeof useNameSubmit>;
 
@@ -37,7 +37,7 @@ export function useNameSubmit({
         onSaved(normalizeName(name), result.id);
         return;
       }
-      const answer = sheetAnswer(result, messages);
+      const answer = dialogAnswer(result, messages);
       if (answer.kind === "alert") setError(answer.text);
       input.current?.focus();
     });
@@ -46,7 +46,7 @@ export function useNameSubmit({
   return { pending, error, submit, input };
 }
 
-// The label, the input and its alert, with no form of their own, so a sheet's
+// The label, the input and its alert, with no form of their own, so a dialog's
 // form or another form's inline field can hold them.
 export function NameField({
   inputRef,

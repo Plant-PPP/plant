@@ -2,20 +2,22 @@
 
 import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { IconButton } from "@/components/ui/icon-button";
 import type { ListView, PortfolioRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type WriteMessages, rowAnswer } from "./answers";
-import { NameSheet } from "./name-sheet";
-import { ArchivedList, RowButton, SetupCard, useSetupCard } from "./setup-card";
+import { NameDialog } from "./name-dialog";
+import { ArchivedList, SetupCard, useSetupCard } from "./setup-card";
 
 type NamedRow = PortfolioRow;
 
-type SheetState =
+type DialogState =
   | { kind: "create" }
   | { kind: "rename"; row: NamedRow }
   | { kind: "restore"; row: NamedRow };
 
-type SheetCopy = { title: string; description: string };
+type DialogCopy = { title: string; description: string };
 
 export type NamedRowsCopy = {
   title: string;
@@ -27,10 +29,10 @@ export type NamedRowsCopy = {
   noMoreArchived: string;
   firstPageLabel: string;
   truncated: string;
-  createSheet: SheetCopy;
-  renameSheet: SheetCopy;
+  createDialog: DialogCopy;
+  renameDialog: DialogCopy;
   // For a restore whose name an active row took.
-  restoreSheet: SheetCopy;
+  restoreDialog: DialogCopy;
 };
 
 export type NamedRowsActions = {
@@ -55,13 +57,12 @@ export function NamedRowsCard({
   // The institutions of the active accounts that use a row.
   usedBy: (id: string) => string[];
 }) {
-  const card = useSetupCard(view.archivedPage);
-  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const card = useSetupCard();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
 
-  function openSheet(next: SheetState) {
+  function openDialog(next: DialogState) {
     if (card.pending) return;
-    card.clearMessages();
-    setSheet(next);
+    setDialog(next);
   }
 
   function rowAction(row: NamedRow, action: "archive" | "restore") {
@@ -72,9 +73,9 @@ export function NamedRowsCard({
           : actions.restore(row.id),
       (result) => rowAnswer(result, action, messages, usedBy(row.id)),
       {
-        done: `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}.`,
+        done: `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}`,
         // Defensive: the openers ignore clicks while an action is pending.
-        askName: () => setSheet((open) => open ?? { kind: "restore", row }),
+        askName: () => setDialog((open) => open ?? { kind: "restore", row }),
       },
     );
   }
@@ -82,13 +83,11 @@ export function NamedRowsCard({
   return (
     <SetupCard
       heading={card.heading}
-      alert={card.alert}
-      notice={card.notice}
       pending={card.pending}
       title={copy.title}
       description={copy.description}
       addLabel={copy.addLabel}
-      onAdd={() => openSheet({ kind: "create" })}
+      onAdd={() => openDialog({ kind: "create" })}
     >
       {view.active.length === 0 ? (
         <p className="text-sm text-muted-foreground">{copy.emptyText}</p>
@@ -101,18 +100,18 @@ export function NamedRowsCard({
             >
               <span className="min-w-0 truncate text-sm">{row.name}</span>
               <span className="flex shrink-0 gap-1">
-                <RowButton
+                <IconButton
+                  icon={Pencil}
+                  tooltip="Renombrar"
+                  label={`Renombrar ${row.name}`}
                   pending={card.pending}
-                  icon={<Pencil />}
-                  label="Renombrar"
-                  rowName={row.name}
-                  onClick={() => openSheet({ kind: "rename", row })}
+                  onClick={() => openDialog({ kind: "rename", row })}
                 />
-                <RowButton
+                <IconButton
+                  icon={Archive}
+                  tooltip="Archivar"
+                  label={`Archivar ${row.name}`}
                   pending={card.pending}
-                  icon={<Archive />}
-                  label="Archivar"
-                  rowName={row.name}
                   onClick={() => rowAction(row, "archive")}
                 />
               </span>
@@ -133,58 +132,58 @@ export function NamedRowsCard({
             <span className="min-w-0 truncate text-sm text-muted-foreground">
               {row.name}
             </span>
-            <RowButton
+            <IconButton
+              icon={ArchiveRestore}
+              tooltip="Restaurar"
+              label={`Restaurar ${row.name}`}
               pending={card.pending}
-              icon={<ArchiveRestore />}
-              label="Restaurar"
-              rowName={row.name}
               onClick={() => rowAction(row, "restore")}
             />
           </>
         )}
       />
-      {sheet?.kind === "create" && (
-        <NameSheet
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "create" && (
+        <NameDialog
+          onClose={() => setDialog(null)}
           returnFocusTo={card.focusHeading}
-          title={copy.createSheet.title}
-          description={copy.createSheet.description}
+          title={copy.createDialog.title}
+          description={copy.createDialog.description}
           submitLabel="Crear"
           messages={messages}
           onSubmit={(name) => actions.create({ name })}
-          onSaved={(name) => card.setNotice(`Creaste ${name}.`)}
+          onSaved={(name) => toast.success(`Creaste ${name}`)}
         />
       )}
-      {sheet?.kind === "rename" && (
-        <NameSheet
-          key={sheet.row.id}
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "rename" && (
+        <NameDialog
+          key={dialog.row.id}
+          onClose={() => setDialog(null)}
           returnFocusTo={card.focusHeading}
-          title={copy.renameSheet.title}
-          description={copy.renameSheet.description}
+          title={copy.renameDialog.title}
+          description={copy.renameDialog.description}
           submitLabel="Guardar"
-          defaultValue={sheet.row.name}
+          defaultValue={dialog.row.name}
           messages={messages}
-          onSubmit={(name) => actions.rename(sheet.row.id, { name })}
+          onSubmit={(name) => actions.rename(dialog.row.id, { name })}
           onSaved={(name) =>
-            name !== sheet.row.name &&
-            card.setNotice(`Renombraste ${sheet.row.name} a ${name}.`)
+            name !== dialog.row.name &&
+            toast.success(`Renombraste ${dialog.row.name} a ${name}`)
           }
         />
       )}
-      {sheet?.kind === "restore" && (
-        <NameSheet
-          key={sheet.row.id}
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "restore" && (
+        <NameDialog
+          key={dialog.row.id}
+          onClose={() => setDialog(null)}
           returnFocusTo={card.focusHeading}
           savedRemovesOpener
-          title={copy.restoreSheet.title}
-          description={copy.restoreSheet.description}
+          title={copy.restoreDialog.title}
+          description={copy.restoreDialog.description}
           submitLabel="Restaurar"
-          defaultValue={sheet.row.name}
+          defaultValue={dialog.row.name}
           messages={messages}
-          onSubmit={(name) => actions.restore(sheet.row.id, { name })}
-          onSaved={(name) => card.setNotice(`Restauraste ${name}.`)}
+          onSubmit={(name) => actions.restore(dialog.row.id, { name })}
+          onSaved={(name) => toast.success(`Restauraste ${name}`)}
         />
       )}
     </SetupCard>

@@ -16,7 +16,7 @@ export function submitOnEnter(submit: () => void) {
   };
 }
 
-// Creates a holder from inside the account sheet's form. It has no form of
+// Creates a holder from inside the account dialog's form. It has no form of
 // its own, its input no name, so the account's form never sends it, and its
 // buttons do not submit.
 export function NewHolderField({

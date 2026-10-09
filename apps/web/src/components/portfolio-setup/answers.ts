@@ -28,11 +28,11 @@ export function rowAnswer(
       return { kind: "alert", text: inUseMessage(result.code, usedBy) };
     }
   }
-  return sheetAnswer(result, messages);
+  return dialogAnswer(result, messages);
 }
 
-// A sheet closes on success and otherwise stays open with the alert.
-export function sheetAnswer(
+// A dialog closes on success and otherwise stays open with the alert.
+export function dialogAnswer(
   result: WriteResult | "rejected",
   messages: WriteMessages,
 ): { kind: "done" } | { kind: "alert"; text: string } {
