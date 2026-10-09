@@ -21,7 +21,6 @@ import {
   SOURCE,
 } from "../../eslint.fences.mjs";
 
-// A module allowed to import a fenced one may not re-export it.
 const noReexport = (modules) =>
   modules.flatMap(({ regex, message }) =>
     [

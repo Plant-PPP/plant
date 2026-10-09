@@ -249,6 +249,7 @@ const flagged = [
   ],
   ["src/lib/ai/x.ts", 'export { generateText } from "ai";'],
   ["src/lib/ai/x.ts", 'export * from "@ai-sdk/google";'],
+  ["src/lib/ai/x.ts", 'export * as ai from "ai";'],
   ["src/lib/ai/ai-cost-sink.ts", '"use server";\nexport const x = 1;'],
   [
     "src/lib/ai/ai-cost-sink.ts",
