@@ -23,7 +23,9 @@ or any other HTTP route handler; an assistant tool definition. Nothing in that l
 the wave is clean.
 
 MODEL: single-user ownership — no organizations, no tenants. Every row has `user_id uuid` referencing
-auth.users; the house policy is `for all to authenticated using (user_id = (select auth.uid())) with
+auth.users (except the reference tables `fx_rates` and `prices`: market data with no `user_id`, read
+by every authenticated user and inserted only by `service_role`; the pgTAP floor limits the exception
+to those two, and they keep the MFA gate); the house policy is `for all to authenticated using (user_id = (select auth.uid())) with
 check (user_id = (select auth.uid()))`, plus the RESTRICTIVE MFA gate from the house form on every
 `public` table (the pgTAP floor pins its text); `authenticated` is granted only the verbs the app uses, `anon`
 nothing; DEFINER helpers live in schema `private` with `SET search_path`; the service-role key never
@@ -71,7 +73,8 @@ THE FIVE CO-EQUAL LAWS — check and REPORT each (an unstated law is UNCHECKED, 
 4. BYPASS-CARRIES-ITS-OWN-BOUNDARY — where RLS is off, the code is the ONLY boundary:
    • service-role client (Inngest steps in packages/jobs) → every query carries its OWN `user_id` filter,
      even when it already selects by import_id, and every storage path is asserted against the owner's
-     `<user_id>/` prefix. The user_id comes from a server-trusted source (the imports row, a
+     `<user_id>/` prefix (the reference tables `fx_rates`/`prices` have no owner key; there the column
+     grants are the boundary). The user_id comes from a server-trusted source (the imports row, a
      server-sent event), never a client payload field.
    • the service-role key → server-only: never NEXT_PUBLIC_, never reachable from a client component;
      the module building it starts with `import "server-only"`.

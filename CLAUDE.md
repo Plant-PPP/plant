@@ -57,6 +57,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 - **Never push to `production`.** It is a frozen branch that exists only because Vercel requires a Production Branch. Production will ship through the _Promote to production_ workflow (PLA-13), which will tag the commit `production-latest`. There is no `main`.
 - A commit you write is a single Conventional Commits subject line in English, under 70 characters: no body and no trailers (`Co-Authored-By:`, `Claude-Session:`). This overrides any tool's default attribution.
 - PR titles use the same format with the Linear key (omitted only when there is no Linear issue). Whoever merges uses Squash and merge, keeps the PR title as the commit title (GitHub's appended ` (#N)` may stay) and clears the message box, so the PR title is the commit on `staging`. Destructive migrations: `[DESTRUCTIVE]` at the start of the title, before any stacked-PR `(N/X)` marker, which is dropped from the squash commit title (see `nav-github`); the squash commit title keeps `[DESTRUCTIVE]`, the only prefix it may have before the type.
+- Branches named `claude/*` get no Vercel preview while their PR is a draft. Marking it ready for review deploys one (`.github/workflows/preview.yml`); post the link from the PR's `vercel-preview` deployment with the ready-for-review message.
 - The PR body starts with `## Intent` and follows the template in `.github/pull_request_template.md`.
 
 ## Supabase
@@ -71,7 +72,7 @@ pnpm db:generate:supabase-types     # after every migration; pre-push fails if t
 
 - A migration applied on staging is read-only: changes go in a new migration.
 - Every new migration passes squawk (`.squawk.toml`). Copy the header from `scripts/fixtures/squawk/pass-migration-header.sql`; `statement_timeout = 0` only with the reason in a comment. Any `... INDEX CONCURRENTLY` statement goes alone in its migration, without the header, like `pass-concurrent-index-alone.sql`. The PLA-16 migration predates squawk: do not use it as a model.
-- RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`.
+- RLS on every table from the moment it is created, with `user_id = (select auth.uid())` in `USING` and `WITH CHECK`. The only tables without `user_id` are the global reference tables `fx_rates` and `prices`: `authenticated` only reads them, `service_role` writes them only by insert, and they keep the MFA gate (see `docs/decisions.md`). A new one needs its own floor exception.
 - "Automatically expose new tables" is off (`auto_expose_new_tables = false` in `supabase/config.toml` and in the dashboard): every migration makes an explicit `GRANT` to `authenticated` with only the operations the app uses. Never to `anon`.
 - Every table starts with `REVOKE ALL`, and `authenticated` writes only through column-level grants, never on `user_id`. The full shape of owned tables is in `docs/decisions.md`; the pgTAP floor checks part of it and each table's two-user test checks the rest.
 - Explicit `REVOKE ... FROM PUBLIC, anon, authenticated` on functions, and `SECURITY DEFINER` always with `SET search_path`.

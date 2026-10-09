@@ -9,13 +9,21 @@
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
+-- - The reference tables, public tables with no user_id, are exactly fx_rates
+--   and prices: market data every user reads. Their permissive policies only
+--   let authenticated read every row, authenticated cannot write them,
+--   service_role cannot update or delete them, and they have no foreign key,
+--   since every user reads what a row points at.
 -- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
 --   table copies it from enforce-owner-isolation's house form. The first
 --   Storage bucket or private Realtime channel adds the same predicate and its
 --   assert here, and a sensitive check written in SQL joins the truth table in
 --   mfa_gate_test.sql.
--- - Views granted to authenticated run as the caller, and materialized views
---   and foreign tables grant authenticated nothing.
+-- - Views granted to authenticated, or writable by service_role, run as the
+--   caller, and materialized views and foreign tables grant them nothing.
+-- - No table in public or private inherits or is inherited, besides partitions.
+-- - The extensions schema holds only its extensions' members and the
+--   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, service_role none in
@@ -41,8 +49,8 @@
 --   there, is a member of no role, and only authenticator can switch to it.
 --   Only supabase_auth_admin and the owner can execute the hook, which runs as
 --   the caller with an empty search_path.
--- - Canaries prove the MFA gate, partition and authenticated_aal1 asserts can
---   fail.
+-- - Canaries prove the MFA gate, reference table, view, inheritance,
+--   partition and authenticated_aal1 asserts can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them and no partition is granted to authenticated: queried directly, a
@@ -55,7 +63,15 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(36);
+SELECT plan(41);
+
+-- Partitions are reached through their parent, like in the asserts below.
+CREATE TEMP VIEW reference_tables AS
+  SELECT c.oid, c.relname FROM pg_class c
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+    AND NOT c.relispartition
+    AND NOT EXISTS (SELECT 1 FROM pg_attribute a
+                    WHERE a.attrelid = c.oid AND a.attname = 'user_id' AND NOT a.attisdropped);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -136,6 +152,7 @@ SELECT is_empty(
 SELECT is_empty(
   $$ SELECT tablename || '.' || policyname FROM pg_policies
      WHERE schemaname = 'public' AND permissive = 'PERMISSIVE'
+       AND tablename NOT IN (SELECT relname FROM reference_tables)
        AND (roles <> '{authenticated}'::name[]
             OR (cmd <> 'INSERT' AND qual IS DISTINCT FROM '(user_id = ( SELECT auth.uid() AS uid))')
             OR (cmd IN ('INSERT', 'UPDATE', 'ALL')
@@ -143,17 +160,9 @@ SELECT is_empty(
   'every permissive policy in public pins user_id to auth.uid() for authenticated'
 );
 
--- A view reads as its owner, past RLS, unless security_invoker is set.
--- reloptions keeps the spelling it was given (true, on, 1, yes).
-SELECT is_empty(
-  $$ SELECT c.relname FROM pg_class c
-     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('v', 'm', 'f')
-       AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE')
-            OR has_table_privilege('authenticated', c.oid, 'DELETE'))
-       AND (c.relkind <> 'v'
-            OR NOT COALESCE((SELECT o.option_value::boolean FROM pg_options_to_table(c.reloptions) o
-                             WHERE o.option_name = 'security_invoker'), false)) $$,
-  'views granted to authenticated are security_invoker; materialized views and foreign tables grant it nothing'
+SELECT ok(
+  (SELECT count(*) FROM reference_tables WHERE relname IN ('fx_rates', 'prices')) = 2,
+  'fx_rates and prices are reference tables'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.
@@ -457,6 +466,96 @@ INSERT INTO canaried VALUES
            OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
            OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$),
+-- A view reads as its owner, past RLS and past the grants service_role lacks
+-- on a quote table, unless security_invoker is set.
+-- reloptions keeps the spelling it was given (true, on, 1, yes).
+('views granted to authenticated, or writable by service_role, are security_invoker; materialized views and foreign tables grant them nothing',
+ ARRAY['pgtap_canary_view_read', 'pgtap_canary_view_insert', 'pgtap_canary_view_update',
+       'pgtap_canary_view_delete', 'pgtap_canary_view_matview'],
+ $$ SELECT c.relname FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('v', 'm', 'f')
+      AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE')
+           OR has_table_privilege('authenticated', c.oid, 'DELETE')
+           OR has_any_column_privilege('service_role', c.oid, 'INSERT, UPDATE')
+           OR has_table_privilege('service_role', c.oid, 'DELETE'))
+      AND (c.relkind <> 'v'
+           OR NOT COALESCE((SELECT o.option_value::boolean FROM pg_options_to_table(c.reloptions) o
+                            WHERE o.option_name = 'security_invoker'), false)) $$),
+-- A child's rows answer every query on its parent under the parent's grants
+-- and policies, past the child's own, so a user's table under a reference
+-- table writes what every user reads.
+('no table in public or private inherits or is inherited, besides partitions', ARRAY['public.pgtap_canary_inherits', 'extensions.pgtap_canary_inherits'],
+ $$ SELECT c.relnamespace::regnamespace::text || '.' || c.relname FROM pg_inherits i
+    JOIN pg_class c ON c.oid = i.inhrelid
+    JOIN pg_class p ON p.oid = i.inhparent
+    WHERE NOT c.relispartition
+      AND (c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)
+           OR p.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)) $$),
+-- The floor's other asserts stop at public and private, so a migration that
+-- put a table, a definer, a rule or a trigger in extensions would write public
+-- tables past all of them. Only extensions' own members and the platform's
+-- objects (supabase_admin's) live there.
+('nothing in extensions but its extensions'' members and the platform''s own objects and default privileges, and no rule or trigger there',
+ ARRAY['table pgtap_canary_relation', 'function pgtap_canary_fn', 'type pgtap_canary_type',
+       'operator ===', 'collation pgtap_canary_collation', 'default privileges postgres',
+       'rule pgtap_canary_relation.pgtap_canary', 'trigger pgtap_canary_relation.pgtap_canary'],
+ $$ SELECT 'table ' || c.relname FROM pg_class c
+    WHERE c.relnamespace = 'extensions'::regnamespace AND c.relowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'function ' || p.proname FROM pg_proc p
+    WHERE p.pronamespace = 'extensions'::regnamespace AND p.proowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'type ' || t.typname FROM pg_type t
+    WHERE t.typnamespace = 'extensions'::regnamespace AND t.typowner <> 'supabase_admin'::regrole
+      AND t.typrelid = 0
+      AND NOT EXISTS (SELECT 1 FROM pg_type e WHERE e.typarray = t.oid)
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'operator ' || o.oprname FROM pg_operator o
+    WHERE o.oprnamespace = 'extensions'::regnamespace AND o.oprowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_operator'::regclass AND d.objid = o.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'collation ' || co.collname FROM pg_collation co
+    WHERE co.collnamespace = 'extensions'::regnamespace AND co.collowner <> 'supabase_admin'::regrole
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                      WHERE d.classid = 'pg_collation'::regclass AND d.objid = co.oid AND d.deptype = 'e')
+    UNION ALL
+    SELECT 'default privileges ' || pg_get_userbyid(da.defaclrole) FROM pg_default_acl da
+    WHERE da.defaclnamespace = 'extensions'::regnamespace
+      AND da.defaclrole <> 'supabase_admin'::regrole
+    UNION ALL
+    SELECT 'rule ' || c.relname || '.' || r.rulename FROM pg_rewrite r
+    JOIN pg_class c ON c.oid = r.ev_class
+    WHERE c.relnamespace = 'extensions'::regnamespace AND r.rulename <> '_RETURN'
+    UNION ALL
+    SELECT 'trigger ' || c.relname || '.' || tg.tgname FROM pg_trigger tg
+    JOIN pg_class c ON c.oid = tg.tgrelid
+    WHERE c.relnamespace = 'extensions'::regnamespace AND NOT tg.tgisinternal $$),
+('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
+ $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
+('a reference table only lets authenticated read every row, no API role write it but service_role''s inserts, and points at no other table',
+ ARRAY['pgtap_canary_ref_all.pgtap_canary', 'pgtap_canary_ref_role.pgtap_canary',
+       'pgtap_canary_ref_qual.pgtap_canary', 'pgtap_canary_ref_insert', 'pgtap_canary_ref_update',
+       'pgtap_canary_ref_delete', 'pgtap_canary_ref_service_update',
+       'pgtap_canary_ref_service_delete', 'pgtap_canary_ref_fk'],
+ $$ SELECT p.tablename || '.' || p.policyname FROM pg_policies p
+    JOIN reference_tables r ON r.relname = p.tablename
+    WHERE p.schemaname = 'public' AND p.permissive = 'PERMISSIVE'
+      AND (p.cmd <> 'SELECT' OR p.roles <> '{authenticated}'::name[]
+           OR p.qual IS DISTINCT FROM 'true')
+    UNION ALL
+    SELECT r.relname FROM reference_tables r
+    WHERE has_any_column_privilege('authenticated', r.oid, 'INSERT, UPDATE')
+       OR has_table_privilege('authenticated', r.oid, 'DELETE')
+       OR has_any_column_privilege('service_role', r.oid, 'UPDATE')
+       OR has_table_privilege('service_role', r.oid, 'DELETE')
+       OR EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conrelid = r.oid AND c.contype = 'f') $$),
 ('no partition in public is granted to authenticated', ARRAY['pgtap_canary_partition'],
  $$ SELECT c.relname FROM pg_class c
     WHERE c.relnamespace = 'public'::regnamespace AND c.relispartition
@@ -565,6 +664,47 @@ GRANT EXECUTE ON FUNCTION private.custom_access_token_hook(jsonb) TO authenticat
 CREATE TABLE public.pgtap_canary_partition PARTITION OF public.pgtap_canary_partitioned
   FOR VALUES FROM (0) TO (1);
 GRANT SELECT ON public.pgtap_canary_partition TO authenticated;
+CREATE TABLE public.pgtap_canary_reference ();
+CREATE TABLE extensions.pgtap_canary_relation ();
+CREATE TABLE public.pgtap_canary_inherits () INHERITS (extensions.pgtap_canary_relation);
+CREATE TABLE extensions.pgtap_canary_inherits () INHERITS (public.pgtap_canary_reference);
+CREATE FUNCTION extensions.pgtap_canary_fn() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+CREATE TYPE extensions.pgtap_canary_type AS ENUM ('x');
+CREATE OPERATOR extensions.=== (LEFTARG = int, RIGHTARG = int, FUNCTION = int4eq);
+CREATE COLLATION extensions.pgtap_canary_collation FROM "C";
+ALTER DEFAULT PRIVILEGES IN SCHEMA extensions GRANT EXECUTE ON FUNCTIONS TO anon;
+CREATE RULE pgtap_canary AS ON INSERT TO extensions.pgtap_canary_relation DO INSTEAD NOTHING;
+CREATE TRIGGER pgtap_canary BEFORE INSERT ON extensions.pgtap_canary_relation
+  FOR EACH ROW EXECUTE FUNCTION extensions.pgtap_canary_fn();
+CREATE VIEW public.pgtap_canary_view_read AS SELECT 1 AS x;
+GRANT SELECT (x) ON public.pgtap_canary_view_read TO authenticated;
+CREATE VIEW public.pgtap_canary_view_insert AS SELECT 1 AS x;
+GRANT INSERT (x) ON public.pgtap_canary_view_insert TO service_role;
+CREATE VIEW public.pgtap_canary_view_update AS SELECT 1 AS x;
+GRANT UPDATE (x) ON public.pgtap_canary_view_update TO service_role;
+CREATE VIEW public.pgtap_canary_view_delete AS SELECT 1 AS x;
+GRANT DELETE ON public.pgtap_canary_view_delete TO service_role;
+CREATE MATERIALIZED VIEW public.pgtap_canary_view_matview AS SELECT 1 AS x;
+GRANT SELECT ON public.pgtap_canary_view_matview TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_all (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_all FOR ALL TO authenticated USING (true);
+CREATE TABLE public.pgtap_canary_ref_role (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_role FOR SELECT TO anon, authenticated
+  USING (true);
+CREATE TABLE public.pgtap_canary_ref_qual (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_qual FOR SELECT TO authenticated
+  USING (x = 1);
+CREATE TABLE public.pgtap_canary_ref_insert (x int);
+GRANT INSERT (x) ON public.pgtap_canary_ref_insert TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_update (x int);
+GRANT UPDATE (x) ON public.pgtap_canary_ref_update TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_delete (x int);
+GRANT DELETE ON public.pgtap_canary_ref_delete TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_service_update (x int);
+GRANT UPDATE (x) ON public.pgtap_canary_ref_service_update TO service_role;
+CREATE TABLE public.pgtap_canary_ref_service_delete (x int);
+GRANT DELETE ON public.pgtap_canary_ref_service_delete TO service_role;
+CREATE TABLE public.pgtap_canary_ref_fk (x uuid REFERENCES public.profiles (user_id));
 -- Each gate canary copies the gate on profiles and changes one thing.
 DO $$
 DECLARE

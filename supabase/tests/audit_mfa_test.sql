@@ -5,25 +5,49 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(21);
+SELECT plan(22);
 
 CREATE TEMP TABLE baseline AS SELECT coalesce(max(id), 0) AS last_id FROM private.audit_log;
 
+-- The audit rows come from triggers, so a role that owns the table, a trigger
+-- function or the private schema, adds a trigger or turns triggers off gets
+-- past them.
+CREATE FUNCTION pg_temp.bypasses() RETURNS SETOF text LANGUAGE sql AS $f$
+  SELECT r.rolname || ' ' || t
+  FROM pg_roles r,
+       unnest(ARRAY['auth.sessions', 'auth.mfa_factors', 'private.audit_log']) t
+  WHERE pg_has_role('authenticator', r.oid, 'MEMBER')
+    AND (has_any_column_privilege(r.oid, t, 'INSERT, UPDATE')
+         OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
+         OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
+         OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
+         OR EXISTS (SELECT 1 FROM pg_trigger tg JOIN pg_proc p ON p.oid = tg.tgfoid
+                    WHERE tg.tgrelid = t::regclass AND pg_has_role(r.oid, p.proowner, 'MEMBER'))
+         OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
+         OR coalesce(pg_has_role(r.oid, (SELECT oid FROM pg_roles
+                                         WHERE rolname = current_setting('supautils.privileged_role', true)),
+                                 'MEMBER'), true))
+$f$;
+
 SELECT is_empty(
-  $$ SELECT r.rolname || ' ' || t
-     FROM pg_roles r,
-          unnest(ARRAY['auth.sessions', 'auth.mfa_factors', 'private.audit_log']) t
-     WHERE pg_has_role('authenticator', r.oid, 'MEMBER')
-       AND (has_any_column_privilege(r.oid, t, 'INSERT, UPDATE')
-            OR has_table_privilege(r.oid, t, 'DELETE, TRUNCATE, TRIGGER')
-            OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
-            OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
-            OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
-            OR coalesce(pg_has_role(r.oid, (SELECT oid FROM pg_roles
-                                            WHERE rolname = current_setting('supautils.privileged_role', true)),
-                                    'MEMBER'), true)) $$,
-  'no role the API can become can write, truncate, add a trigger to or own sessions, factors or audit_log, or switch triggers off, so none can forge or skip an audit row'
+  $$ SELECT pg_temp.bypasses() $$,
+  'no role the API can become can write, truncate, add a trigger to or own sessions, factors, audit_log or their trigger functions, or switch triggers off, so none can forge or skip an audit row'
 );
+
+-- A role needs CREATE on a schema to own a function there.
+CREATE FUNCTION pg_temp.trigger_owner_missed() RETURNS boolean LANGUAGE plpgsql AS $f$
+DECLARE missed boolean;
+BEGIN
+  GRANT CREATE ON SCHEMA private TO authenticated_aal1;
+  ALTER FUNCTION private.record_mfa_factor_event() OWNER TO authenticated_aal1;
+  missed := 'authenticated_aal1 auth.mfa_factors' NOT IN (SELECT pg_temp.bypasses());
+  RAISE EXCEPTION USING ERRCODE = 'PTCAN';
+EXCEPTION WHEN SQLSTATE 'PTCAN' THEN RETURN missed;
+END
+$f$;
+
+SELECT ok(NOT pg_temp.trigger_owner_missed(),
+          'the bypass assert catches a trigger function owned by a role the API can become');
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
