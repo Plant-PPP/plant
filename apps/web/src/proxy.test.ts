@@ -467,6 +467,56 @@ describe("the request line", () => {
   const UUID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 
   it.each([
+    [
+      "an unverified session sent to the MFA step",
+      unverified,
+      "/assets?x=1",
+      "/assets",
+      "redirect_mfa",
+      "info",
+      {},
+    ],
+    [
+      "an unverified session on the MFA step",
+      unverified,
+      "/auth/mfa?next=%2Fassets",
+      "/auth/mfa",
+      "mfa_required",
+      "info",
+      {},
+    ],
+    [
+      "a token without the MFA claim",
+      claimMissing,
+      "/assets?x=1",
+      "/assets",
+      "mfa_claim_missing",
+      "error",
+      { "error.type": "mfa_claim_missing" },
+    ],
+  ] as const)(
+    "records %s with only ids and the outcome",
+    async (_label, claims, url, path, outcome, level, extra) => {
+      getClaims = claims;
+      const res = await proxy(request(url));
+      expect(logged()).toEqual({
+        method: level === "info" ? "log" : level,
+        line: {
+          level,
+          event: "proxy.request",
+          [REQUEST_ID_FIELD]: res.headers.get(REQUEST_ID_HEADER),
+          "http.request.method": "GET",
+          "url.path": path,
+          "plant.outcome": outcome,
+          "plant.auth.duration_ms": expect.any(Number),
+          "enduser.id": "u",
+          ...extra,
+        },
+      });
+    },
+  );
+
+  it.each([
     ["a signed-in page", signedIn, "/assets", "signed_in", "log"],
     [
       "a signed-in user on /login",
