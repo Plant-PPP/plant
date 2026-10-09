@@ -8,7 +8,8 @@ const dateParts = new Intl.DateTimeFormat("en-US", {
 });
 
 // The calendar day in Buenos Aires as YYYY-MM-DD, the date a quote is stored
-// under (the quote guards in the quotes migration compute the same day). Read from the parts, so no locale's date format is assumed.
+// under (the quote guards in the quotes migration compute the same day). Read
+// from the parts, so no locale's date format is assumed.
 export function buenosAiresDate(instant: Date): string {
   const parts = Object.fromEntries(
     dateParts.formatToParts(instant).map((part) => [part.type, part.value]),

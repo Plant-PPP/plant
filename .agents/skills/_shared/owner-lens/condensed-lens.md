@@ -25,7 +25,9 @@ the wave is clean.
 MODEL: single-user ownership — no organizations, no tenants. Every row has `user_id uuid` referencing
 auth.users; the house policy is `for all to authenticated using (user_id = (select auth.uid())) with
 check (user_id = (select auth.uid()))`, plus the RESTRICTIVE MFA gate from the house form on every
-`public` table (the pgTAP floor pins its text); `authenticated` is granted only the verbs the app uses, `anon`
+`public` table (the pgTAP floor pins its text). The one exception is the reference tables (`fx_rates`,
+`prices`): market data with no `user_id`, read by every authenticated user and inserted only by
+`service_role`, which the floor limits to exactly those two; `authenticated` is granted only the verbs the app uses, `anon`
 nothing; DEFINER helpers live in schema `private` with `SET search_path`; the service-role key never
 reaches the frontend.
 

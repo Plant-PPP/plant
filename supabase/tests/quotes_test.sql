@@ -151,31 +151,41 @@ SELECT is_empty(
   'no role the API can become can change, delete, own or add a trigger to a quote table, own its enums, or switch triggers off'
 );
 
--- Each canary breaks one clause; owning a table or a guard function, or
--- setting session_replication_role, takes a superuser to grant. A sequence keeps its value through ROLLBACK
--- TO, so it carries the number of missed canaries out of the savepoint.
-CREATE TEMP SEQUENCE bypass_misses MINVALUE -1 START -1;
-SAVEPOINT canary;
-GRANT TRIGGER ON public.fx_rates TO anon;
-GRANT UPDATE (sell) ON public.fx_rates TO authenticated;
-GRANT DELETE ON public.prices TO anon;
-GRANT TRUNCATE ON public.prices TO authenticated_aal1;
-ALTER SCHEMA private OWNER TO service_role;
-GRANT CREATE ON SCHEMA public TO authenticated;
-ALTER TYPE public.quote_source OWNER TO authenticated;
-SELECT setval('bypass_misses',
-              (SELECT count(*) FROM (VALUES ('service_role public.fx_rates'),
-                                            ('service_role public.prices'),
-                                            ('authenticated public.fx_rates'),
-                                            ('authenticated public.prices'),
-                                            ('anon public.fx_rates'),
-                                            ('anon public.prices'),
-                                            ('authenticated_aal1 public.prices')) c(x)
-               WHERE x NOT IN (SELECT pg_temp.bypasses())));
-ROLLBACK TO SAVEPOINT canary;
+-- Each canary breaks one clause in its own subtransaction, so no canary can
+-- stand in for another. Setting session_replication_role or holding the
+-- privileged role takes a superuser to grant, and owning a table also holds
+-- DELETE. A role needs CREATE on a schema to own a type or function there.
+CREATE FUNCTION pg_temp.bypass_misses() RETURNS int LANGUAGE plpgsql AS $f$
+DECLARE c record; misses int := 0;
+BEGIN
+  FOR c IN SELECT * FROM (VALUES
+    ('GRANT TRIGGER ON public.fx_rates TO anon', 'anon public.fx_rates'),
+    ('GRANT UPDATE (sell) ON public.fx_rates TO authenticated', 'authenticated public.fx_rates'),
+    ('GRANT DELETE ON public.prices TO anon', 'anon public.prices'),
+    ('GRANT TRUNCATE ON public.prices TO authenticated_aal1', 'authenticated_aal1 public.prices'),
+    ('ALTER SCHEMA private OWNER TO service_role', 'service_role public.fx_rates'),
+    ('GRANT CREATE ON SCHEMA private TO authenticated_aal1;
+      ALTER FUNCTION private.guard_fx_rate_insert() OWNER TO authenticated_aal1', 'authenticated_aal1 public.fx_rates'),
+    ('GRANT CREATE ON SCHEMA public TO authenticated;
+      ALTER TYPE public.fx_rate_kind OWNER TO authenticated', 'authenticated public.prices'),
+    ('GRANT CREATE ON SCHEMA public TO authenticated;
+      ALTER TYPE public.quote_source OWNER TO authenticated', 'authenticated public.prices'),
+    ('GRANT CREATE ON SCHEMA public TO authenticated;
+      ALTER TYPE public.currency OWNER TO authenticated', 'authenticated public.prices')
+  ) v(breaks, flagged) LOOP
+    BEGIN
+      EXECUTE c.breaks;
+      IF c.flagged NOT IN (SELECT pg_temp.bypasses()) THEN misses := misses + 1; END IF;
+      RAISE EXCEPTION USING ERRCODE = 'PTCAN';
+    EXCEPTION WHEN SQLSTATE 'PTCAN' THEN NULL;
+    END;
+  END LOOP;
+  RETURN misses;
+END
+$f$;
 
-SELECT is((SELECT last_value FROM bypass_misses), 0::bigint,
-          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema or a quote enum');
+SELECT is(pg_temp.bypass_misses(), 0,
+          'the bypass assert catches TRIGGER, UPDATE, DELETE and TRUNCATE grants and owning the private schema, a guard function or a quote enum');
 
 -- ── The table owner (a migration) ───────────────────────────────────────────
 ALTER TABLE public.fx_rates DISABLE TRIGGER fx_rates_guard;

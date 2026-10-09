@@ -16,7 +16,9 @@ description: >-
 This is a **language guide**, not a workflow. Load it as the lens for a pass whose sole job is to
 prove a change cannot be driven across a user boundary. Plant is single-user ownership: no
 organizations, no tenants, no shared rows. Every row belongs to exactly one user (`user_id uuid`
-referencing `auth.users`), and nothing one user does may read, write, or influence another user's
+referencing `auth.users`), except the reference tables `fx_rates` and `prices` (market data every
+authenticated user reads and only `service_role` inserts; the pgTAP floor limits the exception to
+those two), and nothing one user does may read, write, or influence another user's
 portfolio, debts, imports, or assistant context. The bar is deliberately unforgiving, because every
 shape below reads like ordinary code and is the kind that ships in real Supabase apps.
 

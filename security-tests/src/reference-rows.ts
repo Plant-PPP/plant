@@ -8,6 +8,8 @@ export type ReferenceTable = {
   [T in keyof Tables]: "user_id" extends keyof Tables[T]["Row"] ? never : T;
 }[keyof Tables];
 
+export type OwnedTable = Exclude<keyof Tables, ReferenceTable>;
+
 type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
 
 type ReferenceRow<T extends ReferenceTable> = {
@@ -28,8 +30,8 @@ export function filterOf({
     .join("&");
 }
 
-// Made-up quotes. No real symbol is PENTEST; the UVA row can stand in for
-// that day's real one on a local database that is not reset.
+// Made-up quotes. No real symbol is PENTEST; on a local database that is not
+// reset, the UVA row takes that day's slot and the real one is ignored.
 export function referenceRows(date: string): {
   [T in ReferenceTable]: ReferenceRow<T>;
 } {
