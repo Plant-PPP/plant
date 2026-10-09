@@ -20,7 +20,10 @@
     "supabase/tests/mfa_gate_test.sql",
     // Read by apps/web's limits.test.ts, which checks the name limits against
     // the CHECKs this pgTAP file pins.
-    "supabase/tests/portfolio_setup_isolation_test.sql"
+    "supabase/tests/portfolio_setup_isolation_test.sql",
+    // Read by core's and web's tests that pin TypeScript constants to the
+    // migrations.
+    "supabase/migrations/**"
   ],
   "tasks": {
     // Workspace packages ship TypeScript sources with no build of their own,

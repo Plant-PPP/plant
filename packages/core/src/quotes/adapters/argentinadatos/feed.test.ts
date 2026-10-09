@@ -68,7 +68,7 @@ describe("argentinadatos parse", () => {
       NOW,
       "argentinadatos",
     );
-    expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
+    expect(batch.refused).toMatchObject({ stale: ["uva"], invalid: [] });
   });
 
   it("picks the latest entry of a 200 000-entry series", () => {

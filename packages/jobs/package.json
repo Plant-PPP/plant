@@ -2,7 +2,7 @@
   "name": "@plant/jobs",
   "version": "0.0.0",
   "private": true,
-  "description": "Inngest client and the endpoint options. The JobRunner port arrives with the \"Carga con IA\" stage.",
+  "description": "Inngest client, the ping and refresh-quotes functions and the endpoint options. The JobRunner port arrives with the \"Carga con IA\" stage.",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -15,6 +15,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
+    "@plant/core": "workspace:*",
     "@plant/shared": "workspace:*",
     "inngest": "catalog:"
   },

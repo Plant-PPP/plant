@@ -1,6 +1,9 @@
-import { createHmac } from "node:crypto";
-
-import { loadWithEnv, restoreEnv, TEST_SIGNING_KEY as KEY } from "./testing";
+import {
+  loadWithEnv,
+  restoreEnv,
+  sign,
+  TEST_SIGNING_KEY as KEY,
+} from "./testing";
 
 const ORIGINAL_FETCH = global.fetch;
 
@@ -10,9 +13,10 @@ function loadHandler(env: Record<string, string | undefined>): Handler {
   return loadWithEnv({ NODE_ENV: "production", ...env }, () => {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { serve } = require("inngest/edge") as typeof import("inngest/edge");
-    const { serveOptions } = require("./index") as typeof import("./index");
+    const { createServeOptions } =
+      require("./index") as typeof import("./index");
     /* eslint-enable @typescript-eslint/no-require-imports */
-    return serve(serveOptions) as Handler;
+    return serve(createServeOptions({})) as Handler;
   });
 }
 
@@ -30,14 +34,6 @@ function request(
       ...headers,
     },
   });
-}
-
-function sign(body: string): string {
-  const timestamp = Math.round(Date.now() / 1000).toString();
-  const signature = createHmac("sha256", KEY.replace(/^signkey-\w+-/, ""))
-    .update(body + timestamp)
-    .digest("hex");
-  return `t=${timestamp}&s=${signature}`;
 }
 
 let outbound: jest.Mock;

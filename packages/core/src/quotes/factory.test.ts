@@ -43,6 +43,36 @@ describe("toQuoteFeed", () => {
     });
   });
 
+  it("throws bad_shape when every part was unread or invalid", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [],
+        prices: [],
+        unread: [{ key: "blue", code: "http_4xx" }],
+      })),
+    );
+    await expect(feed.read(NOW)).rejects.toMatchObject({ code: "bad_shape" });
+  });
+
+  it("keeps a read whose rows are all early", async () => {
+    const morning = new Date("2026-10-09T13:00:00.000Z");
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [
+          {
+            kind: "mep",
+            rate_date: "2026-10-09",
+            buy: "1",
+            sell: "2",
+            quoted_at: morning.toISOString(),
+          },
+        ],
+        prices: [],
+      })),
+    );
+    expect((await feed.read(morning)).refused.early).toEqual(["mep"]);
+  });
+
   it("keeps a read whose rows are all stale", async () => {
     const feed = toQuoteFeed(
       raw(async () => ({
@@ -59,7 +89,7 @@ describe("toQuoteFeed", () => {
       })),
     );
     const batch = await feed.read(NOW);
-    expect([batch.fxRates.length, batch.staleCount]).toEqual([0, 1]);
+    expect([batch.fxRates.length, batch.refused.stale]).toEqual([0, ["uva"]]);
   });
 
   it("stamps its own id and the read instant over what a row carries", async () => {
@@ -125,7 +155,10 @@ describe("toQuoteFeed", () => {
     const batch = await feed.read(NOW);
     expect(feed.id).toBe(SOURCE);
     expect(batch.fxRates.map((row) => row.rate_date)).toEqual(["2026-10-09"]);
-    expect([batch.staleCount, batch.invalidCount]).toEqual([1, 1]);
+    expect(batch.refused).toMatchObject({
+      stale: ["uva"],
+      invalid: ["_unknown"],
+    });
   });
 
   // Far from the wall clock, so only the read instant can put the rows in the
@@ -165,7 +198,7 @@ describe("toQuoteFeed", () => {
   ])("returns a read that kept only %s", async (_label, rows) => {
     const batch = await toQuoteFeed(raw(async () => rows)).read(LATER);
     expect(batch.fxRates.length + batch.prices.length).toBe(1);
-    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 0]);
+    expect(Object.values(batch.refused).flat()).toEqual([]);
   });
 });
 

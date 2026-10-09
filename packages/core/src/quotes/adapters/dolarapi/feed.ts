@@ -27,7 +27,8 @@ const responseSchema = z.object({
 });
 
 // On weekends and holidays the house still stamps its last business day, so
-// the row is dated that day and the window drops it.
+// the row is dated that day: the window refuses it as closed on a weekend and
+// as stale on a holiday.
 export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   const { compra, venta, fechaActualizacion } = parseResponse(
     responseSchema,
@@ -42,35 +43,45 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   };
 }
 
-// A house that changed shape or went away becomes one row the schemas count as
-// invalid, so the other houses are kept.
-function unreadable(kind: FxRateKind, now: Date): RawFxRate {
-  return {
-    kind,
-    rate_date: buenosAiresDate(now),
-    buy: null,
-    sell: "",
-    quoted_at: now.toISOString(),
-  };
-}
+// A house that fails is recorded as unread and the others are kept; only when
+// every house fails does the read fail, retryable if any house's error is.
+type HouseRead =
+  | { ok: true; row: RawFxRate }
+  | { ok: false; kind: FxRateKind; error: QuoteFeedError };
 
 export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "dolarapi",
-    async readRaw(now) {
-      const fxRates = await Promise.all(
-        HOUSES.map(async ({ house, kind }) => {
+    async readRaw() {
+      const results = await Promise.all(
+        HOUSES.map(async ({ house, kind }): Promise<HouseRead> => {
           try {
-            return parse(await getJson(`${BASE_URL}/${house}`), kind);
+            const json = await getJson(`${BASE_URL}/${house}`);
+            return { ok: true, row: parse(json, kind) };
           } catch (error) {
-            if (error instanceof QuoteFeedError && !error.retryable) {
-              return unreadable(kind, now);
+            if (error instanceof QuoteFeedError) {
+              return { ok: false, kind, error };
             }
             throw error;
           }
         }),
       );
-      return { fxRates, prices: [] };
+      const fxRates = results.flatMap((result) =>
+        result.ok ? [result.row] : [],
+      );
+      const failed = results.flatMap((result) => (result.ok ? [] : [result]));
+      const [first] = failed;
+      if (first && failed.length === HOUSES.length) {
+        throw (failed.find(({ error }) => error.retryable) ?? first).error;
+      }
+      return {
+        fxRates,
+        prices: [],
+        unread: failed.map(({ kind, error }) => ({
+          key: kind,
+          code: error.code,
+        })),
+      };
     },
   };
 }

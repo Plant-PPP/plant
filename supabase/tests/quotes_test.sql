@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(60);
+SELECT plan(65);
 
 -- A local database may hold rows from a cron or pentest run.
 DELETE FROM public.fx_rates;
@@ -115,8 +115,10 @@ SELECT set_eq(
         'fx_rates CHECK ((buy > (0)::numeric))',
         $q$fx_rates CHECK (((kind <> 'uva'::fx_rate_kind) OR (buy IS NULL)))$q$,
         'fx_rates CHECK ((sell > (0)::numeric))',
+        $q$fx_rates CHECK ((sell <> 'NaN'::numeric))$q$,
         'fx_rates PRIMARY KEY (kind, rate_date)',
         'prices CHECK ((price > (0)::numeric))',
+        $q$prices CHECK ((price <> 'NaN'::numeric))$q$,
         $q$prices CHECK ((symbol ~ '^[A-Z0-9]{1,15}$'::text))$q$,
         'prices PRIMARY KEY (symbol, price_date)'],
   'each quote table has exactly its constraints'
@@ -530,6 +532,42 @@ SELECT throws_ok(
      VALUES ('ETH', (SELECT today FROM day), 1e12, 'USD', 'kraken', now(), now()) $$,
   '22003', NULL,
   'a price fits 12 integer digits'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.fx_rates (kind, rate_date, buy, sell, source, quoted_at, fetched_at)
+     VALUES ('blue', (SELECT today FROM day), NULL, 'NaN', 'dolarapi', now(), now()) $$,
+  '23514', 'new row for relation "fx_rates" violates check constraint "fx_rates_not_nan"',
+  'a selling rate is a number, not NaN'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
+     VALUES ('ETH', (SELECT today FROM day), 'NaN', 'USD', 'kraken', now(), now()) $$,
+  '23514', 'new row for relation "prices" violates check constraint "prices_not_nan"',
+  'a price is a number, not NaN'
+);
+
+-- Pins of checks that already held before the NaN constraints.
+SELECT throws_ok(
+  $$ INSERT INTO public.fx_rates (kind, rate_date, buy, sell, source, quoted_at, fetched_at)
+     VALUES ('blue', (SELECT today FROM day), 'NaN', 1200, 'dolarapi', now(), now()) $$,
+  '23514', NULL,
+  'a NaN buying rate fails buy <= sell'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.fx_rates (kind, rate_date, buy, sell, source, quoted_at, fetched_at)
+     VALUES ('blue', (SELECT today FROM day), NULL, 'Infinity', 'dolarapi', now(), now()) $$,
+  '22003', NULL,
+  'an infinite selling rate does not fit numeric(20, 8)'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
+     VALUES ('ETH', (SELECT today FROM day), 'Infinity', 'USD', 'kraken', now(), now()) $$,
+  '22003', NULL,
+  'an infinite price does not fit numeric(20, 8)'
 );
 
 SELECT throws_ok(

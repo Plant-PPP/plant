@@ -38,8 +38,9 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
   const errors = response.error.filter((entry) => !entry.startsWith("W"));
   if (errors.length > 0) {
     throw new QuoteFeedError(
-      "provider_error",
-      errors.every((entry) => TRANSIENT_ERROR.test(entry)),
+      errors.every((entry) => TRANSIENT_ERROR.test(entry))
+        ? "provider_busy"
+        : "provider_error",
     );
   }
   const result = response.result ?? {};
