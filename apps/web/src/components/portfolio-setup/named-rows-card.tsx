@@ -3,7 +3,8 @@
 import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { IconButton } from "@/components/ui/icon-button";
+import type { ColumnDef } from "@tanstack/react-table";
+import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type WriteMessages, rowAnswer } from "./answers";
@@ -44,6 +45,14 @@ export type NamedRowsActions = {
   archive: (id: unknown) => Promise<WriteResult>;
   restore: (id: unknown, input?: unknown) => Promise<WriteResult>;
 };
+
+const DATA_COLUMNS: ColumnDef<NamedRow>[] = [
+  {
+    id: "name",
+    header: "Nombre",
+    cell: ({ row }) => <TruncatedText text={row.original.name} />,
+  },
+];
 
 // A card of rows that are only a name: create, rename, archive and restore.
 export function NamedRowsCard({
@@ -94,49 +103,53 @@ export function NamedRowsCard({
     >
       <ActiveList
         view={view}
+        title={copy.title}
         emptyText={copy.emptyText}
         truncatedText={copy.truncated}
-        renderRow={(row) => (
-          <>
-            <span className="min-w-0 truncate text-sm">{row.name}</span>
-            <span className="flex shrink-0 gap-1">
-              <IconButton
-                icon={Pencil}
-                tooltip="Renombrar"
-                label={`Renombrar ${row.name}`}
-                pending={card.pending}
-                onClick={() => openDialog({ kind: "rename", row })}
-              />
-              <IconButton
-                icon={Archive}
-                tooltip="Archivar"
-                label={`Archivar ${row.name}`}
-                pending={card.pending}
-                onClick={() => rowAction(row, "archive")}
-              />
-            </span>
-          </>
-        )}
+        columns={[
+          ...DATA_COLUMNS,
+          actionsColumn<NamedRow>(
+            [
+              {
+                id: "rename",
+                icon: Pencil,
+                tooltip: "Renombrar",
+                label: (row) => `Renombrar ${row.name}`,
+                onClick: (row) => openDialog({ kind: "rename", row }),
+              },
+              {
+                id: "archive",
+                icon: Archive,
+                tooltip: "Archivar",
+                label: (row) => `Archivar ${row.name}`,
+                onClick: (row) => rowAction(row, "archive"),
+              },
+            ],
+            { pending: card.pending },
+          ),
+        ]}
       />
       <ArchivedList
         view={view}
+        title={copy.title}
         label={copy.archivedLabel}
         emptyText={copy.noMoreArchived}
         firstPageLabel={copy.firstPageLabel}
-        renderRow={(row) => (
-          <>
-            <span className="min-w-0 truncate text-sm text-muted-foreground">
-              {row.name}
-            </span>
-            <IconButton
-              icon={ArchiveRestore}
-              tooltip="Restaurar"
-              label={`Restaurar ${row.name}`}
-              pending={card.pending}
-              onClick={() => rowAction(row, "restore")}
-            />
-          </>
-        )}
+        columns={[
+          ...DATA_COLUMNS,
+          actionsColumn<NamedRow>(
+            [
+              {
+                id: "restore",
+                icon: ArchiveRestore,
+                tooltip: "Restaurar",
+                label: (row) => `Restaurar ${row.name}`,
+                onClick: (row) => rowAction(row, "restore"),
+              },
+            ],
+            { pending: card.pending },
+          ),
+        ]}
       />
       {dialog?.kind === "create" && (
         <NameDialog

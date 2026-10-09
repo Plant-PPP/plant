@@ -1,6 +1,7 @@
 "use client";
 
 import type * as React from "react";
+import { useEffect } from "react";
 import { createHolder } from "@/app/(app)/accounts/actions";
 import { Button } from "@/components/ui/button";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
@@ -23,15 +24,24 @@ export function submitOnEnter(submit: () => void) {
 export function NewHolderField({
   onCreated,
   onCancel,
+  onPendingChange,
 }: {
   onCreated: (row: HolderRow) => void;
   onCancel: () => void;
+  onPendingChange: (pending: boolean) => void;
 }) {
   const field = useNameSubmit({
     onSubmit: (name) => createHolder({ name }),
     messages: WRITE_MESSAGES.holders,
     onSaved: (name, id) => onCreated({ id, name }),
   });
+
+  // Reports false once the field unmounts, or an unmount mid-save would hold
+  // the dialog open.
+  useEffect(() => {
+    onPendingChange(field.pending);
+    return () => onPendingChange(false);
+  }, [field.pending, onPendingChange]);
 
   return (
     <div className="grid gap-2 rounded-md border p-3">

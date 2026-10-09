@@ -14,6 +14,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The amount columns refuse NaN** (`fx_rates_not_nan`, `prices_not_nan`, and `ai_costs_not_nan` on the same rule): Postgres's `numeric` takes `'NaN'`, which passes `> 0`, `>= 0` and `<=`. `Infinity` does not fit `numeric(20, 8)`.
 - **`next dev` and the Inngest dev server bind 127.0.0.1**, because dev mode checks no Inngest signature: another device on the network could otherwise run the job. In dev mode the app registers at `http://127.0.0.1:3000` (`serveOrigin`) whatever Host a request sends, so a page rebinding its DNS to loopback cannot move the job to its own host. The dev server's connect gateway and gRPC ports cannot be bound in `inngest-cli` 1.46.0 (see the Inngest threat model).
 
+## 2026-10-09 · Data table (PLA-97)
+
+- **A small table on `@tanstack/react-table`, taken from the reference app's table**: the row model keyed by row id, header and body cells, the icon actions column and truncated cells. Left out until a screen needs them: sorting, expandable rows, a totals footer, loading skeletons, pagination, resizing and pinned columns. Amount cells and exact sums land with the first screen that shows amounts (PLA-28).
+- **No sorting in the browser.** The `/accounts` lists are capped (`PAGE_ROW_LIMIT`) or paged by keyset, so a click on a header would order only the rows on screen and suggest an order the list does not have. Sorting waits for the server to order and page by the chosen column.
+- **Cells are called, not mounted.** The cards build their columns on every render, since the cells close over the card's handlers; mounted as components, each new function would remount its cell and replace the button a dialog returns focus to. `DataTable` calls each header and cell as a function, so they must not use hooks.
+
 ## 2026-10-09 · Holders and accounts (PLA-24)
 
 - **A holder is a row, and an account with no holder is the user's.** `holders` holds the people whose assets the user tracks besides their own, with the same name rules, archive and restore as portfolios (`namedRowWrites` in `lib/portfolio-setup` serves both). A NULL `holder_id` shows as "Vos", and PLA-25 copies the account's holder onto each holding the same way. An account (`source_connections`) is an institution typed as a label, with suggestions but no list it must match and no provider column: where holdings come from is per holding (PLA-25).
