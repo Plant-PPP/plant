@@ -195,6 +195,9 @@ export function SourceConnectionDialog({
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
+  // A new holder still saving holds the account back too: its save may be
+  // the holder the account is about to pick.
+  const busy = pending || holderPending;
 
   if (listed !== holders) {
     setListed(holders);
@@ -232,10 +235,8 @@ export function SourceConnectionDialog({
     ? portfolio
     : "";
 
-  // A new holder still saving holds the account back too: its save may be
-  // the holder the account is about to pick.
   function submit() {
-    if (pending || holderPending) return;
+    if (busy) return;
     const fields = {
       institution: institution.current?.value ?? "",
       holder: chosenHolder,
@@ -272,7 +273,7 @@ export function SourceConnectionDialog({
   return (
     <AppDialog
       onClose={onClose}
-      pending={pending || holderPending}
+      pending={busy}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -398,7 +399,7 @@ export function SourceConnectionDialog({
           <PendingButton
             type="submit"
             size="sm"
-            pending={pending || holderPending}
+            pending={busy}
             aria-describedby={error ? ids.alert : undefined}
           >
             {pending ? "Guardando…" : submitLabel}
