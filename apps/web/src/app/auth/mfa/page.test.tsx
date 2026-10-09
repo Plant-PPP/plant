@@ -53,6 +53,12 @@ it("sends a session that needs no verification where it was going", async () => 
   expect(listFactors).not.toHaveBeenCalled();
 });
 
+it("forwards a user without a factor", async () => {
+  readSessionClaims.mockResolvedValue({ ...UNVERIFIED, mfa_enrolled: false });
+  await expect(render("/assets")).rejects.toThrow("redirect /assets");
+  expect(listFactors).not.toHaveBeenCalled();
+});
+
 it("shows the form for the user's TOTP factor, keeping the first next", async () => {
   listFactors.mockResolvedValue({
     data: { all: [totp], totp: [totp] },

@@ -39,16 +39,21 @@ describe("cleanupUnverifiedTotp", () => {
     expect(unenroll.mock.calls).toEqual([[{ factorId: "stale" }]]);
   });
 
-  it("throws when an unenroll fails", async () => {
+  it("throws when any unenroll fails", async () => {
     const error = new Error("nope");
     await expect(
       cleanupUnverifiedTotp(
         fakeClient({
           listFactors: async () => ({
-            data: { all: [factor("stale", "unverified")] },
+            data: {
+              all: [factor("s1", "unverified"), factor("s2", "unverified")],
+            },
             error: null,
           }),
-          unenroll: async () => ({ data: null, error }),
+          unenroll: async ({ factorId }: { factorId: string }) =>
+            factorId === "s2"
+              ? { data: null, error }
+              : { data: {}, error: null },
         }),
       ),
     ).rejects.toBe(error);
@@ -148,6 +153,15 @@ describe("startEnrollment", () => {
       ),
     ).rejects.toBe(error);
     expect(enroll).not.toHaveBeenCalled();
+  });
+});
+
+it("verifyTotp sends the factor and the code", async () => {
+  const challengeAndVerify = jest.fn(async () => ({ error: null }));
+  await verifyTotp(fakeClient({ challengeAndVerify }), "f", "123456");
+  expect(challengeAndVerify).toHaveBeenCalledWith({
+    factorId: "f",
+    code: "123456",
   });
 });
 
