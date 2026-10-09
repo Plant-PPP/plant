@@ -28,7 +28,7 @@ export function NewHolderField({
 }: {
   onCreated: (row: HolderRow) => void;
   onCancel: () => void;
-  // The dialog around it stays open while the holder saves.
+  // Whether the holder is saving; false once the field unmounts.
   onPendingChange: (pending: boolean) => void;
 }) {
   const field = useNameSubmit({

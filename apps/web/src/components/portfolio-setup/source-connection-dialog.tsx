@@ -232,8 +232,10 @@ export function SourceConnectionDialog({
     ? portfolio
     : "";
 
+  // A new holder still saving holds the account back too: its save may be
+  // the holder the account is about to pick.
   function submit() {
-    if (pending) return;
+    if (pending || holderPending) return;
     const fields = {
       institution: institution.current?.value ?? "",
       holder: chosenHolder,
