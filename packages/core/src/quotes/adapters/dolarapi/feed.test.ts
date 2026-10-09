@@ -46,15 +46,19 @@ describe("dolarapi parse", () => {
     expect([batch.fxRates.length, batch.invalidCount]).toEqual([0, 1]);
   });
 
-  it.each(["0000-10-09T20:00:00Z", "9999-10-09T20:00:00Z"])(
-    "maps a rate stamped %s to a row the window drops",
-    (fechaActualizacion) => {
+  it.each([
+    ["0000-10-09T20:00:00Z", 0, 1],
+    ["9999-10-09T20:00:00Z", 1, 0],
+  ])(
+    "maps a rate stamped %s to a dropped row, stale %i and invalid %i",
+    (fechaActualizacion, stale, invalid) => {
       const row = parse({ ...body("bolsa", 1, 2), fechaActualizacion }, "mep");
       const batch = checkBatch({ fxRates: [row], prices: [] }, NOW);
       expect([
         batch.fxRates.length,
-        batch.staleCount + batch.invalidCount,
-      ]).toEqual([0, 1]);
+        batch.staleCount,
+        batch.invalidCount,
+      ]).toEqual([0, stale, invalid]);
     },
   );
 
@@ -113,15 +117,16 @@ describe("createDolarapiFeed", () => {
     expect(batch.invalidCount).toBe(1);
   });
 
-  it("throws bad_shape when every house changed shape", async () => {
-    const feed = createDolarapiFeed(async () => ({ compra: 1 }));
-    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
-      code: "bad_shape",
-      retryable: false,
+  it("keeps the other houses when one answers 404", async () => {
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw new QuoteFeedError("http_4xx", false);
+      return body("x", 1, 2);
     });
+    const batch = checkBatch(await feed.readRaw(NOW), NOW);
+    expect([batch.fxRates.length, batch.invalidCount]).toEqual([3, 1]);
   });
 
-  it("fails the read when one house cannot be fetched", async () => {
+  it("fails the read when one house fails in a way a retry may fix", async () => {
     const feed = createDolarapiFeed(async (url) => {
       if (url.endsWith("/blue")) throw new QuoteFeedError("http_5xx", true);
       return body("x", 1, 2);

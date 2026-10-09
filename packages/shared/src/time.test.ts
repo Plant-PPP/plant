@@ -65,6 +65,14 @@ describe("startOfBuenosAiresDay", () => {
     expect(buenosAiresDate(new Date(start.getTime() - 1))).not.toBe(date);
   });
 
+  // The day before 0001-01-01 in Buenos Aires is in the year 0, which the
+  // formatter writes as 1 BC.
+  it("starts the first day of the year 1 in the year 1", () => {
+    expect(startOfBuenosAiresDay("0001-01-01").toISOString()).toBe(
+      "0001-01-01T03:53:48.000Z",
+    );
+  });
+
   it("keeps a year below 100 as written", () => {
     expect(startOfBuenosAiresDay("0050-01-01").getUTCFullYear()).toBe(50);
   });

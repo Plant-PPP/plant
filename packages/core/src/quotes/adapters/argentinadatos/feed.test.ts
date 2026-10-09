@@ -1,3 +1,4 @@
+import { checkBatch } from "../../contract/quote";
 import { createArgentinadatosFeed, parse } from "./feed";
 
 // 2026-10-09 10:00 in Buenos Aires.
@@ -52,9 +53,17 @@ describe("argentinadatos parse", () => {
     expect(parse(json, NOW)).toEqual({ fxRates: [], prices: [] });
   });
 
-  it("leaves an exponent valor for the schemas to refuse", () => {
+  it("writes an exponent valor as an exponent string", () => {
     const rows = parse([{ fecha: "2026-10-09", valor: 1e-7 }], NOW);
     expect(rows.fxRates[0]?.sell).toBe("1e-7");
+  });
+
+  it("leaves an entry from the year 1 for the window to drop", () => {
+    const batch = checkBatch(
+      parse([{ fecha: "0001-01-01", valor: 1 }], NOW),
+      NOW,
+    );
+    expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
   });
 
   it("reads a series of 200 000 entries", () => {
@@ -70,6 +79,7 @@ describe("argentinadatos parse", () => {
     ["a day that does not exist", [{ fecha: "2026-02-30", valor: 1 }]],
     ["a string value", [{ fecha: "2026-10-09", valor: "1" }]],
     ["an object", { fecha: "2026-10-09", valor: 1 }],
+    ["an entry in the year 0", [{ fecha: "0000-01-01", valor: 1 }]],
   ])("throws bad_shape on %s", (_label, json) => {
     expect(() => parse(json, NOW)).toThrow(
       expect.objectContaining({ code: "bad_shape", retryable: false }),

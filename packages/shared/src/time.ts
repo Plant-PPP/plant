@@ -9,6 +9,7 @@ const wallClock = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
   second: "2-digit",
   hourCycle: "h23",
+  era: "short",
 });
 
 // Read from the parts, so no locale's date format is assumed.
@@ -26,7 +27,6 @@ export function buenosAiresDate(instant: Date): string {
   return `${parts.year?.padStart(4, "0")}-${parts.month}-${parts.day}`;
 }
 
-// The hour in Buenos Aires, 0 to 23.
 export function buenosAiresHour(instant: Date): number {
   return Number(wallClockParts(instant).hour);
 }
@@ -49,9 +49,11 @@ function utc(
 // How far Buenos Aires' wall clock is from UTC at an instant, in ms.
 function offsetAt(instant: number): number {
   const parts = wallClockParts(new Date(instant));
+  // The formatter counts the years before 1 as 1 BC, 2 BC and so on.
+  const year = parts.era === "BC" ? 1 - Number(parts.year) : Number(parts.year);
   return (
     utc(
-      Number(parts.year),
+      year,
       Number(parts.month),
       Number(parts.day),
       Number(parts.hour),

@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import {
   checkBatch,
-  dropStale,
   inQuoteWindow,
   parseResponse,
   type QuoteBatch,
@@ -154,6 +153,7 @@ describe("checkBatch", () => {
         },
         NOW,
       );
+      expect(batch.fxRates).toHaveLength(1);
       for (const row of batch.fxRates) {
         expect(row.quoted_at).toMatch(/Z$/);
       }
@@ -230,19 +230,6 @@ describe("checkBatch", () => {
     );
     expect(batch.fxRates.map((row) => row.sell)).toEqual(["1460"]);
     expect([batch.staleCount, batch.invalidCount]).toEqual([1, 1]);
-  });
-});
-
-describe("dropStale", () => {
-  it("adds the rows it drops to the stale count", () => {
-    const read = checkBatch({ fxRates: [fx()], prices: [price()] }, NOW);
-    const nextDay = new Date("2026-10-10T21:30:00.000Z");
-    expect(counts(dropStale({ ...read, staleCount: 1 }, nextDay))).toEqual({
-      fxRates: 0,
-      prices: 0,
-      staleCount: 3,
-      invalidCount: 0,
-    });
   });
 });
 

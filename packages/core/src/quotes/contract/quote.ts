@@ -119,24 +119,6 @@ export function inQuoteWindow(
   return kind === "uva" || buenosAiresHour(now) >= QUOTE_CLOSE_HOUR;
 }
 
-export function dropStale(batch: QuoteBatch, now: Date): QuoteBatch {
-  const fxRates = batch.fxRates.filter((row) =>
-    inQuoteWindow(row.kind, row.rate_date, now),
-  );
-  const prices = batch.prices.filter((row) =>
-    inQuoteWindow("price", row.price_date, now),
-  );
-  return {
-    fxRates,
-    prices,
-    staleCount:
-      batch.staleCount +
-      (batch.fxRates.length - fxRates.length) +
-      (batch.prices.length - prices.length),
-    invalidCount: batch.invalidCount,
-  };
-}
-
 function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
   return [...new Map(rows.map((row) => [key(row), row])).values()];
 }
@@ -157,10 +139,12 @@ export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
     if (parsed.success) prices.push(parsed.data);
     else invalidCount += 1;
   }
-  const fresh = dropStale(
-    { fxRates, prices, staleCount: 0, invalidCount },
-    now,
-  );
+  const fresh = {
+    fxRates: fxRates.filter((row) =>
+      inQuoteWindow(row.kind, row.rate_date, now),
+    ),
+    prices: prices.filter((row) => inQuoteWindow("price", row.price_date, now)),
+  };
   const kept = {
     fxRates: lastPerKey(fresh.fxRates, (row) => `${row.kind} ${row.rate_date}`),
     prices: lastPerKey(
@@ -168,14 +152,12 @@ export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
       (row) => `${row.symbol} ${row.price_date}`,
     ),
   };
-  const repeated =
-    fresh.fxRates.length +
-    fresh.prices.length -
-    kept.fxRates.length -
-    kept.prices.length;
+  const read = fxRates.length + prices.length;
+  const inWindow = fresh.fxRates.length + fresh.prices.length;
   return {
     ...kept,
-    staleCount: fresh.staleCount,
-    invalidCount: fresh.invalidCount + repeated,
+    staleCount: read - inWindow,
+    invalidCount:
+      invalidCount + inWindow - kept.fxRates.length - kept.prices.length,
   };
 }

@@ -85,6 +85,8 @@ describe("kraken parse", () => {
     ["EService:Unavailable", true],
     ["EAPI:Rate limit exceeded", true],
     ["EGeneral:Temporary lockout", true],
+    ["EGeneral:Internal error", true],
+    ["EGeneral:Too many requests", true],
     ["EQuery:Unknown asset pair", false],
     ["EGeneral:Invalid arguments", false],
   ])("throws provider_error on %s, retryable %s", (error, retryable) => {

@@ -20,14 +20,14 @@ Each control and the layer it lives in: RLS and grants, `proxy.ts`, route handle
 
 ## STRIDE
 
-| | Vector | Control |
-|---|---|---|
-| **S** | Spoofing | |
-| **T** | Tampering | |
-| **R** | Repudiation | |
-| **I** | Information disclosure | |
-| **D** | Denial of service | |
-| **E** | Elevation of privilege | |
+|       | Vector                 | Control |
+| ----- | ---------------------- | ------- |
+| **S** | Spoofing               |         |
+| **T** | Tampering              |         |
+| **R** | Repudiation            |         |
+| **I** | Information disclosure |         |
+| **D** | Denial of service      |         |
+| **E** | Elevation of privilege |         |
 
 ## Controls as built
 

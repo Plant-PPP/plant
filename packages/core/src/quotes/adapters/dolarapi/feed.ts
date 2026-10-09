@@ -43,12 +43,8 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   };
 }
 
-function isBadShape(error: unknown): boolean {
-  return error instanceof QuoteFeedError && error.code === "bad_shape";
-}
-
-// A house that changed shape counts as one invalid row, so the other houses
-// are still stored for the day; only today's rows can ever be inserted.
+// A house that changed shape or went away becomes one row the schemas count as
+// invalid, so the other houses are kept.
 function unreadable(kind: FxRateKind, now: Date): RawFxRate {
   return {
     kind,
@@ -66,18 +62,16 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
     async readRaw(now) {
       const fxRates = await Promise.all(
         HOUSES.map(async ({ house, kind }) => {
-          const json = await getJson(`${BASE_URL}/${house}`);
           try {
-            return parse(json, kind);
+            return parse(await getJson(`${BASE_URL}/${house}`), kind);
           } catch (error) {
-            if (!isBadShape(error)) throw error;
-            return unreadable(kind, now);
+            if (error instanceof QuoteFeedError && !error.retryable) {
+              return unreadable(kind, now);
+            }
+            throw error;
           }
         }),
       );
-      if (fxRates.every((row) => row.sell === "")) {
-        throw new QuoteFeedError("bad_shape", false);
-      }
       return { fxRates, prices: [] };
     },
   };

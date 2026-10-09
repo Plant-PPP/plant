@@ -30,7 +30,8 @@ const responseSchema = z.object({
 // Each error entry starts with its severity: E for an error, W for a warning
 // that comes with a usable result. Only these errors pass on a retry; an
 // unknown pair or a bad argument fails the same way every time.
-const TRANSIENT_ERROR = /^E(Service:|API:Rate limit|General:Temporary)/;
+const TRANSIENT_ERROR =
+  /^E(Service:|API:Rate limit|General:(Temporary|Internal error|Too many requests))/;
 
 export function parse(json: unknown, now: Date): RawQuoteRows {
   const response = parseResponse(responseSchema, json);

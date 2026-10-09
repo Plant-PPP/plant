@@ -21,6 +21,28 @@ describe("toQuoteFeed", () => {
     });
   });
 
+  it("throws bad_shape when every row is refused", async () => {
+    const feed = toQuoteFeed(
+      raw(async () => ({
+        fxRates: [],
+        prices: [
+          {
+            symbol: "BTC",
+            price_date: "2026-10-09",
+            price: "",
+            currency: "USD",
+            source: SOURCE,
+            quoted_at: NOW.toISOString(),
+          },
+        ],
+      })),
+    );
+    await expect(feed.read(NOW)).rejects.toMatchObject({
+      code: "bad_shape",
+      retryable: false,
+    });
+  });
+
   it("passes any other error through", async () => {
     const bug = new TypeError("boom");
     const feed = toQuoteFeed(

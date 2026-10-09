@@ -9,7 +9,10 @@ const URL = "https://api.argentinadatos.com/v1/finanzas/indices/uva";
 // fecha is a Buenos Aires calendar day, kept as text: new Date("YYYY-MM-DD")
 // reads it as UTC midnight, the previous day in Buenos Aires.
 const responseSchema = z.array(
-  z.object({ fecha: z.iso.date(), valor: z.number() }),
+  z.object({
+    fecha: z.iso.date().refine((date) => !date.startsWith("0000")),
+    valor: z.number(),
+  }),
 );
 
 // The series runs ahead of today, so the row is the latest entry not after
