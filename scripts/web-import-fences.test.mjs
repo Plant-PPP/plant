@@ -269,6 +269,177 @@ const flagged = [
   ],
 ];
 
+// Only /auth/mfa reads claims without the MFA redirect, and only the factor
+// helpers call Auth's MFA API.
+const READER =
+  'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked";';
+flagged.push(
+  ["src/app/(app)/page.tsx", READER],
+  ["src/app/api/x/route.ts", READER],
+  ["src/lib/ai/x.ts", READER],
+  ["src/app/auth/mfa/actions.ts", READER],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export { readSessionClaims } from "./session-claims-unchecked";',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'const m = "@/lib/auth/session-claims-unchecked";\nexport const f = () => import(m);',
+  ],
+  [
+    "src/app/(app)/settings/actions.ts",
+    "export const f = (s) => s.auth.mfa.verify({ factorId: 'f', code: '1' });",
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (supabase) => {\n  const { mfa } = supabase.auth;\n  return mfa;\n};",
+  ],
+  ["src/components/mfa/x.tsx", 'export const f = (s) => s.auth["mfa"].enroll;'],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport { readSessionClaims };`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const r = readSessionClaims;`,
+  ],
+  ["src/app/auth/mfa/page.tsx", `${READER}\nexport { readSessionClaims };`],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import { readSessionClaims as r } from "@/lib/auth/session-claims-unchecked";\nexport const f = () => r();',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `"use server";\n${READER}\nexport async function act() {\n  return readSessionClaims();\n}`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `${READER}\nexport default function Page() {\n  async function act() {\n    "use server";\n    return readSessionClaims();\n  }\n  return act;\n}`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    'import * as u from "./session-claims-unchecked";\nexport const r = u;',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import * as u from "@/lib/auth/session-claims-unchecked";\nexport const f = () => u["readSessionClaims"];',
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export const load = () => import("./session-claims-unchecked");',
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    'import { "readSessionClaims" as r } from "./session-claims-unchecked";\nexport const getSessionClaims = r;',
+  ],
+  ["src/components/mfa/x.tsx", 'export const f = (s) => s.auth["_enroll"];'],
+  ...[
+    "_verify",
+    "_challenge",
+    "_listFactors",
+    "_getAuthenticatorAssuranceLevel",
+    "_verifyRecoveryCode",
+    "_unenrollRecoveryCodes",
+    "_getRecoveryCodesStatus",
+    "_generateRecoveryCodes",
+    "_regenerateRecoveryCodes",
+  ].map((method) => [
+    "src/components/mfa/x.tsx",
+    `export const f = (s) => s.auth.${method}({});`,
+  ]),
+  [
+    "src/components/mfa/x.tsx",
+    'export const f = (s) => {\n  const { "_challengeAndVerify": v } = s.auth;\n  return v;\n};',
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => s.auth[`_enroll`]({});",
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nconst g = () => readSessionClaims();\nexport { g };`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport default () => readSessionClaims();`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport class C {\n  static g = () => readSessionClaims();\n}`,
+  ],
+  [
+    "src/lib/auth/session-claims-unchecked.ts",
+    '"use server";\nexport const f = async () => null;',
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth[`_listFactors` satisfies string]();",
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const getUncheckedClaims = () => readSessionClaims();`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport async function getUncheckedClaims() {\n  return readSessionClaims();\n}`,
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    'export const f = (s) => s.auth["_enroll" as const]({});',
+  ],
+  [
+    "src/components/mfa/x.tsx",
+    "export const f = (s) => {\n  const { [`_verify`]: v } = s.auth;\n  return v;\n};",
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'import u from "@/lib/auth/session-claims-unchecked";\nexport const f = () => u;',
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    'export * from "./session-claims-unchecked";',
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    'export * from "@/lib/auth/session-claims-unchecked";',
+  ],
+  [
+    "src/lib/auth/session-claims.test.ts",
+    'export * from "./session-claims-unchecked";',
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth[\"mfa\"].enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/app/(app)/page.tsx",
+    'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked.ts";',
+  ],
+  ["src/lib/auth/mfa-browser.ts", "export const f = (s) => s.auth._unenroll;"],
+  ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth._unenroll;"],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => {\n  const { _challengeAndVerify: v } = s.auth;\n  return v;\n};",
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => {\n  const { mfa } = s.auth;\n  return mfa.listFactors();\n};",
+  ],
+  ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth.mfa;"],
+  [
+    "src/lib/auth/mfa-factors.test.ts",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
+);
+
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
     assert.notDeepEqual(await fenced(filePath, code), []);
@@ -342,10 +513,80 @@ const allowed = [
   ],
 ];
 
+allowed.push(
+  ["src/lib/auth/session-claims.ts", READER],
+  ["src/lib/auth/session-claims.test.ts", READER],
+  ["src/app/auth/mfa/page.tsx", READER],
+  ["src/app/auth/mfa/page.test.tsx", READER],
+  [
+    "src/lib/auth/mfa-browser.ts",
+    "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/lib/auth/mfa-factors.ts",
+    "export const f = (s) => s.auth.mfa.listFactors();",
+  ],
+  ["src/lib/x.ts", "export const f = (c) => c.mfa_enrolled;"],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport const getSessionClaims = async () => readSessionClaims();`,
+  ],
+  [
+    "src/app/auth/mfa/page.tsx",
+    `${READER}\nexport default async function Page() {\n  await readSessionClaims();\n  return null;\n}`,
+  ],
+  [
+    "src/app/auth/mfa/page.test.tsx",
+    'jest.mock("@/lib/auth/session-claims-unchecked", () => ({\n  readSessionClaims: () => null,\n}));',
+  ],
+);
+
 for (const [filePath, code] of allowed) {
   test(`${filePath}: ${code} is allowed`, async () => {
     assert.deepEqual(await fenced(filePath, code), []);
   });
+}
+
+// Each override replaces the global block's rules for its files, so it must
+// carry every fence it does not exempt.
+const OVERRIDES = [
+  ["src/lib/ai/x.ts", []],
+  ["src/lib/ai/ai-cost-sink.ts", []],
+  ["src/lib/ai/ai-cost-sink.test.ts", []],
+  ["src/lib/supabase/service-role.ts", []],
+  ["src/app/api/x/route.ts", []],
+  ["src/lib/auth/session-claims-unchecked.ts", []],
+  ["src/lib/auth/session-claims.ts", ["reader"]],
+  ["src/lib/auth/session-claims.test.ts", ["reader"]],
+  ["src/app/auth/mfa/page.tsx", ["reader"]],
+  ["src/app/auth/mfa/page.test.tsx", ["reader"]],
+  ["src/lib/auth/mfa-browser.ts", ["mfa"]],
+  ["src/lib/auth/mfa-browser.test.ts", ["mfa"]],
+  ["src/lib/auth/mfa-factors.ts", []],
+  ["src/lib/auth/mfa-factors.test.ts", []],
+];
+const PROBES = {
+  reader: READER,
+  mfa: "export const f = (s) => s.auth.mfa.challenge({ factorId: 'f' });",
+  service: 'import "@/lib/supabase/service-role";',
+  ai: 'import { generateText } from "ai";',
+  sink: 'import "@/lib/ai/ai-cost-sink";',
+  dynamic: 'const m = "ai";\nexport const f = () => import(m);',
+};
+for (const [filePath, exempt] of OVERRIDES) {
+  for (const [probe, code] of Object.entries(PROBES)) {
+    if (exempt.includes(probe)) continue;
+    // Each block's own allowances: src/lib/ai reaches models, the sink and
+    // its test reach the sink, and the sink and service-role.ts the client.
+    if (probe === "ai" && filePath.startsWith("src/lib/ai/")) continue;
+    if (probe === "sink" && /ai-cost-sink|route\.ts$/.test(filePath)) continue;
+    if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
+      continue;
+    }
+    test(`${filePath} keeps the ${probe} fence`, async () => {
+      assert.notDeepEqual(await fenced(filePath, code), []);
+    });
+  }
 }
 
 const jobs = new ESLint({

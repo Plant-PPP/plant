@@ -10,8 +10,12 @@ import {
   COST_SINK,
   fence,
   LITERAL_IMPORTS_ONLY,
+  MFA_CALLS,
+  MFA_CALLS_BUT_LIST,
+  MFA_PRIVATE_CALLS,
   secretKeyReads,
   SERVICE_ROLE,
+  SESSION_CLAIMS_UNCHECKED,
   SOURCE,
 } from "../../eslint.fences.mjs";
 
@@ -26,10 +30,11 @@ const noReexport = (modules) =>
       message,
     })),
   );
-// The service-role client, the sink, route handlers and src/lib/ai export
-// values only through a named declaration, so an imported sink, client or
-// model cannot be handed on through an export list, a default export or
-// CommonJS (module.exports, exports or a top-level this).
+// The service-role client, the sink, route handlers, src/lib/ai and
+// session-claims.ts export values only through a named declaration, so an
+// imported sink, client, model or claims reader cannot be handed on through
+// an export list, a default export or CommonJS (module.exports, exports or a
+// top-level this).
 const NO_EXPORT_LIST = [
   'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
   "ExportDefaultDeclaration",
@@ -52,13 +57,63 @@ const LIB_AI_SYNTAX = [
   ...NO_EXPORT_LIST,
 ];
 
-const NO_SERVER_ACTION = ["Program", ":function > BlockStatement"].map(
-  (parent) => ({
+// Every module fence of the web app. A block names the ones it may import and
+// keeps the rest, so an override cannot drop a fence by leaving it out (a
+// later block replaces a rule's whole options).
+const WEB_FENCES = [
+  AI,
+  AI_PROVIDERS,
+  SERVICE_ROLE,
+  COST_SINK,
+  SESSION_CLAIMS_UNCHECKED,
+];
+const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
+  fence(
+    WEB_FENCES.filter((module) => !allow.includes(module)),
+    [...syntax, ...mfaFence, ...MFA_PRIVATE_CALLS],
+  );
+
+const noServerAction = (message) =>
+  ["Program", ":function > BlockStatement"].map((parent) => ({
     selector: `${parent} > ExpressionStatement[directive][expression.value="use server"]`,
-    message:
-      "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
-  }),
+    message,
+  }));
+const NO_SERVER_ACTION = noServerAction(
+  "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
 );
+
+// The files that may import the unchecked claims reader only call it: a
+// server action there would read an aal1 session's claims, and a value
+// handed on would reach a file the fence keeps it from.
+const READER = "readSessionClaims";
+const READER_CALLS_ONLY = [
+  ...noServerAction(
+    "This file reads claims without the MFA redirect; a server action here would accept a session that has not verified its code.",
+  ),
+  ...noReexport([SESSION_CLAIMS_UNCHECKED]),
+  ...[
+    `Identifier[name="${READER}"]:not(CallExpression > .callee):not(ImportSpecifier > Identifier)`,
+    `ImportSpecifier[imported.name="${READER}"][local.name!="${READER}"]`,
+    // import { "readSessionClaims" as r } names it by a string.
+    `ImportSpecifier[imported.type="Literal"]`,
+    // A module object would carry the function with it.
+    `ImportDeclaration[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
+    `ImportExpression[source.value=${asSelector(SESSION_CLAIMS_UNCHECKED.regex)}]`,
+  ].map((selector) => ({
+    selector,
+    message: `Only call ${READER}; pass its result on, not the function.`,
+  })),
+];
+
+// session-claims.ts exports getSessionClaims alone, so no other export can
+// wrap the unchecked reader without the redirect.
+const ONLY_GET_SESSION_CLAIMS = [
+  "ExportNamedDeclaration > :matches(FunctionDeclaration, ClassDeclaration)",
+  'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name!="getSessionClaims"]',
+].map((selector) => ({
+  selector,
+  message: "session-claims.ts exports only getSessionClaims.",
+}));
 
 export default defineConfig([
   ...nextVitals,
@@ -71,40 +126,94 @@ export default defineConfig([
   },
   {
     files: [`**/*.${SOURCE}`],
-    rules: fence([AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK], BASE_SYNTAX),
+    rules: webRules({ syntax: BASE_SYNTAX }),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
-    rules: fence([SERVICE_ROLE, COST_SINK], LIB_AI_SYNTAX),
+    rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_AI_SYNTAX }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.test.ts"],
-    rules: fence([SERVICE_ROLE], LIB_AI_SYNTAX),
+    rules: webRules({
+      allow: [AI, AI_PROVIDERS, COST_SINK],
+      syntax: LIB_AI_SYNTAX,
+    }),
   },
   {
     files: ["src/lib/ai/ai-cost-sink.ts"],
-    rules: fence([], [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX]),
+    rules: webRules({
+      allow: [AI, AI_PROVIDERS, SERVICE_ROLE, COST_SINK],
+      syntax: [...NO_SERVER_ACTION, ...LIB_AI_SYNTAX],
+    }),
   },
   {
     files: [
       "src/lib/supabase/service-role.ts",
       "src/lib/supabase/service-role.test.ts",
     ],
-    rules: fence(
-      [AI, AI_PROVIDERS, COST_SINK],
-      [
+    rules: webRules({
+      allow: [SERVICE_ROLE],
+      syntax: [
         ...LITERAL_IMPORTS_ONLY,
         ...noReexport([SERVICE_ROLE]),
         ...NO_EXPORT_LIST,
       ],
-    ),
+    }),
   },
   {
     files: [`src/app/api/**/route.${SOURCE}`],
-    rules: fence(
-      [AI, AI_PROVIDERS, SERVICE_ROLE],
-      [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
-    ),
+    rules: webRules({
+      allow: [COST_SINK],
+      syntax: [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
+    }),
+  },
+  {
+    files: ["src/lib/auth/session-claims-unchecked.ts"],
+    rules: webRules({
+      syntax: [
+        ...BASE_SYNTAX,
+        ...noServerAction(
+          "The unchecked claims reader would answer a session that has not verified its code.",
+        ),
+      ],
+    }),
+  },
+  {
+    files: ["src/lib/auth/session-claims.ts"],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [
+        ...BASE_SYNTAX,
+        ...READER_CALLS_ONLY,
+        ...NO_EXPORT_LIST,
+        ...ONLY_GET_SESSION_CLAIMS,
+      ],
+    }),
+  },
+  {
+    files: ["src/app/auth/mfa/page.tsx"],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [...BASE_SYNTAX, ...READER_CALLS_ONLY],
+    }),
+  },
+  {
+    files: [
+      "src/lib/auth/session-claims.test.ts",
+      "src/app/auth/mfa/page.test.tsx",
+    ],
+    rules: webRules({
+      allow: [SESSION_CLAIMS_UNCHECKED],
+      syntax: [...BASE_SYNTAX, ...noReexport([SESSION_CLAIMS_UNCHECKED])],
+    }),
+  },
+  {
+    files: ["src/lib/auth/mfa-browser.ts", "src/lib/auth/mfa-browser.test.ts"],
+    rules: webRules({ syntax: BASE_SYNTAX, mfaFence: [] }),
+  },
+  {
+    files: ["src/lib/auth/mfa-factors.ts", "src/lib/auth/mfa-factors.test.ts"],
+    rules: webRules({ syntax: BASE_SYNTAX, mfaFence: MFA_CALLS_BUT_LIST }),
   },
   globalIgnores([
     ".next/**",
