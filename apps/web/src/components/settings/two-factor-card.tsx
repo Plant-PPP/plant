@@ -90,6 +90,11 @@ export function TwoFactorCard() {
               );
               reload();
             }}
+            onAlreadyOn={() => {
+              setEnrolling(false);
+              setNotice("La verificación en dos pasos ya estaba activada.");
+              reload();
+            }}
             onCancel={() => setEnrolling(false)}
           />
         )}

@@ -1,5 +1,4 @@
 import "client-only";
-import { TOTP_ALREADY_ON } from "./mfa-errors";
 import type { AuthClient } from "./mfa-factors";
 import { isInlineQrSvg } from "./qr-svg";
 
@@ -14,10 +13,13 @@ export type TotpEnrollment = {
   secret: string;
 };
 
+// Thrown here, not by Auth, when a verified TOTP factor exists.
+export const TOTP_ALREADY_ON = "totp_already_on";
+
 // enroll() leaves a factor unverified until a code is verified, and a second
 // enroll cannot recover an abandoned factor's secret, so abandoned attempts are
 // removed first. A verified one means another tab already turned it on, and
-// Auth would let a second one in beside it.
+// Auth lets an aal2 session add a second one beside it.
 export async function cleanupUnverifiedTotp(client: AuthClient): Promise<void> {
   const { data, error } = await client.auth.mfa.listFactors();
   if (error) throw error;

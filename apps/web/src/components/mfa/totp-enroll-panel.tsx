@@ -6,6 +6,7 @@ import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
 import {
   startEnrollment,
+  TOTP_ALREADY_ON,
   verifyTotp,
   type TotpEnrollment,
 } from "@/lib/auth/mfa-browser";
@@ -28,12 +29,14 @@ function signInAgain() {
 
 // Clears abandoned attempts, enrolls, shows the QR and the setup key, and
 // verifies the first code. onSuccess runs once the factor is verified and the
-// session is aal2.
+// session is aal2; onAlreadyOn when another tab had already turned it on.
 export function TotpEnrollPanel({
   onSuccess,
+  onAlreadyOn,
   onCancel,
 }: {
   onSuccess: () => void;
+  onAlreadyOn: () => void;
   onCancel: () => void;
 }) {
   const codeId = useId();
@@ -49,8 +52,9 @@ export function TotpEnrollPanel({
       return null;
     });
     if (failedOnEndedSession(failure)) signInAgain();
+    else if (failure?.code === TOTP_ALREADY_ON) onAlreadyOn();
     else if (failure) setError(mfaErrorMessage(failure));
-  }, [setError]);
+  }, [setError, onAlreadyOn]);
 
   // Enroll once per mount. React's dev double effect would otherwise send two
   // enrolls, and the second removes the first's factor in the cleanup.

@@ -7,9 +7,6 @@ const WRONG_CODE =
 const RETRY = "No pudimos preparar la configuración. Reintentá.";
 const NOT_AVAILABLE = "Todavía no está disponible.";
 
-// Thrown by mfa-browser.ts, not Auth, when a verified TOTP factor exists.
-export const TOTP_ALREADY_ON = "totp_already_on";
-
 // A Map, so a code like "constructor" finds nothing.
 const MFA_ERRORS: ReadonlyMap<string, string> = new Map([
   ["mfa_verification_failed", WRONG_CODE],
@@ -22,10 +19,6 @@ const MFA_ERRORS: ReadonlyMap<string, string> = new Map([
   [
     "mfa_factor_not_found",
     "Tu app de autenticación cambió. Recargá la página y probá de nuevo.",
-  ],
-  [
-    TOTP_ALREADY_ON,
-    "Ya activaste la verificación en dos pasos. Recargá la página.",
   ],
   ["insufficient_aal", "Tu sesión cambió. Recargá la página y probá de nuevo."],
 ]);
