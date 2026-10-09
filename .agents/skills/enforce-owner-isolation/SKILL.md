@@ -38,6 +38,12 @@ create policy <t>_owner on public.<t>
   using      (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
+-- the MFA gate (PLA-18): copied verbatim, the pgTAP floor compares its text
+create policy "Requires two-factor authentication" on public.<t>
+  as restrictive for all to authenticated
+  using      ((select auth.jwt() ->> 'aal') = 'aal2' or (select auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb)
+  with check ((select auth.jwt() ->> 'aal') = 'aal2' or (select auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb);
+
 grant select, insert, update on public.<t> to authenticated;  -- only the verbs the app uses
 revoke all on public.<t> from anon;
 ```
