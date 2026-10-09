@@ -168,10 +168,12 @@ export function costMiddleware(options: {
         cancel?: (reason: unknown) => void;
       } = {
         async transform(part, controller) {
-          if (part.type === "error" && !finished) partError ??= part.error;
+          if (part.type === "error") partError ??= part.error;
           if (part.type === "finish") {
             finished = true;
-            await safeRecord(part.usage, partError);
+            const error = partError;
+            partError = undefined;
+            await safeRecord(part.usage, error);
           }
           controller.enqueue(part);
         },

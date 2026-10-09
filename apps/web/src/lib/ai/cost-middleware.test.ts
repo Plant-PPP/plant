@@ -752,6 +752,11 @@ describe("stream", () => {
       "overloaded_error",
     ],
     ["two errors", [new TypeError("a"), new RangeError("b")], "TypeError"],
+    [
+      "an Error with a type",
+      [Object.assign(new TypeError("x"), { type: "overloaded_error" })],
+      "TypeError",
+    ],
   ];
 
   it.each(ERROR_PARTS)(
@@ -796,6 +801,28 @@ describe("stream", () => {
       expect(record).not.toHaveBeenCalled();
       expect(events()).toEqual([["ai_cost.unbilled", "no_finish"]]);
       expect(lines[0]?.["error.type"]).toBe(type);
+    },
+  );
+
+  it.each([
+    ["before the first", 0],
+    ["between the two", 1],
+  ])(
+    "ties an error part %s finish parts to the next row only",
+    async (_, at) => {
+      const parts: StreamPart[] = [...TEXT_PARTS, FINISH, FINISH];
+      parts.splice(TEXT_PARTS.length + at, 0, {
+        type: "error",
+        error: new TypeError("x"),
+      });
+      const result = streamText({
+        model: model({ doStream: async () => ({ stream: streamOf(parts) }) }),
+        prompt: "hi",
+        onError: () => {},
+      });
+      await result.consumeStream({ onError: () => {} });
+      expect(record.mock.calls).toEqual([[ROW], [ROW]]);
+      expect(events()).toEqual([["ai_cost.unbilled", "usage_partial"]]);
     },
   );
 

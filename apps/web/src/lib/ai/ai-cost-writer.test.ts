@@ -88,6 +88,15 @@ it("throws a PostgREST code", async () => {
   expect((await failure(writerWith(fetch)(row))).message).toBe("PGRST204");
 });
 
+it("throws the status when a PGRST code runs on", async () => {
+  const fetch = jest.fn(async () =>
+    json(400, { code: "PGRST204 in row 0.0087" }),
+  );
+  const error = await failure(writerWith(fetch)(row));
+  expect(error.message).toBe("http_400");
+  expect(JSON.stringify(error)).not.toContain("0.0087");
+});
+
 it("throws the status when the body's code is not a code", async () => {
   const fetch = jest.fn(async () => json(400, { code: "10000 in row 22800" }));
   const error = await failure(writerWith(fetch)(row));
