@@ -11,6 +11,7 @@ import {
   prepareMfaCases,
   runEnv,
   seedAiCost,
+  seedQuotes,
 } from "./pentest-users";
 
 // Kong answers 502/503 while PostgREST is still loading its schema cache.
@@ -33,7 +34,7 @@ async function waitForRest(stack: LocalStack): Promise<void> {
 // Two users for every spec, created once per run: Auth rate-limits sign-ins
 // and code verifications (auth.rate_limit in supabase/config.toml), so a few
 // back-to-back local runs can hit HTTP 429. The service role key stays here, so
-// the auth and MFA specs' admin steps run here too.
+// the auth, MFA and reference table specs' service-role steps run here too.
 export default async function globalSetup(): Promise<void> {
   const stack = readLocalStack();
   await waitForRest(stack);
@@ -48,6 +49,7 @@ export default async function globalSetup(): Promise<void> {
     const b = await createUser(stack, track);
     await seedAiCost(stack, a.id);
     await seedAiCost(stack, b.id);
+    process.env[runEnv.quotes] = JSON.stringify(await seedQuotes(stack));
     const publicStack: PublicStack = {
       apiUrl: stack.apiUrl,
       anonKey: stack.anonKey,

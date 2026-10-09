@@ -33,6 +33,34 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"fx_rates": {
+                  Row: {
+                    "buy": number | null,"fetched_at": string,"kind": Database["public"]['Enums']["fx_rate_kind"],"quoted_at": string,"rate_date": string,"sell": number,"source": Database["public"]['Enums']["quote_source"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "buy"?: number | null,"fetched_at": string,"kind": Database["public"]['Enums']["fx_rate_kind"],"quoted_at": string,"rate_date": string,"sell": number,"source": Database["public"]['Enums']["quote_source"]
+                  }
+                  Update: {
+                    "buy"?: number | null,"fetched_at"?: string,"kind"?: Database["public"]['Enums']["fx_rate_kind"],"quoted_at"?: string,"rate_date"?: string,"sell"?: number,"source"?: Database["public"]['Enums']["quote_source"]
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"prices": {
+                  Row: {
+                    "currency": Database["public"]['Enums']["currency"],"fetched_at": string,"price": number,"price_date": string,"quoted_at": string,"source": Database["public"]['Enums']["quote_source"],"symbol": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "currency": Database["public"]['Enums']["currency"],"fetched_at": string,"price": number,"price_date": string,"quoted_at": string,"source": Database["public"]['Enums']["quote_source"],"symbol": string
+                  }
+                  Update: {
+                    "currency"?: Database["public"]['Enums']["currency"],"fetched_at"?: string,"price"?: number,"price_date"?: string,"quoted_at"?: string,"source"?: Database["public"]['Enums']["quote_source"],"symbol"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"profiles": {
                   Row: {
                     "created_at": string,"display_name": string | null,"reference_dollar": Database["public"]['Enums']["reference_dollar"],"updated_at": string,"user_id": string
@@ -56,7 +84,7 @@ export type Database = {
             [_ in never]: never
           }
           Enums: {
-            "ai_cost_type": "import_extraction","consent_kind": "terms"|"privacy"|"ai_providers","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -172,7 +200,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction"],"consent_kind": ["terms", "privacy", "ai_providers"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const
