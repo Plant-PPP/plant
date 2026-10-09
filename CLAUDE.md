@@ -19,16 +19,16 @@ pnpm dev:up                         # local Supabase + web on :3000 + Inngest de
 
 ## Structure
 
-| Package            | What it holds                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | Next.js 16 (App Router) + React 19 on Vercel `gru1`. Includes `/api/inngest` (the chat arrives with the "Asistente" stage)                              |
-| `packages/shared`  | Money (`Money` as a decimal string with its currency). Database types generated in `src/db/generated/`. `pricing.ts`, `ai-cost.ts` and `prompt-text.ts` |
-| `packages/sources` | `PortfolioSourcePort` and the `file_upload` adapter (arrive with the "Carga con IA" stage)                                                              |
-| `packages/core`    | The quote feeds behind `QuoteFeedPort`. Valuation and portfolio functions arrive with the "Patrimonio manual" stage                                     |
-| `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                       |
-| `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                    |
-| `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                               |
-| `security-tests/`  | Pentest specs over HTTP: `anon`, another user and the owner on every `public` table and view; a new one fails typecheck without a spec                  |
+| Package            | What it holds                                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`         | Next.js 16 (App Router) + React 19 on Vercel `gru1`. Includes `/api/inngest` (the chat arrives with the "Asistente" stage)                                                                |
+| `packages/shared`  | Money (`Money` as a decimal string with its currency). Database types generated in `src/db/generated/`. `pricing.ts`, `ai-cost.ts`, `prompt-text.ts` and the `Logger` contract (`log.ts`) |
+| `packages/sources` | `PortfolioSourcePort` and the `file_upload` adapter (arrive with the "Carga con IA" stage)                                                                                                |
+| `packages/core`    | The quote feeds behind `QuoteFeedPort`. Valuation and portfolio functions arrive with the "Patrimonio manual" stage                                                                       |
+| `packages/jobs`    | Inngest client, a test `ping` function and the `/api/inngest` options. The `JobRunner` port arrives with the "Carga con IA" stage                                                         |
+| `supabase/`        | Config, migrations and pgTAP tests (`supabase/tests/`, run in the CI `database` job)                                                                                                      |
+| `evals/`           | Extraction and assistant evals (the real documents live outside the repo)                                                                                                                 |
+| `security-tests/`  | Pentest specs over HTTP: `anon`, another user and the owner on every `public` table and view; a new one fails typecheck without a spec                                                    |
 
 Packages export their TypeScript sources and `apps/web` compiles them with `transpilePackages`, so they don't need a build before starting the web app. Which package may depend on which is checked by `pnpm check:boundaries` (`scripts/check-package-boundaries.mjs`) over the `package.json` files, `inngest` is declared only in `packages/jobs` and `apps/web`, and `ai` and `@ai-sdk/*` only in `apps/web` and `evals`. The check includes the root `package.json`, because every package sees its `node_modules`; don't import another package through relative paths (`../../jobs/src`).
 

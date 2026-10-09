@@ -2,7 +2,7 @@ import { trace, type Span } from "@opentelemetry/api";
 
 import { MASK } from "@/lib/security/credential-scrub";
 
-import { errorType, serverLog } from "./server-log";
+import { errorType, serverLog, type Logger } from "./server-log";
 
 const UUID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 
@@ -203,4 +203,18 @@ it("logs only the type of something thrown that is not an Error", () => {
     level: "error",
     event: "x",
   });
+});
+
+it("takes only flat field values, which the compiler checks", () => {
+  const probe = (logger: Logger) => {
+    logger.info("x");
+    logger.error("x", { id: UUID, n: 1, ok: true, none: null }, new Error("e"));
+    // @ts-expect-error a nested object
+    logger.info("x", { holding: { quantity: 1 } });
+    // @ts-expect-error an array
+    logger.warn("x", { ids: [UUID] });
+    // @ts-expect-error a nested object
+    logger.error("x", { holding: { quantity: 1 } });
+  };
+  probe(serverLog);
 });

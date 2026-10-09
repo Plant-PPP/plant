@@ -47,10 +47,10 @@ export const SESSION_CLAIMS_UNCHECKED = {
     "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
 };
 
-// The modules a block can be allowed. Every web block fences each one it does
-// not allow (through fenceExcept) and every package fences them all, so a new
-// fence goes here; fence() also bans node_modules paths and Inngest's model
-// packages in every block.
+// The modules a block can be allowed to import. Every web block fences each
+// one it does not allow (through fenceExcept) and every package fences them
+// all, so a new fence goes here; fence() also bans node_modules paths and
+// Inngest's model packages in every block.
 export const ALL_FENCED = [
   AI,
   AI_PROVIDERS,

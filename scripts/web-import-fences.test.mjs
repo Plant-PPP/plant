@@ -371,6 +371,10 @@ flagged.push(
     'export const load = () => import("./session-claims-unchecked");',
   ],
   [
+    "src/app/auth/mfa/page.tsx",
+    'export const load = () => import("@/lib/auth/session-claims-unchecked");',
+  ],
+  [
     "src/lib/auth/session-claims.ts",
     'import { "readSessionClaims" as r } from "./session-claims-unchecked";\nexport const getSessionClaims = r;',
   ],
