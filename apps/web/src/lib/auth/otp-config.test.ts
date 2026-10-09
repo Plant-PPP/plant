@@ -26,6 +26,13 @@ function value(tableName: string, key: string): string {
   return (matches[0]?.[1] ?? "").trim();
 }
 
+function tablesUnder(prefix: string): string[] {
+  return [...config.matchAll(/^\[([^\]]+)\]$/gm)]
+    .map((m) => m[1] ?? "")
+    .filter((name) => name.startsWith(`${prefix}.`))
+    .map((name) => name.slice(prefix.length + 1));
+}
+
 describe("supabase/config.toml [auth.email]", () => {
   it("sends codes of OTP_LENGTH digits", () => {
     expect(Number(value("auth.email", "otp_length"))).toBe(OTP_LENGTH);
@@ -64,5 +71,63 @@ describe("the sign-in mail", () => {
   it("shows the code and its expiry", () => {
     expect(template).toContain("{{ .Token }}");
     expect(template).toContain(`vence en ${OTP_EXPIRY_MINUTES} minutos`);
+  });
+});
+
+// Preconditions of FIRST_FACTOR_METHODS (packages/shared/src/mfa.ts), of TOTP
+// being the only MFA factor, and of Auth calling the access token hook. The
+// hosted project keeps its own copy of each setting in the dashboard.
+describe("the Auth settings the MFA rules rely on", () => {
+  it("allows no MFA factor or passkey but TOTP", () => {
+    expect(value("auth.mfa.phone", "enroll_enabled")).toBe("false");
+    expect(value("auth.mfa.phone", "verify_enabled")).toBe("false");
+    expect(value("auth.mfa.web_authn", "enroll_enabled")).toBe("false");
+    expect(value("auth.mfa.web_authn", "verify_enabled")).toBe("false");
+    expect(value("auth.passkey", "enabled")).toBe("false");
+  });
+
+  it("has no phone sign-in or SMS provider", () => {
+    expect(value("auth.sms", "enable_signup")).toBe("false");
+    expect(tablesUnder("auth.sms")).toEqual(["twilio"]);
+    expect(value("auth.sms.twilio", "enabled")).toBe("false");
+  });
+
+  it("confirms a new address, and an email change on both addresses", () => {
+    expect(value("auth.email", "enable_confirmations")).toBe("true");
+    expect(value("auth.email", "double_confirm_changes")).toBe("true");
+  });
+
+  it("allows no anonymous sign-in and no manual identity linking", () => {
+    expect(value("auth", "enable_anonymous_sign_ins")).toBe("false");
+    expect(value("auth", "enable_manual_linking")).toBe("false");
+  });
+
+  it("signs in with no external provider but Google", () => {
+    const providers = tablesUnder("auth.external");
+    expect(providers).toContain("google");
+    for (const provider of providers.filter((p) => p !== "google")) {
+      expect(value(`auth.external.${provider}`, "enabled")).toBe("false");
+    }
+  });
+
+  it("calls no Auth hook but the access token hook", () => {
+    expect(value("auth.hook.custom_access_token", "uri")).toBe(
+      '"pg-functions://postgres/private/custom_access_token_hook"',
+    );
+    for (const hook of tablesUnder("auth.hook")) {
+      expect([hook, value(`auth.hook.${hook}`, "enabled")]).toEqual([
+        hook,
+        hook === "custom_access_token" ? "true" : "false",
+      ]);
+    }
+  });
+
+  it("accepts no third-party, Web3 or OAuth server tokens", () => {
+    for (const prefix of ["auth.third_party", "auth.web3"]) {
+      for (const provider of tablesUnder(prefix)) {
+        expect(value(`${prefix}.${provider}`, "enabled")).toBe("false");
+      }
+    }
+    expect(value("auth.oauth_server", "enabled")).toBe("false");
   });
 });
