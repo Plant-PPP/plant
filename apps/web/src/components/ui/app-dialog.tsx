@@ -12,14 +12,17 @@ import {
 
 // A form's dialog, open while mounted: a caller mounts it to open it.
 function AppDialog({
-  onOpenChange,
+  onClose,
+  pending = false,
   title,
   description,
   returnFocusTo,
   onEscapeKeyDown,
   children,
 }: {
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
+  // While its form saves, the dialog cannot be dismissed.
+  pending?: boolean;
   title: string;
   description: string;
   // Where focus goes on close, given the element that opened the dialog when
@@ -37,7 +40,7 @@ function AppDialog({
   );
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent
         data-slot="app-dialog"
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"

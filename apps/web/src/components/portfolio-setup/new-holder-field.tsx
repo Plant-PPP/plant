@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { HolderRow } from "@/lib/portfolio-setup/read";
 import { NameField, useNameSubmit } from "./name-field";
-import { PendingButton } from "./pending-button";
+import { PendingButton } from "@/components/ui/pending-button";
 
 // Enter saves the holder instead of submitting the form around the field.
 export function submitOnEnter(submit: () => void) {

@@ -11,7 +11,10 @@ import {
 } from "@/app/(app)/accounts/actions";
 import { IconButton } from "@/components/ui/icon-button";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import {
+  SELF_HOLDER_LABEL,
+  WRITE_MESSAGES,
+} from "@/lib/portfolio-setup/messages";
 import type {
   HolderRow,
   PortfolioRow,
@@ -50,7 +53,7 @@ function SourceConnectionSummary({
       <span
         className={`truncate text-sm ${muted ? "text-muted-foreground" : ""}`}
       >
-        {row.institution} · {row.holder?.name ?? "Vos"}
+        {row.institution} · {row.holder?.name ?? SELF_HOLDER_LABEL}
       </span>
       <span className="truncate text-xs text-muted-foreground">
         {row.portfolio.name}
@@ -179,6 +182,7 @@ export function SourceConnectionsCard({
           holders={holders}
           portfolios={portfolios}
           returnFocusTo={card.focusHeading}
+          savedRemovesOpener
           onClose={() => setDialog(null)}
           onSubmit={(fields) => restoreSourceConnection(dialog.row.id, fields)}
           onSaved={(label) => toast.success(`Restauraste ${label}`)}

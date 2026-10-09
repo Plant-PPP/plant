@@ -52,6 +52,9 @@ export const CHOICE_MESSAGES = {
   portfolio: "Elegí una cartera por defecto.",
 } as const;
 
+// How the user shows where a holder would: an account with no holder is theirs.
+export const SELF_HOLDER_LABEL = "Vos";
+
 // How an account is named in copy: "tu IOL", or "IOL de Lucía".
 export function accountLabel(
   institution: string,
@@ -66,18 +69,23 @@ export function accountLabel(
 const LISTED_ACCOUNTS = 3;
 
 // The in-use refusals name the accounts behind them, when the page has them:
-// each once, the first few, after a colon so no "y" has to agree with them.
+// two accounts with one name as "tu IOL (2)", the first few names, after a
+// colon so no "y" has to agree with them.
 export function inUseMessage(
   hint: "portfolio_in_use" | "holder_in_use",
   accounts: string[],
 ): string {
-  const labels = [...new Set(accounts)];
-  if (labels.length === 0) return GUARD_MESSAGES[hint];
-  const shown = labels.slice(0, LISTED_ACCOUNTS).join(", ");
-  const more = labels.length - LISTED_ACCOUNTS;
+  if (accounts.length === 0) return GUARD_MESSAGES[hint];
+  const counts = new Map<string, number>();
+  for (const label of accounts) counts.set(label, (counts.get(label) ?? 0) + 1);
+  const names = [...counts].map(([label, count]) =>
+    count === 1 ? label : `${label} (${count})`,
+  );
+  const shown = names.slice(0, LISTED_ACCOUNTS).join(", ");
+  const more = names.length - LISTED_ACCOUNTS;
   const list = more > 0 ? `${shown} y ${more} más` : shown;
   const which =
-    labels.length === 1 ? "archivá esta cuenta" : "archivá estas cuentas";
+    accounts.length === 1 ? "archivá esta cuenta" : "archivá estas cuentas";
   return hint === "portfolio_in_use"
     ? `Para archivar esta cartera, primero elegí otra o ${which}: ${list}.`
     : `Para archivar este titular, primero elegí otro o ${which}: ${list}.`;

@@ -68,10 +68,10 @@ describe("rowAnswer", () => {
     expect(inUse(usedBy)).toEqual({ kind: "alert", text });
   });
 
-  test("names each account once", () => {
+  test("counts accounts that share a name", () => {
     expect(inUse(["tu IOL", "tu IOL"])).toEqual({
       kind: "alert",
-      text: "Para archivar esta cartera, primero elegí otra o archivá esta cuenta: tu IOL.",
+      text: "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu IOL (2).",
     });
   });
 

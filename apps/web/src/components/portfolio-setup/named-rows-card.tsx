@@ -4,7 +4,7 @@ import { Archive, ArchiveRestore, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { IconButton } from "@/components/ui/icon-button";
-import type { ListView, PortfolioRow } from "@/lib/portfolio-setup/read";
+import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type WriteMessages, rowAnswer } from "./answers";
 import { NameDialog } from "./name-dialog";
@@ -14,8 +14,6 @@ import {
   SetupCard,
   useSetupCard,
 } from "./setup-card";
-
-type NamedRow = PortfolioRow;
 
 type DialogState =
   | { kind: "create" }

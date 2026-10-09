@@ -9,6 +9,7 @@ import {
   choose,
   holderChoices,
   initialFields,
+  pruneAdded,
   missingChoice,
 } from "./source-connection-dialog";
 
@@ -107,5 +108,19 @@ describe("holderChoices", () => {
   it("adds the holders created here after the page's, once", () => {
     expect(holderChoices([LUCIA], [LUCIA, JUAN])).toEqual([LUCIA, JUAN]);
     expect(holderChoices([], [])).toEqual([]);
+  });
+});
+
+describe("pruneAdded", () => {
+  const LUCIA = { id: "h1", name: "Lucía" };
+  const JUAN = { id: "h2", name: "Juan" };
+
+  it("keeps a holder created here until the page lists it", () => {
+    expect(pruneAdded([], [JUAN], [LUCIA])).toEqual([LUCIA]);
+    expect(pruneAdded([], [LUCIA], [LUCIA])).toEqual([]);
+  });
+
+  it("does not offer again a holder the page listed and then dropped", () => {
+    expect(pruneAdded([LUCIA], [], [LUCIA])).toEqual([]);
   });
 });

@@ -16,8 +16,10 @@ import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { PortfolioSetupError } from "./errors";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT, type SetupTable } from "./limits";
 
-export type PortfolioRow = { id: string; name: string };
-export type HolderRow = PortfolioRow;
+// A row that is only a name: a portfolio or a holder.
+export type NamedRow = { id: string; name: string };
+export type PortfolioRow = NamedRow;
+export type HolderRow = NamedRow;
 
 // An account with its holder (null is the user) and default portfolio, each
 // marked when archived: only an archived account can point at one.

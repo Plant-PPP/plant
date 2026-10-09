@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   accountLabel,
   CHOICE_MESSAGES,
+  SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
@@ -32,7 +33,8 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
 import { dialogAnswer } from "./answers";
 import { NewHolderField } from "./new-holder-field";
-import { PendingButton } from "./pending-button";
+import { useSavedFocus } from "./saved-focus";
+import { PendingButton } from "@/components/ui/pending-button";
 
 // Suggestions only: any institution can be typed.
 const INSTITUTIONS = [
@@ -74,7 +76,8 @@ export function initialFields(
       institution: "",
       holder: SELF_HOLDER,
       includeInTaxReport: true,
-      // The oldest active portfolio, "Principal" unless the user archived it.
+      // The oldest active portfolio listed, the first one the user had unless
+      // they archived it.
       defaultPortfolioId: portfolios.at(-1)?.id ?? "",
     };
   }
@@ -120,6 +123,21 @@ export function holderChoices(
   ];
 }
 
+// The holders created here still to offer once the page's list changes from
+// `listed` to `holders`: one the page listed is the page's to offer, so one it
+// stops listing, archived elsewhere, is not offered again.
+export function pruneAdded(
+  listed: HolderRow[],
+  holders: HolderRow[],
+  added: HolderRow[],
+): HolderRow[] {
+  return added.filter(
+    ({ id }) =>
+      !listed.some((row) => row.id === id) &&
+      !holders.some((row) => row.id === id),
+  );
+}
+
 // Creates, edits or restores an account. A new holder can be added from the
 // dialog without leaving it: its field has no form of its own, so Enter there
 // saves the holder and never the account.
@@ -131,6 +149,7 @@ export function SourceConnectionDialog({
   holders,
   portfolios,
   returnFocusTo,
+  savedRemovesOpener = false,
   onClose,
   onSubmit,
   onSaved,
@@ -141,7 +160,9 @@ export function SourceConnectionDialog({
   initial: SourceConnectionFields;
   holders: HolderRow[];
   portfolios: PortfolioRow[];
+  // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
+  savedRemovesOpener?: boolean;
   onClose: () => void;
   onSubmit: (fields: SourceConnectionFields) => Promise<WriteResult>;
   onSaved: (label: string) => void;
@@ -163,24 +184,40 @@ export function SourceConnectionDialog({
   const [added, setAdded] = useState<HolderRow[]>([]);
   const [listed, setListed] = useState(holders);
   const [addingHolder, setAddingHolder] = useState(false);
+  // Each opening of the new holder's field gets a key; a save that lands
+  // after its field was closed only adds the holder, without choosing it.
+  const [holderFieldKey, setHolderFieldKey] = useState(0);
+  const openHolderField = useRef<number | null>(null);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const institution = useRef<HTMLInputElement>(null);
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
-  const saved = useRef(false);
+  const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
 
-  // Once the page lists a holder created here, the page decides: one it
-  // stops listing, archived elsewhere, is not offered again.
   if (listed !== holders) {
     setListed(holders);
-    setAdded((rows) =>
-      rows.filter(
-        ({ id }) =>
-          !listed.some((row) => row.id === id) &&
-          !holders.some((row) => row.id === id),
-      ),
-    );
+    setAdded((rows) => pruneAdded(listed, holders, rows));
+  }
+
+  function showHolderField() {
+    const key = holderFieldKey + 1;
+    setHolderFieldKey(key);
+    openHolderField.current = key;
+    setAddingHolder(true);
+  }
+
+  function closeHolderField() {
+    openHolderField.current = null;
+    setAddingHolder(false);
+    holderTrigger.current?.focus();
+  }
+
+  function holderCreated(row: HolderRow, key: number) {
+    setAdded((rows) => [...rows, row]);
+    if (openHolderField.current !== key) return;
+    setHolder(row.id);
+    closeHolderField();
   }
 
   const holderOptions = holderChoices(holders, added);
@@ -218,7 +255,7 @@ export function SourceConnectionDialog({
         WRITE_MESSAGES.source_connections,
       );
       if (answer.kind === "done") {
-        saved.current = true;
+        focus.markSaved();
         const holderName =
           holderOptions.find(({ id }) => id === fields.holder)?.name ?? null;
         onSaved(accountLabel(normalizeName(fields.institution), holderName));
@@ -231,18 +268,17 @@ export function SourceConnectionDialog({
 
   return (
     <AppDialog
-      onOpenChange={(open) => !open && !pending && onClose()}
+      onClose={onClose}
+      pending={pending}
       title={title}
       description={description}
-      returnFocusTo={(opener) =>
-        saved.current || !opener ? returnFocusTo() : opener
-      }
+      returnFocusTo={focus.returnFocusTo}
       onEscapeKeyDown={(event) => {
-        // Escape in the new holder's field closes that field, not the dialog.
+        // While the new holder's field is open, Escape closes it instead of
+        // the dialog.
         if (!addingHolder) return;
         event.preventDefault();
-        setAddingHolder(false);
-        holderTrigger.current?.focus();
+        closeHolderField();
       }}
     >
       <form
@@ -252,7 +288,7 @@ export function SourceConnectionDialog({
           submit();
         }}
       >
-        <div className="grid gap-5">
+        <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor={ids.institution}>Institución</Label>
             <Input
@@ -284,7 +320,9 @@ export function SourceConnectionDialog({
                   <SelectValue placeholder="Elegí un titular" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={SELF_HOLDER}>Vos</SelectItem>
+                  <SelectItem value={SELF_HOLDER}>
+                    {SELF_HOLDER_LABEL}
+                  </SelectItem>
                   {holderOptions.map((row) => (
                     <SelectItem key={row.id} value={row.id}>
                       {row.name}
@@ -296,7 +334,9 @@ export function SourceConnectionDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setAddingHolder(true)}
+                  size="sm"
+                  className="h-9"
+                  onClick={showHolderField}
                 >
                   <Plus />
                   Nuevo titular
@@ -305,16 +345,9 @@ export function SourceConnectionDialog({
             </div>
             {addingHolder && (
               <NewHolderField
-                onCreated={(row) => {
-                  setAdded((rows) => [...rows, row]);
-                  setHolder(row.id);
-                  setAddingHolder(false);
-                  holderTrigger.current?.focus();
-                }}
-                onCancel={() => {
-                  setAddingHolder(false);
-                  holderTrigger.current?.focus();
-                }}
+                key={holderFieldKey}
+                onCreated={(row) => holderCreated(row, holderFieldKey)}
+                onCancel={closeHolderField}
               />
             )}
           </div>
@@ -360,6 +393,7 @@ export function SourceConnectionDialog({
         <DialogFooter>
           <PendingButton
             type="submit"
+            size="sm"
             pending={pending}
             aria-describedby={error ? ids.alert : undefined}
           >

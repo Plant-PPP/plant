@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { WriteMessages } from "./answers";
 import { NameField, useNameSubmit } from "./name-field";
-import { PendingButton } from "./pending-button";
+import { useSavedFocus } from "./saved-focus";
+import { PendingButton } from "@/components/ui/pending-button";
 
 // A dialog that asks for one name and saves it with `onSubmit`: creating,
 // renaming, or restoring under a new name.
@@ -27,20 +27,19 @@ export function NameDialog({
   description: string;
   submitLabel: string;
   defaultValue?: string;
-  // Where focus goes when the opener is gone, and after a save that removes
-  // it (savedRemovesOpener): the save's refresh may land after the close.
+  // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
   savedRemovesOpener?: boolean;
   messages: WriteMessages;
   onSubmit: (name: string) => Promise<WriteResult>;
   onSaved: (name: string) => void;
 }) {
-  const saved = useRef(false);
+  const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
   const field = useNameSubmit({
     onSubmit,
     messages,
     onSaved: (name) => {
-      saved.current = true;
+      focus.markSaved();
       onSaved(name);
       onClose();
     },
@@ -48,14 +47,11 @@ export function NameDialog({
 
   return (
     <AppDialog
-      onOpenChange={(open) => !open && !field.pending && onClose()}
+      onClose={onClose}
+      pending={field.pending}
       title={title}
       description={description}
-      returnFocusTo={(opener) =>
-        (saved.current && savedRemovesOpener) || !opener
-          ? returnFocusTo()
-          : opener
-      }
+      returnFocusTo={focus.returnFocusTo}
     >
       <form
         className="grid gap-4"
@@ -72,7 +68,7 @@ export function NameDialog({
           autoFocus
         />
         <DialogFooter>
-          <PendingButton type="submit" pending={field.pending}>
+          <PendingButton type="submit" size="sm" pending={field.pending}>
             {field.pending ? "Guardando…" : submitLabel}
           </PendingButton>
         </DialogFooter>
