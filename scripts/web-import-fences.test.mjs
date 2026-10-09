@@ -438,6 +438,28 @@ flagged.push(
     "src/lib/auth/mfa-factors.test.ts",
     "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
   ],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    "export const f = (s) => s.auth.mfa.challengeAndVerify({ factorId: 'f', code: '1' });",
+  ],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    "export const f = (s) => s.auth.mfa.enroll({ factorType: 'totp' });",
+  ],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    "export const f = (s) => {\n  const { mfa } = s.auth;\n  return mfa.unenroll({ factorId: 'f' });\n};",
+  ],
+  ["src/lib/auth/mfa-disable.ts", "export const f = (s) => s.auth._unenroll;"],
+  ["src/lib/auth/mfa-disable.ts", '"use server";\nexport const x = 1;'],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    'export async function f() {\n  "use server";\n}',
+  ],
+  [
+    "src/app/(app)/settings/actions.ts",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
 );
 
 for (const [filePath, code] of flagged) {
@@ -526,6 +548,10 @@ allowed.push(
     "src/lib/auth/mfa-factors.ts",
     "export const f = (s) => s.auth.mfa.listFactors();",
   ],
+  [
+    "src/lib/auth/mfa-disable.ts",
+    "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
+  ],
   ["src/lib/x.ts", "export const f = (c) => c.mfa_enrolled;"],
   [
     "src/lib/auth/session-claims.ts",
@@ -564,6 +590,8 @@ const OVERRIDES = [
   ["src/lib/auth/mfa-browser.test.ts", ["mfa"]],
   ["src/lib/auth/mfa-factors.ts", []],
   ["src/lib/auth/mfa-factors.test.ts", []],
+  ["src/lib/auth/mfa-disable.ts", []],
+  ["src/lib/auth/mfa-disable.test.ts", []],
 ];
 const PROBES = {
   reader: READER,

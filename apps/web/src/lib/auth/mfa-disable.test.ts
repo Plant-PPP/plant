@@ -1,0 +1,203 @@
+jest.mock("server-only", () => ({}), { virtual: true });
+
+import { unenrollForSession } from "./mfa-disable";
+import type { AuthClient } from "./mfa-factors";
+import { TOTP_FRESH_S } from "./mfa-rules";
+import type { SensitiveSession } from "./sensitive-session";
+
+const NOW_S = 1_800_000_000;
+const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
+const session = { userId: "user-1" } as SensitiveSession;
+const fresh = { amr: [{ method: "totp", timestamp: NOW_S - 10 }] };
+
+type Factor = { id: string; status: string };
+const factor = (id: string, status = "verified"): Factor => ({ id, status });
+
+function fakeClient({
+  user = { id: "user-1", factors: [factor("bound")] as Factor[] },
+  getUserError = null as unknown,
+  failOn = undefined as string | undefined,
+  refreshError = null as unknown,
+} = {}) {
+  const unenrolled: string[] = [];
+  const auth = {
+    getUser: jest.fn(async () =>
+      getUserError
+        ? { data: { user: null }, error: getUserError }
+        : { data: { user }, error: null },
+    ),
+    refreshSession: jest.fn(async () => ({ error: refreshError })),
+    mfa: {
+      unenroll: jest.fn(async ({ factorId }: { factorId: string }) => {
+        if (factorId === failOn) return { data: null, error: new Error("no") };
+        unenrolled.push(factorId);
+        return { data: {}, error: null };
+      }),
+    },
+  };
+  return { client: { auth } as unknown as AuthClient, auth, unenrolled };
+}
+
+// serverLog writes one line per call, on console.log, warn or error by level.
+let lines: unknown[][] = [];
+
+beforeEach(() => {
+  jest.useFakeTimers({ now: NOW_S * 1000 });
+  lines = [];
+  for (const method of ["log", "warn", "error"] as const) {
+    jest
+      .spyOn(console, method)
+      .mockImplementation((...args: unknown[]) => void lines.push(args));
+  }
+});
+
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
+function line(): Record<string, unknown> {
+  expect(lines).toHaveLength(1);
+  return JSON.parse(lines[0]?.[0] as string) as Record<string, unknown>;
+}
+
+const run = (client: AuthClient, factorId = "bound", claims = fresh) =>
+  unenrollForSession({
+    session,
+    claims,
+    client,
+    factorId,
+    requestId: REQUEST_ID,
+  });
+
+it("removes the other factors first and the verified one last", async () => {
+  const { client, auth, unenrolled } = fakeClient({
+    user: {
+      id: "user-1",
+      factors: [factor("bound"), factor("other"), factor("half", "unverified")],
+    },
+  });
+  await expect(run(client)).resolves.toEqual({ outcome: "disabled" });
+  expect(unenrolled).toEqual(["other", "bound"]);
+  expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+  expect(line()).toMatchObject({
+    level: "info",
+    event: "auth.mfa.disable",
+    "plant.request_id": REQUEST_ID,
+    "enduser.id": "user-1",
+    "plant.outcome": "disabled",
+    "plant.auth.mfa_factors_removed.count": 2,
+    "plant.auth.mfa_factors_verified.count": 2,
+  });
+  expect(lines[0]?.[0]).not.toMatch(/bound|other|totp/);
+});
+
+it("refuses a TOTP code older than two minutes without calling Auth", async () => {
+  const { client, auth } = fakeClient();
+  const stale = {
+    amr: [{ method: "totp", timestamp: NOW_S - TOTP_FRESH_S - 1 }],
+  };
+  await expect(run(client, "bound", stale)).resolves.toEqual({
+    outcome: "totp_stale",
+  });
+  expect(auth.getUser).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    level: "info",
+    "plant.outcome": "totp_stale",
+  });
+});
+
+it("refuses when Auth's user is not the session's", async () => {
+  const { client, auth } = fakeClient({
+    user: { id: "user-2", factors: [factor("bound")] },
+  });
+  await expect(run(client)).resolves.toEqual({ outcome: "user_mismatch" });
+  expect(auth.mfa.unenroll).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    level: "warn",
+    "plant.outcome": "user_mismatch",
+  });
+});
+
+it.each([
+  ["another user's factor", "someone-else"],
+  ["an unverified factor", "half"],
+])("removes nothing for %s", async (_, factorId) => {
+  const { client, auth } = fakeClient({
+    user: {
+      id: "user-1",
+      factors: [factor("bound"), factor("half", "unverified")],
+    },
+  });
+  await expect(run(client, factorId)).resolves.toEqual({
+    outcome: "factor_not_found",
+  });
+  expect(auth.mfa.unenroll).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    level: "warn",
+    "plant.outcome": "factor_not_found",
+    "plant.auth.mfa_factors_removed.count": 0,
+    "plant.auth.mfa_factors_verified.count": 1,
+  });
+});
+
+it("reports an ended session apart from an Auth failure", async () => {
+  const { client } = fakeClient({
+    getUserError: { name: "AuthSessionMissingError" },
+  });
+  await expect(run(client)).resolves.toEqual({ outcome: "session_ended" });
+  expect(line()).toMatchObject({
+    level: "info",
+    "plant.outcome": "session_ended",
+  });
+});
+
+it("logs an Auth failure on getUser as an error", async () => {
+  const error = Object.assign(new Error("down"), {
+    code: "unexpected_failure",
+  });
+  const { client, auth } = fakeClient({ getUserError: error });
+  await expect(run(client)).resolves.toEqual({ outcome: "error" });
+  expect(auth.mfa.unenroll).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    level: "error",
+    "plant.outcome": "error",
+    "error.type": "unexpected_failure",
+  });
+});
+
+it("reports partial when a factor is left behind", async () => {
+  const { client, auth } = fakeClient({
+    user: { id: "user-1", factors: [factor("bound"), factor("other")] },
+    failOn: "bound",
+  });
+  await expect(run(client)).resolves.toEqual({ outcome: "partial" });
+  expect(auth.refreshSession).not.toHaveBeenCalled();
+  expect(line()).toMatchObject({
+    level: "error",
+    "plant.outcome": "partial",
+    "plant.auth.mfa_factors_removed.count": 1,
+    "plant.auth.mfa_factors_verified.count": 2,
+  });
+});
+
+it("reports an error when the first removal fails", async () => {
+  const { client } = fakeClient({ failOn: "bound" });
+  await expect(run(client)).resolves.toEqual({ outcome: "error" });
+  expect(line()).toMatchObject({
+    level: "error",
+    "plant.auth.mfa_factors_removed.count": 0,
+  });
+});
+
+it("says so when every factor is gone but the session did not refresh", async () => {
+  const { client } = fakeClient({ refreshError: new Error("down") });
+  await expect(run(client)).resolves.toEqual({
+    outcome: "session_refresh_failed",
+  });
+  expect(line()).toMatchObject({
+    level: "warn",
+    "plant.outcome": "session_refresh_failed",
+    "plant.auth.mfa_factors_removed.count": 1,
+  });
+});
