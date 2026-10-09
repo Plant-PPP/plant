@@ -22,9 +22,10 @@ const UNSAFE =
   /[\p{Cc}\p{Cs}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800\u{1D159}\u{16FE4}]/u;
 
 // The raw cap stops a huge string before it is normalized and scanned; spaces
-// that collapse still fit under it. trim() strips every Unicode space, more
-// than the CHECK's btrim, and zod 4's max() counts code points, as char_length
-// does, so a name that passes is never refused by the table's CHECK.
+// that collapse still fit under it. normalizeName's trim() strips every
+// Unicode space, more than the CHECK's btrim, and zod 4's max() counts code
+// points, as char_length does, so a name that passes is never refused by the
+// table's CHECK.
 function trimmedName(max: number) {
   return z
     .string()

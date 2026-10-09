@@ -57,19 +57,27 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
     }
   }, [view.archivedFirstHref, view.archivedNextHref]);
 
-  function openSheet(next: SheetState) {
-    if (pending) return;
+  function clearMessages() {
     setAlert(undefined);
     setNotice(undefined);
+  }
+
+  function openSheet(next: SheetState) {
+    if (pending) return;
+    clearMessages();
     setSheet(next);
+  }
+
+  function pageArchived() {
+    paging.current = true;
+    clearMessages();
   }
 
   // The row's buttons are aria-disabled while pending, not disabled: a
   // disabled button drops its focus to the page.
   function rowAction(row: PortfolioRow, action: "archive" | "restore") {
     if (pending) return;
-    setAlert(undefined);
-    setNotice(undefined);
+    clearMessages();
     startTransition(async () => {
       const call =
         action === "archive"
@@ -201,7 +209,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedFirstHref}
-                  onClick={() => (paging.current = true)}
+                  onClick={pageArchived}
                   scroll={false}
                 >
                   Ver las más recientes
@@ -211,7 +219,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedNextHref}
-                  onClick={() => (paging.current = true)}
+                  onClick={pageArchived}
                   scroll={false}
                 >
                   Ver más

@@ -173,6 +173,21 @@ describe("createPortfolio", () => {
     expect(line).toMatchObject({ level: "warn", "plant.outcome": "invalid" });
   });
 
+  it("inserts only the name, whatever else the caller sends", async () => {
+    const calls = fakeClient({ ...ok(ID), status: 201 });
+    await createPortfolio({
+      name: "Otra",
+      user_id: OTHER,
+      id: OTHER,
+      archived_at: "2000-01-01T00:00:00Z",
+    });
+    expect(calls).toEqual([
+      ["from", "portfolios"],
+      ["insert", { name: "Otra" }],
+      ["select", "id"],
+    ]);
+  });
+
   it("maps a duplicate name", async () => {
     fakeClient(refused(409, "23505"));
     await expect(createPortfolio({ name: SENTINEL })).resolves.toEqual({

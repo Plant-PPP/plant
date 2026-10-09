@@ -44,7 +44,10 @@ export function NameSheet({
   const saved = useRef(false);
   const input = useRef<HTMLInputElement>(null);
 
+  // The submit button is aria-disabled while pending, not disabled: a disabled
+  // button drops its focus to the page.
   function submit(form: HTMLFormElement) {
+    if (pending) return;
     const name = String(new FormData(form).get("name") ?? "");
     setError(undefined);
     startTransition(async () => {
@@ -94,7 +97,11 @@ export function NameSheet({
           {error && <FormAlert id={alertId}>{error}</FormAlert>}
         </div>
         <SheetFooter className="border-t">
-          <Button type="submit" disabled={pending}>
+          <Button
+            type="submit"
+            aria-disabled={pending}
+            className="aria-disabled:opacity-50"
+          >
             {pending ? "Guardando…" : submitLabel}
           </Button>
         </SheetFooter>
