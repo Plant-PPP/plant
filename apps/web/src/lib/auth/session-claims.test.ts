@@ -25,11 +25,20 @@ beforeEach(() => {
   redirect.mockClear();
 });
 
-it("throws without refreshing when proxy.ts found Auth unavailable", async () => {
-  requestHeaders.set("x-plant-auth", "unavailable");
-  await expect(getSessionClaims()).rejects.toThrow(AuthUnavailableError);
-  expect(getClaims).not.toHaveBeenCalled();
-});
+it.each([
+  ["auth_unavailable", "auth_unavailable"],
+  ["mfa_claim_missing", "mfa_claim_missing"],
+  ["a value it does not know", "auth_unavailable"],
+])(
+  "throws without refreshing when proxy.ts recorded %s",
+  async (value, reason) => {
+    requestHeaders.set("x-plant-auth", value);
+    const thrown = getSessionClaims();
+    await expect(thrown).rejects.toThrow(AuthUnavailableError);
+    await expect(thrown).rejects.toMatchObject({ reason });
+    expect(getClaims).not.toHaveBeenCalled();
+  },
+);
 
 it("sends a missing session to /login", async () => {
   getClaims.mockResolvedValue({ data: null, error: null });
@@ -43,8 +52,35 @@ it("throws on a rate limit instead of signing the user out", async () => {
   expect(redirect).not.toHaveBeenCalled();
 });
 
-it("returns the claims", async () => {
-  const claims = { sub: "u", email: "a@x.com" };
-  getClaims.mockResolvedValue({ data: { claims }, error: null });
-  await expect(getSessionClaims()).resolves.toBe(claims);
+describe("the MFA check", () => {
+  function signIn(claims: Record<string, unknown>) {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "u", email: "a@x.com", ...claims } },
+      error: null,
+    });
+  }
+
+  it.each([
+    ["without a factor", { aal: "aal1", mfa_enrolled: false }],
+    ["verified", { aal: "aal2", mfa_enrolled: true }],
+  ])("returns the claims of a user %s", async (_, claims) => {
+    signIn(claims);
+    await expect(getSessionClaims()).resolves.toMatchObject(claims);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("sends a user with a factor who has not verified it to /auth/mfa", async () => {
+    signIn({ aal: "aal1", mfa_enrolled: true });
+    await expect(getSessionClaims()).rejects.toThrow("redirect /auth/mfa");
+  });
+
+  it("throws instead of returning claims without the MFA claim", async () => {
+    signIn({ aal: "aal1" });
+    const thrown = getSessionClaims();
+    await expect(thrown).rejects.toThrow(AuthUnavailableError);
+    await expect(thrown).rejects.toMatchObject({
+      reason: "mfa_claim_missing",
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
 });

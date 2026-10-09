@@ -4,7 +4,12 @@ import {
   AuthRetryableFetchError,
   AuthSessionMissingError,
 } from "@supabase/supabase-js";
-import { isSessionMissing } from "./session-state";
+import {
+  AuthUnavailableError,
+  authUnavailableReason,
+  isSessionMissing,
+  unavailableReason,
+} from "./session-state";
 
 type Case = [string, Parameters<typeof isSessionMissing>[0]];
 
@@ -38,5 +43,71 @@ describe("isSessionMissing", () => {
     ["a 401 with no code", apiError(401)],
   ])("is false for %s", (_, error) => {
     expect(isSessionMissing(error)).toBe(false);
+  });
+});
+
+describe("unavailableReason", () => {
+  function headers(value?: string) {
+    return new Headers(value === undefined ? {} : { "x-plant-auth": value });
+  }
+
+  it("is null when proxy.ts found the session usable", () => {
+    expect(unavailableReason(headers())).toBeNull();
+  });
+
+  it.each(["auth_unavailable", "mfa_claim_missing"])("reads %s", (value) => {
+    expect(unavailableReason(headers(value))).toBe(value);
+  });
+
+  it.each(["", "unavailable", "MFA_CLAIM_MISSING", "toString"])(
+    "reads %j, which proxy.ts never writes, as auth_unavailable",
+    (value) => {
+      expect(unavailableReason(headers(value))).toBe("auth_unavailable");
+    },
+  );
+});
+
+describe("authUnavailableReason", () => {
+  function foreign(reason?: unknown) {
+    return Object.assign(new Error("Auth unavailable"), {
+      name: "AuthUnavailableError",
+      reason,
+    });
+  }
+
+  it.each(["auth_unavailable", "mfa_claim_missing"] as const)(
+    "reads %s from the error",
+    (reason) => {
+      expect(authUnavailableReason(new AuthUnavailableError(reason))).toBe(
+        reason,
+      );
+    },
+  );
+
+  it("defaults to auth_unavailable", () => {
+    expect(authUnavailableReason(new AuthUnavailableError())).toBe(
+      "auth_unavailable",
+    );
+  });
+
+  it("reads another bundle's error by name", () => {
+    expect(authUnavailableReason(foreign("mfa_claim_missing"))).toBe(
+      "mfa_claim_missing",
+    );
+  });
+
+  it.each([undefined, "other", 1])(
+    "reads another bundle's error with reason %j as auth_unavailable",
+    (reason) => {
+      expect(authUnavailableReason(foreign(reason))).toBe("auth_unavailable");
+    },
+  );
+
+  it.each([
+    ["another error", new Error("Auth unavailable")],
+    ["a thrown string", "AuthUnavailableError"],
+    ["null", null],
+  ])("is null for %s", (_, error) => {
+    expect(authUnavailableReason(error)).toBeNull();
   });
 });

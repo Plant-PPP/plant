@@ -157,27 +157,31 @@ describe("onRequestError", () => {
   it("warns on an Auth outage thrown from another bundle's class", async () => {
     const foreign = Object.assign(new Error("Auth unavailable"), {
       name: "AuthUnavailableError",
+      reason: "mfa_claim_missing",
     });
     await onRequestError(foreign, request(REQUEST_ID), context);
     expect(error).not.toHaveBeenCalled();
     expect(lineOf(warn)).toEqual({
       ...warnLine,
-      "plant.outcome": "auth_unavailable",
+      "plant.outcome": "mfa_claim_missing",
       "error.type": "AuthUnavailableError",
     });
   });
 
-  it("warns on an Auth outage, without a stack", async () => {
-    await onRequestError(
-      new AuthUnavailableError(),
-      request(REQUEST_ID),
-      context,
-    );
-    expect(error).not.toHaveBeenCalled();
-    expect(lineOf(warn)).toEqual({
-      ...warnLine,
-      "plant.outcome": "auth_unavailable",
-      "error.type": "AuthUnavailableError",
-    });
-  });
+  it.each(["auth_unavailable", "mfa_claim_missing"] as const)(
+    "warns with the reason %s as the outcome, without a stack",
+    async (reason) => {
+      await onRequestError(
+        new AuthUnavailableError(reason),
+        request(REQUEST_ID),
+        context,
+      );
+      expect(error).not.toHaveBeenCalled();
+      expect(lineOf(warn)).toEqual({
+        ...warnLine,
+        "plant.outcome": reason,
+        "error.type": "AuthUnavailableError",
+      });
+    },
+  );
 });

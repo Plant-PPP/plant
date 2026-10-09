@@ -1,0 +1,45 @@
+import "server-only";
+import { headers } from "next/headers";
+import { serverLog } from "@/lib/log/server-log";
+import {
+  REQUEST_ID_FIELD,
+  REQUEST_ID_HEADER,
+  requestIdFrom,
+} from "@/lib/request-id";
+import { sensitiveRequirement } from "./mfa-rules";
+import { getSessionClaims } from "./session-claims";
+
+export type SensitiveAction = "export" | "delete_account" | "change_email";
+
+declare const checked: unique symbol;
+
+// Proof that requireSensitiveSession let this request through: an action that
+// needs it takes one, so it cannot run without the check.
+export type SensitiveSession = {
+  readonly userId: string;
+  readonly [checked]: true;
+};
+
+export type SensitiveAnswer =
+  | { ok: true; session: SensitiveSession }
+  | { ok: false; stepUp: "sign_in_again" };
+
+// Called by the server action, or the code that enqueues the job, behind an
+// export, an account deletion or an email change. On sign_in_again the UI asks
+// the user to sign in again.
+export async function requireSensitiveSession(
+  action: SensitiveAction,
+): Promise<SensitiveAnswer> {
+  const claims = await getSessionClaims();
+  const nowS = Math.floor(Date.now() / 1000);
+  if (sensitiveRequirement(claims, nowS) === "met") {
+    return { ok: true, session: { userId: claims.sub } as SensitiveSession };
+  }
+  serverLog.info("auth.step_up", {
+    [REQUEST_ID_FIELD]: requestIdFrom((await headers()).get(REQUEST_ID_HEADER)),
+    "enduser.id": claims.sub,
+    "plant.outcome": "step_up_required",
+    "plant.auth.sensitive_action": action,
+  });
+  return { ok: false, stepUp: "sign_in_again" };
+}
