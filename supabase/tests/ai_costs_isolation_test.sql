@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(34);
+SELECT plan(36);
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -32,6 +32,29 @@ SELECT set_eq(
         'input_tokens:INSERT', 'cache_read_tokens:INSERT', 'cache_write_tokens:INSERT',
         'output_tokens:INSERT'],
   'the service role holds only INSERT on the data columns'
+);
+
+-- ── What the API roles hold ─────────────────────────────────────────────────
+SELECT set_eq(
+  $$ SELECT '(table):' || acl.privilege_type
+              || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
+     FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+     WHERE c.oid = 'public.ai_costs'::regclass AND acl.grantee = 'authenticated'::regrole
+     UNION ALL
+     SELECT a.attname || ':' || acl.privilege_type
+     FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.ai_costs'::regclass AND acl.grantee = 'authenticated'::regrole $$,
+  ARRAY['(table):SELECT'],
+  'a user holds only SELECT, without the grant option'
+);
+
+SELECT is_empty(
+  $$ SELECT acl.privilege_type FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+     WHERE c.oid = 'public.ai_costs'::regclass AND acl.grantee = 'anon'::regrole
+     UNION ALL
+     SELECT acl.privilege_type FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.ai_costs'::regclass AND acl.grantee = 'anon'::regrole $$,
+  'anon holds nothing on the table or its columns'
 );
 
 SELECT set_config('request.jwt.claims', '{"role": "service_role"}', true);
