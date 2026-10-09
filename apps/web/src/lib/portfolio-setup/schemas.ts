@@ -35,9 +35,12 @@ export function normalizeName(name: string): string {
     .replace(/(\p{Emoji_Presentation})\uFE0F+/gu, "$1");
 }
 
+// The raw cap stops a huge string before it is normalized and scanned; spaces
+// that collapse still fit under it.
 function trimmedName(max: number) {
   return z
     .string()
+    .max(max * 8, { abort: true })
     .overwrite(normalizeName)
     .min(1)
     .max(max)

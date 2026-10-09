@@ -2,7 +2,7 @@
 
 import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   archivePortfolio,
   createPortfolio,
@@ -38,12 +38,24 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   const [alert, setAlert] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const heading = useRef<HTMLHeadingElement>(null);
+  const archivedSummary = useRef<HTMLElement>(null);
+  const paging = useRef(false);
   const focusHeading = () => heading.current;
   const [pending, startTransition] = useTransition();
   // Seeded once: paging back to the first archived page keeps it open.
   const [archivedOpen, setArchivedOpen] = useState(
     view.archivedFirstHref !== null,
   );
+
+  // The page reached through an archived-list link may not have that link,
+  // and focus would fall to the page: it goes to the list's summary instead.
+  useEffect(() => {
+    if (!paging.current) return;
+    paging.current = false;
+    if (document.activeElement === document.body) {
+      archivedSummary.current?.focus();
+    }
+  }, [view.archivedFirstHref, view.archivedNextHref]);
 
   function openSheet(next: SheetState) {
     if (pending) return;
@@ -150,7 +162,10 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
             open={archivedOpen}
             onToggle={(event) => setArchivedOpen(event.currentTarget.open)}
           >
-            <summary className="cursor-pointer text-sm font-medium">
+            <summary
+              ref={archivedSummary}
+              className="cursor-pointer text-sm font-medium"
+            >
               Archivadas
             </summary>
             {view.archived.length === 0 && (
@@ -186,6 +201,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedFirstHref}
+                  onClick={() => (paging.current = true)}
                   scroll={false}
                 >
                   Ver las más recientes
@@ -195,6 +211,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                 <Link
                   className="underline"
                   href={view.archivedNextHref}
+                  onClick={() => (paging.current = true)}
                   scroll={false}
                 >
                   Ver más

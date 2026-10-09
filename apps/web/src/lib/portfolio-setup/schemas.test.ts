@@ -80,6 +80,15 @@ describe("nameInputSchema", () => {
     });
   });
 
+  test("refuses a huge name without scanning it", () => {
+    expect(schema.safeParse({ name: "a".repeat(1_000_000) }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ name: `a${" ".repeat(300)}b` }).success).toBe(
+      true,
+    );
+  });
+
   test("collapses spaces before counting the limit", () => {
     const name = `${"a".repeat(19)}  ${"a".repeat(20)}`;
     expect(schema.safeParse({ name }).success).toBe(true);
