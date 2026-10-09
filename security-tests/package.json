@@ -2,7 +2,7 @@
   "name": "@plant/security-tests",
   "version": "0.0.0",
   "private": true,
-  "description": "Pentest specs against the local Supabase stack: Auth's password and redirect rules, and anon, another user and the owner on every public table and view.",
+  "description": "Pentest specs against the local Supabase stack: Auth's password and redirect rules, the MFA access token hook, and anon, another user and the owner on every public table and view.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
