@@ -32,6 +32,8 @@ describe("classifyPostgrestResult", () => {
     ["a code that is not one", pgError("not a code"), 409, "http_409", false],
     ["a non-string code", pgError(23514), 400, "http_400", false],
     ["a 4-character code", pgError("2351"), 400, "http_400", false],
+    ["a 6-character code", pgError("235140"), 400, "http_400", false],
+    ["a PGRST code with letters", pgError("PGRST20x"), 400, "http_400", false],
     ["a lowercase word", pgError("abcde"), 400, "http_400", false],
     ["no error", null, 204, "http_204", false],
     ["a 503 with no error", null, 503, "http_503", true],
@@ -73,9 +75,17 @@ describe("postgrestInsert", () => {
     ).resolves.toEqual({ code: "23505", mayHaveCommitted: false });
   });
 
-  it("clears the deadline when the query throws", async () => {
+  it("clears the deadline when the query rejects", async () => {
     await expect(
       postgrestInsert(async () => {
+        throw new Error("boom");
+      }, 1000),
+    ).rejects.toThrow("boom");
+  });
+
+  it("clears the deadline when the query throws", async () => {
+    await expect(
+      postgrestInsert(() => {
         throw new Error("boom");
       }, 1000),
     ).rejects.toThrow("boom");

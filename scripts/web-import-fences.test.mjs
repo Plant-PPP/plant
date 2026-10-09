@@ -96,6 +96,7 @@ const flagged = [
     'export const s = require("@/lib/supabase/service-role?x");',
   ],
   ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink#x";'],
+  ["src/app/page.tsx", 'import "@/lib/supabase/service-role?";'],
   ["src/lib/supabase/service-role.ts", 'import "ai";'],
   ["src/lib/supabase/service-role.ts", 'import "@ai-sdk/google";'],
   [
@@ -155,6 +156,19 @@ const flagged = [
     "src/app/actions.ts",
     'export const c = import.meta.webpackContext("../lib/ai", { regExp: /sink/ });',
   ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta["webpackContext"]("../lib/ai", { regExp: /sink/ });',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = (import.meta as any).webpackContext("../lib/ai", { regExp: /sink/ });',
+  ],
+  [
+    "src/app/actions.ts",
+    "const { webpackContext } = import.meta;\nexport const c = webpackContext;",
+  ],
+  ["src/components/x.tsx", 'import { generateText } from "ai?x";'],
   [
     "src/app/page.tsx",
     'export const c = (require as unknown as { context: Function }).context("../lib", false, /role/);',
@@ -428,6 +442,10 @@ flagged.push(
     "src/app/(app)/page.tsx",
     'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked.ts";',
   ],
+  [
+    "src/app/(app)/page.tsx",
+    'import { readSessionClaims } from "@/lib/auth/session-claims-unchecked?x";',
+  ],
   ["src/lib/auth/mfa-browser.ts", "export const f = (s) => s.auth._unenroll;"],
   ["src/lib/auth/mfa-factors.ts", "export const f = (s) => s.auth._unenroll;"],
   [
@@ -535,6 +553,9 @@ const allowed = [
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
   ],
   ["src/lib/x.ts", "export const f = (o: { aim: number }) => o.aim;"],
+  ["src/lib/x.ts", 'export const u = new URL("./x.json", import.meta.url);'],
+  ["src/lib/x.ts", 'import "@/lib/foo/service-role-x";'],
+  ["src/lib/x.ts", 'import "./session-claims-unchecked.d";'],
   ["src/lib/ai/ai-cost-sink.ts", 'export const s = "use server";'],
   [
     "src/app/api/x/route.js",
@@ -601,10 +622,10 @@ const OVERRIDES = [
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/lib/auth/session-claims-unchecked.ts", []],
-  ["src/lib/auth/session-claims.ts", ["reader"]],
-  ["src/lib/auth/session-claims.test.ts", ["reader"]],
-  ["src/app/auth/mfa/page.tsx", ["reader"]],
-  ["src/app/auth/mfa/page.test.tsx", ["reader"]],
+  ["src/lib/auth/session-claims.ts", ["reader", "claims"]],
+  ["src/lib/auth/session-claims.test.ts", ["reader", "claims"]],
+  ["src/app/auth/mfa/page.tsx", ["reader", "claims"]],
+  ["src/app/auth/mfa/page.test.tsx", ["reader", "claims"]],
   ["src/lib/auth/mfa-browser.ts", ["mfa"]],
   ["src/lib/auth/mfa-browser.test.ts", ["mfa"]],
   ["src/lib/auth/mfa-factors.ts", []],
@@ -618,6 +639,7 @@ const PROBES = {
   service: 'import "@/lib/supabase/service-role";',
   ai: 'import { generateText } from "ai";',
   sink: 'import "@/lib/ai/ai-cost-sink";',
+  claims: 'import "@/lib/auth/session-claims-unchecked";',
   dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
 for (const [filePath, exempt] of OVERRIDES) {

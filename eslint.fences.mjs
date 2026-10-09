@@ -23,7 +23,7 @@ export const secretKeyReads = [
 const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?([?#].*)?`;
 const AI_MESSAGE =
   "Only apps/web/src/lib/ai, except the cost sink, may call a model, so every call is costed.";
-export const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
+export const AI = { regex: "^ai([/?#].*)?$", message: AI_MESSAGE };
 export const AI_PROVIDERS = {
   regex: "^@ai-sdk/(?!react(/|$))",
   message: AI_MESSAGE,
@@ -55,7 +55,7 @@ const NODE_MODULES = {
 // Inngest's step.ai and @inngest/agent-kit call a model themselves, past the
 // cost middleware; inngest re-exports @inngest/ai's model helpers for step.ai.
 const INNGEST_AI = {
-  regex: "^@inngest/(ai|agent-kit)(/|$)",
+  regex: "^@inngest/(ai|agent-kit)([/?#]|$)",
   message:
     "Models are called only through src/lib/ai, which records their cost.",
 };
@@ -132,8 +132,9 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 }));
 
 // The fences read import specifiers, so a computed one, a bundler's
-// require.context or import.meta.webpackContext, or a require wrapped in a
-// type cast (which the fences' callee match misses), cannot pass them.
+// require.context or any import.meta member but url, dirname and filename
+// (import.meta.webpackContext), or a require wrapped in a type cast (which the
+// fences' callee match misses), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
@@ -143,7 +144,7 @@ export const LITERAL_IMPORTS_ONLY = [
     "property",
     "context",
   ),
-  'MemberExpression[object.type="MetaProperty"][property.name="webpackContext"]',
+  'MetaProperty[meta.name="import"]:not(MemberExpression[computed=false][property.name=/^(url|dirname|filename)$/] > .object)',
 ].map((selector) => ({
   selector,
   message: "Import a module by a string literal so the import fences see it.",

@@ -28,9 +28,11 @@ export function classifyPostgrestResult(
   };
 }
 
-// PostgREST answers an insert with 201; data is null when postgrest-js could
-// not parse its body. A timeout or any other answer resolves as a
-// PostgrestFailure; a query that rejects or throws still rejects.
+// PostgREST answers an insert with 201; data is null when the insert returns
+// no representation or postgrest-js could not parse its body. A timeout or any
+// other answer resolves as a PostgrestFailure; a query that rejects or throws
+// still rejects. Not for `.maybeSingle()`: postgrest-js turns its 2xx with
+// several rows into a 406 after the write committed.
 export async function postgrestInsert<T>(
   query: (signal: AbortSignal) => PromiseLike<PostgrestSingleResponse<T>>,
   ms: number,
