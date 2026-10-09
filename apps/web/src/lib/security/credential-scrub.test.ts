@@ -347,8 +347,9 @@ describe("scrubSensitiveText", () => {
     },
   );
 
-  // A ULID's first character is 0 to 7 (its 48-bit time), so a token that
-  // starts any other way is no run id, even with a second digit run.
+  // A ULID's first character is 0 to 7 (its 48-bit time; the rule keeps only
+  // 0, until 3084), so a token that starts any other way is no run id, even
+  // with a second digit run.
   it.each([
     ["a letter", "ABCDEFGHJK12345678MNPQRS9T"],
     ["an 8", "8BCDEFGHJK12345678MNPQRS9T"],
@@ -356,8 +357,8 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(token)).toContain(MASK);
   });
 
-  // A run id's second character is a letter until 2039, so a digit run that
-  // starts at the token's first character is the token's only one.
+  // A run id's third character is a letter until 2039, so the digit run it
+  // opens with is at most two digits.
   it.each([
     ["a zero-padded DNI", "09123456ABCDEFGHJKMNPQRSTV"],
     ["a zero-padded DNI in lower case", "01234567abcdefghjkmnpqrstv"],

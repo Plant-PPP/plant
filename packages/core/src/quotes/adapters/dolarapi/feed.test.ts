@@ -242,6 +242,15 @@ describe("createDolarapiFeed", () => {
     expect(rows.unread).toEqual([{ key: "blue", code: "http_5xx" }]);
   });
 
+  it("passes a QuoteFeedError-named error with an unknown code through", async () => {
+    const forged = Object.assign(new Error("boom"), { name: "QuoteFeedError" });
+    const feed = createDolarapiFeed(async (url) => {
+      if (url.endsWith("/blue")) throw forged;
+      return body("x", 1, 2);
+    });
+    await expect(feed.readRaw(NOW)).rejects.toBe(forged);
+  });
+
   it("passes an error that is not a QuoteFeedError through unchanged", async () => {
     const bug = new TypeError("boom");
     const feed = createDolarapiFeed(async (url) => {
