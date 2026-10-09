@@ -13,10 +13,10 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
         rows.fxRates.length + rows.prices.length + (rows.unread?.length ?? 0);
       if (count === 0) throw new QuoteFeedError("empty");
       const batch = checkBatch(rows, now, raw.id);
-      // Nothing kept and nothing out of its window: a part that failed for a
-      // passing reason makes the read retryable; else a read whose every part
-      // failed fails with the first part's code, and one whose rows the checks
-      // refused means the source changed what it sends.
+      // Every row and part refused, none for its window: a part whose code a
+      // retry can help fails the read with that code; else a read where
+      // nothing was read fails with the first part's code, and one whose rows
+      // were all refused means the source changed what it sends.
       if (batch.refused.invalid.length === count) {
         const unread = rows.unread ?? [];
         const passing = unread.find(({ code }) => QUOTE_FEED_CODES[code]);
