@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Vercel previews on request for agent branches
+
+- **`claude/*` branches don't deploy on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns them off, so review fixes stop spending Vercel Hobby's daily deployment cap. `staging` and every other branch deploy on push as before.
+- **A thread deploys its branch when the PR is ready for review**, with the Vercel connector's `create_deployment`: project `plant`, `gitSource` `{ type: "github", org: "Plant-PPP", repo: "plant", ref: "<branch>" }`, no `target` (a preview). It posts the deployment's URL with the PR. A later push needs a new request.
+- **`claude/*` deployments skip `turbo-ignore`.** A deployment someone asked for always builds, even when the branch's last commit touches nothing `@plant/web` depends on.
+
 ## 2026-10-09 · Audit rows for MFA and session end (PLA-76)
 
 - **Four more `audit_log` actions, all from database triggers:** `auth.session.deleted`, `auth.mfa.verified` (a session raised to `aal2`), `auth.mfa.factor_verified` and `auth.mfa.factor_removed` (a verified factor deleted). Enroll, verify, unenroll and sign-out run between the browser and Auth, so only the database sees all of them. An unverified factor, a refresh and a failed TOTP attempt write nothing, and a TOTP verify on a session already at `aal2` (a step-up) writes only the `auth.session.deleted` rows of the sessions below `aal2` it deletes; Auth's logs keep the failed attempts.
