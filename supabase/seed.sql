@@ -23,3 +23,14 @@ VALUES ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-0000000
 -- Signup already gave the user "Principal"; a second portfolio shows the list.
 INSERT INTO public.portfolios (user_id, name)
 VALUES ('00000000-0000-4000-8000-000000000001', 'Largo plazo');
+
+-- A holder and two accounts, one of them the holder's.
+INSERT INTO public.holders (id, user_id, name)
+VALUES ('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-000000000001', 'Lucía');
+
+INSERT INTO public.source_connections (user_id, institution, holder_id, default_portfolio_id)
+SELECT p.user_id, c.institution, c.holder_id::uuid, p.id
+FROM public.portfolios p
+CROSS JOIN (VALUES ('IOL', NULL), ('Balanz', '00000000-0000-4000-8000-0000000000a1'))
+  AS c (institution, holder_id)
+WHERE p.user_id = '00000000-0000-4000-8000-000000000001' AND p.name = 'Principal';

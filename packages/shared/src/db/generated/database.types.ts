@@ -47,6 +47,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"holders": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"id": string,"name": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"portfolios": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"id": string,"name": string,"updated_at": string,"user_id": string
@@ -88,6 +102,32 @@ export type Database = {
                   }
                   Relationships: [
                     
+                  ]
+                },"source_connections": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"default_portfolio_id": string,"holder_id": string | null,"id": string,"include_in_tax_report": boolean,"institution": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id": string,"holder_id"?: string | null,"id"?: string,"include_in_tax_report"?: boolean,"institution": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id"?: string,"holder_id"?: string | null,"id"?: string,"include_in_tax_report"?: boolean,"institution"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "source_connections_user_id_default_portfolio_id_fkey"
+      columns: ["user_id","default_portfolio_id"]
+isOneToOne: false
+      referencedRelation: "portfolios"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "source_connections_user_id_holder_id_fkey"
+      columns: ["user_id","holder_id"]
+isOneToOne: false
+      referencedRelation: "holders"
+      referencedColumns: ["user_id","id"]
+    }
                   ]
                 }
           }
