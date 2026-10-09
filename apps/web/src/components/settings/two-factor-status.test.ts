@@ -1,50 +1,57 @@
 import type { AuthClient } from "@/lib/auth/mfa-factors";
-import { fetchTwoFactorStatus, twoFactorSwitch } from "./two-factor-status";
+import { fetchTwoFactorState, twoFactorSwitch } from "./two-factor-status";
 
 const client = (listFactors: () => Promise<unknown>) =>
   ({ auth: { mfa: { listFactors } } }) as unknown as AuthClient;
 
-const listed = (statuses: string[]) => async () => ({
-  data: {
-    all: statuses.map((status, i) => ({ id: `f${i}`, status })),
-    totp: [],
-  },
-  error: null,
-});
+const listed =
+  (statuses: string[], totp: { id: string }[] = []) =>
+  async () => ({
+    data: {
+      all: statuses.map((status, i) => ({ id: `f${i}`, status })),
+      totp,
+    },
+    error: null,
+  });
 
-describe("fetchTwoFactorStatus", () => {
-  it("is on with a verified factor", async () => {
+describe("fetchTwoFactorState", () => {
+  it("is on with a verified factor, naming the TOTP one", async () => {
     await expect(
-      fetchTwoFactorStatus(client(listed(["unverified", "verified"]))),
-    ).resolves.toBe("on");
+      fetchTwoFactorState(
+        client(listed(["unverified", "verified"], [{ id: "f1" }])),
+      ),
+    ).resolves.toEqual({ status: "on", totpId: "f1" });
   });
 
   it("is off with only unverified factors", async () => {
     await expect(
-      fetchTwoFactorStatus(client(listed(["unverified"]))),
-    ).resolves.toBe("off");
+      fetchTwoFactorState(client(listed(["unverified"]))),
+    ).resolves.toEqual({ status: "off" });
   });
 
   it("is failed, not off, when the list fails", async () => {
     await expect(
-      fetchTwoFactorStatus(
+      fetchTwoFactorState(
         client(async () => ({ data: null, error: { code: "x" } })),
       ),
-    ).resolves.toBe("failed");
+    ).resolves.toEqual({ status: "failed" });
     await expect(
-      fetchTwoFactorStatus(client(() => Promise.reject(undefined))),
-    ).resolves.toBe("failed");
+      fetchTwoFactorState(client(() => Promise.reject(undefined))),
+    ).resolves.toEqual({ status: "failed" });
   });
 });
 
 describe("twoFactorSwitch", () => {
+  const on = { status: "on", totpId: "f" } as const;
   it.each([
-    ["loading", false, { checked: false, disabled: true }],
-    ["failed", false, { checked: false, disabled: true }],
-    ["off", false, { checked: false, disabled: false }],
-    ["off", true, { checked: true, disabled: true }],
-    ["on", false, { checked: true, disabled: true }],
-  ] as const)("%s, enrolling %s", (status, enrolling, expected) => {
-    expect(twoFactorSwitch(status, enrolling)).toEqual(expected);
+    [{ status: "loading" }, "none", { checked: false, disabled: true }],
+    [{ status: "failed" }, "none", { checked: false, disabled: true }],
+    [{ status: "off" }, "none", { checked: false, disabled: false }],
+    [{ status: "off" }, "enroll", { checked: true, disabled: true }],
+    [on, "none", { checked: true, disabled: false }],
+    [on, "disable", { checked: true, disabled: true }],
+    [{ status: "on" }, "none", { checked: true, disabled: true }],
+  ] as const)("%p, panel %s", (state, panel, expected) => {
+    expect(twoFactorSwitch(state, panel)).toEqual(expected);
   });
 });
