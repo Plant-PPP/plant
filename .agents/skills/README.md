@@ -28,7 +28,7 @@ Common entry points:
 - Check a change against the boundary / DRY / comment-value lens → `/enforce-ports-and-adapters`,
   `/enforce-clean-code`, `/enforce-comment-value`
 - Check a DB/authz change for a cross-user path (RLS policies, grants, `SECURITY DEFINER`,
-  service-role clients (apps/web/src/lib/supabase, the AI cost sink and writer), `"use server"`, route handlers, assistant tools) → `/enforce-owner-isolation`
+  the service-role client (apps/web/src/lib/supabase/service-role.ts) and the AI cost sink and writer, `"use server"`, route handlers, assistant tools) → `/enforce-owner-isolation`
 - Write or review SQL → `supabase-postgres-best-practices`
 - Make text shorter without losing meaning → `/tighten`
 
