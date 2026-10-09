@@ -1,10 +1,10 @@
-import { afterLoginPath, isPublicPath, loginPath } from "./routes";
+import { afterLoginPath, isPublicPath, loginPath, mfaPath } from "./routes";
 
 it.each(["/login", "/login/x", "/auth/callback"])("%s is public", (path) => {
   expect(isPublicPath(path)).toBe(true);
 });
 
-it.each(["/", "/loginx", "/authx", "/auth/other", "/assets"])(
+it.each(["/", "/loginx", "/authx", "/auth/other", "/auth/mfa", "/assets"])(
   "%s needs a session",
   (path) => {
     expect(isPublicPath(path)).toBe(false);
@@ -25,6 +25,9 @@ it.each([
   "/login",
   "/login?error=callback",
   "/auth/callback",
+  "/auth/mfa",
+  "/auth/mfa?next=%2Fassets",
+  "/auth/mfa/x",
   "//evil",
   undefined,
 ])("lands on / after signing in for %p", (next) => {
@@ -33,4 +36,10 @@ it.each([
 
 it("lands where the user was going", () => {
   expect(afterLoginPath("/assets?x=1")).toBe("/assets?x=1");
+});
+
+it("sends an unverified session to the MFA step", () => {
+  expect(mfaPath("/assets?x=1")).toBe("/auth/mfa?next=%2Fassets%3Fx%3D1");
+  expect(mfaPath("/")).toBe("/auth/mfa");
+  expect(mfaPath("/auth/mfa")).toBe("/auth/mfa");
 });

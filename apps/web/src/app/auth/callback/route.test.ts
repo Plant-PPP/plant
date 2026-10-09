@@ -168,7 +168,7 @@ describe("the callback line", () => {
 
   it("drops a request id that is not a UUID", async () => {
     await callback("", "/assets", `${REQUEST_ID}x`);
-    expect(JSON.parse(logged().line)).not.toHaveProperty("plant.request_id");
+    expect(JSON.parse(logged().line)).not.toHaveProperty(["plant.request_id"]);
   });
 
   it.each([

@@ -108,7 +108,7 @@ describe("onRequestError", () => {
 
   it("drops a request id with text before its UUID", async () => {
     await onRequestError(new Error("x"), request(`x ${REQUEST_ID}`), context);
-    expect(lineOf(error)).not.toHaveProperty("plant.request_id");
+    expect(lineOf(error)).not.toHaveProperty(["plant.request_id"]);
   });
 
   it("drops a request id that is not a UUID", async () => {
@@ -117,7 +117,7 @@ describe("onRequestError", () => {
       request(`${REQUEST_ID}\n{"forged":1}`),
       context,
     );
-    expect(lineOf(error)).not.toHaveProperty("plant.request_id");
+    expect(lineOf(error)).not.toHaveProperty(["plant.request_id"]);
   });
 
   it("skips the proxy, which logs its own errors", async () => {
@@ -154,30 +154,34 @@ describe("onRequestError", () => {
     });
   });
 
-  it("warns on an Auth outage thrown from another bundle's class", async () => {
+  it("warns on an unavailable session thrown from another bundle's class", async () => {
     const foreign = Object.assign(new Error("Auth unavailable"), {
       name: "AuthUnavailableError",
+      reason: "mfa_claim_missing",
     });
     await onRequestError(foreign, request(REQUEST_ID), context);
     expect(error).not.toHaveBeenCalled();
     expect(lineOf(warn)).toEqual({
       ...warnLine,
-      "plant.outcome": "auth_unavailable",
+      "plant.outcome": "mfa_claim_missing",
       "error.type": "AuthUnavailableError",
     });
   });
 
-  it("warns on an Auth outage, without a stack", async () => {
-    await onRequestError(
-      new AuthUnavailableError(),
-      request(REQUEST_ID),
-      context,
-    );
-    expect(error).not.toHaveBeenCalled();
-    expect(lineOf(warn)).toEqual({
-      ...warnLine,
-      "plant.outcome": "auth_unavailable",
-      "error.type": "AuthUnavailableError",
-    });
-  });
+  it.each(["auth_unavailable", "mfa_claim_missing"] as const)(
+    "warns with the reason %s as the outcome, without a stack",
+    async (reason) => {
+      await onRequestError(
+        new AuthUnavailableError(reason),
+        request(REQUEST_ID),
+        context,
+      );
+      expect(error).not.toHaveBeenCalled();
+      expect(lineOf(warn)).toEqual({
+        ...warnLine,
+        "plant.outcome": reason,
+        "error.type": "AuthUnavailableError",
+      });
+    },
+  );
 });

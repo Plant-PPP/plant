@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { AuthInvalidJwtError } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
-import { AUTH_UNAVAILABLE_HEADER } from "@/lib/auth/session-state";
+import {
+  AUTH_UNAVAILABLE_HEADER,
+  type AuthUnavailableReason,
+} from "@/lib/auth/session-state";
 import { requireSupabaseEnv, SESSION_COOKIE_OPTIONS } from "./env";
 
 // auth-js retries a refresh for up to 30 s on a 5xx or a failed fetch, and a
@@ -15,23 +18,15 @@ const AUTH_TIMEOUT_MS = 5000;
 // though the token still works for up to 120 s.
 const REFRESH_AHEAD_MS = 120_000;
 
-function withoutUnavailable(headers: Headers): Headers {
-  const copy = new Headers(headers);
-  copy.delete(AUTH_UNAVAILABLE_HEADER);
-  return copy;
-}
-
 // The request/response cookie adapter for proxy.ts. server.ts goes through
 // cookies(), which can neither rebuild NextResponse.next({ request }) with
 // refreshed cookies nor set the no-cache headers Supabase sends with them.
 export async function updateSession(request: NextRequest) {
-  // The headers as they arrived, before a refresh rewrites the cookies, minus
-  // any copy of the header only proxy.ts may set.
-  const original = withoutUnavailable(request.headers);
+  // The headers before a refresh rewrites the cookies. proxy.ts has already
+  // dropped a client's x-plant-auth.
+  const original = new Headers(request.headers);
   const forward = () =>
-    NextResponse.next({
-      request: { headers: withoutUnavailable(request.headers) },
-    });
+    NextResponse.next({ request: { headers: new Headers(request.headers) } });
 
   const env = requireSupabaseEnv();
   let response = forward();
@@ -104,15 +99,13 @@ export async function updateSession(request: NextRequest) {
     redirect(url: URL) {
       return withRefresh(NextResponse.redirect(url));
     },
-    // Auth failed after or instead of a refresh. The page gets the header that
-    // makes it show the retry; deletions from the failure are dropped, but a
-    // refresh that succeeded is kept, because Auth already rotated the old
-    // refresh token.
-    unavailable() {
-      const headers = refreshed
-        ? withoutUnavailable(request.headers)
-        : new Headers(original);
-      headers.set(AUTH_UNAVAILABLE_HEADER, "unavailable");
+    // The session cannot be used: Auth failed after or instead of a refresh,
+    // or the token lacks the MFA claim. The page gets the header that makes it
+    // show the retry; deletions from a failure are dropped, but a refresh that
+    // succeeded is kept, because Auth already rotated the old refresh token.
+    unavailable(reason: AuthUnavailableReason) {
+      const headers = new Headers(refreshed ? request.headers : original);
+      headers.set(AUTH_UNAVAILABLE_HEADER, reason);
       const forwarded = NextResponse.next({ request: { headers } });
       return refreshed ? withRefresh(forwarded) : forwarded;
     },

@@ -1,7 +1,10 @@
 import type { Instrumentation } from "next";
 
-import { isAuthUnavailable } from "@/lib/auth/session-state";
-import { errorType, serverLog } from "@/lib/log/server-log";
+import {
+  AUTH_UNAVAILABLE_ERROR,
+  authUnavailableReason,
+} from "@/lib/auth/session-state";
+import { serverLog } from "@/lib/log/server-log";
 import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
@@ -56,12 +59,14 @@ export const onRequestError: Instrumentation.onRequestError = (
     "http.route": context.routePath,
     "plant.route_type": context.routeType,
   };
-  if (isAuthUnavailable(error)) {
-    // Expected during an Auth outage, which the proxy's line already records.
+  const unavailable = authUnavailableReason(error);
+  if (unavailable) {
+    // An Auth outage, or the access token hook off. When the proxy set the
+    // header, its own line already records it at its level.
     serverLog.warn("request.error", {
       ...fields,
-      "plant.outcome": "auth_unavailable",
-      "error.type": errorType(error),
+      "plant.outcome": unavailable,
+      "error.type": AUTH_UNAVAILABLE_ERROR,
     });
     return;
   }

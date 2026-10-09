@@ -29,7 +29,8 @@ VALUES ('b0000000-0000-4000-8000-00000000000b', 'terms', '2026-10', true);
 
 -- ── Signed in as Ana ────────────────────────────────────────────────────────
 SELECT set_config('request.jwt.claims',
-  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated')::text, true);
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
 SET LOCAL ROLE authenticated;
 
 SELECT results_eq(
@@ -179,7 +180,8 @@ GRANT INSERT (user_id) ON TABLE public.consents TO authenticated;
 GRANT UPDATE (user_id) ON TABLE public.profiles TO authenticated;
 
 SELECT set_config('request.jwt.claims',
-  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated')::text, true);
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
 SET LOCAL ROLE authenticated;
 
 SELECT throws_ok(

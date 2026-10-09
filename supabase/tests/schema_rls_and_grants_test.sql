@@ -9,6 +9,11 @@
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
+-- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
+--   table copies it from enforce-owner-isolation's house form. The first
+--   Storage bucket or private Realtime channel adds the same predicate and its
+--   assert here, and a sensitive check written in SQL joins the truth table in
+--   mfa_gate_test.sql.
 -- - Views granted to authenticated run as the caller, and materialized views
 --   and foreign tables grant authenticated nothing.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
@@ -35,11 +40,14 @@
 --   user's token below aal2, uses no schema but public and holds no privilege
 --   there, is a member of no role, and only authenticator can switch to it.
 --   Only supabase_auth_admin and the owner can execute the hook, which runs as
---   the caller with an empty search_path. Canaries prove each is_empty assert
---   can fail.
+--   the caller with an empty search_path.
+-- - Canaries prove the MFA gate, partition and authenticated_aal1 asserts can
+--   fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
--- skip them; RLS and the revokes still apply. It covers public and private:
+-- skip them and no partition is granted to authenticated: queried directly, a
+-- partition answers under its own policies, without the parent's MFA gate. RLS
+-- and the revokes still apply. It covers public and private:
 -- storage.objects policies and any new schema add their asserts in the PR that
 -- creates them.
 --
@@ -47,7 +55,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(33);
+SELECT plan(35);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -403,13 +411,42 @@ SELECT is_empty(
   'authenticated writes public tables only through column grants, none on user_id'
 );
 
+-- The asserts below run against canaries further down, each of which breaks
+-- one rule.
+CREATE TEMP TABLE canaried (name text PRIMARY KEY, canaries text[] NOT NULL, query text NOT NULL)
+  ON COMMIT DROP;
+INSERT INTO canaried VALUES
+-- pg_get_expr's rendering of the predicate in the mfa_gate migration, compared
+-- as text like the owner predicate above.
+('every public table has one RESTRICTIVE policy, the MFA gate for authenticated, copied from enforce-owner-isolation''s house form',
+ ARRAY['pgtap_canary_no_gate', 'pgtap_canary_permissive_gate', 'pgtap_canary_two_gates',
+       'pgtap_canary_two_gates.pgtap_canary', 'pgtap_canary_gate_name.pgtap_canary',
+       'pgtap_canary_gate_role.Requires two-factor authentication',
+       'pgtap_canary_gate_cmd.Requires two-factor authentication',
+       'pgtap_canary_gate_using.Requires two-factor authentication',
+       'pgtap_canary_gate_check.Requires two-factor authentication'],
+ $$ SELECT c.relname FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+      AND NOT c.relispartition
+      AND (SELECT count(*) FROM pg_policies p
+           WHERE p.schemaname = 'public' AND p.tablename = c.relname
+             AND p.permissive = 'RESTRICTIVE') <> 1
+    UNION ALL
+    SELECT tablename || '.' || policyname FROM pg_policies
+    WHERE schemaname = 'public' AND permissive = 'RESTRICTIVE'
+      AND (policyname <> 'Requires two-factor authentication'
+           OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
+           OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
+           OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$),
+('no partition in public is granted to authenticated', ARRAY['pgtap_canary_partition'],
+ $$ SELECT c.relname FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relispartition
+      AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE, REFERENCES')
+           OR has_table_privilege('authenticated', c.oid, 'DELETE, TRUNCATE, TRIGGER, MAINTAIN')) $$),
 -- has_*_privilege counts grants to PUBLIC and through inherited roles, so
 -- these see everything authenticated_aal1 could use. PUBLIC keeps USAGE on the
 -- public schema, which reaches nothing by itself; a schema without USAGE hides
 -- whatever PUBLIC may execute in it.
-CREATE TEMP TABLE aal1_floor (name text PRIMARY KEY, canaries text[] NOT NULL, query text NOT NULL)
-  ON COMMIT DROP;
-INSERT INTO aal1_floor VALUES
 ('authenticated_aal1 uses no schema but public and holds no privilege on any relation, column or function there',
  ARRAY['schema private', 'schema graphql_public', 'profiles', 'consents', 'pgtap_canary_insert',
        'pgtap_canary_update', 'pgtap_canary_partitioned', 'pgtap_canary_matview',
@@ -451,7 +488,7 @@ INSERT INTO aal1_floor VALUES
       AND a.privilege_type = 'EXECUTE'
       AND a.grantee NOT IN (p.proowner, 'supabase_auth_admin'::regrole) $$);
 
-SELECT is_empty(query, name) FROM aal1_floor ORDER BY name;
+SELECT is_empty(query, name) FROM canaried ORDER BY name;
 
 SELECT ok(
   (SELECT NOT rolcanlogin AND NOT rolinherit AND NOT rolsuper AND NOT rolcreaterole
@@ -476,7 +513,7 @@ SELECT ok(
 -- it is given. A sequence keeps its value through ROLLBACK TO, so it carries
 -- the number of missed canaries out of the savepoint; it stays at -1 if the
 -- count never ran.
-CREATE TEMP SEQUENCE aal1_floor_misses MINVALUE -1 START -1;
+CREATE TEMP SEQUENCE canary_misses MINVALUE -1 START -1;
 CREATE FUNCTION pg_temp.misses(query text, canaries text[]) RETURNS bigint LANGUAGE plpgsql AS $f$
 DECLARE n bigint;
 BEGIN
@@ -506,16 +543,50 @@ CREATE ROLE pgtap_canary NOLOGIN;
 GRANT pgtap_canary TO authenticated_aal1;
 GRANT authenticated_aal1 TO anon;
 GRANT EXECUTE ON FUNCTION private.custom_access_token_hook(jsonb) TO authenticated;
+CREATE TABLE public.pgtap_canary_partition PARTITION OF public.pgtap_canary_partitioned
+  FOR VALUES FROM (0) TO (1);
+GRANT SELECT ON public.pgtap_canary_partition TO authenticated;
+-- Each gate canary copies the gate on profiles and changes one thing.
+DO $$
+DECLARE
+  gate text := (SELECT qual FROM pg_policies WHERE schemaname = 'public' AND tablename = 'profiles'
+                  AND policyname = 'Requires two-factor authentication');
+  canary text;
+BEGIN
+  FOREACH canary IN ARRAY ARRAY['no_gate', 'permissive_gate', 'two_gates', 'gate_name', 'gate_role',
+                                'gate_cmd', 'gate_using', 'gate_check'] LOOP
+    EXECUTE format('CREATE TABLE public.%I ()', 'pgtap_canary_' || canary);
+  END LOOP;
+  EXECUTE format($f$
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_permissive_gate
+      AS PERMISSIVE FOR ALL TO authenticated USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_two_gates
+      AS RESTRICTIVE FOR ALL TO authenticated USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY pgtap_canary ON public.pgtap_canary_two_gates
+      AS RESTRICTIVE FOR ALL TO authenticated USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY pgtap_canary ON public.pgtap_canary_gate_name
+      AS RESTRICTIVE FOR ALL TO authenticated USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_role
+      AS RESTRICTIVE FOR ALL TO authenticated, authenticated_aal1 USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_cmd
+      AS RESTRICTIVE FOR UPDATE TO authenticated USING (%1$s) WITH CHECK (%1$s);
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_using
+      AS RESTRICTIVE FOR ALL TO authenticated USING (true) WITH CHECK (%1$s);
+    CREATE POLICY "Requires two-factor authentication" ON public.pgtap_canary_gate_check
+      AS RESTRICTIVE FOR ALL TO authenticated USING (%1$s) WITH CHECK (true);
+  $f$, gate);
+END
+$$;
 DO $$
 BEGIN
-  PERFORM setval('aal1_floor_misses',
-                 (SELECT sum(pg_temp.misses(query, canaries))::bigint FROM aal1_floor));
+  PERFORM setval('canary_misses',
+                 (SELECT sum(pg_temp.misses(query, canaries))::bigint FROM canaried));
 END
 $$;
 ROLLBACK TO SAVEPOINT canaries;
 
-SELECT is((SELECT last_value FROM aal1_floor_misses), 0::bigint,
-          'every authenticated_aal1 assert catches its canaries');
+SELECT is((SELECT last_value FROM canary_misses), 0::bigint,
+          'every canaried assert catches its canaries');
 
 SELECT * FROM finish();
 ROLLBACK;
