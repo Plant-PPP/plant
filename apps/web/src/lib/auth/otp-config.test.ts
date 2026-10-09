@@ -75,11 +75,16 @@ describe("the sign-in mail", () => {
 
   // Pasting the whole mail must not hand the code field a number before the code.
   it("has no digit in its text before the code", () => {
-    const text = template
-      .replace(/<head[\s\S]*?<\/head>/i, "")
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<[^>]*>/g, " ");
-    expect(text.slice(0, text.indexOf("{{ .Token }}"))).not.toMatch(/\d/);
+    const body = template.slice(
+      template.indexOf("</head>"),
+      template.indexOf("{{ .Token }}"),
+    );
+    // The text between tags; comments and attributes sit inside them.
+    const text = body
+      .split("<")
+      .map((part) => part.slice(part.indexOf(">") + 1))
+      .join(" ");
+    expect(text).not.toMatch(/\d/);
   });
 });
 

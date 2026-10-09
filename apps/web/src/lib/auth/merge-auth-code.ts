@@ -1,9 +1,16 @@
 import { OTP_LENGTH } from "./otp-config";
 
+const WORD_CHARS = "0-9A-Za-z\\u00C0-\\u024F@";
+const LINE_BREAKS = "\\n\\v\\f\\r\\u0085\\u2028\\u2029";
 // A number in pasted text: groups of digits joined by up to three characters
 // that are not letters, digits, "@" or line breaks ("123 456", "12-34-56").
-const NUMBER = /\d+(?:[^0-9A-Za-zÀ-ɏ@\r\n]{1,3}\d+)*/g;
-const WORD = /[0-9A-Za-zÀ-ɏ@_]/;
+const NUMBER = new RegExp(
+  `\\d+(?:[^${WORD_CHARS}${LINE_BREAKS}]{1,3}\\d+)*`,
+  "g",
+);
+// "_" joins digit groups ("123_456") but, as in an identifier, keeps a code
+// from standing alone.
+const WORD = new RegExp(`[${WORD_CHARS}_]`);
 const HALVES = [Math.floor(OTP_LENGTH / 2), Math.ceil(OTP_LENGTH / 2)];
 
 // Pasted text can carry the mail's other numbers (a date, "10 minutos", an
@@ -33,8 +40,9 @@ function codeIn(text: string): string {
 
 // The field's new text after an edit at the end, where its caret always is.
 // Six or more digits added there replace the digits already in the field, and
-// a browser autofill (replaceAll) replaces them outright; fewer are appended. An autofill whose text starts with the old digits keeps them:
-// it can't be told apart from one that sends the code twice.
+// a browser autofill (replaceAll) replaces them outright; fewer are appended.
+// An autofill whose text starts with the old digits keeps them: it can't be
+// told apart from one that sends the code twice.
 export function mergeAuthCode(
   previous: string,
   raw: string,

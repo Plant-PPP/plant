@@ -6,7 +6,7 @@ import { mergeAuthCode } from "@/lib/auth/merge-auth-code";
 import { cn } from "@/lib/utils";
 
 // One transparent input spans the boxes, so paste, one-time-code autofill and
-// screen readers see a single field.
+// screen readers see a single field; an input per box would break both.
 export function CodeInput({
   id,
   value,

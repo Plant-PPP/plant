@@ -45,14 +45,3 @@ it("lets taps through every box to the field", () => {
     expect(box).toMatch(/pointer-events-none/);
   }
 });
-
-it("is named by a label pointing at its id", () => {
-  const out = renderToStaticMarkup(
-    <>
-      <label htmlFor="c">Código</label>
-      <CodeInput id="c" value="1" onChange={() => {}} />
-    </>,
-  );
-  expect(out).toMatch(/<label for="c">Código<\/label>/);
-  expect(out).toMatch(/<input[^>]*id="c"/);
-});

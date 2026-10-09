@@ -119,7 +119,7 @@ describe("mergeAuthCode", () => {
     },
   );
 
-  it("does not take a code from inside a longer number", () => {
+  it("prefers a code standing alone over a longer number", () => {
     expect(mergeAuthCode("", "DNI 12.345.678\n654 321")).toBe("654321");
     expect(mergeAuthCode("", "123 456 789\n654321")).toBe("654321");
   });
@@ -209,6 +209,13 @@ describe("mergeAuthCode", () => {
       ),
     ).toBe("654321");
   });
+
+  it.each(["\v", "\f", "\u0085", "\u2028", "\u2029"])(
+    "treats %j as a line break",
+    (lineBreak) => {
+      expect(mergeAuthCode("", `10/10/2026${lineBreak}654 321`)).toBe("654321");
+    },
+  );
 
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
