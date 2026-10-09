@@ -28,7 +28,6 @@ export function NewHolderField({
 }: {
   onCreated: (row: HolderRow) => void;
   onCancel: () => void;
-  // Whether the holder is saving; false once the field unmounts.
   onPendingChange: (pending: boolean) => void;
 }) {
   const field = useNameSubmit({
@@ -37,7 +36,8 @@ export function NewHolderField({
     onSaved: (name, id) => onCreated({ id, name }),
   });
 
-  // Else an unmount mid-save would hold the dialog open.
+  // Reports false once the field unmounts, or an unmount mid-save would hold
+  // the dialog open.
   useEffect(() => {
     onPendingChange(field.pending);
     return () => onPendingChange(false);

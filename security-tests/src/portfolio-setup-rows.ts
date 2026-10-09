@@ -21,6 +21,17 @@ export async function createRow<T extends SetupTable>(
   return row!.id;
 }
 
+export async function restoreRow(
+  user: TestUser,
+  table: SetupTable,
+  id: string,
+): Promise<void> {
+  const res = await rest(user, "PATCH", `${table}?id=eq.${id}`, {
+    body: { archived_at: null },
+  });
+  expect(res.status).toBe(204);
+}
+
 export async function archiveRow(
   user: TestUser,
   table: SetupTable,
@@ -58,13 +69,16 @@ export const RACE_ROUNDS = 10;
 const RACE_HINTS = {
   portfolios: { inUse: "portfolio_in_use", archived: "portfolio_archived" },
   holders: { inUse: "holder_in_use", archived: "holder_archived" },
-} as const satisfies Record<
-  string,
-  { inUse: PortfolioSetupGuardHint; archived: PortfolioSetupGuardHint }
+} as const satisfies Partial<
+  Record<
+    SetupTable,
+    { inUse: PortfolioSetupGuardHint; archived: PortfolioSetupGuardHint }
+  >
 >;
 
 // An archive and a new account pointing at the same row: exactly one must win,
-// the other refused with its hint. Each round undoes its winner.
+// the other refused with its hint. Each round archives the account it created,
+// then runs `afterRound`.
 export async function raceArchiveAgainstAccount(
   user: TestUser,
   {
