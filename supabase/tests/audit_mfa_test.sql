@@ -19,8 +19,9 @@ SELECT is_empty(
             OR pg_has_role(r.oid, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
             OR pg_has_role(r.oid, (SELECT nspowner FROM pg_namespace WHERE nspname = 'private'), 'MEMBER')
             OR has_parameter_privilege(r.oid, 'session_replication_role', 'SET')
-            OR pg_has_role(r.oid, (SELECT oid FROM pg_roles
-                                   WHERE rolname = current_setting('supautils.privileged_role', true)), 'MEMBER')) $$,
+            OR coalesce(pg_has_role(r.oid, (SELECT oid FROM pg_roles
+                                            WHERE rolname = current_setting('supautils.privileged_role', true)),
+                                    'MEMBER'), true)) $$,
   'no role the API can become can write, truncate, add a trigger to or own sessions, factors or audit_log, or switch triggers off, so none can forge or skip an audit row'
 );
 
