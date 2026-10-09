@@ -9,6 +9,9 @@
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
+-- - The reference tables, public tables with no user_id, are exactly fx_rates
+--   and prices: market data every user reads. Their permissive policies only
+--   let authenticated read every row, and authenticated cannot write them.
 -- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
 --   table copies it from enforce-owner-isolation's house form. The first
 --   Storage bucket or private Realtime channel adds the same predicate and its
@@ -41,8 +44,8 @@
 --   there, is a member of no role, and only authenticator can switch to it.
 --   Only supabase_auth_admin and the owner can execute the hook, which runs as
 --   the caller with an empty search_path.
--- - Canaries prove the MFA gate, partition and authenticated_aal1 asserts can
---   fail.
+-- - Canaries prove the MFA gate, reference table, partition and
+--   authenticated_aal1 asserts can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them and no partition is granted to authenticated: queried directly, a
@@ -55,7 +58,15 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(36);
+SELECT plan(39);
+
+-- Partitions are reached through their parent, like in the asserts below.
+CREATE TEMP VIEW reference_tables AS
+  SELECT c.oid, c.relname FROM pg_class c
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+    AND NOT c.relispartition
+    AND NOT EXISTS (SELECT 1 FROM pg_attribute a
+                    WHERE a.attrelid = c.oid AND a.attname = 'user_id' AND NOT a.attisdropped);
 
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -136,11 +147,17 @@ SELECT is_empty(
 SELECT is_empty(
   $$ SELECT tablename || '.' || policyname FROM pg_policies
      WHERE schemaname = 'public' AND permissive = 'PERMISSIVE'
+       AND tablename NOT IN (SELECT relname FROM reference_tables)
        AND (roles <> '{authenticated}'::name[]
             OR (cmd <> 'INSERT' AND qual IS DISTINCT FROM '(user_id = ( SELECT auth.uid() AS uid))')
             OR (cmd IN ('INSERT', 'UPDATE', 'ALL')
                 AND with_check IS DISTINCT FROM '(user_id = ( SELECT auth.uid() AS uid))')) $$,
   'every permissive policy in public pins user_id to auth.uid() for authenticated'
+);
+
+SELECT ok(
+  (SELECT count(*) FROM reference_tables WHERE relname IN ('fx_rates', 'prices')) = 2,
+  'fx_rates and prices are reference tables'
 );
 
 -- A view reads as its owner, past RLS, unless security_invoker is set.
@@ -457,6 +474,20 @@ INSERT INTO canaried VALUES
            OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
            OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$),
+('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
+ $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
+('a reference table only lets authenticated read every row',
+ ARRAY['pgtap_canary_ref_all.pgtap_canary', 'pgtap_canary_ref_role.pgtap_canary',
+       'pgtap_canary_ref_insert'],
+ $$ SELECT p.tablename || '.' || p.policyname FROM pg_policies p
+    JOIN reference_tables r ON r.relname = p.tablename
+    WHERE p.schemaname = 'public' AND p.permissive = 'PERMISSIVE'
+      AND (p.cmd <> 'SELECT' OR p.roles <> '{authenticated}'::name[]
+           OR p.qual IS DISTINCT FROM 'true' OR p.with_check IS NOT NULL)
+    UNION ALL
+    SELECT relname FROM reference_tables
+    WHERE has_any_column_privilege('authenticated', oid, 'INSERT, UPDATE')
+       OR has_table_privilege('authenticated', oid, 'DELETE') $$),
 ('no partition in public is granted to authenticated', ARRAY['pgtap_canary_partition'],
  $$ SELECT c.relname FROM pg_class c
     WHERE c.relnamespace = 'public'::regnamespace AND c.relispartition
@@ -565,6 +596,14 @@ GRANT EXECUTE ON FUNCTION private.custom_access_token_hook(jsonb) TO authenticat
 CREATE TABLE public.pgtap_canary_partition PARTITION OF public.pgtap_canary_partitioned
   FOR VALUES FROM (0) TO (1);
 GRANT SELECT ON public.pgtap_canary_partition TO authenticated;
+CREATE TABLE public.pgtap_canary_reference ();
+CREATE TABLE public.pgtap_canary_ref_all (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_all FOR ALL TO authenticated USING (true);
+CREATE TABLE public.pgtap_canary_ref_role (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_role FOR SELECT TO anon, authenticated
+  USING (x = 1);
+CREATE TABLE public.pgtap_canary_ref_insert (x int);
+GRANT INSERT (x) ON public.pgtap_canary_ref_insert TO authenticated;
 -- Each gate canary copies the gate on profiles and changes one thing.
 DO $$
 DECLARE

@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const currencySchema = z.enum(["ARS", "USD"]);
+import { Constants } from "./db/generated/database.types";
+
+export const currencySchema = z.enum(Constants.public.Enums.currency);
 export type Currency = z.infer<typeof currencySchema>;
 
 // Amounts travel as decimal strings so no layer rounds them through a float.

@@ -11,6 +11,7 @@ import {
   prepareMfaCases,
   runEnv,
   seedAiCost,
+  seedQuotes,
 } from "./pentest-users";
 
 // Kong answers 502/503 while PostgREST is still loading its schema cache.
@@ -48,6 +49,7 @@ export default async function globalSetup(): Promise<void> {
     const b = await createUser(stack, track);
     await seedAiCost(stack, a.id);
     await seedAiCost(stack, b.id);
+    process.env[runEnv.quotes] = JSON.stringify(await seedQuotes(stack));
     const publicStack: PublicStack = {
       apiUrl: stack.apiUrl,
       anonKey: stack.anonKey,

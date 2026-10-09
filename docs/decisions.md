@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-09 · Quotes (PLA-26)
+
+- **Two global reference tables, `fx_rates` and `prices`**, one row per kind or symbol and Buenos Aires day, with its `source`, the instant the source stamps (`quoted_at`, or the fetch instant when it stamps none) and `fetched_at`. They have no `user_id`: a quote is market data, the same for every user. `fx_rates.kind` is `official`, `mep`, `ccl`, `blue` or `uva`; UVA has a single value, kept in `sell` with `buy` null. Prices are crypto for now, in the `currency` enum, which also feeds `currencySchema` through the generated `Constants`. `quote_source` and `fx_rate_kind` only grow (`ALTER TYPE ... ADD VALUE`).
+- **Rows are inserted once and never updated by the app.** The daily job (PR 4/4) inserts with `ON CONFLICT DO NOTHING`, so the first row of the day stays and a rerun writes nothing. `service_role` holds `INSERT` on every column and `SELECT` on the key columns only (what `ON CONFLICT` and `RETURNING <key>` need); `authenticated` holds `SELECT` and reads every row through a `FOR SELECT USING (true)` policy plus the MFA gate; `anon` holds nothing.
+- **Only today's row may be inserted.** A `BEFORE INSERT` trigger per table refuses any date other than today in Buenos Aires with `PT403` (PostgREST answers 403, and the writer tells it apart from a missing grant, `42501`), because a past or future row would never be replaced. It fires before `ON CONFLICT`, so a past duplicate is refused too. The table owner corrects a row with `UPDATE` in a migration, and a history backfill (PLA-25) disables the trigger and enables it again inside its own migration.
+- **The pgTAP floor's reference-table exception**: a public table without `user_id` must be `fx_rates` or `prices`, its permissive policies may only let `authenticated` read every row, and `authenticated` may not write it. The owner predicate and the owned-table asserts skip those two; the MFA gate does not.
+
 ## 2026-10-09 · Audit rows for MFA and session end (PLA-76)
 
 - **Four more `audit_log` actions, all from database triggers:** `auth.session.deleted`, `auth.mfa.verified` (a session raised to `aal2`), `auth.mfa.factor_verified` and `auth.mfa.factor_removed` (a verified factor deleted). Enroll, verify, unenroll and sign-out run between the browser and Auth, so only the database sees all of them. An unverified factor, a refresh and a failed TOTP attempt write nothing, and a TOTP verify on a session already at `aal2` (a step-up) writes only the `auth.session.deleted` rows of the sessions below `aal2` it deletes; Auth's logs keep the failed attempts.
