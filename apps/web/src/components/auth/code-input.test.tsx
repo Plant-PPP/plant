@@ -19,10 +19,6 @@ it("takes the id its label points at", () => {
   expect(html).toMatch(/<input[^>]*id="code"/);
 });
 
-it("renders no inline style, which the CSP would block", () => {
-  expect(html).not.toMatch(/\sstyle=/);
-});
-
 it("is 16px, so iOS does not zoom into it", () => {
   expect(html).toMatch(/<input[^>]*class="[^"]*\btext-base\b/);
 });

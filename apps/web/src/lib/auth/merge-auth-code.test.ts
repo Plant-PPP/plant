@@ -150,6 +150,24 @@ describe("mergeAuthCode", () => {
     }
   });
 
+  it("takes a whole code dropped after digits", () => {
+    expect(mergeAuthCode("12", `12${mail("654321")}`)).toBe("654321");
+  });
+
+  it("keeps only the first group past a long separator", () => {
+    expect(mergeAuthCode("", "123 -- 456")).toBe("123");
+  });
+
+  it("treats a one-digit autofill like typing", () => {
+    for (const previous of ["", "1", "12345", "123456"]) {
+      for (const digit of "09") {
+        expect(mergeAuthCode(previous, previous + digit, true)).toBe(
+          mergeAuthCode(previous, previous + digit),
+        );
+      }
+    }
+  });
+
   it.each([false, true])("only ever yields up to six digits (%s)", (all) => {
     for (const previous of ["", "12", "123456"]) {
       for (const raw of ["a1b2", "１２３", "98-76 54 32 10", "x".repeat(50)]) {
