@@ -168,6 +168,17 @@ export default defineConfig([
     }),
   },
   {
+    files: ["src/lib/auth/session-claims-unchecked.ts"],
+    rules: webRules({
+      syntax: [
+        ...BASE_SYNTAX,
+        ...noServerAction(
+          "The unchecked claims reader would answer a session that has not verified its code.",
+        ),
+      ],
+    }),
+  },
+  {
     files: ["src/lib/auth/session-claims.ts"],
     rules: webRules({
       allow: [SESSION_CLAIMS_UNCHECKED],

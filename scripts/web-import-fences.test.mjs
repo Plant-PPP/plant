@@ -360,6 +360,22 @@ flagged.push(
   ],
   ["src/components/mfa/x.tsx", "export const f = (s) => s.auth[`_enroll`]({});"],
   [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nconst g = () => readSessionClaims();\nexport { g };`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport default () => readSessionClaims();`,
+  ],
+  [
+    "src/lib/auth/session-claims.ts",
+    `${READER}\nexport class C {\n  static g = () => readSessionClaims();\n}`,
+  ],
+  [
+    "src/lib/auth/session-claims-unchecked.ts",
+    '"use server";\nexport const f = async () => null;',
+  ],
+  [
     "src/lib/auth/mfa-factors.ts",
     "export const f = (s) => s.auth[`_listFactors` satisfies string]();",
   ],
