@@ -28,11 +28,13 @@ export function classifyPostgrestResult(
   };
 }
 
-// Runs an insert with a deadline. PostgREST answers an insert with 201.
+// PostgREST answers an insert with 201; data is null when postgrest-js could
+// not parse its body. A timeout or any other answer resolves as a
+// PostgrestFailure; a query that rejects or throws still rejects.
 export async function postgrestInsert<T>(
   query: (signal: AbortSignal) => PromiseLike<PostgrestSingleResponse<T>>,
   ms: number,
-): Promise<{ data: T } | PostgrestFailure> {
+): Promise<{ data: T | null } | PostgrestFailure> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<PostgrestFailure>((resolve) => {
@@ -45,7 +47,7 @@ export async function postgrestInsert<T>(
   try {
     const result = await Promise.race([query(controller.signal), timeout]);
     if (!("status" in result)) return result;
-    return classifyPostgrestResult(result, 201) ?? { data: result.data as T };
+    return classifyPostgrestResult(result, 201) ?? { data: result.data };
   } finally {
     clearTimeout(timer);
   }

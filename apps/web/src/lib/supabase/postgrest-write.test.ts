@@ -15,6 +15,13 @@ describe("classifyPostgrestResult", () => {
     expect(classifyPostgrestResult({ error: null, status: 201 }, 201)).toBe(
       null,
     );
+    expect(classifyPostgrestResult({ error: null, status: 204 }, 204)).toBe(
+      null,
+    );
+    expect(classifyPostgrestResult({ error: null, status: 201 }, 204)).toEqual({
+      code: "http_201",
+      mayHaveCommitted: false,
+    });
   });
 
   it.each([
@@ -23,7 +30,9 @@ describe("classifyPostgrestResult", () => {
     ["a PostgREST code", pgError("PGRST204"), 400, "PGRST204", false],
     ["a 5xx with a SQLSTATE", pgError("57014"), 500, "57014", true],
     ["a code that is not one", pgError("not a code"), 409, "http_409", false],
-    ["a non-string code", pgError(42), 400, "http_400", false],
+    ["a non-string code", pgError(23514), 400, "http_400", false],
+    ["a 4-character code", pgError("2351"), 400, "http_400", false],
+    ["a lowercase word", pgError("abcde"), 400, "http_400", false],
     ["no error", null, 204, "http_204", false],
     ["a 503 with no error", null, 503, "http_503", true],
   ])("classifies %s", (_label, error, status, code, mayHaveCommitted) => {
@@ -35,9 +44,12 @@ describe("classifyPostgrestResult", () => {
 });
 
 describe("postgrestInsert", () => {
+  beforeEach(() => jest.useFakeTimers());
+
   afterEach(() => {
-    expect(jest.getTimerCount()).toBe(0);
+    const pending = jest.getTimerCount();
     jest.useRealTimers();
+    expect(pending).toBe(0);
   });
 
   const answer = (status: number, error: PostgrestError | null = null) =>
@@ -61,8 +73,15 @@ describe("postgrestInsert", () => {
     ).resolves.toEqual({ code: "23505", mayHaveCommitted: false });
   });
 
+  it("clears the deadline when the query throws", async () => {
+    await expect(
+      postgrestInsert(async () => {
+        throw new Error("boom");
+      }, 1000),
+    ).rejects.toThrow("boom");
+  });
+
   it("aborts the query and returns a timeout when it outlasts the deadline", async () => {
-    jest.useFakeTimers();
     let signal: AbortSignal | undefined;
     const result = postgrestInsert((s) => {
       signal = s;

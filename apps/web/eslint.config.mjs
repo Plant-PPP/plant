@@ -66,7 +66,6 @@ const noServerAction = (message) =>
 const NO_SERVER_ACTION = noServerAction(
   "The cost sink writes rows for any user_id; a server action would make it a public endpoint.",
 );
-const ROUTE_SYNTAX = [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX];
 
 // The files that may import the unchecked claims reader only call it: a
 // server action there would read an aal1 session's claims, and a value
@@ -149,7 +148,7 @@ export default defineConfig([
     files: [`src/app/api/**/route.${SOURCE}`],
     rules: webRules({
       allow: [COST_SINK],
-      syntax: ROUTE_SYNTAX,
+      syntax: [...NO_SERVER_ACTION, ...NO_EXPORT_LIST, ...BASE_SYNTAX],
     }),
   },
   {

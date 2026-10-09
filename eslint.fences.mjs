@@ -19,10 +19,10 @@ export const secretKeyReads = [
 }));
 
 // Who may reach a model and the secret key. Each fenced module is a regex
-// over the import specifier, with or without a file extension.
-const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?`;
+// over the import specifier, with or without a file extension, query or hash.
+const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?([?#].*)?`;
 const AI_MESSAGE =
-  "Only apps/web/src/lib/ai may call a model, so every call is costed.";
+  "Only apps/web/src/lib/ai, except the cost sink, may call a model, so every call is costed.";
 export const AI = { regex: "^ai(/.*)?$", message: AI_MESSAGE };
 export const AI_PROVIDERS = {
   regex: "^@ai-sdk/(?!react(/|$))",
@@ -132,8 +132,8 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 }));
 
 // The fences read import specifiers, so a computed one, a bundler's
-// require.context, or a require wrapped in a type cast (which the fences'
-// callee match misses), cannot pass them.
+// require.context or import.meta.webpackContext, or a require wrapped in a
+// type cast (which the fences' callee match misses), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
@@ -143,6 +143,7 @@ export const LITERAL_IMPORTS_ONLY = [
     "property",
     "context",
   ),
+  'MemberExpression[object.type="MetaProperty"][property.name="webpackContext"]',
 ].map((selector) => ({
   selector,
   message: "Import a module by a string literal so the import fences see it.",

@@ -11,8 +11,8 @@ export type { LogFields, Logger, LogValue } from "@plant/shared";
 
 // The one way server code logs: a single JSON line per call, flat fields,
 // every field's string value scrubbed (event names are static literals). The
-// masks are a net for Logger's contract, not a license. A number passes as it
-// is: only its key is checked.
+// masks are a net, not a license to break Logger's ids-and-counts contract. A
+// number passes as it is: only its key is checked.
 
 export type LogLevel = "info" | "warn" | "error";
 

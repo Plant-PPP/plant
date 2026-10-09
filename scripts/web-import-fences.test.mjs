@@ -91,6 +91,11 @@ const flagged = [
   ],
   ["src/app/page.tsx", 'import "@/lib/supabase/service-role.mjs";'],
   ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink.tsx";'],
+  [
+    "src/lib/x.js",
+    'export const s = require("@/lib/supabase/service-role?x");',
+  ],
+  ["src/app/actions.ts", 'import "@/lib/ai/ai-cost-sink#x";'],
   ["src/lib/supabase/service-role.ts", 'import "ai";'],
   ["src/lib/supabase/service-role.ts", 'import "@ai-sdk/google";'],
   [
@@ -145,6 +150,10 @@ const flagged = [
   [
     "src/app/actions.ts",
     'export const c = require.context("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta.webpackContext("../lib/ai", { regExp: /sink/ });',
   ],
   [
     "src/app/page.tsx",
@@ -467,14 +476,10 @@ flagged.push(
 );
 
 // The cost sink may import the service-role client and no other fenced module.
-flagged.push(
-  ["src/lib/ai/ai-cost-sink.ts", 'import { generateText } from "ai";'],
-  ["src/lib/ai/ai-cost-sink.ts", 'import { google } from "@ai-sdk/google";'],
-  [
-    "src/lib/ai/ai-cost-sink.ts",
-    'import "@/lib/auth/session-claims-unchecked";',
-  ],
-);
+flagged.push([
+  "src/lib/ai/ai-cost-sink.ts",
+  'import { google } from "@ai-sdk/google";',
+]);
 
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
@@ -618,10 +623,22 @@ const PROBES = {
 for (const [filePath, exempt] of OVERRIDES) {
   for (const [probe, code] of Object.entries(PROBES)) {
     if (exempt.includes(probe)) continue;
-    // Each block's own allowances: src/lib/ai reaches models, the sink and
-    // its test reach the sink, and the sink and service-role.ts the client.
-    if (probe === "ai" && filePath.startsWith("src/lib/ai/")) continue;
-    if (probe === "sink" && /ai-cost-sink|route\.ts$/.test(filePath)) continue;
+    // Each block's own allowances: src/lib/ai except the sink reaches models,
+    // the sink's test and route handlers reach the sink, and the sink and
+    // service-role.ts reach the client.
+    if (
+      probe === "ai" &&
+      filePath.startsWith("src/lib/ai/") &&
+      !filePath.endsWith("/ai-cost-sink.ts")
+    ) {
+      continue;
+    }
+    if (
+      probe === "sink" &&
+      /ai-cost-sink\.test\.ts|route\.ts$/.test(filePath)
+    ) {
+      continue;
+    }
     if (probe === "service" && /service-role|ai-cost-sink\.ts/.test(filePath)) {
       continue;
     }
@@ -682,6 +699,7 @@ for (const [dir, up] of [
     'import "@ai-sdk/react";',
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
+    'import "./web/auth/session-claims-unchecked";',
     `import "${up}/apps/web/src/lib/supabase/server";`,
   ]) {
     for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {
