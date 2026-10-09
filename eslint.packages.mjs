@@ -26,7 +26,7 @@ export default tseslint.config(
     files: [`**/*.${SOURCE}`],
     // The AI SDK and the web app's modules by name too: a hoisted package or a
     // symlinked directory reaches them without a manifest entry or an `apps`
-    // segment.
+    // segment. @ai-sdk/react too, which only the web app renders.
     rules: fence(
       [
         APPS,

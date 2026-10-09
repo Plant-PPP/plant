@@ -48,15 +48,18 @@ const NO_EXPORT_LIST = [
   message:
     "Export through a declaration (export function, export const), so the fences see who uses what.",
 }));
-const BASE_SYNTAX = [
-  ...LITERAL_IMPORTS_ONLY,
-  ...secretKeyReads,
-  ...noReexport(ALL_FENCED),
-];
+const BASE_SYNTAX = [...LITERAL_IMPORTS_ONLY, ...secretKeyReads];
 const LIB_SYNTAX = [...BASE_SYNTAX, ...NO_EXPORT_LIST];
 
+// Every block bans re-exporting a fenced module, so one it is allowed to
+// import cannot be handed on to the files fenced from it.
 const webRules = ({ allow = [], syntax, mfaFence = MFA_CALLS }) =>
-  fenceExcept(allow, [...syntax, ...mfaFence, ...MFA_PRIVATE_CALLS]);
+  fenceExcept(allow, [
+    ...noReexport(ALL_FENCED),
+    ...syntax,
+    ...mfaFence,
+    ...MFA_PRIVATE_CALLS,
+  ]);
 
 const noServerAction = (message) =>
   ["Program", ":function > BlockStatement"].map((parent) => ({
@@ -137,11 +140,7 @@ export default defineConfig([
     ],
     rules: webRules({
       allow: [SERVICE_ROLE],
-      syntax: [
-        ...LITERAL_IMPORTS_ONLY,
-        ...noReexport([SERVICE_ROLE]),
-        ...NO_EXPORT_LIST,
-      ],
+      syntax: [...LITERAL_IMPORTS_ONLY, ...NO_EXPORT_LIST],
     }),
   },
   {

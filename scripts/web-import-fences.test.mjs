@@ -169,6 +169,7 @@ const flagged = [
     "const { webpackContext } = import.meta;\nexport const c = webpackContext;",
   ],
   ["src/components/x.tsx", 'import { generateText } from "ai?x";'],
+  ["src/app/actions.ts", "export const c = import.meta.urlx;"],
   ["src/components/x.tsx", 'import { generateText } from "ai#x";'],
   [
     "src/components/x.tsx",

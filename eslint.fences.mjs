@@ -18,8 +18,9 @@ export const secretKeyReads = [
     "Only apps/web/src/lib/supabase/service-role.ts names SUPABASE_SERVICE_ROLE_KEY.",
 }));
 
-// Who may reach a model and the secret key. Each fenced module is a regex
-// over the import specifier, with or without a file extension, query or hash.
+// Who may reach a model, the secret key and the unchecked claims reader. Each
+// fenced module is a regex over the import specifier, with or without a file
+// extension, query or hash.
 const EXTENSION = String.raw`(\.[cm]?[jt]sx?)?([?#].*)?`;
 const AI_MESSAGE =
   "Only apps/web/src/lib/ai, except the cost sink, may call a model, so every call is costed.";
@@ -45,6 +46,18 @@ export const SESSION_CLAIMS_UNCHECKED = {
   message:
     "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
 };
+
+// The modules a block can be allowed. Every web block fences each one it does
+// not allow (through fenceExcept) and every package fences them all, so a new
+// fence goes here; fence() also bans node_modules paths and Inngest's model
+// packages in every block.
+export const ALL_FENCED = [
+  AI,
+  AI_PROVIDERS,
+  SERVICE_ROLE,
+  COST_SINK,
+  SESSION_CLAIMS_UNCHECKED,
+];
 
 // A path into node_modules reaches a package without naming it.
 const NODE_MODULES = {
@@ -149,15 +162,6 @@ export const LITERAL_IMPORTS_ONLY = [
   selector,
   message: "Import a module by a string literal so the import fences see it.",
 }));
-
-// Every fenced module.
-export const ALL_FENCED = [
-  AI,
-  AI_PROVIDERS,
-  SERVICE_ROLE,
-  COST_SINK,
-  SESSION_CLAIMS_UNCHECKED,
-];
 
 export const asSelector = (regex) => `/${regex.replaceAll("/", "\\/")}/`;
 
