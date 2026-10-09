@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { DisableTotpDialog } from "@/components/mfa/disable-totp-dialog";
 import { TotpEnrollPanel } from "@/components/mfa/totp-enroll-panel";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { StatusNotice } from "@/components/ui/status-notice";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -44,7 +44,6 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
   const [confirmDisable] = useState(() => confirmsDisable(searchParams));
   const [state, setState] = useState<TwoFactorState>({ status: "loading" });
   const [panel, setPanel] = useState<TwoFactorPanel>("none");
-  const [notice, setNotice] = useState<string>();
   // Once the action asks for the step-up, every later try starts there.
   const [stepUp, setStepUp] = useState(stepUpNeeded);
 
@@ -70,7 +69,7 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
 
   function closePanel(notice: string) {
     setPanel("none");
-    setNotice(notice);
+    toast(notice);
     reload();
   }
 
@@ -94,7 +93,6 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
             id="two-factor"
             {...twoFactorSwitch(state, panel)}
             onCheckedChange={(checked) => {
-              setNotice(undefined);
               setPanel(checked ? "enroll" : "disable");
             }}
           />
@@ -129,7 +127,6 @@ export function TwoFactorCard({ stepUpNeeded }: { stepUpNeeded: boolean }) {
             onDone={closePanel}
           />
         )}
-        <StatusNotice>{notice}</StatusNotice>
       </CardContent>
     </Card>
   );

@@ -20,11 +20,11 @@ export function rowAnswer(
   ) {
     return { kind: "ask_name" };
   }
-  return sheetAnswer(result);
+  return dialogAnswer(result);
 }
 
-// A name sheet closes on success and otherwise stays open with the alert.
-export function sheetAnswer(
+// A name dialog closes on success and otherwise stays open with the alert.
+export function dialogAnswer(
   result: WriteResult | "rejected",
 ): { kind: "done" } | { kind: "alert"; text: string } {
   if (result === "rejected")

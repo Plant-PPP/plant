@@ -2,6 +2,7 @@
 
 import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   archivePortfolio,
@@ -18,25 +19,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FormAlert } from "@/components/ui/form-alert";
-import { StatusNotice } from "@/components/ui/status-notice";
+import { IconButton } from "@/components/ui/icon-button";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
 import { settle } from "@/lib/server-action-call";
 import { rowAnswer } from "./answers";
-import { NameSheet } from "./name-sheet";
+import { NameDialog } from "./name-dialog";
 
-const PENDING_ROW_BUTTON = "aria-disabled:opacity-50";
-
-type SheetState =
+type DialogState =
   | { kind: "create" }
   | { kind: "rename"; row: PortfolioRow }
   | { kind: "restore"; row: PortfolioRow };
 
 export function PortfoliosCard({ view }: { view: PortfoliosView }) {
-  const [sheet, setSheet] = useState<SheetState | null>(null);
-  const [alert, setAlert] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+  const [dialog, setDialog] = useState<DialogState | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const archivedSummary = useRef<HTMLElement>(null);
   const paging = useRef(false);
@@ -46,13 +42,6 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
   const [archivedOpen, setArchivedOpen] = useState(
     view.archivedFirstHref !== null,
   );
-  // Another archived page, by a link, Back or the sidebar, clears the messages
-  // about the one before; an action's refresh keeps the page and its message.
-  const [shownPage, setShownPage] = useState(view.archivedPage);
-  if (shownPage !== view.archivedPage) {
-    setShownPage(view.archivedPage);
-    clearMessages();
-  }
 
   // The page reached through an archived-list link may not have that link,
   // and focus would fall to the page: it goes to the list's summary instead.
@@ -64,43 +53,31 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
     }
   }, [view.archivedFirstHref, view.archivedNextHref]);
 
-  function clearMessages() {
-    setAlert(undefined);
-    setNotice(undefined);
-  }
-
-  function openSheet(next: SheetState) {
+  function openDialog(next: DialogState) {
     if (pending) return;
-    clearMessages();
-    setSheet(next);
+    setDialog(next);
   }
 
-  // The row's buttons are aria-disabled while pending, not disabled: a
-  // disabled button drops its focus to the page.
   function rowAction(row: PortfolioRow, action: "archive" | "restore") {
     if (pending) return;
-    clearMessages();
     startTransition(async () => {
       const call =
         action === "archive"
           ? archivePortfolio(row.id)
           : restorePortfolio(row.id);
       const answer = rowAnswer(await settle(call), action);
-      // A done row moved to the other list and an alert shows above both, so
-      // focus goes to the heading right above the alert or the notice.
-      if (answer.kind === "alert") {
-        setAlert(answer.text);
-        heading.current?.focus();
-      }
+      if (answer.kind === "alert") toast.error(answer.text);
+      // A done row moved to the other list, so its button is gone: focus goes
+      // to the card's heading instead of falling to the page.
       if (answer.kind === "done") {
-        setNotice(
-          `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}.`,
+        toast.success(
+          `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}`,
         );
         heading.current?.focus();
       }
       // Defensive: the openers ignore clicks while an action is pending.
       if (answer.kind === "ask_name") {
-        setSheet((open) => open ?? { kind: "restore", row });
+        setDialog((open) => open ?? { kind: "restore", row });
       }
     });
   }
@@ -118,7 +95,7 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           <Button
             size="sm"
             disabled={pending}
-            onClick={() => openSheet({ kind: "create" })}
+            onClick={() => openDialog({ kind: "create" })}
           >
             <Plus />
             Nueva cartera
@@ -126,8 +103,6 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4 pt-6">
-        {alert && <FormAlert>{alert}</FormAlert>}
-        <StatusNotice>{notice}</StatusNotice>
         <ul className="divide-y rounded-md border">
           {view.active.map((row) => (
             <li
@@ -136,28 +111,20 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
             >
               <span className="min-w-0 truncate text-sm">{row.name}</span>
               <span className="flex shrink-0 gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-disabled={pending}
-                  className={PENDING_ROW_BUTTON}
-                  onClick={() => openSheet({ kind: "rename", row })}
-                  aria-label={`Renombrar ${row.name}`}
-                >
-                  <Pencil />
-                  <span className="sr-only sm:not-sr-only">Renombrar</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-disabled={pending}
-                  className={PENDING_ROW_BUTTON}
+                <IconButton
+                  icon={Pencil}
+                  tooltip="Renombrar"
+                  label={`Renombrar ${row.name}`}
+                  pending={pending}
+                  onClick={() => openDialog({ kind: "rename", row })}
+                />
+                <IconButton
+                  icon={Archive}
+                  tooltip="Archivar"
+                  label={`Archivar ${row.name}`}
+                  pending={pending}
                   onClick={() => rowAction(row, "archive")}
-                  aria-label={`Archivar ${row.name}`}
-                >
-                  <Archive />
-                  <span className="sr-only sm:not-sr-only">Archivar</span>
-                </Button>
+                />
               </span>
             </li>
           ))}
@@ -192,17 +159,13 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
                   <span className="min-w-0 truncate text-sm text-muted-foreground">
                     {row.name}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-disabled={pending}
-                    className={PENDING_ROW_BUTTON}
+                  <IconButton
+                    icon={ArchiveRestore}
+                    tooltip="Restaurar"
+                    label={`Restaurar ${row.name}`}
+                    pending={pending}
                     onClick={() => rowAction(row, "restore")}
-                    aria-label={`Restaurar ${row.name}`}
-                  >
-                    <ArchiveRestore />
-                    <span className="sr-only sm:not-sr-only">Restaurar</span>
-                  </Button>
+                  />
                 </li>
               ))}
             </ul>
@@ -231,45 +194,45 @@ export function PortfoliosCard({ view }: { view: PortfoliosView }) {
           </details>
         )}
       </CardContent>
-      {sheet?.kind === "create" && (
-        <NameSheet
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "create" && (
+        <NameDialog
+          onClose={() => setDialog(null)}
           returnFocusTo={focusHeading}
           title="Nueva cartera"
           description="Elegí un nombre para la cartera."
           submitLabel="Crear"
           onSubmit={(name) => createPortfolio({ name })}
-          onSaved={(name) => setNotice(`Creaste ${name}.`)}
+          onSaved={(name) => toast.success(`Creaste ${name}`)}
         />
       )}
-      {sheet?.kind === "rename" && (
-        <NameSheet
-          key={sheet.row.id}
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "rename" && (
+        <NameDialog
+          key={dialog.row.id}
+          onClose={() => setDialog(null)}
           returnFocusTo={focusHeading}
           title="Renombrar cartera"
           description="Elegí el nuevo nombre."
           submitLabel="Guardar"
-          defaultValue={sheet.row.name}
-          onSubmit={(name) => renamePortfolio(sheet.row.id, { name })}
+          defaultValue={dialog.row.name}
+          onSubmit={(name) => renamePortfolio(dialog.row.id, { name })}
           onSaved={(name) =>
-            name !== sheet.row.name &&
-            setNotice(`Renombraste ${sheet.row.name} a ${name}.`)
+            name !== dialog.row.name &&
+            toast.success(`Renombraste ${dialog.row.name} a ${name}`)
           }
         />
       )}
-      {sheet?.kind === "restore" && (
-        <NameSheet
-          key={sheet.row.id}
-          onClose={() => setSheet(null)}
+      {dialog?.kind === "restore" && (
+        <NameDialog
+          key={dialog.row.id}
+          onClose={() => setDialog(null)}
           returnFocusTo={focusHeading}
           savedRemovesOpener
           title="Restaurar cartera"
           description="Ya tenés una cartera activa con ese nombre. Elegí otro para restaurarla."
           submitLabel="Restaurar"
-          defaultValue={sheet.row.name}
-          onSubmit={(name) => restorePortfolio(sheet.row.id, { name })}
-          onSaved={(name) => setNotice(`Restauraste ${name}.`)}
+          defaultValue={dialog.row.name}
+          onSubmit={(name) => restorePortfolio(dialog.row.id, { name })}
+          onSaved={(name) => toast.success(`Restauraste ${name}`)}
         />
       )}
     </Card>
