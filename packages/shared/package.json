@@ -2,7 +2,7 @@
   "name": "@plant/shared",
   "version": "0.0.0",
   "private": true,
-  "description": "Shared types and utilities: money as a decimal string with its currency, the MFA claim and first-factor methods, the generated database types and enums, the Buenos Aires date, hour and start of day, AI prices and cost rows, and the neutralizer for untrusted prompt text.",
+  "description": "Shared types and utilities: money as a decimal string with its currency, the MFA claim and first-factor methods, the generated database types and enums, the Buenos Aires date, hour and start of day, AI prices and cost rows, the logger contract (ids and counts, never values), and the neutralizer for untrusted prompt text.",
   "type": "module",
   "sideEffects": false,
   "exports": {
