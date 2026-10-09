@@ -14,8 +14,10 @@ SELECT is_empty(
      FROM unnest(ARRAY['anon', 'authenticated', 'authenticated_aal1', 'authenticator', 'service_role']) r,
           unnest(ARRAY['auth.sessions', 'auth.mfa_factors']) t
      WHERE has_any_column_privilege(r, t, 'INSERT, UPDATE')
-        OR has_table_privilege(r, t, 'DELETE, TRUNCATE, TRIGGER') $$,
-  'no API role can write, truncate or add a trigger to sessions or factors, so none can forge or skip an audit row'
+        OR has_table_privilege(r, t, 'DELETE, TRUNCATE, TRIGGER')
+        OR pg_has_role(r, (SELECT relowner FROM pg_class WHERE oid = t::regclass), 'MEMBER')
+        OR pg_has_role(r, (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass), 'MEMBER') $$,
+  'no API role can write, truncate, add a trigger to or become the owner of sessions, factors or audit_log, so none can forge or skip an audit row'
 );
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -215,15 +217,16 @@ SELECT is_empty(
 );
 
 SELECT results_eq(
-  $$ SELECT user_id::text, metadata ->> 'session_id' FROM private.audit_log
+  $$ SELECT user_id::text, metadata ->> 'session_id', ARRAY(SELECT jsonb_object_keys(metadata) ORDER BY 1)
+     FROM private.audit_log
      WHERE id > (SELECT last_id FROM baseline) AND action = 'auth.session.created'
      ORDER BY id $$,
-  $$ VALUES ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a1'),
-            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a2'),
-            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a3'),
-            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b1'),
-            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b2') $$,
-  'every new session still writes one auth.session.created row with its owner'
+  $$ VALUES ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a1', ARRAY['aal', 'session_id']),
+            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a2', ARRAY['aal', 'session_id']),
+            ('a0000000-0000-4000-8000-00000000000a', '5e550000-0000-4000-8000-0000000000a3', ARRAY['aal', 'session_id']),
+            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b1', ARRAY['aal', 'session_id']),
+            ('b0000000-0000-4000-8000-00000000000b', '5e550000-0000-4000-8000-0000000000b2', ARRAY['aal', 'session_id']) $$,
+  'every new session still writes one auth.session.created row with its owner and only session_id and aal'
 );
 
 SELECT set_eq(

@@ -15,7 +15,7 @@
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, service_role none in
 --   private, the only SECURITY DEFINER
---   functions are the signup and session triggers, and no trigger on public,
+--   functions are the signup, session and MFA factor triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
 -- - plpgsql_check finds no error in any function, trigger functions checked

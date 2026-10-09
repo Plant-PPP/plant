@@ -29,8 +29,8 @@ CREATE OR REPLACE FUNCTION private.record_session_event()
   AS $$
 DECLARE
   session auth.sessions := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-  n jsonb := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE to_jsonb(NEW) END;
-  o jsonb := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE to_jsonb(OLD) END;
+  n jsonb := to_jsonb(NEW);
+  o jsonb := to_jsonb(OLD);
   event private.audit_action;
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -63,7 +63,7 @@ CREATE FUNCTION private.record_mfa_factor_event()
   AS $$
 DECLARE
   factor auth.mfa_factors := CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-  n jsonb := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE to_jsonb(NEW) END;
+  n jsonb := to_jsonb(NEW);
   o jsonb := to_jsonb(OLD);
   event private.audit_action;
 BEGIN
@@ -83,10 +83,11 @@ $$;
 
 REVOKE ALL ON FUNCTION private.record_mfa_factor_event() FROM PUBLIC, anon, authenticated;
 
--- Last, factors before sessions, the order Auth locks them in verify and
--- unenroll. Each takes SHARE ROW EXCLUSIVE (reads go on) under lock_timeout; a
--- request that still crosses the migration is aborted by the deadlock
--- detector on one side, and a failed deploy is re-run. No column list and no
+-- Last, factors before sessions, the order Auth locks them in unenroll and a
+-- first verify; a verify of an already verified factor locks sessions first.
+-- Each takes SHARE ROW EXCLUSIVE (reads go on) under lock_timeout; a request
+-- that crosses the migration in the other order deadlocks, the waiting
+-- migration is the side aborted, and the deploy is re-run. No column list and no
 -- WHEN: those would make an Auth migration that changes status or aal fail on
 -- a dependency.
 CREATE TRIGGER record_mfa_factor_event
