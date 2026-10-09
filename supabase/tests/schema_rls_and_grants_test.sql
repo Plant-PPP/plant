@@ -21,6 +21,7 @@
 --   mfa_gate_test.sql.
 -- - Views granted to authenticated, or writable by service_role, run as the
 --   caller, and materialized views and foreign tables grant them nothing.
+-- - No table in public or private inherits or is inherited, besides partitions.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, neither anon nor
 --   authenticated can execute any function in them, service_role none in
@@ -46,8 +47,8 @@
 --   there, is a member of no role, and only authenticator can switch to it.
 --   Only supabase_auth_admin and the owner can execute the hook, which runs as
 --   the caller with an empty search_path.
--- - Canaries prove the MFA gate, reference table, partition and
---   authenticated_aal1 asserts can fail.
+-- - Canaries prove the MFA gate, reference table, view, inheritance,
+--   partition and authenticated_aal1 asserts can fail.
 --
 -- Partitions are reached through their parent, so the grant and policy asserts
 -- skip them and no partition is granted to authenticated: queried directly, a
@@ -60,7 +61,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(39);
+SELECT plan(40);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -160,22 +161,6 @@ SELECT is_empty(
 SELECT ok(
   (SELECT count(*) FROM reference_tables WHERE relname IN ('fx_rates', 'prices')) = 2,
   'fx_rates and prices are reference tables'
-);
-
--- A view reads as its owner, past RLS and past the grants service_role lacks
--- on a quote table, unless security_invoker is set.
--- reloptions keeps the spelling it was given (true, on, 1, yes).
-SELECT is_empty(
-  $$ SELECT c.relname FROM pg_class c
-     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('v', 'm', 'f')
-       AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE')
-            OR has_table_privilege('authenticated', c.oid, 'DELETE')
-            OR has_any_column_privilege('service_role', c.oid, 'INSERT, UPDATE')
-            OR has_table_privilege('service_role', c.oid, 'DELETE'))
-       AND (c.relkind <> 'v'
-            OR NOT COALESCE((SELECT o.option_value::boolean FROM pg_options_to_table(c.reloptions) o
-                             WHERE o.option_name = 'security_invoker'), false)) $$,
-  'views granted to authenticated, or writable by service_role, are security_invoker; materialized views and foreign tables grant them nothing'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.
@@ -479,6 +464,31 @@ INSERT INTO canaried VALUES
            OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
            OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$),
+-- A view reads as its owner, past RLS and past the grants service_role lacks
+-- on a quote table, unless security_invoker is set.
+-- reloptions keeps the spelling it was given (true, on, 1, yes).
+('views granted to authenticated, or writable by service_role, are security_invoker; materialized views and foreign tables grant them nothing',
+ ARRAY['pgtap_canary_view_read', 'pgtap_canary_view_insert', 'pgtap_canary_view_update',
+       'pgtap_canary_view_delete', 'pgtap_canary_view_matview'],
+ $$ SELECT c.relname FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('v', 'm', 'f')
+      AND (has_any_column_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE')
+           OR has_table_privilege('authenticated', c.oid, 'DELETE')
+           OR has_any_column_privilege('service_role', c.oid, 'INSERT, UPDATE')
+           OR has_table_privilege('service_role', c.oid, 'DELETE'))
+      AND (c.relkind <> 'v'
+           OR NOT COALESCE((SELECT o.option_value::boolean FROM pg_options_to_table(c.reloptions) o
+                            WHERE o.option_name = 'security_invoker'), false)) $$),
+-- A child's rows answer every query on its parent under the parent's grants
+-- and policies, past the child's own, so a user's table under a reference
+-- table writes what every user reads.
+('no table in public or private inherits or is inherited, besides partitions', ARRAY['public.pgtap_canary_inherits', 'extensions.pgtap_canary_inherits'],
+ $$ SELECT c.relnamespace::regnamespace::text || '.' || c.relname FROM pg_inherits i
+    JOIN pg_class c ON c.oid = i.inhrelid
+    JOIN pg_class p ON p.oid = i.inhparent
+    WHERE NOT c.relispartition
+      AND (c.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)
+           OR p.relnamespace IN ('public'::regnamespace, 'private'::regnamespace)) $$),
 ('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
  $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
 ('a reference table only lets authenticated read every row, no API role write it but service_role''s inserts, and points at no other table',
@@ -607,6 +617,19 @@ CREATE TABLE public.pgtap_canary_partition PARTITION OF public.pgtap_canary_part
   FOR VALUES FROM (0) TO (1);
 GRANT SELECT ON public.pgtap_canary_partition TO authenticated;
 CREATE TABLE public.pgtap_canary_reference ();
+CREATE TABLE extensions.pgtap_canary_relation ();
+CREATE TABLE public.pgtap_canary_inherits () INHERITS (extensions.pgtap_canary_relation);
+CREATE TABLE extensions.pgtap_canary_inherits () INHERITS (public.pgtap_canary_reference);
+CREATE VIEW public.pgtap_canary_view_read AS SELECT 1 AS x;
+GRANT SELECT (x) ON public.pgtap_canary_view_read TO authenticated;
+CREATE VIEW public.pgtap_canary_view_insert AS SELECT 1 AS x;
+GRANT INSERT (x) ON public.pgtap_canary_view_insert TO service_role;
+CREATE VIEW public.pgtap_canary_view_update AS SELECT 1 AS x;
+GRANT UPDATE (x) ON public.pgtap_canary_view_update TO service_role;
+CREATE VIEW public.pgtap_canary_view_delete AS SELECT 1 AS x;
+GRANT DELETE ON public.pgtap_canary_view_delete TO service_role;
+CREATE MATERIALIZED VIEW public.pgtap_canary_view_matview AS SELECT 1 AS x;
+GRANT SELECT ON public.pgtap_canary_view_matview TO authenticated;
 CREATE TABLE public.pgtap_canary_ref_all (x int);
 CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_all FOR ALL TO authenticated USING (true);
 CREATE TABLE public.pgtap_canary_ref_role (x int);
