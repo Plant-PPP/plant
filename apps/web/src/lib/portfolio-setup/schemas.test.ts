@@ -1,4 +1,5 @@
-import { idSchema, nameInputSchema, normalizeName } from "./schemas";
+import { normalizeName } from "./normalize-name";
+import { idSchema, nameInputSchema } from "./schemas";
 
 const schema = nameInputSchema(40);
 

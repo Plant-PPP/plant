@@ -7,7 +7,7 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SheetFooter } from "@/components/ui/sheet";
-import { normalizeName } from "@/lib/portfolio-setup/schemas";
+import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
 import { settle } from "@/lib/server-action-call";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { sheetAnswer } from "./answers";

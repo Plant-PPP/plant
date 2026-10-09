@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeName } from "./normalize-name";
 
 // At least one letter, digit, punctuation mark or symbol, so no name renders
 // blank.
@@ -20,23 +21,10 @@ const EMOJI =
 const UNSAFE =
   /[\p{Cc}\p{Cs}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800\u{1D159}\u{16FE4}]/u;
 
-// Trimmed, NFC, single spaces and no variation selector after an emoji that
-// already shows as one, so composed and decomposed forms of a name, the same
-// name with doubled spaces, or a thumbs up with and without U+FE0F collide in
-// the unique index. trim() strips every Unicode space, more than the CHECK's
-// btrim, and zod 4's max() counts code points, as char_length does, so a name
-// that passes is never refused by the table's CHECK. The name sheet uses it to
-// show the name as saved.
-export function normalizeName(name: string): string {
-  return name
-    .trim()
-    .normalize("NFC")
-    .replace(/\s+/gu, " ")
-    .replace(/(\p{Emoji_Presentation})\uFE0F+/gu, "$1");
-}
-
 // The raw cap stops a huge string before it is normalized and scanned; spaces
-// that collapse still fit under it.
+// that collapse still fit under it. trim() strips every Unicode space, more
+// than the CHECK's btrim, and zod 4's max() counts code points, as char_length
+// does, so a name that passes is never refused by the table's CHECK.
 function trimmedName(max: number) {
   return z
     .string()

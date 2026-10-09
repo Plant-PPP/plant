@@ -26,9 +26,9 @@ function AppSheet({
   returnFocusTo?: (opener: HTMLElement | null) => HTMLElement | null;
   children: React.ReactNode;
 }) {
-  // Opened by state rather than a SheetTrigger, so Radix has no trigger to
-  // return focus to: keep whatever had focus when the sheet first rendered,
-  // before its own autofocus moves it.
+  // Opened by state with no SheetTrigger, so Radix has no trigger to return
+  // focus to: keep whatever had focus when the sheet first rendered, before
+  // its own autofocus moves it.
   const [opener] = useState(() =>
     typeof document === "undefined" ? null : document.activeElement,
   );
