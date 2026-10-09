@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { type DisableResult, disableTotp } from "@/app/(app)/settings/actions";
+import { disableTotp } from "@/app/(app)/settings/actions";
 import { CONFIRM_DISABLE_PATH } from "@/components/settings/two-factor-status";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { failedOnEndedSession } from "@/lib/auth/session-state";
 import { currentPath, signInAgain } from "@/lib/auth/sign-in-again";
 import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { useAuthRequest } from "@/lib/auth/use-auth-request";
+import { settle } from "@/lib/server-action-call";
 import { createClient } from "@/lib/supabase/client";
 
 const RETRY = "No pudimos desactivarla. Probá de nuevo.";
@@ -103,10 +104,8 @@ export function DisableTotpDialog({
     setCode("");
     if (failure) return;
 
-    let result: DisableResult;
-    try {
-      result = await disableTotp(factorId);
-    } catch {
+    const result = await settle(disableTotp(factorId));
+    if (result === "rejected") {
       setPending(false);
       setError(RETRY);
       return;

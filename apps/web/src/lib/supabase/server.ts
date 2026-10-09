@@ -1,3 +1,4 @@
+import type { Database } from "@plant/shared";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { requireSupabaseEnv, SESSION_COOKIE_OPTIONS } from "./env";
@@ -6,7 +7,7 @@ export async function createClient() {
   const env = requireSupabaseEnv();
   const cookieStore = await cookies();
 
-  return createServerClient(env.url, env.anonKey, {
+  return createServerClient<Database>(env.url, env.anonKey, {
     cookieOptions: SESSION_COOKIE_OPTIONS,
     cookies: {
       getAll() {

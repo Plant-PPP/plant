@@ -1,5 +1,6 @@
 import {
   Bot,
+  Building2,
   ChartNoAxesColumn,
   Landmark,
   Settings2,
@@ -22,6 +23,7 @@ export const NAV_ITEMS = [
   { href: "/", title: "Resumen", icon: ChartNoAxesColumn, primary: false },
   { href: "/assets", title: "Activos", icon: Wallet, primary: false },
   { href: "/debts", title: "Deudas", icon: Landmark, primary: false },
+  { href: "/accounts", title: "Cuentas", icon: Building2, primary: false },
   { href: "/import", title: "Cargar", icon: Upload, primary: false },
 ] as const satisfies readonly NavItem[];
 

@@ -47,6 +47,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"portfolios": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"id": string,"name": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"name": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"prices": {
                   Row: {
                     "currency": Database["public"]['Enums']["currency"],"fetched_at": string,"price": number,"price_date": string,"quoted_at": string,"source": Database["public"]['Enums']["quote_source"],"symbol": string

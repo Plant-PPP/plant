@@ -30,6 +30,8 @@
 --   private, the only SECURITY DEFINER
 --   functions are the signup, session and MFA factor triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
+-- - Every SECURITY DEFINER function, and every function in private, sets its
+--   search_path.
 -- - Only the owner holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN.
 -- - plpgsql_check finds no error in any function, trigger functions checked
 --   against each table they fire on.
@@ -141,9 +143,9 @@ SELECT is_empty(
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
-       AND p.prosecdef
+       AND (p.prosecdef OR p.pronamespace = 'private'::regnamespace)
        AND NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) cfg WHERE cfg LIKE 'search_path=%') $$,
-  'every SECURITY DEFINER function sets its search_path'
+  'every SECURITY DEFINER function, and every function in private, sets its search_path'
 );
 
 -- Compared as text: this is pg_get_expr's rendering of
@@ -196,6 +198,7 @@ SELECT set_eq(
 SELECT ok(
   (SELECT p.proconfig = ARRAY['search_path=""']
           AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.profiles'::regclass)
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.portfolios'::regclass)
    FROM pg_proc p WHERE p.oid = 'private.create_profile_for_new_user()'::regprocedure)
     AND (SELECT t.tgenabled = 'O'
                 AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.create_profile_for_new_user()'
@@ -203,7 +206,7 @@ SELECT ok(
          WHERE t.tgrelid = 'auth.users'::regclass AND t.tgname = 'on_auth_user_created')
     AND (SELECT count(*) FROM pg_trigger t
          WHERE t.tgfoid = 'private.create_profile_for_new_user()'::regprocedure) = 1,
-  'the signup trigger runs as the owner of profiles, with an empty search_path, is enabled and is its function''s only trigger'
+  'the signup trigger runs as the owner of profiles and portfolios, with an empty search_path, is enabled and is its function''s only trigger'
 );
 
 SELECT ok(

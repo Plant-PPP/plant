@@ -4,6 +4,7 @@ import {
   AUTH_UNAVAILABLE_ERROR,
   authUnavailableReason,
 } from "@/lib/auth/session-state";
+import { isLoggedError } from "@/lib/log/logged-error";
 import { serverLog } from "@/lib/log/server-log";
 import {
   REQUEST_ID_FIELD,
@@ -44,15 +45,15 @@ const BAD_ROUTER_STATE = new Set([
   "The router state header was sent but could not be parsed.",
 ]);
 
-// Uncaught errors in pages, route handlers and server actions. The proxy logs
-// its own, so a proxy error that reaches here is skipped. Next still prints
-// its own line too.
+// Uncaught errors in pages, route handlers and server actions. The proxy and
+// whoever throws a LoggedError log their own, so those are skipped. Next still
+// prints its own line too.
 export const onRequestError: Instrumentation.onRequestError = (
   error,
   request,
   context,
 ) => {
-  if (context.routeType === "proxy") return;
+  if (context.routeType === "proxy" || isLoggedError(error)) return;
   const fields = {
     [REQUEST_ID_FIELD]: requestIdFrom(request.headers[REQUEST_ID_HEADER]),
     "http.request.method": request.method,

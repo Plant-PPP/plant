@@ -1,0 +1,277 @@
+"use client";
+
+import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  archivePortfolio,
+  createPortfolio,
+  renamePortfolio,
+  restorePortfolio,
+} from "@/app/(app)/accounts/actions";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { FormAlert } from "@/components/ui/form-alert";
+import { StatusNotice } from "@/components/ui/status-notice";
+import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
+import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
+import { settle } from "@/lib/server-action-call";
+import { rowAnswer } from "./answers";
+import { NameSheet } from "./name-sheet";
+
+const PENDING_ROW_BUTTON = "aria-disabled:opacity-50";
+
+type SheetState =
+  | { kind: "create" }
+  | { kind: "rename"; row: PortfolioRow }
+  | { kind: "restore"; row: PortfolioRow };
+
+export function PortfoliosCard({ view }: { view: PortfoliosView }) {
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const [alert, setAlert] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const archivedSummary = useRef<HTMLElement>(null);
+  const paging = useRef(false);
+  const focusHeading = () => heading.current;
+  const [pending, startTransition] = useTransition();
+  // Seeded once: paging back to the first archived page keeps it open.
+  const [archivedOpen, setArchivedOpen] = useState(
+    view.archivedFirstHref !== null,
+  );
+  // Another archived page, by a link, Back or the sidebar, clears the messages
+  // about the one before; an action's refresh keeps the page and its message.
+  const [shownPage, setShownPage] = useState(view.archivedPage);
+  if (shownPage !== view.archivedPage) {
+    setShownPage(view.archivedPage);
+    clearMessages();
+  }
+
+  // The page reached through an archived-list link may not have that link,
+  // and focus would fall to the page: it goes to the list's summary instead.
+  useEffect(() => {
+    if (!paging.current) return;
+    paging.current = false;
+    if (document.activeElement === document.body) {
+      archivedSummary.current?.focus();
+    }
+  }, [view.archivedFirstHref, view.archivedNextHref]);
+
+  function clearMessages() {
+    setAlert(undefined);
+    setNotice(undefined);
+  }
+
+  function openSheet(next: SheetState) {
+    if (pending) return;
+    clearMessages();
+    setSheet(next);
+  }
+
+  // The row's buttons are aria-disabled while pending, not disabled: a
+  // disabled button drops its focus to the page.
+  function rowAction(row: PortfolioRow, action: "archive" | "restore") {
+    if (pending) return;
+    clearMessages();
+    startTransition(async () => {
+      const call =
+        action === "archive"
+          ? archivePortfolio(row.id)
+          : restorePortfolio(row.id);
+      const answer = rowAnswer(await settle(call), action);
+      // A done row moved to the other list and an alert shows above both, so
+      // focus goes to the heading right above the alert or the notice.
+      if (answer.kind === "alert") {
+        setAlert(answer.text);
+        heading.current?.focus();
+      }
+      if (answer.kind === "done") {
+        setNotice(
+          `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}.`,
+        );
+        heading.current?.focus();
+      }
+      // Defensive: the openers ignore clicks while an action is pending.
+      if (answer.kind === "ask_name") {
+        setSheet((open) => open ?? { kind: "restore", row });
+      }
+    });
+  }
+
+  return (
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">
+          <h2 ref={heading} tabIndex={-1} className="outline-none">
+            Carteras
+          </h2>
+        </CardTitle>
+        <CardDescription>Agrupá tus inversiones como quieras</CardDescription>
+        <CardAction>
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => openSheet({ kind: "create" })}
+          >
+            <Plus />
+            Nueva cartera
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-4 pt-6">
+        {alert && <FormAlert>{alert}</FormAlert>}
+        <StatusNotice>{notice}</StatusNotice>
+        <ul className="divide-y rounded-md border">
+          {view.active.map((row) => (
+            <li
+              key={row.id}
+              className="flex items-center justify-between gap-2 px-3 py-2"
+            >
+              <span className="min-w-0 truncate text-sm">{row.name}</span>
+              <span className="flex shrink-0 gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-disabled={pending}
+                  className={PENDING_ROW_BUTTON}
+                  onClick={() => openSheet({ kind: "rename", row })}
+                  aria-label={`Renombrar ${row.name}`}
+                >
+                  <Pencil />
+                  <span className="sr-only sm:not-sr-only">Renombrar</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-disabled={pending}
+                  className={PENDING_ROW_BUTTON}
+                  onClick={() => rowAction(row, "archive")}
+                  aria-label={`Archivar ${row.name}`}
+                >
+                  <Archive />
+                  <span className="sr-only sm:not-sr-only">Archivar</span>
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {view.activeTruncated && (
+          <p className="text-xs text-muted-foreground">
+            Mostrando las {PAGE_ROW_LIMIT} más recientes.
+          </p>
+        )}
+        {(view.archived.length > 0 || view.archivedFirstHref) && (
+          <details
+            open={archivedOpen}
+            onToggle={(event) => setArchivedOpen(event.currentTarget.open)}
+          >
+            <summary
+              ref={archivedSummary}
+              className="cursor-pointer text-sm font-medium"
+            >
+              Archivadas
+            </summary>
+            {view.archived.length === 0 && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No hay más carteras archivadas.
+              </p>
+            )}
+            <ul className="mt-2 divide-y rounded-md border empty:hidden">
+              {view.archived.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-sm text-muted-foreground">
+                    {row.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-disabled={pending}
+                    className={PENDING_ROW_BUTTON}
+                    onClick={() => rowAction(row, "restore")}
+                    aria-label={`Restaurar ${row.name}`}
+                  >
+                    <ArchiveRestore />
+                    <span className="sr-only sm:not-sr-only">Restaurar</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex gap-4 text-sm">
+              {view.archivedFirstHref && (
+                <Link
+                  className="underline"
+                  href={view.archivedFirstHref}
+                  onNavigate={() => (paging.current = true)}
+                  scroll={false}
+                >
+                  Ver las más recientes
+                </Link>
+              )}
+              {view.archivedNextHref && (
+                <Link
+                  className="underline"
+                  href={view.archivedNextHref}
+                  onNavigate={() => (paging.current = true)}
+                  scroll={false}
+                >
+                  Ver más
+                </Link>
+              )}
+            </div>
+          </details>
+        )}
+      </CardContent>
+      {sheet?.kind === "create" && (
+        <NameSheet
+          onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
+          title="Nueva cartera"
+          description="Elegí un nombre para la cartera."
+          submitLabel="Crear"
+          onSubmit={(name) => createPortfolio({ name })}
+          onSaved={(name) => setNotice(`Creaste ${name}.`)}
+        />
+      )}
+      {sheet?.kind === "rename" && (
+        <NameSheet
+          key={sheet.row.id}
+          onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
+          title="Renombrar cartera"
+          description="Elegí el nuevo nombre."
+          submitLabel="Guardar"
+          defaultValue={sheet.row.name}
+          onSubmit={(name) => renamePortfolio(sheet.row.id, { name })}
+          onSaved={(name) =>
+            name !== sheet.row.name &&
+            setNotice(`Renombraste ${sheet.row.name} a ${name}.`)
+          }
+        />
+      )}
+      {sheet?.kind === "restore" && (
+        <NameSheet
+          key={sheet.row.id}
+          onClose={() => setSheet(null)}
+          returnFocusTo={focusHeading}
+          savedRemovesOpener
+          title="Restaurar cartera"
+          description="Ya tenés una cartera activa con ese nombre. Elegí otro para restaurarla."
+          submitLabel="Restaurar"
+          defaultValue={sheet.row.name}
+          onSubmit={(name) => restorePortfolio(sheet.row.id, { name })}
+          onSaved={(name) => setNotice(`Restauraste ${name}.`)}
+        />
+      )}
+    </Card>
+  );
+}
