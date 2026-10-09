@@ -19,10 +19,11 @@ function wallClockParts(instant: Date): Record<string, string> {
 }
 
 // The calendar day in Buenos Aires as YYYY-MM-DD, the date a quote is stored
-// under (the quote guards in the quotes migration compute the same day).
+// under (the quote guards in the quotes migration compute the same day). Only
+// for the years 1 to 9999: the formatter drops the era of earlier years.
 export function buenosAiresDate(instant: Date): string {
   const parts = wallClockParts(instant);
-  return `${parts.year}-${parts.month}-${parts.day}`;
+  return `${parts.year?.padStart(4, "0")}-${parts.month}-${parts.day}`;
 }
 
 // The hour in Buenos Aires, 0 to 23.
@@ -66,7 +67,9 @@ function offsetAt(instant: number): number {
 // and the earliest instant dated that day wins.
 export function startOfBuenosAiresDay(date: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!match) throw new RangeError("Expected a YYYY-MM-DD date");
+  if (!match || match[1] === "0000") {
+    throw new RangeError("Expected a YYYY-MM-DD date from the year 1");
+  }
   const midnightUtc = utc(Number(match[1]), Number(match[2]), Number(match[3]));
   if (new Date(midnightUtc).toISOString().slice(0, 10) !== date) {
     throw new RangeError("Expected a date that exists");

@@ -21,10 +21,15 @@ export const SYMBOL_PATTERN = /^[A-Z0-9]{1,15}$/;
 export const QUOTE_CLOSE_HOUR = 18;
 
 // Stored in UTC: a provider's stamp may carry any offset, and Postgres refuses
-// one beyond ±15:59, which would fail the whole insert.
+// one beyond ±15:59, which would fail the whole insert. Postgres has no year 0
+// and does not read the six-digit years toISOString writes past 9999.
 const isoInstant = z.iso
   .datetime({ offset: true })
-  .transform((value) => new Date(value).toISOString());
+  .transform((value) => new Date(value).toISOString())
+  .refine(
+    (value) => /^(?!0000)\d{4}-/.test(value),
+    "Must be in years 1 to 9999",
+  );
 
 // The object's refinements run even when a field failed; a row whose fields
 // failed is already invalid, and compareDecimals expects valid decimals.
@@ -66,7 +71,7 @@ export type RawPrice = Omit<Price, "fetched_at">;
 export type RawQuoteRows = { fxRates: RawFxRate[]; prices: RawPrice[] };
 
 // staleCount: rows outside their window; invalidCount: rows that failed the
-// schemas.
+// schemas or share their primary key with a later row.
 export type QuoteBatch = {
   fxRates: FxRate[];
   prices: Price[];
@@ -74,27 +79,18 @@ export type QuoteBatch = {
   invalidCount: number;
 };
 
-export type SavedCounts = { fxRates: number; prices: number };
+export type QuoteFeedCode =
+  | "fetch_error"
+  | "http_429"
+  | "http_4xx"
+  | "http_5xx"
+  | "too_large"
+  | "bad_json"
+  | "bad_shape"
+  | "provider_error"
+  | "empty";
 
-export const QUOTE_FEED_CODES = [
-  "fetch_error",
-  "http_429",
-  "http_4xx",
-  "http_5xx",
-  "too_large",
-  "bad_json",
-  "bad_shape",
-  "provider_error",
-  "empty",
-] as const;
-export type QuoteFeedCode = (typeof QUOTE_FEED_CODES)[number];
-
-export function isQuoteFeedCode(value: unknown): value is QuoteFeedCode {
-  return (QUOTE_FEED_CODES as readonly unknown[]).includes(value);
-}
-
-// Both errors carry only their code as the message, so no provider or
-// PostgREST text reaches a log line.
+// The message is only the code, so no source's text reaches a log line.
 export class QuoteFeedError extends Error {
   override readonly name = "QuoteFeedError";
   constructor(
@@ -105,35 +101,15 @@ export class QuoteFeedError extends Error {
   }
 }
 
-export const QUOTE_SAVE_CODES = [
-  "timeout",
-  "fetch_error",
-  "http_5xx",
-  "out_of_window",
-  "forbidden",
-  "invalid_row",
-  "not_configured",
-  "rejected",
-] as const;
-export type QuoteSaveCode = (typeof QUOTE_SAVE_CODES)[number];
-
-export function isQuoteSaveCode(value: unknown): value is QuoteSaveCode {
-  return (QUOTE_SAVE_CODES as readonly unknown[]).includes(value);
+// A response that fails its schema is not retried: the source changed shape.
+export function parseResponse<T>(schema: z.ZodType<T>, json: unknown): T {
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
+  return parsed.data;
 }
 
-export class QuoteSaveError extends Error {
-  override readonly name = "QuoteSaveError";
-  constructor(
-    readonly code: QuoteSaveCode,
-    readonly retryable: boolean,
-  ) {
-    super(code);
-  }
-}
-
-// Every row must be dated today in Buenos Aires, the only day the database
-// accepts. Dollar rates and prices also wait for QUOTE_CLOSE_HOUR; UVA is
-// fixed for the whole day.
+// Today in Buenos Aires is the only date the quotes' insert guard accepts. UVA
+// is fixed for the whole day.
 export function inQuoteWindow(
   kind: FxRateKind | "price",
   date: string,
@@ -165,8 +141,7 @@ function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
   return [...new Map(rows.map((row) => [key(row), row])).values()];
 }
 
-// Stamps each row with the read instant, drops rows that fail the schemas,
-// then rows outside their window, and keeps the last row per primary key.
+// One row per table primary key; the last one wins.
 export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
   const fetched_at = now.toISOString();
   let invalidCount = 0;
@@ -186,12 +161,21 @@ export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
     { fxRates, prices, staleCount: 0, invalidCount },
     now,
   );
-  return {
-    ...fresh,
+  const kept = {
     fxRates: lastPerKey(fresh.fxRates, (row) => `${row.kind} ${row.rate_date}`),
     prices: lastPerKey(
       fresh.prices,
       (row) => `${row.symbol} ${row.price_date}`,
     ),
+  };
+  const repeated =
+    fresh.fxRates.length +
+    fresh.prices.length -
+    kept.fxRates.length -
+    kept.prices.length;
+  return {
+    ...kept,
+    staleCount: fresh.staleCount,
+    invalidCount: fresh.invalidCount + repeated,
   };
 }

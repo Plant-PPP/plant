@@ -23,7 +23,6 @@ export const positiveDecimalSchema = decimalStringSchema.refine(
   "Must be greater than 0",
 );
 
-// numeric(20, 8): every amount has at most 8 decimals.
 export const DECIMAL_SCALE_DIGITS = 8;
 export const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 
@@ -40,7 +39,6 @@ export function toScaled(decimal: string): bigint {
   return negative ? -scaled : scaled;
 }
 
-// Negative, zero or positive, like a sort comparator.
 export function compareDecimals(a: string, b: string): number {
   const difference = toScaled(a) - toScaled(b);
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;

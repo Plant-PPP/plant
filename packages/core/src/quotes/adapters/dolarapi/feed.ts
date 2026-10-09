@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import {
   type FxRateKind,
+  parseResponse,
   QuoteFeedError,
   type RawFxRate,
 } from "../../contract/quote";
@@ -28,9 +29,10 @@ const responseSchema = z.object({
 // On weekends and holidays the house still stamps its last business day, so
 // the row is dated that day and the window drops it.
 export function parse(json: unknown, kind: FxRateKind): RawFxRate {
-  const parsed = responseSchema.safeParse(json);
-  if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
-  const { compra, venta, fechaActualizacion } = parsed.data;
+  const { compra, venta, fechaActualizacion } = parseResponse(
+    responseSchema,
+    json,
+  );
   return {
     kind,
     rate_date: buenosAiresDate(new Date(fechaActualizacion)),
@@ -41,15 +43,41 @@ export function parse(json: unknown, kind: FxRateKind): RawFxRate {
   };
 }
 
+function isBadShape(error: unknown): boolean {
+  return error instanceof QuoteFeedError && error.code === "bad_shape";
+}
+
+// A house that changed shape counts as one invalid row, so the other houses
+// are still stored for the day; only today's rows can ever be inserted.
+function unreadable(kind: FxRateKind, now: Date): RawFxRate {
+  return {
+    kind,
+    rate_date: buenosAiresDate(now),
+    buy: null,
+    sell: "",
+    source: "dolarapi",
+    quoted_at: now.toISOString(),
+  };
+}
+
 export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "dolarapi",
-    async readRaw() {
+    async readRaw(now) {
       const fxRates = await Promise.all(
-        HOUSES.map(async ({ house, kind }) =>
-          parse(await getJson(`${BASE_URL}/${house}`), kind),
-        ),
+        HOUSES.map(async ({ house, kind }) => {
+          const json = await getJson(`${BASE_URL}/${house}`);
+          try {
+            return parse(json, kind);
+          } catch (error) {
+            if (!isBadShape(error)) throw error;
+            return unreadable(kind, now);
+          }
+        }),
       );
+      if (fxRates.every((row) => row.sell === "")) {
+        throw new QuoteFeedError("bad_shape", false);
+      }
       return { fxRates, prices: [] };
     },
   };

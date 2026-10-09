@@ -1,12 +1,8 @@
-import type {
-  QuoteBatch,
-  QuoteSource,
-  RawQuoteRows,
-  SavedCounts,
-} from "./quote";
+import type { QuoteBatch, QuoteSource, RawQuoteRows } from "./quote";
 
 // One public quote source. read() returns the rows it could check; it throws a
-// QuoteFeedError when the source fails, or a bug's own error.
+// QuoteFeedError when the source fails; any other error is a bug and passes
+// through unchanged.
 export interface QuoteFeedPort {
   readonly id: QuoteSource;
   read(now: Date): Promise<QuoteBatch>;
@@ -20,7 +16,3 @@ export interface RawQuoteFeed {
 
 // The HTTP reader the composition root injects; throws QuoteFeedError.
 export type GetJson = (url: string) => Promise<unknown>;
-
-// The store the composition root injects; resolves with the rows actually
-// inserted and throws QuoteSaveError.
-export type SaveQuotes = (batch: QuoteBatch) => Promise<SavedCounts>;

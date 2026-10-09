@@ -2,7 +2,7 @@ import { buenosAiresDate, startOfBuenosAiresDay } from "@plant/shared";
 import { z } from "zod";
 
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
-import { QuoteFeedError, type RawQuoteRows } from "../../contract/quote";
+import { parseResponse, type RawQuoteRows } from "../../contract/quote";
 
 const URL = "https://api.argentinadatos.com/v1/finanzas/indices/uva";
 
@@ -13,13 +13,13 @@ const responseSchema = z.array(
 );
 
 // The series runs ahead of today, so the row is the latest entry not after
-// today (the last one listed, if a day repeats); a series that lags yields an older row, which the window drops.
+// today (the last one listed, if a day repeats); a series that lags yields an
+// older row, which the window drops.
 export function parse(json: unknown, now: Date): RawQuoteRows {
-  const parsed = responseSchema.safeParse(json);
-  if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
+  const series = parseResponse(responseSchema, json);
   const today = buenosAiresDate(now);
   let latest: { fecha: string; valor: number } | undefined;
-  for (const entry of parsed.data) {
+  for (const entry of series) {
     if (entry.fecha <= today && (!latest || entry.fecha >= latest.fecha)) {
       latest = entry;
     }

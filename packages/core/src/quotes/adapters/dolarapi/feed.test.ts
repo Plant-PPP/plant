@@ -1,31 +1,8 @@
 import { checkBatch, QuoteFeedError } from "../../contract/quote";
-import { toQuoteFeed } from "../../factory";
 import { createDolarapiFeed, parse } from "./feed";
 
-describe("dolarapi parse edges", () => {
-  const NOW = new Date("2026-10-09T21:30:00.000Z");
-  const house = (compra: number, venta: number) => ({
-    compra,
-    venta,
-    fechaActualizacion: "2026-10-09T20:57:00.000Z",
-  });
-
-  it.each([
-    ["a zero buying rate", house(0, 1450)],
-    ["a float with noise", house(0.1 + 0.2, 1450)],
-    ["a tiny rate printed as an exponent", house(1e-7, 1450)],
-  ])("maps %s to a row the schemas count as invalid", (_label, json) => {
-    const row = parse(json, "mep");
-    const batch = checkBatch({ fxRates: [row], prices: [] }, NOW);
-    expect([batch.fxRates.length, batch.invalidCount]).toEqual([0, 1]);
-  });
-
-  it("throws bad_shape on a null buying rate", () => {
-    expect(() => parse({ ...house(1, 2), compra: null }, "official")).toThrow(
-      expect.objectContaining({ code: "bad_shape" }),
-    );
-  });
-});
+// 2026-10-09 18:30 in Buenos Aires.
+const NOW = new Date("2026-10-09T21:30:00.000Z");
 
 // Invented values in the shape of /v1/dolares/{house}.
 const body = (casa: string, compra: number, venta: number) => ({
@@ -58,8 +35,37 @@ describe("dolarapi parse", () => {
   });
 
   it.each([
+    ["a zero buying rate", body("bolsa", 0, 1450)],
+    ["a float with noise", body("bolsa", 0.1 + 0.2, 1450)],
+    ["a tiny rate printed as an exponent", body("bolsa", 1e-7, 1450)],
+  ])("maps %s to a row the schemas count as invalid", (_label, json) => {
+    const batch = checkBatch(
+      { fxRates: [parse(json, "mep")], prices: [] },
+      NOW,
+    );
+    expect([batch.fxRates.length, batch.invalidCount]).toEqual([0, 1]);
+  });
+
+  it.each(["0000-10-09T20:00:00Z", "9999-10-09T20:00:00Z"])(
+    "maps a rate stamped %s to a row the window drops",
+    (fechaActualizacion) => {
+      const row = parse({ ...body("bolsa", 1, 2), fechaActualizacion }, "mep");
+      const batch = checkBatch({ fxRates: [row], prices: [] }, NOW);
+      expect([
+        batch.fxRates.length,
+        batch.staleCount + batch.invalidCount,
+      ]).toEqual([0, 1]);
+    },
+  );
+
+  it.each([
     ["a string price", { ...body("blue", 1, 2), venta: "2" }],
+    ["a null buying rate", { ...body("blue", 1, 2), compra: null }],
     ["no stamp", { compra: 1, venta: 2 }],
+    [
+      "a day that does not exist",
+      { ...body("blue", 1, 2), fechaActualizacion: "2026-02-30T12:00:00Z" },
+    ],
     ["a list", [body("blue", 1, 2)]],
   ])("throws bad_shape on %s", (_label, json) => {
     expect(() => parse(json, "blue")).toThrow(
@@ -75,7 +81,7 @@ describe("createDolarapiFeed", () => {
       urls.push(url);
       return body(url.split("/").pop() ?? "", 1, 2);
     });
-    const rows = await feed.readRaw(new Date());
+    const rows = await feed.readRaw(NOW);
     expect(feed.id).toBe("dolarapi");
     expect(urls).toEqual([
       "https://dolarapi.com/v1/dolares/oficial",
@@ -92,53 +98,36 @@ describe("createDolarapiFeed", () => {
     expect(rows.prices).toEqual([]);
   });
 
-  it("fails the read when one house fails", async () => {
+  it("keeps the other houses when one changed shape", async () => {
+    const feed = createDolarapiFeed(async (url) =>
+      url.endsWith("/blue")
+        ? { ...body("blue", 1, 2), compra: null }
+        : body("x", 1, 2),
+    );
+    const batch = checkBatch(await feed.readRaw(NOW), NOW);
+    expect(batch.fxRates.map((row) => row.kind)).toEqual([
+      "official",
+      "mep",
+      "ccl",
+    ]);
+    expect(batch.invalidCount).toBe(1);
+  });
+
+  it("throws bad_shape when every house changed shape", async () => {
+    const feed = createDolarapiFeed(async () => ({ compra: 1 }));
+    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
+      code: "bad_shape",
+      retryable: false,
+    });
+  });
+
+  it("fails the read when one house cannot be fetched", async () => {
     const feed = createDolarapiFeed(async (url) => {
       if (url.endsWith("/blue")) throw new QuoteFeedError("http_5xx", true);
       return body("x", 1, 2);
     });
-    await expect(feed.readRaw(new Date())).rejects.toMatchObject({
+    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
       code: "http_5xx",
     });
-  });
-});
-
-describe("dolarapi on a hostile answer", () => {
-  // 2026-10-09 18:30 in Buenos Aires.
-  const NOW = new Date("2026-10-09T21:30:00.000Z");
-  const stamped = (fechaActualizacion: string) =>
-    toQuoteFeed(
-      createDolarapiFeed(async () => ({
-        ...body("bolsa", 1, 2),
-        fechaActualizacion,
-      })),
-    ).read(NOW);
-
-  // Today in Buenos Aires, but an offset Postgres refuses (beyond ±15:59).
-  it("hands the store a quoted_at Postgres accepts", async () => {
-    const batch = await stamped("2026-10-10T17:00:00+23:59");
-    for (const row of batch.fxRates) {
-      expect(row.quoted_at).not.toMatch(/[+-](1[6-9]|2\d):\d\d$/);
-    }
-  });
-
-  it.each(["0000-10-09T20:00:00Z", "9999-10-09T20:00:00Z"])(
-    "drops a rate stamped %s",
-    async (stamp) => {
-      const batch = await stamped(stamp);
-      expect([
-        batch.fxRates.length,
-        batch.staleCount + batch.invalidCount,
-      ]).toEqual([0, 4]);
-    },
-  );
-
-  it("refuses a stamp on a day that does not exist", () => {
-    expect(() =>
-      parse(
-        { ...body("bolsa", 1, 2), fechaActualizacion: "2026-02-30T12:00:00Z" },
-        "mep",
-      ),
-    ).toThrow(expect.objectContaining({ code: "bad_shape" }));
   });
 });

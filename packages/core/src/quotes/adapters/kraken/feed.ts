@@ -2,7 +2,11 @@ import { buenosAiresDate } from "@plant/shared";
 import { z } from "zod";
 
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
-import { QuoteFeedError, type RawQuoteRows } from "../../contract/quote";
+import {
+  parseResponse,
+  QuoteFeedError,
+  type RawQuoteRows,
+} from "../../contract/quote";
 
 // pair is what the request names; resultKey is how the answer names it.
 const PAIRS: readonly { symbol: string; pair: string; resultKey: string }[] = [
@@ -23,13 +27,21 @@ const responseSchema = z.object({
     .optional(),
 });
 
+// Each error entry starts with its severity: E for an error, W for a warning
+// that comes with a usable result. Only these errors pass on a retry; an
+// unknown pair or a bad argument fails the same way every time.
+const TRANSIENT_ERROR = /^E(Service:|API:Rate limit|General:Temporary)/;
+
 export function parse(json: unknown, now: Date): RawQuoteRows {
-  const parsed = responseSchema.safeParse(json);
-  if (!parsed.success) throw new QuoteFeedError("bad_shape", false);
-  if (parsed.data.error.length > 0) {
-    throw new QuoteFeedError("provider_error", true);
+  const response = parseResponse(responseSchema, json);
+  const errors = response.error.filter((entry) => !entry.startsWith("W"));
+  if (errors.length > 0) {
+    throw new QuoteFeedError(
+      "provider_error",
+      errors.every((entry) => TRANSIENT_ERROR.test(entry)),
+    );
   }
-  const result = parsed.data.result ?? {};
+  const result = response.result ?? {};
   const instant = now.toISOString();
   const today = buenosAiresDate(now);
   return {
