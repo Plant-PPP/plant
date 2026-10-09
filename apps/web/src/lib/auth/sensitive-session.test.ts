@@ -82,7 +82,7 @@ it("drops a request id that is not a UUID", async () => {
     string,
     unknown
   >;
-  expect(line).not.toHaveProperty("plant.request_id");
+  expect(line).not.toHaveProperty(["plant.request_id"]);
 });
 
 it("lets the session check's redirect or error through", async () => {

@@ -108,7 +108,7 @@ describe("onRequestError", () => {
 
   it("drops a request id with text before its UUID", async () => {
     await onRequestError(new Error("x"), request(`x ${REQUEST_ID}`), context);
-    expect(lineOf(error)).not.toHaveProperty("plant.request_id");
+    expect(lineOf(error)).not.toHaveProperty(["plant.request_id"]);
   });
 
   it("drops a request id that is not a UUID", async () => {
@@ -117,7 +117,7 @@ describe("onRequestError", () => {
       request(`${REQUEST_ID}\n{"forged":1}`),
       context,
     );
-    expect(lineOf(error)).not.toHaveProperty("plant.request_id");
+    expect(lineOf(error)).not.toHaveProperty(["plant.request_id"]);
   });
 
   it("skips the proxy, which logs its own errors", async () => {

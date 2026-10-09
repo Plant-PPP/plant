@@ -106,6 +106,10 @@ describe("authUnavailableReason", () => {
   it.each([
     ["another error", new Error("Auth unavailable")],
     ["a thrown string", "AuthUnavailableError"],
+    [
+      "an object named like it",
+      { name: "AuthUnavailableError", reason: "mfa_claim_missing" },
+    ],
     ["null", null],
   ])("is null for %s", (_, error) => {
     expect(authUnavailableReason(error)).toBeNull();

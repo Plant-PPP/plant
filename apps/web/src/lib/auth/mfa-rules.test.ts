@@ -70,7 +70,7 @@ describe("mfaRequirement", () => {
     },
   );
 
-  it.each([["aal3"], ["AAL2"], ["aal2 "], [2]])(
+  it.each([["aal3"], ["AAL2"], ["aal2 "], [" aal2"], [["aal2"]], [2]])(
     "asks an enrolled session whose aal is %p for the code",
     (aal) => {
       expect(mfaRequirement({ aal, [MFA_ENROLLED_CLAIM]: true })).toBe(

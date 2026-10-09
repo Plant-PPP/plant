@@ -328,6 +328,19 @@ describe("a token close to expiry", () => {
     expect(refreshSession).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [119, 1],
+    [121, 0],
+  ])(
+    "with %s seconds to go is refreshed %s time(s)",
+    async (seconds, times) => {
+      getClaims = expiringIn(seconds);
+      refreshSession = jest.fn(async () => ({ data: null, error: null }));
+      await proxy(request("/assets"));
+      expect(refreshSession).toHaveBeenCalledTimes(times);
+    },
+  );
+
   it("shows the retry when Auth cannot refresh it", async () => {
     getClaims = expiringIn(100);
     refreshSession = async () => ({
@@ -435,6 +448,12 @@ describe("the CSP and request id", () => {
     expect(forwarded(res, CSP_HEADER)).not.toContain("attacker");
   });
 
+  it("leave eval blocked outside next dev", async () => {
+    getClaims = signedIn;
+    const res = await proxy(request("/assets"));
+    expect(res.headers.get(CSP_HEADER)).not.toContain("'unsafe-eval'");
+  });
+
   it("let the browser reach Supabase", async () => {
     getClaims = signedIn;
     const res = await proxy(request("/assets"));
@@ -486,7 +505,7 @@ describe("the request line", () => {
     const { method, line } = logged();
     expect(method).toBe("log");
     expect(line).toMatchObject({ "plant.outcome": "redirect_login" });
-    expect(line).not.toHaveProperty("enduser.id");
+    expect(line).not.toHaveProperty(["enduser.id"]);
   });
 
   it("records a broken cookie on a public page as a reason, not an error", async () => {
@@ -499,7 +518,7 @@ describe("the request line", () => {
       "plant.outcome": "anonymous",
       "plant.auth.reason": "invalid_jwt",
     });
-    expect(line).not.toHaveProperty("error.type");
+    expect(line).not.toHaveProperty(["error.type"]);
   });
 
   it("records the code of a cookie auth-js cannot decode", async () => {
@@ -511,7 +530,7 @@ describe("the request line", () => {
       "plant.outcome": "redirect_login",
       "plant.auth.reason": "invalid_jwt",
     });
-    expect(logged().line).not.toHaveProperty("error.type");
+    expect(logged().line).not.toHaveProperty(["error.type"]);
   });
 
   it("warns with Auth's code when Auth is unavailable", async () => {
@@ -528,7 +547,7 @@ describe("the request line", () => {
         "error.type": "over_request_rate_limit",
       },
     });
-    expect(logged().line).not.toHaveProperty("plant.auth.reason");
+    expect(logged().line).not.toHaveProperty(["plant.auth.reason"]);
   });
 
   it("warns with a timeout when Auth does not answer", async () => {
@@ -637,6 +656,28 @@ describe("the MFA check", () => {
       expect(logged().line).toMatchObject({ "plant.outcome": outcome });
     },
   );
+
+  it("keeps the refreshed session on the MFA step", async () => {
+    getClaims = async ({ setAll }) => {
+      setAll(
+        [{ name: "sb-x-auth-token", value: "new", options: {} }],
+        CACHE_HEADERS,
+      );
+      return {
+        data: { claims: { ...CLAIMS, mfa_enrolled: true } },
+        error: null,
+      };
+    };
+    const res = await proxy(
+      request("/auth/mfa", { cookie: "sb-x-auth-token=old" }),
+    );
+    expect(res.headers.get("location")).toBeNull();
+    expect(forwarded(res, "cookie")).toBe("sb-x-auth-token=new");
+    expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=new");
+    for (const [key, value] of Object.entries(CACHE_HEADERS)) {
+      expect(res.headers.get(key)).toBe(value);
+    }
+  });
 
   it("keeps the refreshed session on the way to the MFA step", async () => {
     getClaims = async ({ setAll }) => {
