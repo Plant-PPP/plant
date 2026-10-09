@@ -14,7 +14,8 @@ export type PostgrestFailure = { code: string; mayHaveCommitted: boolean };
 
 // postgrest-js reports some answers as success (a 404 with an empty body
 // becomes a 204), and the error of a failed one can be falsy, so only the
-// status decides.
+// status decides. An update that matched no row (filtered by RLS or a wrong
+// id) passes too; select the row to tell.
 export function classifyPostgrestResult(
   { error, status }: { error: PostgrestError | null; status: number },
   expectedStatus: number,

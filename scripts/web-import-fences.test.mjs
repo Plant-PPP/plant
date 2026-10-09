@@ -169,6 +169,19 @@ const flagged = [
     "const { webpackContext } = import.meta;\nexport const c = webpackContext;",
   ],
   ["src/components/x.tsx", 'import { generateText } from "ai?x";'],
+  ["src/components/x.tsx", 'import { generateText } from "ai#x";'],
+  [
+    "src/components/x.tsx",
+    'import { createAgent } from "@inngest/agent-kit#x";',
+  ],
+  [
+    "src/app/actions.ts",
+    'const url = "webpackContext";\nexport const c = import.meta[url];',
+  ],
+  [
+    "src/app/actions.ts",
+    'export const c = import.meta.webpackContext("../lib/ai", { regExp: /sink/ }).url;',
+  ],
   [
     "src/app/page.tsx",
     'export const c = (require as unknown as { context: Function }).context("../lib", false, /role/);',
@@ -554,6 +567,10 @@ const allowed = [
   ],
   ["src/lib/x.ts", "export const f = (o: { aim: number }) => o.aim;"],
   ["src/lib/x.ts", 'export const u = new URL("./x.json", import.meta.url);'],
+  [
+    "src/lib/x.mjs",
+    "export const p = [import.meta.dirname, import.meta.filename];",
+  ],
   ["src/lib/x.ts", 'import "@/lib/foo/service-role-x";'],
   ["src/lib/x.ts", 'import "./session-claims-unchecked.d";'],
   ["src/lib/ai/ai-cost-sink.ts", 'export const s = "use server";'],
@@ -681,6 +698,7 @@ for (const code of [
   'export const f = ({ step }) => step.ai.infer("x", {});',
   'import { gemini } from "@inngest/ai";',
   'import { createAgent } from "@inngest/agent-kit";',
+  'export const c = import.meta.webpackContext("x", {});',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
   'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
   'export const f = ({ step }) => step["ai" as const].infer("x", {});',

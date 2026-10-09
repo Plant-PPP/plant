@@ -11,7 +11,7 @@ const pgError = (code: unknown): PostgrestError =>
   }) as unknown as PostgrestError;
 
 describe("classifyPostgrestResult", () => {
-  it("passes the expected status", () => {
+  it("passes only the expected status", () => {
     expect(classifyPostgrestResult({ error: null, status: 201 }, 201)).toBe(
       null,
     );
@@ -75,7 +75,7 @@ describe("postgrestInsert", () => {
     ).resolves.toEqual({ code: "23505", mayHaveCommitted: false });
   });
 
-  it("clears the deadline when the query rejects", async () => {
+  it("clears the deadline when the query's promise rejects", async () => {
     await expect(
       postgrestInsert(async () => {
         throw new Error("boom");
@@ -83,7 +83,7 @@ describe("postgrestInsert", () => {
     ).rejects.toThrow("boom");
   });
 
-  it("clears the deadline when the query throws", async () => {
+  it("clears the deadline when the query throws synchronously", async () => {
     await expect(
       postgrestInsert(() => {
         throw new Error("boom");

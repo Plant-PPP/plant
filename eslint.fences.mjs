@@ -132,7 +132,7 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 }));
 
 // The fences read import specifiers, so a computed one, a bundler's
-// require.context or any import.meta member but url, dirname and filename
+// require.context or import.meta other than .url, .dirname and .filename
 // (import.meta.webpackContext), or a require wrapped in a type cast (which the
 // fences' callee match misses), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
@@ -150,8 +150,7 @@ export const LITERAL_IMPORTS_ONLY = [
   message: "Import a module by a string literal so the import fences see it.",
 }));
 
-// Every fenced module. A block names the ones it may import and keeps the
-// rest, so an override cannot drop a fence by leaving it out.
+// Every fenced module.
 export const ALL_FENCED = [
   AI,
   AI_PROVIDERS,
@@ -193,6 +192,8 @@ export function fence(fenced, syntax) {
   };
 }
 
+// A block names the modules it may import and keeps the rest fenced, so an
+// override cannot drop a fence by leaving it out.
 export const fenceExcept = (allowed, syntax) =>
   fence(
     ALL_FENCED.filter((module) => !allowed.includes(module)),
