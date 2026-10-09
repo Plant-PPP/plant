@@ -3,6 +3,7 @@ export * from "./mfa";
 export * from "./pricing";
 export * from "./ai-cost";
 export * from "./prompt-text";
+export * from "./portfolio-setup";
 export * from "./time";
 export { Constants } from "./db/generated/database.types";
 export type { Database } from "./db/generated/database.types";
