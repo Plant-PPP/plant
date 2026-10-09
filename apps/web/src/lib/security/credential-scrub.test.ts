@@ -334,6 +334,19 @@ describe("scrubSensitiveText", () => {
     expect(scrubSensitiveText(token)).toContain(MASK);
   });
 
+  // A run id's first character is always a digit, so a digit run after it is
+  // not "another" digit run that makes the token an id.
+  it.each([
+    ["a DNI", "1X12345678ABCDEFGHJKMNPQRS"],
+    ["a CUIT", "2X20123456789ABCDEFGHJKMNP"],
+    ["a CBU", "0X0170099220000067797370AB"],
+  ])(
+    "masks %s after the first character of a run-id-shaped token",
+    (_label, token) => {
+      expect(scrubSensitiveText(token)).toContain(MASK);
+    },
+  );
+
   // A ULID's first character is 0 to 7 (its 48-bit time), so a token that
   // starts any other way is no run id, even with a second digit run.
   it.each([

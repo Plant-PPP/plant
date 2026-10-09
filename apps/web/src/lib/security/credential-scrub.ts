@@ -49,28 +49,28 @@ const SUPABASE_AUTH_COOKIE =
 const SUPABASE_SECRET_KEY = /sb_secret_[\w-]+/g;
 const INNGEST_SIGNING_KEY = /signkey-(?:prod|test|branch)-[\w-]+/g;
 
-// An id of digits and `letters` (`first`, then `length` more), holding at
-// least one letter, that is not one run of `digitRun` or more digits with only
-// letters around it (a DNI, CUIT or CBU glued to a word). Another digit run
-// lets the whole token pass, a number in it included.
+// An id of `first`, then `length` digits and `letters` holding at least one
+// letter, that is not one run of `digitRun` or more digits with only letters
+// around it (a DNI, CUIT or CBU glued to a word). Another digit run lets the
+// whole token pass, a number in it included.
 const idToken = (
   letters: string,
   digitRun: number,
   first: string,
   length: string,
 ) =>
-  String.raw`(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})(?![${letters}]*\d{${digitRun},}[${letters}]*(?![0-9a-z]))(?=[0-9${letters}]*[${letters}])${first}[0-9${letters}]${length}(?![0-9a-z])`;
+  String.raw`(?:(?<![0-9a-z])|${AFTER_ESCAPE})(?<!${INSIDE_ESCAPE})${first}(?![${letters}]*\d{${digitRun},}[${letters}]*(?![0-9a-z]))(?=[0-9${letters}]*[${letters}])[0-9${letters}]${length}(?![0-9a-z])`;
 
 // Kept whole: ids and times, whose digit groups would otherwise read as a
 // DNI. A UUID; a hex run of 16 or more (a trace id, a hash, a chunk name),
 // whose guard looks for 11 digits, so a DNI glued to hex letters passes; a
-// ULID (an Inngest run id: 26 characters in Crockford's alphabet, the first
-// 0-7 since it opens with a 48-bit time), whose guard looks for 7, so a DNI
-// glued to ULID letters is masked; a time with its fraction (a comma one up
+// ULID (an Inngest run id: 26 characters in Crockford's alphabet, opening
+// with a 48-bit time whose first character is 0 until 2109), whose guard looks
+// for 7 after the first two, so a DNI glued to ULID letters is masked; a time with its fraction (a comma one up
 // to microseconds, so a CSV's next field is not read as one); a basic ISO
 // timestamp. Not followed by `@`: an id used as an email's local part is not
 // an id.
-const KEPT = String.raw`(?:${UUID}|${idToken("a-f", 11, "", "{16,}")}|${idToken("a-hjkmnp-tv-z", 7, "[0-7]", "{25}")}|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
+const KEPT = String.raw`(?:${UUID}|${idToken("a-f", 11, "", "{16,}")}|${idToken("a-hjkmnp-tv-z", 7, "0[0-9a-hjkmnp-tv-z]", "{24}")}|(?<!\d)(?:\d{2}:\d{2}:\d{2}(?:\.\d{1,9}|,\d{1,6})?|\d{8}T\d{6}(?:\.\d{1,9})?)(?!\d|\.\d))(?!@|%(?:25)?40)`;
 
 // Bounded by digits, not `\b`, so a number glued to `_` or a word, as in a
 // file name, is masked; a percent escape's hex digits do not count. A DNI may

@@ -84,6 +84,20 @@ describe("/api/inngest outside development", () => {
     expect(outbound).not.toHaveBeenCalled();
   });
 
+  // The dev loopback origin must not reach a deployment: its syncs register
+  // the URL they were sent to.
+  it("registers a signed out-of-band sync at the request's URL", async () => {
+    const handler = loadHandler({ INNGEST_SIGNING_KEY: KEY });
+    await handler(
+      request("PUT", "", {
+        "x-inngest-signature": sign(""),
+      }),
+    );
+    const sent = outbound.mock.calls.map((args) => JSON.stringify(args));
+    expect(sent.join("\n")).toContain("https://plant.test/api/inngest");
+    expect(sent.join("\n")).not.toContain("127.0.0.1");
+  });
+
   it("answers a signed introspection", async () => {
     const handler = loadHandler({ INNGEST_SIGNING_KEY: KEY });
     const res = await handler(
