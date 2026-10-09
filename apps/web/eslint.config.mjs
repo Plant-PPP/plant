@@ -26,9 +26,9 @@ const noReexport = (modules) =>
       message,
     })),
   );
-// The sink, route handlers and src/lib/ai export values only through a named
-// declaration, so an imported sink, client or model cannot be handed on
-// through an export list or a default export.
+// The service-role client, the sink, route handlers and src/lib/ai export
+// values only through a named declaration, so an imported sink, client or
+// model cannot be handed on through an export list or a default export.
 const NO_EXPORT_LIST = [
   'ExportNamedDeclaration:not([source]):not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
   "ExportDefaultDeclaration",

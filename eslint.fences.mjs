@@ -34,7 +34,8 @@ export const SERVICE_ROLE = {
 };
 export const COST_SINK = {
   regex: `(^|/)ai-cost-sink${EXTENSION}$`,
-  message: "The cost sink writes past RLS; only route handlers may use it.",
+  message:
+    "The cost sink writes past RLS; only route handlers under src/app/api may use it.",
 };
 
 // A path into node_modules reaches a package without naming it.
@@ -50,14 +51,21 @@ const INNGEST_AI = {
   message:
     "Models are called only through src/lib/ai, which records their cost.",
 };
+const CAST =
+  ":matches(TSAsExpression, TSSatisfiesExpression, TSNonNullExpression, TSTypeAssertion)";
 // A property or destructured key named `name`, written bare, quoted or as a
-// template literal, or quoted inside a type cast.
+// template literal, or quoted inside any number of type casts.
 const named = (node, key, name) => [
   `${node}[${key}.name="${name}"]`,
   `${node}[${key}.value="${name}"]`,
   `${node}[${key}.quasis.0.value.cooked="${name}"]`,
-  `${node}[${key}.expression.value="${name}"]`,
-  `${node}[${key}.expression.quasis.0.value.cooked="${name}"]`,
+  ...[
+    `[expression.value="${name}"]`,
+    `[expression.quasis.0.value.cooked="${name}"]`,
+  ].map(
+    (inner) =>
+      `${node}[computed=true] > ${CAST}.${key}:matches(${inner}, :has(${CAST}${inner}))`,
+  ),
 ];
 const STEP_AI = [
   ...named("MemberExpression", "property", "ai"),
@@ -70,9 +78,11 @@ const STEP_AI = [
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
-  ':matches(TSAsExpression, TSSatisfiesExpression, TSNonNullExpression, TSTypeAssertion)[expression.name="require"]',
-  ...named("MemberExpression", "property", "context").map(
-    (node) => `${node}:has(Identifier[name="require"])`,
+  `${CAST}[expression.name="require"]`,
+  ...named(
+    'MemberExpression:has(Identifier[name="require"])',
+    "property",
+    "context",
   ),
 ].map((selector) => ({
   selector,

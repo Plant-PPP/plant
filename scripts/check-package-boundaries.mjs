@@ -25,7 +25,8 @@ const allowed = {
   plant: [],
 };
 // `ai` is fenced with the providers: given a string model id it reaches them
-// through the AI Gateway. Inngest's model packages call providers too.
+// through the AI Gateway. @inngest/agent-kit calls providers, and
+// @inngest/ai's model helpers feed step.ai.
 const sdkFences = [
   {
     matches: (dep) => dep === "inngest" || dep.startsWith("@inngest/"),
@@ -119,6 +120,8 @@ function installedName(dir, spec) {
     // pnpm reads any spec that starts with ".", "/" or "~/" as a path.
     /^((?:\.|\/|~\/).*)$/.exec(spec)?.[1];
   if (path !== undefined) {
+    // pnpm resolves "~/" under $HOME, outside the workspace.
+    if (path.startsWith("~/")) return null;
     // A path, not a URL: pnpm reads a "%61" in a directory name literally.
     const target = resolve(root, dir, path);
     return workspaceDirs.has(target)

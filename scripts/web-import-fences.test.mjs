@@ -1,7 +1,7 @@
 // Cases for the import fences in apps/web/eslint.config.mjs: who may reach a
 // model, the cost sink and the secret key. Each source is linted in memory
 // under the path it would have in apps/web, and the package fences
-// (eslint.packages.mjs) under packages/jobs.
+// (eslint.packages.mjs) under every package that uses them.
 //
 //   pnpm test:scripts
 
@@ -30,6 +30,17 @@ const flagged = [
   ["src/components/x.tsx", 'export * from "ai";'],
   ["src/components/x.tsx", 'export const f = () => import("ai");'],
   ["src/components/x.js", 'import { generateText } from "ai";'],
+  ["src/lib/supabase/x.ts", 'import { generateText } from "ai";'],
+  ["src/components/x.tsx", 'import "@ai-sdk/reactor";'],
+  ["src/app/api/x/helpers.ts", 'import "@/lib/ai/ai-cost-sink";'],
+  [
+    "src/app/page.tsx",
+    'export const c = require["context"]("../lib/ai", false, /sink/);',
+  ],
+  [
+    "src/app/page.tsx",
+    'export const c = require["context" as const]("../lib/ai", false, /sink/);',
+  ],
   [
     "src/app/actions.ts",
     '"use server";\nexport const s = (require as NodeRequire)("@/lib/ai/ai-cost-sink");',
@@ -253,6 +264,7 @@ for (const [filePath, code] of flagged) {
 }
 
 const allowed = [
+  ["src/lib/x.ts", 'import "./service-roles";'],
   ["src/components/x.tsx", 'import { useChat } from "@ai-sdk/react";'],
   [
     "src/lib/ai/x.ts",
@@ -327,6 +339,9 @@ for (const code of [
   'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
   'export const f = ({ step }) => step["ai" as const].infer("x", {});',
   'export const f = ({ step }) => { const { ["ai" as const]: m } = step; return m; };',
+  'export const f = ({ step }) => step["ai" as unknown as "ai"].infer("x", {});',
+  'export const f = ({ step }) => { const { ["ai" as unknown as "ai"]: m } = step; return m; };',
+  'export const f = ({ step }) => step["ai" satisfies string as "ai"].infer;',
 ]) {
   test(`packages/jobs: ${code} is flagged`, async () => {
     assert.notDeepEqual(await fenced("src/x.ts", code, jobs), []);
@@ -352,6 +367,7 @@ for (const [dir, up] of [
     'import "@ai-sdk/google";',
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
+    `import "${up}/apps/web/src/lib/supabase/server";`,
   ]) {
     for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {
       test(`${dir}: ${code} in a .${ext} file is flagged`, async () => {

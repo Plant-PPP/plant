@@ -340,6 +340,15 @@ test("a flow-style packages list fails", () => {
   assert.match(r.output, /Could not read the packages globs/);
 });
 
+// pnpm resolves "~/" under $HOME, wherever the spec names it.
+for (const spec of ["~/../../shared", "file:~/../../shared"]) {
+  test(`x: ${spec} in @plant/core fails`, () => {
+    const r = check({ "@plant/core": [["x", spec]] });
+    assert.equal(r.status, 1);
+    assert.match(r.output, /x \(.*\) is not a version/);
+  });
+}
+
 test("a path to the repo root fails", () => {
   const r = check({ "@plant/core": [["r", "link:../.."]] });
   assert.equal(r.status, 1);
