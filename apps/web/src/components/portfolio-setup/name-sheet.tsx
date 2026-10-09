@@ -7,6 +7,7 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SheetFooter } from "@/components/ui/sheet";
+import { normalizeName } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle, sheetAnswer } from "./answers";
 
@@ -49,7 +50,7 @@ export function NameSheet({
       const answer = sheetAnswer(await settle(onSubmit(name)));
       if (answer.kind === "done") {
         saved.current = true;
-        onSaved(name.trim());
+        onSaved(normalizeName(name));
         onClose();
       } else {
         setError(answer.text);

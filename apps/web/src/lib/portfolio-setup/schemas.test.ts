@@ -1,4 +1,4 @@
-import { idSchema, nameInputSchema } from "./schemas";
+import { idSchema, nameInputSchema, normalizeName } from "./schemas";
 
 const schema = nameInputSchema(40);
 
@@ -88,6 +88,11 @@ describe("nameInputSchema", () => {
   test("refuses a missing name", () => {
     expect(schema.safeParse({}).success).toBe(false);
   });
+});
+
+test("normalizeName gives the name the schema stores", () => {
+  expect(normalizeName(" Mi  cartera ")).toBe("Mi cartera");
+  expect(normalizeName("Jubilacio\u0301n")).toBe("Jubilación");
 });
 
 describe("idSchema", () => {
