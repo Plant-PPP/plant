@@ -94,6 +94,7 @@ describe("kraken parse", () => {
     ["EGeneral:Too many requests", true],
     ["EQuery:Unknown asset pair", false],
     ["EGeneral:Invalid arguments", false],
+    ["Unavailable", false],
   ])("throws provider_error on %s, retryable %s", (error, retryable) => {
     expect(() => parse({ error: [error] }, NOW)).toThrow(
       expect.objectContaining({

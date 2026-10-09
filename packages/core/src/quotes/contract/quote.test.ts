@@ -83,9 +83,18 @@ describe("checkBatch", () => {
     });
   });
 
+  it("stamps the read instant over a fetched_at the row carries", () => {
+    const row = { ...fx(), fetched_at: "2020-01-01T00:00:00.000Z" };
+    const batch = checkBatch({ fxRates: [row], prices: [] }, NOW);
+    expect(batch.fxRates.map((kept) => kept.fetched_at)).toEqual([
+      NOW.toISOString(),
+    ]);
+  });
+
   it.each([
     ["a zero rate", fx({ sell: "0" })],
     ["a negative buy", fx({ buy: "-1" })],
+    ["no buy", { ...fx(), buy: undefined } as unknown as RawFxRate],
     ["a UVA buying rate", fx({ kind: "uva", buy: "1" })],
     ["a date that is not a day", fx({ rate_date: "2026-10-9" })],
     ["an unknown kind", fx({ kind: "tarjeta" as RawFxRate["kind"] })],

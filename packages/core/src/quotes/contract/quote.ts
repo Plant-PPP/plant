@@ -124,7 +124,6 @@ function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
   return [...new Map(rows.map((row) => [key(row), row])).values()];
 }
 
-// Stamps each row with the read instant and keeps the ones the schema accepts.
 function validRows<T>(
   schema: z.ZodType<T>,
   rows: readonly object[],

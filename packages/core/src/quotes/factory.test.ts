@@ -137,9 +137,9 @@ describe("toQuoteFeed", () => {
       {
         fxRates: [
           {
-            kind: "uva" as const,
+            kind: "mep" as const,
             rate_date: "2031-03-14",
-            buy: null,
+            buy: "0.5",
             sell: "1",
             source: SOURCE,
             quoted_at: LATER.toISOString(),

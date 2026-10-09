@@ -71,7 +71,7 @@ describe("argentinadatos parse", () => {
     expect([batch.staleCount, batch.invalidCount]).toEqual([1, 0]);
   });
 
-  it("picks the latest entry of a 200 000-entry series without spreading it", () => {
+  it("picks the latest entry of a 200 000-entry series", () => {
     const series = Array.from({ length: 200_000 }, (_, i) => ({
       fecha: "2000-01-01",
       valor: i + 1,
