@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FormAlert } from "./form-alert";
@@ -21,4 +23,17 @@ it("stays an alert whatever role the caller passes", () => {
   const html = renderToStaticMarkup(<FormAlert {...props}>x</FormAlert>);
   expect(html).toContain('role="alert"');
   expect(html).not.toContain('role="status"');
+});
+
+it("is the only alert written by hand", () => {
+  const src = join(__dirname, "../..");
+  const files = readdirSync(src, { recursive: true, encoding: "utf8" });
+  const hits = files.filter(
+    (file) =>
+      file.endsWith(".tsx") &&
+      !file.endsWith(".test.tsx") &&
+      !file.endsWith("form-alert.tsx") &&
+      readFileSync(join(src, file), "utf8").includes('role="alert"'),
+  );
+  expect(hits).toEqual([]);
 });
