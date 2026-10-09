@@ -130,6 +130,16 @@ describe("onRequestError", () => {
     expect(log).not.toHaveBeenCalled();
   });
 
+  it("skips an error its thrower already logged, from another bundle's class", async () => {
+    const logged = Object.assign(new Error("portfolio_setup.read_failed"), {
+      name: "LoggedError",
+    });
+    await onRequestError(logged, request(REQUEST_ID), context);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
   // A warning carries the request's fields and no exception.
   const warnLine = {
     level: "warn",

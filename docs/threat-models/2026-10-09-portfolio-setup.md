@@ -16,7 +16,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 ## Data flow
 
 1. On sign-up, `private.create_profile_for_new_user` (`SECURITY DEFINER`) creates the profile and the "Principal" portfolio. The migration gave every existing user one.
-2. The user creates, renames, archives and restores portfolios through PostgREST, as `authenticated`.
+2. The `/accounts` page reads the user's portfolios, and its server actions create, rename, archive and restore them through PostgREST with the user's JWT, as `authenticated`. Any client can also call PostgREST directly with its own token.
 3. On every insert and update, the `portfolio_setup_*` triggers take the user's advisory lock, stamp `archived_at` and refuse archiving the last active portfolio.
 
 ## Where it is enforced
@@ -26,6 +26,8 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - CHECK: names of 1 to 40 characters with no outer spaces; a unique index on `(user_id, lower(name))` among active portfolios.
 - Triggers (`SECURITY INVOKER`, `search_path = ''`, not executable by the API roles): the lock serializes one user's writes, the stamp sets `archived_at` to the server's time of the first archive, the guard refuses archiving the last active portfolio with `PT409` and the hint `last_active_portfolio`. They key on the row's `user_id`, never on `auth.uid()`, because the signup function, the seed and the owner write past RLS.
 - `UNIQUE (user_id, id)`: the target of the composite foreign keys PLA-24 and PLA-25 add, so a row can only point at a portfolio of its own user.
+
+- Server actions: each calls `getSessionClaims()`, parses every argument with zod (a uuid id, a trimmed name within the CHECK's limit), filters by the session's `user_id` and the id besides RLS, and logs one line without names or PostgREST's text.
 
 ## STRIDE
 
@@ -45,7 +47,10 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - **Floor** (`schema_rls_and_grants_test.sql`): the signup function's owner must also own `portfolios`, besides the owned-table shape every table passes.
 - **PostgREST** (`security-tests/src/portfolios.pentest.test.ts`): the shared cross-user cases, a PATCH and an archive of another user's portfolios that change nothing, moving one's own row to another user, archiving one's last active portfolio (409, `PT409`, the hint), a duplicate name in another case (409, `23505`), `DELETE` and the server's columns refused.
 
+- **Server actions** (`app/(app)/accounts/actions.test.ts`): the filters by user and id, the zod refusals before any client, the mapping of every refusal, the session's redirect propagating, an update matching no row or two, and a log line with no name or PostgREST text on every outcome.
+
 ## Residual risk
 
 - **A data migration over many users' rows takes one advisory lock per user until commit.** It disables the lock trigger around it or batches per user (`docs/decisions.md`).
+- **A rejected action has no server-side signal** (network, version skew), as everywhere in the app until client telemetry exists.
 - **A failing "Principal" insert fails signup** with Auth's generic error and no Plant log, as the profile insert already does.

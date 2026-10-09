@@ -4,6 +4,7 @@ describe("routeItemForPath", () => {
   it("matches the summary only on the exact root", () => {
     expect(routeItemForPath("/")?.title).toBe("Resumen");
     expect(routeItemForPath("/debts")?.title).toBe("Deudas");
+    expect(routeItemForPath("/accounts")?.title).toBe("Cuentas");
   });
 
   it("matches nested routes by segment", () => {
