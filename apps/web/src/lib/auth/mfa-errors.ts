@@ -14,6 +14,11 @@ const MFA_ERRORS: ReadonlyMap<string, string> = new Map([
   ["too_many_enrolled_mfa_factors", RETRY],
   ["mfa_totp_enroll_not_enabled", NOT_AVAILABLE],
   ["mfa_totp_verify_not_enabled", NOT_AVAILABLE],
+  // Another tab replaced the factor this one shows.
+  [
+    "mfa_factor_not_found",
+    "Esta configuración ya no es válida. Recargá la página y empezá de nuevo.",
+  ],
   ["insufficient_aal", "Tu sesión cambió. Recargá la página y probá de nuevo."],
 ]);
 

@@ -1,4 +1,40 @@
-import { attempt } from "./use-auth-request";
+// The hook's state, as the last value each setter received.
+const mockState: unknown[] = [];
+jest.mock("react", () => ({
+  useEffect: () => {},
+  useState: (initial: unknown) => {
+    const slot = mockState.length;
+    mockState.push(initial);
+    return [initial, (value: unknown) => (mockState[slot] = value)];
+  },
+}));
+
+import { attempt, useAuthRequest } from "./use-auth-request";
+
+beforeEach(() => {
+  mockState.length = 0;
+});
+
+describe("run", () => {
+  const toMessage = (failure: { code?: string }) => `copy:${failure.code}`;
+
+  it("keeps pending after a success and clears the error", async () => {
+    const { run } = useAuthRequest(toMessage, "earlier");
+    await expect(run(async () => null)).resolves.toBe(true);
+    // [error, pending]
+    expect(mockState).toEqual([undefined, true]);
+  });
+
+  it("shows a thrown error's copy and re-enables the buttons", async () => {
+    const { run } = useAuthRequest(toMessage);
+    await expect(
+      run(async () => {
+        throw { code: "mfa_verification_failed" };
+      }),
+    ).resolves.toBe(false);
+    expect(mockState).toEqual(["copy:mfa_verification_failed", false]);
+  });
+});
 
 it("keeps the code of a thrown Auth error", async () => {
   await expect(

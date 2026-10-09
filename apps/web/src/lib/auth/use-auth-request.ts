@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 
 export type AuthFailure = { code?: string };
 
-// One request to Auth at a time, with its error as Spanish copy. The buttons
-// stay disabled after a success: what follows navigates away, and a second
-// click would reuse a spent code.
+// One request to Auth at a time, with its error as Spanish copy. pending stays
+// true after a success, so a second click cannot reuse a spent code; a caller
+// that stays on the page resets it.
 export function useAuthRequest(
   toMessage: (failure: AuthFailure) => string | undefined,
   initialError?: string,
@@ -24,7 +24,6 @@ export function useAuthRequest(
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
-  // True when the action succeeded.
   async function run(
     action: () => Promise<AuthFailure | null>,
   ): Promise<boolean> {

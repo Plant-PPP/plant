@@ -1,19 +1,18 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
 import {
-  cleanupUnverifiedTotp,
-  enrollTotp,
+  startEnrollment,
   verifyTotp,
   type TotpEnrollment,
 } from "@/lib/auth/mfa-browser";
 import { mfaErrorMessage } from "@/lib/auth/mfa-errors";
 import { TOTP_CODE_LENGTH } from "@/lib/auth/otp-config";
 import { qrDataUrl, withQrSvgViewBox } from "@/lib/auth/qr-svg";
-import { useAuthRequest } from "@/lib/auth/use-auth-request";
+import { attempt, useAuthRequest } from "@/lib/auth/use-auth-request";
 import { createClient } from "@/lib/supabase/client";
 import { TotpHelpDialog } from "./totp-help-dialog";
 
@@ -34,25 +33,40 @@ export function TotpEnrollPanel({
   const [helpOpen, setHelpOpen] = useState(false);
   const { run, pending, error, setError } = useAuthRequest(mfaErrorMessage);
 
+  const enroll = useCallback(async () => {
+    const failure = await attempt(async () => {
+      setEnrollment(await startEnrollment(createClient()));
+      return null;
+    });
+    if (failure) setError(mfaErrorMessage(failure));
+  }, [setError]);
+
   // Enroll once per mount. React's dev double effect would otherwise send two
   // enrolls, and the second removes the first's factor in the cleanup.
   const started = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const client = createClient();
-    cleanupUnverifiedTotp(client)
-      .then(() => enrollTotp(client))
-      .then(setEnrollment, (failure: { code?: string }) =>
-        setError(mfaErrorMessage(failure ?? {})),
-      );
-  }, [setError]);
+    void enroll();
+  }, [enroll]);
 
+  function retry() {
+    setError(undefined);
+    void enroll();
+  }
+
+  // Without clipboard access the key stays on screen to select by hand.
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   async function copySecret() {
     if (!enrollment) return;
-    await navigator.clipboard.writeText(enrollment.secret);
+    try {
+      await navigator.clipboard.writeText(enrollment.secret);
+    } catch {
+      return;
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
   }
 
   async function verify() {
@@ -73,7 +87,16 @@ export function TotpEnrollPanel({
         </p>
       )}
       {!enrollment ? (
-        !error && (
+        error ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="justify-self-center"
+            onClick={retry}
+          >
+            Reintentar
+          </Button>
+        ) : (
           <p
             role="status"
             className="text-center text-sm text-muted-foreground"

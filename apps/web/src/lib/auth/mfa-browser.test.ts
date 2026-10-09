@@ -1,6 +1,11 @@
 jest.mock("client-only", () => ({}), { virtual: true });
 
-import { cleanupUnverifiedTotp, enrollTotp, verifyTotp } from "./mfa-browser";
+import {
+  cleanupUnverifiedTotp,
+  enrollTotp,
+  startEnrollment,
+  verifyTotp,
+} from "./mfa-browser";
 import type { AuthClient } from "./mfa-factors";
 
 const factor = (id: string, status: string, factor_type = "totp") => ({
@@ -99,6 +104,50 @@ describe("enrollTotp", () => {
       factorType: "totp",
       issuer: "Plant",
     });
+  });
+});
+
+describe("startEnrollment", () => {
+  it("cleans up before it enrolls", async () => {
+    const calls: string[] = [];
+    const enrollment = await startEnrollment(
+      fakeClient({
+        listFactors: async () => {
+          calls.push("list");
+          return {
+            data: { all: [factor("stale", "unverified")] },
+            error: null,
+          };
+        },
+        unenroll: async () => {
+          calls.push("unenroll");
+          return { data: {}, error: null };
+        },
+        enroll: async () => {
+          calls.push("enroll");
+          return {
+            data: { id: "f", totp: { qr_code: "<svg></svg>", secret: "S" } },
+            error: null,
+          };
+        },
+      }),
+    );
+    expect(calls).toEqual(["list", "unenroll", "enroll"]);
+    expect(enrollment.factorId).toBe("f");
+  });
+
+  it("does not enroll when the cleanup fails", async () => {
+    const error = { code: "unexpected_failure" };
+    const enroll = jest.fn();
+    await expect(
+      startEnrollment(
+        fakeClient({
+          listFactors: async () => ({ data: null, error }),
+          enroll,
+        }),
+      ),
+    ).rejects.toBe(error);
+    expect(enroll).not.toHaveBeenCalled();
   });
 });
 

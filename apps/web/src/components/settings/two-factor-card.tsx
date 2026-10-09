@@ -12,30 +12,24 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { listVerifiedFactors } from "@/lib/auth/mfa-factors";
 import { createClient } from "@/lib/supabase/client";
+import {
+  fetchTwoFactorStatus,
+  twoFactorSwitch,
+  type TwoFactorStatus,
+} from "./two-factor-status";
 
-type Status = "loading" | "failed" | "on" | "off";
-
-const DESCRIPTIONS: Record<Status, string> = {
+const DESCRIPTIONS: Record<TwoFactorStatus, string> = {
   loading: "Cargando…",
   failed: "No pudimos cargar el estado.",
   on: "Tu cuenta está protegida con una app de autenticación.",
-  off: "Pedimos un código de tu app de autenticación al ingresar.",
+  off: "Al activarla, te pedimos un código de tu app al ingresar.",
 };
 
-// A failed load never reads as "off": an enrolled user would enroll again.
-async function fetchStatus(): Promise<Status> {
-  try {
-    const { verified } = await listVerifiedFactors(createClient());
-    return verified.length > 0 ? "on" : "off";
-  } catch {
-    return "failed";
-  }
-}
+const fetchStatus = () => fetchTwoFactorStatus(createClient());
 
 export function TwoFactorCard() {
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<TwoFactorStatus>("loading");
   const [enrolling, setEnrolling] = useState(false);
   const [notice, setNotice] = useState<string>();
 
@@ -72,8 +66,7 @@ export function TwoFactorCard() {
           </div>
           <Switch
             id="two-factor"
-            checked={status === "on" || enrolling}
-            disabled={status !== "off" || enrolling}
+            {...twoFactorSwitch(status, enrolling)}
             onCheckedChange={(checked) => {
               if (!checked) return;
               setNotice(undefined);

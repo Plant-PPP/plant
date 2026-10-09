@@ -47,6 +47,15 @@ export async function enrollTotp(client: AuthClient): Promise<TotpEnrollment> {
   return { factorId: data.id, qrCode, secret: data.totp.secret };
 }
 
+// What the switch in Ajustes runs: a failed cleanup does not enroll, so an
+// abandoned factor never stacks up beside a new one.
+export async function startEnrollment(
+  client: AuthClient,
+): Promise<TotpEnrollment> {
+  await cleanupUnverifiedTotp(client);
+  return enrollTotp(client);
+}
+
 // On success the session is aal2.
 export async function verifyTotp(
   client: AuthClient,

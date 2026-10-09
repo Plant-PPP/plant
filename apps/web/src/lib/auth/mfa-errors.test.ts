@@ -28,3 +28,9 @@ it.each([{}, { code: "constructor" }, { code: "something_new" }])(
     expect(mfaErrorMessage(failure)).toBe("Algo salió mal. Probá de nuevo.");
   },
 );
+
+it("asks to start over when the factor is gone", () => {
+  expect(mfaErrorMessage({ code: "mfa_factor_not_found" })).toBe(
+    "Esta configuración ya no es válida. Recargá la página y empezá de nuevo.",
+  );
+});
