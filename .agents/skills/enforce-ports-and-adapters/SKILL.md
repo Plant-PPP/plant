@@ -186,7 +186,8 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   `SourceError` carrying `retryable`, a capability matrix, a factory, and the `file_upload` adapter.
   Every new port copies this skeleton.
 - **`core` is pure domain** — the quote feeds behind `QuoteFeedPort`; the valuation and
-  portfolio functions the UI and the assistant will use arrive with the "Patrimonio manual" stage. It knows nothing about where holdings came from (no `sources` edge) and nothing about
+  portfolio functions the UI and the assistant will use arrive with the "Patrimonio manual"
+  stage. It knows nothing about where holdings came from (no `sources` edge) and nothing about
   how work is scheduled (no `jobs` edge).
 - **`jobs` owns the `JobRunner` port** (`startImport`, `cancelImport`) and its Inngest adapter: thin
   Inngest orchestrators that call steps. **Steps are pure functions in `sources`/`core` with no
@@ -226,9 +227,9 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   error class or message parsed by a consumer is a leak.
 - **`QuoteFeedPort` (`packages/core/src/quotes`).** Same skeleton: `contract/port.ts` and
   `contract/quote.ts` (schemas, the window, `QuoteFeedError` with `retryable`), one folder per
-  provider under `adapters/`, and `factory.ts`, the only place outside the adapters that names a provider. An adapter maps
-  its response; the factory checks every row the same way. HTTP is the injected `GetJson`, which
-  the composition root builds (PLA-93), so `core` stays infra-free.
+  provider under `adapters/`, and `factory.ts`, the only place outside the adapters that names a
+  provider. An adapter maps its response; the factory checks every row the same way. HTTP is the
+  injected `GetJson`, which the composition root builds (PLA-93), so `core` stays infra-free.
 - **`JobRunner` (`packages/jobs`).** Callers say `startImport` / `cancelImport` and read the `imports`
   row; they never import `inngest`, send an Inngest event by name, or know a step id. Steps take plain
   inputs and return plain outputs; anything engine-shaped (`step.run`, retries, event payloads) stays

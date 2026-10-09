@@ -303,7 +303,7 @@ describe("QuoteFeedError", () => {
 });
 
 describe("SYMBOL_PATTERN", () => {
-  it("is the pattern the prices.symbol CHECK uses", () => {
+  it("is the pattern the quotes migration gives the prices.symbol CHECK", () => {
     const migration = readFileSync(
       join(
         __dirname,
