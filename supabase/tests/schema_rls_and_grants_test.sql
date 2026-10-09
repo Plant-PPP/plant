@@ -11,7 +11,8 @@
 --   its own PR.
 -- - The reference tables, public tables with no user_id, are exactly fx_rates
 --   and prices: market data every user reads. Their permissive policies only
---   let authenticated read every row, and authenticated cannot write them.
+--   let authenticated read every row, authenticated cannot write them, and
+--   service_role cannot update or delete them.
 -- - Every public table has exactly one RESTRICTIVE policy, the MFA gate: a new
 --   table copies it from enforce-owner-isolation's house form. The first
 --   Storage bucket or private Realtime channel adds the same predicate and its
@@ -476,18 +477,21 @@ INSERT INTO canaried VALUES
            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))') $$),
 ('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
  $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
-('a reference table only lets authenticated read every row',
+('a reference table only lets authenticated read every row, and no API role write it but service_role''s inserts',
  ARRAY['pgtap_canary_ref_all.pgtap_canary', 'pgtap_canary_ref_role.pgtap_canary',
-       'pgtap_canary_ref_insert'],
+       'pgtap_canary_ref_qual.pgtap_canary', 'pgtap_canary_ref_insert', 'pgtap_canary_ref_update',
+       'pgtap_canary_ref_delete', 'pgtap_canary_ref_service'],
  $$ SELECT p.tablename || '.' || p.policyname FROM pg_policies p
     JOIN reference_tables r ON r.relname = p.tablename
     WHERE p.schemaname = 'public' AND p.permissive = 'PERMISSIVE'
       AND (p.cmd <> 'SELECT' OR p.roles <> '{authenticated}'::name[]
-           OR p.qual IS DISTINCT FROM 'true' OR p.with_check IS NOT NULL)
+           OR p.qual IS DISTINCT FROM 'true')
     UNION ALL
     SELECT relname FROM reference_tables
     WHERE has_any_column_privilege('authenticated', oid, 'INSERT, UPDATE')
-       OR has_table_privilege('authenticated', oid, 'DELETE') $$),
+       OR has_table_privilege('authenticated', oid, 'DELETE')
+       OR has_any_column_privilege('service_role', oid, 'UPDATE')
+       OR has_table_privilege('service_role', oid, 'DELETE') $$),
 ('no partition in public is granted to authenticated', ARRAY['pgtap_canary_partition'],
  $$ SELECT c.relname FROM pg_class c
     WHERE c.relnamespace = 'public'::regnamespace AND c.relispartition
@@ -601,9 +605,18 @@ CREATE TABLE public.pgtap_canary_ref_all (x int);
 CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_all FOR ALL TO authenticated USING (true);
 CREATE TABLE public.pgtap_canary_ref_role (x int);
 CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_role FOR SELECT TO anon, authenticated
+  USING (true);
+CREATE TABLE public.pgtap_canary_ref_qual (x int);
+CREATE POLICY pgtap_canary ON public.pgtap_canary_ref_qual FOR SELECT TO authenticated
   USING (x = 1);
 CREATE TABLE public.pgtap_canary_ref_insert (x int);
 GRANT INSERT (x) ON public.pgtap_canary_ref_insert TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_update (x int);
+GRANT UPDATE (x) ON public.pgtap_canary_ref_update TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_delete (x int);
+GRANT DELETE ON public.pgtap_canary_ref_delete TO authenticated;
+CREATE TABLE public.pgtap_canary_ref_service (x int);
+GRANT UPDATE (x) ON public.pgtap_canary_ref_service TO service_role;
 -- Each gate canary copies the gate on profiles and changes one thing.
 DO $$
 DECLARE

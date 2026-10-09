@@ -1,4 +1,10 @@
-import { expectError, readEnv, rest, users } from "./pentest-helpers";
+import {
+  expectError,
+  expectRelationDenied,
+  readEnv,
+  rest,
+  users,
+} from "./pentest-helpers";
 import { type QuoteCases, runEnv } from "./pentest-users";
 import { type ReferenceTable, referenceRows } from "./reference-rows";
 
@@ -20,12 +26,8 @@ export function describeReferenceTable(table: ReferenceTable): void {
     return res.body;
   }
 
-  function expectDenied(res: Awaited<ReturnType<typeof rest>>): void {
-    expectError(res, 403);
-    expect((res.body as { message?: unknown }).message).toBe(
-      `permission denied for table ${table}`,
-    );
-  }
+  const expectDenied = (res: Awaited<ReturnType<typeof rest>>) =>
+    expectRelationDenied(res, table);
 
   beforeAll(async () => {
     before = await read();
@@ -87,11 +89,19 @@ export function describeReferenceTable(table: ReferenceTable): void {
     });
 
     test("cannot overwrite a row", () => {
-      expect(writes.merge).toMatchObject({ status: 403, code: "42501" });
+      expect(writes.merge).toMatchObject({
+        status: 403,
+        code: "42501",
+        body: { message: `permission denied for table ${table}` },
+      });
     });
 
     test("cannot delete a row", () => {
-      expect(writes.delete).toMatchObject({ status: 403, code: "42501" });
+      expect(writes.delete).toMatchObject({
+        status: 403,
+        code: "42501",
+        body: { message: `permission denied for table ${table}` },
+      });
     });
   });
 }

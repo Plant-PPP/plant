@@ -8,9 +8,10 @@ CREATE TYPE public.fx_rate_kind AS ENUM ('official', 'mep', 'ccl', 'blue', 'uva'
 CREATE TYPE public.quote_source AS ENUM ('dolarapi', 'argentinadatos', 'kraken');
 CREATE TYPE public.currency AS ENUM ('ARS', 'USD');
 
--- One row per kind and Buenos Aires day, written once. buy is the house's
--- buying price; UVA has a single value, kept in sell. quoted_at is the instant
--- the source stamps (the fetch instant when it stamps none).
+-- One row per kind and Buenos Aires day, written once, in pesos per dollar
+-- (per UVA for uva). buy is the house's buying price; UVA has a single value,
+-- kept in sell. quoted_at is the instant the source stamps (the fetch instant
+-- when it stamps none).
 CREATE TABLE public.fx_rates (
   kind public.fx_rate_kind NOT NULL,
   rate_date date NOT NULL,

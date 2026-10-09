@@ -8,8 +8,10 @@ export type ReferenceTable = {
   [T in keyof Tables]: "user_id" extends keyof Tables[T]["Row"] ? never : T;
 }[keyof Tables];
 
+type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
+
 type ReferenceRow<T extends ReferenceTable> = {
-  key: (keyof Tables[T]["Row"] & string)[];
+  key: [Column<T>, ...Column<T>[]];
   filter: string;
   row: Tables[T]["Insert"];
 };
