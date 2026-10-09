@@ -61,9 +61,10 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
         expect(res.body).toEqual([]);
       });
 
-      // A claims B's row id under its own user_id: the INSERT check passes, so
-      // only the grants and the SELECT and UPDATE policies on B's row stop the
-      // takeover.
+      // A claims B's row id under its own user_id. Where the insert policy lets
+      // A write its own rows, only the grants and the SELECT and UPDATE
+      // policies on B's row stop the takeover; today the grants answer first.
+      // supabase/tests/profiles_consents_isolation_test.sql checks the policies.
       test("upsert over B's row by id is denied", async () => {
         const id = await idOfB();
         const body = { ...rowForB, id, user_id: a.id };
