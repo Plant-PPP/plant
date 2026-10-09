@@ -30,7 +30,7 @@ INSERT INTO truth (aal, mfa_enrolled, expected) VALUES
   (NULL, NULL, 'verify');
 -- truth-table:end
 
-SELECT plan((SELECT count(*) + count(mfa_enrolled) FROM truth)::int + 4);
+SELECT plan((SELECT count(*) + count(mfa_enrolled) FROM truth)::int + 5);
 
 SELECT bag_eq(
   $$SELECT aal, mfa_enrolled FROM truth$$,
@@ -159,7 +159,7 @@ BEGIN
     RESET ROLE;
     INSERT INTO gated VALUES (t.aal, t.mfa_enrolled, t.expected, jsonb_build_object(
       'reads its profile', reads_profile,
-      'updates its profile', (SELECT display_name = 'row ' || n FROM public.profiles
+      'updates its profile', (SELECT display_name IS NOT DISTINCT FROM 'row ' || n FROM public.profiles
                               WHERE user_id = 'e0000000-0000-4000-8000-00000000000e'),
       'adds a consent', consent,
       'reads its AI costs', reads_costs));
@@ -182,6 +182,31 @@ SELECT is(
 )
 FROM gated
 ORDER BY aal NULLS LAST, mfa_enrolled NULLS LAST;
+
+-- The policy compares the claim as JSON, so a claim that is not a JSON
+-- boolean counts as missing, as mfaRequirement treats it.
+CREATE TEMP TABLE odd_claims (claim jsonb, reads boolean) ON COMMIT DROP;
+DO $$
+DECLARE
+  claim jsonb;
+  reads boolean;
+BEGIN
+  FOREACH claim IN ARRAY ARRAY['"true"', '"false"', '1', '0', 'null']::jsonb[] LOOP
+    PERFORM set_config('request.jwt.claims', jsonb_build_object(
+      'sub', 'e0000000-0000-4000-8000-00000000000e', 'role', 'authenticated',
+      'aal', 'aal1', 'mfa_enrolled', claim)::text, true);
+    SET LOCAL ROLE authenticated;
+    reads := EXISTS (SELECT 1 FROM public.profiles);
+    RESET ROLE;
+    INSERT INTO odd_claims VALUES (claim, reads);
+  END LOOP;
+END
+$$;
+
+SELECT is_empty(
+  $$SELECT claim::text FROM odd_claims WHERE reads$$,
+  'an aal1 session whose claim is not a JSON boolean reads nothing'
+);
 
 SELECT * FROM finish();
 ROLLBACK;
