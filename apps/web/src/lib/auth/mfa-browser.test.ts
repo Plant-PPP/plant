@@ -26,7 +26,7 @@ describe("cleanupUnverifiedTotp", () => {
         listFactors: async () => ({
           data: {
             all: [
-              factor("verified", "verified"),
+              factor("verified-phone", "verified", "phone"),
               factor("stale", "unverified"),
               factor("phone", "unverified", "phone"),
             ],
@@ -37,6 +37,24 @@ describe("cleanupUnverifiedTotp", () => {
       }),
     );
     expect(unenroll.mock.calls).toEqual([[{ factorId: "stale" }]]);
+  });
+
+  it("refuses when a verified TOTP factor exists", async () => {
+    const unenroll = jest.fn();
+    await expect(
+      cleanupUnverifiedTotp(
+        fakeClient({
+          listFactors: async () => ({
+            data: {
+              all: [factor("on", "verified"), factor("stale", "unverified")],
+            },
+            error: null,
+          }),
+          unenroll,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "totp_already_on" });
+    expect(unenroll).not.toHaveBeenCalled();
   });
 
   it("throws when any unenroll fails", async () => {

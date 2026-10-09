@@ -49,6 +49,10 @@ it.each([
   ],
   ["insufficient_aal", "Tu sesión cambió. Recargá la página y probá de nuevo."],
   [
+    "totp_already_on",
+    "Ya activaste la verificación en dos pasos. Recargá la página.",
+  ],
+  [
     "mfa_factor_not_found",
     "Tu app de autenticación cambió. Recargá la página y probá de nuevo.",
   ],
