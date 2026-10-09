@@ -140,7 +140,7 @@ SELECT throws_ok(
                                   cache_read_tokens, cache_write_tokens, output_tokens)
      VALUES ('a0000000-0000-4000-8000-00000000000a', 'import_extraction',
              'gemini-3.5-flash-lite', 'NaN', 0, 0, 0, 0) $$,
-  '23514', NULL,
+  '23514', 'new row for relation "ai_costs" violates check constraint "ai_costs_not_nan"',
   'a cost is a number, not NaN'
 );
 

@@ -38,8 +38,9 @@ async function readCapped(response: Response): Promise<string> {
 }
 
 // The quote feeds' HTTP reader. Every error it throws is a QuoteFeedError, and
-// none carries the body or the parser's message. Inngest retries the step. A
-// redirect is answered by its status (`http_4xx`, not retried).
+// none carries the body or the parser's message. Inngest retries the step when
+// the code is retryable. A redirect is answered by its status (`http_4xx`, not
+// retried).
 export const getJson: GetJson = async (url) => {
   let text: string;
   try {

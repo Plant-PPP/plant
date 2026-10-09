@@ -24,7 +24,7 @@ export type QuoteJobDeps = {
 // while the machine slept, a source down past its retries, or a dollar house
 // a day behind. Extra runs insert nothing.
 export const REFRESH_QUOTES_CRON = `TZ=${BUENOS_AIRES_TZ} 5 ${QUOTE_CLOSE_HOUR}-23 * * *`;
-export const REFRESH_QUOTES_EVENT = "plant/quotes.refresh";
+const REFRESH_QUOTES_EVENT = "plant/quotes.refresh";
 
 // What a step returns: counts, keys and time only. Quote rows never cross a
 // step boundary, because memoized step output is what the caller sends back

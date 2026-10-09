@@ -6,8 +6,8 @@ import { serverLog } from "@/lib/log/server-log";
 import { getJson } from "@/lib/quotes/get-json";
 import { quoteSink } from "@/lib/quotes/quote-sink";
 
-// The quotes job runs only under `next dev` for now: plant-staging is also
-// production's database.
+// The quotes job runs only under `next dev` until PLA-73 registers it on a
+// deployment: plant-staging is also production's database.
 export const { GET, POST, PUT } = serve(
   createServeOptions({
     quotes: () => ({

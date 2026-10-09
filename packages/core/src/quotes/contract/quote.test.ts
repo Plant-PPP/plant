@@ -643,6 +643,42 @@ describe("the quotes migrations", () => {
     expect(tableSql("prices")).toContain("CHECK (price <> 'NaN')");
   });
 
+  // A value past the column's integer digits fails the whole insert (22003),
+  // and one past its scale is rounded, to 0 below the last digit.
+  it.each([
+    ["fx_rates", ["buy", "sell"]],
+    ["prices", ["price"]],
+  ])("store %s amounts in the digits the check keeps", (table, columns) => {
+    const amounts = [
+      ...tableSql(table).matchAll(/\n\s*(\w+) numeric\((\d+), (\d+)\)/g),
+    ];
+    expect(amounts.map(([, column]) => column)).toEqual(columns);
+    for (const [, column, precision, scale] of amounts) {
+      const whole = Number(precision) - Number(scale);
+      const decimals = Number(scale);
+      const amount = (value: string) =>
+        column === "price"
+          ? checkBatch(
+              { fxRates: [], prices: [price({ price: value })] },
+              NOW,
+              "kraken",
+            )
+          : checkBatch(
+              { fxRates: [fx({ buy: value, sell: value })], prices: [] },
+              NOW,
+              "dolarapi",
+            );
+      const kept = (value: string) => {
+        const batch = amount(value);
+        return batch.fxRates.length + batch.prices.length === 1;
+      };
+      expect(kept(`${"9".repeat(whole)}.${"9".repeat(decimals)}`)).toBe(true);
+      expect(kept(`0.${"0".repeat(decimals - 1)}1`)).toBe(true);
+      expect(kept(`1${"0".repeat(whole)}`)).toBe(false);
+      expect(kept(`1.${"0".repeat(decimals)}1`)).toBe(false);
+    }
+  });
+
   it("refuse a buying rate for exactly the daily indexes", () => {
     const kinds = [
       ...tableSql("fx_rates").matchAll(

@@ -50,6 +50,14 @@ const flagged = [
   ],
   ["src/components/x.ts", 'export const s = (<NodeRequire>require)("ai");'],
   [
+    "src/app/page.tsx",
+    'import { createRequire } from "node:module";\nexport const s = createRequire(import.meta.url)("@/lib/supabase/service-role");',
+  ],
+  [
+    "src/components/x.ts",
+    'import { createRequire } from "node:module";\nexport const s = createRequire(import.meta.url)("ai");',
+  ],
+  [
     "src/components/x.ts",
     'export const s = (require satisfies NodeRequire)("ai");',
   ],
@@ -489,6 +497,16 @@ flagged.push(
         `"use server";\nexport const s = (require as NodeRequire)("${spec}");`,
       ],
       ["src/app/actions.ts", `export const s = require!("${spec}");`],
+      // The bundler resolves a createRequire(import.meta.url) call like a
+      // require, so it reaches the sink by a literal the fences do not read.
+      [
+        "src/app/actions.ts",
+        `import { createRequire } from "node:module";\nexport const s = createRequire(import.meta.url)("${spec}");`,
+      ],
+      [
+        "src/app/actions.ts",
+        `import { createRequire as r } from "module";\nexport const s = r(import.meta.url)("${spec}");`,
+      ],
       [
         "src/app/api/x/route.cjs",
         `module.exports = require("../../../${spec.slice(2)}");`,
@@ -753,6 +771,7 @@ for (const code of [
   'export const c = import.meta.webpackContext("x", {});',
   'export const c = require.context("../../../apps/web/src/lib/supabase", false, /role/);',
   'export const s = (require as NodeRequire)("../../../apps/web/src/lib/ai/ai-cost-sink");',
+  'import { createRequire } from "node:module";\nexport const s = createRequire(import.meta.url)("../../../apps/web/src/lib/quotes/quote-sink");',
   'export const f = ({ step }) => step["ai" as const].infer("x", {});',
   'export const f = ({ step }) => { const { ["ai" as const]: m } = step; return m; };',
   'export const f = ({ step }) => step["ai" as unknown as "ai"].infer("x", {});',

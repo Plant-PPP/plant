@@ -32,3 +32,18 @@ test("the jobs package registers the app at the origin the dev server calls", ()
     ) ?? [];
   assert.equal(origin, "http://127.0.0.1:3000");
 });
+
+// Without a port of its own, next dev moves to 3001 when 3000 is taken, while
+// the app still registers at 3000 and the dev server still calls 3000: the
+// quotes job would run against whatever else listens there.
+test("next dev fails rather than leave the port it registers", () => {
+  const { scripts } = JSON.parse(read("apps/web/package.json"));
+  assert.match(scripts.dev, /\s(-p|--port) 3000(\s|$)/);
+});
+
+test("dev-up.sh starts the web app through its pinned dev script", () => {
+  const web = read("scripts/setup/dev-up.sh")
+    .split("\n")
+    .filter((line) => /next dev|@plant\/web/.test(line));
+  assert.deepEqual(web, ['  "pnpm --filter @plant/web dev" \\']);
+});

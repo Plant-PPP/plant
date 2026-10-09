@@ -153,8 +153,9 @@ export const MFA_PRIVATE_CALLS = PRIVATE_MFA.flatMap((name) => [
 
 // The fences read import specifiers, so a computed one, a bundler's
 // require.context or import.meta other than .url, .dirname and .filename
-// (import.meta.webpackContext), or a require wrapped in a type cast (which the
-// fences' callee match misses), cannot pass them.
+// (import.meta.webpackContext), a require wrapped in a type cast (which the
+// fences' callee match misses), or one built by createRequire (which the
+// bundler still bundles), cannot pass them.
 export const LITERAL_IMPORTS_ONLY = [
   'ImportExpression[source.type!="Literal"]',
   'CallExpression[callee.name="require"][arguments.0.type!="Literal"]',
@@ -164,6 +165,8 @@ export const LITERAL_IMPORTS_ONLY = [
     "property",
     "context",
   ),
+  'ImportSpecifier[imported.name="createRequire"]',
+  'MemberExpression[property.name="createRequire"]',
   'MetaProperty[meta.name="import"]:not(MemberExpression[computed=false][property.name=/^(url|dirname|filename)$/] > .object)',
 ].map((selector) => ({
   selector,
