@@ -38,11 +38,11 @@ const ANSWERS: Record<
   },
   session_refresh_failed: {
     close: true,
-    copy: "Desactivamos la verificación. Recargá la página.",
+    copy: "Desactivaste la verificación en dos pasos.",
   },
   partial: {
     close: true,
-    copy: "Desactivamos parte de la verificación. Recargá la página y probá de nuevo.",
+    copy: "Desactivamos parte de la verificación. Probá de nuevo.",
   },
   totp_stale: { close: false, copy: "El código venció. Probá de nuevo." },
   factor_not_found: {
