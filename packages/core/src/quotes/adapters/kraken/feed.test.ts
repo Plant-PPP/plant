@@ -76,6 +76,11 @@ describe("kraken parse", () => {
     expect(Object.prototype).not.toHaveProperty("c");
   });
 
+  it("leaves every price empty when the answer has no result", () => {
+    const rows = parse({ error: [] }, NOW);
+    expect(rows.prices.map((row) => row.price)).toEqual(["", "", "", "", ""]);
+  });
+
   it("keeps the prices when Kraken sends only a warning", () => {
     const rows = parse({ ...BODY, error: ["WGeneral:Deprecated"] }, NOW);
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual(PRICES);

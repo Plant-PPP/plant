@@ -88,4 +88,13 @@ describe("startOfBuenosAiresDay", () => {
   ])("rejects %j", (date) => {
     expect(() => startOfBuenosAiresDay(date)).toThrow(RangeError);
   });
+
+  it.each(["2026-10-09T00:00", " 2026-10-09"])(
+    "rejects %j as not a YYYY-MM-DD date",
+    (date) => {
+      expect(() => startOfBuenosAiresDay(date)).toThrow(
+        "Expected a YYYY-MM-DD date",
+      );
+    },
+  );
 });

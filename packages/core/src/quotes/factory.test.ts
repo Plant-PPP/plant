@@ -111,6 +111,48 @@ describe("toQuoteFeed", () => {
     expect(batch.fxRates.map((row) => row.rate_date)).toEqual(["2026-10-09"]);
     expect([batch.staleCount, batch.invalidCount]).toEqual([1, 1]);
   });
+
+  // Far from the wall clock, so only the read instant can put the rows in the
+  // window.
+  const LATER = new Date("2031-03-14T21:30:00.000Z");
+  it.each([
+    [
+      "a price",
+      {
+        fxRates: [],
+        prices: [
+          {
+            symbol: "BTC",
+            price_date: "2031-03-14",
+            price: "1",
+            currency: "USD" as const,
+            source: SOURCE,
+            quoted_at: LATER.toISOString(),
+          },
+        ],
+      },
+    ],
+    [
+      "a dollar rate",
+      {
+        fxRates: [
+          {
+            kind: "uva" as const,
+            rate_date: "2031-03-14",
+            buy: null,
+            sell: "1",
+            source: SOURCE,
+            quoted_at: LATER.toISOString(),
+          },
+        ],
+        prices: [],
+      },
+    ],
+  ])("returns a read that kept only %s", async (_label, rows) => {
+    const batch = await toQuoteFeed(raw(async () => rows)).read(LATER);
+    expect(batch.fxRates.length + batch.prices.length).toBe(1);
+    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 0]);
+  });
 });
 
 describe("quoteFeeds", () => {

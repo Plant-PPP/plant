@@ -124,21 +124,22 @@ function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
   return [...new Map(rows.map((row) => [key(row), row])).values()];
 }
 
+// Stamps each row with the read instant and keeps the ones the schema accepts.
+function validRows<T>(
+  schema: z.ZodType<T>,
+  rows: readonly object[],
+  fetched_at: string,
+): T[] {
+  return rows.flatMap((row) => {
+    const parsed = schema.safeParse({ ...row, fetched_at });
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
   const fetched_at = now.toISOString();
-  let invalidCount = 0;
-  const fxRates: FxRate[] = [];
-  for (const row of raw.fxRates) {
-    const parsed = fxRateSchema.safeParse({ ...row, fetched_at });
-    if (parsed.success) fxRates.push(parsed.data);
-    else invalidCount += 1;
-  }
-  const prices: Price[] = [];
-  for (const row of raw.prices) {
-    const parsed = priceSchema.safeParse({ ...row, fetched_at });
-    if (parsed.success) prices.push(parsed.data);
-    else invalidCount += 1;
-  }
+  const fxRates = validRows(fxRateSchema, raw.fxRates, fetched_at);
+  const prices = validRows(priceSchema, raw.prices, fetched_at);
   const fresh = {
     fxRates: fxRates.filter((row) =>
       inQuoteWindow(row.kind, row.rate_date, now),
@@ -152,12 +153,13 @@ export function checkBatch(raw: RawQuoteRows, now: Date): QuoteBatch {
       (row) => `${row.symbol} ${row.price_date}`,
     ),
   };
-  const read = fxRates.length + prices.length;
+  const raws = raw.fxRates.length + raw.prices.length;
+  const valid = fxRates.length + prices.length;
   const inWindow = fresh.fxRates.length + fresh.prices.length;
   return {
     ...kept,
-    staleCount: read - inWindow,
+    staleCount: valid - inWindow,
     invalidCount:
-      invalidCount + inWindow - kept.fxRates.length - kept.prices.length,
+      raws - valid + inWindow - kept.fxRates.length - kept.prices.length,
   };
 }

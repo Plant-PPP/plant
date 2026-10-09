@@ -226,7 +226,7 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
   error class or message parsed by a consumer is a leak.
 - **`QuoteFeedPort` (`packages/core/src/quotes`).** Same skeleton: `contract/port.ts` and
   `contract/quote.ts` (schemas, the window, `QuoteFeedError` with `retryable`), one folder per
-  provider under `adapters/`, and `factory.ts`, the only place that names a provider. An adapter maps
+  provider under `adapters/`, and `factory.ts`, the only place outside the adapters that names a provider. An adapter maps
   its response; the factory checks every row the same way. HTTP is the injected `GetJson`, built at
   the composition root, so `core` stays infra-free.
 - **`JobRunner` (`packages/jobs`).** Callers say `startImport` / `cancelImport` and read the `imports`

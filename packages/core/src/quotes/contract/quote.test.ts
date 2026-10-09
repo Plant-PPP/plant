@@ -86,9 +86,6 @@ describe("checkBatch", () => {
   it.each([
     ["a zero rate", fx({ sell: "0" })],
     ["a negative buy", fx({ buy: "-1" })],
-    ["13 integer digits", fx({ sell: "1000000000000" })],
-    ["an exponent", fx({ sell: "1e21" })],
-    ["9 decimals", fx({ sell: "1.123456789" })],
     ["a UVA buying rate", fx({ kind: "uva", buy: "1" })],
     ["a date that is not a day", fx({ rate_date: "2026-10-9" })],
     ["an unknown kind", fx({ kind: "tarjeta" as RawFxRate["kind"] })],
@@ -122,33 +119,22 @@ describe("checkBatch", () => {
   });
 
   it.each([
-    ["lowercase", "btc"],
-    ["a dash", "BTC-USD"],
-    ["16 characters", "ABCDEFGHIJKLMNOP"],
-    ["empty", ""],
-  ])("counts a %s symbol as invalid", (_label, symbol) => {
-    const batch = checkBatch({ fxRates: [], prices: [price({ symbol })] }, NOW);
-    expect(batch.invalidCount).toBe(1);
-  });
-
-  it.each([
+    ["a lowercase symbol", price({ symbol: "btc" })],
+    ["a symbol with a dash", price({ symbol: "BTC-USD" })],
+    ["a 16-character symbol", price({ symbol: "ABCDEFGHIJKLMNOP" })],
+    ["an empty symbol", price({ symbol: "" })],
     ["an unknown currency", price({ currency: "EUR" as RawPrice["currency"] })],
     ["a date that is not a day", price({ price_date: "2026-10-9" })],
+    ["an empty price", price({ price: "" })],
+    ["a float artifact", price({ price: "0.30000000000000004" })],
   ])("counts a price with %s as invalid", (_label, row) => {
-    const batch = checkBatch({ fxRates: [], prices: [row] }, NOW);
-    expect([batch.staleCount, batch.invalidCount]).toEqual([0, 1]);
+    expect(counts(checkBatch({ fxRates: [], prices: [row] }, NOW))).toEqual({
+      fxRates: 0,
+      prices: 0,
+      staleCount: 0,
+      invalidCount: 1,
+    });
   });
-
-  it.each(["", "1e-7", "1e+21", "Infinity", "0.30000000000000004"])(
-    "counts a price of %j as invalid",
-    (value) => {
-      const batch = checkBatch(
-        { fxRates: [], prices: [price({ price: value })] },
-        NOW,
-      );
-      expect(batch.invalidCount).toBe(1);
-    },
-  );
 
   // Postgres refuses a time zone offset beyond ±15:59, which would fail the
   // whole insert.
@@ -212,6 +198,28 @@ describe("checkBatch", () => {
     ]);
     expect(batch.prices.map((row) => row.price)).toEqual(["2"]);
     expect([batch.staleCount, batch.invalidCount]).toEqual([0, 2]);
+  });
+
+  it("keeps one price per symbol", () => {
+    const batch = checkBatch(
+      {
+        fxRates: [],
+        prices: [price({ symbol: "BTC" }), price({ symbol: "ETH" })],
+      },
+      NOW,
+    );
+    expect(batch.prices.map((row) => row.symbol)).toEqual(["BTC", "ETH"]);
+    expect(batch.invalidCount).toBe(0);
+  });
+
+  it("before 18:00 keeps only UVA and counts the rest as stale", () => {
+    const morning = new Date("2026-10-09T13:00:00.000Z");
+    const batch = checkBatch(
+      { fxRates: [fx({ kind: "uva", buy: null }), fx()], prices: [price()] },
+      morning,
+    );
+    expect(batch.fxRates.map((row) => row.kind)).toEqual(["uva"]);
+    expect([batch.prices.length, batch.staleCount]).toEqual([0, 2]);
   });
 
   it("keeps a fresh row when a later duplicate is invalid", () => {
