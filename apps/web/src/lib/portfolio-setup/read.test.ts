@@ -185,3 +185,14 @@ it("logs one line when both lists fail", async () => {
     }),
   ]);
 });
+
+it("names the active list when only it fails", async () => {
+  const { client } = fakeClient(
+    { data: null, error: { code: "57014" }, status: 500 },
+    ok([]),
+  );
+  await expect(read(client)).rejects.toThrow("portfolio_setup.read_failed");
+  expect(lines).toEqual([
+    expect.objectContaining({ "plant.portfolio_setup.list": "active" }),
+  ]);
+});

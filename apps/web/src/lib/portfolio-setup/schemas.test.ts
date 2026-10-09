@@ -32,15 +32,28 @@ describe("nameInputSchema", () => {
     );
   });
 
-  test.each(["\u0000x", "\ud800", "a\u0007b", "a\u202eb", "Trading\u200b"])(
-    "refuses %j",
-    (name) => {
-      expect(schema.safeParse({ name }).success).toBe(false);
-    },
-  );
+  test.each([
+    "\u0000x",
+    "\ud800",
+    "a\u0007b",
+    "a\u202eb",
+    "Trading\u200b",
+    "Principal\u00ad",
+    "a\u200eb",
+    "\u3164",
+    "\u200d",
+  ])("refuses %j", (name) => {
+    expect(schema.safeParse({ name }).success).toBe(false);
+  });
 
-  test("keeps emoji joined by ZWJ", () => {
+  test("keeps emoji joined by ZWJ or built from tags", () => {
     expect(schema.safeParse({ name: "👨‍👩‍👧" }).success).toBe(true);
+    expect(schema.safeParse({ name: "🏴󠁧󠁢󠁳󠁣󠁴󠁿" }).success).toBe(true);
+  });
+
+  test("collapses spaces before counting the limit", () => {
+    const name = `${"a".repeat(19)}  ${"a".repeat(20)}`;
+    expect(schema.safeParse({ name }).success).toBe(true);
   });
 
   test("refuses a missing name", () => {

@@ -5,10 +5,18 @@ import { z } from "zod";
 // the next page would repeat or skip rows.
 export type Keyset = { at: string; id: string };
 
-const keysetSchema = z.tuple([z.iso.datetime({ offset: true }), z.uuid()]);
+// Postgres refuses the year 0 and an offset beyond ±15:59, which ISO allows.
+const timestampSchema = z.iso
+  .datetime({ offset: true })
+  .refine(
+    (at) => !at.startsWith("0000") && !/[+-](1[6-9]|2\d):\d{2}$/.test(at),
+  );
 
-// A missing param is the first page; anything that is not one timestamp and
-// one uuid is invalid, so no caller-supplied text reaches a filter.
+const keysetSchema = z.tuple([timestampSchema, z.uuid()]);
+
+// A missing param is the first page; anything that is not one timestamp
+// Postgres reads and one uuid is invalid, so no caller-supplied text reaches a
+// filter and no cursor makes the read fail.
 export function parseKeyset(
   raw: string | string[] | undefined,
 ): { ok: true; cursor: Keyset | null } | { ok: false } {

@@ -8,6 +8,10 @@ describe("parseKeyset", () => {
     expect(parseKeyset(undefined)).toEqual({ ok: true, cursor: null });
   });
 
+  test("accepts the widest offset Postgres reads", () => {
+    expect(parseKeyset(`2026-10-09T00:00:00-15:59,${ID}`).ok).toBe(true);
+  });
+
   test("keeps the timestamp exactly as PostgREST wrote it", () => {
     expect(parseKeyset(`${AT},${ID}`)).toEqual({
       ok: true,
@@ -23,6 +27,9 @@ describe("parseKeyset", () => {
     `2026-10-09 14:18:15+00,${ID}`,
     `x),user_id.not.is.null,and(id.lt.${ID}`,
     `${AT}),or(id.gt.0,${ID}`,
+    `0000-01-01T00:00:00Z,${ID}`,
+    `2026-10-09T00:00:00+23:59,${ID}`,
+    `2026-10-09T00:00:00-16:00,${ID}`,
   ])("refuses %j", (raw) => {
     expect(parseKeyset(raw)).toEqual({ ok: false });
   });

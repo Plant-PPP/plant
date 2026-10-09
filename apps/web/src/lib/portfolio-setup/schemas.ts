@@ -1,12 +1,19 @@
 import { z } from "zod";
 
-// Controls (NUL included); lone surrogates, which Postgres refuses in the
-// request's JSON; invisible spaces; and the bidi overrides and isolates that
-// can make one name read as another.
-const UNSAFE = /[\p{Cc}\p{Cs}\u200b\u2060\ufeff\u202a-\u202e\u2066-\u2069]/u;
+// After whitespace (tabs, newlines included) becomes one space: other controls,
+// lone surrogates (Postgres refuses them in the request's JSON), the Hangul
+// fillers that render blank, and every invisible format character (soft
+// hyphen, zero-width space, bidi marks and overrides) but the zero-width
+// joiner and the tag characters that emoji are built from.
+// At least one letter, digit, punctuation mark or symbol, so no name renders
+// blank.
+const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u;
 
-// NFC and single spaces, so two names that look the same are the same for the
-// unique index. trim() strips every Unicode space, more than the CHECK's btrim,
+const UNSAFE =
+  /[\p{Cc}\p{Cs}\u115f\u1160\u2800\u3164\uffa0]|(?!\u200d)(?![\u{e0020}-\u{e007f}])\p{Cf}/u;
+
+// NFC and single spaces, so composed and decomposed forms of a name, or the
+// same name with doubled spaces, collide in the unique index. trim() strips every Unicode space, more than the CHECK's btrim,
 // and zod 4's max() counts code points, as char_length does, so a name that
 // passes is never refused by the table's CHECK.
 function trimmedName(max: number) {
@@ -17,7 +24,7 @@ function trimmedName(max: number) {
     .overwrite((name) => name.replace(/\s+/gu, " "))
     .min(1)
     .max(max)
-    .refine((name) => !UNSAFE.test(name));
+    .refine((name) => VISIBLE.test(name) && !UNSAFE.test(name));
 }
 
 export function nameInputSchema(max: number) {

@@ -12,13 +12,15 @@ export function rowAnswer(
   result: WriteResult | "rejected",
   action: "archive" | "restore",
 ): Answer {
-  if (result === "rejected")
-    return { kind: "alert", text: WRITE_MESSAGES.failed };
-  if (result.ok) return { kind: "done" };
-  if (result.code === "duplicate_name" && action === "restore") {
+  if (
+    result !== "rejected" &&
+    !result.ok &&
+    result.code === "duplicate_name" &&
+    action === "restore"
+  ) {
     return { kind: "ask_name" };
   }
-  return { kind: "alert", text: WRITE_MESSAGES[result.code] };
+  return sheetAnswer(result);
 }
 
 // A name sheet closes on success and otherwise stays open with the alert.
