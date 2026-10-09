@@ -9,7 +9,8 @@ import {
   restoreSourceConnection,
   updateSourceConnection,
 } from "@/app/(app)/accounts/actions";
-import { IconButton } from "@/components/ui/icon-button";
+import type { ColumnDef } from "@tanstack/react-table";
+import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
   SELF_HOLDER_LABEL,
@@ -41,29 +42,60 @@ type DialogState =
   | { kind: "edit"; row: SourceConnectionRow }
   | { kind: "restore"; row: SourceConnectionRow };
 
-function SourceConnectionSummary({
-  row,
-  muted = false,
-}: {
-  row: SourceConnectionRow;
-  muted?: boolean;
-}) {
-  return (
-    <span className="grid min-w-0 gap-0.5">
-      <span
-        className={`truncate text-sm ${muted ? "text-muted-foreground" : ""}`}
-      >
-        {row.institution} · {row.holder?.name ?? SELF_HOLDER_LABEL}
-      </span>
-      <span className="truncate text-xs text-muted-foreground">
-        {row.portfolio.name}
-        {row.includeInTaxReport
-          ? " · Incluida en el reporte"
-          : " · Fuera del reporte"}
-      </span>
-    </span>
-  );
+function holderName(row: SourceConnectionRow): string {
+  return row.holder?.name ?? SELF_HOLDER_LABEL;
 }
+
+function reportStatus(row: SourceConnectionRow): string {
+  return row.includeInTaxReport
+    ? "Incluida en el reporte"
+    : "Fuera del reporte";
+}
+
+// Below @2xl the holder follows the institution and the portfolio and report
+// status take a muted second line; from @2xl each has its own column.
+const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
+  {
+    id: "institution",
+    header: "Cuenta",
+    cell: ({ row: { original: row } }) => (
+      <>
+        <span
+          className="block truncate"
+          title={`${row.institution} · ${holderName(row)}`}
+        >
+          {row.institution}
+          <span className="@2xl:hidden"> · {holderName(row)}</span>
+        </span>
+        <TruncatedText
+          className="text-xs text-muted-foreground @2xl:hidden"
+          text={`${row.portfolio.name} · ${reportStatus(row)}`}
+        />
+      </>
+    ),
+  },
+  {
+    id: "holder",
+    header: "Titular",
+    size: 128,
+    meta: { className: "hidden @2xl:table-cell" },
+    cell: ({ row }) => <TruncatedText text={holderName(row.original)} />,
+  },
+  {
+    id: "portfolio",
+    header: "Cartera",
+    size: 128,
+    meta: { className: "hidden @2xl:table-cell" },
+    cell: ({ row }) => <TruncatedText text={row.original.portfolio.name} />,
+  },
+  {
+    id: "report",
+    header: "Reporte",
+    size: 184,
+    meta: { className: "hidden @2xl:table-cell" },
+    cell: ({ row }) => <TruncatedText text={reportStatus(row.original)} />,
+  },
+];
 
 export function SourceConnectionsCard({
   view,
@@ -101,47 +133,53 @@ export function SourceConnectionsCard({
     >
       <ActiveList
         view={view}
+        title="Cuentas"
         emptyText="Todavía no agregaste cuentas."
         truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
-        renderRow={(row) => (
-          <>
-            <SourceConnectionSummary row={row} />
-            <span className="flex shrink-0 gap-1">
-              <IconButton
-                icon={Pencil}
-                tooltip="Editar"
-                label={`Editar ${sourceConnectionLabel(row)}`}
-                pending={card.pending}
-                onClick={() => openDialog({ kind: "edit", row })}
-              />
-              <IconButton
-                icon={Archive}
-                tooltip="Archivar"
-                label={`Archivar ${sourceConnectionLabel(row)}`}
-                pending={card.pending}
-                onClick={() => archive(row)}
-              />
-            </span>
-          </>
-        )}
+        columns={[
+          ...DATA_COLUMNS,
+          actionsColumn<SourceConnectionRow>(
+            [
+              {
+                id: "edit",
+                icon: Pencil,
+                tooltip: "Editar",
+                label: (row) => `Editar ${sourceConnectionLabel(row)}`,
+                onClick: (row) => openDialog({ kind: "edit", row }),
+              },
+              {
+                id: "archive",
+                icon: Archive,
+                tooltip: "Archivar",
+                label: (row) => `Archivar ${sourceConnectionLabel(row)}`,
+                onClick: archive,
+              },
+            ],
+            { pending: card.pending },
+          ),
+        ]}
       />
       <ArchivedList
         view={view}
+        title="Cuentas"
         label="Archivadas"
         emptyText="No hay más cuentas archivadas."
         firstPageLabel="Ver las más recientes"
-        renderRow={(row) => (
-          <>
-            <SourceConnectionSummary row={row} muted />
-            <IconButton
-              icon={ArchiveRestore}
-              tooltip="Restaurar"
-              label={`Restaurar ${sourceConnectionLabel(row)}`}
-              pending={card.pending}
-              onClick={() => openDialog({ kind: "restore", row })}
-            />
-          </>
-        )}
+        columns={[
+          ...DATA_COLUMNS,
+          actionsColumn<SourceConnectionRow>(
+            [
+              {
+                id: "restore",
+                icon: ArchiveRestore,
+                tooltip: "Restaurar",
+                label: (row) => `Restaurar ${sourceConnectionLabel(row)}`,
+                onClick: (row) => openDialog({ kind: "restore", row }),
+              },
+            ],
+            { pending: card.pending },
+          ),
+        ]}
       />
       {dialog?.kind === "create" && (
         <SourceConnectionDialog
