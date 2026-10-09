@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { loginErrorPath } from "@/lib/auth/login-errors";
 import { LOGIN_PATH } from "@/lib/auth/routes";
 import { signOutAndConfirm } from "@/lib/auth/sign-out";
 import { createClient } from "@/lib/supabase/client";
@@ -20,8 +21,10 @@ export function SignOutEverywhere() {
       createClient().auth,
       signOutAndConfirm,
     );
-    if (outcome === "done") {
-      window.location.assign(LOGIN_PATH);
+    if (outcome === "done" || outcome === "session_ended") {
+      window.location.assign(
+        outcome === "done" ? LOGIN_PATH : loginErrorPath("session_ended"),
+      );
       return;
     }
     setPending(false);

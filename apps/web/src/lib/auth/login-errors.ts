@@ -8,6 +8,7 @@ export const LOGIN_ERROR_SLUGS = [
   "link_expired",
   "callback",
   "oauth",
+  "session_ended",
   "generic",
 ] as const;
 
@@ -23,6 +24,8 @@ const COPY: Record<LoginErrorSlug, string> = {
   callback:
     "No pudimos terminar el ingreso. Probá de nuevo desde este navegador.",
   oauth: "No pudimos entrar con Google. Probá de nuevo.",
+  session_ended:
+    "Tu sesión se cerró desde otro dispositivo. Ingresá de nuevo y cerrá la sesión en todos tus dispositivos.",
   generic: "Algo salió mal. Probá de nuevo.",
 };
 
