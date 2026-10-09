@@ -189,11 +189,14 @@ const FAILURES: Readonly<
 };
 
 // A serialized error keeps only its name and message, so the stage and code
-// are rebuilt from them: an unknown class is a read failure, and a message
-// outside its class's codes reads as _OTHER, so the code stays bounded.
+// are rebuilt from them, retryable included: an unknown class is a read
+// failure, and a message outside its class's codes reads as _OTHER (known:
+// false), so the code stays bounded.
 export function quoteFailureOf(error: unknown): {
   stage: QuoteStage;
   code: string;
+  known: boolean;
+  retryable: boolean;
 } {
   const { name, message } =
     typeof error === "object" && error !== null
@@ -207,7 +210,12 @@ export function quoteFailureOf(error: unknown): {
     failure !== undefined &&
     typeof message === "string" &&
     Object.hasOwn(failure.codes, message);
-  return { stage: failure?.stage ?? "read", code: known ? message : "_OTHER" };
+  return {
+    stage: failure?.stage ?? "read",
+    code: known ? message : "_OTHER",
+    known,
+    retryable: known && failure.codes[message] === true,
+  };
 }
 
 // The contract's code table applied to an HTTP status, for the reader the

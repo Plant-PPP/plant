@@ -323,6 +323,30 @@ describe("runRefreshQuotes", () => {
     });
   });
 
+  // Another copy of core in the bundle builds errors of another class with the
+  // same name, so retryability comes from the name and code alone.
+  it("retries a store error from another copy of core", async () => {
+    const copy = Object.assign(new Error("out_of_window"), {
+      name: "QuoteStoreError",
+      storeCode: "PT403",
+    });
+    const save = jest
+      .fn()
+      .mockRejectedValueOnce(copy)
+      .mockImplementation(async (rows) => ({
+        fxRates: rows.fxRates.length,
+        prices: 0,
+      }));
+    const d = deps([feed(INDEX, ok(index()))], { save });
+    const { result } = await drive(d);
+    expect(result).toEqual({ outcome: "ok", fxRates: 1, prices: 0 });
+    expect(feedLines(d.lines)[0]?.level).toBe("warn");
+    expect(feedLines(d.lines)[0]?.fields).toMatchObject({
+      "error.type": "out_of_window",
+      "plant.quotes.store_code": "PT403",
+    });
+  });
+
   it("does not retry a non-retryable store code, and logs the store's code", async () => {
     const save = jest.fn(async () => {
       throw new QuoteStoreError("invalid_row", "23514");
@@ -507,6 +531,75 @@ describe("runRefreshQuotes", () => {
     const d = deps([feed(DOLLARS, ok(batch({}, { early: ["mep"] })))]);
     await drive(d);
     expect(d.save).not.toHaveBeenCalled();
+  });
+
+  it("does not save a memoized feed again while a later feed retries", async () => {
+    const read = jest
+      .fn<Promise<QuoteBatch>, [Date]>()
+      .mockRejectedValueOnce(new QuoteFeedError("http_5xx"))
+      .mockResolvedValue(crypto());
+    const d = deps([feed(INDEX, ok(index())), { id: CRYPTO, read }]);
+    const { result } = await drive(d);
+    expect(result).toEqual({ outcome: "ok", fxRates: 1, prices: 2 });
+    expect(d.save.mock.calls.map(([rows]) => rows)).toEqual([
+      { fxRates: [fxRate("uva", TODAY)], prices: [] },
+      { fxRates: [], prices: [price("BTC"), price("ETH")] },
+    ]);
+    expect(feedLines(d.lines)).toHaveLength(1);
+  });
+
+  it("ends partial with the save stage after a retryable save fails every attempt", async () => {
+    const save = jest.fn(async () => {
+      throw new QuoteStoreError("timeout");
+    });
+    const d = deps([feed(INDEX, ok(index())), feed(CRYPTO, ok(batch()))], {
+      save,
+    });
+    const { result } = await drive(d);
+    expect(result).toEqual({ outcome: "partial", fxRates: 0, prices: 0 });
+    expect(save).toHaveBeenCalledTimes(RETRIES + 1);
+    expect(
+      feedLines(d.lines).map((line) => [
+        line.fields["plant.inngest.attempt"],
+        line.fields["plant.quotes.stage"],
+        line.fields["error.type"],
+      ]),
+    ).toEqual([
+      [0, "save", "timeout"],
+      [1, "save", "timeout"],
+      [2, "save", "timeout"],
+    ]);
+    expect(runLines(d.lines)[0]?.fields).toMatchObject({
+      "plant.quotes.failed_codes": `${INDEX}:save:timeout`,
+      "plant.quotes.stage": "save",
+      "error.type": "timeout",
+      "plant.quotes.slowest_feed": CRYPTO,
+    });
+  });
+
+  it.each([
+    [
+      "a failed feed outranks a stale key",
+      [
+        feed(DOLLARS, ok(batch({}, { stale: ["blue"] }))),
+        feed(INDEX, fail(new QuoteFeedError("bad_shape"))),
+      ],
+      "partial",
+    ],
+    [
+      "an invalid row outranks a stale key",
+      [feed(DOLLARS, ok(batch({}, { stale: ["blue"], invalid: ["ccl"] })))],
+      "partial",
+    ],
+    [
+      "early and closed keys alone",
+      [feed(DOLLARS, ok(batch({}, { early: ["mep"], closed: ["blue"] })))],
+      "ok",
+    ],
+  ] as const)("on %s, ends %s", async (_label, feeds, outcome) => {
+    const d = deps([...feeds]);
+    await drive(d);
+    expect(runLines(d.lines)[0]?.fields["plant.outcome"]).toBe(outcome);
   });
 
   it("never saves rows from forged memoized output", async () => {

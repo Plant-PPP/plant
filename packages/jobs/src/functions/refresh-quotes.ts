@@ -1,10 +1,9 @@
 import {
   QUOTE_CLOSE_HOUR,
-  QuoteError,
   quoteFailureOf,
   type QuoteFeedPort,
   type QuoteStage,
-  QuoteStoreError,
+  type QuoteStoreError,
   type QuoteStorePort,
   type Refusal,
   REFUSALS,
@@ -66,7 +65,7 @@ async function refreshFeed(
         : { fxRates: 0, prices: 0 };
     return { ok: true, ...saved, refused, unread, ms: elapsed() };
   } catch (error) {
-    const { code } = quoteFailureOf(error);
+    const { code, known, retryable } = quoteFailureOf(error);
     const ms = elapsed();
     const fields = {
       "plant.inngest.run_id": runId,
@@ -75,17 +74,16 @@ async function refreshFeed(
       "plant.quotes.stage": stage,
       "plant.quotes.step_ms": ms,
     };
-    if (!(error instanceof QuoteError)) {
+    if (!known) {
       deps.log.error("quotes.feed_failed", fields, error);
       return { ok: false, stage, code, ms };
     }
     deps.log.warn("quotes.feed_failed", {
       ...fields,
       "error.type": code,
-      "plant.quotes.store_code":
-        error instanceof QuoteStoreError ? error.storeCode : undefined,
+      "plant.quotes.store_code": (error as Partial<QuoteStoreError>).storeCode,
     });
-    if (error.retryable) throw error;
+    if (retryable) throw error;
     return { ok: false, stage, code, ms };
   }
 }
@@ -175,7 +173,8 @@ export async function runRefreshQuotes(
       );
     } catch (error) {
       // The step's retries ran out; each attempt logged its own line.
-      outcome = { ok: false, ...quoteFailureOf(error) };
+      const { stage, code } = quoteFailureOf(error);
+      outcome = { ok: false, stage, code };
     }
     results.push({ feed: feed.id, outcome });
   }

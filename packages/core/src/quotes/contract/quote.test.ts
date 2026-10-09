@@ -516,36 +516,61 @@ describe("quoteFailureOf", () => {
   const copy = ({ name, message }: Error) => ({ name, message });
 
   it.each([
-    ["a feed error", feedError, { stage: "read", code: "http_5xx" }],
+    [
+      "a feed error",
+      feedError,
+      { stage: "read", code: "http_5xx", known: true, retryable: true },
+    ],
     [
       "a copy of a feed error",
       copy(feedError),
-      { stage: "read", code: "http_5xx" },
+      { stage: "read", code: "http_5xx", known: true, retryable: true },
     ],
-    ["a store error", storeError, { stage: "save", code: "out_of_window" }],
+    [
+      "a store error",
+      storeError,
+      { stage: "save", code: "out_of_window", known: true, retryable: true },
+    ],
     [
       "a copy of a store error",
       copy(storeError),
-      { stage: "save", code: "out_of_window" },
+      { stage: "save", code: "out_of_window", known: true, retryable: true },
+    ],
+    [
+      "a store error that is not retried",
+      new QuoteStoreError("invalid_row", "23514"),
+      { stage: "save", code: "invalid_row", known: true, retryable: false },
     ],
     [
       "a store error name with another message",
       { name: QUOTE_STORE_ERROR_NAME, message: "provider text" },
-      { stage: "save", code: "_OTHER" },
+      { stage: "save", code: "_OTHER", known: false, retryable: false },
     ],
     [
       "a feed error name with a store code",
       { name: QUOTE_FEED_ERROR_NAME, message: "unavailable" },
-      { stage: "read", code: "_OTHER" },
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
     ],
-    ["a TypeError", new TypeError("boom"), { stage: "read", code: "_OTHER" }],
+    [
+      "a TypeError",
+      new TypeError("boom"),
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
     [
       "an inherited name",
       { name: "toString", message: "http_5xx" },
-      { stage: "read", code: "_OTHER" },
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
     ],
-    ["a string", "http_5xx", { stage: "read", code: "_OTHER" }],
-    ["null", null, { stage: "read", code: "_OTHER" }],
+    [
+      "a string",
+      "http_5xx",
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
+    [
+      "null",
+      null,
+      { stage: "read", code: "_OTHER", known: false, retryable: false },
+    ],
   ])("reads %s", (_label, error, failure) => {
     expect(quoteFailureOf(error)).toEqual(failure);
   });
