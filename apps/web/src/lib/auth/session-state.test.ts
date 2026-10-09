@@ -122,6 +122,7 @@ it.each<[Parameters<typeof failedOnEndedSession>[0], boolean]>([
   [{ name: "AuthSessionMissingError" }, true],
   [{ code: "session_not_found" }, true],
   [{ code: "mfa_verification_failed" }, false],
+  [{ name: "AuthRetryableFetchError" }, false],
 ])("reads %p as a failure on an ended session: %p", (failure, ended) => {
   expect(failedOnEndedSession(failure)).toBe(ended);
 });

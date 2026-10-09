@@ -25,7 +25,6 @@ export function useAuthRequest(
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
-  // The action's failure, or null on success.
   async function run(
     action: () => Promise<AuthFailure | null>,
   ): Promise<AuthFailure | null> {

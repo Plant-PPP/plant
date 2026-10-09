@@ -27,7 +27,8 @@ export function isSessionMissing(error: MaybeAuthError): boolean {
 }
 
 // A failed request whose session had ended: another device's verify ends the
-// session's aal1 siblings, and so does a timeout. No failure is not one.
+// session's aal1 siblings, and so does a timeout. null is a success here,
+// though isSessionMissing(null) is true.
 export function failedOnEndedSession(failure: MaybeAuthError): boolean {
   return failure !== null && isSessionMissing(failure);
 }

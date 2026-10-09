@@ -64,6 +64,16 @@ describe("run", () => {
     ).resolves.toEqual({ code: "mfa_verification_failed", name: undefined });
     expect(mockState).toEqual(["copy:mfa_verification_failed", false]);
   });
+
+  it("treats a failure without a code as a failure", async () => {
+    const { run } = useAuthRequest(toMessage);
+    await expect(
+      run(async () => {
+        throw new Error("network");
+      }),
+    ).resolves.toEqual({ code: undefined, name: "Error" });
+    expect(mockState).toEqual(["copy:undefined", false]);
+  });
 });
 
 it("keeps the code of a thrown Auth error", async () => {
