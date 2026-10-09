@@ -3,9 +3,9 @@
 // that allocate per match (mergeAuthCode's runs of spaces); quadratic work
 // grows sixty-fourfold. 32 times splits them, and the 5 ms absorbs timer noise
 // on small inputs. Comparing the CPU time of the two keeps the check
-// independent of how fast or loaded the machine is. It stops at the first round
-// under the bound, or once the larger input takes over a second, so a
-// regression fails instead of stalling the suite.
+// independent of how fast or loaded the machine is. It stops once the larger
+// input takes over a second, so a regression fails instead of stalling the
+// suite.
 export function expectLinear<T>(
   input: (scale: number) => T,
   run: (input: T) => unknown,
@@ -23,7 +23,7 @@ export function expectLinear<T>(
     bestSmall = Math.min(bestSmall, time(small));
     const elapsed = time(large);
     bestLarge = Math.min(bestLarge, elapsed);
-    if (bestLarge < 32 * bestSmall + 5 || elapsed > 1000) break;
+    if (elapsed > 1000) break;
   }
   expect(bestLarge).toBeLessThan(32 * bestSmall + 5);
 }

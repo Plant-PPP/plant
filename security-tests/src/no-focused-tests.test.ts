@@ -1,0 +1,18 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+const FOCUS_OR_SKIP =
+  /\b(?:describe|test|it)(?:\.concurrent)?\.(?:only|skip|todo|failing)\b|\b(?:fdescribe|fit|xdescribe|xit|xtest)(?:\.each)?\s*[(`]/;
+
+// A focused or skipped test stops the rest of its file, the shared cases
+// included, from running while Jest still exits green. This file holds only
+// this check, so a focus here still runs it.
+test.each(
+  readdirSync(__dirname, { recursive: true, encoding: "utf8" }).filter((file) =>
+    file.endsWith(".ts"),
+  ),
+)("%s focuses and skips nothing", (file) => {
+  expect(readFileSync(join(__dirname, file), "utf8")).not.toMatch(
+    FOCUS_OR_SKIP,
+  );
+});

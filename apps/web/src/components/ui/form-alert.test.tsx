@@ -25,15 +25,18 @@ it("stays an alert whatever role the caller passes", () => {
   expect(html).not.toContain('role="status"');
 });
 
-it("is the only alert written by hand", () => {
+it("is the only component writing role=alert, so form errors go through it", () => {
   const src = join(__dirname, "../..");
   const files = readdirSync(src, { recursive: true, encoding: "utf8" });
+  const self = join("components", "ui", "form-alert.tsx");
   const hits = files.filter(
     (file) =>
-      file.endsWith(".tsx") &&
-      !file.endsWith(".test.tsx") &&
-      !file.endsWith("form-alert.tsx") &&
-      readFileSync(join(src, file), "utf8").includes('role="alert"'),
+      /\.tsx?$/.test(file) &&
+      !/\.test\.tsx?$/.test(file) &&
+      file !== self &&
+      /role(?:=|:\s*)\{?\s*["'`]alert["'`]/.test(
+        readFileSync(join(src, file), "utf8"),
+      ),
   );
   expect(hits).toEqual([]);
 });

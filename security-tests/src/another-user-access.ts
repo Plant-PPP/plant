@@ -6,22 +6,16 @@ import {
   rowsOf,
   users,
 } from "./pentest-helpers";
-import type { Database } from "@plant/shared";
-
-import type { OwnedTable } from "./reference-rows";
+import { OWNED_KEYS, type OwnedTable } from "./reference-rows";
 
 const { a, b } = users;
 
-type Tables = Database["public"]["Tables"];
-type IdTable = {
-  [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? T : never;
-}[OwnedTable];
-
-// What another user can try on every owned table: read B's rows, delete them,
-// embed auth users and read unfiltered. Both users need rows before it runs. The DELETE case expects the table
-// refused because no owned table grants DELETE; under a grant RLS would answer
-// 204 and leave B's rows alone. The cases specific to the table go in `cases`,
-// which shares the check that B's rows never change.
+// What another user can try on every owned table: read B's rows, by id where
+// the table has one, delete them, embed auth users and read unfiltered. Both
+// users need rows before it runs. The DELETE case expects the table refused
+// because no owned table grants DELETE; under a grant RLS would answer 204 and
+// leave B's rows alone. The cases specific to the table go in `cases`, which
+// shares the check that B's rows never change.
 export function describeAnotherUserAccess(
   table: OwnedTable,
   cases: () => void,
@@ -44,6 +38,22 @@ export function describeAnotherUserAccess(
       expect(res.body).toEqual([]);
     });
 
+    if (OWNED_KEYS[table] === "id") {
+      test("GET of B's row by id returns nothing", async () => {
+        const own = await rest(
+          b,
+          "GET",
+          `${table}?user_id=eq.${b.id}&select=id`,
+        );
+        expect(own.status).toBe(200);
+        const [row] = own.body as { id: string }[];
+        expect(row).toBeDefined();
+        const res = await rest(a, "GET", `${table}?id=eq.${row!.id}`);
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual([]);
+      });
+    }
+
     test("DELETE of B's rows is denied", async () => {
       expectRelationDenied(
         await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`),
@@ -60,16 +70,5 @@ export function describeAnotherUserAccess(
     });
 
     cases();
-  });
-}
-
-// For the cases of a table keyed by `id`; profiles is keyed by user_id.
-export function testHiddenById(table: IdTable): void {
-  test("GET of B's row by id returns nothing", async () => {
-    const [row] = (await rest(b, "GET", table)).body as { id: string }[];
-    expect(row).toBeDefined();
-    const res = await rest(a, "GET", `${table}?id=eq.${row!.id}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
   });
 }

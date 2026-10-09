@@ -10,6 +10,16 @@ export type ReferenceTable = {
 
 export type OwnedTable = Exclude<keyof Tables, ReferenceTable>;
 
+// The key another user would guess a row by. A new owned table fails typecheck
+// here until it is listed.
+export const OWNED_KEYS = {
+  ai_costs: "id",
+  consents: "id",
+  profiles: "user_id",
+} as const satisfies {
+  [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? "id" : "user_id";
+};
+
 type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
 
 type ReferenceRow<T extends ReferenceTable> = {
