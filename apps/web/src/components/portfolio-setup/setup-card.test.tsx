@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import { listView } from "@/test/list-view";
-import { ActiveList, ArchivedList } from "./setup-card";
+import { ActiveList, ArchivedList, SetupCard } from "./setup-card";
 
 const rows: NamedRow[] = [
   { id: "a", name: "Principal" },
@@ -46,7 +46,7 @@ describe("ActiveList", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("draws the rows in a table named after the card", () => {
+  it("draws the rows in a table named after the section", () => {
     const html = active(listView({ active: rows }));
     expect(html).not.toContain("No tenés carteras activas.");
     expect(html).toMatch(/<caption[^>]*>Carteras<\/caption>/);
@@ -69,7 +69,7 @@ describe("ArchivedList", () => {
     expect(archived(listView())).toBe("");
   });
 
-  it("names the archived table after the card and its label", () => {
+  it("names the archived table after the section and its label", () => {
     const html = archived(listView({ archived: rows }));
     expect(html).toMatch(/<caption[^>]*>Carteras archivadas<\/caption>/);
     expect(html).toContain("Largo plazo");
@@ -95,5 +95,39 @@ describe("ArchivedList", () => {
     expect(
       archived(paged, true).match(/<a [^>]*aria-disabled="true"/g),
     ).toHaveLength(2);
+  });
+});
+
+describe("SetupCard", () => {
+  const html = renderToStaticMarkup(
+    <SetupCard
+      heading={{ current: null }}
+      pending={false}
+      title="Carteras"
+      description="Agrupá tus cuentas."
+      addLabel="Agregar cartera"
+      onAdd={() => {}}
+    >
+      <table data-row-list="" />
+    </SetupCard>,
+  );
+
+  it("is a section the heading's row actions are found in", () => {
+    const section =
+      /^<section [^>]*data-slot="setup-section"[^>]*>(.*)<\/section>$/.exec(
+        html,
+      );
+    expect(section).not.toBeNull();
+    expect(section![1]).toMatch(/<h2 [^>]*tabindex="-1"[^>]*>Carteras<\/h2>/);
+    expect(section![1]).toContain('<table data-row-list=""></table>');
+  });
+
+  it("describes the list and offers to add to it", () => {
+    expect(html).toMatch(/<p [^>]*>Agrupá tus cuentas\.<\/p>/);
+    expect(html).toMatch(/<button[^>]*>.*Agregar cartera<\/button>/);
+  });
+
+  it("draws no card around the list", () => {
+    expect(html).not.toContain('data-slot="card');
   });
 });

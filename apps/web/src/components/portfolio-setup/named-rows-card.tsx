@@ -56,7 +56,8 @@ const DATA_COLUMNS: ColumnDef<NamedRow>[] = [
   },
 ];
 
-// A card of rows that are only a name: create, rename, archive and restore.
+// A list section of rows that are only a name: create, rename, archive and
+// restore.
 export function NamedRowsCard({
   list,
   view,

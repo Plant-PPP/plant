@@ -7,14 +7,6 @@ import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   DataTable,
   type DataTableRow,
   rowActionButton,
@@ -36,7 +28,7 @@ type RowChange = SetupChange & {
   change: { kind: "archive" | "restore" };
 };
 
-// The heading of one card on the accounts page and the feedback of its
+// The heading of one list section on the accounts page and the feedback of its
 // actions, which the page runs.
 export function useSetupCard({
   run,
@@ -50,7 +42,7 @@ export function useSetupCard({
   const refocus = useRef<{ rowId: string; actionId: string } | null>(null);
   // A refused dialog write's alert until the commit that ends the write, which
   // shows the dialog again. When the page is left mid-write, or a navigation
-  // that waited for the write commits with the reopen, the card is gone and
+  // that waited for the write commits with the reopen, the section is gone and
   // the alert is a toast.
   const unshown = useRef<string | null>(null);
   const mounted = useRef(false);
@@ -72,8 +64,11 @@ export function useSetupCard({
     const target = refocus.current;
     if (!target || pending) return;
     refocus.current = null;
-    const card = heading.current?.closest<HTMLElement>('[data-slot="card"]');
-    const button = card && rowActionButton(card, target.rowId, target.actionId);
+    const section = heading.current?.closest<HTMLElement>(
+      '[data-slot="setup-section"]',
+    );
+    const button =
+      section && rowActionButton(section, target.rowId, target.actionId);
     if (!button) return;
     // The user may have moved on while the action ran.
     const active = document.activeElement;
@@ -85,7 +80,7 @@ export function useSetupCard({
   });
 
   // Runs a row's action. The row leaves its list at once, taking its button,
-  // so focus goes to the card's heading, never the page; a refusal brings the
+  // so focus goes to the section's heading, never the page; a refusal brings the
   // row back and focus returns to its button.
   function rowAction(
     change: RowChange,
@@ -111,7 +106,7 @@ export function useSetupCard({
   }
 
   // Runs a dialog's write as the dialog closes: a toast when done, or the
-  // dialog again with its alert (a toast once the card is gone). False when
+  // dialog again with its alert (a toast once the section is gone). False when
   // another write is running, so the dialog stays open with what the user typed.
   function dialogAction(
     change: SetupChange,
@@ -162,23 +157,25 @@ export function SetupCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="gap-0">
-      <CardHeader className="border-b">
-        <CardTitle className="text-lg">
-          <h2 ref={heading} tabIndex={-1} className="outline-none">
+    <section data-slot="setup-section" className="grid gap-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid gap-1">
+          <h2
+            ref={heading}
+            tabIndex={-1}
+            className="text-lg leading-none font-semibold outline-none"
+          >
             {title}
           </h2>
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-        <CardAction>
-          <PendingButton size="sm" pending={pending} onClick={onAdd}>
-            <Plus />
-            {addLabel}
-          </PendingButton>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="grid gap-4 pt-6">{children}</CardContent>
-    </Card>
+          <p className="text-muted-foreground text-sm">{description}</p>
+        </div>
+        <PendingButton size="sm" pending={pending} onClick={onAdd}>
+          <Plus />
+          {addLabel}
+        </PendingButton>
+      </div>
+      {children}
+    </section>
   );
 }
 

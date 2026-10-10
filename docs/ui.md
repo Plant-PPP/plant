@@ -26,12 +26,13 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 
 - **Lists of records are a `DataTable`** (`components/ui/data-table.tsx`), one per list, named by a screen-reader caption ("Carteras", "Carteras archivadas"). Rows keep the server's order: a list is capped or paged by keyset, so sorting it in the browser would only reorder what is loaded.
 - Row actions are an `actionsColumn` of `IconButton`s, sized to its buttons. Single-line text cuts with an ellipsis and carries the whole text in a `title` (`TruncatedText`), which shows on hover; screen readers get the whole text.
-- List cards span the content width. A short first column gets a fixed width from `@2xl` so the descriptive columns share the rest.
-- Columns respond to the table's width, not the screen's: secondary columns use `hidden @2xl:table-cell`, and below that width their values ride inside the first column (on its first line or a muted second line), so nothing is lost on a narrow card.
+- **A list section is not a card**: a heading (`text-lg`), a short description and its add button on one row, with the `DataTable` below as the section's only box (a hairline border, no shadow). Sections stack `gap-10` and span the content width. A short first column gets a fixed width from `@2xl` so the descriptive columns share the rest.
+- A table shows its column names only when several columns sit side by side; a one-column list, or any table below `@2xl`, keeps its header row out of view (`visibility: collapse`, so the columns keep their widths). Screen readers then read no column names, and the caption names the table.
+- Columns respond to the table's width, not the screen's: secondary columns use `hidden @2xl:table-cell`, and below that width their values ride inside the first column (on its first line or a muted second line), so nothing is lost on a narrow table.
 - Amounts are right-aligned with `tabular-nums`, formatted `es-AR` with their currency (`$ 1.234.567,89`, `US$ 12.345,67`), and never pass through a `number` to be summed.
 
 ## Density and type
 
-- Card title `text-lg`, body `text-sm`, secondary text `text-xs text-muted-foreground`.
+- Card and section title `text-lg`, body `text-sm`, secondary text `text-xs text-muted-foreground`.
 - Default gap `gap-2`; between blocks `gap-4`.
-- Buttons: `size="sm"` for card and dialog actions, `IconButton` for row actions.
+- Buttons: `size="sm"` for section, card and dialog actions, `IconButton` for row actions.

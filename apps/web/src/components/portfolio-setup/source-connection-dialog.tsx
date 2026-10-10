@@ -6,7 +6,6 @@ import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,31 +27,15 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import { SELF_HOLDER } from "@/lib/portfolio-setup/schemas";
+import {
+  InstitutionField,
+  chosenInstitution,
+  institutionChoice,
+  typedInstitution,
+} from "./institution-field";
 import { NewHolderField } from "./new-holder-field";
 import { useSavedFocus } from "./saved-focus";
 import { PendingButton } from "@/components/ui/pending-button";
-
-// Suggestions only: any institution can be typed.
-const INSTITUTIONS = [
-  "Allaria",
-  "Balanz",
-  "Banco Galicia",
-  "Banco Macro",
-  "Banco Nación",
-  "Banco Santander",
-  "BBVA",
-  "Binance",
-  "Brubank",
-  "Bull Market",
-  "Cocos",
-  "IEB",
-  "IOL",
-  "Lemon",
-  "Mercado Pago",
-  "Naranja X",
-  "PPI",
-  "Ualá",
-];
 
 export type SourceConnectionFields = {
   institution: string;
@@ -118,8 +101,9 @@ export function accountRow(
   };
 }
 
-// The select the user left unchosen, or that offeredChoices unchose because
-// the page no longer lists the account's holder or portfolio.
+// The holder or portfolio select the user left unchosen, or that
+// offeredChoices unchose because the page no longer lists the account's holder
+// or portfolio.
 export function missingChoice(
   fields: Pick<SourceConnectionFields, "holder" | "defaultPortfolioId">,
 ): "holder" | "portfolio" | undefined {
@@ -215,12 +199,14 @@ export function SourceConnectionDialog({
 }) {
   const ids = {
     institution: useId(),
-    institutions: useId(),
     holder: useId(),
     portfolio: useId(),
     tax: useId(),
     alert: useId(),
   };
+  const [institutionPick, setInstitutionPick] = useState(() =>
+    institutionChoice(initial.institution),
+  );
   const [holder, setHolder] = useState(initial.holder);
   const [portfolio, setPortfolio] = useState(initial.defaultPortfolioId);
   const [includeInTaxReport, setIncludeInTaxReport] = useState(
@@ -246,7 +232,8 @@ export function SourceConnectionDialog({
   // A new holder still saving holds the dialog and its submit: the holder it
   // saves may be the one the account picks.
   const [holderPending, setHolderPending] = useState(false);
-  const institution = useRef<HTMLInputElement>(null);
+  const institutionTrigger = useRef<HTMLButtonElement>(null);
+  const otherInstitution = useRef<HTMLInputElement>(null);
   const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
@@ -294,14 +281,22 @@ export function SourceConnectionDialog({
   function submit() {
     if (holderPending) return;
     const fields = {
-      institution: institution.current?.value ?? "",
+      institution: chosenInstitution(
+        institutionPick,
+        otherInstitution.current?.value ?? "",
+      ),
       holder: chosenHolder,
       includeInTaxReport,
       defaultPortfolioId: chosenPortfolio,
     };
+    if (institutionPick === "") {
+      setAlert({ text: CHOICE_MESSAGES.institution, field: "institution" });
+      institutionTrigger.current?.focus();
+      return;
+    }
     if (normalizeName(fields.institution) === "") {
       setAlert({ text: MESSAGES.invalid, field: "institution" });
-      institution.current?.focus();
+      otherInstitution.current?.focus();
       return;
     }
     const missing = missingChoice(fields);
@@ -354,23 +349,18 @@ export function SourceConnectionDialog({
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor={ids.institution}>Institución</Label>
-            <Input
-              ref={institution}
+            <InstitutionField
               id={ids.institution}
-              list={ids.institutions}
-              defaultValue={initial.institution}
-              onChange={() => settle("institution")}
-              aria-invalid={invalid("institution")}
-              aria-describedby={invalid("institution") && ids.alert}
-              autoComplete="off"
+              choice={institutionPick}
+              onChoose={pick("institution", setInstitutionPick)}
+              initialOther={typedInstitution(initial.institution)}
+              triggerRef={institutionTrigger}
+              otherRef={otherInstitution}
+              onOtherChange={() => settle("institution")}
+              invalid={invalid("institution")}
+              describedBy={invalid("institution") ? ids.alert : undefined}
               autoFocus={firstField === "institution"}
-              required
             />
-            <datalist id={ids.institutions}>
-              {INSTITUTIONS.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
           </div>
 
           <div className="grid gap-2">

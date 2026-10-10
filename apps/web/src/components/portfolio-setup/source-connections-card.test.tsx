@@ -52,7 +52,7 @@ it("calls the user's own holder Vos", () => {
 it("shows the holder, portfolio and report status under the institution", () => {
   expect(html).toContain('title="Broker Dos · Ana"');
   expect(html).toContain(
-    'class="block truncate text-xs text-muted-foreground @2xl:hidden" title="Principal · Incluida en el reporte"',
+    'class="block truncate pl-6 text-xs text-muted-foreground @2xl:hidden" title="Principal · Incluida en el reporte"',
   );
   expect(html).toContain('title="Largo plazo · No incluida en el reporte"');
 });

@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-10 · Lighter account lists (PLA-101)
+
+- **A list section is a heading row and its table, not a card.** The table's border is the section's only box, with no shadow, so a list is never a box inside a box.
+- **A table hides its column names unless several columns sit side by side.** The row stays in the table with `visibility: collapse`, so the fixed layout keeps the header cells' widths. Screen readers then read no column names; the caption names the table, and each row action carries its own label.
+- **The institution is a select of the suggested names, with "Otra" last.** "Otra" opens a field for any name. A list keeps the names the same across accounts, which the icons rely on. An account saved with a name the list lacks opens on "Otra" with its name.
+- **Each suggested institution shows its icon**, in the select and in the accounts list: its favicon, saved once into `apps/web/src/assets/institutions/` and served by Plant, so no outside service learns which institutions a user picks (domains from the public directory loguitos.app). Any other name shows its initial; icons for names the user types arrive with PLA-102. The logos are their owners' marks, used only to name the institution. The account column is `@2xl:w-36` so the icon fits. With nothing chosen the dialog asks "Elegí una institución."; a blank name under "Otra" gets the invalid-name alert.
+
 ## 2026-10-09 · Optimistic lists (PLA-98)
 
 - **The accounts page holds one optimistic state for its three lists** (`useSetupActions` in `AccountsSetup`, `useOptimistic` over Cuentas, Carteras and Titulares) and runs one write at a time. A change shows when the user acts; when the write ends, the page's refresh replaces it in the same commit, or the lists go back if it was refused. A portfolio's or holder's new name also reaches the accounts that show it, and the account dialog's choices and the in-use alert read the same lists.
@@ -11,7 +18,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Renaming to the same name sends no write**, so a row archived from another tab is not reported there.
 - **The new holder field inside the account dialog still waits for the server**: the account needs the holder's id.
 - **A call that never reaches the server (network, a deploy's version skew) still has no server-side signal** (`docs/threat-models/2026-10-09-portfolio-setup.md`); optimistic lists make it look done for one round trip before the rollback and its alert.
-- **The accounts cards span the content width.** From the card's `@2xl` width the account column is fixed and short (`@2xl:w-28`) and Titular and Cartera share the rest; the report column reads "Incluida" or "No incluida" under its header, and the narrow second line, with no header, adds "en el reporte".
+- **The accounts lists span the content width.** From the table's `@2xl` width the account column is fixed and short (`@2xl:w-28`) and Titular and Cartera share the rest; the report column reads "Incluida" or "No incluida" under its header, and the narrow second line, with no header, adds "en el reporte".
 
 ## 2026-10-09 · Daily quotes job (PLA-93)
 

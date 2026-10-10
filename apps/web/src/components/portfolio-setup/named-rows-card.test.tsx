@@ -49,7 +49,7 @@ function render(change: Partial<ListView<NamedRow>> = {}, pending = false) {
   );
 }
 
-it("lists the active rows in a table named after the card", () => {
+it("lists the active rows in a table named after the section", () => {
   const html = render();
   expect(html).toMatch(/<caption[^>]*>Carteras<\/caption>/);
   expect(html).toContain('title="Principal">Principal</span>');
