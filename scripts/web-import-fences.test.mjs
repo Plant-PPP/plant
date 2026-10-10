@@ -555,10 +555,16 @@ flagged.push(
   ].map((filePath) => [filePath, 'import "@/lib/quotes/quote-sink";']),
 );
 
-flagged.push([
-  "src/lib/supabase/service-role.ts",
-  '"use server";\nexport const x = 1;',
-]);
+flagged.push(
+  ["src/lib/supabase/service-role.ts", '"use server";\nexport const x = 1;'],
+  // Only tests import a package's testing helpers.
+  ["src/lib/x.ts", 'import "@plant/shared/testing";'],
+  ["src/lib/x.ts", 'import "@plant/jobs/testing";'],
+  [
+    "src/app/(app)/page.tsx",
+    'import { tableSql } from "@plant/shared/testing";',
+  ],
+);
 
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
@@ -567,6 +573,11 @@ for (const [filePath, code] of flagged) {
 }
 
 const allowed = [
+  ["src/lib/x.test.ts", 'import "@plant/shared/testing";'],
+  ["src/components/x.test.tsx", 'import "@plant/shared/testing";'],
+  ["src/app/api/inngest/route.test.ts", 'import "@plant/jobs/testing";'],
+  // Only a path segment named testing is fenced.
+  ["src/lib/x.ts", 'import "./backtesting";'],
   ["src/lib/x.ts", 'import "./service-roles";'],
   ["src/components/x.tsx", 'import { useChat } from "@ai-sdk/react";'],
   [
@@ -708,6 +719,8 @@ const OVERRIDES = [
   ["src/lib/auth/mfa-factors.test.ts", []],
   ["src/lib/auth/mfa-disable.ts", []],
   ["src/lib/auth/mfa-disable.test.ts", []],
+  ["src/lib/x.test.ts", ["testing"]],
+  ["src/components/x.test.tsx", ["testing"]],
 ];
 const PROBES = {
   reader: READER,
@@ -717,6 +730,7 @@ const PROBES = {
   sink: 'import "@/lib/ai/ai-cost-sink";',
   quoteSink: 'import "@/lib/quotes/quote-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
+  testing: 'import "@plant/shared/testing";',
   dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
 for (const [filePath, exempt] of OVERRIDES) {
@@ -812,6 +826,12 @@ for (const [dir, up] of [
     'import "./web/ai/ai-cost-sink";',
     'import "./web/quotes/quote-sink";',
     'import "./web/auth/session-claims-unchecked";',
+    'import "@plant/shared/testing";',
+    'import "./testing/migrations";',
+    'import "@plant/jobs/testing";',
+    'import "./testing";',
+    'import "./testing/fixtures";',
+    'import "./testing/a/b";',
     `import "${up}/apps/web/src/lib/supabase/server";`,
   ]) {
     for (const ext of ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]) {
@@ -819,13 +839,36 @@ for (const [dir, up] of [
         assert.notDeepEqual(await fenced(`src/x.${ext}`, code, lint), []);
       });
     }
+    // A test may import the testing helpers, and nothing else fenced.
+    if (!/testing/.test(code)) {
+      test(`${dir}: ${code} in a test is flagged`, async () => {
+        assert.notDeepEqual(await fenced("src/x.test.ts", code, lint), []);
+      });
+    }
   }
 }
+
+test("packages: a test reads the migrations", async () => {
+  const core = new ESLint({
+    cwd: fileURLToPath(new URL("../packages/core/", import.meta.url)),
+  });
+  assert.deepEqual(
+    await fenced("src/x.test.ts", 'import "@plant/shared/testing";', core),
+    [],
+  );
+});
 
 test("packages/jobs: its own and workspace imports are allowed", async () => {
   const [result] = await jobs.lintText(
     'import "./client";\nimport "@plant/shared";\nimport "inngest";',
     { filePath: "src/x.ts" },
   );
+  assert.deepEqual(result.messages, []);
+});
+
+test("packages/jobs: a test imports its testing helpers", async () => {
+  const [result] = await jobs.lintText('import "./testing";', {
+    filePath: "src/x.test.ts",
+  });
   assert.deepEqual(result.messages, []);
 });

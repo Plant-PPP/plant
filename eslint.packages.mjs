@@ -8,6 +8,7 @@ import {
   LITERAL_IMPORTS_ONLY,
   secretKeyReads,
   SOURCE,
+  TESTING,
 } from "./eslint.fences.mjs";
 import { moneyRules } from "./eslint.money.mjs";
 
@@ -18,23 +19,26 @@ const APPS = {
   message: "A package may not import from an app.",
 };
 
+// The AI SDK and the web app's modules by name too: a hoisted package or a
+// symlinked directory reaches them without a manifest entry or an `apps`
+// segment. @ai-sdk/react too, which only the web app renders.
+const packageRules = (allowed = []) =>
+  fence(
+    [
+      APPS,
+      ...ALL_FENCED.filter((module) => !allowed.includes(module)).map(
+        (module) =>
+          module === AI_PROVIDERS ? { ...module, regex: "^@ai-sdk/" } : module,
+      ),
+    ],
+    [...LITERAL_IMPORTS_ONLY, ...secretKeyReads],
+  );
+
 export default tseslint.config(
   ...tseslint.configs.recommended,
   { rules: moneyRules },
   { rules: { "no-console": "error" } },
-  {
-    files: [`**/*.${SOURCE}`],
-    // The AI SDK and the web app's modules by name too: a hoisted package or a
-    // symlinked directory reaches them without a manifest entry or an `apps`
-    // segment. @ai-sdk/react too, which only the web app renders.
-    rules: fence(
-      [
-        APPS,
-        ...ALL_FENCED.map((module) =>
-          module === AI_PROVIDERS ? { ...module, regex: "^@ai-sdk/" } : module,
-        ),
-      ],
-      [...LITERAL_IMPORTS_ONLY, ...secretKeyReads],
-    ),
-  },
+  { files: [`**/*.${SOURCE}`], rules: packageRules() },
+  // Tests may also import the testing helpers.
+  { files: [`**/*.test.${SOURCE}`], rules: packageRules([TESTING]) },
 );

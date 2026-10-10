@@ -53,6 +53,13 @@ export const SESSION_CLAIMS_UNCHECKED = {
     "Read claims through getSessionClaims, which sends an unverified MFA session to /auth/mfa.",
 };
 
+// A package's testing subpath reads files off disk or swaps env: tests only,
+// so no shipped module carries it.
+export const TESTING = {
+  regex: `(^|/)testing(/[\\w.-]+)*${EXTENSION}$`,
+  message: "Only tests import a package's testing helpers.",
+};
+
 // The modules a block can be allowed to import. Every web block fences each
 // one it does not allow (through fenceExcept) and every package fences them
 // all, so a new fence goes here; fence() also bans node_modules paths and
@@ -64,6 +71,7 @@ export const ALL_FENCED = [
   COST_SINK,
   QUOTE_SINK,
   SESSION_CLAIMS_UNCHECKED,
+  TESTING,
 ];
 
 // A path into node_modules reaches a package without naming it.

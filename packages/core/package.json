@@ -2,7 +2,7 @@
   "name": "@plant/core",
   "version": "0.0.0",
   "private": true,
-  "description": "Domain functions: the quote feeds (dollar rates, UVA and crypto prices) behind QuoteFeedPort; valuation and portfolio functions arrive with the \"Patrimonio manual\" stage.",
+  "description": "Domain functions: the quote feeds (dollar rates, UVA and crypto prices) behind QuoteFeedPort, and holding valuation in any denominator (ARS, USD MEP, CCL or official, BTC), exact until rounded once.",
   "type": "module",
   "sideEffects": false,
   "exports": {

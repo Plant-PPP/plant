@@ -1,8 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { type FxRate, type Price, QuoteStoreError } from "@plant/core";
 import { Constants } from "@plant/shared";
+import { lastFunctionBodies } from "@plant/shared/testing";
 import { createClient } from "@supabase/supabase-js";
 
 jest.mock("server-only", () => ({}), { virtual: true });
@@ -197,16 +195,7 @@ it("stops at the first table that fails", async () => {
 });
 
 it("is the SQLSTATE both quote guards raise, as last defined", () => {
-  const dir = join(__dirname, "../../../../../supabase/migrations");
-  const guards = new Map<string, string>();
-  for (const file of readdirSync(dir).sort()) {
-    const sql = readFileSync(join(dir, file), "utf8");
-    for (const [, name, body] of sql.matchAll(
-      /CREATE (?:OR REPLACE )?FUNCTION private\.(guard_\w+_insert)\(\)[\s\S]*?\$\$([\s\S]*?)\$\$/g,
-    )) {
-      if (name && body) guards.set(name, body);
-    }
-  }
+  const guards = lastFunctionBodies(/guard_\w+_insert/);
   expect([...guards.keys()].sort()).toEqual([
     "guard_fx_rate_insert",
     "guard_price_insert",

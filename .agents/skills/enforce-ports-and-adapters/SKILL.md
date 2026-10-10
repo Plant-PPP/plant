@@ -185,9 +185,9 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 - **`sources` is the reference hexagon.** `PortfolioSourcePort` (the zod contract), a single
   `SourceError` carrying `retryable`, a capability matrix, a factory, and the `file_upload` adapter.
   Every new port copies this skeleton.
-- **`core` is pure domain** — the quote feeds behind `QuoteFeedPort`; the valuation and
-  portfolio functions the UI and the assistant will use arrive with the "Patrimonio manual"
-  stage. It knows nothing about where holdings came from (no `sources` edge) and nothing about
+- **`core` is pure domain** — the quote feeds behind `QuoteFeedPort` and the valuation of
+  holdings in any denominator (`valuation/`); the net worth and debt functions the UI and the
+  assistant will use arrive with the "Patrimonio manual" stage. It knows nothing about where holdings came from (no `sources` edge) and nothing about
   how work is scheduled (no `jobs` edge).
 - **`jobs` owns the `JobRunner` port** (`startImport`, `cancelImport`) and its Inngest adapter: thin
   Inngest orchestrators that call steps. **Steps are pure functions in `sources`/`core` with no
@@ -208,7 +208,7 @@ off-spine:  evals                    → may import packages; NOTHING imports ev
 
 | Package          | IN scope (owns)                                                                                                                                                                                                        | OUT of scope (must not hold)                                                                                                             |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `shared`         | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`                                                                                                                                           | any runtime infra, any test fixture, any consumer knowledge                                                                              |
+| `shared`         | pure types, DB generated types, `pricing.ts`, `ai-cost.ts`, `prompt-text.ts`                                                                                                                                           | any runtime infra, any test fixture, any consumer knowledge (except the fenced, test-only `@plant/shared/testing` migration reader)      |
 | `sources`        | `PortfolioSourcePort` contract, `SourceError`, capability matrix, factory, `adapters/file_upload/` and its extraction steps                                                                                            | engine imports (`inngest`), valuation logic, UI knowledge, naming a consumer                                                             |
 | `core`           | `QuoteFeedPort` contract, `QuoteFeedError`, factory, `quotes/adapters/<provider>/`; `QuoteStorePort` and `QuoteStoreError`, implemented at the root; valuation and portfolio functions (ARS/USD MEP, net worth, debts) | knowing which source produced a holding; engine imports; I/O (HTTP and the store come in as the injected `GetJson` and `QuoteStorePort`) |
 | `jobs`           | the `JobRunner` port, the Inngest adapter, thin orchestrators that sequence steps and write job state, orchestrators that read feeds and save through `QuoteStorePort`                                                 | step logic itself (it lives in `sources`/`core`); UI knowledge                                                                           |

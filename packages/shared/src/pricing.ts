@@ -1,4 +1,4 @@
-import { DECIMAL_SCALE, DECIMAL_SCALE_DIGITS, toScaled } from "./money";
+import { divideRounded, fromScaled, toScaled } from "./money";
 
 // USD per 1M tokens, Standard tier. Sources (checked 2026-10-08):
 // https://ai.google.dev/gemini-api/docs/pricing,
@@ -64,8 +64,8 @@ function tokens(count: number): bigint {
   return BigInt(count);
 }
 
-// Cost in USD as a decimal string, rounded half-up to 8 decimals
-// (numeric(20, 8)).
+// Cost in USD as a decimal string at 8 decimals (numeric(20, 8)), rounded half
+// away from zero.
 export function costUsd(modelId: PricedModelId, usage: TokenUsage): string {
   const price = MODEL_PRICING[modelId];
   const perMillion =
@@ -73,12 +73,5 @@ export function costUsd(modelId: PricedModelId, usage: TokenUsage): string {
     toScaled(price.cacheRead) * tokens(usage.cacheRead) +
     toScaled(price.cacheWrite) * tokens(usage.cacheWrite) +
     toScaled(price.output) * tokens(usage.output);
-  const scaled =
-    (perMillion + TOKENS_PER_PRICE_UNIT / 2n) / TOKENS_PER_PRICE_UNIT;
-  const whole = scaled / DECIMAL_SCALE;
-  const fraction = (scaled % DECIMAL_SCALE)
-    .toString()
-    .padStart(DECIMAL_SCALE_DIGITS, "0")
-    .replace(/0+$/, "");
-  return fraction === "" ? whole.toString() : `${whole}.${fraction}`;
+  return fromScaled(divideRounded(perMillion, TOKENS_PER_PRICE_UNIT));
 }

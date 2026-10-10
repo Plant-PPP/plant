@@ -13,6 +13,11 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
   holder_in_use:
     "Para archivar este titular, primero elegí otro en las cuentas que lo usan o archivalas.",
   holder_archived: "Ese titular está archivado.",
+  portfolio_has_holdings:
+    "Para archivar esta cartera, primero archivá sus tenencias.",
+  source_connection_has_holdings:
+    "Para archivar esta cuenta, primero archivá sus tenencias.",
+  source_connection_archived: "Esa cuenta está archivada.",
 };
 
 const invalidName = (max: number) =>

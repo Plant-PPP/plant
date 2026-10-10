@@ -9,8 +9,9 @@
 -- - Every permissive policy in public is exactly the owner predicate, for
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
--- - The reference tables, public tables with no user_id, are exactly fx_rates
---   and prices: market data every user reads. Their permissive policies only
+-- - The reference tables, public tables with no user_id, are exactly fx_rates,
+--   prices and instruments: market data every user reads; service_role holds
+--   nothing on instruments, which migrations seed. Their permissive policies only
 --   let authenticated read every row, authenticated cannot write them,
 --   service_role cannot update or delete them, and they have no foreign key,
 --   since every user reads what a row points at.
@@ -65,7 +66,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(41);
+SELECT plan(43);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -163,8 +164,23 @@ SELECT is_empty(
 );
 
 SELECT ok(
-  (SELECT count(*) FROM reference_tables WHERE relname IN ('fx_rates', 'prices')) = 2,
-  'fx_rates and prices are reference tables'
+  (SELECT count(*) FROM reference_tables WHERE relname IN ('fx_rates', 'prices', 'instruments')) = 3,
+  'fx_rates, prices and instruments are reference tables'
+);
+
+SELECT ok(
+  NOT has_any_column_privilege('service_role', 'public.instruments', 'SELECT, INSERT, UPDATE')
+    AND NOT has_table_privilege('service_role', 'public.instruments', 'DELETE'),
+  'service_role holds nothing on instruments, which only migrations write'
+);
+
+-- Mirrors QuoteTable in security-tests/src/reference-rows.ts, whose specs run
+-- the service role's cases: the two change together.
+SELECT set_eq(
+  $$ SELECT relname::text FROM reference_tables r
+     WHERE has_any_column_privilege('service_role', r.oid, 'INSERT') $$,
+  ARRAY['fx_rates', 'prices'],
+  'service_role inserts only into the quote tables'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.
@@ -540,8 +556,8 @@ INSERT INTO canaried VALUES
     SELECT 'trigger ' || c.relname || '.' || tg.tgname FROM pg_trigger tg
     JOIN pg_class c ON c.oid = tg.tgrelid
     WHERE c.relnamespace = 'extensions'::regnamespace AND NOT tg.tgisinternal $$),
-('the only reference tables in public are fx_rates and prices', ARRAY['pgtap_canary_reference'],
- $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices') $$),
+('the only reference tables in public are fx_rates, prices and instruments', ARRAY['pgtap_canary_reference'],
+ $$ SELECT relname FROM reference_tables WHERE relname NOT IN ('fx_rates', 'prices', 'instruments') $$),
 ('a reference table only lets authenticated read every row, no API role write it but service_role''s inserts, and points at no other table',
  ARRAY['pgtap_canary_ref_all.pgtap_canary', 'pgtap_canary_ref_role.pgtap_canary',
        'pgtap_canary_ref_qual.pgtap_canary', 'pgtap_canary_ref_insert', 'pgtap_canary_ref_update',
