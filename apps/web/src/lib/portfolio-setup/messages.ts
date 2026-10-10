@@ -48,6 +48,7 @@ export const WRITE_MESSAGES: Record<
 
 // An account's select left unchosen, caught before the write.
 export const CHOICE_MESSAGES = {
+  institution: "Elegí una institución.",
   holder: "Elegí un titular.",
   portfolio: "Elegí una cartera por defecto.",
 } as const;

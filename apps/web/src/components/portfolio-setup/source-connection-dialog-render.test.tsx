@@ -52,16 +52,29 @@ function marked(html: string, attribute: string): string[] {
   return LABELS.filter((label) => control(html, label).includes(attribute));
 }
 
+// The field Otra opens for an institution the list does not have.
+function nameInput(html: string): string | undefined {
+  return /<input[^>]*aria-label="Nombre de la institución"[^>]*>/.exec(
+    html,
+  )?.[0];
+}
+
+// The name field, when it shows.
+function otherField(html: string): string | undefined {
+  const field = nameInput(html);
+  return field?.includes(" hidden") ? undefined : field;
+}
+
 function alertId(html: string): string | undefined {
   return /<p[^>]*id="([^"]+)"[^>]*role="alert"/.exec(html)?.[1];
 }
 
 it("opens again with the refused fields and the alert", () => {
-  const html = render(MESSAGES.failed);
+  const html = render(MESSAGES.failed, { institution: "Mi broker" });
   expect(html).toMatch(
     new RegExp(`<p[^>]*role="alert"[^>]*>${MESSAGES.failed}</p>`),
   );
-  expect(html).toMatch(/<input[^>]*value="IOL"/);
+  expect(html).toMatch(/<input[^>]*value="Mi broker"/);
   expect(html).toMatch(
     new RegExp(
       `<button[^>]*type="submit"[^>]*aria-describedby="${alertId(html)}"`,
@@ -86,11 +99,56 @@ it("marks no field when the alert is about the save itself", () => {
 
 it("marks, describes and focuses the institution when it was refused", () => {
   const html = render(MESSAGES.invalid);
+  expect(otherField(html)).toBeUndefined();
   expect(marked(html, 'aria-invalid="true"')).toEqual(["Institución"]);
   expect(marked(html, `aria-describedby="${alertId(html)}"`)).toEqual([
     "Institución",
   ]);
   expect(marked(html, "autofocus")).toEqual(["Institución"]);
+});
+
+it("marks, describes and focuses the typed name, not the list, when an unlisted institution was refused", () => {
+  const html = render(MESSAGES.invalid, { institution: "Mi broker" });
+  const other = otherField(html)!;
+  expect(other).toContain('aria-invalid="true"');
+  expect(other).toContain(`aria-describedby="${alertId(html)}"`);
+  expect(other).toContain("autofocus");
+  expect(marked(html, 'aria-invalid="true"')).toEqual([]);
+  expect(marked(html, "aria-describedby=")).toEqual([]);
+  expect(marked(html, "autofocus")).toEqual([]);
+});
+
+describe("the institution", () => {
+  it("starts a new account on the list's placeholder, with no field to type a name", () => {
+    const html = render(undefined, { institution: "" });
+    expect(control(html, "Institución")).toContain("data-placeholder");
+    expect(html).toContain("Elegí una institución");
+    expect(otherField(html)).toBeUndefined();
+  });
+
+  it("opens a listed institution chosen in the list, with no field to type a name", () => {
+    const html = render(undefined, { institution: "Banco Nación" });
+    expect(control(html, "Institución")).not.toContain("data-placeholder");
+    expect(otherField(html)).toBeUndefined();
+  });
+
+  it("opens an unlisted institution under Otra, with its name typed", () => {
+    const html = render(undefined, { institution: "Mi broker" });
+    expect(control(html, "Institución")).not.toContain("data-placeholder");
+    const other = otherField(html)!;
+    expect(other).toContain('value="Mi broker"');
+    expect(other).toContain("autofocus");
+    expect(marked(html, "autofocus")).toEqual([]);
+  });
+
+  it("keeps the hidden name field mounted but unmarked when the list was refused", () => {
+    const html = render(MESSAGES.invalid);
+    const field = nameInput(html);
+    expect(field).toContain(" hidden");
+    expect(field).not.toContain("aria-invalid=");
+    expect(field).not.toContain("aria-describedby=");
+    expect(field).not.toContain("autofocus");
+  });
 });
 
 it("marks, describes and focuses the holder when it was archived", () => {

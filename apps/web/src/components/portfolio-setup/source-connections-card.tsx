@@ -23,6 +23,7 @@ import type {
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
 import { sourceConnectionLabel } from "./accounts-using";
+import { InstitutionIcon } from "./institution-field";
 import { rowAnswer } from "./answers";
 import { temporaryId } from "./list-change";
 import {
@@ -66,18 +67,21 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
   {
     id: "institution",
     header: "Cuenta",
-    meta: { className: "@2xl:w-28" },
+    meta: { className: "@2xl:w-36" },
     cell: ({ row: { original: row } }) => (
       <>
-        <span
-          className="block truncate"
-          title={`${row.institution} · ${holderName(row)}`}
-        >
-          {row.institution}
-          <span className="@2xl:hidden"> · {holderName(row)}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <InstitutionIcon name={row.institution} />
+          <span
+            className="block truncate"
+            title={`${row.institution} · ${holderName(row)}`}
+          >
+            {row.institution}
+            <span className="@2xl:hidden"> · {holderName(row)}</span>
+          </span>
         </span>
         <TruncatedText
-          className="text-xs text-muted-foreground @2xl:hidden"
+          className="pl-6 text-xs text-muted-foreground @2xl:hidden"
           text={`${row.portfolio.name} · ${reportStatus(row)} en el reporte`}
         />
       </>

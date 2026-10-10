@@ -213,3 +213,45 @@ describe("rowActionButton", () => {
     expect(rowActionButton(rootFinding(null).root, "a", "restore")).toBeNull();
   });
 });
+
+describe("the header row", () => {
+  const kind: ColumnDef<Row> = { id: "kind", header: "Tipo", cell: () => "x" };
+  const actions = actionsColumn<Row>(
+    [
+      {
+        id: "archive",
+        icon: Archive,
+        tooltip: "Archivar",
+        label: (row) => `Archivar ${row.name}`,
+        onClick: () => {},
+      },
+    ],
+    { pending: false },
+  );
+  const headerRow = (html: string) => /<thead[^>]*><tr[^>]*>/.exec(html)![0];
+
+  it("stays out of view for a list of one column and its actions", () => {
+    expect(headerRow(render([nameColumn, actions]))).toMatch(
+      /class="[^"]*(?<![\w:-])collapse\b/,
+    );
+  });
+
+  it("drops its border while out of view", () => {
+    expect(headerRow(render([nameColumn, actions]))).toContain("border-b-0!");
+    expect(headerRow(render([nameColumn, kind, actions]))).toContain(
+      "@max-2xl:border-b-0!",
+    );
+  });
+
+  it("leaves the body rows alone", () => {
+    expect(render([nameColumn, actions])).not.toMatch(
+      /<tbody[^>]*>[\s\S]*collapse/,
+    );
+  });
+
+  it("shows when several columns sit side by side, from @2xl", () => {
+    const row = headerRow(render([nameColumn, kind, actions]));
+    expect(row).toContain("@max-2xl:collapse");
+    expect(row).not.toMatch(/class="[^"]*(?<![\w:-])collapse\b/);
+  });
+});

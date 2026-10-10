@@ -26,13 +26,13 @@ const alert = WRITE_MESSAGES.portfolios.duplicate_name;
 function rendered(run: SetupRun, pending: boolean) {
   mockRender.effects = [];
   mockRender.ref = 0;
-  // One render of the card; the mocked hooks above stand in for React's.
+  // One render of the hook; the mocked hooks above stand in for React's.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const card = useSetupCard({ run, pending });
   return { card, effects: mockRender.effects };
 }
 
-// Shows the card, then submits a dialog whose write the test settles.
+// Shows the section, then submits a dialog whose write the test settles.
 function submitted() {
   mockRender.refs = [];
   const runs: Parameters<SetupRun>[] = [];
@@ -58,7 +58,7 @@ function submitted() {
       const [, , answerOf, after] = runs[0]!;
       after(answerOf(result));
     },
-    // A commit of the card, while the write runs or once it ended.
+    // A commit of the section, while the write runs or once it ended.
     commit: (pending: boolean) =>
       rendered(run, pending)
         .effects.filter((effect) => effect.everyCommit)
@@ -78,7 +78,7 @@ it("reopens the dialog with the alert and toasts nothing once it shows", () => {
   expect(toast.error).not.toHaveBeenCalled();
 });
 
-it("toasts the alert when the card goes before the reopened dialog shows", () => {
+it("toasts the alert when the section goes before the reopened dialog shows", () => {
   const write = submitted();
   write.settle(refused);
   write.leave();
@@ -114,10 +114,61 @@ it("toasts the change and never an alert when the write is done", () => {
   expect(toast.error).not.toHaveBeenCalled();
 });
 
-it("toasts the alert instead of reopening when the card is already gone", () => {
+it("toasts the alert instead of reopening when the section is already gone", () => {
   const write = submitted();
   write.leave();
   write.settle(refused);
   expect(write.reopen).not.toHaveBeenCalled();
   expect(toast.error).toHaveBeenCalledWith(alert);
+});
+
+describe("a refused row action", () => {
+  const button = { focus: jest.fn(), closest: () => null };
+  const section = {
+    querySelector: (selector: string) =>
+      selector.includes('"a"') && selector.includes('"archive"')
+        ? button
+        : null,
+  };
+  const heading = {
+    focus: jest.fn(),
+    closest: (selector: string) =>
+      selector === '[data-slot="setup-section"]' ? section : null,
+  };
+
+  beforeAll(() => {
+    Object.assign(globalThis, {
+      CSS: { escape: (value: string) => value },
+      document: { activeElement: heading, body: {} },
+    });
+  });
+  afterAll(() => {
+    Reflect.deleteProperty(globalThis, "CSS");
+    Reflect.deleteProperty(globalThis, "document");
+  });
+
+  it("returns focus to its button in the heading's section once it ends", () => {
+    mockRender.refs = [];
+    const runs: Parameters<SetupRun>[] = [];
+    const run: SetupRun = (...args) => {
+      runs.push(args);
+      return true;
+    };
+    const { card, effects } = rendered(run, false);
+    effects.forEach((effect) => effect());
+    (mockRender.refs[0] as { current: unknown }).current = heading;
+    card.rowAction(
+      { list: "portfolios", change: { kind: "archive", id: "a" } },
+      () => Promise.resolve(refused),
+      () => ({ kind: "alert", text: alert }),
+      { done: "Archivaste Principal", rowId: "a", actionId: "archive" },
+    );
+    const [, , answerOf, after] = runs[0]!;
+    after(answerOf(refused));
+    expect(button.focus).not.toHaveBeenCalled();
+    rendered(run, false)
+      .effects.filter((effect) => effect.everyCommit)
+      .forEach((effect) => effect());
+    expect(button.focus).toHaveBeenCalledTimes(1);
+  });
 });

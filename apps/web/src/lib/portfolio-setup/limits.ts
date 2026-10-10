@@ -8,6 +8,7 @@ export const NAME_LIMITS = {
 
 export type SetupTable = keyof typeof NAME_LIMITS;
 
-// The most active rows a card lists, and the archived rows one page shows.
+// The most active rows a list section shows, and the archived rows one page
+// shows.
 export const PAGE_ROW_LIMIT = 300;
 export const ARCHIVED_ROW_LIMIT = 50;

@@ -6,7 +6,7 @@ import type {
 
 export type WriteMessages = Record<WriteResultCode, string>;
 
-// What the card does with an action's answer, or with a rejected call
+// What the section does with an action's answer, or with a rejected call
 // (network, version skew).
 export type Answer =
   { kind: "done" } | { kind: "alert"; text: string } | { kind: "ask_name" };

@@ -30,8 +30,8 @@ declare module "@tanstack/react-table" {
   }
 }
 
-// A header or cell is called as a function, not mounted as a component: the
-// cards rebuild their columns on every render, and as components each new
+// A header or cell is called as a function, not mounted as a component: its
+// callers rebuild their columns on every render, and as components each new
 // function would remount its cell, replacing the button a dialog returns focus
 // to. So a header or cell must not call hooks; one that needs them renders a
 // component instead (`cell: (context) => <Cell {...context} />`).
@@ -45,6 +45,8 @@ function slot<P extends object>(
 // A row of a DataTable. `unsaved` marks a row the page shows before the
 // server has confirmed it.
 type DataTableRow = { id: string; unsaved?: true };
+
+const ACTIONS_COLUMN = "actions";
 
 // Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
@@ -70,13 +72,25 @@ function DataTable<T extends DataTableRow>({
     getRowId: (row) => row.id,
   });
 
+  // Column names only help when several columns show side by side: a list of
+  // one column, or a table below @2xl (its secondary columns use
+  // `hidden @2xl:table-cell` and fold into the first), keeps its header row
+  // out of view, and the caption names it. visibility: collapse keeps the
+  // fixed layout's column widths, which the header cells set; the row's
+  // border would still paint, so it goes too.
+  const dataColumns = columns.filter((column) => column.id !== ACTIONS_COLUMN);
+  const headerRowClass =
+    dataColumns.length > 1
+      ? "@max-2xl:collapse @max-2xl:border-b-0!"
+      : "collapse border-b-0!";
+
   return (
     <div data-slot="data-table" className="@container rounded-md border">
       <Table className="table-fixed">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow key={headerGroup.id} className={headerRowClass}>
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
@@ -148,7 +162,7 @@ function actionsColumn<T>(
   { pending }: { pending: boolean },
 ): ColumnDef<T> {
   return {
-    id: "actions",
+    id: ACTIONS_COLUMN,
     size: actions.length * 28 + (actions.length - 1) * 4 + 24,
     header: () => <span className="sr-only">Acciones</span>,
     cell: ({ row }) => (
