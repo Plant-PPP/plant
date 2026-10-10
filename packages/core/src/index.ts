@@ -8,6 +8,7 @@ export type {
 export {
   feedErrorForStatus,
   type FxRate,
+  type FxRateKind,
   type Price,
   QUOTE_CLOSE_HOUR,
   QUOTE_KEYS,
@@ -15,6 +16,7 @@ export {
   type QuoteFeedCode,
   QuoteFeedError,
   quoteFailureOf,
+  type QuoteSnapshot,
   type QuoteStage,
   type QuoteStoreCode,
   QuoteStoreError,
@@ -22,3 +24,15 @@ export {
   REFUSALS,
 } from "./quotes/contract/quote";
 export { quoteFeeds } from "./quotes/factory";
+export { DENOMINATORS, type Denominator } from "./valuation/denominators";
+export {
+  rate,
+  type ReferenceDollar,
+  type Value,
+} from "./valuation/denominator";
+export {
+  type Holding,
+  holdingSchema,
+  instrumentValue,
+} from "./valuation/holding";
+export { type HoldingsValue, valueHoldings } from "./valuation/holdings";

@@ -61,6 +61,52 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"holdings": {
+                  Row: {
+                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                  }
+                  Update: {
+                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "holdings_instrument_symbol_fkey"
+      columns: ["instrument_symbol"]
+isOneToOne: false
+      referencedRelation: "instruments"
+      referencedColumns: ["symbol"]
+    },{
+      foreignKeyName: "holdings_user_id_portfolio_id_fkey"
+      columns: ["user_id","portfolio_id"]
+isOneToOne: false
+      referencedRelation: "portfolios"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "holdings_user_id_source_connection_id_fkey"
+      columns: ["user_id","source_connection_id"]
+isOneToOne: false
+      referencedRelation: "source_connections"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"instruments": {
+                  Row: {
+                    "currency": Database["public"]['Enums']["currency"],"name": string,"symbol": string,"type": Database["public"]['Enums']["instrument_type"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "currency": Database["public"]['Enums']["currency"],"name": string,"symbol": string,"type": Database["public"]['Enums']["instrument_type"]
+                  }
+                  Update: {
+                    "currency"?: Database["public"]['Enums']["currency"],"name"?: string,"symbol"?: string,"type"?: Database["public"]['Enums']["instrument_type"]
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"portfolios": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"id": string,"name": string,"updated_at": string,"user_id": string
@@ -138,7 +184,7 @@ isOneToOne: false
             [_ in never]: never
           }
           Enums: {
-            "ai_cost_type": "import_extraction","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -254,7 +300,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

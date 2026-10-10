@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { BUENOS_AIRES_TZ, Constants } from "@plant/shared";
+import {
+  lastConstraint,
+  lastFunctionBodies,
+  tableSql,
+} from "@plant/shared/testing";
 import { z } from "zod";
 
 import {
@@ -600,34 +602,15 @@ describe("feedErrorForStatus", () => {
 });
 
 describe("the quotes migrations", () => {
-  const dir = join(__dirname, "../../../../../supabase/migrations");
-  const readMigrations = () =>
-    readdirSync(dir)
-      .filter((file) => file.endsWith(".sql"))
-      .map((file) => ({ file, sql: readFileSync(join(dir, file), "utf8") }));
-  const tableSql = (table: string) => {
-    const match = readMigrations()
-      .map(({ sql }) =>
-        sql.match(
-          new RegExp(`CREATE TABLE public\\.${table} \\(([\\s\\S]*?)\\n\\);`),
-        ),
-      )
-      .find(Boolean);
-    if (!match?.[1]) throw new Error(`no CREATE TABLE for ${table}`);
-    // Constraints a later migration adds count too.
-    const alters = readMigrations().flatMap(({ sql }) =>
-      [
-        ...sql.matchAll(
-          new RegExp(`ALTER TABLE public\\.${table}\\b[^;]*;`, "g"),
-        ),
-      ].map(([statement]) => statement),
-    );
-    return [match[1], ...alters].join("\n");
-  };
-
   it("give prices.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
     expect(tableSql("prices")).toContain(
       `CHECK (symbol ~ '${SYMBOL_PATTERN.source}')`,
+    );
+  });
+
+  it("give instruments.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
+    expect(lastConstraint("instruments", "instruments_symbol_pattern")).toBe(
+      `symbol ~ '${SYMBOL_PATTERN.source}'`,
     );
   });
 
@@ -691,11 +674,10 @@ describe("the quotes migrations", () => {
   });
 
   it("date the quote guards in BUENOS_AIRES_TZ", () => {
-    const zones = readMigrations()
-      .filter(({ sql }) => sql.includes("'PT403'"))
-      .flatMap(({ sql }) =>
-        [...sql.matchAll(/AT TIME ZONE '([^']+)'/g)].map((match) => match[1]),
-      );
+    const zones = [...lastFunctionBodies(/guard_\w+_insert/).values()].flatMap(
+      (body) =>
+        [...body.matchAll(/AT TIME ZONE '([^']+)'/g)].map((match) => match[1]),
+    );
     expect(zones.length).toBeGreaterThanOrEqual(2);
     expect(new Set(zones)).toEqual(new Set([BUENOS_AIRES_TZ]));
   });

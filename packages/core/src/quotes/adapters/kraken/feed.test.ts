@@ -1,3 +1,4 @@
+import { migrations } from "@plant/shared/testing";
 import { createKrakenFeed, parse } from "./feed";
 
 const NOW = new Date("2026-10-09T21:30:00.000Z");
@@ -154,4 +155,26 @@ describe("createKrakenFeed", () => {
       "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,USDTUSD,USDCUSD",
     ]);
   });
+});
+
+// Every symbol this feed prices is an instrument a user can hold, in the
+// currency the feed quotes it in.
+it("prices only instruments the migrations seed, in their currency", () => {
+  const seeded = new Map(
+    migrations().flatMap(({ sql }) =>
+      [
+        ...(sql.match(/INSERT INTO public\.instruments[^;]*;/g) ?? []).flatMap(
+          (insert) => [
+            ...insert.matchAll(/\('(\w+)', '[^']*', '\w+', '(\w+)'\)/g),
+          ],
+        ),
+      ].map(([, symbol, currency]) => [symbol, currency]),
+    ),
+  );
+  for (const row of parse(BODY, NOW).prices) {
+    expect([row.symbol, seeded.get(row.symbol)]).toEqual([
+      row.symbol,
+      row.currency,
+    ]);
+  }
 });

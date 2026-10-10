@@ -7,18 +7,39 @@ import {
   users,
 } from "./pentest-helpers";
 import { type QuoteCases, runEnv } from "./pentest-users";
-import { type ReferenceTable, filterOf, referenceRows } from "./reference-rows";
+import {
+  type QuoteTable,
+  type ReferenceRow,
+  type ReferenceTable,
+  filterOf,
+  referenceRows,
+} from "./reference-rows";
 
 const quotes = readEnv<QuoteCases>(runEnv.quotes);
-export const REFERENCE_TARGETS = referenceRows(quotes.date);
+// The quote rows global setup seeded through the service role, and an
+// instrument the migration seeded.
+const QUOTE_TARGETS = referenceRows(quotes.date);
+export const REFERENCE_TARGETS = {
+  ...QUOTE_TARGETS,
+  instruments: {
+    key: ["symbol"],
+    row: { symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD" },
+  },
+} satisfies { [T in ReferenceTable]: ReferenceRow<T> };
 
 const { a, b } = users;
 
-// Global setup seeded the row through the service role.
+const deniedOn =
+  (table: ReferenceTable) =>
+  (res: Parameters<typeof expectRelationDenied>[0]) =>
+    expectRelationDenied(res, table);
+
+export const isQuoteTable = (table: ReferenceTable): table is QuoteTable =>
+  Object.hasOwn(QUOTE_TARGETS, table);
+
 export function describeReferenceTable(table: ReferenceTable): void {
   const { row } = REFERENCE_TARGETS[table];
   const target = `${table}?${filterOf(REFERENCE_TARGETS[table])}`;
-  const writes = quotes.writes[table];
   let before: unknown;
 
   async function read(): Promise<unknown> {
@@ -27,8 +48,7 @@ export function describeReferenceTable(table: ReferenceTable): void {
     return res.body;
   }
 
-  const expectDenied = (res: Parameters<typeof expectRelationDenied>[0]) =>
-    expectRelationDenied(res, table);
+  const expectDenied = deniedOn(table);
 
   beforeAll(async () => {
     before = await read();
@@ -75,6 +95,14 @@ export function describeReferenceTable(table: ReferenceTable): void {
       await expectNoAuthUsersEmbed(a, table);
     });
   });
+
+  if (isQuoteTable(table)) describeQuoteServiceRole(table);
+}
+
+// What the service role, which writes quotes daily, may and may not do.
+function describeQuoteServiceRole(table: QuoteTable): void {
+  const writes = quotes.writes[table];
+  const expectDenied = deniedOn(table);
 
   describe(`the service role on ${table}`, () => {
     test("inserting today's row again returns nothing", () => {

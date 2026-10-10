@@ -3,6 +3,8 @@ import {
   buenosAiresHour,
   compareDecimals,
   Constants,
+  type Currency,
+  fieldsPassed,
   positiveDecimalSchema,
 } from "@plant/shared";
 import { z } from "zod";
@@ -38,11 +40,6 @@ const isoInstant = z.iso
     "Must be in years 1 to 9999",
   );
 
-// The object's refinements run even when a field failed; a row whose fields
-// failed is already invalid, and compareDecimals expects valid decimals.
-const fieldsPassed = (payload: { issues: readonly unknown[] }) =>
-  payload.issues.length === 0;
-
 const fxRateSchema = z
   .object({
     kind: z.enum(fx_rate_kind),
@@ -72,6 +69,17 @@ const priceSchema = z.object({
   fetched_at: isoInstant,
 });
 export type Price = z.output<typeof priceSchema>;
+
+// The quotes a valuation reads for one day: each rate (by fx_rate_kind) and each price as
+// its latest row on or before `date`, with the date that row carries. Amounts
+// are decimal strings, so a reader selects numeric columns as text.
+export type QuoteSnapshot = {
+  date: string;
+  fx: Partial<Record<FxRateKind, { sell: string; date: string }>>;
+  prices: Partial<
+    Record<string, { price: string; currency: Currency; date: string }>
+  >;
+};
 
 // Each table's primary key, as in the quotes migration. A row's key is the
 // first column's value; the date is the same for every row a read keeps.

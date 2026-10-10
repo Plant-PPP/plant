@@ -5,7 +5,7 @@ import {
 import { type Insert, expectError, rest } from "./pentest-helpers";
 import type { TestUser } from "./pentest-users";
 
-type SetupTable = "portfolios" | "holders" | "source_connections";
+type SetupTable = "portfolios" | "holders" | "source_connections" | "holdings";
 
 export async function createRow<T extends SetupTable>(
   user: TestUser,

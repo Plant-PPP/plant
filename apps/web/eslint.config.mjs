@@ -20,6 +20,7 @@ import {
   SERVICE_ROLE,
   SESSION_CLAIMS_UNCHECKED,
   SOURCE,
+  TESTING,
 } from "../../eslint.fences.mjs";
 
 const noReexport = (modules) =>
@@ -117,6 +118,13 @@ export default defineConfig([
   {
     files: [`**/*.${SOURCE}`],
     rules: webRules({ syntax: BASE_SYNTAX }),
+  },
+  // Tests may also import the testing helpers. Placed before the per-file
+  // blocks: flat config replaces a file's rules, so a test those blocks match
+  // gets TESTING only if its block allows it.
+  {
+    files: [`**/*.test.{ts,tsx}`],
+    rules: webRules({ allow: [TESTING], syntax: BASE_SYNTAX }),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],
