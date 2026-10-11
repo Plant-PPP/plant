@@ -18,11 +18,12 @@ export type MovementScope =
   | { symbol: string };
 
 // A movement as a list shows it, its money in the page's unit (null when it
-// cannot be expressed in that unit): what it cost or paid (a sale's cost is
-// that of the units it sold), and its charges.
+// cannot be expressed in that unit): its amount (a purchase's cost, what a
+// sale brought before charges, what an income paid, the cost an adjustment
+// moved), and its charges.
 export type MovementLine = {
   movement: Movement;
-  cost: string | null;
+  amount: string | null;
   charges: string | null;
   operation: OperationParts;
 };
