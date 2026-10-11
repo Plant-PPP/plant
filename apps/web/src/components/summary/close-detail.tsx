@@ -74,10 +74,10 @@ function CloseFigures({
   return (
     <div className="grid gap-3">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Patrimonio al inicio">
+        <SummaryTile label="Patrimonio neto al inicio">
           <Money amount={figures.startValue} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Patrimonio al final">
+        <SummaryTile label="Patrimonio neto al final">
           <Money amount={figures.endValue} unit={unit} />
         </SummaryTile>
         <SummaryTile

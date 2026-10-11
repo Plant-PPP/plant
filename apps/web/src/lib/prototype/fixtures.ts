@@ -2,6 +2,7 @@ import {
   admitMovement,
   type Charge,
   isTrade,
+  type Liability,
   type ManualPrice,
   type Movement,
   type MovementDraft,
@@ -36,6 +37,7 @@ export type Fixtures = {
   movements: Movement[];
   quotes: StoredQuotes;
   manualPrices: ManualPrice[];
+  liabilities: Liability[];
 };
 
 const HISTORY_DAYS = 730;
@@ -84,6 +86,8 @@ const INSTRUMENTS: InstrumentRow[] = [
 const mepCents = (day: number) => 90_000 + day * 45 + (day % 5) * 150;
 const cclCents = (day: number) => mepCents(day) + 4_000 + day * 2;
 const officialCents = (day: number) => mepCents(day) - 15_000 - day * 3;
+// The UVA climbs every day, with inflation.
+const uvaCents = (day: number) => 120_000 + day * 55;
 
 // How a symbol's dollar price moves: today's, what share of it it was two
 // years back (in percent), and a wave of `amplitude` per mille every
@@ -181,6 +185,7 @@ function quotesFor(today: string): StoredQuotes {
       { kind: "mep", rate_date: date, sell: decimal(mepCents(day)) },
       { kind: "ccl", rate_date: date, sell: decimal(cclCents(day)) },
       { kind: "official", rate_date: date, sell: decimal(officialCents(day)) },
+      { kind: "uva", rate_date: date, sell: decimal(uvaCents(day)) },
     );
     for (const symbol of FED) {
       prices.push({
@@ -426,6 +431,71 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   },
 ];
 
+// What the user owes: a UVA mortgage, a card, a personal loan and a loan in
+// dollars from family.
+const liabilitiesFor = (today: string): Liability[] => [
+  {
+    id: "e5000000-0000-4000-8000-000000000001",
+    kind: "mortgage",
+    label: "Hipoteca del departamento",
+    lender: "Banco Nación",
+    currency: "ARS",
+    uva: true,
+    instrument_symbol: null,
+    balance: "38500",
+    installment: "312.4",
+    annual_rate: "0.045",
+    installments_left: 214,
+    next_due_on: addDays(today, 9),
+    matures_on: addDays(today, 214 * 30),
+  },
+  {
+    id: "e5000000-0000-4000-8000-000000000002",
+    kind: "credit_card",
+    label: "Visa",
+    lender: "Galicia",
+    currency: "ARS",
+    uva: false,
+    instrument_symbol: null,
+    balance: "485320.5",
+    installment: null,
+    annual_rate: null,
+    installments_left: null,
+    next_due_on: addDays(today, 6),
+    matures_on: null,
+  },
+  {
+    id: "e5000000-0000-4000-8000-000000000003",
+    kind: "personal_loan",
+    label: "Préstamo para el auto",
+    lender: "Santander",
+    currency: "ARS",
+    uva: false,
+    instrument_symbol: null,
+    balance: "1820000",
+    installment: "158400",
+    annual_rate: "0.62",
+    installments_left: 14,
+    next_due_on: addDays(today, 12),
+    matures_on: addDays(today, 14 * 30),
+  },
+  {
+    id: "e5000000-0000-4000-8000-000000000004",
+    kind: "usd_debt",
+    label: "Préstamo de mi viejo",
+    lender: null,
+    currency: "USD",
+    uva: false,
+    instrument_symbol: null,
+    balance: "3000",
+    installment: null,
+    annual_rate: null,
+    installments_left: null,
+    next_due_on: null,
+    matures_on: null,
+  },
+];
+
 const OTHER_HOLDINGS: [id: string, columns: Record<string, unknown>, Placed][] =
   [
     [
@@ -580,5 +650,6 @@ export function buildFixtures(today: string): Fixtures {
     movements,
     quotes,
     manualPrices: manualPricesFor(today),
+    liabilities: liabilitiesFor(today),
   };
 }

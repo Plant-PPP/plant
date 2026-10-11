@@ -105,7 +105,7 @@ export function NetWorthChart({
       <figcaption className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-3 h-0.5 w-4 rounded" />
-          Patrimonio a fin de mes
+          Patrimonio neto a fin de mes
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span

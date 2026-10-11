@@ -13,6 +13,7 @@ import {
   quotesNeeded,
   snapshotOn,
   takesUnits,
+  valueLiabilities,
   withManualPrices,
 } from "@plant/core";
 import { exactOf, plus, toDecimal } from "@plant/shared";
@@ -169,6 +170,7 @@ export function closesOf(
     const quoted = withManualPrices(
       snapshotOn(state.quotes, date, {
         ...need,
+        fxKinds: [...need.fxKinds, "uva"],
         symbols: state.instruments.map(({ symbol }) => symbol),
       }).snapshot,
       state.manualPrices,
@@ -184,7 +186,16 @@ export function closesOf(
       unit,
       referenceDollar: state.referenceDollar,
     }).kinds.total;
-    return { value: total.value, complete: total.complete };
+    // Net worth: what is held less what is owed. A debt keeps today's balance
+    // on every past day, in its own unit, until debts have a history.
+    const owed = valueLiabilities(state.liabilities, snapshot, {
+      denominator: unit,
+      referenceDollar: state.referenceDollar,
+    });
+    return {
+      value: minus(total.value, owed.total),
+      complete: total.complete && owed.complete,
+    };
   };
 
   const closes = monthsBetween(first, state.today).map((month) => {

@@ -79,7 +79,7 @@ export function SummaryPage({
         <div className="grid gap-1">
           <h1 className="text-xl font-semibold">Resumen</h1>
           <p className="text-muted-foreground text-sm">
-            Tu patrimonio y cómo se movió mes a mes
+            Tu patrimonio neto y cómo se movió mes a mes
           </p>
         </div>
         <FilterSelect
@@ -96,7 +96,7 @@ export function SummaryPage({
 
       {current && thisYear && (
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryTile label="Patrimonio" note="Hoy">
+          <SummaryTile label="Patrimonio neto" note="Activos menos deudas, hoy">
             <Money amount={current.figures.endValue} unit={unit} />
           </SummaryTile>
           <SummaryTile
