@@ -16,10 +16,8 @@ import { type ReferenceDollar, express } from "../valuation/denominator";
 import type { Denominator } from "../valuation/denominators";
 import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
 
-// The digits a position keeps between movements: its stored precision.
-
+// A position's figures, rounded to the stored precision between movements.
 const kept = (x: Exact): Exact => roundedTo(x, DECIMAL_SCALE_DIGITS);
-const text = stored;
 
 // A holding's position in one unit after a movement. Money is in the view's
 // unit, each movement converted at its own date's rates; it is null when a
@@ -76,10 +74,10 @@ const moneyOf = (money: PositionMoney): Money => ({
 });
 
 const moneyText = (money: Money): PositionMoney => ({
-  cost: text(money.cost),
-  charges: text(money.charges),
-  income: text(money.income),
-  realized: text(money.realized),
+  cost: stored(money.cost),
+  charges: stored(money.charges),
+  income: stored(money.income),
+  realized: stored(money.realized),
 });
 
 // The sum of a movement's charges, in its currency.
@@ -144,10 +142,10 @@ export function replay(
           const result = isSale ? minus(minus(value, charges), cost) : ZERO;
           if (isSale) {
             sale = {
-              gross: text(value),
-              charges: text(charges),
-              cost: text(cost),
-              result: text(result),
+              gross: stored(value),
+              charges: stored(charges),
+              cost: stored(cost),
+              result: stored(result),
             };
           }
           money = {
@@ -179,7 +177,10 @@ export function replay(
     }
     steps.push({
       id: movement.id,
-      position: { quantity: text(quantity), money: money && moneyText(money) },
+      position: {
+        quantity: stored(quantity),
+        money: money && moneyText(money),
+      },
       ...(sale !== undefined && { sale }),
     });
   }
@@ -200,7 +201,7 @@ export function unrealized(
   const paid = exactOf(cost);
   const amount = minus(exactOf(value), paid);
   return {
-    amount: text(amount),
-    share: compareExact(paid, ZERO) === 0 ? null : text(over(amount, paid)),
+    amount: stored(amount),
+    share: compareExact(paid, ZERO) === 0 ? null : stored(over(amount, paid)),
   };
 }

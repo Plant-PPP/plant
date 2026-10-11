@@ -242,31 +242,46 @@ export function ImportReview({
               ? "Lo leído suma lo mismo que el documento."
               : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
         </p>
-        <dl className="grid grid-cols-[auto_auto_auto] justify-start gap-x-6 gap-y-1 text-sm tabular-nums">
-          <dt className="text-muted-foreground text-xs">Moneda</dt>
-          <dt className="text-muted-foreground text-xs">Leído</dt>
-          <dt className="text-muted-foreground text-xs">Documento</dt>
-          {[
-            ...new Set(
-              [...item.documentTotals, ...totals].map(
-                ({ currency }) => currency,
+        <table className="w-fit text-sm tabular-nums">
+          <caption className="sr-only">Totales por moneda</caption>
+          <thead>
+            <tr className="text-muted-foreground text-left text-xs">
+              <th scope="col" className="pr-6 font-normal">
+                Moneda
+              </th>
+              <th scope="col" className="pr-6 font-normal">
+                Leído
+              </th>
+              <th scope="col" className="font-normal">
+                Documento
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ...new Set(
+                [...item.documentTotals, ...totals].map(
+                  ({ currency }) => currency,
+                ),
               ),
-            ),
-          ].map((currency) => {
-            const amountIn = (list: typeof totals) =>
-              formatAmount(
-                list.find((each) => each.currency === currency)?.amount ?? "0",
-                currency,
+            ].map((currency) => {
+              // A currency the document prints no total for shows none.
+              const amountIn = (list: typeof totals) => {
+                const total = list.find((each) => each.currency === currency);
+                return total ? formatAmount(total.amount, currency) : "—";
+              };
+              return (
+                <tr key={currency}>
+                  <th scope="row" className="pr-6 text-left font-normal">
+                    {currency}
+                  </th>
+                  <td className="pr-6">{amountIn(totals)}</td>
+                  <td>{amountIn(item.documentTotals)}</td>
+                </tr>
               );
-            return (
-              <div key={currency} className="contents">
-                <dd>{currency}</dd>
-                <dd>{amountIn(totals)}</dd>
-                <dd>{amountIn(item.documentTotals)}</dd>
-              </div>
-            );
-          })}
-        </dl>
+            })}
+          </tbody>
+        </table>
       </section>
 
       <section className="grid gap-3">

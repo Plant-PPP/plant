@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/format/date";
+import { leftThisMonth } from "@/lib/format/text";
 import {
   IMPORT_STATUS_LABELS,
   type ImportItem,
@@ -180,7 +181,7 @@ export function ImportPage({
           </div>
           <div className="grid gap-1 text-right">
             <span className="text-muted-foreground text-xs">
-              {`${left === 1 ? "Te queda" : "Te quedan"} ${left} de ${IMPORTS_PER_MONTH} cargas este mes`}
+              {leftThisMonth(left, IMPORTS_PER_MONTH, "cargas")}
             </span>
             <span className="bg-muted h-1.5 w-40 overflow-hidden rounded-full">
               <span

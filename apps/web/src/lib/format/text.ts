@@ -5,3 +5,7 @@ export const folded = (text: string): string =>
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
+
+// What is left of a monthly allowance: "Te queda 1 de 10 cargas este mes".
+export const leftThisMonth = (left: number, total: number, noun: string) =>
+  `${left === 1 ? "Te queda" : "Te quedan"} ${left} de ${total} ${noun} este mes`;
