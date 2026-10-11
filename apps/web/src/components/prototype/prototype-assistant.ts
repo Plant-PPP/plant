@@ -26,13 +26,14 @@ import {
 
 type Answer = Omit<AssistantMessage, "id">;
 
-const percent = (fraction: string | null) =>
-  fraction === null ? "sin dato" : formatFraction(fraction);
-
 // A question that asks what to do, not what happened: "¿qué compro?",
-// "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?".
+// "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?",
+// "¿vendo Apple?", "¿qué hago con mis Tesla?", "¿es buen momento?".
 const ADVICE =
-  /\b(que|cual|cuanto) (compro|vendo|invierto)\b|conviene|recomend|deberia (comprar|vender|invertir)|me sale (comprar|vender)/;
+  /\b(que|cual|cuanto) (compro|vendo|invierto)\b|^\W*(compro|vendo|invierto)\b|conviene|recomend|(deberia|debo|tengo que) (comprar|vender|invertir)|me sale (comprar|vender)|que hago con|buen momento/;
+
+// What a figure that left something out says after it.
+const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
 
 const signed = (amount: string, unit: ChatUnit) =>
   `${amount.startsWith("-") ? "" : "+"}${formatAmount(amount, unit)}`;
@@ -107,7 +108,7 @@ export function prototypeAnswer(
       text: [
         `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
         returns
-          ? `En total, entre lo que vendiste, lo que cobraste y lo que tenés, tu inversión ${moved(returns.result, unit)} (${percent(returns.share)} sobre lo que pusiste)${returns.annual ? `, un ${percent(returns.annual)} por año` : ""}.`
+          ? `En total, entre lo que vendiste, lo que cobraste y lo que tenés, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share)} sobre lo que pusiste)` : ""}${returns.annual ? `, un ${formatFraction(returns.annual)} por año` : ""}.`
           : "",
         summary.unrealized
           ? `Lo que tenés hoy está ${summary.unrealized.amount.startsWith("-") ? "abajo" : "arriba"} ${formatAmount(summary.unrealized.amount.replace(/^-/, ""), unit)} contra lo que te costó.`
@@ -143,22 +144,33 @@ export function prototypeAnswer(
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });
+    if (state.liabilities.length === 0) {
+      return {
+        ...base,
+        text: "No tenés deudas cargadas en Plant.",
+        chart: null,
+        sources: ["Deudas"],
+        followUps: FOLLOW_UPS.debts,
+      };
+    }
     const byId = new Map(owed.items.map((item) => [item.id, item.value]));
+    // Only the debts with a value in the unit are ranked and drawn.
+    const valued = state.liabilities
+      .flatMap((debt) => {
+        const value = byId.get(debt.id);
+        return value ? [{ label: debt.label, value }] : [];
+      })
+      .sort((a, b) => compareDecimals(b.value, a.value));
+    const count = state.liabilities.length;
     return {
       ...base,
-      text: `Debés ${formatAmount(owed.total, unit)} en ${state.liabilities.length} deudas. La más grande es ${
-        [...state.liabilities].sort((a, b) =>
-          compareDecimals(byId.get(b.id) ?? "0", byId.get(a.id) ?? "0"),
-        )[0]?.label ?? "—"
-      }.`,
-      chart: {
-        title: "Lo que debés",
-        unit,
-        bars: state.liabilities.map((debt) => ({
-          label: debt.label,
-          value: byId.get(debt.id) ?? "0",
-        })),
-      },
+      text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${count === 1 ? "1 deuda" : `${count} deudas`}.${
+        count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
+      }`,
+      chart:
+        valued.length > 0
+          ? { title: "Lo que debés", unit, bars: valued }
+          : null,
       sources: ["Deudas", "Cotizaciones"],
       followUps: FOLLOW_UPS.debts,
     };
@@ -167,7 +179,7 @@ export function prototypeAnswer(
   if (/dividend|cupon|cobr|renta/.test(asked) && thisYear) {
     return {
       ...base,
-      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, ya sin las retenciones.`,
+      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.`,
       chart: {
         title: `Cobros de ${thisYear.year}`,
         unit,
@@ -185,7 +197,7 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}, un ${percent(thisYear.totals.share)} sin contar lo que pusiste (pusiste ${formatAmount(thisYear.totals.contributed, unit)} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (pusiste ${formatAmount(thisYear.totals.contributed, unit)} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
@@ -213,7 +225,7 @@ export function prototypeAnswer(
     });
     return {
       ...base,
-      text: `Tu patrimonio neto es ${formatAmount(closes.at(-1)?.figures.endValue ?? "0", unit)}: tenés ${formatAmount(valuation.kinds.total.value, unit)} en activos y debés ${formatAmount(owed.total, unit)}.`,
+      text: `Tu patrimonio neto es ${formatAmount(closes.at(-1)?.figures.endValue ?? "0", unit)}${valuation.kinds.total.complete && owed.complete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(valuation.kinds.total.value, unit)} en activos y debés ${formatAmount(owed.total, unit)}.`,
       chart: {
         title: "Cómo está repartido",
         unit,

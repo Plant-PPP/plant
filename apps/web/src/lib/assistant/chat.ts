@@ -29,7 +29,7 @@ export type AssistantMessage = {
   chart: ChartPart | null;
   // What it consulted, named for the user.
   sources: string[];
-  // The day its data is from, and the dollar it used when the unit is one.
+  // The day it was calculated, and the dollar it used when the unit is one.
   asOf: string;
   rate: { label: string; sell: string } | null;
   followUps: string[];

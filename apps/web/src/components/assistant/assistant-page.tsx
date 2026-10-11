@@ -56,10 +56,13 @@ function Answer({
   message,
   animate,
   onFollowUp,
+  disabled,
 }: {
   message: AssistantMessage;
   animate: boolean;
   onFollowUp: (question: string) => void;
+  // No questions left this month.
+  disabled: boolean;
 }) {
   const text = useRevealed(message.text, animate);
   const done = text.length === message.text.length;
@@ -71,7 +74,7 @@ function Answer({
         <>
           <p className="text-muted-foreground text-xs">
             {[
-              `Datos al ${formatDate(message.asOf)}`,
+              `Calculado el ${formatDate(message.asOf)}`,
               message.rate &&
                 `${message.rate.label} ${formatAmount(message.rate.sell, "ars")}`,
               message.sources.length > 0 && message.sources.join(", "),
@@ -84,8 +87,9 @@ function Answer({
               <button
                 key={question}
                 type="button"
+                disabled={disabled}
                 onClick={() => onFollowUp(question)}
-                className="hover:bg-muted rounded-full border px-3 py-1 text-xs"
+                className="hover:bg-muted rounded-full border px-3 py-1 text-xs disabled:pointer-events-none disabled:opacity-50"
               >
                 {question}
               </button>
@@ -115,19 +119,17 @@ export function AssistantPage({
   const [unit, setUnit] = useState<ChatUnit>("usd_mep");
   const [draft, setDraft] = useState("");
   const [waiting, setWaiting] = useState(false);
-  // The answers that arrived while the page was open, which stream in.
-  const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
+  // The answer that just arrived, which streams in and is announced once;
+  // opening another conversation lets it go.
+  const [arrived, setArrived] = useState<string | null>(null);
+  const questionField = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const [deleting, setDeleting] = useState<Conversation | null>(null);
   const newButton = useRef<HTMLButtonElement>(null);
 
   const conversation = conversations.find((each) => each.id === activeId);
   const messages = conversation?.messages ?? [];
-  // The latest answer, announced when it arrives, not when an earlier
-  // conversation is opened.
-  const lastAnswer = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant" && arrived.has(message.id));
+  const lastAnswer = messages.find((message) => message.id === arrived);
   const left = Math.max(0, QUESTIONS_PER_MONTH - used);
 
   useEffect(() => {
@@ -140,11 +142,13 @@ export function AssistantPage({
     const conversationId = conversation?.id ?? fresh;
     setActiveId(conversationId);
     setDraft("");
+    // A suggestion's button goes with the empty conversation it sat in.
+    questionField.current?.focus();
     setWaiting(true);
     void actions
       .ask(conversationId, text, conversation?.unit ?? unit)
       .then(
-        (answerId) => setArrived((current) => new Set([...current, answerId])),
+        (answerId) => setArrived(answerId),
         () => {
           setDraft(text);
           toast.error("No pudimos responder. Probá de nuevo.");
@@ -153,8 +157,13 @@ export function AssistantPage({
       .finally(() => setWaiting(false));
   }
 
+  function open(conversationId: string | null) {
+    setActiveId(conversationId);
+    setArrived(null);
+  }
+
   function startNew() {
-    setActiveId(null);
+    open(null);
     setFresh(crypto.randomUUID());
   }
 
@@ -180,7 +189,7 @@ export function AssistantPage({
               <button
                 type="button"
                 aria-current={each.id === activeId || undefined}
-                onClick={() => setActiveId(each.id)}
+                onClick={() => open(each.id)}
                 className={cn(
                   "min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm",
                   each.id === activeId
@@ -203,15 +212,15 @@ export function AssistantPage({
         </ul>
         {deleting && (
           <ConfirmDialog
-            title={`¿Borrar ${deleting.title}?`}
-            description="La conversación se borra y no se puede recuperar. Las consultas que hiciste siguen contando para este mes."
+            title="¿Borrar esta conversación?"
+            description={`«${deleting.title}» se borra y no se puede recuperar. Las consultas que hiciste siguen contando para este mes.`}
             confirmLabel="Borrar"
             returnFocusTo={() => newButton.current}
             onClose={() => setDeleting(null)}
             onConfirm={() => {
               if (deleting.id === activeId) startNew();
               actions.delete(deleting.id);
-              toast.success(`Borraste ${deleting.title}`);
+              toast.success("Borraste la conversación");
             }}
           />
         )}
@@ -227,7 +236,7 @@ export function AssistantPage({
               {conversation?.title ?? "Asistente"}
             </h1>
             <p className="text-muted-foreground text-xs">
-              {`Te quedan ${left} de ${QUESTIONS_PER_MONTH} consultas este mes · ${NOT_ADVICE}`}
+              {`${left === 1 ? "Te queda" : "Te quedan"} ${left} de ${QUESTIONS_PER_MONTH} consultas este mes · ${NOT_ADVICE}`}
             </p>
           </div>
           <div className="flex items-end gap-2">
@@ -245,7 +254,7 @@ export function AssistantPage({
             )}
             <FilterSelect
               id={`${id}-unit`}
-              label="Moneda"
+              label="Responder en"
               value={conversation?.unit ?? unit}
               pending={waiting || conversation !== undefined}
               options={CHAT_UNITS.map(
@@ -275,8 +284,9 @@ export function AssistantPage({
                   <button
                     key={question}
                     type="button"
+                    disabled={left === 0}
                     onClick={() => ask(question)}
-                    className="hover:bg-muted rounded-full border px-3 py-1.5 text-sm"
+                    className="hover:bg-muted rounded-full border px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-50"
                   >
                     {question}
                   </button>
@@ -296,8 +306,9 @@ export function AssistantPage({
               <Answer
                 key={message.id}
                 message={message}
-                animate={arrived.has(message.id)}
+                animate={message.id === arrived}
                 onFollowUp={ask}
+                disabled={left === 0}
               />
             ),
           )}
@@ -322,6 +333,7 @@ export function AssistantPage({
           </label>
           <textarea
             id={`${id}-question`}
+            ref={questionField}
             value={draft}
             rows={1}
             maxLength={500}

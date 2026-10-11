@@ -93,3 +93,24 @@ it("still counts a question once its conversation is deleted", () => {
   expect(deleted.conversations).toEqual([]);
   expect(deleted.askedOn).toEqual([TODAY]);
 });
+
+it.each([
+  "¿Debo vender mis acciones?",
+  "¿Vendo Apple?",
+  "¿Compro más Bitcoin?",
+  "¿Qué hago con mis Tesla?",
+  "¿Es buen momento para invertir?",
+])("does not advise on %s", (question) => {
+  expect(ask(question).text).toMatch(/no recomienda/);
+});
+
+it("answers about debts with none loaded", () => {
+  const answer = prototypeAnswer(
+    { ...state, liabilities: [] },
+    "¿Cuánto debo?",
+    "usd_mep",
+    snapshot,
+  );
+  expect(answer.text).toBe("No tenés deudas cargadas en Plant.");
+  expect(answer.chart).toBeNull();
+});

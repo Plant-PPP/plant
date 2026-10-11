@@ -4,7 +4,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-11 · Asistente prototype (PLA-115)
 
-- **The prototype's answers are built from the user's data by rules, not a model**, to settle the chat's shape before PLA-47: each answer's text, figures and chart come from the same functions the screens use, with the day of its data, the dollar it used and what it read. It answers net worth, the year and the month, income, debts and one instrument.
+- **The prototype's answers are built from the user's data by rules, not a model**, to settle the chat's shape before PLA-47: each answer's text, figures and chart come from the same functions the screens use, with the day it was calculated, the dollar it used and what it read; a total that left something without a price says so, and a question that asks what to buy, sell or do gets the fixed answer. It answers net worth, the year and the month, income, debts and one instrument.
 - **It never says what to buy or sell.** A question that asks what to do ("¿qué compro?", "¿me conviene vender?", "¿me recomendás…?") gets the fixed answer; a question about what happened ("¿cuánto invertí?", "¿qué vendí?") gets its answer. Every screen of the chat says it is not financial advice.
 - **30 questions a month in the prototype**, counted by the day each was asked; the real limit is the server's (PLA-52).
 
