@@ -6,7 +6,6 @@ import {
   type Denominator,
   EMPTY_POSITION,
   holdingSchema,
-  isTrade,
   type Movement,
   type QuoteSnapshot,
   periodResult,
@@ -18,6 +17,7 @@ import {
 import {
   type Exact,
   exactOf,
+  negated,
   plus,
   stored,
   sumOrNull,
@@ -100,9 +100,9 @@ function holdingsAt(
   });
 }
 
-// Each instrument's price in its latest purchase, sale or opening balance
-// with a price, up to `date`, which values it on a day no feed or manual
-// price covers. An adjustment's price is a cost, not a trade's.
+// Each instrument's price in its latest purchase or sale up to `date`, which
+// values it on a day no feed or manual price covers. An opening balance's or
+// an adjustment's price is a cost, not a trade's.
 function lastTradePrices(
   ledgers: readonly Ledger[],
   date: string,
@@ -113,8 +113,7 @@ function lastTradePrices(
     for (const movement of movements) {
       if (
         movement.date > date ||
-        !isTrade(movement) ||
-        movement.kind === "adjustment" ||
+        (movement.kind !== "purchase" && movement.kind !== "sale") ||
         exactOf(movement.price).n === 0n
       ) {
         continue;
@@ -160,7 +159,7 @@ export function closesOf(
       .sort()
       .at(0) ?? state.today;
   const need = quotesNeeded(allRows(state).map((row) => row.holding));
-  const valueAt = (date: string) => {
+  const valued = (holdings: HoldingRow[], date: string) => {
     const quoted = withManualPrices(
       snapshotOn(state.quotes, date, {
         ...need,
@@ -173,13 +172,44 @@ export function closesOf(
       prices: { ...lastTradePrices(ledgers, date), ...quoted.prices },
     };
     const total = holdingsValuation({
-      holdings: holdingsAt(state, ledgers, date),
+      holdings,
       truncated: false,
       snapshot,
       unit,
       referenceDollar: state.referenceDollar,
     }).kinds.total;
     return { value: total.value, complete: total.complete };
+  };
+  const valueAt = (date: string) =>
+    valued(holdingsAt(state, ledgers, date), date);
+  // An opening balance brings in units the holder already had, worth what
+  // they were worth that day, so the gain they carry is not this month's;
+  // its price stays their cost for what a sale makes. Unpriced that day, it
+  // comes in at its cost.
+  const flowOf = (ledger: Ledger, index: number): CashFlow => {
+    const flow = ledger.flows![index]!;
+    const movement = ledger.movements[index]!;
+    if (movement.kind !== "opening_balance") return flow;
+    const worth = valued(
+      [
+        {
+          ...ledger.row,
+          holding: holdingSchema.parse({
+            ...ledger.row.holding,
+            amount: movement.quantity,
+          }),
+        },
+      ],
+      movement.date,
+    );
+    return worth.complete
+      ? {
+          ...flow,
+          amount: stored(
+            negated(plus(exactOf(worth.value), exactOf(flow.charges))),
+          ),
+        }
+      : flow;
   };
 
   const closes = monthsBetween(first, state.today).map((month) => {
@@ -188,12 +218,13 @@ export function closesOf(
     const inMonth = (date: string) => date > month.from && date <= month.to;
     const flows: CashFlow[] = [];
     const realized: (string | null)[] = [];
+    // Whether every movement of the month could be expressed in the unit.
     let known = true;
     for (const ledger of ledgers) {
-      if (!ledger.flows) known = false;
       ledger.movements.forEach((movement, index) => {
         if (!inMonth(movement.date)) return;
-        if (ledger.flows) flows.push(ledger.flows[index]!);
+        if (ledger.flows) flows.push(flowOf(ledger, index));
+        else known = false;
         realized.push(ledger.realized[index]!);
       });
     }
@@ -208,6 +239,7 @@ export function closesOf(
       }),
       realized: sumOrNull(realized),
       complete: start.complete && end.complete && known,
+      endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
     };
   });
@@ -289,9 +321,9 @@ export function monthDetail(
 
 // What a write to a month or an earlier one changes in its close: the
 // month's own movements, per account and instrument so moving units between
-// portfolios changes nothing, and what its sales made, which an earlier
-// purchase sets. Its values move with every price and balance, so they are
-// left out.
+// portfolios changes nothing, and what its flows and sales came to, which an
+// earlier purchase sets through the cost a sale or an adjustment out takes.
+// Its values move with every price and balance, so they are left out.
 function movedBy(state: PrototypeState, close: MonthClose): string {
   const own = new Map<string, Exact[]>();
   for (const held of state.holdings) {
@@ -322,6 +354,10 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
     [...own]
       .map(([key, [size, charges]]) => [key, stored(size!), stored(charges!)])
       .sort(),
+    close.figures.paidIn,
+    close.figures.proceeds,
+    close.figures.income,
+    close.figures.charges,
     close.realized,
   ]);
 }

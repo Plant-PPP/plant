@@ -10,6 +10,7 @@ import {
 import { SummaryPage } from "@/components/summary/summary-page";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
+import { closeUnit } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
@@ -22,12 +23,14 @@ const closeHref = (period: string) => `/closes/${period}`;
 export function PrototypeSummary({ params }: { params: KeysetParams }) {
   const { state, snapshot } = usePrototype();
   const reference = referenceUnit(state.referenceDollar);
-  const unitOnly = parseAssetsParams(params, {
-    portfolioIds: [],
-    tabs: TABS,
-    salesYears: [],
-  }).unit;
-  const unit = unitOnly ?? reference;
+  const unit = closeUnit(
+    parseAssetsParams(params, {
+      portfolioIds: [],
+      tabs: TABS,
+      salesYears: [],
+    }).unit,
+    reference,
+  );
   const closes = closesOf(state, unit);
   const years = yearsOfCloses(closes);
   // The year the table shows: ?year=, else the newest.
@@ -67,12 +70,14 @@ export function PrototypeClose({
 }) {
   const { state } = usePrototype();
   const reference = referenceUnit(state.referenceDollar);
-  const unit =
+  const unit = closeUnit(
     parseAssetsParams(params, {
       portfolioIds: [],
       tabs: TABS,
       salesYears: [],
-    }).unit ?? reference;
+    }).unit,
+    reference,
+  );
   if (/^\d{4}$/.test(period)) {
     const year = yearsOfCloses(closesOf(state, unit)).find(
       (each) => each.year === period,

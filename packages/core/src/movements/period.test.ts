@@ -37,10 +37,11 @@ it("splits a month's change into market, income and contributions", () => {
     market: "50",
     result: "60",
   });
-  // 60 over 1000, plus 200 for two thirds of the month, less 100 for a
-  // third and 10 for a sixth: 1098.33…
+  // 60 over 1000, plus 200 from the start of the 10th (21 of 30 days),
+  // less 100 from the start of the 20th (11 days); the income is what the
+  // money made: 1103.33…
   expect(Number(result.share)).toBeCloseTo(
-    60 / (1000 + 133.333 - 33.333 - 1.667),
+    60 / (1000 + (200 * 21) / 30 - (100 * 11) / 30),
     6,
   );
 });
@@ -94,4 +95,24 @@ it("chains monthly returns into a yearly one", () => {
   expect(chainedShare(["0.1", "-0.05"])).toBe("0.045");
   expect(chainedShare(["0.1", null])).toBeNull();
   expect(chainedShare([])).toBe("0");
+});
+
+it("weighs a flow on the last day, so a first purchase there has a return", () => {
+  const result = periodResult({
+    ...MONTH,
+    startValue: "0",
+    endValue: "1000",
+    flows: [{ date: "2026-09-30", amount: "-1005", kind: "buy", charges: "5" }],
+  });
+  expect(result.share).not.toBeNull();
+});
+
+it("files a sale whose charges exceed it under proceeds", () => {
+  const result = periodResult({
+    ...MONTH,
+    startValue: "1",
+    endValue: "0",
+    flows: [{ date: "2026-09-15", amount: "-0.5", kind: "sell", charges: "1" }],
+  });
+  expect(result).toMatchObject({ paidIn: "0", proceeds: "0.5" });
 });

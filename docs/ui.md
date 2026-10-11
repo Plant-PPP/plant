@@ -36,7 +36,7 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 - An account shows its institution's icon beside its name (`InstitutionIcon`).
 - **A row can open under itself** (`DataTable`'s `expandable` and `renderExpanded`, through `expandColumn`'s chevron), as a holding opens its movements; the panel spans the columns the table shows at its width.
 - A name that has its own page is a link (`NameLink`): an instrument opens its history, an account or a portfolio its page.
-- A filter is a compact `FilterSelect` (a hidden label, the choice in the trigger), kept in the URL like the tabs.
+- A filter is a compact `FilterSelect` (a hidden label, the choice in the trigger), kept in the URL like the tabs when it narrows a page's data. The unit a page values in is `UnitSelect`, the same filter over every denominator.
 - Outside production the data pages carry a dashed note, "Datos de prueba. Lo que cambies se pierde al recargar."
 
 ## Density and type

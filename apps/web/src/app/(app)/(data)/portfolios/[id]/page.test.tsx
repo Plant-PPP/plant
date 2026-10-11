@@ -27,7 +27,7 @@ const props = (key: string, value: string) => ({
   searchParams: Promise.resolve({}),
 });
 
-// These pages read movements, which only the made-up data has so far.
+// These pages have no production version yet.
 it.each([
   ["a portfolio", () => PortfolioPage(props("id", "p1"))],
   ["an account", () => AccountPage(props("id", "a1"))],

@@ -1,5 +1,5 @@
 import { addDays } from "@plant/shared";
-import type { InstrumentType, PeriodResult } from "@plant/core";
+import type { Denominator, InstrumentType, PeriodResult } from "@plant/core";
 
 import type { MovementLine } from "@/lib/holdings/movements-input";
 
@@ -34,13 +34,33 @@ export function monthsBetween(first: string, today: string): Month[] {
   return months;
 }
 
+// The units closes are in: a movement carries its date's dollar rates, not
+// Bitcoin's price, so its cash flows cannot be expressed in BTC.
+export const CLOSE_UNITS = [
+  "ars",
+  "usd_mep",
+  "usd_ccl",
+  "usd_official",
+] as const satisfies readonly Denominator[];
+
+export const closeUnit = (
+  unit: Denominator | null,
+  reference: Denominator,
+): Denominator =>
+  unit !== null && (CLOSE_UNITS as readonly Denominator[]).includes(unit)
+    ? unit
+    : reference;
+
 // One month's close in the page's unit: its period's result, plus the result
 // of its sales (null when unknown in the unit), whether every holding had a
-// price at both ends, and when it was last recalculated after it closed.
+// price at both ends and every movement could be expressed in the unit, and
+// when it was last recalculated after it closed. `endComplete` says the first
+// alone of its end, the net worth a page shows for today.
 export type MonthClose = Month & {
   figures: PeriodResult;
   realized: string | null;
   complete: boolean;
+  endComplete: boolean;
   recalculatedOn: string | null;
 };
 

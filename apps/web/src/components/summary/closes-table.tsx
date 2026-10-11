@@ -17,6 +17,16 @@ import { CloseStatus, ResultText } from "./figures";
 
 type Row = MonthClose & { id: string };
 
+// A close that left out a holding without a price or a movement the unit
+// cannot express; its detail says which.
+function PartialMark() {
+  return (
+    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+      Parcial
+    </span>
+  );
+}
+
 // A year's monthly closes, newest first, with the year's sum as the footer.
 export function ClosesTable({
   year,
@@ -42,6 +52,7 @@ export function ClosesTable({
           {(close.open || close.recalculatedOn) && (
             <CloseStatus close={close} />
           )}
+          {!close.complete && <PartialMark />}
         </span>
       ),
     },
@@ -87,12 +98,15 @@ export function ClosesTable({
       footer={
         <TableRow>
           <TableCell>
-            <Link
-              href={href(year.year)}
-              className="font-medium underline-offset-2 hover:underline"
-            >
-              {`Total ${year.year}`}
-            </Link>
+            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <Link
+                href={href(year.year)}
+                className="font-medium underline-offset-2 hover:underline"
+              >
+                {`Total ${year.year}`}
+              </Link>
+              {!year.complete && <PartialMark />}
+            </span>
           </TableCell>
           <TableCell className={`hidden @2xl:table-cell ${NUMBER_CELL}`}>
             <AmountText amount={totals.contributed} unit={unit} />

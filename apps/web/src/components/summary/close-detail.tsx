@@ -85,7 +85,7 @@ function CloseFigures({
         </SummaryTile>
         <SummaryTile
           label="Aportes netos"
-          note={`Compraste ${formatAmount(figures.paidIn, unit)} y vendiste ${formatAmount(figures.proceeds, unit)}`}
+          note={`Entró ${formatAmount(figures.paidIn, unit)} y salió ${formatAmount(figures.proceeds, unit)}`}
         >
           <AmountText amount={figures.contributed} unit={unit} />
         </SummaryTile>
@@ -109,8 +109,8 @@ function CloseFigures({
       </dl>
       {!complete && (
         <p className="text-muted-foreground text-xs">
-          Algún activo no tenía cotización al inicio o al final: el patrimonio
-          lo deja afuera.
+          Algún activo no tenía cotización al inicio o al final, o algún
+          movimiento no se pudo pasar a esta moneda: las cifras lo dejan afuera.
         </p>
       )}
     </div>
