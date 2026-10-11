@@ -50,18 +50,27 @@ function otherParams(params: KeysetParams, key: string): URLSearchParams {
   return search;
 }
 
+// The href that sets one param, or drops it when null, keeping the others.
+export function paramHref(
+  params: KeysetParams,
+  key: string,
+  value: string | null,
+): string {
+  const search = otherParams(params, key);
+  if (value !== null) search.set(key, value);
+  return `?${search.toString()}`;
+}
+
 // The href of the next page of one list, keeping the other lists' params.
 export function keysetHref(
   params: KeysetParams,
   key: string,
   { at, id }: Keyset,
 ) {
-  const search = otherParams(params, key);
-  search.set(key, `${at},${id}`);
-  return `?${search.toString()}`;
+  return paramHref(params, key, `${at},${id}`);
 }
 
 // The href of one list's first page, keeping the other lists' params.
 export function firstPageHref(params: KeysetParams, key: string): string {
-  return `?${otherParams(params, key).toString()}`;
+  return paramHref(params, key, null);
 }

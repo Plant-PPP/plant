@@ -1,4 +1,5 @@
 import {
+  addDays,
   buenosAiresDate,
   buenosAiresHour,
   compareDecimals,
@@ -70,15 +71,22 @@ const priceSchema = z.object({
 });
 export type Price = z.output<typeof priceSchema>;
 
-// The quotes a valuation reads for one day: each rate (by fx_rate_kind) and each price as
-// its latest row on or before `date`, with the date that row carries. Amounts
-// are decimal strings, so a reader selects numeric columns as text.
+// The quotes a valuation reads for one day: each rate (by fx_rate_kind) and
+// each price as its latest row on or before `date` and within QUOTE_CARRY_DAYS
+// of it, with the date that row carries. Amounts are decimal strings, so a
+// reader selects numeric columns as text.
 export type QuoteSnapshot = {
   date: string;
   fx: Partial<Record<FxRateKind, { sell: string; date: string }>>;
   prices: Partial<
     Record<string, { price: string; currency: Currency; date: string }>
   >;
+};
+
+// Which quotes a snapshot holds: these rate kinds and these price symbols.
+export type QuoteNeed = {
+  fxKinds: readonly FxRateKind[];
+  symbols: readonly string[];
 };
 
 // Each table's primary key, as in the quotes migration. A row's key is the
@@ -137,8 +145,8 @@ export const QUOTE_FEED_CODES = {
 export type QuoteFeedCode = keyof typeof QUOTE_FEED_CODES;
 
 // out_of_window is the store's refusal of a date that is not today: a retry
-// reads the feed again. unavailable: the store did not answer and may have
-// committed.
+// reads the feed again. unavailable: the store did not answer (a write may
+// have committed).
 export const QUOTE_STORE_CODES = {
   timeout: true,
   unavailable: true,
@@ -240,15 +248,13 @@ export function parseResponse<T>(schema: z.ZodType<T>, json: unknown): T {
   return parsed.data;
 }
 
-// The Friday before a Buenos Aires Saturday or Sunday, else null. The date is
-// read as UTC midnight and only through getUTC*/setUTC*: new Date(date).getDay()
-// reads the host's zone, where a Saturday can be Friday.
+// The Friday before a Buenos Aires Saturday or Sunday, else null. The weekday
+// is read through getUTCDay: new Date(date).getDay() reads the host's zone,
+// where a Saturday can be Friday.
 function weekendFriday(date: string): string | null {
-  const day = new Date(`${date}T00:00:00Z`);
-  const weekday = day.getUTCDay();
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
   if (weekday !== 0 && weekday !== 6) return null;
-  day.setUTCDate(day.getUTCDate() - (weekday === 6 ? 1 : 2));
-  return day.toISOString().slice(0, 10);
+  return addDays(date, weekday === 6 ? -1 : -2);
 }
 
 // Crypto trades every day; the dollar market closes on the weekend.

@@ -22,7 +22,6 @@ import type {
   SourceConnectionRow,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
-import { sourceConnectionLabel } from "./accounts-using";
 import { InstitutionIcon } from "./institution-field";
 import { rowAnswer } from "./answers";
 import { temporaryId } from "./list-change";
@@ -135,7 +134,7 @@ export function SourceConnectionsCard({
       () => archiveSourceConnection(row.id),
       (result) => rowAnswer(result, "archive", MESSAGES),
       {
-        done: `Archivaste ${sourceConnectionLabel(row)}`,
+        done: `Archivaste ${row.institution}`,
         rowId: row.id,
         actionId: "archive",
       },
@@ -155,7 +154,7 @@ export function SourceConnectionsCard({
       call,
       MESSAGES,
       {
-        done: `${done} ${sourceConnectionLabel(row)}`,
+        done: `${done} ${row.institution}`,
         reopen: (error) =>
           setDialog({ ...dialog, initial: fields, initialError: error }),
       },
@@ -195,14 +194,14 @@ export function SourceConnectionsCard({
                 id: "edit",
                 icon: Pencil,
                 tooltip: "Editar",
-                label: (row) => `Editar ${sourceConnectionLabel(row)}`,
+                label: (row) => `Editar ${row.institution}`,
                 onClick: (row) => openDialog({ kind: "edit", row }),
               },
               {
                 id: "archive",
                 icon: Archive,
                 tooltip: "Archivar",
-                label: (row) => `Archivar ${sourceConnectionLabel(row)}`,
+                label: (row) => `Archivar ${row.institution}`,
                 onClick: archive,
               },
             ],
@@ -225,7 +224,7 @@ export function SourceConnectionsCard({
                 id: "restore",
                 icon: ArchiveRestore,
                 tooltip: "Restaurar",
-                label: (row) => `Restaurar ${sourceConnectionLabel(row)}`,
+                label: (row) => `Restaurar ${row.institution}`,
                 onClick: (row) => openDialog({ kind: "restore", row }),
               },
             ],

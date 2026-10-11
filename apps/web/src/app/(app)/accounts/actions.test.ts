@@ -200,11 +200,11 @@ describe("createPortfolio", () => {
     fakeClient(refused(409, "23505"));
     await expect(createPortfolio({ name: SENTINEL })).resolves.toEqual({
       ok: false,
-      code: "duplicate_name",
+      code: "duplicate",
     });
     expect(onlyLine()).toMatchObject({
       level: "info",
-      "plant.outcome": "duplicate_name",
+      "plant.outcome": "duplicate",
     });
   });
 
@@ -346,7 +346,7 @@ describe("restorePortfolio", () => {
     const calls = fakeClient(refused(409, "23505"), ok(ID));
     await expect(restorePortfolio(ID)).resolves.toEqual({
       ok: false,
-      code: "duplicate_name",
+      code: "duplicate",
     });
     await expect(restorePortfolio(ID, { name: "Nueva" })).resolves.toEqual({
       ok: true,

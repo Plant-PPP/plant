@@ -11,7 +11,7 @@ test.each([
   ["PT409", "holder_archived", "holder_archived"],
   ["PT409", "some_other_guard", "failed"],
   ["PT409", undefined, "failed"],
-  ["23505", "Key (user_id, lower(name))=(…, mía)", "duplicate_name"],
+  ["23505", "Key (user_id, lower(name))=(…, mía)", "duplicate"],
   ["23503", undefined, "failed"],
   ["42501", undefined, "failed"],
   ["PGRST116", undefined, "failed"],

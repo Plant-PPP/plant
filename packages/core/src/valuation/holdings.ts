@@ -1,7 +1,11 @@
 import { type Exact, plus, toDecimal } from "@plant/shared";
-import type { QuoteSnapshot } from "../quotes/contract/quote";
+import type { QuoteNeed, QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "./denominator";
-import { DENOMINATORS, type Denominator } from "./denominators";
+import {
+  DENOMINATORS,
+  type Denominator,
+  type DenominatorSpec,
+} from "./denominators";
 import { type Holding, valueHolding } from "./holding";
 
 export type HoldingsValue = {
@@ -81,5 +85,21 @@ export function valueHoldings(
     complete: missing.length === 0,
     missing,
     items,
+  };
+}
+
+const SPECS: readonly DenominatorSpec[] = Object.values(DENOMINATORS);
+
+// The quotes valuing these holdings in any unit can read: every unit's rate,
+// every priced unit, and each held instrument's price.
+export function quotesNeeded(holdings: readonly Holding[]): QuoteNeed {
+  return {
+    fxKinds: SPECS.flatMap((spec) => ("fx" in spec ? [spec.fx] : [])),
+    symbols: [
+      ...SPECS.flatMap((spec) => ("priced" in spec ? [spec.priced] : [])),
+      ...holdings.flatMap((holding) =>
+        holding.asset_class === "instrument" ? [holding.instrument_symbol] : [],
+      ),
+    ],
   };
 }

@@ -5,7 +5,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
-import { readHolders, readPortfolios, readSourceConnections } from "./read";
+import { z } from "zod";
+import {
+  readHolders,
+  readList,
+  readPortfolios,
+  readSourceConnections,
+} from "./read";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -67,7 +73,12 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 const read = (client: SupabaseClient<Database>, params = {}) =>
-  readPortfolios(client, { userId: USER, requestId: REQUEST_ID, params });
+  readPortfolios(client, {
+    userId: USER,
+    requestId: REQUEST_ID,
+    page: "/accounts",
+    params,
+  });
 
 it("reads both lists by the user, newest first", async () => {
   const { client, calls } = fakeClient(ok(rows(2)), ok(rows(1, true)));
@@ -150,6 +161,7 @@ it("shows the first page and warns on an invalid cursor", async () => {
       event: "portfolio_setup.read",
       "enduser.id": USER,
       "plant.request_id": REQUEST_ID,
+      "plant.page": "/accounts",
       "plant.portfolio_setup.table": "portfolios",
       "plant.outcome": "invalid_cursor",
     }),
@@ -208,6 +220,7 @@ it("pages archived holders by their own param", async () => {
   const view = await readHolders(client, {
     userId: USER,
     requestId: REQUEST_ID,
+    page: "/accounts",
     params: { titulares: `${AT},${ID}`, carteras: "x" },
   });
   expect(calls[0]![0]).toEqual(["select", "id, name"]);
@@ -242,6 +255,7 @@ it("reads accounts with their holder and portfolio", async () => {
   const view = await readSourceConnections(client, {
     userId: USER,
     requestId: REQUEST_ID,
+    page: "/accounts",
     params: {},
   });
   expect(calls[0]![0]).toEqual([
@@ -279,6 +293,7 @@ it("names the table of a failed read", async () => {
     readSourceConnections(client, {
       userId: USER,
       requestId: REQUEST_ID,
+      page: "/accounts",
       params: {},
     }),
   ).rejects.toThrow("portfolio_setup.read_failed");
@@ -287,4 +302,93 @@ it("names the table of a failed read", async () => {
       "plant.portfolio_setup.table": "source_connections",
     }),
   ]);
+});
+
+describe("a row the list cannot read", () => {
+  const CONTEXT = {
+    userId: USER,
+    requestId: REQUEST_ID,
+    page: "/assets" as const,
+    params: {},
+  };
+  const schema = z.object({ id: z.string(), name: z.string().max(3) });
+  const spec = (toRow: (data: Record<string, unknown>) => unknown) => ({
+    table: "portfolios" as const,
+    param: "carteras",
+    columns: "id, name",
+    toRow,
+  });
+
+  it("logs the row id and the refused columns, never values, and throws", async () => {
+    const { client } = fakeClient(ok(rows(1)), ok([]));
+    const error: unknown = await readList(
+      client,
+      spec((data) => schema.parse(data)),
+      CONTEXT,
+    ).catch((e: unknown) => e);
+    expect(isLoggedError(error)).toBe(true);
+    expect(lines).toEqual([
+      expect.objectContaining({
+        level: "error",
+        event: "portfolio_setup.read",
+        "plant.page": "/assets",
+        "plant.outcome": "invalid_row",
+        "plant.portfolio_setup.row_id": rows(1)[0]!.id,
+        "plant.portfolio_setup.columns": "name",
+      }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain("Cartera 0");
+  });
+
+  it("counts an issue on the whole row as row", async () => {
+    const { client } = fakeClient(ok(rows(1)), ok([]));
+    const whole = z.object({}).refine(() => false);
+    await readList(
+      client,
+      spec((data) => whole.parse(data)),
+      CONTEXT,
+    ).catch(() => undefined);
+    expect(lines[0]?.["plant.portfolio_setup.columns"]).toBe("row");
+  });
+
+  it("logs a throw that is not a schema's without columns", async () => {
+    const { client } = fakeClient(ok(rows(1)), ok([]));
+    await readList(
+      client,
+      spec(() => {
+        throw new TypeError("no embed");
+      }),
+      CONTEXT,
+    ).catch(() => undefined);
+    expect(lines[0]).toMatchObject({ "plant.outcome": "invalid_row" });
+    expect(lines[0]).not.toHaveProperty("plant.portfolio_setup.columns");
+  });
+
+  it("ignores the archived cursor of a list read without archived rows", async () => {
+    const { client } = fakeClient(ok(rows(1)), ok([]));
+    const view = await readList(
+      client,
+      spec((data) => data),
+      { ...CONTEXT, params: { carteras: "garbage" } },
+      { archived: false },
+    );
+    expect(lines).toEqual([]);
+    expect(view.archivedPage).toBeNull();
+    expect(view.archivedFirstHref).toBeNull();
+  });
+
+  it("reads only the active rows when asked", async () => {
+    const { client, calls } = fakeClient(ok(rows(1)), ok(rows(1, true)));
+    const view = await readList(
+      client,
+      spec((data) => data),
+      CONTEXT,
+      {
+        archived: false,
+      },
+    );
+    expect(calls).toHaveLength(1);
+    expect(view.archived).toEqual([]);
+    expect(view.archivedNextHref).toBeNull();
+  });
 });

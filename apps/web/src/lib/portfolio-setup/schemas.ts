@@ -26,7 +26,7 @@ const UNSAFE =
 // Unicode space, more than the CHECK's btrim, and zod 4's max() counts code
 // points, as char_length does, so a name that passes is never refused by the
 // table's CHECK.
-function trimmedName(max: number) {
+export function trimmedName(max: number) {
   return z
     .string()
     .max(max * 8, { abort: true })

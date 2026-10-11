@@ -24,12 +24,16 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 
 ## Lists and amounts
 
-- **Lists of records are a `DataTable`** (`components/ui/data-table.tsx`), one per list, named by a screen-reader caption ("Carteras", "Carteras archivadas"). Rows keep the server's order: a list is capped or paged by keyset, so sorting it in the browser would only reorder what is loaded.
+- **Lists of records are a `DataTable`** (`components/ui/data-table.tsx`), one per list, named by a screen-reader caption ("Carteras", "Carteras archivadas"). Rows keep the server's order: a list is capped or paged by keyset, so sorting it in the browser would only reorder what is loaded. The exception is an order by a value the page computes after the read, such as a valuation: the browser sorts what is loaded, and the screen says when the list was cut.
 - Row actions are an `actionsColumn` of `IconButton`s, sized to its buttons. Single-line text cuts with an ellipsis and carries the whole text in a `title` (`TruncatedText`), which shows on hover; screen readers get the whole text.
 - **A list section is not a card**: a heading (`text-lg`), a short description and its add button on one row, with the `DataTable` below as the section's only box (a hairline border, no shadow). Sections stack `gap-10` and span the content width. A short first column gets a fixed width from `@2xl` so the descriptive columns share the rest.
 - A table shows its column names only when several columns sit side by side; a one-column list, or any table below `@2xl`, keeps its header row out of view (`visibility: collapse`, so the columns keep their widths). Screen readers then read no column names, and the caption names the table.
 - Columns respond to the table's width, not the screen's: secondary columns use `hidden @2xl:table-cell`, and below that width their values ride inside the first column (on its first line or a muted second line), so nothing is lost on a narrow table.
-- Amounts are right-aligned with `tabular-nums`, formatted `es-AR` with their currency (`$ 1.234.567,89`, `US$ 12.345,67`), and never pass through a `number` to be summed.
+- Amounts are right-aligned with `tabular-nums`, formatted `es-AR` with their currency (`$ 1.234.567,89`, `US$ 12.345,67`) by `formatAmount` (`lib/format/amount.ts`), and never pass through a `number` to be summed.
+- A `footer` row closes a table with its total. A sum shown while a write runs is dimmed (`opacity-60`, `aria-busy`), a row the server has not valued yet reads "Calculando…", and a sum of nothing reads "—".
+- **Summary tiles** open a screen whose figures are the point: a row of tiles (`bg-muted/60`, an 11px label, the value semibold, a muted note such as its share), and below them a distribution bar in the chart colors with its legend.
+- **Tabs** switch between tables of the same data: a segmented control (`bg-muted`, the chosen tab on `bg-background` with `shadow-xs`) with each tab's row count, kept in the URL (`?vista=`); the chosen tab shows at once and the page loads behind it.
+- An account shows its institution's icon beside its name (`InstitutionIcon`).
 
 ## Density and type
 

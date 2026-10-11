@@ -103,10 +103,22 @@ const PERSONAL_DATA = new RegExp(
   "giu",
 );
 
-// Money and holdings: their ids pass.
+// Money, holdings and what names them. Any segment masks the key, not only
+// the last (plant.auth.rate_limited would be masked); ids, counts and
+// durations pass.
 const VALUE_SEGMENTS = new Set([
   "amount",
   "amounts",
+  "total",
+  "totals",
+  "subtotal",
+  "subtotals",
+  "value",
+  "values",
+  "rate",
+  "rates",
+  "label",
+  "labels",
   "balance",
   "balances",
   "quantity",

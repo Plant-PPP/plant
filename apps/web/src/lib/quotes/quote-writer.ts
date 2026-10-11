@@ -1,38 +1,17 @@
 import "server-only";
-import {
-  QUOTE_KEYS,
-  type QuoteRows,
-  type QuoteStoreCode,
-  QuoteStoreError,
-  type QuoteStorePort,
-} from "@plant/core";
+import { QUOTE_KEYS, type QuoteRows, type QuoteStorePort } from "@plant/core";
 import type { Database } from "@plant/shared";
 import type {
   PostgrestSingleResponse,
   SupabaseClient,
 } from "@supabase/supabase-js";
 
-import {
-  ERROR_CODE,
-  type PostgrestFailure,
-  postgrestInsert,
-} from "@/lib/supabase/postgrest-write";
-
-const TIMEOUT_MS = 10_000;
-// The quotes migration's insert guard raises it for any date but today.
-export const GUARD_SQLSTATE = "PT403";
+import { STORE_TIMEOUT_MS, storeError } from "@/lib/quotes/store-error";
+import type { DecimalInsert } from "@/lib/supabase/decimal-columns";
+import { postgrestInsert } from "@/lib/supabase/postgrest-write";
 
 type Tables = Database["public"]["Tables"];
 
-// An insert with every column required and each amount column in A as a
-// decimal string, null kept where the column is nullable.
-type DecimalInsert<I, A extends keyof I> = {
-  [K in keyof I]-?: K extends A
-    ? null extends I[K]
-      ? string | null
-      : string
-    : Exclude<I[K], undefined>;
-};
 type FxRateInsert = DecimalInsert<Tables["fx_rates"]["Insert"], "buy" | "sell">;
 type PriceInsert = DecimalInsert<Tables["prices"]["Insert"], "price">;
 
@@ -43,28 +22,6 @@ type SameKeys<A, B> = [keyof A] extends [keyof B]
     ? A
     : never
   : never;
-
-const CODE_BY_SQLSTATE: Readonly<Record<string, QuoteStoreCode>> = {
-  [GUARD_SQLSTATE]: "out_of_window",
-  "42501": "forbidden",
-  "23514": "invalid_row",
-  "23502": "invalid_row",
-  "22003": "invalid_row",
-  "22P02": "invalid_row",
-};
-
-function storeError({ code, mayHaveCommitted }: PostgrestFailure) {
-  const quoteCode: QuoteStoreCode =
-    code === "timeout"
-      ? "timeout"
-      : mayHaveCommitted
-        ? "unavailable"
-        : (CODE_BY_SQLSTATE[code] ?? "rejected");
-  return new QuoteStoreError(
-    quoteCode,
-    ERROR_CODE.test(code) ? code : undefined,
-  );
-}
 
 // A row already stored for its key is skipped and counts 0.
 const ignoreStored = (table: keyof typeof QUOTE_KEYS) => ({
@@ -77,7 +34,7 @@ async function insert<T>(
   query: (signal: AbortSignal) => PromiseLike<PostgrestSingleResponse<T[]>>,
 ): Promise<number> {
   if (rows.length === 0) return 0;
-  const result = await postgrestInsert(query, TIMEOUT_MS);
+  const result = await postgrestInsert(query, STORE_TIMEOUT_MS);
   if ("code" in result) throw storeError(result);
   return (result.data ?? []).length;
 }

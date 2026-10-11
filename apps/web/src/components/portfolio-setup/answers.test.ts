@@ -7,7 +7,7 @@ const PORTFOLIOS = WRITE_MESSAGES.portfolios;
 describe("rowAnswer", () => {
   test("a restore whose name is taken asks for another one", () => {
     expect(
-      rowAnswer({ ok: false, code: "duplicate_name" }, "restore", PORTFOLIOS),
+      rowAnswer({ ok: false, code: "duplicate" }, "restore", PORTFOLIOS),
     ).toEqual({ kind: "ask_name" });
   });
 
@@ -26,8 +26,8 @@ describe("rowAnswer", () => {
 
   test("an archive never asks for a name", () => {
     expect(
-      rowAnswer({ ok: false, code: "duplicate_name" }, "archive", PORTFOLIOS),
-    ).toEqual({ kind: "alert", text: PORTFOLIOS.duplicate_name });
+      rowAnswer({ ok: false, code: "duplicate" }, "archive", PORTFOLIOS),
+    ).toEqual({ kind: "alert", text: PORTFOLIOS.duplicate });
   });
 
   test("a rejected call shows the failed copy", () => {
@@ -57,21 +57,21 @@ describe("rowAnswer", () => {
       "Para archivar esta cartera, primero elegí otra en las cuentas que la usan o archivalas.",
     ],
     [
-      ["tu IOL"],
-      "Para archivar esta cartera, primero elegí otra o archivá esta cuenta: tu IOL.",
+      ["IOL"],
+      "Para archivar esta cartera, primero elegí otra o archivá esta cuenta: IOL.",
     ],
     [
-      ["tu IOL", "Balanz de Lucía"],
-      "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu IOL, Balanz de Lucía.",
+      ["IOL", "Balanz"],
+      "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: IOL, Balanz.",
     ],
   ])("a portfolio in use by %j says so", (usedBy, text) => {
     expect(inUse(usedBy)).toEqual({ kind: "alert", text });
   });
 
   test("counts accounts that share a name", () => {
-    expect(inUse(["tu IOL", "tu IOL"])).toEqual({
+    expect(inUse(["IOL", "IOL"])).toEqual({
       kind: "alert",
-      text: "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu IOL (2).",
+      text: "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: IOL (2).",
     });
   });
 
@@ -88,11 +88,11 @@ describe("rowAnswer", () => {
         { ok: false, code: "holder_in_use" },
         "archive",
         WRITE_MESSAGES.holders,
-        ["IOL de Lucía"],
+        ["IOL"],
       ),
     ).toEqual({
       kind: "alert",
-      text: "Para archivar este titular, primero elegí otro o archivá esta cuenta: IOL de Lucía.",
+      text: "Para archivar este titular, primero elegí otro o archivá esta cuenta: IOL.",
     });
   });
 });
@@ -102,9 +102,7 @@ describe("dialogAnswer", () => {
     expect(dialogAnswer({ ok: true, id: ID }, PORTFOLIOS)).toEqual({
       kind: "done",
     });
-    expect(
-      dialogAnswer({ ok: false, code: "duplicate_name" }, PORTFOLIOS),
-    ).toEqual({
+    expect(dialogAnswer({ ok: false, code: "duplicate" }, PORTFOLIOS)).toEqual({
       kind: "alert",
       text: "Ya tenés una cartera con ese nombre.",
     });
@@ -116,10 +114,7 @@ describe("dialogAnswer", () => {
 
   test("uses the copy of the table it wrote", () => {
     expect(
-      dialogAnswer(
-        { ok: false, code: "duplicate_name" },
-        WRITE_MESSAGES.holders,
-      ),
+      dialogAnswer({ ok: false, code: "duplicate" }, WRITE_MESSAGES.holders),
     ).toEqual({ kind: "alert", text: "Ya tenés un titular con ese nombre." });
     expect(
       dialogAnswer(

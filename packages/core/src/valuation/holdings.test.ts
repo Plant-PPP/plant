@@ -2,7 +2,8 @@ import { compareExact, exactOf, times, toDecimal } from "@plant/shared";
 import { DENOMINATORS, type Denominator } from "./denominators";
 import { SNAPSHOT } from "./fixtures.test-support";
 import { type Holding, holdingSchema } from "./holding";
-import { valueHoldings } from "./holdings";
+import { readSnapshot } from "../quotes/snapshot";
+import { quotesNeeded, valueHoldings } from "./holdings";
 
 const base = {
   instrument_symbol: null,
@@ -349,5 +350,55 @@ describe("valueHoldings", () => {
       complete: true,
       items: [],
     });
+  });
+});
+
+describe("quotesNeeded", () => {
+  const cash = HOLDINGS.filter((holding) => holding.asset_class === "cash");
+
+  it("needs every unit's rate and price, whatever is held", () => {
+    expect(quotesNeeded(cash)).toEqual({
+      fxKinds: ["mep", "ccl", "official"],
+      symbols: ["BTC"],
+    });
+  });
+
+  it("adds each held instrument's price", () => {
+    const eth = holdingSchema.parse({
+      ...base,
+      id: "eth",
+      portfolio_id: "p1",
+      asset_class: "instrument",
+      instrument_symbol: "ETH",
+      amount: "2",
+    });
+    expect(quotesNeeded([...cash, eth]).symbols).toEqual(["BTC", "ETH"]);
+  });
+});
+
+describe("a snapshot read through the store", () => {
+  it("feeds valueHoldings", async () => {
+    const read = jest.fn().mockResolvedValue({
+      fxRates: [{ kind: "mep", rate_date: "2026-10-09", sell: "1200" }],
+      prices: [
+        {
+          symbol: "BTC",
+          price_date: "2026-10-10",
+          price: "65000",
+          currency: "USD",
+        },
+      ],
+    });
+    const { snapshot } = await readSnapshot({ read }, "2026-10-10", {
+      fxKinds: ["mep"],
+      symbols: ["BTC"],
+    });
+    const btc = HOLDINGS.filter((holding) => holding.id === "btc");
+    const value = valueHoldings(btc, snapshot, {
+      denominator: "ars",
+      referenceDollar: "mep",
+    });
+    expect(value.total).toBe("39000000");
+    expect(value.complete).toBe(true);
   });
 });

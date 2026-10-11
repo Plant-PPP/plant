@@ -2,6 +2,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import {
   classifyPostgrestResult,
+  postgrestCall,
   postgrestInsert,
   type PostgrestFailure,
 } from "./postgrest-write";
@@ -15,6 +16,15 @@ const pgError = (code: unknown): PostgrestError =>
   }) as unknown as PostgrestError;
 
 describe("classifyPostgrestResult", () => {
+  it("passes any status of an expected list", () => {
+    expect(
+      classifyPostgrestResult({ error: null, status: 206 }, [200, 206]),
+    ).toBe(null);
+    expect(
+      classifyPostgrestResult({ error: null, status: 201 }, [200, 206]),
+    ).toEqual({ code: "http_201", mayHaveCommitted: false });
+  });
+
   it("passes only the expected status", () => {
     expect(classifyPostgrestResult({ error: null, status: 201 }, 201)).toBe(
       null,
@@ -121,5 +131,24 @@ describe("postgrestInsert", () => {
       mayHaveCommitted: true,
     });
     expect(signal?.aborted).toBe(true);
+  });
+
+  it("passes any of the expected statuses of a call, with the count", async () => {
+    const read = (status: number) => async () =>
+      ({
+        data: [{ id: 1 }],
+        error: null,
+        count: 5,
+        status,
+        statusText: "",
+      }) as never;
+    await expect(postgrestCall(read(206), 1000, [200, 206])).resolves.toEqual({
+      data: [{ id: 1 }],
+      count: 5,
+    });
+    await expect(postgrestCall(read(206), 1000, [200])).resolves.toEqual({
+      code: "http_206",
+      mayHaveCommitted: false,
+    });
   });
 });

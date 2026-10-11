@@ -20,7 +20,7 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
   source_connection_archived: "Esa cuenta está archivada.",
 };
 
-const invalidName = (max: number) =>
+export const invalidName = (max: number) =>
   `Usá entre 1 y ${max} letras, números o signos.`;
 
 export const WRITE_MESSAGES: Record<
@@ -29,14 +29,14 @@ export const WRITE_MESSAGES: Record<
 > = {
   portfolios: {
     ...GUARD_MESSAGES,
-    duplicate_name: "Ya tenés una cartera con ese nombre.",
+    duplicate: "Ya tenés una cartera con ese nombre.",
     not_found: "Esa cartera cambió hace un momento. Ya actualizamos la lista.",
     invalid: invalidName(NAME_LIMITS.portfolios.name),
     failed: FAILED,
   },
   holders: {
     ...GUARD_MESSAGES,
-    duplicate_name: "Ya tenés un titular con ese nombre.",
+    duplicate: "Ya tenés un titular con ese nombre.",
     not_found: "Ese titular cambió hace un momento. Ya actualizamos la lista.",
     invalid: invalidName(NAME_LIMITS.holders.name),
     failed: FAILED,
@@ -44,9 +44,20 @@ export const WRITE_MESSAGES: Record<
   source_connections: {
     ...GUARD_MESSAGES,
     // Accounts have no unique column.
-    duplicate_name: FAILED,
+    duplicate: FAILED,
     not_found: "Esa cuenta cambió hace un momento. Ya actualizamos la lista.",
     invalid: `En la institución, usá entre 1 y ${NAME_LIMITS.source_connections.institution} letras, números o signos.`,
+    failed: FAILED,
+  },
+  holdings: {
+    ...GUARD_MESSAGES,
+    duplicate: "Ya tenés ese instrumento en esa cuenta y cartera.",
+    source_connection_archived:
+      "Esa cuenta está archivada. Restaurala en Cuentas primero.",
+    portfolio_archived:
+      "Esa cartera está archivada. Restaurala en Cuentas primero.",
+    not_found: "Esa tenencia cambió hace un momento. Ya actualizamos la lista.",
+    invalid: "Revisá los datos de la tenencia.",
     failed: FAILED,
   },
 };
@@ -61,21 +72,11 @@ export const CHOICE_MESSAGES = {
 // How the user shows where a holder would: an account with no holder is theirs.
 export const SELF_HOLDER_LABEL = "Vos";
 
-// How an account is named in copy: "tu IOL", or "IOL de Lucía".
-export function accountLabel(
-  institution: string,
-  holderName: string | null,
-): string {
-  return holderName === null
-    ? `tu ${institution}`
-    : `${institution} de ${holderName}`;
-}
-
 // The most accounts an in-use refusal names before "y N más".
 const LISTED_ACCOUNTS = 3;
 
 // The in-use refusals name the accounts behind them, when the page has them:
-// two accounts with one name as "tu IOL (2)", the first few names, after a
+// two accounts with one name as "IOL (2)", the first few names, after a
 // colon so no "y" has to agree with them.
 export function inUseMessage(
   hint: "portfolio_in_use" | "holder_in_use",

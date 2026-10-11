@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(82);
+SELECT plan(84);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -148,6 +148,14 @@ SELECT results_eq(
     'O CREATE TRIGGER portfolio_setup_3_guard BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.guard_holding_write()'
   ],
   'holdings has the lock, default, stamp and guard triggers, all enabled'
+);
+
+-- The label's bound, in the form limits.test.ts reads.
+SELECT is(
+  (SELECT conrelid::regclass || ' ' || pg_get_constraintdef(oid) FROM pg_constraint
+   WHERE conrelid = 'public.holdings'::regclass AND conname = 'holdings_label_check'),
+  'holdings CHECK (((label IS NULL) OR (((char_length(label) >= 1) AND (char_length(label) <= 80)) AND (label = btrim(label)))))',
+  'a label is empty or 1 to 80 characters with no outer spaces'
 );
 
 SELECT set_eq(
@@ -578,6 +586,13 @@ SELECT is(
                       WHERE id = 'a7000000-0000-4000-8000-0000000000a7' $$),
   '23503 -',
   'a holding cannot move into another user''s archived portfolio'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.holdings SET portfolio_id = 'b1000000-0000-4000-8000-0000000000b1'
+                      WHERE id = 'a7000000-0000-4000-8000-0000000000a7' $$),
+  '23503 -',
+  'a holding cannot move into another user''s active portfolio'
 );
 
 -- The guards.

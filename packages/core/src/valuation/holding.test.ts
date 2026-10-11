@@ -1,8 +1,12 @@
 import { toDecimal } from "@plant/shared";
 import { lastConstraint } from "@plant/shared/testing";
+import { z } from "zod";
 import { SNAPSHOT } from "./fixtures.test-support";
 import {
+  HOLDING_DATE_MAX,
+  HOLDING_DATE_MIN,
   MAX_ANNUAL_RATE,
+  classBranch,
   holdingSchema,
   instrumentValue,
   valueHolding,
@@ -355,8 +359,32 @@ describe("holdingSchema", () => {
     );
   });
 
+  it("bounds a date like the holdings_dates_in_range CHECK", () => {
+    const range = `BETWEEN '${HOLDING_DATE_MIN}' AND '${HOLDING_DATE_MAX}'`;
+    expect(lastConstraint("holdings", "holdings_dates_in_range")).toBe(
+      `\n    started_on ${range}\n    AND matures_on ${range}\n    AND valued_on ${range}`,
+    );
+  });
+
+  it.each([
+    ["1899-12-31", false],
+    [HOLDING_DATE_MIN, true],
+    [HOLDING_DATE_MAX, true],
+  ])("takes %s as a valued date: %s", (valued_on, valid) => {
+    expect(
+      holdingSchema.safeParse({
+        ...base,
+        asset_class: "other",
+        amount: "1",
+        currency: "ARS",
+        valued_on,
+        label: "Auto",
+      }).success,
+    ).toBe(valid);
+  });
+
   // Each class-dependent column with a value it takes when the class has it.
-  const CLASS_COLUMNS = {
+  const CLASS_SAMPLES = {
     instrument_symbol: "BTC",
     currency: "USD",
     annual_rate: "0.35",
@@ -394,7 +422,7 @@ describe("holdingSchema", () => {
       const assetClass = (shape.asset_class as unknown as { value: string })
         .value;
       const branch = branches[assetClass]!;
-      for (const [column, sample] of Object.entries(CLASS_COLUMNS)) {
+      for (const [column, sample] of Object.entries(CLASS_SAMPLES)) {
         const takesNull = shape[column]!.safeParse(null).success;
         const takesText = shape[column]!.safeParse(sample).success;
         if (!takesNull) expect(branch).toContain(`${column} IS NOT NULL`);
@@ -435,5 +463,58 @@ describe("instrumentValue", () => {
     if ("missing" in value) throw new Error(value.missing);
     expect(toDecimal(value.value.amount, 2)).toBe("2500");
     expect(value.asOf).toBe("2026-10-11");
+  });
+});
+
+describe("classBranch", () => {
+  const term = {
+    asset_class: "fixed_term",
+    amount: "1000",
+    currency: "ARS",
+    annual_rate: "0.35",
+    started_on: "2026-10-01",
+    matures_on: "2026-10-31",
+    instrument_symbol: null,
+    valued_on: null,
+    label: null,
+  };
+
+  it("keeps the fixed-term rule through extend and strict", () => {
+    const schema = classBranch("fixed_term")
+      .extend({ portfolio_id: z.string() })
+      .strict();
+    expect(schema.safeParse({ ...term, portfolio_id: "p" }).success).toBe(true);
+    expect(
+      schema.safeParse({
+        ...term,
+        portfolio_id: "p",
+        matures_on: "2026-09-30",
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ ...term, portfolio_id: "p", user_id: "u" }).success,
+    ).toBe(false);
+  });
+
+  it("leaves out the omitted columns", () => {
+    const schema = classBranch("instrument", { omit: ["instrument_symbol"] });
+    expect(Object.keys(schema.shape)).not.toContain("instrument_symbol");
+    expect(Object.keys(schema.shape)).toContain("amount");
+  });
+
+  it("checks the label with the caller's schema", () => {
+    const schema = classBranch("other", { label: z.string().max(3) });
+    const other = {
+      asset_class: "other",
+      amount: "1",
+      currency: "ARS",
+      valued_on: "2026-10-01",
+      instrument_symbol: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+    };
+    expect(schema.safeParse({ ...other, label: "Auto" }).success).toBe(false);
+    expect(schema.safeParse({ ...other, label: "Ok" }).success).toBe(true);
   });
 });

@@ -1,4 +1,11 @@
-import type { QuoteBatch, QuoteSource, RawQuoteRows } from "./quote";
+import type {
+  FxRate,
+  Price,
+  QuoteBatch,
+  QuoteNeed,
+  QuoteSource,
+  RawQuoteRows,
+} from "./quote";
 
 // One public quote source. read() returns the rows that passed the check, with
 // the key of every refused row. It throws a QuoteFeedError when the source
@@ -27,4 +34,19 @@ export type SavedCounts = { fxRates: number; prices: number };
 // retry can help.
 export interface QuoteStorePort {
   save(rows: QuoteRows): Promise<SavedCounts>;
+}
+
+// The stored quotes for every key a need names, dated from `from` to `to`
+// inclusive (YYYY-MM-DD).
+export type QuoteRange = QuoteNeed & { from: string; to: string };
+export type StoredQuotes = {
+  fxRates: Pick<FxRate, "kind" | "rate_date" | "sell">[];
+  prices: Pick<Price, "symbol" | "price_date" | "price" | "currency">[];
+};
+
+// Where a valuation reads saved quotes, implemented by the composition root.
+// read() rejects with a QuoteStoreError when the store fails; any other error
+// is a bug and passes through unchanged.
+export interface QuoteReaderPort {
+  read(range: QuoteRange): Promise<StoredQuotes>;
 }

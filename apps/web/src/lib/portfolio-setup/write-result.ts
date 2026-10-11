@@ -5,11 +5,7 @@ import {
 import type { PostgrestFailure } from "@/lib/supabase/postgrest-write";
 
 export type WriteResultCode =
-  | PortfolioSetupGuardHint
-  | "duplicate_name"
-  | "not_found"
-  | "invalid"
-  | "failed";
+  PortfolioSetupGuardHint | "duplicate" | "not_found" | "invalid" | "failed";
 
 export type WriteResult =
   { ok: true; id: string } | { ok: false; code: WriteResultCode };
@@ -26,6 +22,6 @@ export function toWriteResult(
 ): WriteResultCode {
   if (code === PORTFOLIO_SETUP_GUARD.sqlstate)
     return guardHint(hint) ?? "failed";
-  if (code === "23505") return "duplicate_name";
+  if (code === "23505") return "duplicate";
   return "failed";
 }
