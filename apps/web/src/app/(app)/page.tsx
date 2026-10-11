@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { PrototypeSummary } from "@/components/prototype/prototype-summary";
 import { isProductionDeployment } from "@/lib/deployment";
 import { navTitle } from "@/lib/navigation";
 import { requireSupabaseEnv } from "@/lib/supabase/env";
@@ -21,7 +23,14 @@ async function supabaseStatus(): Promise<string> {
   }
 }
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
+  if (!isProductionDeployment()) {
+    return <PrototypeSummary params={(await searchParams) ?? {}} />;
+  }
   // The connection check is a dev aid; production does not expose it.
   const status = isProductionDeployment() ? null : await supabaseStatus();
 

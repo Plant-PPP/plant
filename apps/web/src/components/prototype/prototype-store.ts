@@ -82,6 +82,8 @@ export type PrototypeState = {
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
+  // The closed months a write changed, by period, with the day it did.
+  recalculated: ReadonlyMap<string, string>;
 };
 
 export type StoredHolding = {
@@ -120,6 +122,7 @@ export function initialState(
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
+    recalculated: new Map(),
   };
 }
 

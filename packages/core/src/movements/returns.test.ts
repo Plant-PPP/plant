@@ -20,9 +20,9 @@ it("pays in purchases and their charges and pays out sales less theirs", () => {
       income("dividend", "5", { date: "2025-03-01", taxes: "1" }),
     ]),
   ).toEqual([
-    { date: "2025-01-01", amount: "-201" },
-    { date: "2025-02-01", amount: "118" },
-    { date: "2025-03-01", amount: "4" },
+    { date: "2025-01-01", amount: "-201", kind: "buy" },
+    { date: "2025-02-01", amount: "118", kind: "sell" },
+    { date: "2025-03-01", amount: "4", kind: "income" },
   ]);
 });
 
@@ -32,7 +32,7 @@ it("pays nothing for units an adjustment moves, only its charges", () => {
       trade("purchase", "1", "100", { date: "2025-01-01" }),
       adjustment("in", "1", { date: "2025-02-01", fees: "1" }),
     ])![1],
-  ).toEqual({ date: "2025-02-01", amount: "-1" });
+  ).toEqual({ date: "2025-02-01", amount: "-1", kind: "buy" });
 });
 
 it("counts the whole result of a round trip, sold gains included", () => {

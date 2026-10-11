@@ -18,8 +18,12 @@ const text = (x: Exact): string => toDecimal(x, 8);
 
 // Money between the holder and a holding on a date, in the view's unit:
 // negative is paid in (a purchase and its charges), positive paid out (a sale
-// less its charges, an income less its withholding).
-export type CashFlow = { date: string; amount: string };
+// less its charges, an income less its withholding). Its kind says which.
+export type CashFlow = {
+  date: string;
+  amount: string;
+  kind: "buy" | "sell" | "income";
+};
 
 // Each movement's cash flow, from the replay of the same movements; null when
 // a step could not be expressed in the view's unit. Units an adjustment moves
@@ -41,17 +45,20 @@ export function cashFlowsOf(
     };
     const charges = minus(now.charges, before.charges);
     let amount: Exact;
+    let kind: CashFlow["kind"] = "buy";
     if (movement.kind === "sale") {
+      kind = "sell";
       if (!step.sale) return null;
       amount = minus(exactOf(step.sale.gross), exactOf(step.sale.charges));
     } else if (isIncome(movement.kind)) {
+      kind = "income";
       amount = minus(minus(now.income, before.income), charges);
     } else if (movement.kind === "adjustment") {
       amount = negated(charges);
     } else {
       amount = negated(plus(minus(now.cost, before.cost), charges));
     }
-    flows.push({ date: movement.date, amount: text(amount) });
+    flows.push({ date: movement.date, amount: text(amount), kind });
     before = now;
   }
   return flows;
@@ -93,7 +100,7 @@ export function returnsOf(
     share: compareExact(paidIn, ZERO) === 0 ? null : text(over(result, paidIn)),
     annual:
       first !== undefined && daysBetween(first, date) >= YEAR_DAYS
-        ? yearlyRate([...flows, { date, amount: value }], date)
+        ? yearlyRate([...flows, { date, amount: value, kind: "sell" }], date)
         : null,
   };
 }
