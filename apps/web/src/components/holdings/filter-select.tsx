@@ -69,16 +69,13 @@ export function FilterSelect({
   );
 }
 
-const UNIT_OPTIONS = (Object.keys(DENOMINATORS) as Denominator[]).map(
-  (each) => [each, UNIT_LABELS[each]] as const,
-);
-
 // The unit a page values in, handing on its URL param: none for the
-// user's reference unit.
+// user's reference unit. A page offers every unit unless it names its own.
 export function UnitSelect({
   id,
   unit,
   referenceUnit,
+  units = Object.keys(DENOMINATORS) as Denominator[],
   pending,
   shownLabel,
   onChange,
@@ -86,6 +83,7 @@ export function UnitSelect({
   id: string;
   unit: Denominator;
   referenceUnit: Denominator;
+  units?: readonly Denominator[];
   pending: boolean;
   shownLabel?: boolean;
   onChange: (param: string | null) => void;
@@ -97,7 +95,7 @@ export function UnitSelect({
       shownLabel={shownLabel}
       value={unit}
       pending={pending}
-      options={UNIT_OPTIONS}
+      options={units.map((each) => [each, UNIT_LABELS[each]] as const)}
       onChange={(value) => onChange(unitParam(value, referenceUnit))}
     />
   );

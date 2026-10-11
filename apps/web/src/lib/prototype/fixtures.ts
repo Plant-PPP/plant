@@ -41,6 +41,7 @@ export type Fixtures = {
 };
 
 const HISTORY_DAYS = 730;
+const LEAD_DAYS = 31;
 
 const PORTFOLIOS = {
   principal: { id: "b1000000-0000-4000-8000-000000000001", name: "Principal" },
@@ -178,7 +179,9 @@ const priceOn = (symbol: string, daysAgo: number): string =>
 function quotesFor(today: string): StoredQuotes {
   const fxRates: StoredQuotes["fxRates"] = [];
   const prices: StoredQuotes["prices"] = [];
-  for (let day = 0; day <= HISTORY_DAYS; day += 1) {
+  // From a month before the history, so the first movement's month starts
+  // priced.
+  for (let day = -LEAD_DAYS; day <= HISTORY_DAYS; day += 1) {
     const daysAgo = HISTORY_DAYS - day;
     const date = addDays(today, -daysAgo);
     fxRates.push(

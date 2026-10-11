@@ -172,7 +172,7 @@ export function DebtsSetup({
             {owed(debt, debt.installment)}
             {debt.installments_left && (
               <span className="text-muted-foreground block text-xs">
-                {`Quedan ${debt.installments_left}`}
+                {`${debt.installments_left === 1 ? "Queda" : "Quedan"} ${debt.installments_left}`}
               </span>
             )}
           </span>

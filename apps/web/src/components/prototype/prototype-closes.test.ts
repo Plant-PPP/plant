@@ -114,3 +114,86 @@ it("keeps charges out of the market result", () => {
   }
   expect(closes.some((each) => Number(each.figures.charges) > 0)).toBe(true);
 });
+
+it("counts an opening balance at its worth that day, not as a gain", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const quote = state.quotes.prices.find(
+    (each) => each.symbol === "NVDA" && each.price_date === "2026-09-15",
+  )!;
+  const opened = writeOperation(
+    state,
+    {
+      kind: "opening_balance",
+      source_connection_id: iol.id,
+      instrument_symbol: "NVDA",
+      date: "2026-09-15",
+      currency: "ARS",
+      // Its cost, far under what it was worth that day.
+      price: "1",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, quantity: "100" }],
+    },
+    { operationId: "opening", newId: () => crypto.randomUUID() },
+  );
+  expect(opened.result.ok).toBe(true);
+  const month = (each: typeof state) =>
+    closesOf(each, "ars").find((close) => close.period === "2026-09")!;
+  const before = month(state).figures;
+  const after = month(opened.state).figures;
+  // What came in is the holding's worth at that day's quote, and the market
+  // result moves only with its price after that day.
+  expect(Number(after.paidIn) - Number(before.paidIn)).toBeCloseTo(
+    100 * Number(quote.price),
+    2,
+  );
+  expect(Math.abs(Number(after.market) - Number(before.market))).toBeLessThan(
+    100 * Number(quote.price) * 0.5,
+  );
+});
+
+it("marks a month whose adjustment out an earlier write repriced", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const input = (
+    date: string,
+    kind: "purchase" | "adjustment",
+    price: string,
+  ) => ({
+    kind,
+    ...(kind === "adjustment" && { direction: "out" as const }),
+    source_connection_id: iol.id,
+    instrument_symbol: "MSFT",
+    date,
+    currency: "ARS",
+    price,
+    charges: [],
+    reference: null,
+    note: null,
+    parts: [
+      {
+        portfolio_id: iol.portfolio.id,
+        quantity: kind === "purchase" ? "10" : "5",
+      },
+    ],
+  });
+  let id = 0;
+  const newId = () =>
+    `f0000000-0000-4000-8000-${String((id += 1)).padStart(12, "0")}`;
+  const bought = writeOperation(state, input("2026-03-02", "purchase", "100"), {
+    operationId: "buy",
+    newId,
+  }).state;
+  const out = writeOperation(bought, input("2026-05-04", "adjustment", "0"), {
+    operationId: "out",
+    newId,
+  }).state;
+  const repriced = writeOperation(out, input("2026-03-02", "purchase", "200"), {
+    operationId: "buy",
+    replacing: true,
+    newId,
+  }).state;
+  const marked = markRecalculated(out, repriced, "ars");
+  expect(marked.recalculated.get("2026-03")).toBe(TODAY);
+  expect(marked.recalculated.get("2026-05")).toBe(TODAY);
+});
