@@ -14,8 +14,6 @@ import {
 import { isIncome, type Movement } from "./movement";
 import type { LedgerStep } from "./replay";
 
-const text = stored;
-
 // Money between the holder and a holding on a date, in the view's unit:
 // negative is paid in (a purchase or an adjustment in, at its cost, with its
 // charges), positive paid out (a sale less its charges, an adjustment out at
@@ -51,7 +49,7 @@ export function cashFlowsOf(
     } else {
       amount = negated(plus(minus(now.cost, before.cost), charges));
     }
-    flows.push({ date: movement.date, amount: text(amount) });
+    flows.push({ date: movement.date, amount: stored(amount) });
     before = now;
   }
   return flows;
@@ -87,10 +85,11 @@ export function returnsOf(
   const result = minus(plus(paidOut, exactOf(value)), paidIn);
   const first = flows[0]?.date;
   return {
-    paidIn: text(paidIn),
-    paidOut: text(paidOut),
-    result: text(result),
-    share: compareExact(paidIn, ZERO) === 0 ? null : text(over(result, paidIn)),
+    paidIn: stored(paidIn),
+    paidOut: stored(paidOut),
+    result: stored(result),
+    share:
+      compareExact(paidIn, ZERO) === 0 ? null : stored(over(result, paidIn)),
     annual:
       first !== undefined && daysBetween(first, date) >= YEAR_DAYS
         ? yearlyRate([...flows, { date, amount: value }], date)
