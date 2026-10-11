@@ -159,6 +159,10 @@ export default defineConfig([
     rules: webRules({ allow: [PROTOTYPE], syntax: BASE_SYNTAX }),
   },
   {
+    files: [`src/app/(app)/(data)/**/*.test.{ts,tsx}`],
+    rules: webRules({ allow: [PROTOTYPE, TESTING], syntax: BASE_SYNTAX }),
+  },
+  {
     files: [`src/lib/ai/**/*.${SOURCE}`],
     rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_SYNTAX }),
   },

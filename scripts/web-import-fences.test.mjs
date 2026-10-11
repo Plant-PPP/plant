@@ -773,6 +773,7 @@ const OVERRIDES = [
   ["src/components/prototype/x.ts", ["prototype"]],
   ["src/app/(app)/(data)/assets/page.tsx", ["prototype"]],
   ["src/app/(app)/(data)/layout.tsx", ["prototype"]],
+  ["src/app/(app)/(data)/layout.test.tsx", ["prototype", "testing"]],
   ["src/lib/prototype/x.test.ts", ["prototype", "testing"]],
 ];
 const PROBES = {
