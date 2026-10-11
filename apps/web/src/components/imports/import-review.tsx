@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { MissingFigure } from "@/components/holdings/sum-text";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import {
   parseAmountInput,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { currencyOf } from "@/lib/holdings/holding-name";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
@@ -265,18 +267,24 @@ export function ImportReview({
                 ),
               ),
             ].map((currency) => {
-              // A currency the document prints no total for shows none.
-              const amountIn = (list: typeof totals) => {
-                const total = list.find((each) => each.currency === currency);
-                return total ? formatAmount(total.amount, currency) : "—";
-              };
+              const amountIn = (list: typeof totals) =>
+                list.find((each) => each.currency === currency)?.amount;
+              const printed = amountIn(item.documentTotals);
               return (
                 <tr key={currency}>
                   <th scope="row" className="pr-6 text-left font-normal">
                     {currency}
                   </th>
-                  <td className="pr-6">{amountIn(totals)}</td>
-                  <td>{amountIn(item.documentTotals)}</td>
+                  <td className="pr-6">
+                    {formatAmount(amountIn(totals) ?? "0", currency)}
+                  </td>
+                  <td>
+                    {printed === undefined ? (
+                      <MissingFigure text="Sin total en el documento" />
+                    ) : (
+                      formatAmount(printed, currency)
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -355,9 +363,7 @@ export function ImportReview({
                         if (!symbol) return;
                         change(row.id, {
                           symbol,
-                          currency:
-                            instruments.find((each) => each.symbol === symbol)
-                              ?.currency ?? "ARS",
+                          currency: currencyOf(instruments, symbol),
                         });
                       }}
                     >
