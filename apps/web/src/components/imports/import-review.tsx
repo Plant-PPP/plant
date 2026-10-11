@@ -36,7 +36,11 @@ import {
   parseAmountInput,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { currencyOf, instrumentNames } from "@/lib/holdings/holding-name";
+import {
+  currencyOf,
+  instrumentLabel,
+  instrumentNames,
+} from "@/lib/holdings/holding-name";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
@@ -379,14 +383,14 @@ export function ImportReview({
                           .filter((each) => !listed(row.id).has(each.symbol))
                           .map((each) => (
                             <SelectItem key={each.symbol} value={each.symbol}>
-                              {`${each.symbol} · ${each.name}`}
+                              {instrumentLabel(each.symbol, each.name)}
                             </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
                   ) : (
                     <span className="truncate font-medium">
-                      {`${row.symbol} · ${names.get(row.symbol) ?? row.symbol}`}
+                      {instrumentLabel(row.symbol, names.get(row.symbol))}
                     </span>
                   )}
                   <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
