@@ -1,10 +1,22 @@
 "use client";
 
-import type { Denominator } from "@plant/core";
+import {
+  allowedKinds,
+  type Denominator,
+  type Movement,
+  type Position,
+  takesMovements,
+} from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Archive, ArchiveRestore, Pencil } from "lucide-react";
-import { useId, useState } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeftRight,
+  Pencil,
+  Plus,
+} from "lucide-react";
+import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -26,7 +38,9 @@ import {
   DataTable,
   TruncatedText,
   actionsColumn,
+  expandColumn,
 } from "@/components/ui/data-table";
+import { PendingButton } from "@/components/ui/pending-button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -40,7 +54,12 @@ import {
   tickerOf,
 } from "@/lib/holdings/assets-filter";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
-import { ASSET_CLASS_LABELS } from "@/lib/holdings/messages";
+import {
+  ASSET_CLASS_LABELS,
+  MOVEMENT_KIND_LABELS,
+  MOVEMENT_MESSAGES,
+} from "@/lib/holdings/messages";
+import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
 import type {
   MovementResult,
   MovementsInput,
@@ -54,7 +73,7 @@ import {
   type HoldingsValuation,
   hasUnitPrice,
 } from "@/lib/holdings/valuation-view";
-import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
+import { PAGE_ROW_LIMIT, SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type {
   PortfolioRow,
@@ -77,10 +96,21 @@ import {
   toUpdate,
 } from "./holding-fields";
 import { AssetsTabs, panelId, tabId } from "./assets-tabs";
+import { AccountCell, TickerChip } from "./holding-cells";
 import { useAssetsUrl } from "./assets-url";
 import { PortfoliosBreakdown } from "./portfolios-breakdown";
+import { MovementDialog } from "./movement-dialog";
+import {
+  initialMovementFields,
+  type MovementFields,
+  toMovementInput,
+} from "./movement-fields";
+import { MovementsTable } from "./movements-table";
+import { SalesSummary } from "./sales-summary";
+import { SalesTable } from "./sales-table";
 import {
   CALCULATING,
+  GainLossText,
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
@@ -90,7 +120,14 @@ import {
 
 const MESSAGES = WRITE_MESSAGES.holdings;
 
+// The width of each figure the movements add, and of the quantity beside them.
+const MOVEMENT_FIGURE = 112;
+
 type ShownHolding = HoldingRow & { unsaved?: true };
+
+type MovementDialogState =
+  | ({ kind: "create"; holdingId: string | null } & Retry<MovementFields>)
+  | ({ kind: "edit"; movement: Movement } & Retry<MovementFields>);
 
 type DialogState =
   | ({ kind: "create" } & Retry<HoldingFields>)
@@ -145,6 +182,8 @@ export function AssetsSetup({
   today,
   tabs,
   actions,
+  movements,
+  movementActions,
 }: {
   holdings: HoldingsView;
   valuation: HoldingsValuation;
@@ -170,9 +209,14 @@ export function AssetsSetup({
   // The tab shows at once; its data is already on the page.
   const tab = tabOf(url.params.tab, tabs);
   const { archiving } = actions;
+  // The movement columns, rows and tab, for a page that passes movements.
+  const movement = movements &&
+    movementActions && { input: movements, actions: movementActions };
   const tabsId = useId();
   const router = useRouter();
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [movementDialog, setMovementDialog] =
+    useState<MovementDialogState | null>(null);
   const names = instrumentNames(instruments);
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
@@ -229,6 +273,82 @@ export function AssetsSetup({
     });
   }
 
+  // The instrument holdings a movement can be recorded for.
+  const movementHoldings = view.active.flatMap((row) =>
+    takesMovements(row.holding) && !("unsaved" in row && row.unsaved)
+      ? [
+          {
+            id: row.id,
+            name: named(row),
+            hasMovements: movement?.input.positions.has(row.id) ?? false,
+            row,
+          },
+        ]
+      : [],
+  );
+
+  function openMovementDialog(next: MovementDialogState) {
+    if (pending) return;
+    if (next.kind === "create" && movementHoldings.length === 0) {
+      toast.error("Primero agregá una tenencia de un instrumento.");
+      return;
+    }
+    setMovementDialog(next);
+  }
+
+  // A new movement's fields: today, the holding's first allowed kind, its
+  // instrument's currency, and its amount as an opening balance's quantity.
+  function newMovementFields(holdingId: string | null): MovementFields {
+    const chosen =
+      movementHoldings.find((each) => each.id === holdingId) ??
+      movementHoldings[0]!;
+    const [kind] = allowedKinds(chosen.hasMovements);
+    const { holding } = chosen.row;
+    const symbol =
+      holding.asset_class === "instrument" ? holding.instrument_symbol : "";
+    return initialMovementFields(null, {
+      kind: kind!,
+      holdingId: chosen.id,
+      date: today,
+      currency:
+        instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS",
+      ...(kind === "opening_balance" && { quantity: holding.amount }),
+    });
+  }
+
+  function submitMovement(
+    state: MovementDialogState,
+    actions: MovementActions,
+    fields: MovementFields,
+  ): boolean {
+    const chosen = movementHoldings.find(
+      (each) => each.id === fields.holdingId,
+    );
+    if (!chosen) return false;
+    const input = toMovementInput(fields);
+    return card.dialogAction(
+      // The holding shows as saving until its movements are read again.
+      { kind: "update", row: chosen.row },
+      () =>
+        state.kind === "edit"
+          ? actions.update(state.movement.id, input)
+          : actions.create(input),
+      MOVEMENT_MESSAGES,
+      {
+        done:
+          state.kind === "edit"
+            ? `Guardaste el movimiento de ${chosen.name}`
+            : `Agregaste un movimiento a ${chosen.name}`,
+        reopen: (error) =>
+          setMovementDialog({
+            ...state,
+            initial: fields,
+            initialError: error,
+          }),
+      },
+    );
+  }
+
   // What the server valued for a row; nothing yet for one it has not saved.
   const valued = (row: ShownHolding) =>
     row.unsaved ? undefined : valuation.values[row.id];
@@ -274,21 +394,23 @@ export function AssetsSetup({
       id: "ticker",
       header: "Ticker",
       size: 96,
-      meta: { className: "hidden @3xl:table-cell" },
+      meta: {
+        className: movement
+          ? "hidden @7xl:table-cell"
+          : "hidden @3xl:table-cell",
+      },
       cell: ({ row: { original: row } }) => {
         const ticker = tickerOf(row);
-        return ticker === null ? null : (
-          <span className="bg-muted inline-block max-w-full truncate rounded px-1.5 py-0.5 font-mono text-xs">
-            {ticker}
-          </span>
-        );
+        return ticker === null ? null : <TickerChip ticker={ticker} />;
       },
     },
     {
       id: "class",
       header: "Tipo",
       size: 104,
-      meta: { className: "hidden @4xl:table-cell text-muted-foreground" },
+      meta: {
+        className: `${movement ? "hidden @6xl:table-cell" : "hidden @4xl:table-cell"} text-muted-foreground`,
+      },
       cell: ({ row: { original: row } }) => (
         <TruncatedText text={ASSET_CLASS_LABELS[row.holding.asset_class]} />
       ),
@@ -296,20 +418,19 @@ export function AssetsSetup({
     {
       id: "account",
       header: "Cuenta",
-      size: 144,
+      size: movement ? 128 : 144,
       meta: { className: "hidden @2xl:table-cell text-muted-foreground" },
       cell: ({ row: { original: row } }) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <InstitutionIcon name={row.account.institution} />
-          <TruncatedText text={row.account.institution} />
-        </span>
+        <AccountCell institution={row.account.institution} />
       ),
     },
     {
       id: "portfolio",
       header: "Cartera",
       size: 120,
-      meta: { className: "hidden @4xl:table-cell text-muted-foreground" },
+      meta: {
+        className: `${movement ? "hidden @7xl:table-cell" : "hidden @4xl:table-cell"} text-muted-foreground`,
+      },
       cell: ({ row: { original: row } }) => (
         <TruncatedText text={row.portfolio.name} />
       ),
@@ -317,6 +438,7 @@ export function AssetsSetup({
     {
       id: "held",
       header: "Cantidad",
+      size: movement ? MOVEMENT_FIGURE : undefined,
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: row } }) => (
         <TruncatedText text={heldAmount(row)} />
@@ -342,6 +464,7 @@ export function AssetsSetup({
         );
       },
     },
+    ...(movement ? movementColumns(movement.input) : []),
     {
       id: "value",
       header: "Valor",
@@ -355,7 +478,7 @@ export function AssetsSetup({
       header: "%",
       size: 72,
       meta: {
-        className: `hidden @3xl:table-cell text-muted-foreground ${NUMBER_CELL}`,
+        className: `${movement ? "hidden @7xl:table-cell" : "hidden @3xl:table-cell"} text-muted-foreground ${NUMBER_CELL}`,
       },
       cell: ({ row: { original: row } }) => {
         const item = valued(row);
@@ -369,7 +492,74 @@ export function AssetsSetup({
     },
   ];
 
+  // A holding's cost, average cost and gain, from its movements: "—" for one
+  // with none.
+  function movementColumns(input: MovementsInput): ColumnDef<ShownHolding>[] {
+    const positionOf = (row: ShownHolding) =>
+      row.unsaved ? undefined : (input.positions.get(row.id) ?? null);
+    const figure = (
+      row: ShownHolding,
+      show: (position: Position) => ReactNode,
+    ) => {
+      const position = positionOf(row);
+      if (position === undefined) return CALCULATING;
+      if (position === null) return <MissingFigure text="Sin movimientos" />;
+      return show(position);
+    };
+    return [
+      {
+        id: "average",
+        size: MOVEMENT_FIGURE,
+        header: "Costo prom.",
+        meta: { className: `hidden @5xl:table-cell ${NUMBER_CELL}` },
+        cell: ({ row: { original: row } }) =>
+          figure(row, (position) => {
+            const average = averageCost(position);
+            return average === null ? (
+              <MissingFigure text="Sin costo" />
+            ) : (
+              formatPrice(average, unit)
+            );
+          }),
+      },
+      {
+        id: "cost",
+        size: MOVEMENT_FIGURE,
+        header: "Costo",
+        meta: { className: `hidden @4xl:table-cell ${NUMBER_CELL}` },
+        cell: ({ row: { original: row } }) =>
+          figure(row, (position) =>
+            position.money ? (
+              formatAmount(position.money.cost, unit)
+            ) : (
+              <MissingFigure text="Sin costo en esta moneda" />
+            ),
+          ),
+      },
+      {
+        id: "gain",
+        size: MOVEMENT_FIGURE,
+        header: "G/P",
+        meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
+        cell: ({ row: { original: row } }) =>
+          figure(row, (position) => (
+            <GainLossText
+              gain={gainLoss(position, valued(row)?.value ?? null)}
+              unit={unit}
+            />
+          )),
+      },
+    ];
+  }
+
   const tableColumns: ColumnDef<ShownHolding>[] = [
+    ...(movement
+      ? [
+          expandColumn<ShownHolding>({
+            label: (row) => `Movimientos de ${named(row)}`,
+          }),
+        ]
+      : []),
     ...columns,
     actionsColumn<ShownHolding>(
       [
@@ -407,14 +597,21 @@ export function AssetsSetup({
     matchesFilter(row, filter, names),
   );
   const valueOf = (row: ShownHolding) => valued(row)?.value ?? "0";
-  const sortedRows = [...shownRows].sort((a, b) =>
+  const sortedRows: ShownHolding[] = [...shownRows].sort((a, b) =>
     compareDecimals(valueOf(b), valueOf(a)),
   );
   const { missing } = valuation.kinds.total;
+  // The cost and gain of the shown holdings with movements; none while a
+  // write runs, which may change them.
+  const totals =
+    movement && !pending
+      ? costTotals(shownRows, movement.input.positions, valuation)
+      : undefined;
   const counts: Partial<Record<AssetsTab, number>> = {
     holdings: shownRows.length,
     accounts: new Set(shownRows.map((row) => row.account.id)).size,
     portfolios: new Set(shownRows.map((row) => row.portfolio.id)).size,
+    ...(movement && { sales: movement.input.sales.totals.count }),
   };
 
   const archivedColumns: ColumnDef<ShownHolding>[] | undefined = archiving && [
@@ -466,6 +663,175 @@ export function AssetsSetup({
     ),
   ];
 
+  // The sales of the chosen year: those of every holding the filters keep,
+  // open or not, so they show even when no open holding matches.
+  function salesPanel(input: MovementsInput): ReactNode {
+    const year =
+      typeof url.params.year === "string" &&
+      input.years.includes(url.params.year)
+        ? url.params.year
+        : input.years[0];
+    if (year === undefined) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          Todavía no registraste ventas.
+        </p>
+      );
+    }
+    return (
+      <>
+        <SalesSummary totals={input.sales.totals} unit={unit} year={year} />
+        {input.sales.rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {`Ninguna venta de ${year} coincide con los filtros.`}
+          </p>
+        ) : (
+          <SalesTable
+            sales={input.sales.rows}
+            unit={unit}
+            assetName={assetName}
+          />
+        )}
+        {input.sales.truncated && (
+          <p className="text-xs text-muted-foreground">
+            {`Mostrando las ${SALES_LIMIT} ventas más recientes; los totales las incluyen a todas.`}
+          </p>
+        )}
+      </>
+    );
+  }
+
+  function panel(): ReactNode {
+    switch (tab) {
+      case "sales":
+        return movement && salesPanel(movement.input);
+      case "holdings":
+      case "accounts":
+      case "portfolios":
+        return shownRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {accounts.length === 0 ? (
+              <>
+                Para cargar tenencias, primero agregá una cuenta en{" "}
+                <Link className="underline" href="/accounts">
+                  Cuentas
+                </Link>
+                .
+              </>
+            ) : view.active.length > 0 ? (
+              view.activeTruncated ? (
+                `Ninguna de las ${PAGE_ROW_LIMIT} tenencias más recientes coincide con los filtros.`
+              ) : (
+                "Ninguna tenencia coincide con los filtros."
+              )
+            ) : (
+              "Todavía no cargaste tenencias."
+            )}
+          </p>
+        ) : tab === "accounts" ? (
+          <AccountsBreakdown
+            rows={shownRows}
+            accounts={valuation.accounts}
+            whole={valuation.kinds}
+            unit={unit}
+            pending={pending}
+          />
+        ) : tab === "portfolios" ? (
+          <PortfoliosBreakdown
+            rows={shownRows}
+            portfolios={valuation.portfolios}
+            total={valuation.kinds.total}
+            unit={unit}
+            pending={pending}
+          />
+        ) : (
+          <DataTable<ShownHolding>
+            columns={tableColumns}
+            data={sortedRows}
+            caption="Tenencias"
+            expandable={(row) =>
+              movement !== undefined &&
+              !row.unsaved &&
+              takesMovements(row.holding)
+            }
+            renderExpanded={
+              movement &&
+              ((row) => (
+                <div className="grid gap-2">
+                  <MovementsTable
+                    key={`${row.id}:${movement.input.revisions.get(row.id) ?? 0}:${unit}`}
+                    scope={{ holdingId: row.id }}
+                    unit={unit}
+                    load={movement.input.loadMovements}
+                    pending={pending}
+                    actions={[
+                      {
+                        id: "edit",
+                        icon: Pencil,
+                        tooltip: "Editar",
+                        label: (line) =>
+                          `Editar ${MOVEMENT_KIND_LABELS[line.movement.kind].toLowerCase()} del ${formatDate(line.movement.date)}`,
+                        onClick: (line) =>
+                          openMovementDialog({
+                            kind: "edit",
+                            movement: line.movement,
+                          }),
+                      },
+                    ]}
+                  />
+                  <div>
+                    <PendingButton
+                      size="sm"
+                      variant="outline"
+                      pending={pending}
+                      onClick={() =>
+                        openMovementDialog({
+                          kind: "create",
+                          holdingId: row.id,
+                        })
+                      }
+                    >
+                      <Plus />
+                      Agregar movimiento
+                    </PendingButton>
+                  </div>
+                </div>
+              ))
+            }
+            footer={
+              <TableRow>
+                {tableColumns.map((column) => (
+                  <TableCell key={column.id} className={column.meta?.className}>
+                    {column.id === "name" ? (
+                      "Total"
+                    ) : column.id === "value" ? (
+                      <PendingSum
+                        sum={valuation.kinds.total}
+                        unit={unit}
+                        pending={pending}
+                      />
+                    ) : column.id === "cost" && totals ? (
+                      totals.cost === null ? (
+                        <MissingFigure text="Sin costo en esta moneda" />
+                      ) : (
+                        formatAmount(totals.cost, unit)
+                      )
+                    ) : column.id === "gain" && totals ? (
+                      <GainLossText gain={totals.gain} unit={unit} />
+                    ) : null}
+                  </TableCell>
+                ))}
+              </TableRow>
+            }
+          />
+        );
+      default: {
+        const unknown: never = tab;
+        return unknown;
+      }
+    }
+  }
+
   const defaultAccount = accounts.length === 1 ? accounts[0] : undefined;
   const dialogBase = {
     accounts,
@@ -487,6 +853,21 @@ export function AssetsSetup({
         description="Lo que tenés en cada cuenta, valuado con la última cotización"
         addLabel="Agregar tenencia"
         onAdd={() => openDialog({ kind: "create" })}
+        secondary={
+          movement && (
+            <PendingButton
+              size="sm"
+              variant="outline"
+              pending={pending}
+              onClick={() =>
+                openMovementDialog({ kind: "create", holdingId: null })
+              }
+            >
+              <ArrowLeftRight />
+              Agregar movimiento
+            </PendingButton>
+          )
+        }
       >
         <AssetsSummary valuation={valuation} unit={unit} pending={pending} />
         <AssetsTabs
@@ -499,6 +880,7 @@ export function AssetsSetup({
         <AssetsFilters
           url={url}
           tabs={tabs}
+          salesYears={movement?.input.years}
           referenceUnit={referenceUnit}
           filter={filter}
           portfolios={portfolios}
@@ -510,70 +892,8 @@ export function AssetsSetup({
           aria-labelledby={tabId(tabsId, tab)}
           className="grid gap-4"
         >
-          {shownRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {accounts.length === 0 ? (
-                <>
-                  Para cargar tenencias, primero agregá una cuenta en{" "}
-                  <Link className="underline" href="/accounts">
-                    Cuentas
-                  </Link>
-                  .
-                </>
-              ) : view.active.length > 0 ? (
-                view.activeTruncated ? (
-                  `Ninguna de las ${PAGE_ROW_LIMIT} tenencias más recientes coincide con los filtros.`
-                ) : (
-                  "Ninguna tenencia coincide con los filtros."
-                )
-              ) : (
-                "Todavía no cargaste tenencias."
-              )}
-            </p>
-          ) : tab === "accounts" ? (
-            <AccountsBreakdown
-              rows={shownRows}
-              accounts={valuation.accounts}
-              whole={valuation.kinds}
-              unit={unit}
-              pending={pending}
-            />
-          ) : tab === "portfolios" ? (
-            <PortfoliosBreakdown
-              rows={shownRows}
-              portfolios={valuation.portfolios}
-              total={valuation.kinds.total}
-              unit={unit}
-              pending={pending}
-            />
-          ) : (
-            <DataTable
-              columns={tableColumns}
-              data={sortedRows}
-              caption="Tenencias"
-              footer={
-                <TableRow>
-                  {tableColumns.map((column) => (
-                    <TableCell
-                      key={column.id}
-                      className={column.meta?.className}
-                    >
-                      {column.id === "name" ? (
-                        "Total"
-                      ) : column.id === "value" ? (
-                        <PendingSum
-                          sum={valuation.kinds.total}
-                          unit={unit}
-                          pending={pending}
-                        />
-                      ) : null}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              }
-            />
-          )}
-          {missing > 0 && (
+          {panel()}
+          {tab !== "sales" && missing > 0 && (
             <p className="text-xs text-muted-foreground">
               {/* The total is marked only when it values some holdings. */}
               {missing < valuation.kinds.total.count && "* "}
@@ -582,7 +902,7 @@ export function AssetsSetup({
                 : `A ${missing} tenencias les falta cotización; el total no las incluye.`}
             </p>
           )}
-          {view.activeTruncated && shownRows.length > 0 && (
+          {tab !== "sales" && view.activeTruncated && shownRows.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {missing < valuation.kinds.total.count && "* "}
               {`Mostrando las ${PAGE_ROW_LIMIT} más recientes; el total no incluye las demás.`}
@@ -640,6 +960,9 @@ export function AssetsSetup({
           mode="edit"
           row={dialog.row}
           {...dialogBase}
+          amountFromMovements={
+            movement?.input.positions.has(dialog.row.id) ?? false
+          }
           initial={
             dialog.initial ??
             initialFields(dialog.row, { accountId: "", portfolioId: "", today })
@@ -660,6 +983,40 @@ export function AssetsSetup({
               row,
             );
           }}
+        />
+      )}
+      {movement && movementDialog && (
+        <MovementDialog
+          mode={movementDialog.kind}
+          holdings={
+            movementDialog.kind === "edit"
+              ? movementHoldings.filter(
+                  (each) => each.id === movementDialog.movement.holding_id,
+                )
+              : movementDialog.holdingId === null
+                ? movementHoldings
+                : movementHoldings.filter(
+                    (each) => each.id === movementDialog.holdingId,
+                  )
+          }
+          initial={
+            movementDialog.initial ??
+            (movementDialog.kind === "edit"
+              ? initialMovementFields(movementDialog.movement, {
+                  kind: movementDialog.movement.kind,
+                  holdingId: movementDialog.movement.holding_id,
+                  currency: movementDialog.movement.currency,
+                  date: movementDialog.movement.date,
+                })
+              : newMovementFields(movementDialog.holdingId))
+          }
+          initialError={movementDialog.initialError}
+          today={today}
+          returnFocusTo={card.focusHeading}
+          onClose={() => setMovementDialog(null)}
+          onSubmit={(fields) =>
+            submitMovement(movementDialog, movement.actions, fields)
+          }
         />
       )}
     </div>

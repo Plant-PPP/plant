@@ -2,7 +2,7 @@ import type { PortfolioSetupGuardHint } from "@plant/shared";
 import { NAME_LIMITS, type SetupTable } from "./limits";
 import type { WriteResultCode } from "./write-result";
 
-const FAILED = "No pudimos guardar. Probá de nuevo.";
+export const FAILED = "No pudimos guardar. Probá de nuevo.";
 
 // A guard's hint names the row it refused for, whichever table was written.
 const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {

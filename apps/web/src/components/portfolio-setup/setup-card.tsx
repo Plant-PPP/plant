@@ -140,6 +140,7 @@ export function SetupCard({
   description,
   addLabel,
   onAdd,
+  secondary,
   children,
 }: {
   heading: SetupCardState["heading"];
@@ -148,6 +149,8 @@ export function SetupCard({
   description: string;
   addLabel: string;
   onAdd: () => void;
+  // Another action beside the add button.
+  secondary?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -163,10 +166,13 @@ export function SetupCard({
           </h2>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        <PendingButton size="sm" pending={pending} onClick={onAdd}>
-          <Plus />
-          {addLabel}
-        </PendingButton>
+        <div className="flex flex-wrap justify-end gap-2">
+          {secondary}
+          <PendingButton size="sm" pending={pending} onClick={onAdd}>
+            <Plus />
+            {addLabel}
+          </PendingButton>
+        </div>
       </div>
       {children}
     </section>

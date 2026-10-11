@@ -225,7 +225,7 @@ export function salesOf(
       const steps = stepsOf(state, row.id, unit);
       movements.forEach((movement, index) => {
         if (movement.kind !== "sale" || !movement.date.startsWith(year)) return;
-        lines.push({ movement, sale: steps[index]?.sale ?? null });
+        lines.push({ movement, sale: steps[index]?.sale ?? null, row });
       });
     }
   }

@@ -45,12 +45,7 @@ import {
   toInsert,
   toUpdate,
 } from "./holding-fields";
-import type { AssetClass } from "@/lib/holdings/messages";
-
-const CURRENCY_LABELS: Record<Currency, string> = {
-  ARS: "Pesos (ARS)",
-  USD: "Dólares (USD)",
-};
+import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 // What the amount is, by class.
 const AMOUNT_LABELS: Record<AssetClass, string> = {
@@ -81,6 +76,7 @@ export function HoldingDialog({
   initial,
   initialError,
   portfolioChosen = false,
+  amountFromMovements = false,
   returnFocusTo,
   onClose,
   onSubmit,
@@ -94,6 +90,8 @@ export function HoldingDialog({
   initialError?: string;
   // The portfolio stays as given when the account changes.
   portfolioChosen?: boolean;
+  // The holding's movements set its quantity, which the dialog only shows.
+  amountFromMovements?: boolean;
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
@@ -346,7 +344,19 @@ export function HoldingDialog({
           {textField("amount", "amount", AMOUNT_LABELS[fields.assetClass], {
             inputMode: "decimal",
             autoComplete: "off",
+            ...(amountFromMovements && {
+              readOnly: true,
+              "aria-describedby": `${fieldId("amount")}-from-movements`,
+            }),
           })}
+          {amountFromMovements && (
+            <p
+              id={`${fieldId("amount")}-from-movements`}
+              className="-mt-2 text-xs text-muted-foreground"
+            >
+              La cantidad sale de sus movimientos.
+            </p>
+          )}
           {shown.has("annual_rate") &&
             textField("rate", "rate", "TNA (%)", {
               inputMode: "decimal",

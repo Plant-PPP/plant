@@ -197,17 +197,17 @@ export function replay(
 export const positionOf = (steps: readonly LedgerStep[]): Position =>
   steps.at(-1)?.position ?? EMPTY_POSITION;
 
-// What the units held would gain or lose at `value` (in the position's unit):
-// the amount over cost, and that as a share of cost (null when cost is 0).
+// What units bought for `cost` would gain or lose at `value` (both in one
+// unit): the amount over cost, and that as a share of cost (null when cost
+// is 0).
 export function unrealized(
-  position: Position,
+  cost: string,
   value: string,
-): { amount: string; share: string | null } | null {
-  if (!position.money) return null;
-  const cost = exactOf(position.money.cost);
-  const amount = minus(exactOf(value), cost);
+): { amount: string; share: string | null } {
+  const paid = exactOf(cost);
+  const amount = minus(exactOf(value), paid);
   return {
     amount: text(amount),
-    share: compareExact(cost, ZERO) === 0 ? null : text(over(amount, cost)),
+    share: compareExact(paid, ZERO) === 0 ? null : text(over(amount, paid)),
   };
 }

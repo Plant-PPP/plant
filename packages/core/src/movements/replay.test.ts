@@ -201,31 +201,14 @@ describe("a long history", () => {
 
 describe("unrealized", () => {
   it("gives the amount over cost and its share", () => {
-    expect(
-      unrealized(
-        {
-          quantity: "20",
-          money: {
-            cost: "3000",
-            fees: "0",
-            taxes: "0",
-            income: "0",
-            realized: "0",
-          },
-        },
-        "3600",
-      ),
-    ).toEqual({ amount: "600", share: "0.2" });
-  });
-
-  it("has no share of a zero cost", () => {
-    expect(unrealized(EMPTY_POSITION, "10")).toEqual({
-      amount: "10",
-      share: null,
+    expect(unrealized("3000", "3600")).toEqual({ amount: "600", share: "0.2" });
+    expect(unrealized("3000", "2400")).toEqual({
+      amount: "-600",
+      share: "-0.2",
     });
   });
 
-  it("is unknown without money", () => {
-    expect(unrealized({ quantity: "1", money: null }, "10")).toBeNull();
+  it("has no share of a zero cost", () => {
+    expect(unrealized("0", "10")).toEqual({ amount: "10", share: null });
   });
 });

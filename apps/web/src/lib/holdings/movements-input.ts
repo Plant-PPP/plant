@@ -7,6 +7,8 @@ import type {
   SaleResult,
 } from "@plant/core";
 
+import type { HoldingRow } from "./read";
+
 // Whose movements a list shows: one holding's, or every holding's in an
 // account or a portfolio.
 export type MovementScope =
@@ -25,7 +27,12 @@ export type MovementsPage =
   | { ok: true; rows: MovementLine[]; next: MovementCursor | null }
   | { ok: false; code: "failed" };
 
-export type SaleLine = { movement: Movement; sale: SaleResult | null };
+// A sale with its holding, open or closed.
+export type SaleLine = {
+  movement: Movement;
+  sale: SaleResult | null;
+  row: HoldingRow;
+};
 
 // The sales of one year whose holding, active or not, matches the page's
 // filters, newest first: at most SALES_LIMIT rows, and the totals of every

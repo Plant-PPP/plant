@@ -6,6 +6,7 @@ import {
   DataTable,
   TruncatedText,
   actionsColumn,
+  expandColumn,
   rowActionButton,
 } from "./data-table";
 
@@ -274,4 +275,53 @@ describe("the footer", () => {
       /<\/tbody><tfoot[^>]*><tr><td>Total<\/td><\/tr><\/tfoot>/,
     );
   });
+});
+
+describe("expandable rows", () => {
+  const html = renderToStaticMarkup(
+    <DataTable
+      columns={[
+        expandColumn<Row>({ label: (row) => `Movimientos de ${row.name}` }),
+        nameColumn,
+      ]}
+      data={rows}
+      caption="Carteras"
+      expandable={(row) => row.id === "a"}
+      renderExpanded={(row) => `Detalle de ${row.name}`}
+    />,
+  );
+
+  it("offers a closed button only on the rows that open", () => {
+    expect(html).toContain(
+      'aria-expanded="false" aria-label="Movimientos de Principal"',
+    );
+    expect(html).not.toContain("Movimientos de Largo plazo");
+    expect(html).not.toContain("Detalle de");
+  });
+
+  it("keeps the button column out of the header row's names", () => {
+    expect(html).toMatch(/<span class="sr-only">Abrir<\/span>/);
+  });
+});
+
+it("keeps a hidden action's place in its row", () => {
+  const html = render([
+    nameColumn,
+    actionsColumn<Row>(
+      [
+        {
+          id: "edit",
+          icon: Pencil,
+          tooltip: "Editar",
+          label: (row) => `Editar ${row.name}`,
+          onClick: () => undefined,
+          hidden: (row) => row.id === "b",
+        },
+      ],
+      { pending: false },
+    ),
+  ]);
+  expect(html).toContain("Editar Principal");
+  expect(html).not.toContain("Editar Largo plazo");
+  expect(html).toMatch(/<span aria-hidden="true" class="size-7"><\/span>/);
 });

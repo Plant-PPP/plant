@@ -395,3 +395,136 @@ it("offers the sales tab only with movements", () => {
   void (<AssetsSetup {...base} tabs={SALES_TABS} />);
   void (<AssetsSetup {...base} tabs={TABS} />);
 });
+
+describe("with movements", () => {
+  const btc: HoldingRow = {
+    id: "h9",
+    holding: holdingSchema.parse({
+      id: "h9",
+      portfolio_id: PRINCIPAL.id,
+      asset_class: "instrument",
+      instrument_symbol: "BTC",
+      amount: "0.5",
+      currency: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+      valued_on: null,
+      label: null,
+    }),
+    account: { id: "a1", institution: "IOL" },
+    portfolio: PRINCIPAL,
+  };
+  const sale = {
+    id: "m2",
+    holding_id: "h9",
+    kind: "sale" as const,
+    date: "2026-03-02",
+    currency: "USD" as const,
+    quantity: "0.5",
+    price: "60000",
+    fees: "4",
+    taxes: "0",
+    rates: {
+      mep: { sell: "1200", date: "2026-03-02" },
+      ccl: { sell: "1250", date: "2026-03-02" },
+      official: { sell: "1000", date: "2026-03-02" },
+    },
+  };
+  const movements = {
+    positions: new Map([
+      [
+        "h9",
+        {
+          quantity: "0.5",
+          money: {
+            cost: "15000",
+            fees: "9",
+            taxes: "0",
+            income: "0",
+            realized: "14996",
+          },
+        },
+      ],
+    ]),
+    revisions: new Map([["h9", 2]]),
+    sales: {
+      rows: [
+        {
+          movement: sale,
+          sale: {
+            gross: "30000",
+            fees: "4",
+            taxes: "0",
+            cost: "15000",
+            result: "14996",
+          },
+          row: btc,
+        },
+      ],
+      truncated: false,
+      totals: { count: 1, gross: "30000", charges: "4", result: "14996" },
+    },
+    years: ["2026"],
+    loadMovements: async () => ({ ok: true as const, rows: [], next: null }),
+  };
+  const valuation = holdingsValuation({
+    holdings: [btc, row("h1", PRINCIPAL, "1000")],
+    truncated: false,
+    snapshot: {
+      date: "2026-10-10",
+      fx: { mep: { sell: "1200", date: "2026-10-10" } },
+      prices: {
+        BTC: { price: "60000", currency: "USD", date: "2026-10-10" },
+      },
+    },
+    unit: "usd_mep",
+    referenceDollar: "mep",
+  });
+  const renderWith = (tab: AssetsTab) =>
+    renderToStaticMarkup(
+      <AssetsSetup
+        holdings={list([btc, row("h1", PRINCIPAL, "1000")])}
+        valuation={valuation}
+        unit="usd_mep"
+        referenceUnit="usd_mep"
+        filter={{ portfolioId: null, assetClass: null, search: "" }}
+        params={tab === "holdings" ? {} : { tab }}
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL]}
+        instruments={[]}
+        today="2026-10-10"
+        tabs={SALES_TABS}
+        actions={ACTIONS}
+        movements={movements}
+        movementActions={{ create: done, update: done }}
+      />,
+    );
+
+  it("adds cost, average cost and gain, a dash for a holding without movements", () => {
+    const html = renderWith("holdings");
+    expect(html).toContain(">Costo prom.<");
+    expect(html).toContain("US$ 30.000,00");
+    expect(html).toContain("+US$ 15.000,00");
+    expect(html).toContain("+100,0 %");
+    expect(html).toMatch(/Sin movimientos/);
+  });
+
+  it("opens an instrument holding into its movements, and offers to add one", () => {
+    const html = renderWith("holdings");
+    expect(html).toContain(
+      'aria-label="Movimientos de BTC de IOL en Principal"',
+    );
+    expect(html).not.toContain('aria-label="Movimientos de Caja h1');
+    expect(html).toContain("Agregar movimiento");
+  });
+
+  it("shows the year's sales with their totals and counts them in the tab", () => {
+    const html = renderWith("sales");
+    expect(html).toMatch(/>Ventas <span[^>]*>1</);
+    expect(html).toContain("Operaciones");
+    expect(html).toContain("Comisiones e impuestos");
+    expect(html).toContain("+US$ 14.996,00");
+    expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Ventas /);
+  });
+});

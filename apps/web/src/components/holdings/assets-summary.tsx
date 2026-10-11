@@ -12,7 +12,7 @@ import type {
 } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
-import { PendingSum, ShareText } from "./sum-text";
+import { PendingSum, ShareText, SummaryTile } from "./sum-text";
 
 const KINDS: { kind: HoldingKind | "total"; label: string }[] = [
   { kind: "total", label: "Total" },
@@ -66,13 +66,11 @@ export function AssetsSummary({
     <div className="grid gap-4">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {KINDS.map(({ kind, label }) => (
-          <div key={kind} className="bg-muted/60 grid gap-1 rounded-lg p-3">
-            <dt className="text-muted-foreground text-[11px]">{label}</dt>
-            <dd className="truncate text-base font-semibold tabular-nums">
-              <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
-            </dd>
-            <dd className="text-muted-foreground text-[11px] tabular-nums">
-              {kind === "total" ? (
+          <SummaryTile
+            key={kind}
+            label={label}
+            note={
+              kind === "total" ? (
                 `Valuado en ${unitName(unit)}${
                   kinds.total.missing > 0
                     ? ` · ${kinds.total.missing} sin cotización`
@@ -83,9 +81,11 @@ export function AssetsSummary({
                   share={kinds[kind].share}
                   complete={kinds[kind].complete && kinds.total.complete}
                 />
-              )}
-            </dd>
-          </div>
+              )
+            }
+          >
+            <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
+          </SummaryTile>
         ))}
       </dl>
       {parts.length > 0 && (

@@ -1,6 +1,8 @@
 import type { Denominator } from "@plant/core";
+import type { ReactNode } from "react";
 
 import { formatAmount, formatShare } from "@/lib/format/amount";
+import type { GainLoss } from "@/lib/holdings/cost-totals";
 import type { Sum } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
@@ -91,5 +93,63 @@ export function ShareText({
       {formatShare(share)}
       <IncompleteMark />
     </>
+  );
+}
+
+const signed = (text: string, amount: string) =>
+  amount.startsWith("-") || /^0(\.0+)?$/.test(amount) ? text : `+${text}`;
+
+// A gain or loss: "Calculando…" until the page has it (undefined), a dash
+// when it is unknown in the unit (null); green when up, red when down, with
+// its percent of cost.
+export function GainLossText({
+  gain,
+  unit,
+}: {
+  gain: GainLoss | null | undefined;
+  unit: Denominator;
+}) {
+  if (gain === undefined) return CALCULATING;
+  if (gain === null) return <MissingFigure text="Sin resultado" />;
+  const loss = gain.amount.startsWith("-");
+  return (
+    <span
+      className={cn(
+        loss ? "text-destructive" : "text-emerald-700 dark:text-emerald-400",
+      )}
+    >
+      {signed(formatAmount(gain.amount, unit), gain.amount)}
+      {gain.percent !== null && (
+        <span className="block text-xs">
+          {signed(formatShare(gain.percent), gain.percent)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// One figure of a summary's row of tiles, inside its `dl`: a label, the
+// figure, and a muted note under it.
+export function SummaryTile({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  note?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-muted/60 grid gap-1 rounded-lg p-3">
+      <dt className="text-muted-foreground text-[11px]">{label}</dt>
+      <dd className="truncate text-base font-semibold tabular-nums">
+        {children}
+      </dd>
+      {note !== undefined && (
+        <dd className="text-muted-foreground text-[11px] tabular-nums">
+          {note}
+        </dd>
+      )}
+    </div>
   );
 }
