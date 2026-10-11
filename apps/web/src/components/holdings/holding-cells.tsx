@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { TruncatedText } from "@/components/ui/data-table";
 
@@ -17,5 +19,27 @@ export function AccountCell({ institution }: { institution: string }) {
       <InstitutionIcon name={institution} />
       <TruncatedText text={institution} />
     </span>
+  );
+}
+
+// A name that opens its page when the page has one.
+export function NameLink({
+  text,
+  href,
+  className,
+}: {
+  text: string;
+  href: string | null | undefined;
+  className?: string;
+}) {
+  if (!href) return <TruncatedText text={text} className={className} />;
+  return (
+    <Link
+      href={href}
+      title={text}
+      className={`block truncate underline-offset-2 hover:underline ${className ?? ""}`}
+    >
+      {text}
+    </Link>
   );
 }

@@ -9,6 +9,7 @@ import type { HoldingRow } from "@/lib/holdings/read";
 import type { Sum } from "@/lib/holdings/valuation-view";
 
 import { type BreakdownLine, breakdownLines } from "./breakdown-lines";
+import { NameLink } from "./holding-cells";
 import {
   NUMBER_CELL,
   PendingSum,
@@ -26,12 +27,14 @@ export function PortfoliosBreakdown({
   total,
   unit,
   pending,
+  href,
 }: {
   rows: readonly HoldingRow[];
   portfolios: Record<string, Sum>;
   total: Sum;
   unit: Denominator;
   pending: boolean;
+  href?: (id: string) => string;
 }) {
   const columns: ColumnDef<PortfolioLine>[] = [
     {
@@ -39,7 +42,11 @@ export function PortfoliosBreakdown({
       header: "Cartera",
       cell: ({ row: { original: line } }) => (
         <>
-          <TruncatedText className="font-medium" text={line.name} />
+          <NameLink
+            className="font-medium"
+            text={line.name}
+            href={href?.(line.id)}
+          />
           <TruncatedText
             className="text-muted-foreground text-xs"
             text={holdingsCountText(line.count)}

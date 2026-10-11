@@ -2,7 +2,10 @@
 
 import { referenceUnit } from "@plant/core";
 
-import { AssetsSetup } from "@/components/holdings/assets-setup";
+import {
+  AssetsSetup,
+  type ScopeHrefs,
+} from "@/components/holdings/assets-setup";
 import { SALES_TABS } from "@/lib/holdings/assets-filter";
 import { assetsSelection } from "@/lib/holdings/assets-selection";
 import { instrumentNames } from "@/lib/holdings/holding-name";
@@ -19,6 +22,12 @@ import {
   salesOf,
   yearsOf,
 } from "./prototype-store";
+
+export const PROTOTYPE_HREFS: ScopeHrefs = {
+  instrument: (symbol) => `/assets/${encodeURIComponent(symbol)}`,
+  account: (id) => `/accounts/${id}`,
+  portfolio: (id) => `/portfolios/${id}`,
+};
 
 // Activos over the prototype's store, with movements and the sales tab.
 export function PrototypeAssets({ params }: { params: KeysetParams }) {
@@ -80,7 +89,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       movements={movements}
       movementActions={actions.movements}
       prices={{ manual, fed, actions: actions.prices }}
-      instrumentHref={(symbol) => `/assets/${encodeURIComponent(symbol)}`}
+      hrefs={PROTOTYPE_HREFS}
     />
   );
 }

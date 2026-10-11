@@ -105,7 +105,7 @@ import {
   toUpdate,
 } from "./holding-fields";
 import { AssetsTabs, panelId, tabId } from "./assets-tabs";
-import { AccountCell, TickerChip } from "./holding-cells";
+import { AccountCell, NameLink, TickerChip } from "./holding-cells";
 import { useAssetsUrl } from "./assets-url";
 import { PortfoliosBreakdown } from "./portfolios-breakdown";
 import { MovementDialog } from "./movement-dialog";
@@ -169,6 +169,12 @@ export type HoldingActions = {
   };
 };
 
+export type ScopeHrefs = {
+  instrument: (symbol: string) => string;
+  account: (id: string) => string;
+  portfolio: (id: string) => string;
+};
+
 export type PriceActions = {
   set: (input: unknown) => Promise<PriceResult>;
 };
@@ -217,7 +223,7 @@ export function AssetsSetup({
   movements,
   movementActions,
   prices,
-  instrumentHref,
+  hrefs,
 }: {
   holdings: HoldingsView;
   valuation: HoldingsValuation;
@@ -231,8 +237,9 @@ export function AssetsSetup({
   today: string;
   actions: HoldingActions;
   prices?: ManualPrices;
-  // An instrument's history page; a page without one names it plainly.
-  instrumentHref?: (symbol: string) => string;
+  // The pages an instrument, account or portfolio opens; a page without
+  // them names each plainly.
+  hrefs?: ScopeHrefs;
 } & MovementProps) {
   const {
     shown: view,
@@ -434,23 +441,16 @@ export function AssetsSetup({
       header: "Activo",
       cell: ({ row: { original: shown } }) => {
         const ticker = tickerOf(shown);
-        const href =
-          instrumentHref && shown.holding.asset_class === "instrument"
-            ? instrumentHref(shown.holding.instrument_symbol)
-            : null;
         return (
           <>
-            {href ? (
-              <Link
-                href={href}
-                className="block truncate font-medium underline-offset-2 hover:underline"
-                title={assetName(shown)}
-              >
-                {assetName(shown)}
-              </Link>
-            ) : (
-              <TruncatedText text={assetName(shown)} />
-            )}
+            <NameLink
+              text={assetName(shown)}
+              href={
+                hrefs && shown.holding.asset_class === "instrument"
+                  ? hrefs.instrument(shown.holding.instrument_symbol)
+                  : null
+              }
+            />
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground @2xl:hidden">
               <TruncatedText text={`${heldAmount(shown)} ·`} />
               <InstitutionIcon name={shown.account.institution} />
@@ -859,6 +859,7 @@ export function AssetsSetup({
             whole={valuation.kinds}
             unit={unit}
             pending={pending}
+            href={hrefs?.account}
           />
         ) : tab === "portfolios" ? (
           <PortfoliosBreakdown
@@ -867,6 +868,7 @@ export function AssetsSetup({
             total={valuation.kinds.total}
             unit={unit}
             pending={pending}
+            href={hrefs?.portfolio}
           />
         ) : (
           <DataTable<ShownHolding>
