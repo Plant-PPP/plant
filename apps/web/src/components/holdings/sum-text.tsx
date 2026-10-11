@@ -111,7 +111,7 @@ export function ShareText({
   );
 }
 
-const signed = (text: string, amount: string) =>
+export const signed = (text: string, amount: string) =>
   amount.startsWith("-") || /^0(\.0+)?$/.test(amount) ? text : `+${text}`;
 
 // A gain or loss: "Calculando…" until the page has it (undefined), a dash

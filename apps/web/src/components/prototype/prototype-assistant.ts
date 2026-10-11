@@ -1,6 +1,7 @@
 import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
 import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
+import { signed } from "@/components/holdings/sum-text";
 import { formatAmount, formatFraction } from "@/lib/format/amount";
 import { folded } from "@/lib/format/text";
 import {
@@ -50,14 +51,18 @@ function resultBars(
 // What a figure that left something out says after it.
 const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
 
-const signed = (amount: string, unit: ChatUnit) =>
-  `${amount.startsWith("-") ? "" : "+"}${formatAmount(amount, unit)}`;
-
-// "ganó US$ 10" or "perdió US$ 10".
-const moved = (amount: string, unit: ChatUnit) =>
+// An amount by its sign, in words: "ganó US$ 10" or "perdió US$ 10".
+const bySign = (
+  amount: string,
+  unit: ChatUnit,
+  [down, up]: readonly [string, string],
+) =>
   amount.startsWith("-")
-    ? `perdió ${formatAmount(amount.slice(1), unit)}`
-    : `ganó ${formatAmount(amount, unit)}`;
+    ? `${down} ${formatAmount(amount.slice(1), unit)}`
+    : `${up} ${formatAmount(amount, unit)}`;
+
+const moved = (amount: string, unit: ChatUnit) =>
+  bySign(amount, unit, ["perdió", "ganó"]);
 
 const FOLLOW_UPS = {
   netWorth: ["¿Cómo me fue este año?", "¿Cuánto debo?"],
@@ -118,15 +123,18 @@ export function prototypeAnswer(
     }
     const summary = instrumentSummary(holdings, flows, state.today);
     const returns = summary.returns;
+    const held = exactOf(summary.quantity).n !== 0n;
     return {
       ...base,
       text: [
-        `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
+        !held
+          ? `Ya no tenés ${instrument.symbol}.`
+          : `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
         returns
           ? `En total, entre lo que vendiste, lo que cobraste y lo que tenés, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share)} sobre lo que pusiste)` : ""}${returns.annual ? `, un ${formatFraction(returns.annual)} por año` : ""}.`
           : "",
-        summary.unrealized
-          ? `Lo que tenés hoy está ${summary.unrealized.amount.startsWith("-") ? "abajo" : "arriba"} ${formatAmount(summary.unrealized.amount.replace(/^-/, ""), unit)} contra lo que te costó.`
+        held && summary.unrealized
+          ? `Lo que tenés hoy está ${bySign(summary.unrealized.amount, unit, ["abajo", "arriba"])} contra lo que te costó.`
           : "",
       ]
         .filter(Boolean)
@@ -138,10 +146,14 @@ export function prototypeAnswer(
             bars: resultBars(returns.result, [
               { label: "Ventas", value: summary.realized ?? "0" },
               { label: "Cobros", value: summary.income ?? "0" },
-              {
-                label: "Lo que tenés",
-                value: summary.unrealized?.amount ?? "0",
-              },
+              ...(held
+                ? [
+                    {
+                      label: "Lo que tenés",
+                      value: summary.unrealized?.amount ?? "0",
+                    },
+                  ]
+                : []),
             ]),
           }
         : null,
@@ -194,7 +206,7 @@ export function prototypeAnswer(
   if (/dividend|cupon|cobr|renta/.test(asked) && thisYear) {
     return {
       ...base,
-      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.`,
+      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)}${thisYear.complete ? "" : WITHOUT_PRICE} de dividendos y cupones, antes de las retenciones.`,
       chart: {
         title: `Cobros de ${thisYear.year}`,
         unit,
@@ -212,7 +224,7 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${thisYear.totals.contributed.startsWith("-") ? `sacaste ${formatAmount(thisYear.totals.contributed.slice(1), unit)}` : `pusiste ${formatAmount(thisYear.totals.contributed, unit)}`} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${bySign(thisYear.totals.contributed, unit, ["sacaste", "pusiste"])} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), current.figures.result)}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
@@ -273,7 +285,7 @@ export function prototypeAnswer(
   };
 }
 
-// A question in a conversation, a new one when `conversationId` is null.
+// A question in a conversation; a new one when no conversation has that id.
 export function addQuestion(
   state: PrototypeState,
   {

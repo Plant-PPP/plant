@@ -130,3 +130,9 @@ it("draws an instrument's result as bars that add up to it", () => {
     6,
   );
 });
+
+it("says an instrument sold out is no longer held", () => {
+  const text = ask("¿Cómo le fue a Tesla?").text;
+  expect(text).toMatch(/^Ya no tenés TSLA\./);
+  expect(text).not.toMatch(/Lo que tenés hoy/);
+});
