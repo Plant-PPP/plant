@@ -4,7 +4,7 @@ import {
   nonNegativeDecimalSchema,
   plus,
   positiveDecimalSchema,
-  toDecimal,
+  stored,
 } from "@plant/shared";
 import { z } from "zod";
 
@@ -77,9 +77,8 @@ export function heldIn(
     const symbol = row.holding.instrument_symbol;
     held.set(
       symbol,
-      toDecimal(
+      stored(
         plus(exactOf(held.get(symbol) ?? "0"), exactOf(row.holding.amount)),
-        8,
       ),
     );
   }
@@ -121,7 +120,7 @@ export function finishReading(
     const quantity = held.get(symbol)!;
     const changed =
       index === 0
-        ? toDecimal(plus(exactOf(quantity), exactOf("5")), 8)
+        ? stored(plus(exactOf(quantity), exactOf("5")))
         : index === 2 && compareDecimals(quantity, "1") > 0
           ? difference(quantity, "1")
           : quantity;
@@ -161,10 +160,10 @@ export function finishReading(
     row.id === misread.id && compareDecimals(row.quantity, "10") >= 0
       ? {
           ...row,
-          quantity: toDecimal(
-            { n: exactOf(row.quantity).n, d: exactOf(row.quantity).d * 10n },
-            8,
-          ),
+          quantity: stored({
+            n: exactOf(row.quantity).n,
+            d: exactOf(row.quantity).d * 10n,
+          }),
           confidence: "low" as const,
         }
       : row,
