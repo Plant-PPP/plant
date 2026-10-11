@@ -50,12 +50,19 @@ export type ReviewActions = {
 };
 
 // A row as the user edits it: the quantity and price as typed.
-type EditedRow = ImportRow & { quantityText: string; priceText: string };
+// A row as the user edits it: the quantity and price as typed, and whether
+// the user added it, so they choose its instrument.
+type EditedRow = ImportRow & {
+  quantityText: string;
+  priceText: string;
+  added: boolean;
+};
 
-const edited = (row: ImportRow): EditedRow => ({
+const edited = (row: ImportRow, added = false): EditedRow => ({
   ...row,
   quantityText: amountInput(row.quantity),
   priceText: row.price === null ? "" : amountInput(row.price),
+  added,
 });
 
 const CHANGE_TEXT = {
@@ -87,7 +94,7 @@ export function ImportReview({
   actions: ReviewActions;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState(() => item.rows.map(edited));
+  const [rows, setRows] = useState(() => item.rows.map((row) => edited(row)));
   const [alert, setAlert] = useState<string>();
   const [pending, startTransition] = useTransition();
   const names = new Map(instruments.map((each) => [each.symbol, each.name]));
@@ -99,13 +106,24 @@ export function ImportReview({
       row.priceText.trim() === "" ? null : parseAmountInput(row.priceText);
     return { row, quantity, price };
   });
+  // A row that adds units to the account needs their price.
+  const addsUnits = (row: EditedRow, quantity: string | null) => {
+    const effect = rowChange(
+      { quantity: quantity ?? "0", discarded: row.discarded },
+      held.get(row.symbol),
+    );
+    return effect.kind === "new" || effect.kind === "up";
+  };
+  const priceInvalid = ({ row, quantity, price }: (typeof parsed)[number]) =>
+    !row.discarded &&
+    (row.priceText.trim() === "" ? addsUnits(row, quantity) : price === null);
   const valid = parsed.every(
-    ({ row, quantity, price }) =>
-      row.discarded ||
-      (quantity !== null &&
-        exactOf(quantity).n > 0n &&
-        row.symbol !== "" &&
-        (row.priceText.trim() === "" || price !== null)),
+    (each) =>
+      each.row.discarded ||
+      (each.quantity !== null &&
+        exactOf(each.quantity).n > 0n &&
+        each.row.symbol !== "" &&
+        !priceInvalid(each)),
   );
   const finalRows: ImportRow[] = parsed.map(({ row, quantity, price }) => ({
     id: row.id,
@@ -131,7 +149,7 @@ export function ImportReview({
   function confirm() {
     if (!valid) {
       setAlert(
-        "Revisá las filas: cada una necesita un activo y una cantidad mayor a 0.",
+        "Revisá las filas: cada una necesita un activo, una cantidad mayor a 0 y, si suma unidades, su precio.",
       );
       return;
     }
@@ -173,19 +191,24 @@ export function ImportReview({
       <section
         className={cn(
           "grid gap-2 rounded-lg border p-4",
-          matches ? "border-emerald-600/40" : "border-amber-500/50",
+          matches === true
+            ? "border-emerald-600/40"
+            : matches === false && "border-amber-500/50",
         )}
         aria-label="Totales"
       >
         <p className="flex items-center gap-2 text-sm font-medium">
-          {matches ? (
+          {matches === true && (
             <Check aria-hidden className="size-4 text-emerald-600" />
-          ) : (
+          )}
+          {matches === false && (
             <TriangleAlert aria-hidden className="size-4 text-amber-600" />
           )}
-          {matches
-            ? "Lo leído suma lo mismo que el documento."
-            : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
+          {matches === "none"
+            ? "El documento no muestra un total para comparar: revisá las filas."
+            : matches
+              ? "Lo leído suma lo mismo que el documento."
+              : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
         </p>
         <dl className="grid grid-cols-[auto_auto_auto] justify-start gap-x-6 gap-y-1 text-sm tabular-nums">
           <dt className="text-muted-foreground text-xs">Moneda</dt>
@@ -210,7 +233,9 @@ export function ImportReview({
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold">
-            {`${rows.filter((row) => !row.discarded).length} tenencias`}
+            {rows.filter((row) => !row.discarded).length === 1
+              ? "1 tenencia"
+              : `${rows.filter((row) => !row.discarded).length} tenencias`}
             {doubtful > 0 && (
               <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
                 {doubtful === 1 ? "1 dudosa" : `${doubtful} dudosas`}
@@ -224,16 +249,19 @@ export function ImportReview({
             onClick={() =>
               setRows((current) => [
                 ...current,
-                edited({
-                  id: `added-${current.length}`,
-                  symbol: "",
-                  quantity: "0",
-                  price: null,
-                  currency: "ARS",
-                  confidence: "high",
-                  source: "Agregada por vos",
-                  discarded: false,
-                }),
+                edited(
+                  {
+                    id: `added-${current.length}`,
+                    symbol: "",
+                    quantity: "0",
+                    price: null,
+                    currency: "ARS",
+                    confidence: "high",
+                    source: "Agregada por vos",
+                    discarded: false,
+                  },
+                  true,
+                ),
               ])
             }
           >
@@ -264,7 +292,7 @@ export function ImportReview({
                 )}
               >
                 <div className="grid min-w-0 gap-1">
-                  {row.source === "Agregada por vos" ? (
+                  {row.added ? (
                     <Select
                       value={row.symbol}
                       onValueChange={(symbol) => {
@@ -334,6 +362,7 @@ export function ImportReview({
                   <Input
                     value={row.priceText}
                     aria-label={`Precio de la fila ${index + 1}`}
+                    aria-invalid={priceInvalid(parsed[index]!) || undefined}
                     inputMode="decimal"
                     disabled={row.discarded}
                     onChange={(event) =>

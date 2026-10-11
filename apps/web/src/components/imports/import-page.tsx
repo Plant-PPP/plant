@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Camera, FileUp, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { Button } from "@/components/ui/button";
@@ -79,8 +80,17 @@ export function ImportPage({
     accounts.find((each) => each.id === accountId)?.institution ?? "";
 
   function send(list: FileList | null) {
-    if (!list || list.length === 0 || !accountId || left === 0) return;
+    if (!list || list.length === 0 || !accountId) return;
+    if (left === 0) {
+      toast.error("Ya usaste las cargas de este mes.");
+      return;
+    }
     actions.upload([...list].slice(0, left), accountId);
+    if (list.length > left) {
+      toast.error(
+        `Subimos ${left} de ${list.length}: no te quedan más cargas este mes.`,
+      );
+    }
   }
 
   const columns: ColumnDef<ImportItem>[] = [
