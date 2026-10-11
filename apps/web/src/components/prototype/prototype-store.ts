@@ -59,6 +59,7 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
+import type { Conversation } from "@/lib/assistant/chat";
 import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
@@ -90,6 +91,8 @@ export type PrototypeState = {
   liabilities: Liability[];
   // Newest first.
   imports: ImportItem[];
+  // Newest first.
+  conversations: Conversation[];
 };
 
 export type StoredHolding = {
@@ -131,6 +134,7 @@ export function initialState(
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
+    conversations: [],
   };
 }
 
