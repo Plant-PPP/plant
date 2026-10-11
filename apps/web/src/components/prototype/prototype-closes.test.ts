@@ -250,3 +250,46 @@ it("marks nothing when a purchase's units move between portfolios", () => {
   ).state;
   expect(markRecalculated(split, whole, "usd_mep").recalculated.size).toBe(0);
 });
+
+it("moves units in and out at their worth, so a transfer makes no market result", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const quoteOn = (date: string) =>
+    Number(
+      state.quotes.prices.find(
+        (each) => each.symbol === "NVDA" && each.price_date === date,
+      )!.price,
+    );
+  const move = (date: string, kind: "opening_balance" | "adjustment") => ({
+    kind,
+    ...(kind === "adjustment" && { direction: "out" as const }),
+    source_connection_id: iol.id,
+    instrument_symbol: "NVDA",
+    date,
+    currency: "ARS",
+    price: kind === "opening_balance" ? "1" : "0",
+    charges: [],
+    reference: null,
+    note: null,
+    parts: [{ portfolio_id: iol.portfolio.id, quantity: "100" }],
+  });
+  const newId = () => crypto.randomUUID();
+  const opened = writeOperation(state, move("2026-09-15", "opening_balance"), {
+    operationId: "in",
+    newId,
+  }).state;
+  const left = writeOperation(opened, move("2026-09-20", "adjustment"), {
+    operationId: "out",
+    newId,
+  });
+  expect(left.result.ok).toBe(true);
+  const market = (each: typeof state) =>
+    Number(
+      closesOf(each, "ars").find((close) => close.period === "2026-09")!.figures
+        .market,
+    );
+  // What the units did while held, not their cost against their worth.
+  expect(market(left.state) - market(state)).toBeCloseTo(
+    100 * (quoteOn("2026-09-20") - quoteOn("2026-09-15")),
+    2,
+  );
+});

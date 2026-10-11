@@ -82,7 +82,8 @@ export function periodResult({
   let income = ZERO;
   let charges = ZERO;
   // The money at work: the start value, plus each flow in for the part of
-  // the period from the start of its day, less each flow out likewise. An
+  // the period from the start of its day, less each flow out for the part
+  // after the end of its day, since the money worked the day it left. An
   // income is what the money made, not money put in or taken out.
   let atWork = start;
   for (const flow of flows) {
@@ -99,7 +100,10 @@ export function periodResult({
       paidIn = plus(paidIn, negated(amount), negated(paid));
     } else proceeds = plus(proceeds, amount, paid);
     const weight = over(
-      { n: BigInt(daysBetween(flow.date, to) + 1), d: 1n },
+      {
+        n: BigInt(daysBetween(flow.date, to) + (flow.kind === "buy" ? 1 : 0)),
+        d: 1n,
+      },
       { n: BigInt(days), d: 1n },
     );
     atWork = minus(atWork, times(amount, weight));
