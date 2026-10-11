@@ -1,6 +1,6 @@
 "use client";
 
-import { DENOMINATORS, type Denominator, type PriceSource } from "@plant/core";
+import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -14,20 +14,18 @@ import {
   formatFraction,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { unitParam } from "@/lib/holdings/assets-filter";
 import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import type {
   InstrumentHolding,
   InstrumentSummary,
 } from "@/lib/holdings/instrument-history";
-import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
 import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { useAssetsUrl } from "./assets-url";
-import { FilterSelect } from "./filter-select";
+import { UnitSelect } from "./filter-select";
 import { AccountCell, TickerChip } from "./holding-cells";
 import { MovementsTable } from "./movements-table";
 import {
@@ -155,17 +153,12 @@ export function InstrumentHistory({
                   }`}
             </p>
           </div>
-          <FilterSelect
+          <UnitSelect
             id={unitId}
-            label="Valuar en"
-            value={unit}
+            unit={unit}
+            referenceUnit={referenceUnit}
             pending={false}
-            options={(Object.keys(DENOMINATORS) as Denominator[]).map(
-              (each) => [each, UNIT_LABELS[each]] as const,
-            )}
-            onChange={(value) =>
-              url.set("unit", unitParam(value, referenceUnit))
-            }
+            onChange={(param) => url.set("unit", param)}
           />
         </div>
       </div>

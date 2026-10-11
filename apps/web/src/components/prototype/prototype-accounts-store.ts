@@ -10,7 +10,11 @@ import {
 } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 
-import type { PrototypeState, Write } from "./prototype-store";
+import {
+  type PrototypeState,
+  refusedWrite,
+  type Write,
+} from "./prototype-store";
 
 // The prototype's accounts and portfolios, written as the real actions write
 // them: parsed with the same schemas and refused by the same guards, with
@@ -21,10 +25,6 @@ const accountInput = sourceConnectionInputSchema(
   NAME_LIMITS.source_connections.institution,
 );
 
-const refused = (
-  state: PrototypeState,
-  code: Extract<WriteResult, { ok: false }>["code"],
-): Write<WriteResult> => ({ state, result: { ok: false, code } });
 const done = (state: PrototypeState, id: string): Write<WriteResult> => ({
   state,
   result: { ok: true, id },
@@ -52,8 +52,9 @@ export function createPortfolio(
   id: string,
 ): Write<WriteResult> {
   const parsed = portfolioName.safeParse(input);
-  if (!parsed.success) return refused(state, "invalid");
-  if (takenName(state, parsed.data.name)) return refused(state, "duplicate");
+  if (!parsed.success) return refusedWrite(state, "invalid");
+  if (takenName(state, parsed.data.name))
+    return refusedWrite(state, "duplicate");
   return done(
     {
       ...state,
@@ -83,12 +84,12 @@ export function renamePortfolio(
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
   const parsed = portfolioName.safeParse(input);
-  if (!id.success || !parsed.success) return refused(state, "invalid");
+  if (!id.success || !parsed.success) return refusedWrite(state, "invalid");
   if (!state.portfolios.some((each) => each.id === id.data)) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   if (takenName(state, parsed.data.name, id.data)) {
-    return refused(state, "duplicate");
+    return refusedWrite(state, "duplicate");
   }
   const row = { id: id.data, name: parsed.data.name };
   return done(
@@ -110,17 +111,17 @@ export function archivePortfolio(
   rawId: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   const row = state.portfolios.find((each) => each.id === id.data);
-  if (!row) return refused(state, "not_found");
+  if (!row) return refusedWrite(state, "not_found");
   if (state.portfolios.length === 1) {
-    return refused(state, "last_active_portfolio");
+    return refusedWrite(state, "last_active_portfolio");
   }
   if (state.accounts.some((each) => each.portfolio.id === row.id)) {
-    return refused(state, "portfolio_in_use");
+    return refusedWrite(state, "portfolio_in_use");
   }
   if (holdsAny(state, "portfolioId", row.id)) {
-    return refused(state, "portfolio_has_holdings");
+    return refusedWrite(state, "portfolio_has_holdings");
   }
   return done(
     {
@@ -138,16 +139,16 @@ export function restorePortfolio(
   input?: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   const row = state.archivedPortfolios.find((each) => each.id === id.data);
-  if (!row) return refused(state, "not_found");
+  if (!row) return refusedWrite(state, "not_found");
   let name = row.name;
   if (input !== undefined) {
     const parsed = portfolioName.safeParse(input);
-    if (!parsed.success) return refused(state, "invalid");
+    if (!parsed.success) return refusedWrite(state, "invalid");
     name = parsed.data.name;
   }
-  if (takenName(state, name, row.id)) return refused(state, "duplicate");
+  if (takenName(state, name, row.id)) return refusedWrite(state, "duplicate");
   const restored = { id: row.id, name };
   return done(
     renamed(
@@ -192,7 +193,7 @@ export function createAccount(
   id: string,
 ): Write<WriteResult> {
   const row = accountRow(state, id, input);
-  if (typeof row === "string") return refused(state, row);
+  if (typeof row === "string") return refusedWrite(state, row);
   return done({ ...state, accounts: [row, ...state.accounts] }, id);
 }
 
@@ -202,12 +203,12 @@ export function updateAccount(
   input: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   if (!state.accounts.some((each) => each.id === id.data)) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   const row = accountRow(state, id.data, input);
-  if (typeof row === "string") return refused(state, row);
+  if (typeof row === "string") return refusedWrite(state, row);
   return done(
     {
       ...state,
@@ -222,11 +223,11 @@ export function archiveAccount(
   rawId: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   const row = state.accounts.find((each) => each.id === id.data);
-  if (!row) return refused(state, "not_found");
+  if (!row) return refusedWrite(state, "not_found");
   if (holdsAny(state, "accountId", row.id)) {
-    return refused(state, "source_connection_has_holdings");
+    return refusedWrite(state, "source_connection_has_holdings");
   }
   return done(
     {
@@ -244,12 +245,12 @@ export function restoreAccount(
   input: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   if (!state.archivedAccounts.some((each) => each.id === id.data)) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   const row = accountRow(state, id.data, input);
-  if (typeof row === "string") return refused(state, row);
+  if (typeof row === "string") return refusedWrite(state, row);
   return done(
     {
       ...state,
@@ -276,13 +277,13 @@ export function deleteAccount(
   rawId: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   const known = [...state.accounts, ...state.archivedAccounts].some(
     (each) => each.id === id.data,
   );
-  if (!known) return refused(state, "not_found");
+  if (!known) return refusedWrite(state, "not_found");
   if (holdsEver(state, "accountId", id.data)) {
-    return refused(state, "source_connection_has_holdings");
+    return refusedWrite(state, "source_connection_has_holdings");
   }
   return done(
     {
@@ -305,26 +306,26 @@ export function deletePortfolio(
   rawId: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  if (!id.success) return refused(state, "invalid");
+  if (!id.success) return refusedWrite(state, "invalid");
   const active = state.portfolios.some((each) => each.id === id.data);
   if (
     !active &&
     !state.archivedPortfolios.some((each) => each.id === id.data)
   ) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   if (active && state.portfolios.length === 1) {
-    return refused(state, "last_active_portfolio");
+    return refusedWrite(state, "last_active_portfolio");
   }
   if (
     [...state.accounts, ...state.archivedAccounts].some(
       (each) => each.portfolio.id === id.data,
     )
   ) {
-    return refused(state, "portfolio_in_use");
+    return refusedWrite(state, "portfolio_in_use");
   }
   if (holdsEver(state, "portfolioId", id.data)) {
-    return refused(state, "portfolio_has_holdings");
+    return refusedWrite(state, "portfolio_has_holdings");
   }
   return done(
     {

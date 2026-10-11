@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  DENOMINATORS,
   type Denominator,
   type LiabilitiesValue,
   type Liability,
@@ -11,7 +10,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import { useAssetsUrl } from "@/components/holdings/assets-url";
-import { FilterSelect } from "@/components/holdings/filter-select";
+import { UnitSelect } from "@/components/holdings/filter-select";
 import {
   MissingFigure,
   NO_QUOTE,
@@ -43,7 +42,6 @@ import {
   formatQuantity,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { unitParam } from "@/lib/holdings/assets-filter";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import { FAILED, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
@@ -248,15 +246,12 @@ export function DebtsSetup({
             Lo que debés, en su moneda y en la que elijas
           </p>
         </div>
-        <FilterSelect
+        <UnitSelect
           id={`${id}-unit`}
-          label="Valuar en"
-          value={unit}
+          unit={unit}
+          referenceUnit={referenceUnit}
           pending={pending}
-          options={(Object.keys(DENOMINATORS) as Denominator[]).map(
-            (each) => [each, UNIT_LABELS[each]] as const,
-          )}
-          onChange={(value) => url.set("unit", unitParam(value, referenceUnit))}
+          onChange={(param) => url.set("unit", param)}
         />
       </div>
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">

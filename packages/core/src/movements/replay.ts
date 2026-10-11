@@ -1,13 +1,14 @@
 import {
   compareExact,
+  DECIMAL_SCALE_DIGITS,
   type Exact,
   exactOf,
   minus,
   over,
   plus,
   roundedTo,
+  stored,
   times,
-  toDecimal,
   ZERO,
 } from "@plant/shared";
 import type { QuoteSnapshot } from "../quotes/contract/quote";
@@ -16,10 +17,9 @@ import type { Denominator } from "../valuation/denominators";
 import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
 
 // The digits a position keeps between movements: its stored precision.
-const STATE_DIGITS = 8;
 
-const kept = (x: Exact): Exact => roundedTo(x, STATE_DIGITS);
-const text = (x: Exact): string => toDecimal(x, STATE_DIGITS);
+const kept = (x: Exact): Exact => roundedTo(x, DECIMAL_SCALE_DIGITS);
+const text = stored;
 
 // A holding's position in one unit after a movement. Money is in the view's
 // unit, each movement converted at its own date's rates; it is null when a
@@ -110,7 +110,7 @@ function factorOf(
 
 // Each movement's step, oldest first, from `from` (the position before the
 // first of them; empty when they start the holding). The state is rounded to
-// STATE_DIGITS between movements and exact within one, so replaying from any
+// DECIMAL_SCALE_DIGITS between movements and exact within one, so replaying from any
 // stored step gives the same steps as replaying from the start.
 export function replay(
   movements: readonly Movement[],

@@ -6,7 +6,12 @@ import {
   monthDetail,
   yearsOfCloses,
 } from "./prototype-closes";
-import { deleteOperation, initialState, setPrice } from "./prototype-store";
+import {
+  deleteOperation,
+  initialState,
+  setPrice,
+  writeOperation,
+} from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -73,4 +78,39 @@ it("counts a holding with no movements in every month's net worth", () => {
   const [first] = closesOf(state, "ars");
   const [firstWithout] = closesOf(without, "ars");
   expect(first!.figures.endValue).not.toBe(firstWithout!.figures.endValue);
+});
+
+it("marks a closed month whose units changed at no cost", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const after = writeOperation(
+    state,
+    {
+      kind: "adjustment",
+      direction: "in",
+      source_connection_id: iol.id,
+      instrument_symbol: "AAPL",
+      date: "2026-03-16",
+      currency: "ARS",
+      price: "0",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, quantity: "5" }],
+    },
+    { operationId: "split", newId: () => crypto.randomUUID() },
+  );
+  expect(after.result.ok).toBe(true);
+  const marked = markRecalculated(state, after.state, "usd_mep");
+  expect(marked.recalculated.get("2026-03")).toBe(TODAY);
+});
+
+it("keeps charges out of the market result", () => {
+  for (const close of closes) {
+    const { market, income, charges, result } = close.figures;
+    expect(Number(result)).toBeCloseTo(
+      Number(market) + Number(income) - Number(charges),
+      6,
+    );
+  }
+  expect(closes.some((each) => Number(each.figures.charges) > 0)).toBe(true);
 });

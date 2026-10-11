@@ -7,23 +7,25 @@ import {
   negated,
   over,
   plus,
-  toDecimal,
+  stored,
   ZERO,
 } from "@plant/shared";
 
 import { isIncome, type Movement, takesUnits } from "./movement";
 import type { LedgerStep } from "./replay";
 
-const text = (x: Exact): string => toDecimal(x, 8);
+const text = stored;
 
 // Money between the holder and a holding on a date, in the view's unit:
 // negative is paid in (a purchase or an adjustment in, at its cost, with its
 // charges), positive paid out (a sale less its charges, an adjustment out at
-// the cost it takes, an income less its withholding). Its kind says which.
+// the cost it takes, an income less its withholding). Its kind says which,
+// and `charges` what of it went to commissions, fees and taxes.
 export type CashFlow = {
   date: string;
   amount: string;
   kind: "buy" | "sell" | "income";
+  charges: string;
 };
 
 // Each movement's cash flow, from the replay of the same movements; null when
@@ -59,7 +61,12 @@ export function cashFlowsOf(
       if (takesUnits(movement)) kind = "sell";
       amount = negated(plus(minus(now.cost, before.cost), charges));
     }
-    flows.push({ date: movement.date, amount: text(amount), kind });
+    flows.push({
+      date: movement.date,
+      amount: text(amount),
+      kind,
+      charges: text(charges),
+    });
     before = now;
   }
   return flows;
@@ -101,7 +108,10 @@ export function returnsOf(
     share: compareExact(paidIn, ZERO) === 0 ? null : text(over(result, paidIn)),
     annual:
       first !== undefined && daysBetween(first, date) >= YEAR_DAYS
-        ? yearlyRate([...flows, { date, amount: value, kind: "sell" }], date)
+        ? yearlyRate(
+            [...flows, { date, amount: value, kind: "sell", charges: "0" }],
+            date,
+          )
         : null,
   };
 }
