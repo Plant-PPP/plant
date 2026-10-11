@@ -139,14 +139,26 @@ export function toUpdate(fields: HoldingFields, portfolioBefore: string) {
 
 // The row the page shows until the server's refresh, built from the fields
 // the schema already accepted.
-export function holdingRow(
+export const holdingRow = (
   id: string,
   fields: HoldingFields,
+  chosen: Pick<HoldingRow, "account" | "portfolio">,
+): HoldingRow => rowOf(id, toInsert(fields), chosen);
+
+// A holding as the page lists it, from a new holding's columns (parsed here;
+// throws on columns the holding schema refuses).
+export function rowOf(
+  id: string,
+  insert: Record<string, unknown>,
   chosen: Pick<HoldingRow, "account" | "portfolio">,
 ): HoldingRow {
   return {
     id,
-    holding: holdingSchema.parse({ ...toInsert(fields), id }),
+    holding: holdingSchema.parse({
+      ...insert,
+      id,
+      portfolio_id: chosen.portfolio.id,
+    }),
     ...chosen,
   };
 }

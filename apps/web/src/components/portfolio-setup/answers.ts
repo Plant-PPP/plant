@@ -3,6 +3,13 @@ import type {
   WriteResult,
   WriteResultCode,
 } from "@/lib/portfolio-setup/write-result";
+import type { Result } from "./optimistic-writes";
+
+// The copy for each code a write can be refused with, and for a failed call.
+export type MessagesFor<R extends Result> = Record<
+  Extract<R, { ok: false }>["code"] | "failed",
+  string
+>;
 
 export type WriteMessages = Record<WriteResultCode, string>;
 
@@ -31,11 +38,12 @@ export function rowAnswer(
   return dialogAnswer(result, messages);
 }
 
-export function dialogAnswer(
-  result: WriteResult | "rejected",
-  messages: WriteMessages,
+export function dialogAnswer<R extends Result>(
+  result: R | "rejected",
+  messages: MessagesFor<R>,
 ): { kind: "done" } | { kind: "alert"; text: string } {
   if (result === "rejected") return { kind: "alert", text: messages.failed };
   if (result.ok) return { kind: "done" };
-  return { kind: "alert", text: messages[result.code] };
+  const code = result.code as keyof MessagesFor<R>;
+  return { kind: "alert", text: messages[code] };
 }

@@ -13,9 +13,8 @@ import {
 } from "@/components/ui/data-table";
 import { PendingButton } from "@/components/ui/pending-button";
 import type { ListView } from "@/lib/portfolio-setup/read";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { type Answer, type WriteMessages, dialogAnswer } from "./answers";
-import type { OptimisticRun } from "./optimistic-writes";
+import { type Answer, dialogAnswer, type MessagesFor } from "./answers";
+import type { OptimisticRun, Result } from "./optimistic-writes";
 
 type SetupCardState = ReturnType<typeof useSetupCard>;
 
@@ -77,10 +76,10 @@ export function useSetupCard<C>({
   // Runs a row's action. The row leaves its list at once, taking its button,
   // so focus goes to the section's heading, never the page; a refusal brings the
   // row back and focus returns to its button.
-  function rowAction(
+  function rowAction<R extends Result>(
     change: C,
-    call: () => Promise<WriteResult>,
-    answerOf: (result: WriteResult | "rejected") => Answer,
+    call: () => Promise<R>,
+    answerOf: (result: R | "rejected") => Answer,
     {
       done,
       rowId,
@@ -103,10 +102,10 @@ export function useSetupCard<C>({
   // Runs a dialog's write as the dialog closes: a toast when done, or the
   // dialog again with its alert (a toast once the section is gone). False when
   // another write is running, so the dialog stays open with what the user typed.
-  function dialogAction(
+  function dialogAction<R extends Result>(
     change: C,
-    call: () => Promise<WriteResult>,
-    messages: WriteMessages,
+    call: () => Promise<R>,
+    messages: MessagesFor<NoInfer<R>>,
     { done, reopen }: { done: string; reopen: (error: string) => void },
   ): boolean {
     return run(

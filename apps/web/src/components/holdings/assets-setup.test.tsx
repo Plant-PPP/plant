@@ -1,4 +1,3 @@
-jest.mock("@/app/(app)/assets/actions", () => ({}));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
@@ -6,7 +5,7 @@ jest.mock("next/navigation", () => ({
 import { type Denominator, holdingSchema } from "@plant/core";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { AssetsTab } from "@/lib/holdings/assets-filter";
+import { type AssetsTab, SALES_TABS, TABS } from "@/lib/holdings/assets-filter";
 import type { HoldingRow } from "@/lib/holdings/read";
 import {
   type HoldingsValuation,
@@ -14,7 +13,14 @@ import {
   holdingsValuation,
 } from "@/lib/holdings/valuation-view";
 
-import { AssetsSetup } from "./assets-setup";
+import { AssetsSetup, type HoldingActions } from "./assets-setup";
+
+const done = async () => ({ ok: true as const, id: "x" });
+const ACTIONS: HoldingActions = {
+  create: done,
+  update: done,
+  archiving: { archive: done, restore: done },
+};
 
 const PRINCIPAL = { id: "p1", name: "Principal" };
 const LARGO = { id: "p2", name: "Largo plazo" };
@@ -113,6 +119,7 @@ function render(
     valuation = VALUATION,
     referenceUnit = "ars",
     urlUnit,
+    actions = ACTIONS,
   }: {
     accounts?: (typeof ACCOUNT)[];
     portfolioId?: string | null;
@@ -120,6 +127,7 @@ function render(
     valuation?: HoldingsValuation;
     referenceUnit?: Denominator;
     urlUnit?: Denominator;
+    actions?: HoldingActions;
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -138,6 +146,8 @@ function render(
       portfolios={[LARGO, PRINCIPAL]}
       instruments={[]}
       today="2026-10-10"
+      tabs={TABS}
+      actions={actions}
     />,
   );
 }
@@ -358,4 +368,30 @@ it("shows the reference unit chosen once its param is cleared", () => {
   expect(render([], { referenceUnit: "usd_ccl", urlUnit: "ars" })).toContain(
     ">Pesos<",
   );
+});
+
+it("offers archiving only to a page that passes it", () => {
+  const holdings = [row("h1", PRINCIPAL, "1000")];
+  expect(render(holdings)).toContain("Archivar ");
+  const unarchived = { create: ACTIONS.create, update: ACTIONS.update };
+  expect(render(holdings, { actions: unarchived })).not.toContain("Archivar");
+});
+
+it("offers the sales tab only with movements", () => {
+  const base = {
+    holdings: list([]),
+    valuation: VALUATION,
+    unit: "ars" as const,
+    referenceUnit: "ars" as const,
+    filter: { portfolioId: null, assetClass: null, search: "" },
+    params: {},
+    accounts: [ACCOUNT],
+    portfolios: [PRINCIPAL],
+    instruments: [],
+    today: "2026-10-10",
+    actions: ACTIONS,
+  };
+  // @ts-expect-error the sales tab needs movements
+  void (<AssetsSetup {...base} tabs={SALES_TABS} />);
+  void (<AssetsSetup {...base} tabs={TABS} />);
 });

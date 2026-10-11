@@ -14,6 +14,7 @@ import {
   type HoldingFields,
   MATURITY_MESSAGE,
   holdingRow,
+  rowOf,
   initialFields,
   refusal,
   refusedField,
@@ -110,6 +111,15 @@ describe.each(CLASSES)("a %s holding", (assetClass) => {
       today: TODAY,
     });
     expect(toInsert(back)).toEqual(toInsert(fields));
+  });
+
+  it("lists a holding from columns the schema accepted, in the chosen portfolio", () => {
+    expect(rowOf("h1", toInsert(fields), CHOSEN)).toEqual(
+      holdingRow("h1", fields, CHOSEN),
+    );
+    expect(rowOf("h1", toInsert(fields), CHOSEN).holding.portfolio_id).toBe(
+      CHOSEN.portfolio.id,
+    );
   });
 });
 

@@ -9,12 +9,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import {
-  archiveHolding,
-  createHolding,
-  restoreHolding,
-  updateHolding,
-} from "@/app/(app)/assets/actions";
 import { dialogAnswer } from "@/components/portfolio-setup/answers";
 import {
   applyChange,
@@ -39,12 +33,18 @@ import { formatDate } from "@/lib/format/date";
 import {
   type AssetsFilter,
   type AssetsTab,
+  type SALES_TABS,
+  type TABS,
   tabOf,
   matchesFilter,
   tickerOf,
 } from "@/lib/holdings/assets-filter";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import { ASSET_CLASS_LABELS } from "@/lib/holdings/messages";
+import type {
+  MovementResult,
+  MovementsInput,
+} from "@/lib/holdings/movements-input";
 import type {
   HoldingRow,
   HoldingsView,
@@ -60,6 +60,7 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
@@ -102,6 +103,35 @@ function heldAmount({ holding }: HoldingRow): string {
     : formatAmount(holding.amount, holding.currency);
 }
 
+// What the screen's writes call. A page whose holdings can be archived passes
+// archiving; the page without it lists no archived holdings.
+export type HoldingActions = {
+  create: (input: unknown) => Promise<WriteResult>;
+  update: (id: string, input: unknown) => Promise<WriteResult>;
+  archiving?: {
+    archive: (id: string) => Promise<WriteResult>;
+    restore: (id: string) => Promise<WriteResult>;
+  };
+};
+
+export type MovementActions = {
+  create: (input: unknown) => Promise<MovementResult>;
+  update: (id: string, input: unknown) => Promise<MovementResult>;
+};
+
+// A page offers the sales tab exactly when it passes movements.
+type MovementProps =
+  | {
+      tabs: typeof TABS & { sales?: never };
+      movements?: undefined;
+      movementActions?: undefined;
+    }
+  | {
+      tabs: typeof SALES_TABS;
+      movements: MovementsInput;
+      movementActions: MovementActions;
+    };
+
 export function AssetsSetup({
   holdings,
   valuation,
@@ -113,6 +143,8 @@ export function AssetsSetup({
   portfolios,
   instruments,
   today,
+  tabs,
+  actions,
 }: {
   holdings: HoldingsView;
   valuation: HoldingsValuation;
@@ -124,7 +156,8 @@ export function AssetsSetup({
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
   today: string;
-}) {
+  actions: HoldingActions;
+} & MovementProps) {
   const {
     shown: view,
     pending,
@@ -135,7 +168,8 @@ export function AssetsSetup({
   const card = useSetupCard({ run, pending });
   const url = useAssetsUrl(params);
   // The tab shows at once; its data is already on the page.
-  const tab = tabOf(url.params.tab);
+  const tab = tabOf(url.params.tab, tabs);
+  const { archiving } = actions;
   const tabsId = useId();
   const router = useRouter();
   const [dialog, setDialog] = useState<DialogState | null>(null);
@@ -168,7 +202,7 @@ export function AssetsSetup({
 
   function rowAction(
     change: ListChange<HoldingRow>,
-    call: () => Promise<Awaited<ReturnType<typeof archiveHolding>>>,
+    call: () => Promise<WriteResult>,
     row: HoldingRow,
     actionId: "archive" | "restore",
     done: string,
@@ -184,7 +218,7 @@ export function AssetsSetup({
     dialog: DialogState,
     fields: HoldingFields,
     change: ListChange<HoldingRow>,
-    call: () => ReturnType<typeof createHolding>,
+    call: () => Promise<WriteResult>,
     done: string,
     row: HoldingRow,
   ): boolean {
@@ -346,20 +380,24 @@ export function AssetsSetup({
           label: (row) => `Editar ${named(row)}`,
           onClick: (row) => openDialog({ kind: "edit", row }),
         },
-        {
-          id: "archive",
-          icon: Archive,
-          tooltip: "Archivar",
-          label: (row) => `Archivar ${named(row)}`,
-          onClick: (row) =>
-            rowAction(
-              { kind: "archive", id: row.id },
-              () => archiveHolding(row.id),
-              row,
-              "archive",
-              "Archivaste",
-            ),
-        },
+        ...(archiving
+          ? [
+              {
+                id: "archive",
+                icon: Archive,
+                tooltip: "Archivar",
+                label: (row: ShownHolding) => `Archivar ${named(row)}`,
+                onClick: (row: ShownHolding) =>
+                  rowAction(
+                    { kind: "archive", id: row.id },
+                    () => archiving.archive(row.id),
+                    row,
+                    "archive",
+                    "Archivaste",
+                  ),
+              },
+            ]
+          : []),
       ],
       { pending },
     ),
@@ -373,13 +411,13 @@ export function AssetsSetup({
     compareDecimals(valueOf(b), valueOf(a)),
   );
   const { missing } = valuation.kinds.total;
-  const counts: Record<AssetsTab, number> = {
+  const counts: Partial<Record<AssetsTab, number>> = {
     holdings: shownRows.length,
     accounts: new Set(shownRows.map((row) => row.account.id)).size,
     portfolios: new Set(shownRows.map((row) => row.portfolio.id)).size,
   };
 
-  const archivedColumns: ColumnDef<ShownHolding>[] = [
+  const archivedColumns: ColumnDef<ShownHolding>[] | undefined = archiving && [
     {
       id: "name",
       header: "Tenencia",
@@ -417,7 +455,7 @@ export function AssetsSetup({
           onClick: (row) =>
             rowAction(
               { kind: "restore", row },
-              () => restoreHolding(row.id),
+              () => archiving.restore(row.id),
               row,
               "restore",
               "Restauraste",
@@ -453,12 +491,14 @@ export function AssetsSetup({
         <AssetsSummary valuation={valuation} unit={unit} pending={pending} />
         <AssetsTabs
           url={url}
+          tabs={tabs}
           idBase={tabsId}
           counts={counts}
           pending={pending}
         />
         <AssetsFilters
           url={url}
+          tabs={tabs}
           referenceUnit={referenceUnit}
           filter={filter}
           portfolios={portfolios}
@@ -549,15 +589,17 @@ export function AssetsSetup({
             </p>
           )}
         </div>
-        <ArchivedList
-          view={view}
-          title="Tenencias"
-          label="Archivadas"
-          emptyText="No hay más tenencias archivadas."
-          firstPageLabel="Ver las más recientes"
-          pending={pending}
-          columns={archivedColumns}
-        />
+        {archivedColumns && (
+          <ArchivedList
+            view={view}
+            title="Tenencias"
+            label="Archivadas"
+            emptyText="No hay más tenencias archivadas."
+            firstPageLabel="Ver las más recientes"
+            pending={pending}
+            columns={archivedColumns}
+          />
+        )}
       </SetupCard>
       {dialog?.kind === "create" && (
         <HoldingDialog
@@ -585,7 +627,7 @@ export function AssetsSetup({
               dialog,
               fields,
               { kind: "create", row },
-              () => createHolding(toInsert(fields)),
+              () => actions.create(toInsert(fields)),
               "Agregaste",
               row,
             );
@@ -610,7 +652,7 @@ export function AssetsSetup({
               fields,
               { kind: "update", row },
               () =>
-                updateHolding(
+                actions.update(
                   dialog.row.id,
                   toUpdate(fields, dialog.row.portfolio.id),
                 ),

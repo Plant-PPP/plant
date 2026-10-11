@@ -2,9 +2,16 @@ import { quotesNeeded, readSnapshot, referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 
+import {
+  archiveHolding,
+  createHolding,
+  restoreHolding,
+  updateHolding,
+} from "@/app/(app)/assets/actions";
 import { AssetsSetup } from "@/components/holdings/assets-setup";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { matchesFilter, parseAssetsParams } from "@/lib/holdings/assets-filter";
+import { TABS } from "@/lib/holdings/assets-filter";
+import { assetsSelection } from "@/lib/holdings/assets-selection";
 import {
   ASSETS_VIEW_EVENT,
   assetsViewFailure,
@@ -70,21 +77,23 @@ export default async function AssetsPage({
       readReferenceDollar(client, context),
     ]);
 
+  const names = instrumentNames(instruments.rows);
   const {
     unit: chosenUnit,
     tab,
     filter,
     invalid,
-  } = parseAssetsParams(
-    context.params,
-    portfolios.active.map(({ id }) => id),
-  );
+    shown,
+  } = assetsSelection({
+    params: context.params,
+    rows: holdings.active,
+    portfolioIds: portfolios.active.map(({ id }) => id),
+    tabs: TABS,
+    salesYears: [],
+    names,
+  });
   const reference = referenceUnit(dollar);
   const unit = chosenUnit ?? reference;
-  const names = instrumentNames(instruments.rows);
-  const shown = holdings.active.filter((row) =>
-    matchesFilter(row, filter, names),
-  );
   const filtered =
     filter.portfolioId !== null ||
     filter.assetClass !== null ||
@@ -139,6 +148,12 @@ export default async function AssetsPage({
         portfolios={portfolios.active}
         instruments={instruments.rows}
         today={today}
+        tabs={TABS}
+        actions={{
+          create: createHolding,
+          update: updateHolding,
+          archiving: { archive: archiveHolding, restore: restoreHolding },
+        }}
       />
     </div>
   );

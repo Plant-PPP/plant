@@ -16,6 +16,7 @@ import { choose } from "@/components/portfolio-setup/field-alert";
 import {
   type AssetsFilter,
   type AssetsParam,
+  type AssetsTabs,
   SEARCH_MAX_LENGTH,
   parseAssetsParams,
   unitParam,
@@ -37,12 +38,14 @@ const SEARCH_DELAY_MS = 250;
 // does; a search typed meanwhile is sent once it ends.
 export function AssetsFilters({
   url,
+  tabs,
   referenceUnit,
   filter,
   portfolios,
   pending,
 }: {
   url: AssetsUrl;
+  tabs: AssetsTabs;
   referenceUnit: Denominator;
   filter: AssetsFilter;
   portfolios: PortfolioRow[];
@@ -56,10 +59,11 @@ export function AssetsFilters({
   };
   // The user's choices, ahead of the page that loads them, read as the page
   // reads them.
-  const chosen = parseAssetsParams(
-    url.params,
-    portfolios.map(({ id }) => id),
-  );
+  const chosen = parseAssetsParams(url.params, {
+    portfolioIds: portfolios.map(({ id }) => id),
+    tabs,
+    salesYears: [],
+  });
   const shown = { ...chosen.filter, unit: chosen.unit ?? referenceUnit };
   const go = (key: AssetsParam, value: string | null) => {
     if (!pending) url.set(key, value);

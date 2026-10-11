@@ -1,14 +1,18 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
 import type { Answer } from "./answers";
 
-export type OptimisticRun<C> = (
+// A write's answer: done, or refused with a code its section has a message
+// for.
+export type Result<Code extends string = string> =
+  { ok: true } | { ok: false; code: Code };
+
+export type OptimisticRun<C> = <R extends Result>(
   change: C,
-  call: () => Promise<WriteResult>,
-  answerOf: (result: WriteResult | "rejected") => Answer,
+  call: () => Promise<R>,
+  answerOf: (result: R | "rejected") => Answer,
   after: (answer: Answer) => void,
 ) => boolean;
 

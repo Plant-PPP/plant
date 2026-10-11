@@ -3,6 +3,8 @@ import { holdingSchema } from "@plant/core";
 import {
   type AssetsFilter,
   parseAssetsParams,
+  SALES_TABS,
+  TABS,
   tabOf,
   matchesFilter,
   SEARCH_MAX_LENGTH,
@@ -80,7 +82,7 @@ describe("matchesFilter", () => {
 
 it("trims a search, and keeps one at the limit once trimmed", () => {
   const search = (raw: string) =>
-    parseAssetsParams({ search: raw }, []).filter.search;
+    parseAssetsParams({ search: raw }, options([])).filter.search;
   expect(search("  btc ")).toBe("btc");
   expect(search(` ${"x".repeat(SEARCH_MAX_LENGTH)} `)).toHaveLength(
     SEARCH_MAX_LENGTH,
@@ -101,8 +103,9 @@ it("knows the page's tabs, and falls back to the first", () => {
       "constructor",
       "__proto__",
       "toString",
+      "sales",
       undefined,
-    ].map(tabOf),
+    ].map((raw) => tabOf(raw, TABS)),
   ).toEqual([
     "holdings",
     "accounts",
@@ -112,7 +115,16 @@ it("knows the page's tabs, and falls back to the first", () => {
     "holdings",
     "holdings",
     "holdings",
+    "holdings",
   ]);
+  expect(tabOf("sales", SALES_TABS)).toBe("sales");
+});
+
+// A page without movements, with these active portfolios.
+const options = (portfolioIds: string[]) => ({
+  portfolioIds,
+  tabs: TABS,
+  salesYears: [],
 });
 
 describe("parseAssetsParams", () => {
@@ -127,11 +139,12 @@ describe("parseAssetsParams", () => {
           buscar: "btc",
           holdings: "x",
         },
-        ["p1"],
+        options(["p1"]),
       ),
     ).toEqual({
       unit: null,
       tab: "holdings",
+      year: null,
       filter: { portfolioId: null, assetClass: null, search: "" },
       invalid: {
         unit: false,
@@ -139,6 +152,7 @@ describe("parseAssetsParams", () => {
         class: false,
         search: false,
         tab: false,
+        year: false,
       },
     });
   });
@@ -153,11 +167,12 @@ describe("parseAssetsParams", () => {
           search: " btc ",
           tab: "accounts",
         },
-        ["p1"],
+        options(["p1"]),
       ),
     ).toEqual({
       unit: "ars",
       tab: "accounts",
+      year: null,
       filter: { portfolioId: "p1", assetClass: "cash", search: "btc" },
       invalid: {
         unit: false,
@@ -165,6 +180,7 @@ describe("parseAssetsParams", () => {
         class: false,
         search: false,
         tab: false,
+        year: false,
       },
     });
   });
@@ -179,11 +195,12 @@ describe("parseAssetsParams", () => {
           search: "x".repeat(SEARCH_MAX_LENGTH + 1),
           tab: ["accounts", "portfolios"],
         },
-        ["p1"],
+        options(["p1"]),
       ),
     ).toEqual({
       unit: null,
       tab: "holdings",
+      year: null,
       filter: { portfolioId: null, assetClass: null, search: "" },
       invalid: {
         unit: true,
@@ -191,17 +208,44 @@ describe("parseAssetsParams", () => {
         class: true,
         search: true,
         tab: true,
+        year: false,
       },
     });
   });
 
   it("flags nothing for absent params", () => {
-    expect(parseAssetsParams({}, []).invalid).toEqual({
+    expect(parseAssetsParams({}, options([])).invalid).toEqual({
       unit: false,
       portfolio: false,
       class: false,
       search: false,
       tab: false,
+      year: false,
+    });
+  });
+
+  it("reads the year of the sales tab, the latest by default", () => {
+    const sales = {
+      portfolioIds: [],
+      tabs: SALES_TABS,
+      salesYears: ["2026", "2025"],
+    };
+    expect(parseAssetsParams({ tab: "sales" }, sales)).toMatchObject({
+      tab: "sales",
+      year: "2026",
+      invalid: { tab: false, year: false },
+    });
+    expect(parseAssetsParams({ year: "2025" }, sales).year).toBe("2025");
+    expect(parseAssetsParams({ year: "2019" }, sales)).toMatchObject({
+      year: "2026",
+      invalid: { year: true },
+    });
+  });
+
+  it("flags a tab the page does not offer", () => {
+    expect(parseAssetsParams({ tab: "sales" }, options([]))).toMatchObject({
+      tab: "holdings",
+      invalid: { tab: true },
     });
   });
 });

@@ -275,6 +275,36 @@ it("leaves out the holdings no filter matches", async () => {
   });
 });
 
+it("does not offer the sales tab, and reads no year", async () => {
+  await render({ tab: "sales", year: "2025" });
+  expect(viewLine()).toMatchObject({
+    "plant.assets.tab": "holdings",
+    "plant.assets.invalid_tab": true,
+  });
+  expect(Object.keys(viewLine()!).sort()).toEqual(VIEW_KEYS);
+});
+
+it("logs a failed valuation once and throws it as logged", async () => {
+  // A currency no unit holds makes the valuation throw.
+  readHoldings.mockResolvedValue(
+    list([
+      {
+        ...holding("h1", P1, "1"),
+        holding: { ...holding("h1", P1, "1").holding, currency: "EUR" },
+      },
+    ]),
+  );
+  const error: unknown = await render().catch((e: unknown) => e);
+  expect(isLoggedError(error)).toBe(true);
+  expect(lines).toEqual([
+    expect.objectContaining({
+      level: "error",
+      event: "assets.view",
+      "plant.assets.read": "valuation",
+    }),
+  ]);
+});
+
 it("logs a failed quote read once, by its code, and throws it as logged", async () => {
   read.mockRejectedValue(new QuoteStoreError("forbidden", "42501"));
   const error: unknown = await render().catch((e: unknown) => e);

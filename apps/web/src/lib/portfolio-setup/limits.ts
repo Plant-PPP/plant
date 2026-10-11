@@ -25,3 +25,8 @@ export const PAGE_BY_TABLE: Record<SetupTable, SetupPage> = {
 // shows.
 export const PAGE_ROW_LIMIT = 300;
 export const ARCHIVED_ROW_LIMIT = 50;
+
+// The most sales the sales tab shows for a year, and the movements one page
+// of a movement list shows.
+export const SALES_LIMIT = 100;
+export const MOVEMENTS_PAGE = 20;

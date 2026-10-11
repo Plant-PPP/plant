@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { repoRoot } from "@/test/supabase-config";
 import { without } from "@/test/without";
 
-import { holdingInsertSchema, holdingUpdateSchema } from "./schemas";
+import {
+  holdingInsertSchema,
+  holdingUpdateSchema,
+  movementInputSchema,
+} from "./schemas";
 
 const ACCOUNT = "a1000000-0000-4000-8000-0000000000a1";
 const PORTFOLIO = "b1000000-0000-4000-8000-0000000000b1";
@@ -178,4 +182,31 @@ it("takes a cash label as null, never missing", () => {
   expect(
     holdingInsertSchema.safeParse(without(insert("cash"), "label")).success,
   ).toBe(false);
+});
+
+describe("movementInputSchema", () => {
+  const purchase = {
+    holding_id: ACCOUNT,
+    kind: "purchase",
+    date: "2026-03-02",
+    currency: "USD",
+    quantity: "10",
+    price: "150",
+  };
+
+  it("takes a movement for its holding, without rates", () => {
+    expect(movementInputSchema.parse(purchase)).toMatchObject({
+      fees: "0",
+      taxes: "0",
+    });
+  });
+
+  it.each([
+    ["rates", { ...purchase, rates: {} }],
+    ["an id", { ...purchase, id: ACCOUNT }],
+    ["a holding that is no uuid", { ...purchase, holding_id: "h1" }],
+    ["an amount on a purchase", { ...purchase, amount: "1" }],
+  ])("refuses %s", (_, input) => {
+    expect(movementInputSchema.safeParse(input).success).toBe(false);
+  });
 });

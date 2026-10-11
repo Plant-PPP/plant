@@ -1,4 +1,9 @@
-import { classBranch, type OmittableColumn } from "@plant/core";
+import {
+  classBranch,
+  type MovementKind,
+  movementBranch,
+  type OmittableColumn,
+} from "@plant/core";
 import { z } from "zod";
 
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
@@ -41,3 +46,17 @@ export const holdingUpdateSchema = z.discriminatedUnion("asset_class", [
   updateBranch("other"),
 ]);
 export type HoldingUpdate = z.output<typeof holdingUpdateSchema>;
+
+// A new or edited movement: its holding and its kind's columns. Its rates are
+// the store's to add, from the quotes of its date.
+const movementInputBranch = <K extends MovementKind>(kind: K) =>
+  movementBranch(kind).extend({ holding_id: id }).strict();
+
+export const movementInputSchema = z.discriminatedUnion("kind", [
+  movementInputBranch("opening_balance"),
+  movementInputBranch("purchase"),
+  movementInputBranch("sale"),
+  movementInputBranch("dividend"),
+  movementInputBranch("coupon"),
+]);
+export type MovementInput = z.output<typeof movementInputSchema>;
