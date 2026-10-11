@@ -1,4 +1,5 @@
-import type { Denominator } from "@plant/core";
+import { DENOMINATORS, type Denominator } from "@plant/core";
+import { exactOf, toDecimal } from "@plant/shared";
 import type { ReactNode } from "react";
 
 import { formatAmount, formatShare } from "@/lib/format/amount";
@@ -111,6 +112,7 @@ export function ShareText({
   );
 }
 
+// A figure with "+" when it shows above zero; `amount` is as shown, rounded.
 export const signed = (text: string, amount: string) =>
   amount.startsWith("-") || /^0(\.0+)?$/.test(amount) ? text : `+${text}`;
 
@@ -126,14 +128,16 @@ export function GainLossText({
 }) {
   if (gain === undefined) return CALCULATING;
   if (gain === null) return <MissingFigure text="Sin resultado" />;
-  const loss = gain.amount.startsWith("-");
+  // The sign of what shows: a result under a cent is no gain or loss.
+  const shown = toDecimal(exactOf(gain.amount), DENOMINATORS[unit].scale);
+  const loss = shown.startsWith("-");
   return (
     <span
       className={cn(
         loss ? "text-destructive" : "text-emerald-700 dark:text-emerald-400",
       )}
     >
-      {signed(formatAmount(gain.amount, unit), gain.amount)}
+      {signed(formatAmount(gain.amount, unit), shown)}
       {gain.percent !== null && (
         <span className="block text-xs">
           {signed(formatShare(gain.percent), gain.percent)}

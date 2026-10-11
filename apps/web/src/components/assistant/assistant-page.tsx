@@ -69,7 +69,10 @@ function Answer({
   const done = text.length === message.text.length;
   return (
     <div className="grid max-w-2xl gap-3">
-      <p className="text-sm leading-relaxed">{text}</p>
+      <p className="text-sm leading-relaxed">
+        <span className="sr-only">Plant: </span>
+        {text}
+      </p>
       {done && message.chart && <AnswerChart chart={message.chart} />}
       {done && (
         <>
@@ -107,9 +110,12 @@ function Answer({
 export function AssistantPage({
   conversations,
   used,
+  defaultUnit,
   actions,
 }: {
   conversations: Conversation[];
+  // The unit a new conversation starts in: the user's reference dollar.
+  defaultUnit: ChatUnit;
   // The questions asked this month.
   used: number;
   actions: AssistantActions;
@@ -117,7 +123,7 @@ export function AssistantPage({
   const id = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fresh, setFresh] = useState(() => crypto.randomUUID());
-  const [unit, setUnit] = useState<ChatUnit>("usd_mep");
+  const [unit, setUnit] = useState<ChatUnit>(defaultUnit);
   const [draft, setDraft] = useState("");
   const [waiting, setWaiting] = useState(false);
   // The answer that just arrived, which streams in and is announced once;
@@ -310,6 +316,7 @@ export function AssistantPage({
                 key={message.id}
                 className="bg-muted max-w-[85%] self-end rounded-2xl px-4 py-2 text-sm"
               >
+                <span className="sr-only">Vos: </span>
                 {message.text}
               </p>
             ) : (

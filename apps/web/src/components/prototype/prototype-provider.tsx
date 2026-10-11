@@ -174,7 +174,7 @@ export function PrototypeProvider({
             }),
             result: null,
           }));
-          setTimeout(() => {
+          later(() => {
             void write((s) => ({
               state: assistant.addAnswer(s, conversationId, {
                 id,

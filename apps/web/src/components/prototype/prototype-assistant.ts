@@ -1,5 +1,16 @@
-import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
-import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
+import {
+  DENOMINATORS,
+  type QuoteSnapshot,
+  valueLiabilities,
+} from "@plant/core";
+import {
+  compareDecimals,
+  exactOf,
+  minus,
+  plus,
+  stored,
+  toDecimal,
+} from "@plant/shared";
 
 import { signed } from "@/components/holdings/sum-text";
 import { formatAmount, formatFraction } from "@/lib/format/amount";
@@ -206,7 +217,7 @@ export function prototypeAnswer(
   if (/dividend|cupon|cobr|renta/.test(asked) && thisYear) {
     return {
       ...base,
-      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)}${thisYear.complete ? "" : WITHOUT_PRICE} de dividendos y cupones, antes de las retenciones.`,
+      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.`,
       chart: {
         title: `Cobros de ${thisYear.year}`,
         unit,
@@ -224,7 +235,7 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${bySign(thisYear.totals.contributed, unit, ["sacaste", "pusiste"])} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), current.figures.result)}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : " (con algún dato que falta; mirá el cierre del año)"}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${bySign(thisYear.totals.contributed, unit, ["sacaste", "pusiste"])} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), toDecimal(exactOf(current.figures.result), DENOMINATORS[unit].scale))}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
@@ -278,7 +289,7 @@ export function prototypeAnswer(
 
   return {
     ...base,
-    text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en un mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
+    text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
     chart: null,
     sources: [],
     followUps: ["¿Cuánto vale mi patrimonio hoy?", "¿Cómo me fue este año?"],
