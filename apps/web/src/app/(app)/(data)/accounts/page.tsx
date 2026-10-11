@@ -12,7 +12,7 @@ import {
   restorePortfolio,
   restoreSourceConnection,
   updateSourceConnection,
-} from "@/app/(app)/accounts/actions";
+} from "@/app/(app)/(data)/accounts/actions";
 import { AccountsSetup } from "@/components/portfolio-setup/accounts-setup";
 import { PrototypeAccounts } from "@/components/prototype/prototype-accounts";
 import { isProductionDeployment } from "@/lib/deployment";

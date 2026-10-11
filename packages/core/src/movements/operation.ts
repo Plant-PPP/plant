@@ -1,9 +1,9 @@
 import {
   type Exact,
   exactOf,
+  minus,
   over,
   plus,
-  roundedTo,
   times,
   toDecimal,
 } from "@plant/shared";
@@ -11,8 +11,8 @@ import {
 import type { Charge } from "./movement";
 
 // An operation's charges for each of its parts, by quantity: each part's share
-// rounded to 8 decimals, the last taking what rounding left so each charge
-// adds up to what was paid. A share that rounds to 0 is left out.
+// cut to 8 decimals, the last taking what the cuts left, so each charge adds
+// up to what was paid and no part is negative. A share of 0 is left out.
 export function splitCharges(
   charges: readonly Charge[],
   quantities: readonly string[],
@@ -28,12 +28,18 @@ export function splitCharges(
       );
       const part =
         index === quantities.length - 1
-          ? plus(amount, { ...before, n: -before.n })
+          ? minus(amount, before)
           : share(amount, exactOf(quantity), total);
       return part.n > 0n ? [{ ...charge, amount: toDecimal(part, 8) }] : [];
     }),
   );
 }
 
-const share = (amount: Exact, quantity: Exact, total: Exact): Exact =>
-  roundedTo(over(times(amount, quantity), total), 8);
+const UNIT = 10n ** 8n;
+
+// Truncated toward zero, so the early parts never add up to more than the
+// charge.
+function share(amount: Exact, quantity: Exact, total: Exact): Exact {
+  const exact = over(times(amount, quantity), total);
+  return { n: (exact.n * UNIT) / exact.d, d: UNIT };
+}

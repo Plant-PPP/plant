@@ -7,7 +7,11 @@ import {
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
-import { amountInput, parseAmountInput } from "@/lib/format/amount";
+import {
+  amountInput,
+  formatPrice,
+  parseAmountInput,
+} from "@/lib/format/amount";
 
 export type PriceResult =
   { ok: true } | { ok: false; code: "invalid" | "failed" | ManualPriceRefusal };
@@ -41,4 +45,18 @@ export function toPriceInput(
     price: quoted === null ? null : unitPrice(instrument.type, quoted),
     currency: instrument.currency,
   };
+}
+
+// A unit's price as the market quotes it, in a currency or the page's unit: a
+// bond's per 100 nominal. An instrument whose type the page does not know
+// shows per unit.
+export function formatQuotedPrice(
+  perUnit: string,
+  unit: Parameters<typeof formatPrice>[1],
+  type: InstrumentType | null | undefined,
+): string {
+  if (!type || INSTRUMENT_PRICING[type].basis === 1) {
+    return formatPrice(perUnit, unit);
+  }
+  return `${formatPrice(quotedPrice(type, perUnit), unit)} c/100 VN`;
 }

@@ -114,4 +114,3 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
     .strict()
     .superRefine(onePerPortfolio),
 ]);
-export type OperationInput = z.output<typeof operationInputSchema>;

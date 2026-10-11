@@ -1,11 +1,9 @@
 import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
 import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
-import { PrototypeRoot } from "@/components/prototype/prototype-root";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { toSessionUser } from "@/lib/auth/session-user";
-import { isProductionDeployment } from "@/lib/deployment";
 import { SIDEBAR_COOKIE_NAME } from "@/lib/sidebar-cookie";
 
 export default async function AppLayout({
@@ -26,13 +24,7 @@ export default async function AppLayout({
       <div className="flex min-w-0 flex-1 md:peer-data-[state=collapsed]:ml-2">
         <SidebarInset>
           <AppSidebarHeader />
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            {isProductionDeployment() ? (
-              children
-            ) : (
-              <PrototypeRoot>{children}</PrototypeRoot>
-            )}
-          </div>
+          <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
         </SidebarInset>
       </div>
     </SidebarProvider>

@@ -11,7 +11,7 @@ import {
   snapshotOn,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { addDays } from "@plant/shared";
+import { addDays, exactOf, times, toDecimal } from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
@@ -567,10 +567,10 @@ function draft(
     };
   }
   const priceCentsNow = priceCents(holding.symbol, step.daysAgo);
-  const [whole = "0", fraction = ""] = step.quantity.split(".");
-  const quantityMillis =
-    Number(whole) * 1000 + Number(fraction.padEnd(3, "0").slice(0, 3));
-  const gross = Math.round((priceCentsNow * quantityMillis) / 1000);
+  // The trade's value in whole cents, from the exact quantity.
+  const gross = Number(
+    toDecimal(times(exactOf(String(priceCentsNow)), exactOf(step.quantity)), 0),
+  );
   return {
     ...common,
     kind: step.kind,
@@ -620,7 +620,7 @@ export function buildFixtures(today: string): Fixtures {
           asset_class: "instrument",
           instrument_symbol: holding.symbol,
           // A closed holding keeps the quantity it opened with, as no schema
-          // takes a zero amount; nothing values or lists it.
+          // takes a zero amount; only its movements and sales are read.
           amount: isClosed ? own.find(isTrade)!.quantity : quantity,
         },
         { ...holding.placed, instrumentType: typeOf(holding.symbol) },

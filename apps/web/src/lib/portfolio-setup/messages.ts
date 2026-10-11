@@ -23,7 +23,7 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
 export const invalidName = (max: number) =>
   `Usá entre 1 y ${max} letras, números o signos.`;
 
-type WriteMessages = Record<WriteResultCode, string>;
+export type WriteMessages = Record<WriteResultCode, string>;
 
 export const WRITE_MESSAGES: Record<SetupTable, WriteMessages> = {
   portfolios: {
@@ -68,6 +68,8 @@ export function deleteMessages(messages: WriteMessages): WriteMessages {
     ...messages,
     portfolio_in_use:
       "Para borrar esta cartera, primero elegí otra en las cuentas que la usan.",
+    holder_in_use:
+      "Para borrar este titular, primero elegí otro en las cuentas que lo usan.",
     portfolio_has_holdings:
       "Para borrar esta cartera, primero borrá o mové sus tenencias.",
     source_connection_has_holdings:

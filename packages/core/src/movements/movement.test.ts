@@ -1,8 +1,8 @@
-import { ratesOf } from "./fixtures.test-support";
+import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 import {
-  allowedKinds,
   isIncome,
   movementSchema,
+  startsHolding,
   takesMovements,
 } from "./movement";
 
@@ -103,17 +103,6 @@ describe("movementSchema", () => {
   });
 });
 
-it("starts a holding with its balance or a purchase, then takes anything else", () => {
-  expect(allowedKinds(false)).toEqual(["opening_balance", "purchase"]);
-  expect(allowedKinds(true)).toEqual([
-    "purchase",
-    "sale",
-    "dividend",
-    "coupon",
-    "adjustment",
-  ]);
-});
-
 it("takes movements on instrument holdings only", () => {
   expect(takesMovements({ asset_class: "instrument" })).toBe(true);
   expect(takesMovements({ asset_class: "cash" })).toBe(false);
@@ -123,4 +112,19 @@ it("counts dividends and coupons as income", () => {
   expect(isIncome("dividend")).toBe(true);
   expect(isIncome("coupon")).toBe(true);
   expect(isIncome("sale")).toBe(false);
+});
+
+it("starts a holding only with units coming in", () => {
+  expect(
+    startsHolding(trade("purchase", "1", "1", { date: "2025-01-01" })),
+  ).toBe(true);
+  expect(startsHolding(adjustment("in", "1", { date: "2025-01-01" }))).toBe(
+    true,
+  );
+  expect(startsHolding(trade("sale", "1", "1", { date: "2025-01-01" }))).toBe(
+    false,
+  );
+  expect(startsHolding(income("dividend", "1", { date: "2025-01-01" }))).toBe(
+    false,
+  );
 });

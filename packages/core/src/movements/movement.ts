@@ -9,7 +9,7 @@ import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
 import { holdingDateSchema } from "../valuation/holding";
 
 // What can happen to an instrument holding. A holding starts with units
-// coming in: its opening balance, or a purchase. An adjustment changes the
+// coming in: its opening balance, a purchase or an adjustment in. An adjustment changes the
 // quantity without trading it: units in at a cost (0 unless given), or units
 // out with their share of the cost and no result.
 export const MOVEMENT_KINDS = [
@@ -48,7 +48,7 @@ const trimmed = (max: number) => z.string().trim().min(1).max(max);
 export const chargeSchema = z
   .object({
     kind: z.enum(CHARGE_KINDS),
-    // A tax may say which; any other charge must.
+    // Only an "other" charge must say what it is; a tax may say which.
     label: trimmed(CHARGE_LABEL_MAX).nullable(),
     amount: positiveDecimalSchema,
   })
@@ -137,9 +137,6 @@ export const takesUnits = (movement: Movement): boolean =>
 export const takesMovements = (holding: { asset_class: string }): boolean =>
   holding.asset_class === "instrument";
 
-// The kinds a holding can take next: units coming in first (its opening
-// balance, or a purchase), then anything but an opening balance.
-export const allowedKinds = (hasMovements: boolean): MovementKind[] =>
-  hasMovements
-    ? MOVEMENT_KINDS.filter((kind) => kind !== "opening_balance")
-    : ["opening_balance", "purchase"];
+// Whether a movement can be a holding's first: one that brings units in.
+export const startsHolding = (movement: Movement): boolean =>
+  isTrade(movement) && !takesUnits(movement);
