@@ -8,7 +8,7 @@ type Point = { period: string; value: string; contributed: string };
 
 const WIDTH = 640;
 const HEIGHT = 200;
-const PAD = { top: 16, right: 8, bottom: 22, left: 8 };
+const PAD = { top: 16, right: 8, bottom: 6, left: 8 };
 
 // Net worth at the end of each month, beside what was put in so far, to
 // scale: both lines share one axis from the smallest value to the largest,
@@ -60,7 +60,7 @@ export function NetWorthChart({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="h-48 w-full"
         role="img"
-        aria-label={`Patrimonio de ${monthName(points[0]!.period)} a ${monthName(last.period)}: termina en ${formatAmount(last.value, unit)}.`}
+        aria-label={`Patrimonio de ${monthName(points[0]!.period).toLowerCase()} a ${monthName(last.period).toLowerCase()}: termina en ${formatAmount(last.value, unit)}.`}
         preserveAspectRatio="none"
       >
         {yearTicks.map(({ index, label }) => (
@@ -74,13 +74,6 @@ export function NetWorthChart({
               strokeDasharray="2 3"
               vectorEffect="non-scaling-stroke"
             />
-            <text
-              x={x(index) + 4}
-              y={HEIGHT - 6}
-              className="fill-muted-foreground text-[10px]"
-            >
-              {label}
-            </text>
           </g>
         ))}
         <path
@@ -99,6 +92,19 @@ export function NetWorthChart({
           vectorEffect="non-scaling-stroke"
         />
       </svg>
+      {/* The year labels sit outside the stretched drawing, so they keep
+          their shape at any width. */}
+      <div aria-hidden className="relative h-3">
+        {yearTicks.map(({ index, label }) => (
+          <span
+            key={label}
+            className="text-muted-foreground absolute top-0 text-[10px] tabular-nums"
+            style={{ left: `calc(${(x(index) / WIDTH) * 100}% + 4px)` }}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
       <span className="text-muted-foreground text-[11px] tabular-nums">
         {formatAmount(bottom, unit)}
       </span>
