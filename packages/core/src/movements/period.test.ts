@@ -119,3 +119,15 @@ it("files a sale whose charges exceed it under proceeds", () => {
   });
   expect(result).toMatchObject({ paidIn: "0", proceeds: "0.5" });
 });
+
+it("puts only what was held to work, not net worth less debts", () => {
+  // 1000 held against 1500 owed: net worth -500, and 100 made.
+  const result = periodResult({
+    ...MONTH,
+    startValue: "-500",
+    endValue: "-400",
+    atWorkAtStart: "1000",
+    flows: [],
+  });
+  expect(result.share).toBe("0.1");
+});

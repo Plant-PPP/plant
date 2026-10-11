@@ -5,7 +5,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-11 · Debts and net worth (PLA-113)
 
 - **A debt is owed in its own unit:** pesos or dollars, UVA units (a mortgage or personal loan in pesos, owed at the UVA of the day) or units of an instrument (a crypto loan, at its price). Core values each in any unit the page shows (`liabilityValue`); a debt it cannot value is listed without a value and leaves the total incomplete, never counted at 0. A debt with no currency and no instrument is never valued as pesos.
-- **Net worth is assets less debts**, in Resumen, its chart and its closes. Debts have no history yet, so a past month counts today's balance at that month's rates.
+- **Net worth is assets less debts**, in Resumen, its chart and its closes. Debts have no history yet, so a past month counts today's balance at that month's rates. A month's return is on what was held, not on net worth: a debt earns nothing, and net worth below zero would leave no return.
 - **The yearly rate follows the holdings' rule** (a fraction from 0 to 10), and a typed cuota or rate the page cannot read is refused, never saved as empty.
 
 ## 2026-10-11 · Resumen and closes (PLA-112)

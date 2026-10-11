@@ -109,7 +109,7 @@ function CloseFigures({
       </dl>
       {!complete && (
         <p className="text-muted-foreground text-xs">
-          Algún activo no tenía cotización al inicio o al final, o algún
+          Algún activo o deuda no tenía cotización al inicio o al final, o algún
           movimiento no se pudo pasar a esta moneda: las cifras lo dejan afuera.
         </p>
       )}

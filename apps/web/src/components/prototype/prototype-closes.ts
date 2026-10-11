@@ -195,6 +195,7 @@ export function closesOf(
     });
     return {
       value: difference(held.value, owed.total),
+      held: held.value,
       complete: held.complete && owed.complete,
     };
   };
@@ -250,6 +251,9 @@ export function closesOf(
         to: month.to,
         startValue: start.value,
         endValue: end.value,
+        // What was held is what worked: a debt counts in net worth but earns
+        // nothing.
+        atWorkAtStart: start.held,
         flows,
       }),
       realized: sumOrNull(realized),

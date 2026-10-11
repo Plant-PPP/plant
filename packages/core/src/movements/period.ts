@@ -46,26 +46,31 @@ export type PeriodResult = {
   share: string | null;
 };
 
-// The flows are those dated after `from` and on or before `to`.
+// The flows are those dated after `from` and on or before `to`. The money at
+// work starts from `atWorkAtStart` when only part of the start value works,
+// as net worth less debts does; the start value otherwise.
 export function periodResult({
   from,
   to,
   startValue,
   endValue,
+  atWorkAtStart = startValue,
   flows,
 }: {
   from: string;
   to: string;
   startValue: string;
   endValue: string;
+  atWorkAtStart?: string;
   flows: readonly CashFlow[];
 }): PeriodResult {
   const start = exactOf(startValue);
+  const working = exactOf(atWorkAtStart);
   const end = exactOf(endValue);
   // Money first put to work inside the period works from the start of that
   // day, so a first purchase on its last day counts for the whole of it.
   const firstIn =
-    start.n === 0n
+    working.n === 0n
       ? flows
           .filter((flow) => flow.kind !== "income")
           .map((flow) => flow.date)
@@ -84,7 +89,7 @@ export function periodResult({
   // The money at work: the start value, plus each flow in for the part of
   // the period from the start of its day, less each flow out likewise. An
   // income is what the money made, not money put in or taken out.
-  let atWork = start;
+  let atWork = working;
   for (const flow of flows) {
     const amount = exactOf(flow.amount);
     const paid = exactOf(flow.charges);
