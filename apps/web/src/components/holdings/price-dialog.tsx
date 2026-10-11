@@ -13,6 +13,7 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CURRENCY_LABELS, PRICE_MESSAGES } from "@/lib/holdings/messages";
+import { instrumentLabel } from "@/lib/holdings/holding-name";
 import {
   type PriceFields,
   priceBasisLabel,
@@ -103,7 +104,7 @@ export function PriceDialog({
     <AppDialog
       onClose={onClose}
       title="Cargar precio"
-      description={`${instrument.symbol} · ${instrument.name}. Lo usamos hasta que cargues otro.`}
+      description={`${instrumentLabel(instrument.symbol, instrument.name)}. Lo usamos hasta que cargues otro.`}
       returnFocusTo={focus.returnFocusTo}
     >
       <form

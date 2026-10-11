@@ -35,6 +35,7 @@ import {
   CURRENCY_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
+import { instrumentLabel } from "@/lib/holdings/holding-name";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
@@ -263,7 +264,7 @@ export function MovementDialog({
                 fields.instrument,
                 instruments.map((each) => [
                   each.symbol,
-                  `${each.symbol} · ${each.name}`,
+                  instrumentLabel(each.symbol, each.name),
                 ]),
                 (value) => {
                   const instrument = instruments.find(
