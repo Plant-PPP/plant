@@ -94,6 +94,8 @@ export type PrototypeState = {
   imports: ImportItem[];
   // Newest first.
   conversations: Conversation[];
+  // The day of each question asked, deleted conversations' included.
+  askedOn: string[];
 };
 
 export type StoredHolding = {
@@ -136,6 +138,7 @@ export function initialState(
     liabilities: fixtures.liabilities,
     imports: [],
     conversations: [],
+    askedOn: [],
   };
 }
 

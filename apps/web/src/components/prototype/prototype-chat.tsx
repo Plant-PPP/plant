@@ -10,7 +10,11 @@ export function PrototypeChat() {
   return (
     <AssistantPage
       conversations={state.conversations}
-      today={state.today}
+      used={
+        state.askedOn.filter(
+          (day) => day.slice(0, 7) === state.today.slice(0, 7),
+        ).length
+      }
       actions={actions.assistant}
     />
   );

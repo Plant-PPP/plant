@@ -22,9 +22,10 @@ export function AnswerChart({ chart }: { chart: ChartPart }) {
     <figure className="m-0 grid gap-2 rounded-lg border p-3">
       <figcaption className="text-sm font-medium">{chart.title}</figcaption>
       <ul className="grid gap-1.5">
-        {chart.bars.map((bar) => (
+        {chart.bars.map((bar, index) => (
           <li
-            key={bar.label}
+            // Two debts may share a label.
+            key={index}
             className="grid grid-cols-[minmax(0,6rem)_minmax(0,1fr)_auto] items-center gap-2 text-xs"
           >
             <span className="text-muted-foreground truncate">{bar.label}</span>

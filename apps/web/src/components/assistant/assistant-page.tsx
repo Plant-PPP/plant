@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { FilterSelect } from "@/components/holdings/filter-select";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatAmount } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import {
@@ -100,11 +101,12 @@ function Answer({
 // the questions it can start from and the conversations before.
 export function AssistantPage({
   conversations,
-  today,
+  used,
   actions,
 }: {
   conversations: Conversation[];
-  today: string;
+  // The questions asked this month.
+  used: number;
   actions: AssistantActions;
 }) {
   const id = useId();
@@ -116,20 +118,16 @@ export function AssistantPage({
   // The answers that arrived while the page was open, which stream in.
   const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
   const end = useRef<HTMLDivElement>(null);
+  const [deleting, setDeleting] = useState<Conversation | null>(null);
+  const newButton = useRef<HTMLButtonElement>(null);
 
   const conversation = conversations.find((each) => each.id === activeId);
   const messages = conversation?.messages ?? [];
-  const used = conversations
-    .flatMap((each) => each.messages)
-    .filter(
-      (message) =>
-        message.role === "user" &&
-        message.askedOn.slice(0, 7) === today.slice(0, 7),
-    ).length;
-  // The latest finished answer, announced once.
+  // The latest answer, announced when it arrives, not when an earlier
+  // conversation is opened.
   const lastAnswer = [...messages]
     .reverse()
-    .find((message) => message.role === "assistant");
+    .find((message) => message.role === "assistant" && arrived.has(message.id));
   const left = Math.max(0, QUESTIONS_PER_MONTH - used);
 
   useEffect(() => {
@@ -166,7 +164,13 @@ export function AssistantPage({
         className="hidden flex-col gap-2 md:flex"
         aria-label="Conversaciones"
       >
-        <Button type="button" size="sm" variant="outline" onClick={startNew}>
+        <Button
+          ref={newButton}
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={startNew}
+        >
           <MessageSquarePlus />
           Nueva conversación
         </Button>
@@ -189,10 +193,7 @@ export function AssistantPage({
               <button
                 type="button"
                 aria-label={`Borrar ${each.title}`}
-                onClick={() => {
-                  if (each.id === activeId) startNew();
-                  actions.delete(each.id);
-                }}
+                onClick={() => setDeleting(each)}
                 className="text-muted-foreground hover:text-foreground rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
               >
                 <Trash2 className="size-3.5" />
@@ -200,6 +201,20 @@ export function AssistantPage({
             </li>
           ))}
         </ul>
+        {deleting && (
+          <ConfirmDialog
+            title={`¿Borrar ${deleting.title}?`}
+            description="La conversación se borra y no se puede recuperar. Las consultas que hiciste siguen contando para este mes."
+            confirmLabel="Borrar"
+            returnFocusTo={() => newButton.current}
+            onClose={() => setDeleting(null)}
+            onConfirm={() => {
+              if (deleting.id === activeId) startNew();
+              actions.delete(deleting.id);
+              toast.success(`Borraste ${deleting.title}`);
+            }}
+          />
+        )}
       </aside>
 
       <section

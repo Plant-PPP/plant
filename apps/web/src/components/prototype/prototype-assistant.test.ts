@@ -2,7 +2,12 @@ import { snapshotOn } from "@plant/core";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
-import { addAnswer, addQuestion, prototypeAnswer } from "./prototype-assistant";
+import {
+  addAnswer,
+  addQuestion,
+  deleteConversation,
+  prototypeAnswer,
+} from "./prototype-assistant";
 import { initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
@@ -75,4 +80,16 @@ it("shows no dollar rate it does not have", () => {
     fx: {},
   });
   expect(answer.rate).toBeNull();
+});
+
+it("still counts a question once its conversation is deleted", () => {
+  const asked = addQuestion(state, {
+    conversationId: "c1",
+    id: "m1",
+    question: "¿Cuánto debo?",
+    unit: "ars",
+  });
+  const deleted = deleteConversation(asked, "c1");
+  expect(deleted.conversations).toEqual([]);
+  expect(deleted.askedOn).toEqual([TODAY]);
 });

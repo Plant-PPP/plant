@@ -16,13 +16,10 @@ export type ChartPart = {
   bars: { label: string; value: string }[];
 };
 
-// A question, with the day it was asked, which counts against that month's
-// questions.
 export type UserMessage = {
   id: string;
   role: "user";
   text: string;
-  askedOn: string;
 };
 
 export type AssistantMessage = {
@@ -49,7 +46,8 @@ export type Conversation = {
   updatedOn: string;
 };
 
-// The most questions a month on the beta plan.
+// The most questions a month on the beta plan. A question counts once asked,
+// even if its conversation is deleted later.
 export const QUESTIONS_PER_MONTH = 30;
 
 export const SUGGESTED_QUESTIONS = [

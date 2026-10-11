@@ -1,7 +1,8 @@
 import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
-import { formatAmount, formatShare, percentOf } from "@/lib/format/amount";
+import { formatAmount, formatFraction } from "@/lib/format/amount";
+import { folded } from "@/lib/format/text";
 import {
   type AssistantMessage,
   type ChatUnit,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/holdings/classes";
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
-import { MONTH_NAMES } from "@/lib/summary/closes";
+import { monthOf } from "@/lib/summary/closes";
 
 import { closesOf, yearsOfCloses } from "./prototype-closes";
 import {
@@ -25,15 +26,8 @@ import {
 
 type Answer = Omit<AssistantMessage, "id">;
 
-// Case and accents ignored.
-const folded = (text: string) =>
-  text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-
 const percent = (fraction: string | null) =>
-  fraction === null ? "sin dato" : formatShare(percentOf(fraction));
+  fraction === null ? "sin dato" : formatFraction(fraction);
 
 // A question that asks what to do, not what happened: "¿qué compro?",
 // "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?".
@@ -178,7 +172,7 @@ export function prototypeAnswer(
         title: `Cobros de ${thisYear.year}`,
         unit,
         bars: thisYear.months.map((month) => ({
-          label: MONTH_NAMES[Number(month.period.slice(5, 7)) - 1]!.slice(0, 3),
+          label: monthOf(month.period).slice(0, 3),
           value: month.figures.income,
         })),
       },
@@ -191,12 +185,12 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}, un ${percent(thisYear.totals.share)} sin contar lo que pusiste (pusiste ${formatAmount(thisYear.totals.contributed, unit)} neto). En lo que va de ${MONTH_NAMES[Number(current.period.slice(5, 7)) - 1]!.toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}, un ${percent(thisYear.totals.share)} sin contar lo que pusiste (pusiste ${formatAmount(thisYear.totals.contributed, unit)} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
         bars: thisYear.months.map((month) => ({
-          label: MONTH_NAMES[Number(month.period.slice(5, 7)) - 1]!.slice(0, 3),
+          label: monthOf(month.period).slice(0, 3),
           value: month.figures.result,
         })),
       },
@@ -264,12 +258,7 @@ export function addQuestion(
     unit: ChatUnit;
   },
 ): PrototypeState {
-  const message = {
-    id,
-    role: "user" as const,
-    text: question,
-    askedOn: state.today,
-  };
+  const message = { id, role: "user" as const, text: question };
   const existing = state.conversations.find(
     (each) => each.id === conversationId,
   );
@@ -289,6 +278,7 @@ export function addQuestion(
       };
   return {
     ...state,
+    askedOn: [...state.askedOn, state.today],
     conversations: [
       conversation,
       ...state.conversations.filter((each) => each.id !== conversationId),
