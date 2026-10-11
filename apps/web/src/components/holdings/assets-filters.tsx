@@ -18,6 +18,7 @@ import {
   type AssetsParam,
   SEARCH_MAX_LENGTH,
   parseAssetsParams,
+  unitParam,
 } from "@/lib/holdings/assets-filter";
 import {
   ASSET_CLASSES,
@@ -28,7 +29,7 @@ import type { PortfolioRow } from "@/lib/portfolio-setup/read";
 
 import { type AssetsUrl, searchParamValue } from "./assets-url";
 
-const ALL = "todas";
+const ALL = "all";
 const SEARCH_DELAY_MS = 250;
 
 // The search, class, portfolio and unit the page shows, kept in the URL; each
@@ -36,13 +37,13 @@ const SEARCH_DELAY_MS = 250;
 // does; a search typed meanwhile is sent once it ends.
 export function AssetsFilters({
   url,
-  unit,
+  referenceUnit,
   filter,
   portfolios,
   pending,
 }: {
   url: AssetsUrl;
-  unit: Denominator;
+  referenceUnit: Denominator;
   filter: AssetsFilter;
   portfolios: PortfolioRow[];
   pending: boolean;
@@ -59,7 +60,7 @@ export function AssetsFilters({
     url.params,
     portfolios.map(({ id }) => id),
   );
-  const shown = { ...chosen.filter, unit: chosen.unit ?? unit };
+  const shown = { ...chosen.filter, unit: chosen.unit ?? referenceUnit };
   const go = (key: AssetsParam, value: string | null) => {
     if (!pending) url.set(key, value);
   };
@@ -83,7 +84,7 @@ export function AssetsFilters({
     if (pending || typed === shown.search) return;
     const timer = setTimeout(() => {
       setSent(typed);
-      url.set("buscar", typed || null);
+      url.set("search", typed || null);
     }, SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
   }, [search, shown.search, pending, url]);
@@ -119,7 +120,7 @@ export function AssetsFilters({
             (each) => [each, ASSET_CLASS_LABELS[each]] as const,
           ),
         ]}
-        onChange={(value) => go("tipo", value === ALL ? null : value)}
+        onChange={(value) => go("class", value === ALL ? null : value)}
       />
       <Filter
         id={ids.portfolio}
@@ -130,7 +131,7 @@ export function AssetsFilters({
           [ALL, "Todas las carteras"],
           ...portfolios.map((each) => [each.id, each.name] as const),
         ]}
-        onChange={(value) => go("cartera", value === ALL ? null : value)}
+        onChange={(value) => go("portfolio", value === ALL ? null : value)}
       />
       <Filter
         id={ids.unit}
@@ -141,7 +142,7 @@ export function AssetsFilters({
         options={(Object.keys(UNIT_LABELS) as Denominator[]).map(
           (each) => [each, UNIT_LABELS[each]] as const,
         )}
-        onChange={(value) => go("moneda", value)}
+        onChange={(value) => go("unit", unitParam(value, referenceUnit))}
       />
     </div>
   );

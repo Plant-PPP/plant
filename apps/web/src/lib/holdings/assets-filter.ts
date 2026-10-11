@@ -65,22 +65,26 @@ export function matchesFilter(
 // The page's tabs, each its own table: the holdings, the accounts that hold
 // them, and the portfolios they are in.
 export const TABS = {
-  tenencias: "Tenencias",
-  cuentas: "Cuentas",
-  carteras: "Carteras",
+  holdings: "Tenencias",
+  accounts: "Cuentas",
+  portfolios: "Carteras",
 } as const;
 export type AssetsTab = keyof typeof TABS;
-export const DEFAULT_TAB: AssetsTab = "tenencias";
+export const DEFAULT_TAB: AssetsTab = "holdings";
 
 const isTab = (value: unknown): value is AssetsTab =>
   typeof value === "string" && Object.hasOwn(TABS, value);
 
-// The tab a `vista` param names, or the default.
 export const tabOf = (raw: unknown): AssetsTab =>
   isTab(raw) ? raw : DEFAULT_TAB;
 
+// The unit param for a choice: none for the user's reference dollar, which
+// the page values in by default.
+export const unitParam = (unit: string, reference: Denominator) =>
+  unit === reference ? null : unit;
+
 // The params the assets page reads.
-export type AssetsParam = "moneda" | "cartera" | "tipo" | "buscar" | "vista";
+export type AssetsParam = "unit" | "portfolio" | "class" | "search" | "tab";
 
 // What the page's params ask for. An invalid value falls back to the default
 // and is flagged, so the page can log it: a unit outside DENOMINATORS, a
@@ -94,28 +98,28 @@ export function parseAssetsParams(
   unit: Denominator | null;
   tab: AssetsTab;
   filter: AssetsFilter;
-  invalid: Record<"unit" | "portfolio" | "class" | "search" | "tab", boolean>;
+  invalid: Record<AssetsParam, boolean>;
 } {
-  const { moneda, cartera, tipo, buscar, vista } = params;
-  const search = parseSearch(buscar);
+  const { unit, portfolio, class: assetClass, search: rawSearch, tab } = params;
+  const search = parseSearch(rawSearch);
   const portfolioId =
-    typeof cartera === "string" && portfolioIds.includes(cartera)
-      ? cartera
+    typeof portfolio === "string" && portfolioIds.includes(portfolio)
+      ? portfolio
       : null;
   return {
-    unit: isDenominator(moneda) ? moneda : null,
-    tab: tabOf(vista),
+    unit: isDenominator(unit) ? unit : null,
+    tab: tabOf(tab),
     filter: {
       portfolioId,
-      assetClass: isAssetClass(tipo) ? tipo : null,
+      assetClass: isAssetClass(assetClass) ? assetClass : null,
       search: search ?? "",
     },
     invalid: {
-      unit: moneda !== undefined && !isDenominator(moneda),
-      portfolio: cartera !== undefined && portfolioId === null,
-      class: tipo !== undefined && !isAssetClass(tipo),
+      unit: unit !== undefined && !isDenominator(unit),
+      portfolio: portfolio !== undefined && portfolioId === null,
+      class: assetClass !== undefined && !isAssetClass(assetClass),
       search: search === null,
-      tab: vista !== undefined && !isTab(vista),
+      tab: tab !== undefined && !isTab(tab),
     },
   };
 }

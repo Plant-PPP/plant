@@ -107,6 +107,7 @@ afterEach(() => jest.restoreAllMocks());
 
 type Props = {
   unit: string;
+  referenceUnit: string;
   filter: AssetsFilter;
   valuation: HoldingsValuation;
 };
@@ -120,6 +121,31 @@ async function render(params: Record<string, string> = {}) {
 
 const viewLine = () => lines.find((line) => line.event === "assets.view");
 
+const VIEW_KEYS = [
+  "enduser.id",
+  "event",
+  "level",
+  "plant.assets.asset_class",
+  "plant.assets.filtered",
+  "plant.assets.holding_count",
+  "plant.assets.instruments_truncated",
+  "plant.assets.invalid_class",
+  "plant.assets.invalid_portfolio",
+  "plant.assets.invalid_search",
+  "plant.assets.invalid_tab",
+  "plant.assets.invalid_unit",
+  "plant.assets.missing_count",
+  "plant.assets.searched",
+  "plant.assets.shown_count",
+  "plant.assets.tab",
+  "plant.assets.truncated",
+  "plant.assets.unit",
+  "plant.outcome",
+  "plant.page",
+  "plant.quotes.dropped_count",
+  "plant.request_id",
+];
+
 it("values in the reference dollar by default", async () => {
   const props = await render();
   expect(props.unit).toBe("usd_ccl");
@@ -132,7 +158,7 @@ it("values in the reference dollar by default", async () => {
       "plant.outcome": "ok",
       "plant.assets.holding_count": 2,
       "plant.assets.shown_count": 2,
-      "plant.assets.tab": "tenencias",
+      "plant.assets.tab": "holdings",
       "plant.assets.asset_class": "all",
       "plant.assets.searched": false,
       "plant.assets.invalid_class": false,
@@ -150,6 +176,11 @@ it("values in the reference dollar by default", async () => {
   );
 });
 
+it("logs exactly the view's fields", async () => {
+  await render();
+  expect(Object.keys(viewLine()!).sort()).toEqual(VIEW_KEYS);
+});
+
 it("reads the quotes active holdings need, from a week back", async () => {
   await render();
   const [range] = read.mock.calls[0] as [
@@ -159,9 +190,10 @@ it("reads the quotes active holdings need, from a week back", async () => {
   expect(range.from < range.to).toBe(true);
 });
 
-it("applies ?moneda and ?cartera", async () => {
-  const props = await render({ moneda: "ars", cartera: P2 });
+it("applies ?unit and ?portfolio", async () => {
+  const props = await render({ unit: "ars", portfolio: P2 });
   expect(props.unit).toBe("ars");
+  expect(props.referenceUnit).toBe("usd_ccl");
   expect(props.filter).toEqual({
     portfolioId: P2,
     assetClass: null,
@@ -172,19 +204,33 @@ it("applies ?moneda and ?cartera", async () => {
   expect(viewLine()).toMatchObject({ "plant.assets.filtered": true });
 });
 
-it("opens the tab ?vista names", async () => {
-  const props = await render({ vista: "carteras" });
+it("opens the tab ?tab names", async () => {
+  const props = await render({ tab: "portfolios" });
   expect(Object.keys(props.valuation.portfolios).sort()).toEqual([P1, P2]);
-  expect(viewLine()).toMatchObject({ "plant.assets.tab": "carteras" });
+  expect(viewLine()).toMatchObject({ "plant.assets.tab": "portfolios" });
+  await render({ tab: "accounts" });
+  expect(lines.filter((line) => line.event === "assets.view")[1]).toMatchObject(
+    { "plant.assets.tab": "accounts" },
+  );
+});
+
+it("opens the default view for an old link, without flagging it", async () => {
+  const props = await render({ vista: "cuentas", moneda: "ars" });
+  expect(props.unit).toBe("usd_ccl");
+  expect(viewLine()).toMatchObject({
+    "plant.assets.tab": "holdings",
+    "plant.assets.invalid_tab": false,
+    "plant.assets.invalid_unit": false,
+  });
 });
 
 it("falls back on invalid params and logs that they were", async () => {
   const props = await render({
-    moneda: "xyz",
-    cartera: "nope",
-    tipo: "toString",
-    vista: "tablero",
-    buscar: "x".repeat(61),
+    unit: "xyz",
+    portfolio: "nope",
+    class: "toString",
+    tab: "tablero",
+    search: "x".repeat(61),
   });
   expect(props.unit).toBe("usd_ccl");
   expect(props.filter).toEqual({
@@ -199,12 +245,12 @@ it("falls back on invalid params and logs that they were", async () => {
     "plant.assets.invalid_class": true,
     "plant.assets.invalid_search": true,
     "plant.assets.invalid_tab": true,
-    "plant.assets.tab": "tenencias",
+    "plant.assets.tab": "holdings",
   });
 });
 
-it("values only the holdings of ?tipo matching ?buscar, and never logs the search", async () => {
-  const props = await render({ tipo: "cash", buscar: "efectivo" });
+it("values only the holdings of ?class matching ?search, and never logs the search", async () => {
+  const props = await render({ class: "cash", search: "efectivo" });
   expect(props.filter).toMatchObject({
     assetClass: "cash",
     search: "efectivo",
@@ -220,7 +266,7 @@ it("values only the holdings of ?tipo matching ?buscar, and never logs the searc
 });
 
 it("leaves out the holdings no filter matches", async () => {
-  const props = await render({ tipo: "instrument" });
+  const props = await render({ class: "instrument" });
   expect(props.valuation.values).toEqual({});
   expect(props.valuation.kinds.total.count).toBe(0);
   expect(viewLine()).toMatchObject({
@@ -246,7 +292,7 @@ it("logs a failed quote read once, by its code, and throws it as logged", async 
 
 it("marks the view incomplete when a quote is missing", async () => {
   read.mockResolvedValue({ fxRates: [], prices: [] });
-  const props = await render({ moneda: "ars" });
+  const props = await render({ unit: "ars" });
   expect(props.valuation.kinds.total.value).toBe("0");
   expect(viewLine()).toMatchObject({
     "plant.outcome": "incomplete",

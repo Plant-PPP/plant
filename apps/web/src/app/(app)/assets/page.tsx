@@ -34,9 +34,9 @@ export const metadata: Metadata = { title: navTitle("/assets") };
 export const dynamic = "force-dynamic";
 
 // The user's holdings valued at today's quotes in one unit (the reference
-// dollar unless ?moneda= names another), in one portfolio (?cartera=) or all,
-// of one class (?tipo=) or all, matching a search (?buscar=) or not; shown in
-// the holdings tab unless ?vista= names another. An invalid param falls back
+// dollar unless ?unit= names another), in one portfolio (?portfolio=) or all,
+// of one class (?class=) or all, matching a search (?search=) or not; shown in
+// the holdings tab unless ?tab= names another. An invalid param falls back
 // to the default and is logged.
 export default async function AssetsPage({
   searchParams,
@@ -79,7 +79,8 @@ export default async function AssetsPage({
     context.params,
     portfolios.active.map(({ id }) => id),
   );
-  const unit = chosenUnit ?? referenceUnit(dollar);
+  const reference = referenceUnit(dollar);
+  const unit = chosenUnit ?? reference;
   const names = instrumentNames(instruments.rows);
   const shown = holdings.active.filter((row) =>
     matchesFilter(row, filter, names),
@@ -131,6 +132,7 @@ export default async function AssetsPage({
         holdings={holdings}
         valuation={valuation}
         unit={unit}
+        referenceUnit={reference}
         filter={filter}
         params={context.params}
         accounts={accounts.active}

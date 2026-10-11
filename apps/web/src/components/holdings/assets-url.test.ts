@@ -13,27 +13,29 @@ describe("searchParamValue", () => {
 
 describe("withParam", () => {
   it("sets one param and keeps the others, or drops it", () => {
-    const params = { vista: "cuentas", tipo: "cash" };
-    expect(withParam(params, "cartera", "p1")).toEqual({
-      vista: "cuentas",
-      tipo: "cash",
-      cartera: "p1",
+    const params = { tab: "accounts", class: "cash" };
+    expect(withParam(params, "portfolio", "p1")).toEqual({
+      tab: "accounts",
+      class: "cash",
+      portfolio: "p1",
     });
-    expect(withParam(params, "vista", null)).toEqual({ tipo: "cash" });
-    expect(params).toEqual({ vista: "cuentas", tipo: "cash" });
+    expect(withParam(params, "tab", null)).toEqual({ class: "cash" });
+    expect(params).toEqual({ tab: "accounts", class: "cash" });
   });
 
   it("applied twice keeps both changes", () => {
     expect(
-      withParam(withParam({}, "vista", "cuentas"), "tipo", "cash"),
+      withParam(withParam({}, "tab", "accounts"), "class", "cash"),
     ).toEqual({
-      vista: "cuentas",
-      tipo: "cash",
+      tab: "accounts",
+      class: "cash",
     });
   });
 });
 
 it("takes only the params the page reads", () => {
-  // @ts-expect-error: "carteras" is another list's cursor param.
-  withParam({}, "carteras", "x");
+  // @ts-expect-error: "holdings" is the archived holdings' cursor param.
+  withParam({}, "holdings", "x");
+  // @ts-expect-error: "portfolios" is another list's cursor param.
+  withParam({}, "portfolios", "x");
 });

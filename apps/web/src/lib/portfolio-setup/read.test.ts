@@ -120,12 +120,12 @@ it("says when active rows were left out", async () => {
 it("links the next page of archived rows from the last one shown", async () => {
   const archived = rows(ARCHIVED_ROW_LIMIT + 1, true);
   const { client } = fakeClient(ok([]), ok(archived));
-  const view = await read(client, { titulares: "x" });
+  const view = await read(client, { holders: "x" });
   expect(view.archived).toHaveLength(ARCHIVED_ROW_LIMIT);
   const last = archived[ARCHIVED_ROW_LIMIT - 1]!;
   const next = new URLSearchParams(view.archivedNextHref!.slice(1));
-  expect(next.get("carteras")).toBe(`${AT},${last.id}`);
-  expect(next.get("titulares")).toBe("x");
+  expect(next.get("portfolios")).toBe(`${AT},${last.id}`);
+  expect(next.get("holders")).toBe("x");
 });
 
 it("links no next page when exactly a page of archived rows is left", async () => {
@@ -137,7 +137,7 @@ it("links no next page when exactly a page of archived rows is left", async () =
 
 it("reads archived rows after a cursor, bounded by its timestamp", async () => {
   const { client, calls } = fakeClient(ok([]), ok([]));
-  const view = await read(client, { carteras: `${AT},${ID}` });
+  const view = await read(client, { portfolios: `${AT},${ID}` });
   expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
   expect(calls[1]).toContainEqual([
     "or",
@@ -150,7 +150,7 @@ it("reads archived rows after a cursor, bounded by its timestamp", async () => {
 it("shows the first page and warns on an invalid cursor", async () => {
   const { client, calls } = fakeClient(ok([]), ok([]));
   const view = await read(client, {
-    carteras: `x),user_id.not.is.null,and(id.lt.${ID}`,
+    portfolios: `x),user_id.not.is.null,and(id.lt.${ID}`,
   });
   expect(calls[1]!.map(([method]) => method)).not.toContain("or");
   expect(view.archivedPage).toBeNull();
@@ -221,12 +221,25 @@ it("pages archived holders by their own param", async () => {
     userId: USER,
     requestId: REQUEST_ID,
     page: "/accounts",
-    params: { titulares: `${AT},${ID}`, carteras: "x" },
+    params: { holders: `${AT},${ID}`, portfolios: "x" },
   });
   expect(calls[0]![0]).toEqual(["select", "id, name"]);
   expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
   expect(view.archivedPage).toBe(`${AT},${ID}`);
-  expect(view.archivedFirstHref).toBe("?carteras=x");
+  expect(view.archivedFirstHref).toBe("?portfolios=x");
+});
+
+it("pages archived accounts by their own param", async () => {
+  const { client, calls } = fakeClient(ok([]), ok([]));
+  const view = await readSourceConnections(client, {
+    userId: USER,
+    requestId: REQUEST_ID,
+    page: "/accounts",
+    params: { accounts: `${AT},${ID}`, holders: "x" },
+  });
+  expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
+  expect(view.archivedPage).toBe(`${AT},${ID}`);
+  expect(view.archivedFirstHref).toBe("?holders=x");
 });
 
 it("reads accounts with their holder and portfolio", async () => {
@@ -314,7 +327,7 @@ describe("a row the list cannot read", () => {
   const schema = z.object({ id: z.string(), name: z.string().max(3) });
   const spec = (toRow: (data: Record<string, unknown>) => unknown) => ({
     table: "portfolios" as const,
-    param: "carteras",
+    param: "portfolios",
     columns: "id, name",
     toRow,
   });
@@ -369,7 +382,7 @@ describe("a row the list cannot read", () => {
     const view = await readList(
       client,
       spec((data) => data),
-      { ...CONTEXT, params: { carteras: "garbage" } },
+      { ...CONTEXT, params: { portfolios: "garbage" } },
       { archived: false },
     );
     expect(lines).toEqual([]);

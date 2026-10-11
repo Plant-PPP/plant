@@ -100,7 +100,7 @@ it("passes the page's pending to its archived list", () => {
   const paged = {
     archived: [{ id: "p3", name: "Vieja" }],
     archivedFirstHref: "/accounts",
-    archivedNextHref: "/accounts?carteras=x",
+    archivedNextHref: "/accounts?portfolios=x",
   };
   expect(render(paged, true)).toMatch(/<a [^>]*aria-disabled="true"/);
 });
