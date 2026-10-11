@@ -1,5 +1,6 @@
 import { snapshotOn } from "@plant/core";
 
+import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -8,7 +9,7 @@ import {
   deleteConversation,
   prototypeAnswer,
 } from "./prototype-assistant";
-import { initialState } from "./prototype-store";
+import { initialState, instrumentHoldings } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -113,4 +114,19 @@ it("answers about debts with none loaded", () => {
   );
   expect(answer.text).toBe("No tenés deudas cargadas en Plant.");
   expect(answer.chart).toBeNull();
+});
+
+it("draws an instrument's result as bars that add up to it", () => {
+  const { holdings, flows } = instrumentHoldings(
+    state,
+    "AAPL",
+    "usd_mep",
+    snapshot,
+  );
+  const result = instrumentSummary(holdings, flows, TODAY).returns!.result;
+  const bars = ask("¿Cómo le fue a Apple?").chart!.bars;
+  expect(bars.reduce((sum, bar) => sum + Number(bar.value), 0)).toBeCloseTo(
+    Number(result),
+    6,
+  );
 });

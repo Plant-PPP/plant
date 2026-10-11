@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatAmount } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { leftThisMonth } from "@/lib/format/text";
 import {
   type AssistantMessage,
   CHAT_UNITS,
@@ -123,6 +124,7 @@ export function AssistantPage({
   // opening another conversation lets it go.
   const [arrived, setArrived] = useState<string | null>(null);
   const questionField = useRef<HTMLTextAreaElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const [deleting, setDeleting] = useState<Conversation | null>(null);
   const newButton = useRef<HTMLButtonElement>(null);
@@ -142,8 +144,11 @@ export function AssistantPage({
     const conversationId = conversation?.id ?? fresh;
     setActiveId(conversationId);
     setDraft("");
-    // A suggestion's button goes with the empty conversation it sat in.
-    questionField.current?.focus();
+    setArrived(null);
+    // The clicked suggestion unmounts with the empty conversation, so focus
+    // stays in the question field, or on the title when this question used
+    // the month's last one and the field goes disabled.
+    (left > 1 ? questionField : heading).current?.focus();
     setWaiting(true);
     void actions
       .ask(conversationId, text, conversation?.unit ?? unit)
@@ -232,11 +237,16 @@ export function AssistantPage({
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-1">
-            <h1 id={`${id}-title`} className="text-xl font-semibold">
+            <h1
+              id={`${id}-title`}
+              ref={heading}
+              tabIndex={-1}
+              className="text-xl font-semibold outline-none"
+            >
               {conversation?.title ?? "Asistente"}
             </h1>
             <p className="text-muted-foreground text-xs">
-              {`${left === 1 ? "Te queda" : "Te quedan"} ${left} de ${QUESTIONS_PER_MONTH} consultas este mes · ${NOT_ADVICE}`}
+              {`${leftThisMonth(left, QUESTIONS_PER_MONTH, "consultas")} · ${NOT_ADVICE}`}
             </p>
           </div>
           <div className="flex items-end gap-2">
@@ -308,7 +318,7 @@ export function AssistantPage({
                 message={message}
                 animate={message.id === arrived}
                 onFollowUp={ask}
-                disabled={left === 0}
+                disabled={waiting || left === 0}
               />
             ),
           )}

@@ -1,5 +1,5 @@
 import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
-import { compareDecimals } from "@plant/shared";
+import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
 import { formatAmount, formatFraction } from "@/lib/format/amount";
 import { folded } from "@/lib/format/text";
@@ -31,6 +31,21 @@ type Answer = Omit<AssistantMessage, "id">;
 // "¿vendo Apple?", "¿qué hago con mis Tesla?", "¿es buen momento?".
 const ADVICE =
   /\b(que|cual|cuanto) (compro|vendo|invierto)\b|^\W*(compro|vendo|invierto)\b|conviene|recomend|(deberia|debo|tengo que) (comprar|vender|invertir)|me sale (comprar|vender)|que hago con|buen momento/;
+
+// Where a result comes from, bar by bar: what is left once sales (net of
+// their charges), income and the units held are counted is what purchases'
+// charges and withholding took, so the bars add up to the result.
+function resultBars(
+  result: string,
+  bars: { label: string; value: string }[],
+): { label: string; value: string }[] {
+  const rest = stored(
+    minus(exactOf(result), plus(...bars.map(({ value }) => exactOf(value)))),
+  );
+  return exactOf(rest).n === 0n
+    ? bars
+    : [...bars, { label: "Gastos y retenciones", value: rest }];
+}
 
 // What a figure that left something out says after it.
 const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
@@ -120,14 +135,14 @@ export function prototypeAnswer(
         ? {
             title: `${instrument.symbol}: de dónde sale el resultado`,
             unit,
-            bars: [
+            bars: resultBars(returns.result, [
               { label: "Ventas", value: summary.realized ?? "0" },
               { label: "Cobros", value: summary.income ?? "0" },
               {
                 label: "Lo que tenés",
                 value: summary.unrealized?.amount ?? "0",
               },
-            ],
+            ]),
           }
         : null,
       sources: ["Movimientos", "Cotizaciones"],
