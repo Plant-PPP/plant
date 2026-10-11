@@ -18,6 +18,10 @@ export const currencyOf = (
 ): Currency =>
   instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS";
 
+// An instrument as lists name it: "BTC · Bitcoin", or its symbol alone.
+export const instrumentLabel = (symbol: string, name?: string): string =>
+  name ? `${symbol} · ${name}` : symbol;
+
 // How a holding is named in a list: "BTC · Bitcoin", its label, or its class
 // and currency ("Efectivo USD").
 export function holdingName(
@@ -26,8 +30,7 @@ export function holdingName(
 ): string {
   if (holding.asset_class === "instrument") {
     const symbol = holding.instrument_symbol;
-    const name = instrumentNames.get(symbol);
-    return name ? `${symbol} · ${name}` : symbol;
+    return instrumentLabel(symbol, instrumentNames.get(symbol));
   }
   return (
     holding.label ??
