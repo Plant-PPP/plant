@@ -8,7 +8,7 @@ import {
   exactUnitPrice,
   quotedPrice,
 } from "@plant/core";
-import { type Currency, exactOf, plus, toDecimal } from "@plant/shared";
+import { type Currency, exactOf, plus, stored } from "@plant/shared";
 import type { z } from "zod";
 
 import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
@@ -126,7 +126,7 @@ export function operationFields(
     charges: [...charges.values()].map(({ kind, label, amounts }) => ({
       kind,
       label,
-      amount: amountInput(toDecimal(plus(...amounts.map(exactOf)), 8)),
+      amount: amountInput(stored(plus(...amounts.map(exactOf)))),
     })),
     reference: movement.reference ?? "",
     note: movement.note ?? "",
