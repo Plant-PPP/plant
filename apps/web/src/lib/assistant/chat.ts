@@ -16,7 +16,14 @@ export type ChartPart = {
   bars: { label: string; value: string }[];
 };
 
-export type UserMessage = { id: string; role: "user"; text: string };
+// A question, with the day it was asked, which counts against that month's
+// questions.
+export type UserMessage = {
+  id: string;
+  role: "user";
+  text: string;
+  askedOn: string;
+};
 
 export type AssistantMessage = {
   id: string;

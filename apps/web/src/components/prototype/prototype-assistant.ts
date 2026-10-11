@@ -1,7 +1,7 @@
 import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
-import { compareDecimals, exactOf, times, toDecimal } from "@plant/shared";
+import { compareDecimals } from "@plant/shared";
 
-import { formatAmount, formatShare } from "@/lib/format/amount";
+import { formatAmount, formatShare, percentOf } from "@/lib/format/amount";
 import {
   type AssistantMessage,
   type ChatUnit,
@@ -33,9 +33,12 @@ const folded = (text: string) =>
     .toLowerCase();
 
 const percent = (fraction: string | null) =>
-  fraction === null
-    ? "sin dato"
-    : formatShare(toDecimal(times(exactOf(fraction), exactOf("100")), 1));
+  fraction === null ? "sin dato" : formatShare(percentOf(fraction));
+
+// A question that asks what to do, not what happened: "¿qué compro?",
+// "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?".
+const ADVICE =
+  /\b(que|cual|cuanto) (compro|vendo|invierto)\b|conviene|recomend|deberia (comprar|vender|invertir)|me sale (comprar|vender)/;
 
 const signed = (amount: string, unit: ChatUnit) =>
   `${amount.startsWith("-") ? "" : "+"}${formatAmount(amount, unit)}`;
@@ -65,16 +68,15 @@ export function prototypeAnswer(
   snapshot: QuoteSnapshot,
 ): Answer {
   const asked = folded(question);
-  const rate =
-    unit === "ars"
-      ? null
-      : {
-          label: unit === "usd_mep" ? "MEP" : "CCL",
-          sell: snapshot.fx[unit === "usd_mep" ? "mep" : "ccl"]?.sell ?? "0",
-        };
+  const words = asked.split(/[^a-z0-9]+/);
+  const dollar =
+    unit === "ars" ? null : snapshot.fx[unit === "usd_mep" ? "mep" : "ccl"];
+  const rate = dollar
+    ? { label: unit === "usd_mep" ? "MEP" : "CCL", sell: dollar.sell }
+    : null;
   const base = { role: "assistant" as const, asOf: state.today, rate };
 
-  if (/compr|vend|conviene|recomend|invert|deberia|me sale/.test(asked)) {
+  if (ADVICE.test(asked)) {
     return {
       ...base,
       text: "No te puedo decir qué comprar ni qué vender: Plant explica tus datos y no recomienda. Sí te puedo contar cómo vienen tus inversiones, cuánto ganaste o cuánto cobraste.",
@@ -86,8 +88,7 @@ export function prototypeAnswer(
 
   const instrument = state.instruments.find(
     (each) =>
-      new RegExp(`\\b${folded(each.symbol)}\\b`).test(asked) ||
-      asked.includes(folded(each.name)),
+      words.includes(folded(each.symbol)) || asked.includes(folded(each.name)),
   );
   if (instrument) {
     const { holdings, flows } = instrumentHoldings(
@@ -263,7 +264,12 @@ export function addQuestion(
     unit: ChatUnit;
   },
 ): PrototypeState {
-  const message = { id, role: "user" as const, text: question };
+  const message = {
+    id,
+    role: "user" as const,
+    text: question,
+    askedOn: state.today,
+  };
   const existing = state.conversations.find(
     (each) => each.id === conversationId,
   );

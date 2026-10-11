@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-11 · Asistente prototype (PLA-115)
+
+- **The prototype's answers are built from the user's data by rules, not a model**, to settle the chat's shape before PLA-47: each answer's text, figures and chart come from the same functions the screens use, with the day of its data, the dollar it used and what it read. It answers net worth, the year and the month, income, debts and one instrument.
+- **It never says what to buy or sell.** A question that asks what to do ("¿qué compro?", "¿me conviene vender?", "¿me recomendás…?") gets the fixed answer; a question about what happened ("¿cuánto invertí?", "¿qué vendí?") gets its answer. Every screen of the chat says it is not financial advice.
+- **30 questions a month in the prototype**, counted by the day each was asked; the real limit is the server's (PLA-52).
+
 ## 2026-10-11 · Cargar and its review (PLA-114)
 
 - **Nothing read goes into an account before the user confirms it.** Each upload is queued, read and then ready to review, or refused with a reason the user can act on; the review shows each row with how sure the reading is and where it was read, what it changes in the account (new, up, down, unchanged) and the totals read against the ones the document prints, per currency (no claim of a match when the document prints none).

@@ -2,6 +2,7 @@
 
 import { ArrowUp, LoaderCircle, MessageSquarePlus, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { FilterSelect } from "@/components/holdings/filter-select";
 import { Button } from "@/components/ui/button";
@@ -119,9 +120,16 @@ export function AssistantPage({
   const conversation = conversations.find((each) => each.id === activeId);
   const messages = conversation?.messages ?? [];
   const used = conversations
-    .filter((each) => each.updatedOn.slice(0, 7) === today.slice(0, 7))
     .flatMap((each) => each.messages)
-    .filter((message) => message.role === "user").length;
+    .filter(
+      (message) =>
+        message.role === "user" &&
+        message.askedOn.slice(0, 7) === today.slice(0, 7),
+    ).length;
+  // The latest finished answer, announced once.
+  const lastAnswer = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
   const left = Math.max(0, QUESTIONS_PER_MONTH - used);
 
   useEffect(() => {
@@ -137,8 +145,12 @@ export function AssistantPage({
     setWaiting(true);
     void actions
       .ask(conversationId, text, conversation?.unit ?? unit)
-      .then((answerId) =>
-        setArrived((current) => new Set([...current, answerId])),
+      .then(
+        (answerId) => setArrived((current) => new Set([...current, answerId])),
+        () => {
+          setDraft(text);
+          toast.error("No pudimos responder. Probá de nuevo.");
+        },
       )
       .finally(() => setWaiting(false));
   }
@@ -229,7 +241,14 @@ export function AssistantPage({
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col gap-6" aria-live="polite">
+        <p role="status" className="sr-only">
+          {waiting
+            ? "Consultando tus datos…"
+            : lastAnswer?.role === "assistant"
+              ? lastAnswer.text
+              : ""}
+        </p>
+        <div className="flex flex-1 flex-col gap-6">
           {messages.length === 0 && !waiting && (
             <div className="grid flex-1 place-content-center gap-4 py-10 text-center">
               <p className="text-muted-foreground text-sm">

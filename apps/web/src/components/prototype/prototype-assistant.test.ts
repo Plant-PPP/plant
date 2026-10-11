@@ -61,3 +61,18 @@ it("keeps a conversation's questions and answers, titled by its first", () => {
   });
   expect(answered.conversations[0]!.messages).toHaveLength(2);
 });
+
+it.each(["¿Cuánto invertí en Apple?", "¿Qué vendí este año?"])(
+  "answers %s, which asks what happened, not what to do",
+  (question) => {
+    expect(ask(question).text).not.toMatch(/no recomienda/);
+  },
+);
+
+it("shows no dollar rate it does not have", () => {
+  const answer = prototypeAnswer(state, "¿Cuánto debo?", "usd_mep", {
+    ...snapshot,
+    fx: {},
+  });
+  expect(answer.rate).toBeNull();
+});
