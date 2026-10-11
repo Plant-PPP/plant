@@ -19,6 +19,7 @@ import {
   deleteHolding,
   deleteOperation,
   initialState,
+  updateHolding,
   type PrototypeState,
   type Write,
   writeOperation,
@@ -213,7 +214,7 @@ it("stays consistent through every kind of write", () => {
         source_connection_id: account("IOL"),
         portfolio_id: LARGO,
         asset_class: "instrument",
-        instrument_symbol: "MSFT",
+        instrument_symbol: "AAPL",
         amount: "7",
         currency: null,
         annual_rate: null,
@@ -310,4 +311,90 @@ it("never reopens a holding inside an archived portfolio", () => {
   const refused = deleteOperation(state, sale);
   expect(refused.result).toEqual({ ok: false, code: "not_found" });
   expect(refused.state).toBe(state);
+});
+
+const instrumentInput = (
+  institution: string,
+  portfolio: string,
+  symbol: string,
+  amount: string,
+) => ({
+  source_connection_id: account(institution),
+  portfolio_id: portfolio,
+  asset_class: "instrument" as const,
+  instrument_symbol: symbol,
+  amount,
+  currency: null,
+  annual_rate: null,
+  started_on: null,
+  matures_on: null,
+  valued_on: null,
+  label: null,
+});
+
+it("never opens units at a made-up cost", () => {
+  // MSFT has no price, from the feeds or the user.
+  const refused = createHolding(
+    start,
+    instrumentInput("IOL", LARGO, "MSFT", "7"),
+    newId(),
+  );
+  expect(refused.result).toEqual({ ok: false, code: "invalid" });
+  expect(refused.state).toBe(start);
+});
+
+it("never moves a holding onto its instrument's holding in a portfolio", () => {
+  const split = newId();
+  const state = writeOperation(
+    start,
+    trade("purchase", "BTC", "Binance", "2026-05-04", [
+      { portfolio_id: PRINCIPAL, quantity: "0.5" },
+      { portfolio_id: LARGO, quantity: "0.25" },
+    ]),
+    write(split),
+  ).state;
+  const largo = state.holdings.find(
+    (each) =>
+      each.portfolioId === LARGO &&
+      each.holding.asset_class === "instrument" &&
+      each.holding.instrument_symbol === "BTC",
+  )!;
+  const moved = updateHolding(state, largo.holding.id, {
+    asset_class: "instrument",
+    amount: largo.holding.amount,
+    currency: null,
+    annual_rate: null,
+    started_on: null,
+    matures_on: null,
+    valued_on: null,
+    label: null,
+    portfolio_id: PRINCIPAL,
+  });
+  expect(moved.result).toEqual({ ok: false, code: "duplicate" });
+  expect(integrity(moved.state)).toEqual([]);
+});
+
+it("reloads the other parts' holdings when one is deleted", () => {
+  const split = newId();
+  const state = writeOperation(
+    start,
+    trade("purchase", "BTC", "Binance", "2026-05-04", [
+      { portfolio_id: PRINCIPAL, quantity: "0.5" },
+      { portfolio_id: LARGO, quantity: "0.25" },
+    ]),
+    write(split),
+  ).state;
+  const holdingOf = (portfolio: string) =>
+    state.holdings.find(
+      (each) =>
+        each.portfolioId === portfolio &&
+        each.holding.asset_class === "instrument" &&
+        each.holding.instrument_symbol === "BTC",
+    )!.holding.id;
+  const principal = holdingOf(PRINCIPAL);
+  const deleted = deleteHolding(state, holdingOf(LARGO)).state;
+  expect(deleted.revisions.get(principal)).toBe(
+    state.revisions.get(principal)! + 1,
+  );
+  expect(integrity(deleted)).toEqual([]);
 });

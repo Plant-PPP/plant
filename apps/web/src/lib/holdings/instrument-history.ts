@@ -34,8 +34,6 @@ export type InstrumentSummary = {
   returns: Returns | null;
 };
 
-const total = (values: readonly (string | null)[]) => sumOrNull(values, 8);
-
 export function instrumentSummary(
   holdings: readonly InstrumentHolding[],
   flows: readonly CashFlow[] | null,
@@ -44,11 +42,11 @@ export function instrumentSummary(
   const open = holdings.filter((each) => !each.closed);
   const money = holdings.map((each) => each.position.money);
   const pick = (key: "realized" | "income" | "charges") =>
-    total(money.map((each) => each?.[key] ?? null));
-  const value = total(open.map((each) => each.value));
-  const cost = total(open.map((each) => each.position.money?.cost ?? null));
+    sumOrNull(money.map((each) => each?.[key] ?? null));
+  const value = sumOrNull(open.map((each) => each.value));
+  const cost = sumOrNull(open.map((each) => each.position.money?.cost ?? null));
   return {
-    quantity: total(open.map((each) => each.position.quantity)) ?? "0",
+    quantity: sumOrNull(open.map((each) => each.position.quantity)) ?? "0",
     value,
     cost,
     unrealized: cost === null || value === null ? null : gainOf(cost, value),

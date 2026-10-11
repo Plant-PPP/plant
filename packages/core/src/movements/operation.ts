@@ -1,11 +1,12 @@
 import {
+  DECIMAL_SCALE_DIGITS,
   type Exact,
   exactOf,
   minus,
   over,
   plus,
+  stored,
   times,
-  toDecimal,
 } from "@plant/shared";
 
 import type { Charge } from "./movement";
@@ -30,16 +31,16 @@ export function splitCharges(
         index === quantities.length - 1
           ? minus(amount, before)
           : share(amount, exactOf(quantity), total);
-      return part.n > 0n ? [{ ...charge, amount: toDecimal(part, 8) }] : [];
+      return part.n > 0n ? [{ ...charge, amount: stored(part) }] : [];
     }),
   );
 }
 
-const UNIT = 10n ** 8n;
+const UNIT = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 
 // Truncated toward zero, so the early parts never add up to more than the
 // charge.
 function share(amount: Exact, quantity: Exact, total: Exact): Exact {
   const exact = over(times(amount, quantity), total);
-  return { n: (exact.n * UNIT) / exact.d, d: UNIT };
+  return over({ n: (exact.n * UNIT) / exact.d, d: 1n }, { n: UNIT, d: 1n });
 }

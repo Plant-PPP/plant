@@ -1,6 +1,6 @@
 "use client";
 
-import { DENOMINATORS, type Denominator, type Position } from "@plant/core";
+import { type Denominator, type Position } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -9,11 +9,9 @@ import { useId } from "react";
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { DataTable } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
-import { unitParam } from "@/lib/holdings/assets-filter";
 import { HOLDING_CLASS_LABELS, classOf } from "@/lib/holdings/classes";
 import { gainLoss } from "@/lib/holdings/cost-totals";
 import { holdingName } from "@/lib/holdings/holding-name";
-import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type {
   MovementScope,
   MovementsInput,
@@ -25,7 +23,7 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import type { ScopeHrefs } from "./assets-setup";
 import { AssetsSummary } from "./assets-summary";
 import { useAssetsUrl } from "./assets-url";
-import { FilterSelect } from "./filter-select";
+import { UnitSelect } from "./filter-select";
 import { NameLink } from "./holding-cells";
 import { MovementsTable } from "./movements-table";
 import {
@@ -173,17 +171,12 @@ export function ScopePage({
               {holdingsCountText(rows.length)}
             </p>
           </div>
-          <FilterSelect
+          <UnitSelect
             id={`${id}-unit`}
-            label="Valuar en"
-            value={unit}
+            unit={unit}
+            referenceUnit={referenceUnit}
             pending={false}
-            options={(Object.keys(DENOMINATORS) as Denominator[]).map(
-              (each) => [each, UNIT_LABELS[each]] as const,
-            )}
-            onChange={(value) =>
-              url.set("unit", unitParam(value, referenceUnit))
-            }
+            onChange={(param) => url.set("unit", param)}
           />
         </div>
       </div>
