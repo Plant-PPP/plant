@@ -54,8 +54,8 @@ export const closeUnit = (
 // One month's close in the page's unit: its period's result, plus the result
 // of its sales (null when unknown in the unit), whether every holding had a
 // price at both ends and every movement could be expressed in the unit, and
-// when it was last recalculated after it closed. `endComplete` says the first
-// alone of its end, the net worth a page shows for today.
+// when it was last recalculated after it closed. `endComplete` is that check
+// for its end alone, the net worth a page shows for today.
 export type MonthClose = Month & {
   figures: PeriodResult;
   realized: string | null;

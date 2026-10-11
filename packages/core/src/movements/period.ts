@@ -18,7 +18,8 @@ const ONE: Exact = { n: 1n, d: 1n };
 
 // What a period made, in one unit, from what the holdings were worth at its
 // start and end and the cash flows between them:
-// - paidIn: purchases and adjustments in, at their cost before charges;
+// - paidIn: purchases, opening balances and adjustments in, at their cost
+//   before charges;
 // - proceeds: sales before charges, and adjustments out at the cost they
 //   take, so units an adjustment removes carry their unrealized gain into
 //   the market result of its period;
@@ -61,7 +62,21 @@ export function periodResult({
 }): PeriodResult {
   const start = exactOf(startValue);
   const end = exactOf(endValue);
-  const days = Math.max(1, daysBetween(from, to));
+  // Money first put to work inside the period works from the start of that
+  // day, so a first purchase on its last day counts for the whole of it.
+  const firstIn =
+    start.n === 0n
+      ? flows
+          .filter((flow) => flow.kind !== "income")
+          .map((flow) => flow.date)
+          .sort()[0]
+      : undefined;
+  const days = Math.max(
+    1,
+    firstIn === undefined
+      ? daysBetween(from, to)
+      : daysBetween(firstIn, to) + 1,
+  );
   let paidIn = ZERO;
   let proceeds = ZERO;
   let income = ZERO;
@@ -112,13 +127,15 @@ export function periodResult({
 }
 
 // Periods' returns one after another as one: each grows what the last left.
-// Null when one of them is unknown.
+// A period with no return of its own (nothing at work) adds nothing; null
+// when none of them has one.
 export function chainedShare(
   shares: readonly (string | null)[],
 ): string | null {
+  const known = shares.filter((share) => share !== null);
+  if (known.length === 0 && shares.length > 0) return null;
   let grown = ONE;
-  for (const share of shares) {
-    if (share === null) return null;
+  for (const share of known) {
     grown = times(grown, plus(ONE, exactOf(share)));
   }
   return stored(minus(grown, ONE));

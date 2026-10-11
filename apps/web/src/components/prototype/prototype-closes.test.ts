@@ -197,3 +197,56 @@ it("marks a month whose adjustment out an earlier write repriced", () => {
   expect(marked.recalculated.get("2026-03")).toBe(TODAY);
   expect(marked.recalculated.get("2026-05")).toBe(TODAY);
 });
+
+it("marks the months after an earlier purchase whose units it held", () => {
+  const meli = [...state.movements.values()]
+    .flat()
+    .find(
+      (each) =>
+        each.kind === "purchase" &&
+        each.date === "2025-09-27" &&
+        state.holdings.some(
+          (held) =>
+            held.holding.id === each.holding_id &&
+            held.holding.asset_class === "instrument" &&
+            held.holding.instrument_symbol === "MELI",
+        ),
+    )!;
+  const after = deleteOperation(state, meli.operation_id);
+  expect(after.result.ok).toBe(true);
+  const marked = markRecalculated(state, after.state, "usd_mep");
+  expect(marked.recalculated.get("2025-09")).toBe(TODAY);
+  expect(marked.recalculated.get("2025-12")).toBe(TODAY);
+});
+
+it("marks nothing when a purchase's units move between portfolios", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const [principal, largo] = state.portfolios;
+  const purchase = (parts: { portfolio_id: string; quantity: string }[]) => ({
+    kind: "purchase" as const,
+    source_connection_id: iol.id,
+    instrument_symbol: "AAPL",
+    date: "2026-06-15",
+    currency: "ARS",
+    price: "33333.33",
+    charges: [{ kind: "commission", label: null, amount: "7.77" }],
+    reference: null,
+    note: null,
+    parts,
+  });
+  const newId = () => crypto.randomUUID();
+  const split = writeOperation(
+    state,
+    purchase([
+      { portfolio_id: principal!.id, quantity: "1" },
+      { portfolio_id: largo!.id, quantity: "2" },
+    ]),
+    { operationId: "moved", newId },
+  ).state;
+  const whole = writeOperation(
+    split,
+    purchase([{ portfolio_id: principal!.id, quantity: "3" }]),
+    { operationId: "moved", replacing: true, newId },
+  ).state;
+  expect(markRecalculated(split, whole, "usd_mep").recalculated.size).toBe(0);
+});

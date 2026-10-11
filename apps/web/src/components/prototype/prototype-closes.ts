@@ -11,6 +11,7 @@ import {
   periodResult,
   quotesNeeded,
   snapshotOn,
+  takesUnits,
   type Trade,
   withManualPrices,
 } from "@plant/core";
@@ -21,6 +22,7 @@ import {
   plus,
   stored,
   sumOrNull,
+  toDecimal,
   ZERO,
 } from "@plant/shared";
 
@@ -73,6 +75,12 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
 // The holdings as they stood at the end of `date`: an instrument holding with
 // what its movements up to then left, and every other holding with today's
 // amount on every past day, until those holdings have a history.
+// A holding row holding `quantity` units, as it stood on some day.
+const rowAt = (row: HoldingRow, quantity: string): HoldingRow => ({
+  ...row,
+  holding: holdingSchema.parse({ ...row.holding, amount: quantity }),
+});
+
 function holdingsAt(
   state: PrototypeState,
   ledgers: readonly Ledger[],
@@ -90,13 +98,7 @@ function holdingsAt(
       last += 1;
     }
     const quantity = last < 0 ? "0" : ledger.quantities[last]!;
-    if (exactOf(quantity).n === 0n) return [];
-    return [
-      {
-        ...row,
-        holding: holdingSchema.parse({ ...row.holding, amount: quantity }),
-      },
-    ];
+    return exactOf(quantity).n === 0n ? [] : [rowAt(row, quantity)];
   });
 }
 
@@ -186,30 +188,25 @@ export function closesOf(
   // they were worth that day, so the gain they carry is not this month's;
   // its price stays their cost for what a sale makes. Unpriced that day, it
   // comes in at its cost.
-  const flowOf = (ledger: Ledger, index: number): CashFlow => {
+  const flowOf = (
+    ledger: Ledger,
+    index: number,
+  ): { flow: CashFlow; priced: boolean } => {
     const flow = ledger.flows![index]!;
     const movement = ledger.movements[index]!;
-    if (movement.kind !== "opening_balance") return flow;
-    const worth = valued(
-      [
-        {
-          ...ledger.row,
-          holding: holdingSchema.parse({
-            ...ledger.row.holding,
-            amount: movement.quantity,
-          }),
-        },
-      ],
-      movement.date,
-    );
+    if (movement.kind !== "opening_balance") return { flow, priced: true };
+    const worth = valued([rowAt(ledger.row, movement.quantity)], movement.date);
     return worth.complete
       ? {
-          ...flow,
-          amount: stored(
-            negated(plus(exactOf(worth.value), exactOf(flow.charges))),
-          ),
+          flow: {
+            ...flow,
+            amount: stored(
+              negated(plus(exactOf(worth.value), exactOf(flow.charges))),
+            ),
+          },
+          priced: true,
         }
-      : flow;
+      : { flow, priced: false };
   };
 
   const closes = monthsBetween(first, state.today).map((month) => {
@@ -218,13 +215,17 @@ export function closesOf(
     const inMonth = (date: string) => date > month.from && date <= month.to;
     const flows: CashFlow[] = [];
     const realized: (string | null)[] = [];
-    // Whether every movement of the month could be expressed in the unit.
+    // Whether every movement of the month could be expressed in the unit,
+    // and every opening balance priced on its day.
     let known = true;
     for (const ledger of ledgers) {
       ledger.movements.forEach((movement, index) => {
         if (!inMonth(movement.date)) return;
-        if (ledger.flows) flows.push(flowOf(ledger, index));
-        else known = false;
+        if (ledger.flows) {
+          const { flow, priced } = flowOf(ledger, index);
+          flows.push(flow);
+          if (!priced) known = false;
+        } else known = false;
         realized.push(ledger.realized[index]!);
       });
     }
@@ -319,20 +320,34 @@ export function monthDetail(
   return { close, lines };
 }
 
-// What a write to a month or an earlier one changes in its close: the
-// month's own movements, per account and instrument so moving units between
-// portfolios changes nothing, and what its flows and sales came to, which an
-// earlier purchase sets through the cost a sale or an adjustment out takes.
-// Its values move with every price and balance, so they are left out.
+// What a write to a month or an earlier one changes in its close, per
+// account and instrument so moving units between portfolios changes
+// nothing: the month's own movements, the units held at its end, and what
+// its flows and sales came to (to the cent, so how a cost splits across
+// portfolios does not show), which an earlier purchase sets through the cost
+// a sale or an adjustment out takes. Prices move every close, so they are
+// left out.
 function movedBy(state: PrototypeState, close: MonthClose): string {
   const own = new Map<string, Exact[]>();
-  for (const held of state.holdings) {
-    if (held.holding.asset_class !== "instrument") continue;
-    for (const movement of state.movements.get(held.holding.id) ?? []) {
-      if (movement.date <= close.from || movement.date > close.to) continue;
+  const held = new Map<string, Exact>();
+  for (const each of state.holdings) {
+    if (each.holding.asset_class !== "instrument") continue;
+    const at = JSON.stringify([each.accountId, each.holding.instrument_symbol]);
+    for (const movement of state.movements.get(each.holding.id) ?? []) {
+      if (movement.date > close.to) continue;
+      if ("quantity" in movement) {
+        const units = exactOf(movement.quantity);
+        held.set(
+          at,
+          plus(
+            held.get(at) ?? ZERO,
+            takesUnits(movement) ? negated(units) : units,
+          ),
+        );
+      }
+      if (movement.date <= close.from) continue;
       const key = JSON.stringify([
-        held.accountId,
-        held.holding.instrument_symbol,
+        at,
         movement.operation_id,
         movement.kind,
         movement.date,
@@ -350,15 +365,18 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
       ]);
     }
   }
+  const cents = (value: string | null) =>
+    value === null ? null : toDecimal(exactOf(value), 2);
   return JSON.stringify([
     [...own]
       .map(([key, [size, charges]]) => [key, stored(size!), stored(charges!)])
       .sort(),
-    close.figures.paidIn,
-    close.figures.proceeds,
-    close.figures.income,
-    close.figures.charges,
-    close.realized,
+    [...held].map(([key, units]) => [key, stored(units)]).sort(),
+    cents(close.figures.paidIn),
+    cents(close.figures.proceeds),
+    cents(close.figures.income),
+    cents(close.figures.charges),
+    cents(close.realized),
   ]);
 }
 
