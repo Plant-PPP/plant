@@ -49,7 +49,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - **PostgREST** (`security-tests/src/portfolios.pentest.test.ts`): the shared cross-user cases, a PATCH and an archive of another user's portfolios that change nothing, moving one's own row to another user, archiving one's last active portfolio (409, `PT409`, the hint) and archiving the last two at once, which fails without the lock, a duplicate name in another case (409, `23505`), `DELETE` and the server's columns refused.
 
 - **The page** (`lib/supabase/keyset.test.ts`, `lib/portfolio-setup/read.test.ts`): a cursor carrying a PostgREST filter, a timestamp Postgres refuses or a non-uuid id is refused, and the read then adds no `or` filter and logs `invalid_cursor`.
-- **Server actions** (`app/(app)/accounts/actions.test.ts`): the filters by user and id, the zod refusals before any client, the mapping of every refusal, the session's redirect propagating, an update matching no row or two, and a log line with no name or PostgREST text on every outcome.
+- **Server actions** (`app/(app)/(data)/accounts/actions.test.ts`): the filters by user and id, the zod refusals before any client, the mapping of every refusal, the session's redirect propagating, an update matching no row or two, and a log line with no name or PostgREST text on every outcome.
 
 ## Residual risk
 

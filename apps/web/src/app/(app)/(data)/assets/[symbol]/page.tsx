@@ -21,7 +21,7 @@ export default async function InstrumentPage({
   const { symbol } = await params;
   return (
     <PrototypeInstrument
-      symbol={decodeURIComponent(symbol).toUpperCase()}
+      symbol={symbol.toUpperCase()}
       params={await searchParams}
     />
   );

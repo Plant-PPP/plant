@@ -7,7 +7,7 @@ import {
   createHolding,
   restoreHolding,
   updateHolding,
-} from "@/app/(app)/assets/actions";
+} from "@/app/(app)/(data)/assets/actions";
 import { AssetsSetup } from "@/components/holdings/assets-setup";
 import { PrototypeAssets } from "@/components/prototype/prototype-assets";
 import { getSessionClaims } from "@/lib/auth/session-claims";

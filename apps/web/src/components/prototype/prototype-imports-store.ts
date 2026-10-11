@@ -1,5 +1,11 @@
-import { snapshotOn } from "@plant/core";
-import { compareDecimals, exactOf, plus, toDecimal } from "@plant/shared";
+import { snapshotOn, withManualPrices } from "@plant/core";
+import {
+  compareDecimals,
+  exactOf,
+  minus as minusExact,
+  plus,
+  toDecimal,
+} from "@plant/shared";
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
@@ -19,7 +25,7 @@ import {
 const READABLE = /\.(pdf|png|jpe?g|heic|webp|csv|xlsx?)$/i;
 
 const minus = (a: string, b: string) =>
-  toDecimal(plus(exactOf(a), { ...exactOf(b), n: -exactOf(b).n }), 8);
+  toDecimal(minusExact(exactOf(a), exactOf(b)), 8);
 
 const withImport = (
   state: PrototypeState,
@@ -102,11 +108,17 @@ export function finishReading(
       error: "No encontramos tenencias en el documento.",
     }));
   }
-  const { prices } = snapshotOn(state.quotes, state.today, {
-    fxKinds: [],
-    symbols: state.instruments.map(({ symbol }) => symbol),
-  }).snapshot;
+  // Priced as the page values them: the feeds, else the user's manual price.
+  const { prices } = withManualPrices(
+    snapshotOn(state.quotes, state.today, {
+      fxKinds: [],
+      symbols: state.instruments.map(({ symbol }) => symbol),
+    }).snapshot,
+    state.manualPrices,
+  ).snapshot;
   const priceOf = (symbol: string) => prices[symbol];
+  const currencyOf = (symbol: string) =>
+    state.instruments.find((each) => each.symbol === symbol)?.currency;
   const symbols = [...held.keys()].sort();
   const truth: ImportRow[] = symbols.map((symbol, index) => {
     const quantity = held.get(symbol)!;
@@ -122,7 +134,7 @@ export function finishReading(
       symbol,
       quantity: changed,
       price: quote?.price ?? null,
-      currency: quote?.currency ?? "ARS",
+      currency: currencyOf(symbol)!,
       confidence: index === 2 ? "medium" : "high",
       source: `Página ${1 + Math.floor(index / 3)}`,
       discarded: false,
@@ -189,33 +201,60 @@ export function confirmImport(
   const held = heldIn(state, account.id);
   for (const row of rows) {
     if (row.discarded) continue;
-    const before = held.get(row.symbol);
-    const diff = minus(row.quantity, before ?? "0");
+    const instrument = state.instruments.find(
+      (each) => each.symbol === row.symbol,
+    );
+    if (!instrument) return { state, result: { ok: false, code: "not_found" } };
+    const diff = minus(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
-    // A new instrument goes to the account's default portfolio; a difference
-    // to the portfolio holding the most of it.
-    const holding = holdingsView(next)
+    // The account's holdings of it, largest first.
+    const holdings = holdingsView(next)
       .active.filter(
         (each) =>
           each.account.id === account.id &&
           each.holding.asset_class === "instrument" &&
           each.holding.instrument_symbol === row.symbol,
       )
-      .sort((a, b) => compareDecimals(b.holding.amount, a.holding.amount))[0];
-    const portfolioId = holding?.portfolio.id ?? account.portfolio.id;
-    const quantity = order > 0 ? diff : minus("0", diff);
+      .sort((a, b) => compareDecimals(b.holding.amount, a.holding.amount));
+    // More units come in at the price read, to the portfolio holding the
+    // most, or the account's default for a new instrument; fewer go out of
+    // the largest holdings first.
+    let parts: { portfolio_id: string; quantity: string }[];
+    if (order > 0) {
+      if (row.price === null) {
+        return { state, result: { ok: false, code: "invalid" } };
+      }
+      parts = [
+        {
+          portfolio_id: holdings[0]?.portfolio.id ?? account.portfolio.id,
+          quantity: diff,
+        },
+      ];
+    } else {
+      let left = minus("0", diff);
+      parts = [];
+      for (const each of holdings) {
+        if (compareDecimals(left, "0") <= 0) break;
+        const taken =
+          compareDecimals(each.holding.amount, left) < 0
+            ? each.holding.amount
+            : left;
+        parts.push({ portfolio_id: each.portfolio.id, quantity: taken });
+        left = minus(left, taken);
+      }
+    }
     const written = writeOperation(
       next,
       {
-        kind: holding ? "adjustment" : "opening_balance",
-        ...(holding && { direction: order > 0 ? "in" : "out" }),
+        kind: holdings.length > 0 ? "adjustment" : "opening_balance",
+        ...(holdings.length > 0 && { direction: order > 0 ? "in" : "out" }),
         source_connection_id: account.id,
         instrument_symbol: row.symbol,
         date: item.documentDate ?? state.today,
-        currency: row.currency,
-        price: order > 0 ? (row.price ?? "0") : "0",
-        parts: [{ portfolio_id: portfolioId, quantity }],
+        currency: instrument.currency,
+        price: order > 0 ? row.price : "0",
+        parts,
         charges: [],
         reference: null,
         note: `Carga de ${item.fileName}`.slice(0, 200),

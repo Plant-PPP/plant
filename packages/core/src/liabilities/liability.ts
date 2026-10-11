@@ -1,10 +1,8 @@
 import {
-  compareExact,
   currencySchema,
   type Exact,
   exactOf,
   fieldsPassed,
-  nonNegativeDecimalSchema,
   plus,
   positiveDecimalSchema,
   times,
@@ -16,9 +14,9 @@ import { SYMBOL_PATTERN, type QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import { DENOMINATORS, type Denominator } from "../valuation/denominators";
 import {
+  annualRate,
   holdingDateSchema,
   instrumentValue,
-  MAX_ANNUAL_RATE,
 } from "../valuation/holding";
 import type { Missing } from "../valuation/snapshot";
 
@@ -49,11 +47,7 @@ export const liabilityFields = {
   instrument_symbol: z.string().regex(SYMBOL_PATTERN).nullable(),
   balance: positiveDecimalSchema,
   installment: positiveDecimalSchema.nullable(),
-  annual_rate: nonNegativeDecimalSchema
-    .refine(
-      (rate) => compareExact(exactOf(rate), exactOf(MAX_ANNUAL_RATE)) <= 0,
-    )
-    .nullable(),
+  annual_rate: annualRate.nullable(),
   installments_left: z.number().int().positive().max(600).nullable(),
   next_due_on: holdingDateSchema.nullable(),
   matures_on: holdingDateSchema.nullable(),
@@ -110,6 +104,7 @@ export function liabilityValue(
     if ("missing" in one) return one;
     return { value: times(one.value.amount, balance), asOf: one.asOf };
   }
+  if (debt.currency === null) return { missing: "currency" };
   let amount = balance;
   let asOf = snapshot.date;
   if (debt.uva) {
@@ -119,7 +114,7 @@ export function liabilityValue(
     asOf = uva.date;
   }
   const shown = express(
-    { amount, currency: debt.currency ?? "ARS" },
+    { amount, currency: debt.currency },
     asOf,
     view,
     snapshot,

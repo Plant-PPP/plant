@@ -1,5 +1,3 @@
-jest.mock("@/app/(app)/accounts/actions", () => ({}));
-
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
 import {
   SELF_HOLDER,

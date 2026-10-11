@@ -4,19 +4,18 @@ import {
   chainedShare,
   compareMovements,
   type Denominator,
+  EMPTY_POSITION,
   holdingSchema,
-  isIncome,
   isTrade,
   type Movement,
   type QuoteSnapshot,
   periodResult,
   quotesNeeded,
   snapshotOn,
-  takesUnits,
   valueLiabilities,
   withManualPrices,
 } from "@plant/core";
-import { exactOf, plus, toDecimal } from "@plant/shared";
+import { exactOf, minus, sumOrNull, toDecimal } from "@plant/shared";
 
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
@@ -30,17 +29,15 @@ import {
 
 import {
   allRows,
+  lineOf,
   operationOf,
   type PrototypeState,
   stepsOf,
 } from "./prototype-store";
 
-const sum = (values: readonly (string | null)[]): string | null =>
-  values.includes(null)
-    ? null
-    : toDecimal(plus(...values.map((value) => exactOf(value!))), 8);
-const minus = (a: string, b: string) =>
-  toDecimal(plus(exactOf(a), { ...exactOf(b), n: -exactOf(b).n }), 8);
+const sum = (values: readonly (string | null)[]) => sumOrNull(values, 8);
+const difference = (a: string, b: string) =>
+  toDecimal(minus(exactOf(a), exactOf(b)), 8);
 
 type Ledger = {
   row: HoldingRow;
@@ -67,7 +64,7 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
           const now = step.position.money;
           const was = index === 0 ? null : steps[index - 1]!.position.money;
           if (!now) return null;
-          return minus(now.charges, was?.charges ?? "0");
+          return difference(now.charges, was?.charges ?? "0");
         }),
         realized: steps.map((step) =>
           step.sale === undefined ? "0" : (step.sale?.result ?? null),
@@ -78,7 +75,8 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
 }
 
 // The holdings as they stood at the end of `date`: an instrument holding with
-// what its movements up to then left, the rest as they are.
+// what its movements up to then left, and every other holding with today's
+// amount on every past day, until those holdings have a history.
 function holdingsAt(
   state: PrototypeState,
   ledgers: readonly Ledger[],
@@ -87,9 +85,7 @@ function holdingsAt(
   const byId = new Map(ledgers.map((ledger) => [ledger.row.id, ledger]));
   return allRows(state).flatMap((row) => {
     const ledger = byId.get(row.id);
-    if (!ledger) {
-      return row.holding.asset_class === "instrument" ? [] : [row];
-    }
+    if (!ledger) return [row];
     let last = -1;
     while (
       last + 1 < ledger.movements.length &&
@@ -193,7 +189,7 @@ export function closesOf(
       referenceDollar: state.referenceDollar,
     });
     return {
-      value: minus(total.value, owed.total),
+      value: difference(total.value, owed.total),
       complete: total.complete && owed.complete,
     };
   };
@@ -284,23 +280,14 @@ export function monthDetail(
   for (const ledger of ledgersOf(state, unit)) {
     ledger.movements.forEach((movement, index) => {
       if (movement.date <= close.from || movement.date > close.to) return;
-      const charges = ledger.charges[index] ?? null;
       const steps = stepsOf(state, ledger.row.id, unit);
-      const now = steps[index]!.position.money;
-      const was = index === 0 ? null : steps[index - 1]!.position.money;
-      const cost =
-        !now || (index > 0 && !was)
-          ? null
-          : isIncome(movement.kind)
-            ? minus(now.income, was?.income ?? "0")
-            : takesUnits(movement)
-              ? minus(was?.cost ?? "0", now.cost)
-              : minus(now.cost, was?.cost ?? "0");
       lines.push({
-        movement,
-        cost,
-        charges,
-        operation: operationOf(state, movement.operation_id)!,
+        ...lineOf(
+          movement,
+          index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
+          steps[index]!,
+          operationOf(state, movement.operation_id)!,
+        ),
         holdingName: `${holdingName(ledger.row.holding, names)} · ${ledger.row.account.institution}`,
       });
     });
@@ -309,24 +296,34 @@ export function monthDetail(
   return { close, lines };
 }
 
-// The closed months whose figures a write changed, marked as recalculated
+// What a month's movements made, the part of a close a write to that month
+// or an earlier one changes. Its values move with every price and every
+// balance, so they are left out.
+const movedBy = (close: MonthClose) =>
+  JSON.stringify([
+    close.figures.paidIn,
+    close.figures.proceeds,
+    close.figures.income,
+    close.charges,
+    close.realized,
+  ]);
+
+// The closed months whose movements a write changed, marked as recalculated
 // today; the month in progress is never marked.
 export function markRecalculated(
   before: PrototypeState,
   after: PrototypeState,
   unit: Denominator,
 ): PrototypeState {
+  if (before.movements === after.movements) return after;
   const was = new Map(
-    closesOf(before, unit).map((each) => [
-      each.period,
-      JSON.stringify(each.figures),
-    ]),
+    closesOf(before, unit).map((each) => [each.period, movedBy(each)]),
   );
   const changed = closesOf(after, unit).filter(
     (each) =>
       !each.open &&
       was.has(each.period) &&
-      was.get(each.period) !== JSON.stringify(each.figures),
+      was.get(each.period) !== movedBy(each),
   );
   if (changed.length === 0) return after;
   const recalculated = new Map(after.recalculated);

@@ -22,13 +22,21 @@ it("gives one part every charge whole", () => {
   expect(splitCharges(charges, ["0.5"])).toEqual([charges]);
 });
 
-it("leaves out a share that rounds to nothing", () => {
+it("leaves out a share that is cut to nothing", () => {
   const charges = [
     { kind: "commission" as const, label: null, amount: "0.00000001" },
   ];
-  // Half of it rounds up for the first part, which leaves the last none.
+  // Half of it is cut to 0 for the first part; the last takes it whole.
   expect(splitCharges(charges, ["1", "1"])).toEqual([
-    [{ kind: "commission", label: null, amount: "0.00000001" }],
     [],
+    [{ kind: "commission", label: null, amount: "0.00000001" }],
   ]);
+});
+
+it("never lets the early parts add up to more than the charge", () => {
+  const charges = [
+    { kind: "commission" as const, label: null, amount: "0.00000002" },
+  ];
+  const parts = splitCharges(charges, ["1", "1", "1", "1"]).flat();
+  expect(parts.map((each) => each.amount)).toEqual(["0.00000002"]);
 });

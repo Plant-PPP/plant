@@ -98,15 +98,19 @@ export function readTotals(
   }));
 }
 
-// Whether what was read matches the document's printed total in a currency,
-// to the cent.
-export const totalsMatch = (
+// Whether what was read matches the totals the document prints, to the cent:
+// the same currencies, each with the same amount; "none" when the document
+// prints no total to compare against.
+export function totalsMatch(
   read: readonly { currency: Currency; amount: string }[],
   printed: readonly { currency: Currency; amount: string }[],
-): boolean =>
-  printed.every((total) => {
+): boolean | "none" {
+  if (printed.length === 0) return "none";
+  if (read.length !== printed.length) return false;
+  return printed.every((total) => {
     const mine = read.find((each) => each.currency === total.currency);
     return (
       mine !== undefined && compareDecimals(mine.amount, total.amount) === 0
     );
   });
+}

@@ -3,18 +3,18 @@ import {
   daysBetween,
   type Exact,
   exactOf,
+  minus,
+  negated,
   over,
   plus,
   times,
   toDecimal,
+  ZERO,
 } from "@plant/shared";
 
 import type { CashFlow } from "./returns";
 
-const ZERO: Exact = { n: 0n, d: 1n };
 const ONE: Exact = { n: 1n, d: 1n };
-const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
-const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
 const text = (x: Exact): string => toDecimal(x, 8);
 
 // What a period made, in one unit, from what the holdings were worth at its

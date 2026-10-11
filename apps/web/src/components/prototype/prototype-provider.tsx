@@ -5,7 +5,13 @@ import {
   referenceUnit,
   withManualPrices,
 } from "@plant/core";
-import { createContext, type ReactNode, useContext } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+} from "react";
 
 import type {
   HoldingActions,
@@ -84,6 +90,22 @@ export function PrototypeProvider({
     latest,
     write: writeState,
   } = usePrototypeStore(() => initialState(buildFixtures(today), today));
+  // The simulated reading's timers, cleared when the pages go away.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
+  const later = (run: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      run();
+    }, ms);
+    timers.current.add(timer);
+  };
   // Every write marks the closed months it changed as recalculated.
   const write = <R,>(change: (state: PrototypeState) => Write<R>) =>
     writeState((before) => {
@@ -182,7 +204,7 @@ export function PrototypeProvider({
           void write((s) =>
             imports.addImport(s, { id, fileName: file.name, accountId }),
           );
-          setTimeout(
+          later(
             () =>
               void write((s) => ({
                 state: imports.startReading(s, id),
@@ -190,7 +212,7 @@ export function PrototypeProvider({
               })),
             700 + index * 500,
           );
-          setTimeout(
+          later(
             () =>
               void write((s) => ({
                 state: imports.finishReading(s, id),

@@ -21,13 +21,6 @@ export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   other: "Otro",
 };
 
-// A class as a share of the whole names its holdings together.
-export const ASSET_CLASS_GROUP_LABELS: Record<AssetClass, string> = {
-  ...ASSET_CLASS_LABELS,
-  real_estate: "Inmuebles",
-  other: "Otros",
-};
-
 // Every class, in the order the labels list them.
 export const ASSET_CLASSES = Object.keys(ASSET_CLASS_LABELS) as AssetClass[];
 

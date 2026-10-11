@@ -72,3 +72,44 @@ it("leaves the account as the reviewed rows say", () => {
     ).toBe(0);
   }
 });
+
+it("takes a decrease out of every portfolio that holds it, largest first", () => {
+  const binance = state.accounts.find((row) => row.institution === "Binance")!;
+  const read = finishReading(
+    addImport(state, {
+      id: "i2",
+      fileName: "binance.png",
+      accountId: binance.id,
+    }).state,
+    "i2",
+  );
+  const rows = read.imports[0]!.rows.map((row) =>
+    row.symbol === "ETH"
+      ? { ...row, quantity: "0.2", confidence: "high" as const }
+      : { ...row, discarded: true },
+  );
+  const confirmed = confirmImport(read, "i2", rows, newId);
+  expect(confirmed.result).toEqual({ ok: true, id: "i2" });
+  const eth = holdingsView(confirmed.state).active.filter(
+    (each) =>
+      each.account.id === binance.id &&
+      each.holding.asset_class === "instrument" &&
+      each.holding.instrument_symbol === "ETH",
+  );
+  expect(eth.map((each) => each.holding.amount)).toEqual(["0.2"]);
+});
+
+it("prices what the feeds do not price from the user's manual price", () => {
+  const cocos = state.accounts.find((row) => row.institution === "Cocos")!;
+  const read = finishReading(
+    addImport(state, {
+      id: "i3",
+      fileName: "cocos.pdf",
+      accountId: cocos.id,
+    }).state,
+    "i3",
+  );
+  const ko = read.imports[0]!.rows.find((row) => row.symbol === "KO")!;
+  expect(ko.price).not.toBeNull();
+  expect(ko.currency).toBe("ARS");
+});

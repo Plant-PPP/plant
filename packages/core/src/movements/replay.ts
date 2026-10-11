@@ -2,11 +2,13 @@ import {
   compareExact,
   type Exact,
   exactOf,
+  minus,
   over,
   plus,
   roundedTo,
   times,
   toDecimal,
+  ZERO,
 } from "@plant/shared";
 import type { QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
@@ -16,9 +18,6 @@ import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
 // The digits a position keeps between movements: its stored precision.
 const STATE_DIGITS = 8;
 
-const ZERO: Exact = { n: 0n, d: 1n };
-const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
-const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
 const kept = (x: Exact): Exact => roundedTo(x, STATE_DIGITS);
 const text = (x: Exact): string => toDecimal(x, STATE_DIGITS);
 
