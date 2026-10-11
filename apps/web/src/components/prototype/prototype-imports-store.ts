@@ -1,11 +1,5 @@
 import { snapshotOn, withManualPrices } from "@plant/core";
-import {
-  compareDecimals,
-  exactOf,
-  minus as minusExact,
-  plus,
-  toDecimal,
-} from "@plant/shared";
+import { compareDecimals, exactOf, plus, toDecimal } from "@plant/shared";
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
@@ -15,6 +9,8 @@ import {
 } from "@/lib/imports/review";
 
 import {
+  difference,
+  holdingIn,
   holdingsView,
   type PrototypeState,
   type Write,
@@ -23,9 +19,6 @@ import {
 
 // The files the reading takes: statements and screenshots.
 const READABLE = /\.(pdf|png|jpe?g|heic|webp|csv|xlsx?)$/i;
-
-const minus = (a: string, b: string) =>
-  toDecimal(minusExact(exactOf(a), exactOf(b)), 8);
 
 const withImport = (
   state: PrototypeState,
@@ -65,7 +58,10 @@ export const startReading = (state: PrototypeState, id: string) =>
   withImport(state, id, (item) => ({ ...item, status: "reading" }));
 
 // Each instrument the account holds, summed across its portfolios.
-function heldIn(state: PrototypeState, accountId: string): Map<string, string> {
+export function heldIn(
+  state: PrototypeState,
+  accountId: string,
+): Map<string, string> {
   const held = new Map<string, string>();
   for (const row of holdingsView(state).active) {
     if (row.account.id !== accountId) continue;
@@ -126,7 +122,7 @@ export function finishReading(
       index === 0
         ? toDecimal(plus(exactOf(quantity), exactOf("5")), 8)
         : index === 2 && compareDecimals(quantity, "1") > 0
-          ? minus(quantity, "1")
+          ? difference(quantity, "1")
           : quantity;
     const quote = priceOf(symbol);
     return {
@@ -197,15 +193,20 @@ export function confirmImport(
   if (!item || !account || item.status !== "ready") {
     return { state, result: { ok: false, code: "not_found" } };
   }
+  const kept = rows.filter((row) => !row.discarded);
+  // Each row is weighed against what the account held before, so an
+  // instrument listed twice would be counted twice.
+  if (new Set(kept.map((row) => row.symbol)).size !== kept.length) {
+    return { state, result: { ok: false, code: "invalid" } };
+  }
   let next = state;
   const held = heldIn(state, account.id);
-  for (const row of rows) {
-    if (row.discarded) continue;
+  for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,
     );
     if (!instrument) return { state, result: { ok: false, code: "not_found" } };
-    const diff = minus(row.quantity, held.get(row.symbol) ?? "0");
+    const diff = difference(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
     // The account's holdings of it, largest first.
@@ -222,7 +223,7 @@ export function confirmImport(
     // the largest holdings first.
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
-      if (row.price === null) {
+      if (row.price === null || compareDecimals(row.price, "0") <= 0) {
         return { state, result: { ok: false, code: "invalid" } };
       }
       parts = [
@@ -232,7 +233,7 @@ export function confirmImport(
         },
       ];
     } else {
-      let left = minus("0", diff);
+      let left = difference("0", diff);
       parts = [];
       for (const each of holdings) {
         if (compareDecimals(left, "0") <= 0) break;
@@ -241,14 +242,20 @@ export function confirmImport(
             ? each.holding.amount
             : left;
         parts.push({ portfolio_id: each.portfolio.id, quantity: taken });
-        left = minus(left, taken);
+        left = difference(left, taken);
       }
     }
+    // A portfolio that held it before, even down to zero, adjusts; one that
+    // never did opens with a balance.
+    const opens =
+      order > 0 &&
+      holdingIn(next, account.id, row.symbol, parts[0]!.portfolio_id) ===
+        undefined;
     const written = writeOperation(
       next,
       {
-        kind: holdings.length > 0 ? "adjustment" : "opening_balance",
-        ...(holdings.length > 0 && { direction: order > 0 ? "in" : "out" }),
+        kind: opens ? "opening_balance" : "adjustment",
+        ...(!opens && { direction: order > 0 ? "in" : "out" }),
         source_connection_id: account.id,
         instrument_symbol: row.symbol,
         date: item.documentDate ?? state.today,

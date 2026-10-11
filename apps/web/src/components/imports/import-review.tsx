@@ -1,5 +1,6 @@
 "use client";
 
+import { exactUnitPrice, type InstrumentType, quotedPrice } from "@plant/core";
 import { exactOf, times, toDecimal } from "@plant/shared";
 import {
   ArrowLeft,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
+import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
@@ -49,7 +51,6 @@ export type ReviewActions = {
   confirm: (id: string, rows: ImportRow[]) => Promise<MovementResult>;
 };
 
-// A row as the user edits it: the quantity and price as typed.
 // A row as the user edits it: the quantity and price as typed, and whether
 // the user added it, so they choose its instrument.
 type EditedRow = ImportRow & {
@@ -58,12 +59,28 @@ type EditedRow = ImportRow & {
   added: boolean;
 };
 
-const edited = (row: ImportRow, added = false): EditedRow => ({
+// A row's price is per unit; the user reads and types it as the market
+// quotes it, a bond's per 100 nominal.
+const edited = (
+  row: ImportRow,
+  type: InstrumentType | undefined,
+  added = false,
+): EditedRow => ({
   ...row,
   quantityText: amountInput(row.quantity),
-  priceText: row.price === null ? "" : amountInput(row.price),
+  priceText:
+    row.price === null
+      ? ""
+      : amountInput(type ? quotedPrice(type, row.price) : row.price),
   added,
 });
+
+// A typed quote as the price of one unit, or null where it is not a number.
+function typedPrice(text: string, type: InstrumentType | undefined) {
+  const quoted = parseAmountInput(text);
+  if (quoted === null || !type) return quoted;
+  return exactUnitPrice(type, quoted);
+}
 
 const CHANGE_TEXT = {
   new: "Nueva",
@@ -94,16 +111,21 @@ export function ImportReview({
   actions: ReviewActions;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState(() => item.rows.map((row) => edited(row)));
+  const names = new Map(instruments.map((each) => [each.symbol, each.name]));
+  const types = new Map(instruments.map((each) => [each.symbol, each.type]));
+  const [rows, setRows] = useState(() =>
+    item.rows.map((row) => edited(row, types.get(row.symbol))),
+  );
   const [alert, setAlert] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const names = new Map(instruments.map((each) => [each.symbol, each.name]));
 
   // The rows as they would be saved; null where a typed value is not a number.
   const parsed = rows.map((row) => {
     const quantity = parseAmountInput(row.quantityText);
     const price =
-      row.priceText.trim() === "" ? null : parseAmountInput(row.priceText);
+      row.priceText.trim() === ""
+        ? null
+        : typedPrice(row.priceText, types.get(row.symbol));
     return { row, quantity, price };
   });
   // A row that adds units to the account needs their price.
@@ -116,13 +138,23 @@ export function ImportReview({
   };
   const priceInvalid = ({ row, quantity, price }: (typeof parsed)[number]) =>
     !row.discarded &&
-    (row.priceText.trim() === "" ? addsUnits(row, quantity) : price === null);
+    (price === null
+      ? row.priceText.trim() !== "" || addsUnits(row, quantity)
+      : exactOf(price).n === 0n && addsUnits(row, quantity));
+  // The instruments the rows kept already list: one row each.
+  const listed = (except: string) =>
+    new Set(
+      rows
+        .filter((row) => !row.discarded && row.id !== except)
+        .map((row) => row.symbol),
+    );
   const valid = parsed.every(
     (each) =>
       each.row.discarded ||
       (each.quantity !== null &&
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
+        !listed(each.row.id).has(each.row.symbol) &&
         !priceInvalid(each)),
   );
   const finalRows: ImportRow[] = parsed.map(({ row, quantity, price }) => ({
@@ -149,7 +181,7 @@ export function ImportReview({
   function confirm() {
     if (!valid) {
       setAlert(
-        "Revisá las filas: cada una necesita un activo, una cantidad mayor a 0 y, si suma unidades, su precio.",
+        "Revisá las filas: cada una necesita un activo que no se repita, una cantidad mayor a 0 y, si suma unidades, su precio.",
       );
       return;
     }
@@ -214,19 +246,26 @@ export function ImportReview({
           <dt className="text-muted-foreground text-xs">Moneda</dt>
           <dt className="text-muted-foreground text-xs">Leído</dt>
           <dt className="text-muted-foreground text-xs">Documento</dt>
-          {item.documentTotals.map((total) => (
-            <div key={total.currency} className="contents">
-              <dd>{total.currency}</dd>
-              <dd>
-                {formatAmount(
-                  totals.find((each) => each.currency === total.currency)
-                    ?.amount ?? "0",
-                  total.currency,
-                )}
-              </dd>
-              <dd>{formatAmount(total.amount, total.currency)}</dd>
-            </div>
-          ))}
+          {[
+            ...new Set(
+              [...item.documentTotals, ...totals].map(
+                ({ currency }) => currency,
+              ),
+            ),
+          ].map((currency) => {
+            const amountIn = (list: typeof totals) =>
+              formatAmount(
+                list.find((each) => each.currency === currency)?.amount ?? "0",
+                currency,
+              );
+            return (
+              <div key={currency} className="contents">
+                <dd>{currency}</dd>
+                <dd>{amountIn(totals)}</dd>
+                <dd>{amountIn(item.documentTotals)}</dd>
+              </div>
+            );
+          })}
         </dl>
       </section>
 
@@ -260,6 +299,7 @@ export function ImportReview({
                     source: "Agregada por vos",
                     discarded: false,
                   },
+                  undefined,
                   true,
                 ),
               ])
@@ -272,6 +312,7 @@ export function ImportReview({
         <ul className="grid gap-2">
           {rows.map((row, index) => {
             const { quantity, price } = parsed[index]!;
+            const type = types.get(row.symbol);
             const effect = rowChange(
               { quantity: quantity ?? "0", discarded: row.discarded },
               held.get(row.symbol),
@@ -312,11 +353,13 @@ export function ImportReview({
                         <SelectValue placeholder="Elegí un activo" />
                       </SelectTrigger>
                       <SelectContent>
-                        {instruments.map((each) => (
-                          <SelectItem key={each.symbol} value={each.symbol}>
-                            {`${each.symbol} · ${each.name}`}
-                          </SelectItem>
-                        ))}
+                        {instruments
+                          .filter((each) => !listed(row.id).has(each.symbol))
+                          .map((each) => (
+                            <SelectItem key={each.symbol} value={each.symbol}>
+                              {`${each.symbol} · ${each.name}`}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   ) : (
@@ -352,7 +395,9 @@ export function ImportReview({
                 </label>
                 <label className="grid gap-1 text-xs">
                   <span className="text-muted-foreground">
-                    {`Precio (${row.currency})`}
+                    {type
+                      ? `Precio ${priceBasisLabel(type)} (${row.currency})`
+                      : `Precio (${row.currency})`}
                     {value && (
                       <span className="text-foreground ml-1 tabular-nums">
                         {`· ${formatAmount(value, row.currency)}`}
