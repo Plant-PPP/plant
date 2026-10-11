@@ -304,9 +304,9 @@ export function salesOf(
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
 
-// A movement's line from its step and the position before it: the cost its
-// units added or took out (a sale's being that of the units sold), or what an
-// income paid; and its charges.
+// A movement's line from its step and the position before it: its amount
+// (the cost its units added or took out, a sale's gross, or what an income
+// paid) and its charges.
 export function lineOf(
   movement: Movement,
   before: Position,
@@ -315,21 +315,24 @@ export function lineOf(
 ): MovementLine {
   const was = before.money;
   const now = step.position.money;
-  if (!was || !now) return { movement, cost: null, charges: null, operation };
+  if (!was || !now) return { movement, amount: null, charges: null, operation };
   const charges = difference(now.charges, was.charges);
   if (isIncome(movement.kind)) {
     return {
       movement,
-      cost: difference(now.income, was.income),
+      amount: difference(now.income, was.income),
       charges,
       operation,
     };
   }
   return {
     movement,
-    cost: takesUnits(movement)
-      ? difference(was.cost, now.cost)
-      : difference(now.cost, was.cost),
+    amount:
+      movement.kind === "sale"
+        ? (step.sale?.gross ?? null)
+        : takesUnits(movement)
+          ? difference(was.cost, now.cost)
+          : difference(now.cost, was.cost),
     charges,
     operation,
   };
@@ -904,6 +907,17 @@ export function deleteHolding(
 ): Write<WriteResult> {
   if (!state.holdings.some((each) => each.holding.id === id)) {
     return refused(state, { ok: false, code: "not_found" });
+  }
+  // A holding with no movements leaves the movements as they were, so no
+  // close counts its delete as a change to what moved.
+  if (!state.movements.has(id)) {
+    return {
+      state: {
+        ...state,
+        holdings: state.holdings.filter((each) => each.holding.id !== id),
+      },
+      result: { ok: true, id },
+    };
   }
   const movements = new Map(state.movements);
   movements.delete(id);

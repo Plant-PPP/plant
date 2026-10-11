@@ -47,6 +47,7 @@ import {
   toUpdate,
 } from "./holding-fields";
 import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
+import { instrumentLabel } from "@/lib/holdings/holding-name";
 
 // What the amount is, by class.
 const AMOUNT_LABELS: Record<AssetClass, string> = {
@@ -318,7 +319,7 @@ export function HoldingDialog({
                 <SelectContent>
                   {instruments.map((each) => (
                     <SelectItem key={each.symbol} value={each.symbol}>
-                      {`${each.symbol} · ${each.name}`}
+                      {instrumentLabel(each.symbol, each.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
