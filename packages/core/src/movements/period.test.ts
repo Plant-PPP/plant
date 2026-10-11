@@ -93,18 +93,21 @@ it("has no return when something was made out of nothing at work", () => {
 
 it("chains monthly returns into a yearly one", () => {
   expect(chainedShare(["0.1", "-0.05"])).toBe("0.045");
-  expect(chainedShare(["0.1", null])).toBeNull();
+  // A month with nothing at work adds nothing to the year.
+  expect(chainedShare(["0.1", null])).toBe("0.1");
+  expect(chainedShare([null])).toBeNull();
   expect(chainedShare([])).toBe("0");
 });
 
-it("weighs a flow on the last day, so a first purchase there has a return", () => {
+it("counts a first purchase from the start of its day", () => {
+  // 1000 bought with 5 of commission on the month's last day, unchanged.
   const result = periodResult({
     ...MONTH,
     startValue: "0",
     endValue: "1000",
     flows: [{ date: "2026-09-30", amount: "-1005", kind: "buy", charges: "5" }],
   });
-  expect(result.share).not.toBeNull();
+  expect(Number(result.share)).toBeCloseTo(-5 / 1005, 8);
 });
 
 it("files a sale whose charges exceed it under proceeds", () => {
@@ -115,4 +118,16 @@ it("files a sale whose charges exceed it under proceeds", () => {
     flows: [{ date: "2026-09-15", amount: "-0.5", kind: "sell", charges: "1" }],
   });
   expect(result).toMatchObject({ paidIn: "0", proceeds: "0.5" });
+});
+
+it("puts only what was held to work, not net worth less debts", () => {
+  // 1000 held against 1500 owed: net worth -500, and 100 made.
+  const result = periodResult({
+    ...MONTH,
+    startValue: "-500",
+    endValue: "-400",
+    atWorkAtStart: "1000",
+    flows: [],
+  });
+  expect(result.share).toBe("0.1");
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { referenceUnit } from "@plant/core";
+import { type Denominator, referenceUnit } from "@plant/core";
 import { notFound } from "next/navigation";
 
 import {
@@ -8,7 +8,11 @@ import {
   YearCloseDetail,
 } from "@/components/summary/close-detail";
 import { SummaryPage } from "@/components/summary/summary-page";
-import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
+import {
+  parseAssetsParams,
+  TABS,
+  unitParam,
+} from "@/lib/holdings/assets-filter";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { closeUnit } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
@@ -17,7 +21,15 @@ import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
 import { usePrototype } from "./prototype-provider";
 import { holdingsView } from "./prototype-store";
 
-const closeHref = (period: string) => `/closes/${period}`;
+// Resumen and a close's page, in the unit the user is looking at.
+const linksIn = (unit: Denominator, reference: Denominator) => {
+  const param = unitParam(unit, reference);
+  const query = param === null ? "" : `?unit=${param}`;
+  return {
+    closeHref: (period: string) => `/closes/${period}${query}`,
+    summaryHref: `/${query}`,
+  };
+};
 
 // Resumen over the prototype's store.
 export function PrototypeSummary({ params }: { params: KeysetParams }) {
@@ -31,6 +43,7 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
     }).unit,
     reference,
   );
+  const { closeHref } = linksIn(unit, reference);
   const closes = closesOf(state, unit);
   const years = yearsOfCloses(closes);
   // The year the table shows: ?year=, else the newest.
@@ -78,6 +91,7 @@ export function PrototypeClose({
     }).unit,
     reference,
   );
+  const { closeHref, summaryHref } = linksIn(unit, reference);
   if (/^\d{4}$/.test(period)) {
     const year = yearsOfCloses(closesOf(state, unit)).find(
       (each) => each.year === period,
@@ -87,7 +101,7 @@ export function PrototypeClose({
       <YearCloseDetail
         year={year}
         unit={unit}
-        backHref="/"
+        backHref={summaryHref}
         closeHref={closeHref}
       />
     );
@@ -96,5 +110,7 @@ export function PrototypeClose({
     ? monthDetail(state, unit, period)
     : null;
   if (!detail) notFound();
-  return <MonthCloseDetail detail={detail} unit={unit} backHref="/" />;
+  return (
+    <MonthCloseDetail detail={detail} unit={unit} backHref={summaryHref} />
+  );
 }
