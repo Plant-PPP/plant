@@ -2,7 +2,7 @@ import type { Denominator } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
 import { formatAmount } from "@/lib/format/amount";
-import { monthName } from "@/lib/summary/closes";
+import { monthInText } from "@/lib/summary/closes";
 
 type Point = { period: string; value: string; contributed: string };
 
@@ -60,7 +60,7 @@ export function NetWorthChart({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="h-48 w-full"
         role="img"
-        aria-label={`Patrimonio de ${monthName(points[0]!.period).toLowerCase()} a ${monthName(last.period).toLowerCase()}: termina en ${formatAmount(last.value, unit)}.`}
+        aria-label={`Patrimonio de ${monthInText(points[0]!.period)} a ${monthInText(last.period)}: termina en ${formatAmount(last.value, unit)}.`}
         preserveAspectRatio="none"
       >
         {yearTicks.map(({ index, label }) => (
@@ -93,17 +93,25 @@ export function NetWorthChart({
         />
       </svg>
       {/* The year labels sit outside the stretched drawing, so they keep
-          their shape at any width. */}
+          their shape at any width; one near the right edge ends at its tick
+          instead of running past the chart. */}
       <div aria-hidden className="relative h-3">
-        {yearTicks.map(({ index, label }) => (
-          <span
-            key={label}
-            className="text-muted-foreground absolute top-0 text-[10px] tabular-nums"
-            style={{ left: `calc(${(x(index) / WIDTH) * 100}% + 4px)` }}
-          >
-            {label}
-          </span>
-        ))}
+        {yearTicks.map(({ index, label }) => {
+          const at = (x(index) / WIDTH) * 100;
+          return (
+            <span
+              key={label}
+              className="text-muted-foreground absolute top-0 text-[10px] tabular-nums"
+              style={
+                at > 90
+                  ? { right: `calc(${100 - at}% + 4px)` }
+                  : { left: `calc(${at}% + 4px)` }
+              }
+            >
+              {label}
+            </span>
+          );
+        })}
       </div>
       <span className="text-muted-foreground text-[11px] tabular-nums">
         {formatAmount(bottom, unit)}

@@ -1,3 +1,5 @@
+import { addDays } from "@plant/shared";
+
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -52,7 +54,7 @@ it("marks the closed months a deleted operation changes", () => {
     .flat()
     .find((each) => each.kind === "sale" && each.date < "2026-06-01")!;
   const { state: after } = deleteOperation(state, sale.operation_id);
-  const marked = markRecalculated(state, after, "usd_mep");
+  const marked = markRecalculated(state, after);
   expect(marked.recalculated.get(sale.date.slice(0, 7))).toBe(TODAY);
   expect(marked.recalculated.has("2026-10")).toBe(false);
 });
@@ -64,7 +66,7 @@ it("marks nothing for a write that moves no month's movements", () => {
     price: "9000",
     currency: "ARS",
   }).state;
-  expect(markRecalculated(state, priced, "usd_mep").recalculated.size).toBe(0);
+  expect(markRecalculated(state, priced).recalculated.size).toBe(0);
 });
 
 it("counts a holding with no movements in every month's net worth", () => {
@@ -100,7 +102,7 @@ it("marks a closed month whose units changed at no cost", () => {
     { operationId: "split", newId: () => crypto.randomUUID() },
   );
   expect(after.result.ok).toBe(true);
-  const marked = markRecalculated(state, after.state, "usd_mep");
+  const marked = markRecalculated(state, after.state);
   expect(marked.recalculated.get("2026-03")).toBe(TODAY);
 });
 
@@ -193,7 +195,7 @@ it("marks a month whose adjustment out an earlier write repriced", () => {
     replacing: true,
     newId,
   }).state;
-  const marked = markRecalculated(out, repriced, "ars");
+  const marked = markRecalculated(out, repriced);
   expect(marked.recalculated.get("2026-03")).toBe(TODAY);
   expect(marked.recalculated.get("2026-05")).toBe(TODAY);
 });
@@ -214,7 +216,7 @@ it("marks the months after an earlier purchase whose units it held", () => {
     )!;
   const after = deleteOperation(state, meli.operation_id);
   expect(after.result.ok).toBe(true);
-  const marked = markRecalculated(state, after.state, "usd_mep");
+  const marked = markRecalculated(state, after.state);
   expect(marked.recalculated.get("2025-09")).toBe(TODAY);
   expect(marked.recalculated.get("2025-12")).toBe(TODAY);
 });
@@ -248,7 +250,7 @@ it("marks nothing when a purchase's units move between portfolios", () => {
     purchase([{ portfolio_id: principal!.id, quantity: "3" }]),
     { operationId: "moved", replacing: true, newId },
   ).state;
-  expect(markRecalculated(split, whole, "usd_mep").recalculated.size).toBe(0);
+  expect(markRecalculated(split, whole).recalculated.size).toBe(0);
 });
 
 it("moves units in and out at their worth, so a transfer makes no market result", () => {
@@ -323,7 +325,93 @@ it("marks a month whose start an earlier trade's price values", () => {
     replacing: true,
     newId,
   }).state;
-  const marked = markRecalculated(april, repriced, "usd_mep");
+  const marked = markRecalculated(april, repriced);
   expect(marked.recalculated.get("2026-03")).toBe(TODAY);
   expect(marked.recalculated.get("2026-04")).toBe(TODAY);
+});
+
+it("marks the months whose pesos a dollar movement's date moved", () => {
+  const opening = [...state.movements.values()]
+    .flat()
+    .find(
+      (each) => each.kind === "opening_balance" && each.currency === "USD",
+    )!;
+  const holding = state.holdings.find(
+    (each) => each.holding.id === opening.holding_id,
+  )!;
+  const later = addDays(opening.date, 3);
+  const moved = writeOperation(
+    state,
+    {
+      kind: "opening_balance",
+      source_connection_id: holding.accountId,
+      instrument_symbol:
+        holding.holding.asset_class === "instrument"
+          ? holding.holding.instrument_symbol
+          : "",
+      date: later,
+      currency: opening.currency,
+      price: "price" in opening ? opening.price : "0",
+      charges: opening.charges,
+      reference: opening.reference,
+      note: opening.note,
+      parts: [
+        {
+          portfolio_id: holding.portfolioId,
+          quantity: "quantity" in opening ? opening.quantity : "0",
+        },
+      ],
+    },
+    {
+      operationId: opening.operation_id,
+      replacing: true,
+      newId: () => crypto.randomUUID(),
+    },
+  );
+  expect(moved.result.ok).toBe(true);
+  const marked = markRecalculated(state, moved.state);
+  // Every closed month whose pesos moved is marked, not only the one it moved in.
+  const peso = (each: typeof state) =>
+    new Map(closesOf(each, "ars").map((close) => [close.period, close]));
+  const before = peso(state);
+  for (const [period, close] of peso(moved.state)) {
+    if (close.open) continue;
+    if (close.realized !== before.get(period)?.realized) {
+      expect(marked.recalculated.get(period)).toBe(TODAY);
+    }
+  }
+});
+
+it("marks nothing for an unchanged re-save of a same-day trade", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const purchase = (price: string) => ({
+    kind: "purchase" as const,
+    source_connection_id: iol.id,
+    instrument_symbol: "MSFT",
+    date: "2026-03-10",
+    currency: "ARS",
+    price,
+    charges: [],
+    reference: null,
+    note: null,
+    parts: [{ portfolio_id: iol.portfolio.id, quantity: "10" }],
+  });
+  let id = 0;
+  const newId = () =>
+    `f1000000-0000-4000-8000-${String((id += 1)).padStart(12, "0")}`;
+  const a = writeOperation(state, purchase("100"), {
+    operationId: "a",
+    newId,
+  }).state;
+  const b = writeOperation(a, purchase("300"), {
+    operationId: "b",
+    newId,
+  }).state;
+  id = 900;
+  const resaved = writeOperation(b, purchase("100"), {
+    operationId: "a",
+    replacing: true,
+    newId,
+  }).state;
+  expect(markRecalculated(b, resaved).recalculated.size).toBe(0);
 });

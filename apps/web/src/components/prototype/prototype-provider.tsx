@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  type QuoteSnapshot,
-  referenceUnit,
-  withManualPrices,
-} from "@plant/core";
+import { type QuoteSnapshot, withManualPrices } from "@plant/core";
 import { createContext, type ReactNode, useContext } from "react";
 
 import type {
@@ -82,11 +78,7 @@ export function PrototypeProvider({
         ? next
         : {
             ...next,
-            state: markRecalculated(
-              before,
-              next.state,
-              referenceUnit(before.referenceDollar),
-            ),
+            state: markRecalculated(before, next.state),
           };
     });
   const actions: Prototype["actions"] = {

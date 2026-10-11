@@ -118,3 +118,7 @@ export const monthOf = (period: string): string =>
 // "Septiembre 2026".
 export const monthName = (period: string): string =>
   `${monthOf(period)} ${period.slice(0, 4)}`;
+
+// A period's month inside a sentence: "septiembre de 2026".
+export const monthInText = (period: string): string =>
+  `${monthOf(period).toLowerCase()} de ${period.slice(0, 4)}`;

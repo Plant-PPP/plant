@@ -12,18 +12,21 @@ import {
   periodResult,
   quotesNeeded,
   snapshotOn,
-  type Trade,
   valueHoldings,
   withManualPrices,
 } from "@plant/core";
 import {
+  compareExact,
+  currencySchema,
   type Exact,
   exactOf,
   minus,
   negated,
+  over,
   plus,
   stored,
   sumOrNull,
+  times,
   toDecimal,
   ZERO,
 } from "@plant/shared";
@@ -32,6 +35,7 @@ import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import {
+  CLOSE_UNITS,
   type MonthClose,
   type MonthDetail,
   monthsBetween,
@@ -104,16 +108,24 @@ function holdingsAt(
   });
 }
 
-// Each instrument's price in its latest purchase or sale up to `date`, which
-// values it on a day no feed or manual price covers. An opening balance's or
-// an adjustment's price is a cost, not a trade's.
+// Each instrument's price on its latest trading day up to `date`, which
+// values it on a day no feed or manual price covers: that day's purchases
+// and sales averaged by their units, so how they split across holdings or
+// which was recorded first does not matter; in the currency most of them
+// traded in. An opening balance's or an adjustment's price is a cost, not a
+// trade's.
 function lastTradePrices(
   ledgers: readonly Ledger[],
   date: string,
 ): QuoteSnapshot["prices"] {
-  const latest = new Map<string, Trade>();
+  type Day = {
+    date: string;
+    byCurrency: Map<string, { units: Exact; worth: Exact }>;
+  };
+  const latest = new Map<string, Day>();
   for (const { row, movements } of ledgers) {
     if (row.holding.asset_class !== "instrument") continue;
+    const symbol = row.holding.instrument_symbol;
     for (const movement of movements) {
       if (
         movement.date > date ||
@@ -122,21 +134,35 @@ function lastTradePrices(
       ) {
         continue;
       }
-      const kept = latest.get(row.holding.instrument_symbol);
-      if (!kept || kept.date <= movement.date) {
-        latest.set(row.holding.instrument_symbol, movement);
-      }
+      const kept = latest.get(symbol);
+      if (kept && kept.date > movement.date) continue;
+      const day =
+        kept?.date === movement.date
+          ? kept
+          : { date: movement.date, byCurrency: new Map() };
+      const units = exactOf(movement.quantity);
+      const was = day.byCurrency.get(movement.currency);
+      day.byCurrency.set(movement.currency, {
+        units: plus(was?.units ?? ZERO, units),
+        worth: plus(was?.worth ?? ZERO, times(units, exactOf(movement.price))),
+      });
+      latest.set(symbol, day);
     }
   }
   return Object.fromEntries(
-    [...latest].map(([symbol, movement]) => [
-      symbol,
-      {
-        price: movement.price,
-        currency: movement.currency,
-        date: movement.date,
-      },
-    ]),
+    [...latest].map(([symbol, day]) => {
+      const [currency, { units, worth }] = [...day.byCurrency].sort(
+        ([a, x], [b, y]) => compareExact(y.units, x.units) || (a < b ? -1 : 1),
+      )[0]!;
+      return [
+        symbol,
+        {
+          price: stored(over(worth, units)),
+          currency: currencySchema.parse(currency),
+          date: day.date,
+        },
+      ];
+    }),
   );
 }
 
@@ -397,25 +423,35 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
   ]);
 }
 
-// The closed months whose movements a write changed, marked as recalculated
-// today; the month in progress is never marked.
+// The closed months whose figures or own movements a write changed, in any
+// unit closes are shown in (a dollar movement's date moves its pesos, not its
+// dollars), marked as recalculated today; the month in progress is never
+// marked.
 export function markRecalculated(
   before: PrototypeState,
   after: PrototypeState,
-  unit: Denominator,
 ): PrototypeState {
   if (before.movements === after.movements) return after;
-  const was = new Map(
-    closesOf(before, unit).map((each) => [each.period, movedBy(before, each)]),
-  );
-  const changed = closesOf(after, unit).filter(
-    (each) =>
-      !each.open &&
-      was.has(each.period) &&
-      was.get(each.period) !== movedBy(after, each),
-  );
-  if (changed.length === 0) return after;
+  const changed = new Set<string>();
+  for (const unit of CLOSE_UNITS) {
+    const was = new Map(
+      closesOf(before, unit).map((each) => [
+        each.period,
+        movedBy(before, each),
+      ]),
+    );
+    for (const each of closesOf(after, unit)) {
+      if (
+        !each.open &&
+        was.has(each.period) &&
+        was.get(each.period) !== movedBy(after, each)
+      ) {
+        changed.add(each.period);
+      }
+    }
+  }
+  if (changed.size === 0) return after;
   const recalculated = new Map(after.recalculated);
-  for (const each of changed) recalculated.set(each.period, after.today);
+  for (const period of changed) recalculated.set(period, after.today);
   return { ...after, recalculated };
 }

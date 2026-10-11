@@ -19,7 +19,7 @@ import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import {
   type MonthClose,
   type MonthDetail,
-  monthName,
+  monthInText,
   type YearClose,
 } from "@/lib/summary/closes";
 
@@ -188,19 +188,18 @@ export function MonthCloseDetail({
     },
     {
       id: "amount",
-      // A trade's cost, or what an income paid.
       header: "Importe",
       size: 136,
       meta: { className: NUMBER_CELL },
       cell: ({ row: { original } }) => (
-        <AmountText amount={original.cost} unit={unit} />
+        <AmountText amount={original.amount} unit={unit} />
       ),
     },
   ];
   return (
     <div className="grid gap-6">
       <Header
-        title={`Cierre de ${monthName(close.period).toLowerCase()}`}
+        title={`Cierre de ${monthInText(close.period)}`}
         status={<CloseStatus close={close} />}
         backHref={backHref}
       />
@@ -217,7 +216,7 @@ export function MonthCloseDetail({
           </p>
         ) : (
           <DataTable
-            caption={`Movimientos de ${monthName(close.period).toLowerCase()}`}
+            caption={`Movimientos de ${monthInText(close.period)}`}
             columns={columns}
             data={lines.map((line) => ({ ...line, id: line.movement.id }))}
           />
