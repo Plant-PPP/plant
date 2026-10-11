@@ -11,18 +11,16 @@ import {
   type AssetsTabs,
   SEARCH_MAX_LENGTH,
   parseAssetsParams,
-  unitParam,
 } from "@/lib/holdings/assets-filter";
 import {
   HOLDING_CLASSES,
   HOLDING_CLASS_LABELS,
   type HoldingClass,
 } from "@/lib/holdings/classes";
-import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { PortfolioRow } from "@/lib/portfolio-setup/read";
 
 import { type AssetsUrl, searchParamValue } from "./assets-url";
-import { FilterSelect } from "./filter-select";
+import { FilterSelect, UnitSelect } from "./filter-select";
 
 const ALL = "all";
 const SEARCH_DELAY_MS = 250;
@@ -151,16 +149,13 @@ export function AssetsFilters({
           }
         />
       )}
-      <FilterSelect
+      <UnitSelect
         id={ids.unit}
-        label="Valuar en"
         shownLabel
-        value={shown.unit}
+        unit={shown.unit}
+        referenceUnit={referenceUnit}
         pending={pending}
-        options={(Object.keys(UNIT_LABELS) as Denominator[]).map(
-          (each) => [each, UNIT_LABELS[each]] as const,
-        )}
-        onChange={(value) => go("unit", unitParam(value, referenceUnit))}
+        onChange={(param) => go("unit", param)}
       />
     </div>
   );

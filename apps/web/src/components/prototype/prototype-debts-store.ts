@@ -2,12 +2,11 @@ import { liabilityInputSchema } from "@plant/core";
 
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 
-import type { PrototypeState, Write } from "./prototype-store";
-
-const refused = (
-  state: PrototypeState,
-  code: Extract<WriteResult, { ok: false }>["code"],
-): Write<WriteResult> => ({ state, result: { ok: false, code } });
+import {
+  type PrototypeState,
+  refusedWrite,
+  type Write,
+} from "./prototype-store";
 
 export function createLiability(
   state: PrototypeState,
@@ -15,7 +14,7 @@ export function createLiability(
   id: string,
 ): Write<WriteResult> {
   const parsed = liabilityInputSchema.safeParse(input);
-  if (!parsed.success) return refused(state, "invalid");
+  if (!parsed.success) return refusedWrite(state, "invalid");
   return {
     state: {
       ...state,
@@ -31,9 +30,9 @@ export function updateLiability(
   input: unknown,
 ): Write<WriteResult> {
   const parsed = liabilityInputSchema.safeParse(input);
-  if (!parsed.success) return refused(state, "invalid");
+  if (!parsed.success) return refusedWrite(state, "invalid");
   if (!state.liabilities.some((each) => each.id === id)) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   return {
     state: {
@@ -51,7 +50,7 @@ export function deleteLiability(
   id: string,
 ): Write<WriteResult> {
   if (!state.liabilities.some((each) => each.id === id)) {
-    return refused(state, "not_found");
+    return refusedWrite(state, "not_found");
   }
   return {
     state: {

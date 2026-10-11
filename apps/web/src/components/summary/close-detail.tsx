@@ -75,7 +75,7 @@ function CloseFigures({
         </SummaryTile>
         <SummaryTile
           label="Resultado"
-          note="Mercado más cobros; el % no cuenta lo que pusiste"
+          note="Mercado más cobros menos gastos; el % no cuenta lo que pusiste"
         >
           <ResultText
             amount={figures.result}
@@ -94,13 +94,16 @@ function CloseFigures({
         <SummaryTile label="Resultado de mercado" note="Precios y dólar">
           <ResultText amount={figures.market} share={null} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Dividendos y cupones">
+        <SummaryTile label="Dividendos y cupones" note="Antes de retenciones">
           <AmountText amount={figures.income} unit={unit} />
         </SummaryTile>
         <SummaryTile label="Resultado de ventas">
           <AmountText amount={figures.realized} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Gastos" note="Comisiones, derechos e impuestos">
+        <SummaryTile
+          label="Gastos"
+          note="Comisiones, derechos, impuestos y retenciones"
+        >
           <AmountText amount={figures.charges} unit={unit} />
         </SummaryTile>
       </dl>
@@ -196,11 +199,7 @@ export function MonthCloseDetail({
         backHref={backHref}
       />
       <CloseFigures
-        figures={{
-          ...close.figures,
-          charges: close.charges,
-          realized: close.realized,
-        }}
+        figures={{ ...close.figures, realized: close.realized }}
         unit={unit}
         complete={close.complete}
       />

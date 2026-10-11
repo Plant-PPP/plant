@@ -1,16 +1,14 @@
 "use client";
 
-import { DENOMINATORS, type Denominator } from "@plant/core";
+import type { Denominator } from "@plant/core";
 import { exactOf, plus, toDecimal } from "@plant/shared";
 import Link from "next/link";
 import { useId } from "react";
 
 import { AssetsSummary } from "@/components/holdings/assets-summary";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
-import { FilterSelect } from "@/components/holdings/filter-select";
+import { UnitSelect } from "@/components/holdings/filter-select";
 import { AmountText, SummaryTile } from "@/components/holdings/sum-text";
-import { unitParam } from "@/lib/holdings/assets-filter";
-import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import {
   type MonthClose,
@@ -82,21 +80,25 @@ export function SummaryPage({
             Tu patrimonio neto y cómo se movió mes a mes
           </p>
         </div>
-        <FilterSelect
+        <UnitSelect
           id={`${id}-unit`}
-          label="Valuar en"
-          value={unit}
+          unit={unit}
+          referenceUnit={referenceUnit}
           pending={false}
-          options={(Object.keys(DENOMINATORS) as Denominator[]).map(
-            (each) => [each, UNIT_LABELS[each]] as const,
-          )}
-          onChange={(value) => url.set("unit", unitParam(value, referenceUnit))}
+          onChange={(param) => url.set("unit", param)}
         />
       </div>
 
       {current && thisYear && (
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryTile label="Patrimonio neto" note="Activos menos deudas, hoy">
+          <SummaryTile
+            label="Patrimonio neto"
+            note={
+              current.complete
+                ? "Activos menos deudas, hoy"
+                : "Activos menos deudas, hoy, sin lo que no tiene cotización"
+            }
+          >
             <AmountText amount={current.figures.endValue} unit={unit} />
           </SummaryTile>
           <SummaryTile

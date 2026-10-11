@@ -12,10 +12,18 @@ import {
   periodResult,
   quotesNeeded,
   snapshotOn,
+  type Trade,
   valueLiabilities,
   withManualPrices,
 } from "@plant/core";
-import { exactOf, sumOrNull } from "@plant/shared";
+import {
+  type Exact,
+  exactOf,
+  plus,
+  stored,
+  sumOrNull,
+  ZERO,
+} from "@plant/shared";
 
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
@@ -36,14 +44,11 @@ import {
   stepsOf,
 } from "./prototype-store";
 
-const sum = (values: readonly (string | null)[]) => sumOrNull(values, 8);
-
 type Ledger = {
   row: HoldingRow;
   movements: readonly Movement[];
   quantities: string[];
   flows: CashFlow[] | null;
-  charges: (string | null)[];
   realized: (string | null)[];
 };
 
@@ -59,12 +64,6 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
         movements,
         quantities: steps.map((step) => step.position.quantity),
         flows: cashFlowsOf(movements, steps),
-        charges: steps.map((step, index) => {
-          const now = step.position.money;
-          const was = index === 0 ? null : steps[index - 1]!.position.money;
-          if (!now) return null;
-          return difference(now.charges, was?.charges ?? "0");
-        }),
         realized: steps.map((step) =>
           step.sale === undefined ? "0" : (step.sale?.result ?? null),
         ),
@@ -103,17 +102,25 @@ function holdingsAt(
   });
 }
 
-// Each instrument's price in its latest purchase or sale up to `date`, which
-// values it on a day no feed or manual price covers.
+// Each instrument's price in its latest purchase, sale or opening balance
+// with a price, up to `date`, which values it on a day no feed or manual
+// price covers. An adjustment's price is a cost, not a trade's.
 function lastTradePrices(
   ledgers: readonly Ledger[],
   date: string,
 ): QuoteSnapshot["prices"] {
-  const latest = new Map<string, Movement>();
+  const latest = new Map<string, Trade>();
   for (const { row, movements } of ledgers) {
     if (row.holding.asset_class !== "instrument") continue;
     for (const movement of movements) {
-      if (movement.date > date || !isTrade(movement)) continue;
+      if (
+        movement.date > date ||
+        !isTrade(movement) ||
+        movement.kind === "adjustment" ||
+        exactOf(movement.price).n === 0n
+      ) {
+        continue;
+      }
       const kept = latest.get(row.holding.instrument_symbol);
       if (!kept || kept.date <= movement.date) {
         latest.set(row.holding.instrument_symbol, movement);
@@ -121,20 +128,14 @@ function lastTradePrices(
     }
   }
   return Object.fromEntries(
-    [...latest].flatMap(([symbol, movement]) =>
-      isTrade(movement) && exactOf(movement.price).n > 0n
-        ? [
-            [
-              symbol,
-              {
-                price: movement.price,
-                currency: movement.currency,
-                date: movement.date,
-              },
-            ],
-          ]
-        : [],
-    ),
+    [...latest].map(([symbol, movement]) => [
+      symbol,
+      {
+        price: movement.price,
+        currency: movement.currency,
+        date: movement.date,
+      },
+    ]),
   );
 }
 
@@ -198,7 +199,6 @@ export function closesOf(
     const end = valueAt(month.to);
     const inMonth = (date: string) => date > month.from && date <= month.to;
     const flows: CashFlow[] = [];
-    const charges: (string | null)[] = [];
     const realized: (string | null)[] = [];
     let known = true;
     for (const ledger of ledgers) {
@@ -206,7 +206,6 @@ export function closesOf(
       ledger.movements.forEach((movement, index) => {
         if (!inMonth(movement.date)) return;
         if (ledger.flows) flows.push(ledger.flows[index]!);
-        charges.push(ledger.charges[index]!);
         realized.push(ledger.realized[index]!);
       });
     }
@@ -219,8 +218,7 @@ export function closesOf(
         endValue: end.value,
         flows,
       }),
-      charges: sum(charges),
-      realized: sum(realized),
+      realized: sumOrNull(realized),
       complete: start.complete && end.complete && known,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
     };
@@ -239,10 +237,15 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
   return [...years]
     .map(([year, months]): YearClose => {
       const pick = (
-        key: "paidIn" | "proceeds" | "income" | "contributed" | "market",
-      ) => sum(months.map((each) => each.figures[key]))!;
-      const market = pick("market");
-      const income = pick("income");
+        key:
+          | "paidIn"
+          | "proceeds"
+          | "income"
+          | "charges"
+          | "contributed"
+          | "market"
+          | "result",
+      ) => sumOrNull(months.map((each) => each.figures[key]))!;
       return {
         year,
         months,
@@ -251,12 +254,12 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
           endValue: months.at(-1)!.figures.endValue,
           paidIn: pick("paidIn"),
           proceeds: pick("proceeds"),
-          income,
+          income: pick("income"),
+          charges: pick("charges"),
           contributed: pick("contributed"),
-          market,
-          result: sum([market, income])!,
-          charges: sum(months.map((each) => each.charges)),
-          realized: sum(months.map((each) => each.realized)),
+          market: pick("market"),
+          result: pick("result"),
+          realized: sumOrNull(months.map((each) => each.realized)),
           share: chainedShare(months.map((each) => each.figures.share)),
         },
         complete: months.every((each) => each.complete),
@@ -296,17 +299,44 @@ export function monthDetail(
   return { close, lines };
 }
 
-// What a month's movements made, the part of a close a write to that month
-// or an earlier one changes. Its values move with every price and every
-// balance, so they are left out.
-const movedBy = (close: MonthClose) =>
-  JSON.stringify([
-    close.figures.paidIn,
-    close.figures.proceeds,
-    close.figures.income,
-    close.charges,
+// What a write to a month or an earlier one changes in its close: the
+// month's own movements, per account and instrument so moving units between
+// portfolios changes nothing, and what its sales made, which an earlier
+// purchase sets. Its values move with every price and balance, so they are
+// left out.
+function movedBy(state: PrototypeState, close: MonthClose): string {
+  const own = new Map<string, Exact[]>();
+  for (const held of state.holdings) {
+    if (held.holding.asset_class !== "instrument") continue;
+    for (const movement of state.movements.get(held.holding.id) ?? []) {
+      if (movement.date <= close.from || movement.date > close.to) continue;
+      const key = JSON.stringify([
+        held.accountId,
+        held.holding.instrument_symbol,
+        movement.operation_id,
+        movement.kind,
+        movement.date,
+        movement.currency,
+        "price" in movement ? movement.price : null,
+        "direction" in movement ? movement.direction : null,
+      ]);
+      const [size = ZERO, charges = ZERO] = own.get(key) ?? [];
+      own.set(key, [
+        plus(
+          size,
+          exactOf("quantity" in movement ? movement.quantity : movement.amount),
+        ),
+        plus(charges, ...movement.charges.map(({ amount }) => exactOf(amount))),
+      ]);
+    }
+  }
+  return JSON.stringify([
+    [...own]
+      .map(([key, [size, charges]]) => [key, stored(size!), stored(charges!)])
+      .sort(),
     close.realized,
   ]);
+}
 
 // The closed months whose movements a write changed, marked as recalculated
 // today; the month in progress is never marked.
@@ -317,13 +347,13 @@ export function markRecalculated(
 ): PrototypeState {
   if (before.movements === after.movements) return after;
   const was = new Map(
-    closesOf(before, unit).map((each) => [each.period, movedBy(each)]),
+    closesOf(before, unit).map((each) => [each.period, movedBy(before, each)]),
   );
   const changed = closesOf(after, unit).filter(
     (each) =>
       !each.open &&
       was.has(each.period) &&
-      was.get(each.period) !== movedBy(each),
+      was.get(each.period) !== movedBy(after, each),
   );
   if (changed.length === 0) return after;
   const recalculated = new Map(after.recalculated);

@@ -3,8 +3,8 @@ import {
   Constants,
   exactOf,
   over,
+  stored,
   times,
-  toDecimal,
 } from "@plant/shared";
 
 // The instrument types the instrument_type enum does not hold yet. The test
@@ -27,7 +27,6 @@ export const INSTRUMENT_PRICING: Record<InstrumentType, { basis: 1 | 100 }> = {
   fci: { basis: 1 },
 };
 
-const PRICE_DIGITS = 8;
 const basisOf = (type: InstrumentType) => ({
   n: BigInt(INSTRUMENT_PRICING[type].basis),
   d: 1n,
@@ -35,7 +34,7 @@ const basisOf = (type: InstrumentType) => ({
 
 // A quoted price as the price of one unit.
 export const unitPrice = (type: InstrumentType, quoted: string): string =>
-  toDecimal(over(exactOf(quoted), basisOf(type)), PRICE_DIGITS);
+  stored(over(exactOf(quoted), basisOf(type)));
 
 // A typed quote as the price of one unit, or null when 8 decimals cannot hold
 // it exactly: a price is never rounded on the way in.
@@ -50,4 +49,4 @@ export function exactUnitPrice(
 
 // A unit's price as the market quotes it.
 export const quotedPrice = (type: InstrumentType, perUnit: string): string =>
-  toDecimal(times(exactOf(perUnit), basisOf(type)), PRICE_DIGITS);
+  stored(times(exactOf(perUnit), basisOf(type)));
