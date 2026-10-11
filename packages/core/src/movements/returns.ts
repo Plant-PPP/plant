@@ -7,14 +7,14 @@ import {
   negated,
   over,
   plus,
-  toDecimal,
+  stored,
   ZERO,
 } from "@plant/shared";
 
 import { isIncome, type Movement, takesUnits } from "./movement";
 import type { LedgerStep } from "./replay";
 
-const text = (x: Exact): string => toDecimal(x, 8);
+const text = stored;
 
 // Money between the holder and a holding on a date, in the view's unit:
 // negative is paid in (a purchase or an adjustment in, at its cost, with its

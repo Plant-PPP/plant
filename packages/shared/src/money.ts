@@ -11,7 +11,9 @@ export type Currency = z.infer<typeof currencySchema>;
 // and "1.50"; Postgres returns the column padded to 8 decimals), so amounts are
 // compared as decimals, never as strings.
 const DECIMAL_INTEGER_DIGITS = 12;
-const DECIMAL_SCALE_DIGITS = 8;
+// The decimals numeric(20, 8) keeps: every quantity, price and amount
+// stored is exact to this scale.
+export const DECIMAL_SCALE_DIGITS = 8;
 const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 const DECIMAL_PATTERN = new RegExp(
   `^-?(0|[1-9]\\d{0,${DECIMAL_INTEGER_DIGITS - 1}})(\\.\\d{1,${DECIMAL_SCALE_DIGITS}})?$`,
@@ -113,7 +115,7 @@ export const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
 // them is unknown.
 export const sumOrNull = (
   values: readonly (string | null)[],
-  digits: number,
+  digits = DECIMAL_SCALE_DIGITS,
 ): string | null =>
   values.includes(null)
     ? null
@@ -152,6 +154,9 @@ export function toDecimal(x: Exact, digits: number): string {
   const rounded = roundedTo(x, digits);
   return fromScaled((rounded.n * DECIMAL_SCALE) / rounded.d);
 }
+
+// x as the decimal string a numeric(20, 8) column keeps.
+export const stored = (x: Exact): string => toDecimal(x, DECIMAL_SCALE_DIGITS);
 
 export const moneySchema = z.object({
   amount: decimalStringSchema,

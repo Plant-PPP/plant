@@ -30,7 +30,7 @@ import {
   snapshotOn,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { exactOf, minus, sumOrNull, toDecimal } from "@plant/shared";
+import { exactOf, minus, stored, sumOrNull } from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
@@ -227,8 +227,6 @@ export function yearsOf(state: PrototypeState): string[] {
   return [...years].sort().reverse();
 }
 
-const sum = (values: (string | null)[]) => sumOrNull(values, 8);
-
 // The sales of a year whose holding, open or closed, matches the filters,
 // newest first: the first `limit` rows and the totals of all of them.
 export function salesOf(
@@ -278,10 +276,10 @@ export function salesOf(
       sale: sales.includes(null)
         ? null
         : {
-            gross: sum(sales.map((each) => each!.gross))!,
-            charges: sum(sales.map((each) => each!.charges))!,
-            cost: sum(sales.map((each) => each!.cost))!,
-            result: sum(sales.map((each) => each!.result))!,
+            gross: sumOrNull(sales.map((each) => each!.gross))!,
+            charges: sumOrNull(sales.map((each) => each!.charges))!,
+            cost: sumOrNull(sales.map((each) => each!.cost))!,
+            result: sumOrNull(sales.map((each) => each!.result))!,
           },
     }),
   );
@@ -291,16 +289,16 @@ export function salesOf(
     truncated: lines.length > limit,
     totals: {
       count: lines.length,
-      gross: sum(lines.map((line) => line.sale?.gross ?? null)),
-      charges: sum(lines.map((line) => line.sale?.charges ?? null)),
-      result: sum(lines.map((line) => line.sale?.result ?? null)),
+      gross: sumOrNull(lines.map((line) => line.sale?.gross ?? null)),
+      charges: sumOrNull(lines.map((line) => line.sale?.charges ?? null)),
+      result: sumOrNull(lines.map((line) => line.sale?.result ?? null)),
     },
   };
 }
 
-// a − b, to the 8 decimals the store keeps.
+// a − b, to the decimals the store keeps.
 export const difference = (a: string, b: string): string =>
-  toDecimal(minus(exactOf(a), exactOf(b)), 8);
+  stored(minus(exactOf(a), exactOf(b)));
 
 // A movement's line from its step and the position before it: the cost its
 // units added or took out (a sale's being that of the units sold), or what an
@@ -481,6 +479,28 @@ const refused = <R>(state: PrototypeState, result: R): Write<R> => ({
   result,
 });
 
+// A refused write of the setup lists, which leaves the state as it was.
+export const refusedWrite = (
+  state: PrototypeState,
+  code: Extract<WriteResult, { ok: false }>["code"],
+): Write<WriteResult> => refused(state, { ok: false, code });
+
+// An instrument's price today in its own currency, from the feeds or else the
+// user's manual price; none when neither has one.
+export function priceToday(
+  state: PrototypeState,
+  instrument: { symbol: string; currency: string },
+): string | null {
+  const quote = withManualPrices(
+    snapshotOn(state.quotes, state.today, {
+      fxKinds: [],
+      symbols: [instrument.symbol],
+    }).snapshot,
+    state.manualPrices,
+  ).snapshot.prices[instrument.symbol];
+  return quote && quote.currency === instrument.currency ? quote.price : null;
+}
+
 export function createHolding(
   state: PrototypeState,
   input: unknown,
@@ -533,20 +553,16 @@ export function createHolding(
     return refused(state, { ok: false, code: "duplicate" });
   }
   // Its quantity is what its movements leave, so the units come in at
-  // today's price, or at no cost when the instrument has none.
-  const quote = withManualPrices(
-    snapshotOn(state.quotes, state.today, {
-      fxKinds: [],
-      symbols: [instrument.symbol],
-    }).snapshot,
-    state.manualPrices,
-  ).snapshot.prices[instrument.symbol];
+  // today's price. Without one their cost would be made up, so the page asks
+  // for an opening balance with its price instead.
+  const price = priceToday(state, instrument);
+  if (price === null) return refused(state, { ok: false, code: "invalid" });
   const opening = {
     source_connection_id: account.id,
     instrument_symbol: instrument.symbol,
     date: state.today,
     currency: instrument.currency,
-    price: quote && quote.currency === instrument.currency ? quote.price : "0",
+    price,
     parts: [{ portfolio_id: portfolio.id, quantity: holding.amount }],
   };
   const base: PrototypeState = existing
@@ -596,6 +612,20 @@ export function updateHolding(
   const { portfolio_id = stored.portfolioId, ...columns } = parsed.data;
   if (!state.portfolios.some((each) => each.id === portfolio_id)) {
     return refused(state, { ok: false, code: "not_found" });
+  }
+  // The database's unique key: one holding of an instrument per account and
+  // portfolio, a closed one included.
+  if (
+    stored.holding.asset_class === "instrument" &&
+    portfolio_id !== stored.portfolioId &&
+    holdingIn(
+      state,
+      stored.accountId,
+      stored.holding.instrument_symbol,
+      portfolio_id,
+    )
+  ) {
+    return refused(state, { ok: false, code: "duplicate" });
   }
   // A holding with movements keeps the quantity they leave.
   const hasMovements = (state.movements.get(id)?.length ?? 0) > 0;
@@ -690,10 +720,15 @@ export function writeOperation(
   const parsed = operationInputSchema.safeParse(input);
   if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
   const operation = parsed.data;
-  const { parts, source_connection_id: accountId, ...fields } = operation;
+  const {
+    parts,
+    source_connection_id: accountId,
+    instrument_symbol: instrumentSymbol,
+    ...fields
+  } = operation;
   const account = state.accounts.find(({ id }) => id === accountId);
   const instrument = state.instruments.find(
-    ({ symbol }) => symbol === operation.instrument_symbol,
+    ({ symbol }) => symbol === instrumentSymbol,
   );
   if (!account || !instrument) {
     return refused(state, { ok: false, code: "not_found" });
@@ -868,8 +903,18 @@ export function deleteHolding(
   }
   const movements = new Map(state.movements);
   movements.delete(id);
+  // The holdings that shared an operation with it show that operation with
+  // one part fewer, so their tables load again.
+  const operations = new Set(
+    (state.movements.get(id) ?? []).map((each) => each.operation_id),
+  );
   const revisions = new Map(state.revisions);
   revisions.delete(id);
+  for (const [holdingId, own] of movements) {
+    if (own.some((each) => operations.has(each.operation_id))) {
+      revisions.set(holdingId, (revisions.get(holdingId) ?? 0) + 1);
+    }
+  }
   return {
     state: {
       ...state,

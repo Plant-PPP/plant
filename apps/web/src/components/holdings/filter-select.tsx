@@ -1,5 +1,7 @@
 "use client";
 
+import { DENOMINATORS, type Denominator } from "@plant/core";
+
 import {
   Select,
   SelectContent,
@@ -8,6 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { choose } from "@/components/portfolio-setup/field-alert";
+import { unitParam } from "@/lib/holdings/assets-filter";
+import { UNIT_LABELS } from "@/lib/holdings/messages";
 
 // A select that narrows what a page shows, its label read by screen readers
 // (and shown inside it with `shownLabel`); it waits while a write runs.
@@ -62,5 +66,39 @@ export function FilterSelect({
         </SelectContent>
       </Select>
     </>
+  );
+}
+
+const UNIT_OPTIONS = (Object.keys(DENOMINATORS) as Denominator[]).map(
+  (each) => [each, UNIT_LABELS[each]] as const,
+);
+
+// The unit a page values in, handing on its URL param: none for the
+// user's reference unit.
+export function UnitSelect({
+  id,
+  unit,
+  referenceUnit,
+  pending,
+  shownLabel,
+  onChange,
+}: {
+  id: string;
+  unit: Denominator;
+  referenceUnit: Denominator;
+  pending: boolean;
+  shownLabel?: boolean;
+  onChange: (param: string | null) => void;
+}) {
+  return (
+    <FilterSelect
+      id={id}
+      label="Valuar en"
+      shownLabel={shownLabel}
+      value={unit}
+      pending={pending}
+      options={UNIT_OPTIONS}
+      onChange={(value) => onChange(unitParam(value, referenceUnit))}
+    />
   );
 }
