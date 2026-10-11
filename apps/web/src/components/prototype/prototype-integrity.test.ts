@@ -8,7 +8,12 @@ import { compareDecimals } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
-import { deleteAccount, deletePortfolio } from "./prototype-accounts-store";
+import {
+  archivePortfolio,
+  createPortfolio,
+  deleteAccount,
+  deletePortfolio,
+} from "./prototype-accounts-store";
 import {
   createHolding,
   deleteHolding,
@@ -34,8 +39,24 @@ function integrity(state: PrototypeState): string[] {
   const portfolios = new Set(
     [...state.portfolios, ...state.archivedPortfolios].map(({ id }) => id),
   );
+  const archived = new Set([
+    ...state.archivedAccounts.map(({ id }) => id),
+    ...state.archivedPortfolios.map(({ id }) => id),
+  ]);
+  const instruments = new Set<string>();
   for (const stored of state.holdings) {
     const id = stored.holding.id;
+    if (
+      !stored.closed &&
+      (archived.has(stored.accountId) || archived.has(stored.portfolioId))
+    ) {
+      problems.push(`${id}: open in an archived account or portfolio`);
+    }
+    if (stored.holding.asset_class === "instrument") {
+      const key = `${stored.accountId}/${stored.portfolioId}/${stored.holding.instrument_symbol}`;
+      if (instruments.has(key)) problems.push(`${key}: held twice`);
+      instruments.add(key);
+    }
     if (!accounts.has(stored.accountId)) problems.push(`${id}: no account`);
     if (!portfolios.has(stored.portfolioId)) {
       problems.push(`${id}: no portfolio`);
@@ -101,6 +122,7 @@ const [PRINCIPAL, LARGO] = start.portfolios.map(({ id }) => id) as [
   string,
   string,
 ];
+const TEMP = "e9000000-0000-4000-8000-999999999999";
 let ids = 0;
 const newId = () =>
   `e9000000-0000-4000-8000-${String((ids += 1)).padStart(12, "0")}`;
@@ -206,6 +228,47 @@ it("stays consistent through every kind of write", () => {
   apply("a holding deleted with its movements", (s) =>
     deleteHolding(s, idOf("SPY")),
   );
+  apply("a sold-out instrument bought back through a new holding", (s) =>
+    createHolding(
+      s,
+      {
+        source_connection_id: account("Cocos"),
+        portfolio_id: start.holdings.find(
+          (each) => each.holding.id === idOf("TSLA"),
+        )!.portfolioId,
+        asset_class: "instrument",
+        instrument_symbol: "TSLA",
+        amount: "3",
+        currency: null,
+        annual_rate: null,
+        started_on: null,
+        matures_on: null,
+        valued_on: null,
+        label: null,
+      },
+      newId(),
+    ),
+  );
+
+  expect(
+    createHolding(
+      state,
+      {
+        source_connection_id: account("IOL"),
+        portfolio_id: PRINCIPAL,
+        asset_class: "instrument",
+        instrument_symbol: "AAPL",
+        amount: "1",
+        currency: null,
+        annual_rate: null,
+        started_on: null,
+        matures_on: null,
+        valued_on: null,
+        label: null,
+      },
+      newId(),
+    ).result,
+  ).toEqual({ ok: false, code: "duplicate" });
 
   expect(deleteAccount(state, account("IOL")).result).toEqual({
     ok: false,
@@ -220,4 +283,31 @@ it("refuses a write that would break a holding's history, changing nothing", () 
   const refused = deleteOperation(start, firstTesla.operation_id);
   expect(refused.result.ok).toBe(false);
   expect(refused.state).toBe(start);
+});
+
+it("never reopens a holding inside an archived portfolio", () => {
+  // A purchase and a sale of all of it in a new portfolio, which is then
+  // archived with nothing open.
+  let state = createPortfolio(start, { name: "Temporal" }, TEMP).state;
+  const purchase = newId();
+  state = writeOperation(
+    state,
+    trade("purchase", "ETH", "Binance", "2026-03-02", [
+      { portfolio_id: TEMP, quantity: "0.2" },
+    ]),
+    write(purchase),
+  ).state;
+  const sale = newId();
+  state = writeOperation(
+    state,
+    trade("sale", "ETH", "Binance", "2026-04-02", [
+      { portfolio_id: TEMP, quantity: "0.2" },
+    ]),
+    write(sale),
+  ).state;
+  state = archivePortfolio(state, TEMP).state;
+  expect(integrity(state)).toEqual([]);
+  const refused = deleteOperation(state, sale);
+  expect(refused.result).toEqual({ ok: false, code: "not_found" });
+  expect(refused.state).toBe(state);
 });

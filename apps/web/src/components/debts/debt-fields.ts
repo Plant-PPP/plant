@@ -105,8 +105,10 @@ export function toLiabilityInput(fields: DebtFields) {
   };
 }
 
-// The unit a debt's amounts are in, as the dialog and table name it.
+// The unit a debt's amounts are in, as the dialog and table name it. A debt
+// owes in an instrument or a currency, so "—" only stands in while the dialog
+// has neither picked yet.
 export const unitOf = (
   debt: Pick<Liability, "currency" | "uva" | "instrument_symbol">,
 ): string =>
-  debt.instrument_symbol ?? (debt.uva ? "UVA" : (debt.currency ?? "ARS"));
+  debt.instrument_symbol ?? (debt.uva ? "UVA" : debt.currency) ?? "—";

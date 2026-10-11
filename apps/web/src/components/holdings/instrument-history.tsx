@@ -11,8 +11,7 @@ import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import {
   formatAmount,
   formatQuantity,
-  formatShare,
-  percentOf,
+  formatFraction,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { unitParam } from "@/lib/holdings/assets-filter";
@@ -47,7 +46,6 @@ const money = (value: string | null | undefined, unit: Denominator) => (
 );
 
 // A fraction as a percent to one decimal.
-const shareText = (fraction: string) => formatShare(percentOf(fraction));
 
 // Everything that happened to one instrument, in every account and
 // portfolio: what it is worth and what it made, where it is held, and each
@@ -184,7 +182,7 @@ export function InstrumentHistory({
           note={
             returns?.share == null
               ? "Ventas, cobros y lo que tenés hoy"
-              : `${shareText(returns.share)} sobre lo invertido`
+              : `${formatFraction(returns.share)} sobre lo invertido`
           }
         >
           {returns ? (
@@ -205,7 +203,7 @@ export function InstrumentHistory({
           }
         >
           {returns?.annual != null ? (
-            shareText(returns.annual)
+            formatFraction(returns.annual)
           ) : (
             <MissingFigure text="Sin rendimiento anual" />
           )}

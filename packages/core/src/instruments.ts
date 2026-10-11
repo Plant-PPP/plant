@@ -1,4 +1,11 @@
-import { Constants, exactOf, over, times, toDecimal } from "@plant/shared";
+import {
+  compareExact,
+  Constants,
+  exactOf,
+  over,
+  times,
+  toDecimal,
+} from "@plant/shared";
 
 // The instrument types the instrument_type enum does not hold yet. The test
 // that keeps both lists apart fails the day a migration adds them, which is
@@ -29,6 +36,17 @@ const basisOf = (type: InstrumentType) => ({
 // A quoted price as the price of one unit.
 export const unitPrice = (type: InstrumentType, quoted: string): string =>
   toDecimal(over(exactOf(quoted), basisOf(type)), PRICE_DIGITS);
+
+// A typed quote as the price of one unit, or null when 8 decimals cannot hold
+// it exactly: a price is never rounded on the way in.
+export function exactUnitPrice(
+  type: InstrumentType,
+  quoted: string,
+): string | null {
+  const perUnit = over(exactOf(quoted), basisOf(type));
+  const kept = unitPrice(type, quoted);
+  return compareExact(exactOf(kept), perUnit) === 0 ? kept : null;
+}
 
 // A unit's price as the market quotes it.
 export const quotedPrice = (type: InstrumentType, perUnit: string): string =>

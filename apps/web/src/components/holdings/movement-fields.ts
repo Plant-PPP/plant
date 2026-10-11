@@ -5,8 +5,8 @@ import {
   isTrade,
   type Movement,
   type MovementKind,
+  exactUnitPrice,
   quotedPrice,
-  unitPrice,
 } from "@plant/core";
 import { type Currency, exactOf, plus, toDecimal } from "@plant/shared";
 import type { z } from "zod";
@@ -145,7 +145,8 @@ export function toOperationInput(
 ) {
   const perUnit = (typed: string): string | null => {
     const quoted = parseAmountInput(typed);
-    return quoted === null || !type ? quoted : unitPrice(type, quoted);
+    if (quoted === null || !type) return quoted;
+    return exactUnitPrice(type, quoted) ?? typed;
   };
   const income = isIncome(fields.kind);
   return {

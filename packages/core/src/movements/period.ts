@@ -19,8 +19,10 @@ const text = (x: Exact): string => toDecimal(x, 8);
 
 // What a period made, in one unit, from what the holdings were worth at its
 // start and end and the cash flows between them:
-// - paidIn: purchases and their charges;
-// - proceeds: sales less their charges;
+// - paidIn: purchases and their charges, and adjustments in at their cost;
+// - proceeds: sales less their charges, and adjustments out at the cost they
+//   take, so units an adjustment removes carry their unrealized gain into
+//   the market result of its period;
 // - income: dividends and coupons less their withholding;
 // - contributed: paidIn less proceeds, what the holder put in net;
 // - market: the change in value not explained by what was put in or taken

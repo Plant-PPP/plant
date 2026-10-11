@@ -131,6 +131,10 @@ const FRACTION_DIGITS = 8;
 export const percentOf = (fraction: string): string =>
   toDecimal(times(exactOf(fraction), HUNDRED), 1);
 
+// A fraction as a percent to show: "0.0523" is "5,2 %".
+export const formatFraction = (fraction: string): string =>
+  formatShare(percentOf(fraction));
+
 // A fraction as a form field starts with it, in percent: "0.355" is 35,5.
 export function percentInput(fraction: string): string {
   return amountInput(toDecimal(times(exactOf(fraction), HUNDRED), 6));
