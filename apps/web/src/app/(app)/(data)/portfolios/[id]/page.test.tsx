@@ -5,11 +5,15 @@ jest.mock("next/navigation", () => ({ notFound: () => notFound() }));
 jest.mock("@/components/prototype/prototype-scope", () => ({
   PrototypeScope: () => null,
 }));
+jest.mock("@/components/prototype/prototype-summary", () => ({
+  PrototypeClose: () => null,
+}));
 
 import type * as React from "react";
 
 import AccountPage from "../../accounts/[id]/page";
 import InstrumentPage from "../../assets/[symbol]/page";
+import ClosePage from "../../closes/[period]/page";
 import PortfolioPage from "./page";
 
 const saved = process.env.VERCEL_ENV;
@@ -28,6 +32,7 @@ it.each([
   ["a portfolio", () => PortfolioPage(props("id", "p1"))],
   ["an account", () => AccountPage(props("id", "a1"))],
   ["an instrument", () => InstrumentPage(props("symbol", "btc"))],
+  ["a close", () => ClosePage(props("period", "2026-09"))],
 ])("is not found in production for %s", async (_, render) => {
   process.env.VERCEL_ENV = "production";
   await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");

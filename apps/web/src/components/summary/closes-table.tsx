@@ -11,11 +11,7 @@ import {
 } from "@/components/holdings/sum-text";
 import { DataTable } from "@/components/ui/data-table";
 import { TableCell, TableRow } from "@/components/ui/table";
-import {
-  type MonthClose,
-  MONTH_NAMES,
-  type YearClose,
-} from "@/lib/summary/closes";
+import { type MonthClose, monthOf, type YearClose } from "@/lib/summary/closes";
 
 import { CloseStatus, ResultText } from "./figures";
 
@@ -41,7 +37,7 @@ export function ClosesTable({
             href={href(close.period)}
             className="font-medium underline-offset-2 hover:underline"
           >
-            {MONTH_NAMES[Number(close.period.slice(5, 7)) - 1]}
+            {monthOf(close.period)}
           </Link>
           {(close.open || close.recalculatedOn) && (
             <CloseStatus close={close} />

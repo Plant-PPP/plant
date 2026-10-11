@@ -2,8 +2,8 @@ import {
   INSTRUMENT_PRICING,
   type InstrumentType,
   type ManualPriceRefusal,
+  exactUnitPrice,
   quotedPrice,
-  unitPrice,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
@@ -42,7 +42,7 @@ export function toPriceInput(
   return {
     symbol: instrument.symbol,
     price_date: fields.date,
-    price: quoted === null ? null : unitPrice(instrument.type, quoted),
+    price: quoted === null ? null : exactUnitPrice(instrument.type, quoted),
     currency: instrument.currency,
   };
 }

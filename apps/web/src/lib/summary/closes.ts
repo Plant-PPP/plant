@@ -1,5 +1,5 @@
 import { addDays } from "@plant/shared";
-import type { PeriodResult } from "@plant/core";
+import type { InstrumentType, PeriodResult } from "@plant/core";
 
 import type { MovementLine } from "@/lib/holdings/movements-input";
 
@@ -71,7 +71,10 @@ export type YearClose = {
 // first, each with the name of its holding.
 export type MonthDetail = {
   close: MonthClose;
-  lines: (MovementLine & { holdingName: string })[];
+  lines: (MovementLine & {
+    holdingName: string;
+    instrumentType: InstrumentType | null;
+  })[];
 };
 
 export const MONTH_NAMES = [
@@ -90,5 +93,10 @@ export const MONTH_NAMES = [
 ];
 
 // "Septiembre 2026".
+// A period's month: "Septiembre".
+export const monthOf = (period: string): string =>
+  MONTH_NAMES[Number(period.slice(5, 7)) - 1]!;
+
+// "Septiembre 2026".
 export const monthName = (period: string): string =>
-  `${MONTH_NAMES[Number(period.slice(5, 7)) - 1]} ${period.slice(0, 4)}`;
+  `${monthOf(period)} ${period.slice(0, 4)}`;

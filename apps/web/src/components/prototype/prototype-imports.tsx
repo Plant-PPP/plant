@@ -1,13 +1,12 @@
 "use client";
 
-import { exactOf, plus, toDecimal } from "@plant/shared";
 import { notFound } from "next/navigation";
 
 import { ImportPage } from "@/components/imports/import-page";
 import { ImportReview } from "@/components/imports/import-review";
 
 import { usePrototype } from "./prototype-provider";
-import { holdingsView } from "./prototype-store";
+import { heldIn } from "./prototype-imports-store";
 
 const reviewHref = (id: string) => `/import/${id}`;
 
@@ -17,6 +16,7 @@ export function PrototypeImports() {
   return (
     <ImportPage
       accounts={state.accounts}
+      archivedAccounts={state.archivedAccounts}
       imports={state.imports}
       today={state.today}
       reviewHref={reviewHref}
@@ -31,25 +31,12 @@ export function PrototypeImportReview({ id }: { id: string }) {
   const item = state.imports.find((each) => each.id === id);
   if (!item || item.status !== "ready") notFound();
   const account = state.accounts.find((each) => each.id === item.accountId);
-  const held = new Map<string, string>();
-  for (const row of holdingsView(state).active) {
-    if (row.account.id !== item.accountId) continue;
-    if (row.holding.asset_class !== "instrument") continue;
-    const symbol = row.holding.instrument_symbol;
-    held.set(
-      symbol,
-      toDecimal(
-        plus(exactOf(held.get(symbol) ?? "0"), exactOf(row.holding.amount)),
-        8,
-      ),
-    );
-  }
   return (
     <ImportReview
       item={item}
       institution={account?.institution ?? ""}
       instruments={state.instruments}
-      held={held}
+      held={heldIn(state, item.accountId)}
       backHref="/import"
       doneHref="/import"
       actions={actions.imports}

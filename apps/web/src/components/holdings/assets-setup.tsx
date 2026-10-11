@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/data-table";
 import { PendingButton } from "@/components/ui/pending-button";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
+import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import {
   type AssetsFilter,
@@ -674,7 +674,7 @@ export function AssetsSetup({
             return average === null ? (
               <MissingFigure text="Sin costo" />
             ) : (
-              formatPrice(average, unit)
+              formatQuotedPrice(average, unit, row.instrumentType)
             );
           }),
       },

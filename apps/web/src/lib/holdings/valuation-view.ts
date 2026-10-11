@@ -1,6 +1,7 @@
 import {
   type Denominator,
   DENOMINATORS,
+  INSTRUMENT_PRICING,
   type Holding,
   type HoldingsValue,
   type QuoteSnapshot,
@@ -134,14 +135,22 @@ export function holdingsValuation({
     holdings.map((row) => [row.holding.id, classOf(row)]),
   );
 
+  const typeById = new Map(
+    holdings.map((row) => [row.holding.id, row.instrumentType]),
+  );
   const priceOf = (holding: Holding): string | null => {
     if (!hasUnitPrice(holding)) return null;
     const one = value([{ ...holding, amount: "1" }]);
     if (!one.complete) return null;
     const small = compareExact(one.exactTotal, exactOf("1")) < 0;
+    // A price quoted for more than one unit keeps every digit, so the quote
+    // is rounded once, after it is scaled.
+    const type = typeById.get(holding.id);
+    const quotedInBulk =
+      type !== null && type !== undefined && INSTRUMENT_PRICING[type].basis > 1;
     const price = toDecimal(
       one.exactTotal,
-      Math.max(DENOMINATORS[unit].scale, small ? SMALL_PRICE_DIGITS : 0),
+      quotedInBulk || small ? SMALL_PRICE_DIGITS : DENOMINATORS[unit].scale,
     );
     // A price too small for its decimals is unknown here, never zero.
     return compareDecimals(price, "0") === 0 ? null : price;

@@ -566,7 +566,7 @@ flagged.push(
   ],
 );
 
-// Only the prototype's own files and the app's pages import it, and none of
+// Only the prototype's own files and the data pages import it, and none of
 // its files holds a server action.
 flagged.push(
   [

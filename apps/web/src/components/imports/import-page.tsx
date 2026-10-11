@@ -56,12 +56,15 @@ function StatusBadge({ item }: { item: ImportItem }) {
 // and follow each import until it is ready to review.
 export function ImportPage({
   accounts,
+  archivedAccounts,
   imports,
   today,
   reviewHref,
   actions,
 }: {
   accounts: SourceConnectionRow[];
+  // Named in the list of earlier imports, never offered for a new one.
+  archivedAccounts: SourceConnectionRow[];
   imports: ImportItem[];
   today: string;
   reviewHref: (id: string) => string;
@@ -76,8 +79,10 @@ export function ImportPage({
     (item) => item.createdOn.slice(0, 7) === today.slice(0, 7),
   ).length;
   const left = Math.max(0, IMPORTS_PER_MONTH - used);
+  const latestReady = imports.find((item) => item.status === "ready");
   const institution = (accountId: string) =>
-    accounts.find((each) => each.id === accountId)?.institution ?? "";
+    [...accounts, ...archivedAccounts].find((each) => each.id === accountId)
+      ?.institution ?? "";
 
   function send(list: FileList | null) {
     if (!list || list.length === 0 || !accountId) return;
@@ -268,11 +273,10 @@ export function ImportPage({
         ) : (
           <DataTable caption="Cargas" columns={columns} data={imports} />
         )}
+        {/* The newest import ready to review, so each one that gets there is
+            announced once, not every earlier one again. */}
         <p role="status" className="sr-only">
-          {imports
-            .filter((item) => item.status === "ready")
-            .map((item) => `${item.fileName} está lista para revisar.`)
-            .join(" ")}
+          {latestReady && `${latestReady.fileName} está lista para revisar.`}
         </p>
       </section>
     </div>

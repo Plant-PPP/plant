@@ -15,7 +15,7 @@ import {
   valueLiabilities,
   withManualPrices,
 } from "@plant/core";
-import { exactOf, minus, sumOrNull, toDecimal } from "@plant/shared";
+import { exactOf, sumOrNull } from "@plant/shared";
 
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
@@ -29,6 +29,7 @@ import {
 
 import {
   allRows,
+  difference,
   lineOf,
   operationOf,
   type PrototypeState,
@@ -36,8 +37,6 @@ import {
 } from "./prototype-store";
 
 const sum = (values: readonly (string | null)[]) => sumOrNull(values, 8);
-const difference = (a: string, b: string) =>
-  toDecimal(minus(exactOf(a), exactOf(b)), 8);
 
 type Ledger = {
   row: HoldingRow;
@@ -289,6 +288,7 @@ export function monthDetail(
           operationOf(state, movement.operation_id)!,
         ),
         holdingName: `${holdingName(ledger.row.holding, names)} · ${ledger.row.account.institution}`,
+        instrumentType: ledger.row.instrumentType,
       });
     });
   }

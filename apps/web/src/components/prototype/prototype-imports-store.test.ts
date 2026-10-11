@@ -113,3 +113,69 @@ it("prices what the feeds do not price from the user's manual price", () => {
   expect(ko.price).not.toBeNull();
   expect(ko.currency).toBe("ARS");
 });
+
+it("refuses an instrument listed twice, changing nothing", () => {
+  const after = read("resumen.pdf");
+  const [first] = after.imports[0]!.rows;
+  const twice = [first!, { ...first!, id: "again" }];
+  const refused = confirmImport(after, "i1", twice, newId);
+  expect(refused.result).toEqual({ ok: false, code: "invalid" });
+  expect(refused.state).toBe(after);
+});
+
+it("refuses units that come in at no price", () => {
+  const after = read("resumen.pdf");
+  const rows = after.imports[0]!.rows.map((row) =>
+    row.id.endsWith("-new") ? { ...row, price: "0" } : row,
+  );
+  expect(confirmImport(after, "i1", rows, newId).result).toEqual({
+    ok: false,
+    code: "invalid",
+  });
+});
+
+it("adjusts an instrument the portfolio sold out of back in", () => {
+  const cocos = state.accounts.find((row) => row.institution === "Cocos")!;
+  const sold = state.holdings.find(
+    (each) =>
+      each.closed &&
+      each.accountId === cocos.id &&
+      each.portfolioId === cocos.portfolio.id,
+  )!;
+  expect(sold.holding.asset_class).toBe("instrument");
+  const symbol =
+    sold.holding.asset_class === "instrument"
+      ? sold.holding.instrument_symbol
+      : "";
+  const after = finishReading(
+    addImport(state, { id: "i3", fileName: "cocos.pdf", accountId: cocos.id })
+      .state,
+    "i3",
+  );
+  const confirmed = confirmImport(
+    after,
+    "i3",
+    [
+      {
+        id: "back",
+        symbol,
+        quantity: "2",
+        price: "100",
+        currency: state.instruments.find((each) => each.symbol === symbol)!
+          .currency,
+        confidence: "high",
+        source: "Página 1",
+        discarded: false,
+      },
+    ],
+    newId,
+  );
+  expect(confirmed.result).toEqual({ ok: true, id: "i3" });
+  const own = confirmed.state.movements.get(sold.holding.id)!;
+  expect(own.at(-1)!.kind).toBe("adjustment");
+  expect(
+    holdingsView(confirmed.state).active.find(
+      (row) => row.id === sold.holding.id,
+    )?.holding.amount,
+  ).toBe("2");
+});

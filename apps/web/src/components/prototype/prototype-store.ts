@@ -2,6 +2,7 @@ import {
   admitManualPrice,
   type CashFlow,
   type Liability,
+  withManualPrices,
   cashFlowsOf,
   type QuoteSnapshot,
   admitMovement,
@@ -309,7 +310,8 @@ export function salesOf(
   };
 }
 
-const difference = (a: string, b: string): string =>
+// a − b, to the 8 decimals the store keeps.
+export const difference = (a: string, b: string): string =>
   toDecimal(minus(exactOf(a), exactOf(b)), 8);
 
 // A movement's line from its step and the position before it: the cost its
@@ -509,43 +511,82 @@ export function createHolding(
     portfolio,
     instrumentType: null,
   });
-  const created: PrototypeState = {
-    ...state,
-    holdings: [
-      {
-        holding,
-        accountId: account.id,
-        portfolioId: portfolio.id,
-        closed: false,
-      },
-      ...state.holdings,
-    ],
-  };
   if (holding.asset_class !== "instrument") {
-    return { state: created, result: { ok: true, id } };
+    return {
+      state: {
+        ...state,
+        holdings: [
+          {
+            holding,
+            accountId: account.id,
+            portfolioId: portfolio.id,
+            closed: false,
+          },
+          ...state.holdings,
+        ],
+      },
+      result: { ok: true, id },
+    };
   }
-  // An instrument holding's quantity is what its movements leave, so one
-  // created with a quantity starts with it as its opening balance, at no
-  // cost until the user edits it.
   const instrument = state.instruments.find(
     ({ symbol }) => symbol === holding.instrument_symbol,
   );
   if (!instrument) return refused(state, { ok: false, code: "not_found" });
+  // One holding per instrument in an account's portfolio, as the database's
+  // unique key keeps it: an open one refuses a second, and one sold to zero
+  // takes the units back as an adjustment.
+  const existing = holdingIn(
+    state,
+    account.id,
+    instrument.symbol,
+    portfolio.id,
+  );
+  if (existing && !existing.closed) {
+    return refused(state, { ok: false, code: "duplicate" });
+  }
+  // Its quantity is what its movements leave, so the units come in at
+  // today's price, or at no cost when the instrument has none.
+  const quote = withManualPrices(
+    snapshotOn(state.quotes, state.today, {
+      fxKinds: [],
+      symbols: [instrument.symbol],
+    }).snapshot,
+    state.manualPrices,
+  ).snapshot.prices[instrument.symbol];
+  const opening = {
+    source_connection_id: account.id,
+    instrument_symbol: instrument.symbol,
+    date: state.today,
+    currency: instrument.currency,
+    price: quote && quote.currency === instrument.currency ? quote.price : "0",
+    parts: [{ portfolio_id: portfolio.id, quantity: holding.amount }],
+  };
+  const base: PrototypeState = existing
+    ? state
+    : {
+        ...state,
+        holdings: [
+          {
+            holding,
+            accountId: account.id,
+            portfolioId: portfolio.id,
+            closed: false,
+          },
+          ...state.holdings,
+        ],
+      };
   const opened = writeOperation(
-    created,
-    {
-      kind: "opening_balance",
-      source_connection_id: account.id,
-      instrument_symbol: instrument.symbol,
-      date: state.today,
-      currency: instrument.currency,
-      price: "0",
-      parts: [{ portfolio_id: portfolio.id, quantity: holding.amount }],
-    },
+    base,
+    existing
+      ? { ...opening, kind: "adjustment", direction: "in" }
+      : { ...opening, kind: "opening_balance" },
     { operationId: `${id}-opening`, newId: () => `${id}-opening` },
   );
   return opened.result.ok
-    ? { state: opened.state, result: { ok: true, id } }
+    ? {
+        state: opened.state,
+        result: { ok: true, id: existing?.holding.id ?? id },
+      }
     : refused(state, { ok: false, code: "invalid" });
 }
 
@@ -619,8 +660,19 @@ function withMovements(
   };
 }
 
+// Whether a holding sits in an account or portfolio the user archived, where
+// no holding may stay open.
+const archivedHome = (state: PrototypeState, holdingId: string): boolean => {
+  const stored = state.holdings.find((each) => each.holding.id === holdingId);
+  return (
+    stored !== undefined &&
+    (state.archivedAccounts.some(({ id }) => id === stored.accountId) ||
+      state.archivedPortfolios.some(({ id }) => id === stored.portfolioId))
+  );
+};
+
 // The open or closed holding of an instrument in an account and portfolio.
-const holdingIn = (
+export const holdingIn = (
   state: PrototypeState,
   accountId: string,
   symbol: string,
@@ -736,6 +788,9 @@ export function writeOperation(
     const admitted = admitMovements({ prior: null, after: own });
     if (!admitted.ok) {
       return refused(state, { ok: false, code: admitted.code });
+    }
+    if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
+      return refused(state, { ok: false, code: "not_found" });
     }
     next = withMovements(
       next,
@@ -858,6 +913,9 @@ export function deleteOperation(
     const admitted = admitMovements({ prior: null, after: kept });
     if (!admitted.ok) {
       return refused(state, { ok: false, code: admitted.code });
+    }
+    if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
+      return refused(state, { ok: false, code: "not_found" });
     }
     next = withMovements(next, holdingId, kept, admitted.quantity);
   }
