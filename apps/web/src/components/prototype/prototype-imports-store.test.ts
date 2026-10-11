@@ -179,3 +179,13 @@ it("adjusts an instrument the portfolio sold out of back in", () => {
     )?.holding.amount,
   ).toBe("2");
 });
+
+it("refuses a kept row with no units, changing nothing", () => {
+  const after = read("resumen.pdf");
+  const rows = after.imports[0]!.rows.map((row, index) =>
+    index === 0 ? { ...row, quantity: "0" } : row,
+  );
+  const refused = confirmImport(after, "i1", rows, newId);
+  expect(refused.result).toEqual({ ok: false, code: "invalid" });
+  expect(refused.state).toBe(after);
+});

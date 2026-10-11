@@ -1,5 +1,12 @@
-import { snapshotOn, withManualPrices } from "@plant/core";
-import { compareDecimals, exactOf, plus, toDecimal } from "@plant/shared";
+import {
+  compareDecimals,
+  exactOf,
+  nonNegativeDecimalSchema,
+  plus,
+  positiveDecimalSchema,
+  toDecimal,
+} from "@plant/shared";
+import { z } from "zod";
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
@@ -12,6 +19,7 @@ import {
   difference,
   holdingIn,
   holdingsView,
+  priceToday,
   type PrototypeState,
   type Write,
   writeOperation,
@@ -105,16 +113,9 @@ export function finishReading(
     }));
   }
   // Priced as the page values them: the feeds, else the user's manual price.
-  const { prices } = withManualPrices(
-    snapshotOn(state.quotes, state.today, {
-      fxKinds: [],
-      symbols: state.instruments.map(({ symbol }) => symbol),
-    }).snapshot,
-    state.manualPrices,
-  ).snapshot;
-  const priceOf = (symbol: string) => prices[symbol];
-  const currencyOf = (symbol: string) =>
-    state.instruments.find((each) => each.symbol === symbol)?.currency;
+  const instrumentOf = (symbol: string) =>
+    state.instruments.find((each) => each.symbol === symbol)!;
+  const priceOf = (symbol: string) => priceToday(state, instrumentOf(symbol));
   const symbols = [...held.keys()].sort();
   const truth: ImportRow[] = symbols.map((symbol, index) => {
     const quantity = held.get(symbol)!;
@@ -124,13 +125,12 @@ export function finishReading(
         : index === 2 && compareDecimals(quantity, "1") > 0
           ? difference(quantity, "1")
           : quantity;
-    const quote = priceOf(symbol);
     return {
       id: `${id}-${index}`,
       symbol,
       quantity: changed,
-      price: quote?.price ?? null,
-      currency: currencyOf(symbol)!,
+      price: priceOf(symbol),
+      currency: instrumentOf(symbol).currency,
       confidence: index === 2 ? "medium" : "high",
       source: `Página ${1 + Math.floor(index / 3)}`,
       discarded: false,
@@ -141,15 +141,15 @@ export function finishReading(
     (each) =>
       !held.has(each.symbol) &&
       currencies.has(each.currency) &&
-      priceOf(each.symbol),
+      priceOf(each.symbol) !== null,
   );
   if (extra) {
     truth.push({
       id: `${id}-new`,
       symbol: extra.symbol,
       quantity: "3",
-      price: priceOf(extra.symbol)!.price,
-      currency: priceOf(extra.symbol)!.currency,
+      price: priceOf(extra.symbol),
+      currency: extra.currency,
       confidence: "medium",
       source: "Página 2",
       discarded: false,
@@ -178,6 +178,17 @@ export function finishReading(
   }));
 }
 
+// A row as the review hands it over: a discarded one may hold anything typed.
+const reviewedRowSchema = z.union([
+  z.object({ discarded: z.literal(true) }),
+  z.object({
+    discarded: z.literal(false),
+    symbol: z.string().min(1),
+    quantity: positiveDecimalSchema,
+    price: nonNegativeDecimalSchema.nullable(),
+  }),
+]);
+
 // The account as the reviewed rows say: for each instrument, an opening
 // balance where it has none and an adjustment for any difference, all or
 // nothing. What the document does not list stays as it is.
@@ -192,6 +203,9 @@ export function confirmImport(
     item && state.accounts.find((each) => each.id === item.accountId);
   if (!item || !account || item.status !== "ready") {
     return { state, result: { ok: false, code: "not_found" } };
+  }
+  if (!z.array(reviewedRowSchema).safeParse(rows).success) {
+    return { state, result: { ok: false, code: "invalid" } };
   }
   const kept = rows.filter((row) => !row.discarded);
   // Each row is weighed against what the account held before, so an
