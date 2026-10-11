@@ -3,17 +3,17 @@ import {
   daysBetween,
   type Exact,
   exactOf,
+  minus,
+  negated,
   over,
   plus,
   toDecimal,
+  ZERO,
 } from "@plant/shared";
 
 import { isIncome, type Movement } from "./movement";
 import type { LedgerStep } from "./replay";
 
-const ZERO: Exact = { n: 0n, d: 1n };
-const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
-const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
 const text = (x: Exact): string => toDecimal(x, 8);
 
 // Money between the holder and a holding on a date, in the view's unit:
@@ -22,8 +22,9 @@ const text = (x: Exact): string => toDecimal(x, 8);
 export type CashFlow = { date: string; amount: string };
 
 // Each movement's cash flow, from the replay of the same movements; null when
-// a step could not be expressed in the view's unit. Units an adjustment moves
-// pay nothing; only its charges are paid.
+// a step could not be expressed in the view's unit. Units an adjustment brings
+// in are paid in at their cost, and units it takes out are paid out at
+// theirs, as the replay counts them.
 export function cashFlowsOf(
   movements: readonly Movement[],
   steps: readonly LedgerStep[],
@@ -46,8 +47,6 @@ export function cashFlowsOf(
       amount = minus(exactOf(step.sale.gross), exactOf(step.sale.charges));
     } else if (isIncome(movement.kind)) {
       amount = minus(minus(now.income, before.income), charges);
-    } else if (movement.kind === "adjustment") {
-      amount = negated(charges);
     } else {
       amount = negated(plus(minus(now.cost, before.cost), charges));
     }

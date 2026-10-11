@@ -1,16 +1,12 @@
 import type { Denominator } from "@plant/core";
 
-import { formatAmount } from "@/lib/format/amount";
 import type { SalesSlice } from "@/lib/holdings/movements-input";
 
-import { GainLossText, MissingFigure, SummaryTile } from "./sum-text";
+import { AmountText, GainLossText, SummaryTile } from "./sum-text";
 
-const amount = (value: string | null, unit: Denominator) =>
-  value === null ? (
-    <MissingFigure text="Sin valor en esta moneda" />
-  ) : (
-    formatAmount(value, unit)
-  );
+const amount = (value: string | null | undefined, unit: Denominator) => (
+  <AmountText amount={value} unit={unit} />
+);
 
 // The year's sales in four tiles: how many, what they brought in, their fees
 // and taxes, and their result.

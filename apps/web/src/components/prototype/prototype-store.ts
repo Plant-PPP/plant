@@ -29,7 +29,7 @@ import {
   snapshotOn,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { type Exact, exactOf, plus, toDecimal } from "@plant/shared";
+import { exactOf, minus, sumOrNull, toDecimal } from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
@@ -223,10 +223,7 @@ export function yearsOf(state: PrototypeState): string[] {
   return [...years].sort().reverse();
 }
 
-const sum = (values: (string | null)[]): string | null =>
-  values.includes(null)
-    ? null
-    : toDecimal(plus(...values.map((value) => exactOf(value!))), 8);
+const sum = (values: (string | null)[]) => sumOrNull(values, 8);
 
 // The sales of a year whose holding, open or closed, matches the filters,
 // newest first: the first `limit` rows and the totals of all of them.
@@ -297,9 +294,8 @@ export function salesOf(
   };
 }
 
-const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
-const minus = (a: string, b: string): string =>
-  toDecimal(plus(exactOf(a), negated(exactOf(b))), 8);
+const difference = (a: string, b: string): string =>
+  toDecimal(minus(exactOf(a), exactOf(b)), 8);
 
 // A movement's line from its step and the position before it: the cost its
 // units added or took out (a sale's being that of the units sold), or what an
@@ -313,11 +309,11 @@ function lineOf(
   const was = before.money;
   const now = step.position.money;
   if (!was || !now) return { movement, cost: null, charges: null, operation };
-  const charges = minus(now.charges, was.charges);
+  const charges = difference(now.charges, was.charges);
   if (isIncome(movement.kind)) {
     return {
       movement,
-      cost: minus(now.income, was.income),
+      cost: difference(now.income, was.income),
       charges,
       operation,
     };
@@ -325,8 +321,8 @@ function lineOf(
   return {
     movement,
     cost: takesUnits(movement)
-      ? minus(was.cost, now.cost)
-      : minus(now.cost, was.cost),
+      ? difference(was.cost, now.cost)
+      : difference(now.cost, was.cost),
     charges,
     operation,
   };

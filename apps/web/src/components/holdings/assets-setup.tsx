@@ -56,6 +56,7 @@ import {
 } from "@/lib/holdings/assets-filter";
 import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import {
+  formatQuotedPrice,
   type PriceFields,
   type PriceResult,
   priceFields,
@@ -281,6 +282,8 @@ export function AssetsSetup({
     run: () => void;
   } | null>(null);
   const names = instrumentNames(instruments);
+  const types = new Map(instruments.map((each) => [each.symbol, each.type]));
+  const typeOf = (symbol: string) => types.get(symbol) ?? null;
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
   // ticker.
@@ -382,7 +385,7 @@ export function AssetsSetup({
     actions: MovementActions,
     fields: MovementFields,
   ): boolean {
-    const input = toOperationInput(fields);
+    const input = toOperationInput(fields, typeOf(fields.instrument));
     const instrument =
       instruments.find((each) => each.symbol === fields.instrument)?.name ??
       fields.instrument;
@@ -582,7 +585,7 @@ export function AssetsSetup({
             : null;
         const figure =
           item.price !== null ? (
-            formatPrice(item.price, unit)
+            formatQuotedPrice(item.price, unit, row.instrumentType)
           ) : (
             // A valued holding whose unit is worth less than the decimals
             // show.
@@ -958,6 +961,7 @@ export function AssetsSetup({
                     key={`${row.id}:${movement.input.revisions.get(row.id) ?? 0}:${unit}`}
                     scope={{ holdingId: row.id }}
                     unit={unit}
+                    instrumentTypes={types}
                     load={movement.input.loadMovements}
                     pending={pending}
                     actions={[
@@ -1219,6 +1223,7 @@ export function AssetsSetup({
               ? operationFields(movementDialog.operation.parts, {
                   accountId: movementDialog.operation.accountId,
                   instrument: movementDialog.operation.instrument,
+                  type: typeOf(movementDialog.operation.instrument),
                 })
               : newOperationFields(movementDialog.row, movementDialog.preset))
           }

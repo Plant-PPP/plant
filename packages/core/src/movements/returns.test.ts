@@ -26,13 +26,15 @@ it("pays in purchases and their charges and pays out sales less theirs", () => {
   ]);
 });
 
-it("pays nothing for units an adjustment moves, only its charges", () => {
-  expect(
-    flowsOf([
-      trade("purchase", "1", "100", { date: "2025-01-01" }),
-      adjustment("in", "1", { date: "2025-02-01", fees: "1" }),
-    ])![1],
-  ).toEqual({ date: "2025-02-01", amount: "-1" });
+it("counts an adjustment's units at the cost the replay gives them", () => {
+  const flows = flowsOf([
+    trade("purchase", "1", "100", { date: "2025-01-01" }),
+    adjustment("in", "1", { date: "2025-02-01", price: "80", fees: "1" }),
+    adjustment("out", "1", { date: "2025-03-01" }),
+  ])!;
+  expect(flows[1]).toEqual({ date: "2025-02-01", amount: "-81" });
+  // Out at the average cost of the two units held.
+  expect(flows[2]).toEqual({ date: "2025-03-01", amount: "90" });
 });
 
 it("counts the whole result of a round trip, sold gains included", () => {

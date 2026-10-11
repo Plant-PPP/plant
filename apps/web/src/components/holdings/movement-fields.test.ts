@@ -36,7 +36,9 @@ it("sends one purchase split across portfolios, with its charges", () => {
     ],
     reference: " BIN-1 ",
   };
-  expect(operationInputSchema.parse(toOperationInput(fields))).toEqual({
+  expect(
+    operationInputSchema.parse(toOperationInput(fields, "crypto")),
+  ).toEqual({
     kind: "purchase",
     source_connection_id: ACCOUNT,
     instrument_symbol: "BTC",
@@ -62,7 +64,7 @@ it("sends an income's parts as amounts, and an adjustment out at no cost", () =>
     ...newMovementFields({ ...defaults, kind: "coupon" }),
     parts: [{ portfolioId: PRINCIPAL, size: "120" }],
   };
-  expect(toOperationInput(coupon).parts).toEqual([
+  expect(toOperationInput(coupon, "crypto").parts).toEqual([
     { portfolio_id: PRINCIPAL, amount: "120" },
   ]);
   const out = {
@@ -71,7 +73,9 @@ it("sends an income's parts as amounts, and an adjustment out at no cost", () =>
     price: "999",
     parts: [{ portfolioId: PRINCIPAL, size: "1" }],
   };
-  expect(operationInputSchema.parse(toOperationInput(out))).toMatchObject({
+  expect(
+    operationInputSchema.parse(toOperationInput(out, "crypto")),
+  ).toMatchObject({
     direction: "out",
     price: "0",
   });
@@ -109,7 +113,7 @@ it("reads an operation back from its parts, adding up each charge", () => {
       { movement: part("m1", "1", "3.33333333"), portfolioId: PRINCIPAL },
       { movement: part("m2", "2", "6.66666667"), portfolioId: LARGO },
     ],
-    { accountId: ACCOUNT, instrument: "BTC" },
+    { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
   );
   expect(fields).toMatchObject({
     kind: "sale",
@@ -129,7 +133,9 @@ it("points at the first refused field in the form's order", () => {
     price: "x",
     parts: [{ portfolioId: PRINCIPAL, size: "0" }],
   };
-  const parsed = operationInputSchema.safeParse(toOperationInput(fields));
+  const parsed = operationInputSchema.safeParse(
+    toOperationInput(fields, "crypto"),
+  );
   if (parsed.success) throw new Error("expected a refusal");
   expect(movementRefusal(parsed.error).field).toBe("price");
 });
@@ -140,4 +146,39 @@ it("points a refused write at its field", () => {
   expect(refusedMovementField(MOVEMENT_MESSAGES.no_rate)).toBe("date");
   expect(refusedMovementField(MOVEMENT_MESSAGES.opening_balance)).toBe("kind");
   expect(refusedMovementField(MOVEMENT_MESSAGES.failed)).toBeNull();
+});
+
+it("takes a bond's price as quoted, per 100 nominal, and sends it per unit", () => {
+  const bond = {
+    ...newMovementFields({ ...defaults, instrument: "AL30", currency: "ARS" }),
+    price: "85,5",
+    parts: [{ portfolioId: PRINCIPAL, size: "1000" }],
+  };
+  expect(toOperationInput(bond, "bond")).toMatchObject({ price: "0.855" });
+  const rates = {
+    mep: { sell: "1", date: "2026-03-02" },
+    ccl: { sell: "1", date: "2026-03-02" },
+    official: { sell: "1", date: "2026-03-02" },
+  };
+  const purchase = {
+    id: "m1",
+    holding_id: "h1",
+    operation_id: "op",
+    kind: "purchase" as const,
+    date: "2026-03-02",
+    currency: "ARS" as const,
+    quantity: "1000",
+    price: "0.855",
+    charges: [],
+    reference: null,
+    note: null,
+    rates,
+  };
+  expect(
+    operationFields([{ movement: purchase, portfolioId: PRINCIPAL }], {
+      accountId: ACCOUNT,
+      instrument: "AL30",
+      type: "bond",
+    }).price,
+  ).toBe("85,5");
 });

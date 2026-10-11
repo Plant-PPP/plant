@@ -1,6 +1,11 @@
 "use client";
 
-import { type Denominator, isTrade, type MovementCursor } from "@plant/core";
+import {
+  type Denominator,
+  type InstrumentType,
+  isTrade,
+  type MovementCursor,
+} from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -12,9 +17,10 @@ import {
   TruncatedText,
   actionsColumn,
 } from "@/components/ui/data-table";
-import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
+import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
+import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type {
   MovementLine,
   MovementScope,
@@ -22,7 +28,7 @@ import type {
 } from "@/lib/holdings/movements-input";
 import { settle } from "@/lib/server-action-call";
 
-import { MissingFigure, NUMBER_CELL } from "./sum-text";
+import { AmountText, NUMBER_CELL } from "./sum-text";
 
 type Row = MovementLine & { id: string };
 
@@ -39,12 +45,9 @@ export type MovementRowAction = {
   onClick: (line: MovementLine) => void;
 };
 
-const money = (amount: string | null, unit: Denominator) =>
-  amount === null ? (
-    <MissingFigure text="Sin valor en esta moneda" />
-  ) : (
-    formatAmount(amount, unit)
-  );
+const money = (value: string | null | undefined, unit: Denominator) => (
+  <AmountText amount={value} unit={unit} />
+);
 
 // A scope's movements, newest first, in the page's unit, a page at a time.
 // The caller keys it by scope, unit and the scope's revision, so a change
@@ -54,6 +57,7 @@ export function MovementsTable({
   unit,
   load,
   holdingName,
+  instrumentTypes,
   limit,
   actions = [],
   pending = false,
@@ -63,6 +67,9 @@ export function MovementsTable({
   load: MovementsInput["loadMovements"];
   // Names each row's holding; a list of one holding's movements has none.
   holdingName?: (holdingId: string) => string;
+  // Each instrument's type by symbol, so a bond's price shows per 100
+  // nominal as quoted.
+  instrumentTypes?: ReadonlyMap<string, InstrumentType>;
   // Shows only the newest `limit`, with no more to page.
   limit?: number;
   actions?: MovementRowAction[];
@@ -144,7 +151,11 @@ export function MovementsTable({
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
         isTrade(original.movement)
-          ? formatPrice(original.movement.price, original.movement.currency)
+          ? formatQuotedPrice(
+              original.movement.price,
+              original.movement.currency,
+              instrumentTypes?.get(original.operation.instrument),
+            )
           : null,
     },
     {
