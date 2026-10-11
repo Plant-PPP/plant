@@ -64,14 +64,17 @@ export function createPortfolio(
 }
 
 // A new name shows on every account that defaults to it.
-const renamed = (state: PrototypeState, row: PortfolioRow): PrototypeState => ({
-  ...state,
-  accounts: state.accounts.map((each) =>
+const renamed = (state: PrototypeState, row: PortfolioRow): PrototypeState => {
+  const withName = (each: SourceConnectionRow) =>
     each.portfolio.id === row.id
       ? { ...each, portfolio: { ...each.portfolio, name: row.name } }
-      : each,
-  ),
-});
+      : each;
+  return {
+    ...state,
+    accounts: state.accounts.map(withName),
+    archivedAccounts: state.archivedAccounts.map(withName),
+  };
+};
 
 export function renamePortfolio(
   state: PrototypeState,

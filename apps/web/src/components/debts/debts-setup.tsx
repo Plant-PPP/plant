@@ -39,9 +39,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import {
   formatAmount,
+  formatFraction,
   formatQuantity,
-  formatShare,
-  percentOf,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { unitParam } from "@/lib/holdings/assets-filter";
@@ -58,6 +57,7 @@ import {
   debtFields,
   LIABILITY_KIND_LABELS,
   toLiabilityInput,
+  unitOf,
 } from "./debt-fields";
 
 export type DebtActions = {
@@ -83,11 +83,9 @@ type DialogState =
 
 // A debt's balance in its own unit: "38.500 UVA", "US$ 3.000,00".
 function owed(debt: Liability, amount: string): string {
-  if (debt.instrument_symbol) {
-    return `${formatQuantity(amount)} ${debt.instrument_symbol}`;
-  }
-  if (debt.uva) return `${formatQuantity(amount)} UVA`;
-  return formatAmount(amount, debt.currency ?? "ARS");
+  return debt.currency !== null && !debt.uva
+    ? formatAmount(amount, debt.currency)
+    : `${formatQuantity(amount)} ${unitOf(debt)}`;
 }
 
 // What a user owes, each debt in its own unit and in the page's, with the
@@ -193,7 +191,7 @@ export function DebtsSetup({
         debt.annual_rate === null ? (
           <MissingFigure text="Sin tasa" />
         ) : (
-          formatShare(percentOf(debt.annual_rate))
+          formatFraction(debt.annual_rate)
         ),
     },
     {

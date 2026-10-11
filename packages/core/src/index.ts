@@ -109,6 +109,7 @@ export {
   type MovementWindow,
 } from "./movements/admit";
 export {
+  exactUnitPrice,
   INSTRUMENT_PRICING,
   INSTRUMENT_TYPES,
   type InstrumentType,
