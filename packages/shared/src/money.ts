@@ -22,6 +22,11 @@ export const decimalStringSchema = z
   .regex(DECIMAL_PATTERN, "Must be a decimal number, e.g. 1234.56")
   .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
 
+export const nonNegativeDecimalSchema = decimalStringSchema.refine(
+  (value) => !value.startsWith("-"),
+  "Must be 0 or more",
+);
+
 export const positiveDecimalSchema = decimalStringSchema.refine(
   (value) => !/^(-|0(\.0+)?$)/.test(value),
   "Must be greater than 0",

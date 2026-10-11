@@ -67,6 +67,14 @@ export function snapshotFromRows(
   return { snapshot: { date: range.to, fx, prices }, invalidCount };
 }
 
+// The snapshot for a day from rows already read: every row the store would
+// return for that day's range, or more.
+export const snapshotOn = (
+  rows: StoredQuotes,
+  date: string,
+  need: QuoteNeed,
+): SnapshotRead => snapshotFromRows(rangeOf(date, need), rows);
+
 // The snapshot for a day, read through the store. Rejects with what the
 // reader rejects with.
 export async function readSnapshot(

@@ -4,9 +4,9 @@ import {
   compareDecimals,
   daysBetween,
   currencySchema as currency,
-  decimalStringSchema,
   exactOf,
   fieldsPassed,
+  nonNegativeDecimalSchema,
   plus,
   positiveDecimalSchema,
   roundedTo,
@@ -33,7 +33,7 @@ const columns = <
 export const HOLDING_DATE_MIN = "1900-01-01";
 export const HOLDING_DATE_MAX = "9999-12-31";
 
-const date = z.iso
+export const holdingDateSchema = z.iso
   .date()
   .refine((day) => day >= HOLDING_DATE_MIN && day <= HOLDING_DATE_MAX, {
     message: `A date from ${HOLDING_DATE_MIN} to ${HOLDING_DATE_MAX}`,
@@ -44,10 +44,8 @@ const none = z.null();
 // The holdings_annual_rate CHECK's bound: 1000% a year.
 export const MAX_ANNUAL_RATE = "10";
 
-const annualRate = decimalStringSchema.refine(
-  (rate) =>
-    compareDecimals(rate, "0") >= 0 &&
-    compareDecimals(rate, MAX_ANNUAL_RATE) <= 0,
+const annualRate = nonNegativeDecimalSchema.refine(
+  (rate) => compareDecimals(rate, MAX_ANNUAL_RATE) <= 0,
   {
     message: `A rate is a fraction from 0 to ${MAX_ANNUAL_RATE}`,
     when: fieldsPassed,
@@ -81,8 +79,8 @@ const classColumns = <L extends Label>(label: L) => ({
   fixed_term: columns({
     currency,
     annual_rate: annualRate,
-    started_on: date,
-    matures_on: date,
+    started_on: holdingDateSchema,
+    matures_on: holdingDateSchema,
     instrument_symbol: none,
     valued_on: none,
     label: label.nullable(),
@@ -90,7 +88,7 @@ const classColumns = <L extends Label>(label: L) => ({
   // A value the user states, with its date and a label.
   real_estate: columns({
     currency,
-    valued_on: date,
+    valued_on: holdingDateSchema,
     label,
     instrument_symbol: none,
     annual_rate: none,
@@ -99,7 +97,7 @@ const classColumns = <L extends Label>(label: L) => ({
   }),
   other: columns({
     currency,
-    valued_on: date,
+    valued_on: holdingDateSchema,
     label,
     instrument_symbol: none,
     annual_rate: none,

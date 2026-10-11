@@ -5,6 +5,7 @@ import {
   DENOMINATORS,
   type Denominator,
   type DenominatorSpec,
+  UNIT_FX_KINDS,
 } from "./denominators";
 import { type Holding, valueHolding } from "./holding";
 
@@ -94,7 +95,7 @@ const SPECS: readonly DenominatorSpec[] = Object.values(DENOMINATORS);
 // every priced unit, and each held instrument's price.
 export function quotesNeeded(holdings: readonly Holding[]): QuoteNeed {
   return {
-    fxKinds: SPECS.flatMap((spec) => ("fx" in spec ? [spec.fx] : [])),
+    fxKinds: UNIT_FX_KINDS,
     symbols: [
       ...SPECS.flatMap((spec) => ("priced" in spec ? [spec.priced] : [])),
       ...holdings.flatMap((holding) =>
