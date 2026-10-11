@@ -126,3 +126,9 @@ export {
   priceSource,
   withManualPrices,
 } from "./quotes/manual";
+export {
+  type CashFlow,
+  cashFlowsOf,
+  type Returns,
+  returnsOf,
+} from "./movements/returns";

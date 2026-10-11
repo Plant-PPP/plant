@@ -1,0 +1,123 @@
+import {
+  compareExact,
+  daysBetween,
+  type Exact,
+  exactOf,
+  over,
+  plus,
+  toDecimal,
+} from "@plant/shared";
+
+import { isIncome, type Movement } from "./movement";
+import type { LedgerStep } from "./replay";
+
+const ZERO: Exact = { n: 0n, d: 1n };
+const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
+const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
+const text = (x: Exact): string => toDecimal(x, 8);
+
+// Money between the holder and a holding on a date, in the view's unit:
+// negative is paid in (a purchase and its charges), positive paid out (a sale
+// less its charges, an income less its withholding).
+export type CashFlow = { date: string; amount: string };
+
+// Each movement's cash flow, from the replay of the same movements; null when
+// a step could not be expressed in the view's unit. Units an adjustment moves
+// pay nothing; only its charges are paid.
+export function cashFlowsOf(
+  movements: readonly Movement[],
+  steps: readonly LedgerStep[],
+): CashFlow[] | null {
+  const flows: CashFlow[] = [];
+  let before = { cost: ZERO, charges: ZERO, income: ZERO };
+  for (const [index, movement] of movements.entries()) {
+    const step = steps[index];
+    const money = step?.position.money;
+    if (!step || !money) return null;
+    const now = {
+      cost: exactOf(money.cost),
+      charges: exactOf(money.charges),
+      income: exactOf(money.income),
+    };
+    const charges = minus(now.charges, before.charges);
+    let amount: Exact;
+    if (movement.kind === "sale") {
+      if (!step.sale) return null;
+      amount = minus(exactOf(step.sale.gross), exactOf(step.sale.charges));
+    } else if (isIncome(movement.kind)) {
+      amount = minus(minus(now.income, before.income), charges);
+    } else if (movement.kind === "adjustment") {
+      amount = negated(charges);
+    } else {
+      amount = negated(plus(minus(now.cost, before.cost), charges));
+    }
+    flows.push({ date: movement.date, amount: text(amount) });
+    before = now;
+  }
+  return flows;
+}
+
+// What a holding's cash flows made, valued at `value` on `date`: what was paid
+// in and out, the result (out plus value less in), the result as a share of
+// what was paid in, and the yearly rate that makes the flows and the value
+// worth nothing today (the money-weighted return). The yearly rate is null
+// for flows under a year old, where a year's rate overstates a short run, or
+// when no rate solves them.
+export type Returns = {
+  paidIn: string;
+  paidOut: string;
+  result: string;
+  share: string | null;
+  annual: string | null;
+};
+
+const YEAR_DAYS = 365;
+
+export function returnsOf(
+  flows: readonly CashFlow[],
+  { date, value }: { date: string; value: string },
+): Returns {
+  let paidIn = ZERO;
+  let paidOut = ZERO;
+  for (const flow of flows) {
+    const amount = exactOf(flow.amount);
+    if (compareExact(amount, ZERO) < 0) paidIn = plus(paidIn, negated(amount));
+    else paidOut = plus(paidOut, amount);
+  }
+  const result = minus(plus(paidOut, exactOf(value)), paidIn);
+  const first = flows[0]?.date;
+  return {
+    paidIn: text(paidIn),
+    paidOut: text(paidOut),
+    result: text(result),
+    share: compareExact(paidIn, ZERO) === 0 ? null : text(over(result, paidIn)),
+    annual:
+      first !== undefined && daysBetween(first, date) >= YEAR_DAYS
+        ? yearlyRate([...flows, { date, amount: value }], date)
+        : null,
+  };
+}
+
+// The rate r where the flows, each discounted by (1 + r) to the power of its
+// years before `date`, add up to nothing; found by bisection, to four
+// decimals. A rate is a ratio, not money, so it is solved in floating point.
+function yearlyRate(flows: readonly CashFlow[], date: string): string | null {
+  const points = flows.map((flow) => ({
+    years: daysBetween(flow.date, date) / YEAR_DAYS,
+    amount: Number(flow.amount),
+  }));
+  const worth = (rate: number) =>
+    points.reduce(
+      (total, { years, amount }) => total + amount * (1 + rate) ** years,
+      0,
+    );
+  let low = -0.9999;
+  let high = 100;
+  if (Math.sign(worth(low)) === Math.sign(worth(high))) return null;
+  for (let step = 0; step < 200 && high - low > 1e-7; step += 1) {
+    const middle = (low + high) / 2;
+    if (Math.sign(worth(middle)) === Math.sign(worth(low))) low = middle;
+    else high = middle;
+  }
+  return ((low + high) / 2).toFixed(4);
+}

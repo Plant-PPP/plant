@@ -11,8 +11,13 @@ import type { HoldingRow } from "./read";
 
 // Whose movements a list shows: one holding's, or every holding's in an
 // account or a portfolio.
+// Whose movements a list shows: one holding's, an account's or a
+// portfolio's, or an instrument's in every account and portfolio.
 export type MovementScope =
-  { holdingId: string } | { accountId: string } | { portfolioId: string };
+  | { holdingId: string }
+  | { accountId: string }
+  | { portfolioId: string }
+  | { symbol: string };
 
 // A movement as a list shows it, its money in the page's unit (null when it
 // cannot be expressed in that unit): what it cost or paid (a sale's cost is

@@ -217,6 +217,7 @@ export function AssetsSetup({
   movements,
   movementActions,
   prices,
+  instrumentHref,
 }: {
   holdings: HoldingsView;
   valuation: HoldingsValuation;
@@ -230,6 +231,8 @@ export function AssetsSetup({
   today: string;
   actions: HoldingActions;
   prices?: ManualPrices;
+  // An instrument's history page; a page without one names it plainly.
+  instrumentHref?: (symbol: string) => string;
 } & MovementProps) {
   const {
     shown: view,
@@ -431,9 +434,23 @@ export function AssetsSetup({
       header: "Activo",
       cell: ({ row: { original: shown } }) => {
         const ticker = tickerOf(shown);
+        const href =
+          instrumentHref && shown.holding.asset_class === "instrument"
+            ? instrumentHref(shown.holding.instrument_symbol)
+            : null;
         return (
           <>
-            <TruncatedText text={assetName(shown)} />
+            {href ? (
+              <Link
+                href={href}
+                className="block truncate font-medium underline-offset-2 hover:underline"
+                title={assetName(shown)}
+              >
+                {assetName(shown)}
+              </Link>
+            ) : (
+              <TruncatedText text={assetName(shown)} />
+            )}
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground @2xl:hidden">
               <TruncatedText text={`${heldAmount(shown)} ·`} />
               <InstitutionIcon name={shown.account.institution} />

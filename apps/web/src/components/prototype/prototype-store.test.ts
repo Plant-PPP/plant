@@ -8,6 +8,7 @@ import {
   createHolding,
   holdingsView,
   initialState,
+  instrumentHoldings,
   movementsPage,
   positionsOf,
   salesOf,
@@ -349,5 +350,45 @@ describe("reads", () => {
       .sort((a, b) => compareMovements(b, a))
       .map((m) => m.id);
     expect(seen).toEqual(expected);
+  });
+});
+
+describe("instrument history", () => {
+  const snapshot = {
+    date: TODAY,
+    fx: { mep: { sell: "1500", date: TODAY } },
+    prices: { ETH: { price: "2500", currency: "USD" as const, date: TODAY } },
+  };
+
+  it("gathers an instrument's holdings across portfolios, with their flows", () => {
+    const { holdings, flows } = instrumentHoldings(
+      state,
+      "ETH",
+      "usd_mep",
+      snapshot,
+    );
+    expect(new Set(holdings.map((each) => each.row.portfolio.id))).toEqual(
+      new Set([PRINCIPAL, LARGO]),
+    );
+    expect(holdings.every((each) => each.value !== null)).toBe(true);
+    expect(flows).toHaveLength(
+      holdings.reduce(
+        (count, each) => count + state.movements.get(each.row.id)!.length,
+        0,
+      ),
+    );
+  });
+
+  it("lists an instrument's movements from every holding of it", () => {
+    const page = movementsPage(state, { symbol: "ETH" }, "usd_mep", null);
+    expect(
+      page.ok && page.rows.map((line) => line.movement.holding_id),
+    ).toEqual(
+      expect.arrayContaining(
+        instrumentHoldings(state, "ETH", "usd_mep", snapshot).holdings.map(
+          (each) => each.row.id,
+        ),
+      ),
+    );
   });
 });

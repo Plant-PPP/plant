@@ -1,5 +1,8 @@
 import {
   admitManualPrice,
+  type CashFlow,
+  cashFlowsOf,
+  type QuoteSnapshot,
   admitMovement,
   admitMovements,
   type ManualPrice,
@@ -54,7 +57,9 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
 import type { PriceResult } from "@/lib/holdings/price-input";
+import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { Fixtures } from "@/lib/prototype/fixtures";
 
@@ -345,7 +350,50 @@ export function operationOf(
 function inScope(row: HoldingRow, scope: MovementScope): boolean {
   if ("holdingId" in scope) return row.id === scope.holdingId;
   if ("accountId" in scope) return row.account.id === scope.accountId;
+  if ("symbol" in scope) {
+    return (
+      row.holding.asset_class === "instrument" &&
+      row.holding.instrument_symbol === scope.symbol
+    );
+  }
   return row.portfolio.id === scope.portfolioId;
+}
+
+// An instrument's holdings, open and closed, each with its position and value
+// in `unit`, and the cash flows of all of them; null flows when one could not
+// be expressed in the unit.
+export function instrumentHoldings(
+  state: PrototypeState,
+  symbol: string,
+  unit: Denominator,
+  snapshot: QuoteSnapshot,
+): { holdings: InstrumentHolding[]; flows: CashFlow[] | null } {
+  const closed = new Set(
+    state.holdings.filter((each) => each.closed).map((each) => each.holding.id),
+  );
+  const rows = allRows(state).filter((row) => inScope(row, { symbol }));
+  const { values } = holdingsValuation({
+    holdings: rows.filter((row) => !closed.has(row.id)),
+    truncated: false,
+    snapshot,
+    unit,
+    referenceDollar: state.referenceDollar,
+  });
+  const flows: CashFlow[] = [];
+  let known = true;
+  const holdings = rows.map((row) => {
+    const steps = stepsOf(state, row.id, unit);
+    const own = cashFlowsOf(state.movements.get(row.id) ?? [], steps);
+    if (own) flows.push(...own);
+    else known = false;
+    return {
+      row,
+      closed: closed.has(row.id),
+      position: steps.at(-1)?.position ?? EMPTY_POSITION,
+      value: values[row.id]?.value ?? null,
+    };
+  });
+  return { holdings, flows: known ? flows : null };
 }
 
 // One page of a scope's movements, newest first, after `cursor`: each

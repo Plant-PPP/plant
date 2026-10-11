@@ -80,6 +80,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       movements={movements}
       movementActions={actions.movements}
       prices={{ manual, fed, actions: actions.prices }}
+      instrumentHref={(symbol) => `/assets/${encodeURIComponent(symbol)}`}
     />
   );
 }
