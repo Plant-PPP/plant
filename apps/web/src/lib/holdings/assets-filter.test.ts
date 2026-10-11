@@ -28,6 +28,7 @@ const row = (fields: Record<string, unknown>): HoldingRow => ({
   id: String(fields.id),
   holding: holdingSchema.parse({ ...empty, portfolio_id: "p1", ...fields }),
   account: { id: "a1", institution: "Crédito Uno" },
+  instrumentType: fields.asset_class === "instrument" ? "crypto" : null,
   portfolio: { id: "p1", name: "Principal" },
 });
 
@@ -55,7 +56,7 @@ const CASH = row({
 const names = instrumentNames([{ symbol: "BTC", name: "Bitcoin" }]);
 const ALL: AssetsFilter = {
   portfolioId: null,
-  assetClass: null,
+  holdingClass: null,
   search: "",
 };
 const shown = (filter: Partial<AssetsFilter>) =>
@@ -70,7 +71,7 @@ describe("matchesFilter", () => {
 
   it("keeps one portfolio and one class", () => {
     expect(shown({ portfolioId: "p2" })).toEqual([]);
-    expect(shown({ assetClass: "cash" })).toEqual(["cash"]);
+    expect(shown({ holdingClass: "cash" })).toEqual(["cash"]);
   });
 
   it("searches the name, the ticker and the account, ignoring case and accents", () => {
@@ -145,7 +146,7 @@ describe("parseAssetsParams", () => {
       unit: null,
       tab: "holdings",
       year: null,
-      filter: { portfolioId: null, assetClass: null, search: "" },
+      filter: { portfolioId: null, holdingClass: null, search: "" },
       invalid: {
         unit: false,
         portfolio: false,
@@ -173,7 +174,7 @@ describe("parseAssetsParams", () => {
       unit: "ars",
       tab: "accounts",
       year: null,
-      filter: { portfolioId: "p1", assetClass: "cash", search: "btc" },
+      filter: { portfolioId: "p1", holdingClass: "cash", search: "btc" },
       invalid: {
         unit: false,
         portfolio: false,
@@ -201,7 +202,7 @@ describe("parseAssetsParams", () => {
       unit: null,
       tab: "holdings",
       year: null,
-      filter: { portfolioId: null, assetClass: null, search: "" },
+      filter: { portfolioId: null, holdingClass: null, search: "" },
       invalid: {
         unit: true,
         portfolio: true,

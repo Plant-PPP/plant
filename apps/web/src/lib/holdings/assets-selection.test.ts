@@ -20,6 +20,7 @@ const row = (id: string, portfolioId: string): HoldingRow => ({
     label: null,
   }),
   account: { id: "a1", institution: "IOL" },
+  instrumentType: null,
   portfolio: { id: portfolioId, name: portfolioId },
 });
 

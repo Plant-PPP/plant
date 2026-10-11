@@ -53,11 +53,18 @@ import {
   matchesFilter,
   tickerOf,
 } from "@/lib/holdings/assets-filter";
+import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
+import {
+  type PriceFields,
+  type PriceResult,
+  priceFields,
+  toPriceInput,
+} from "@/lib/holdings/price-input";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import {
-  ASSET_CLASS_LABELS,
   MOVEMENT_KIND_LABELS,
   MOVEMENT_MESSAGES,
+  PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
 import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
 import type {
@@ -89,6 +96,7 @@ import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
+import { PriceDialog } from "./price-dialog";
 import {
   type HoldingFields,
   holdingRow,
@@ -137,6 +145,8 @@ type MovementDialogState =
     } & Retry<MovementFields>)
   | ({ kind: "edit"; operation: OperationParts } & Retry<MovementFields>);
 
+type PriceDialogState = { symbol: string } & Retry<PriceFields>;
+
 type DialogState =
   | ({ kind: "create" } & Retry<HoldingFields>)
   | ({ kind: "edit"; row: HoldingRow } & Retry<HoldingFields>);
@@ -157,6 +167,20 @@ export type HoldingActions = {
     archive: (id: string) => Promise<WriteResult>;
     restore: (id: string) => Promise<WriteResult>;
   };
+};
+
+export type PriceActions = {
+  set: (input: unknown) => Promise<PriceResult>;
+};
+
+// The manual price the valuation took for each symbol, per unit in the
+// instrument's currency, with its date; a page without them offers no
+// "Cargar precio".
+export type ManualPrices = {
+  manual: ReadonlyMap<string, { price: string; date: string }>;
+  // Whether the feeds price a symbol, which then takes no manual price.
+  fed: (symbol: string) => boolean;
+  actions: PriceActions;
 };
 
 export type MovementActions = {
@@ -192,6 +216,7 @@ export function AssetsSetup({
   actions,
   movements,
   movementActions,
+  prices,
 }: {
   holdings: HoldingsView;
   valuation: HoldingsValuation;
@@ -204,6 +229,7 @@ export function AssetsSetup({
   instruments: InstrumentRow[];
   today: string;
   actions: HoldingActions;
+  prices?: ManualPrices;
 } & MovementProps) {
   const {
     shown: view,
@@ -228,6 +254,7 @@ export function AssetsSetup({
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [movementDialog, setMovementDialog] =
     useState<MovementDialogState | null>(null);
+  const [priceDialog, setPriceDialog] = useState<PriceDialogState | null>(null);
   const names = instrumentNames(instruments);
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
@@ -441,7 +468,7 @@ export function AssetsSetup({
         className: `${movement ? "hidden @6xl:table-cell" : "hidden @4xl:table-cell"} text-muted-foreground`,
       },
       cell: ({ row: { original: row } }) => (
-        <TruncatedText text={ASSET_CLASS_LABELS[row.holding.asset_class]} />
+        <TruncatedText text={HOLDING_CLASS_LABELS[classOf(row)]} />
       ),
     },
     {
@@ -482,14 +509,48 @@ export function AssetsSetup({
         if (!hasUnitPrice(row.holding)) return null;
         const item = valued(row);
         if (!item) return CALCULATING;
-        if (item.price !== null) return formatPrice(item.price, unit);
-        // A valued holding whose unit is worth less than the decimals show.
+        const symbol =
+          row.holding.asset_class === "instrument"
+            ? row.holding.instrument_symbol
+            : null;
+        const manualDate = symbol && prices?.manual.get(symbol)?.date;
+        const opensPrice =
+          prices && symbol !== null && !prices.fed(symbol)
+            ? () => setPriceDialog({ symbol })
+            : null;
+        const figure =
+          item.price !== null ? (
+            formatPrice(item.price, unit)
+          ) : (
+            // A valued holding whose unit is worth less than the decimals
+            // show.
+            <MissingFigure
+              text={
+                item.value === null
+                  ? NO_QUOTE
+                  : "Precio menor al que se muestra"
+              }
+            />
+          );
+        if (!opensPrice) return figure;
         return (
-          <MissingFigure
-            text={
-              item.value === null ? NO_QUOTE : "Precio menor al que se muestra"
-            }
-          />
+          <span className="grid justify-items-end">
+            {figure}
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
+              aria-label={
+                manualDate
+                  ? `Precio manual del ${formatDate(manualDate)} de ${symbol}. Cargar otro`
+                  : `Cargar precio de ${symbol}`
+              }
+              onClick={opensPrice}
+            >
+              {manualDate
+                ? `Manual · ${formatDate(manualDate)}`
+                : "Cargar precio"}
+            </button>
+          </span>
         );
       },
     },
@@ -925,6 +986,7 @@ export function AssetsSetup({
           referenceUnit={referenceUnit}
           filter={filter}
           portfolios={portfolios}
+          classes={new Set(holdings.active.map(classOf))}
           pending={pending}
         />
         <div
@@ -1063,6 +1125,72 @@ export function AssetsSetup({
           }
         />
       )}
+      {priceDialog && prices && (
+        <PriceDialogFor
+          state={priceDialog}
+          instruments={instruments}
+          prices={prices}
+          today={today}
+          returnFocusTo={card.focusHeading}
+          onClose={() => setPriceDialog(null)}
+          onSubmit={(fields, instrument) =>
+            card.dialogAction(
+              null,
+              () => prices.actions.set(toPriceInput(fields, instrument)),
+              PRICE_MESSAGES,
+              {
+                done: `Cargaste el precio de ${instrument.symbol}`,
+                reopen: (error) =>
+                  setPriceDialog({
+                    ...priceDialog,
+                    initial: fields,
+                    initialError: error,
+                  }),
+              },
+            )
+          }
+        />
+      )}
     </div>
+  );
+}
+
+// The price dialog for a symbol, prefilled with its latest manual price.
+function PriceDialogFor({
+  state,
+  instruments,
+  prices,
+  today,
+  returnFocusTo,
+  onClose,
+  onSubmit,
+}: {
+  state: PriceDialogState;
+  instruments: InstrumentRow[];
+  prices: ManualPrices;
+  today: string;
+  returnFocusTo: () => HTMLElement | null;
+  onClose: () => void;
+  onSubmit: (fields: PriceFields, instrument: InstrumentRow) => boolean;
+}) {
+  const instrument = instruments.find((each) => each.symbol === state.symbol);
+  if (!instrument) return null;
+  return (
+    <PriceDialog
+      instrument={instrument}
+      initial={
+        state.initial ??
+        priceFields(
+          instrument.type,
+          prices.manual.get(state.symbol) ?? null,
+          today,
+        )
+      }
+      initialError={state.initialError}
+      today={today}
+      returnFocusTo={returnFocusTo}
+      onClose={onClose}
+      onSubmit={(fields) => onSubmit(fields, instrument)}
+    />
   );
 }

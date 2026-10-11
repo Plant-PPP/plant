@@ -9,11 +9,12 @@ import type { Currency } from "@plant/shared";
 import { FAILED } from "@/lib/portfolio-setup/messages";
 
 import type { MovementResult } from "./movements-input";
+import type { PriceResult } from "./price-input";
 
 export type AssetClass = Holding["asset_class"];
 
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
-  instrument: "Cripto",
+  instrument: "Instrumento",
   cash: "Efectivo",
   fixed_term: "Plazo fijo",
   real_estate: "Inmueble",
@@ -74,4 +75,13 @@ export const MOVEMENT_MESSAGES: Record<
     "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez.",
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
+};
+
+export const PRICE_MESSAGES: Record<
+  Extract<PriceResult, { ok: false }>["code"],
+  string
+> = {
+  invalid: "Ingresá un precio mayor a 0 y una fecha.",
+  failed: FAILED,
+  future_date: FUTURE_DATE_MESSAGE,
 };

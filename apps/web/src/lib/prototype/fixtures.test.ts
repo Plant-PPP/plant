@@ -30,10 +30,10 @@ it("uses uuids for every id", () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-it("holds every class and leaves the accounts without a holder", () => {
+it("holds instruments, cash and an apartment, and leaves the accounts without a holder", () => {
   expect(
     new Set(fixtures.holdings.map((row) => row.holding.asset_class)),
-  ).toEqual(new Set(["instrument", "cash", "fixed_term", "real_estate"]));
+  ).toEqual(new Set(["instrument", "cash", "real_estate"]));
   expect(fixtures.accounts.every((row) => row.holder === null)).toBe(true);
 });
 

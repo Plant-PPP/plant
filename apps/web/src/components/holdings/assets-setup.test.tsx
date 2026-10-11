@@ -45,6 +45,7 @@ const row = (
     label: `Caja ${id}`,
   }),
   account: { id: "a1", institution: "IOL" },
+  instrumentType: null,
   portfolio,
 });
 
@@ -136,7 +137,7 @@ function render(
       valuation={valuation}
       unit="ars"
       referenceUnit={referenceUnit}
-      filter={{ portfolioId, assetClass: null, search: "" }}
+      filter={{ portfolioId, holdingClass: null, search: "" }}
       params={{
         ...(tab === "holdings" ? {} : { tab }),
         ...(urlUnit ? { unit: urlUnit } : {}),
@@ -288,7 +289,7 @@ it("leaves out of the bar a class with no share, largest share first", () => {
       ...VALUATION,
       classes: {
         cash: sum("0", true, 1, "0.0"),
-        instrument: sum("900", true, 1, "90.0"),
+        crypto: sum("900", true, 1, "90.0"),
         real_estate: sum("100", true, 1, "10.0"),
       },
     },
@@ -322,7 +323,11 @@ it("shows no share, never 0,0 %, for a kind core could not value", () => {
   });
   const rows = [
     row("h1", PRINCIPAL, "1000"),
-    { ...row("h9", PRINCIPAL, "1"), holding: unquoted },
+    {
+      ...row("h9", PRINCIPAL, "1"),
+      holding: unquoted,
+      instrumentType: "crypto" as const,
+    },
   ];
   const html = render(rows, {
     valuation: holdingsValuation({
@@ -383,7 +388,7 @@ it("offers the sales tab only with movements", () => {
     valuation: VALUATION,
     unit: "ars" as const,
     referenceUnit: "ars" as const,
-    filter: { portfolioId: null, assetClass: null, search: "" },
+    filter: { portfolioId: null, holdingClass: null, search: "" },
     params: {},
     accounts: [ACCOUNT],
     portfolios: [PRINCIPAL],
@@ -413,6 +418,7 @@ describe("with movements", () => {
       label: null,
     }),
     account: { id: "a1", institution: "IOL" },
+    instrumentType: "crypto",
     portfolio: PRINCIPAL,
   };
   const sale = {
@@ -489,7 +495,7 @@ describe("with movements", () => {
         valuation={valuation}
         unit="usd_mep"
         referenceUnit="usd_mep"
-        filter={{ portfolioId: null, assetClass: null, search: "" }}
+        filter={{ portfolioId: null, holdingClass: null, search: "" }}
         params={tab === "holdings" ? {} : { tab }}
         accounts={[ACCOUNT]}
         portfolios={[PRINCIPAL]}

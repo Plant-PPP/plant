@@ -24,6 +24,7 @@ import {
 } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { ASSET_CLASSES, ASSET_CLASS_LABELS } from "@/lib/holdings/messages";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
 import {
@@ -56,7 +57,10 @@ const AMOUNT_LABELS: Record<AssetClass, string> = {
   other: "Valor",
 };
 
-export type ChosenHolding = Pick<HoldingRow, "account" | "portfolio">;
+export type ChosenHolding = Pick<
+  HoldingRow,
+  "account" | "portfolio" | "instrumentType"
+>;
 
 const accountOf = (row: SourceConnectionRow): HoldingRow["account"] => ({
   id: row.id,
@@ -168,6 +172,13 @@ export function HoldingDialog({
     const chosen: ChosenHolding = {
       account: chosenAccount,
       portfolio: { id: portfolio.id, name: portfolio.name },
+      instrumentType:
+        fields.assetClass === "instrument"
+          ? (instruments.find(({ symbol }) => symbol === fields.instrument)
+              ?.type ??
+            row?.instrumentType ??
+            null)
+          : null,
     };
     if (!onSubmit(fields, chosen)) return;
     focus.markSaved();
@@ -260,7 +271,7 @@ export function HoldingDialog({
             row && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Tipo</dt>
-                <dd>{ASSET_CLASS_LABELS[row.holding.asset_class]}</dd>
+                <dd>{HOLDING_CLASS_LABELS[classOf(row)]}</dd>
                 <dt className="text-muted-foreground">Cuenta</dt>
                 <dd>{row.account.institution}</dd>
                 {row.holding.asset_class === "instrument" && (

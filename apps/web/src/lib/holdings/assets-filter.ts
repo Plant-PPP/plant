@@ -3,21 +3,18 @@ import { type Denominator, isDenominator } from "@plant/core";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { holdingName } from "./holding-name";
-import { ASSET_CLASS_LABELS, type AssetClass } from "./messages";
+import { classOf, type HoldingClass, isHoldingClass } from "./classes";
 import type { HoldingRow } from "./read";
 
 // Which holdings the assets page shows: one portfolio or all, one class or
 // all, and those whose name, ticker or account contain the search.
 export type AssetsFilter = {
   portfolioId: string | null;
-  assetClass: AssetClass | null;
+  holdingClass: HoldingClass | null;
   search: string;
 };
 
 export const SEARCH_MAX_LENGTH = 60;
-
-const isAssetClass = (value: unknown): value is AssetClass =>
-  typeof value === "string" && Object.hasOwn(ASSET_CLASS_LABELS, value);
 
 // Case and accents ignored: "credito" finds "Crédito".
 const folded = (text: string): string =>
@@ -46,11 +43,11 @@ export function tickerOf({ holding }: HoldingRow): string | null {
 
 export function matchesFilter(
   row: HoldingRow,
-  { portfolioId, assetClass, search }: AssetsFilter,
+  { portfolioId, holdingClass, search }: AssetsFilter,
   instrumentNames: ReadonlyMap<string, string>,
 ): boolean {
   if (portfolioId !== null && row.portfolio.id !== portfolioId) return false;
-  if (assetClass !== null && row.holding.asset_class !== assetClass) {
+  if (holdingClass !== null && classOf(row) !== holdingClass) {
     return false;
   }
   if (search === "") return true;
@@ -118,7 +115,7 @@ export function parseAssetsParams(
   const {
     unit,
     portfolio,
-    class: assetClass,
+    class: holdingClass,
     search: rawSearch,
     tab,
     year,
@@ -136,13 +133,13 @@ export function parseAssetsParams(
     year: salesYear ?? salesYears[0] ?? null,
     filter: {
       portfolioId,
-      assetClass: isAssetClass(assetClass) ? assetClass : null,
+      holdingClass: isHoldingClass(holdingClass) ? holdingClass : null,
       search: search ?? "",
     },
     invalid: {
       unit: unit !== undefined && !isDenominator(unit),
       portfolio: portfolio !== undefined && portfolioId === null,
-      class: assetClass !== undefined && !isAssetClass(assetClass),
+      class: holdingClass !== undefined && !isHoldingClass(holdingClass),
       search: search === null,
       tab: tab !== undefined && !isTab(tab, tabs),
       year: year !== undefined && salesYear === null,

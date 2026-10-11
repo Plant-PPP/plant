@@ -143,7 +143,7 @@ export function toUpdate(fields: HoldingFields, portfolioBefore: string) {
 export const holdingRow = (
   id: string,
   fields: HoldingFields,
-  chosen: Pick<HoldingRow, "account" | "portfolio">,
+  chosen: Pick<HoldingRow, "account" | "portfolio" | "instrumentType">,
 ): HoldingRow => rowOf(id, toInsert(fields), chosen);
 
 // A holding as the page lists it, from a new holding's columns (parsed here;
@@ -151,7 +151,7 @@ export const holdingRow = (
 export function rowOf(
   id: string,
   insert: Record<string, unknown>,
-  chosen: Pick<HoldingRow, "account" | "portfolio">,
+  chosen: Pick<HoldingRow, "account" | "portfolio" | "instrumentType">,
 ): HoldingRow {
   return {
     id,

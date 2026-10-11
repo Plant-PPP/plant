@@ -14,10 +14,11 @@ import {
   unitParam,
 } from "@/lib/holdings/assets-filter";
 import {
-  ASSET_CLASSES,
-  ASSET_CLASS_LABELS,
-  UNIT_LABELS,
-} from "@/lib/holdings/messages";
+  HOLDING_CLASSES,
+  HOLDING_CLASS_LABELS,
+  type HoldingClass,
+} from "@/lib/holdings/classes";
+import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { PortfolioRow } from "@/lib/portfolio-setup/read";
 
 import { type AssetsUrl, searchParamValue } from "./assets-url";
@@ -36,6 +37,7 @@ export function AssetsFilters({
   referenceUnit,
   filter,
   portfolios,
+  classes,
   pending,
 }: {
   url: AssetsUrl;
@@ -45,6 +47,8 @@ export function AssetsFilters({
   referenceUnit: Denominator;
   filter: AssetsFilter;
   portfolios: PortfolioRow[];
+  // The classes of the user's holdings, which the class filter offers.
+  classes: ReadonlySet<HoldingClass>;
   pending: boolean;
 }) {
   const ids = {
@@ -113,13 +117,13 @@ export function AssetsFilters({
       <FilterSelect
         id={ids.kind}
         label="Tipo"
-        value={shown.assetClass ?? ALL}
+        value={shown.holdingClass ?? ALL}
         pending={pending}
         options={[
           [ALL, "Todos los tipos"],
-          ...ASSET_CLASSES.map(
-            (each) => [each, ASSET_CLASS_LABELS[each]] as const,
-          ),
+          ...HOLDING_CLASSES.filter(
+            (each) => classes.has(each) || each === shown.holdingClass,
+          ).map((each) => [each, HOLDING_CLASS_LABELS[each]] as const),
         ]}
         onChange={(value) => go("class", value === ALL ? null : value)}
       />

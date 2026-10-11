@@ -22,7 +22,7 @@ import {
 
 // Activos over the prototype's store, with movements and the sales tab.
 export function PrototypeAssets({ params }: { params: KeysetParams }) {
-  const { state, latest, snapshot, actions } = usePrototype();
+  const { state, latest, snapshot, manual, fed, actions } = usePrototype();
   const names = instrumentNames(state.instruments);
   const view = holdingsView(state);
   const years = yearsOf(state);
@@ -79,6 +79,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       actions={actions.holdings}
       movements={movements}
       movementActions={actions.movements}
+      prices={{ manual, fed, actions: actions.prices }}
     />
   );
 }

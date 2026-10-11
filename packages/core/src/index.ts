@@ -108,3 +108,21 @@ export {
   type MovementRefusal,
   type MovementWindow,
 } from "./movements/admit";
+export {
+  INSTRUMENT_PRICING,
+  INSTRUMENT_TYPES,
+  type InstrumentType,
+  PENDING_INSTRUMENT_TYPES,
+  quotedPrice,
+  unitPrice,
+} from "./instruments";
+export {
+  acceptsManualPrice,
+  admitManualPrice,
+  type ManualPrice,
+  type ManualPriceRefusal,
+  manualPriceSchema,
+  type PriceSource,
+  priceSource,
+  withManualPrices,
+} from "./quotes/manual";

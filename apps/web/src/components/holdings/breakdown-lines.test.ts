@@ -20,6 +20,7 @@ const row = (id: string, account: string): HoldingRow => ({
     label: null,
   }),
   account: { id: account, institution: account.toUpperCase() },
+  instrumentType: null,
   portfolio: { id: "p1", name: "Principal" },
 });
 

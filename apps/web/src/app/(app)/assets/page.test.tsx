@@ -73,6 +73,7 @@ const holding = (id: string, portfolio_id: string, amount: string) => ({
     label: null,
   }),
   account: { id: "a1", institution: "IOL" },
+  instrumentType: null,
   portfolio: {
     id: portfolio_id,
     name: portfolio_id === P1 ? "Principal" : "Largo plazo",
@@ -137,7 +138,7 @@ const VIEW_KEYS = [
   "enduser.id",
   "event",
   "level",
-  "plant.assets.asset_class",
+  "plant.assets.class",
   "plant.assets.filtered",
   "plant.assets.holding_count",
   "plant.assets.instruments_truncated",
@@ -187,7 +188,7 @@ it("values in the reference dollar by default", async () => {
       "plant.assets.holding_count": 2,
       "plant.assets.shown_count": 2,
       "plant.assets.tab": "holdings",
-      "plant.assets.asset_class": "all",
+      "plant.assets.class": "all",
       "plant.assets.searched": false,
       "plant.assets.invalid_class": false,
       "plant.assets.invalid_search": false,
@@ -224,7 +225,7 @@ it("applies ?unit and ?portfolio", async () => {
   expect(props.referenceUnit).toBe("usd_ccl");
   expect(props.filter).toEqual({
     portfolioId: P2,
-    assetClass: null,
+    holdingClass: null,
     search: "",
   });
   expect(props.valuation.kinds.total.value).toBe("62500");
@@ -263,7 +264,7 @@ it("falls back on invalid params and logs that they were", async () => {
   expect(props.unit).toBe("usd_ccl");
   expect(props.filter).toEqual({
     portfolioId: null,
-    assetClass: null,
+    holdingClass: null,
     search: "",
   });
   expect(viewLine()).toMatchObject({
@@ -280,7 +281,7 @@ it("falls back on invalid params and logs that they were", async () => {
 it("values only the holdings of ?class matching ?search, and never logs the search", async () => {
   const props = await render({ class: "cash", search: "efectivo" });
   expect(props.filter).toMatchObject({
-    assetClass: "cash",
+    holdingClass: "cash",
     search: "efectivo",
   });
   expect(Object.keys(props.valuation.values)).toHaveLength(
@@ -288,13 +289,21 @@ it("values only the holdings of ?class matching ?search, and never logs the sear
   );
   expect(JSON.stringify(lines)).not.toContain("efectivo");
   expect(viewLine()).toMatchObject({
-    "plant.assets.asset_class": "cash",
+    "plant.assets.class": "cash",
     "plant.assets.searched": true,
   });
 });
 
+it("refuses the old instrument class, which is now a type", async () => {
+  await render({ class: "instrument" });
+  expect(viewLine()).toMatchObject({
+    "plant.assets.class": "all",
+    "plant.assets.invalid_class": true,
+  });
+});
+
 it("leaves out the holdings no filter matches", async () => {
-  const props = await render({ class: "instrument" });
+  const props = await render({ class: "crypto" });
   expect(props.valuation.values).toEqual({});
   expect(props.valuation.kinds.total.count).toBe(0);
   expect(viewLine()).toMatchObject({

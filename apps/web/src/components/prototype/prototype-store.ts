@@ -1,6 +1,9 @@
 import {
+  admitManualPrice,
   admitMovement,
   admitMovements,
+  type ManualPrice,
+  manualPriceSchema,
   isIncome,
   type MovementDraft,
   type SaleResult,
@@ -51,6 +54,7 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import type { PriceResult } from "@/lib/holdings/price-input";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { Fixtures } from "@/lib/prototype/fixtures";
 
@@ -70,6 +74,7 @@ export type PrototypeState = {
   movements: ReadonlyMap<string, readonly Movement[]>;
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
+  manualPrices: readonly ManualPrice[];
 };
 
 export type StoredHolding = {
@@ -105,6 +110,7 @@ export function initialState(
     movements,
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
+    manualPrices: fixtures.manualPrices,
   };
 }
 
@@ -124,6 +130,12 @@ function rowOfStored(
     holding: stored.holding,
     account: { id: account.id, institution: account.institution },
     portfolio: { id: portfolio.id, name: portfolio.name },
+    instrumentType:
+      stored.holding.asset_class === "instrument"
+        ? (state.instruments.find(
+            ({ symbol }) => symbol === stored.holding.instrument_symbol,
+          )?.type ?? null)
+        : null,
   };
 }
 
@@ -429,6 +441,7 @@ export function createHolding(
   const { holding } = rowOf(id, columns, {
     account: { id: account.id, institution: account.institution },
     portfolio,
+    instrumentType: null,
   });
   return {
     state: {
@@ -664,6 +677,7 @@ function createdHolding(
     {
       account: { id: account.id, institution: account.institution },
       portfolio,
+      instrumentType: null,
     },
   );
   return {
@@ -677,5 +691,31 @@ function createdHolding(
       },
       ...state.holdings,
     ],
+  };
+}
+
+// A manual price, replacing the one the instrument had on that date.
+export function setPrice(
+  state: PrototypeState,
+  input: unknown,
+): Write<PriceResult> {
+  const parsed = manualPriceSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const price = parsed.data;
+  const admitted = admitManualPrice(price, state.today);
+  if (!admitted.ok) return refused(state, admitted);
+  return {
+    state: {
+      ...state,
+      manualPrices: [
+        ...state.manualPrices.filter(
+          (each) =>
+            each.symbol !== price.symbol ||
+            each.price_date !== price.price_date,
+        ),
+        price,
+      ],
+    },
+    result: { ok: true },
   };
 }

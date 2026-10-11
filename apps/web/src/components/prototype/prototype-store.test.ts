@@ -20,7 +20,7 @@ import {
 const TODAY = "2026-10-12";
 const fixtures = buildFixtures(TODAY);
 const state = initialState(fixtures, TODAY);
-const NO_FILTER = { portfolioId: null, assetClass: null, search: "" };
+const NO_FILTER = { portfolioId: null, holdingClass: null, search: "" };
 const NAMES = new Map(fixtures.instruments.map((i) => [i.symbol, i.name]));
 
 const idOf = (symbol: string) =>
@@ -30,14 +30,14 @@ const idOf = (symbol: string) =>
       row.holding.instrument_symbol === symbol,
   )!.id;
 const AAPL = idOf("AAPL");
-const AL30D = idOf("AL30D");
-const BTC = idOf("BTC");
+const TSLA = idOf("TSLA");
 const CASH = fixtures.holdings.find(
   (row) => row.holding.asset_class === "cash",
 )!.id;
 const NEW_ID = "e1000000-0000-4000-8000-000000000001";
 
 const IOL = fixtures.accounts.find((row) => row.institution === "IOL")!.id;
+const COCOS = fixtures.accounts.find((row) => row.institution === "Cocos")!.id;
 const BINANCE = fixtures.accounts.find(
   (row) => row.institution === "Binance",
 )!.id;
@@ -67,9 +67,9 @@ const sale = (quantity: string, date = TODAY) => ({
 describe("holdings", () => {
   it("lists open holdings and leaves the closed one out", () => {
     const shown = holdingsView(state).active.map((row) => row.id);
-    expect(shown).not.toContain(AL30D);
+    expect(shown).not.toContain(TSLA);
     expect(shown).toContain(AAPL);
-    expect(allRows(state).map((row) => row.id)).toContain(AL30D);
+    expect(allRows(state).map((row) => row.id)).toContain(TSLA);
   });
 
   it("creates a holding in an account and portfolio it has", () => {
@@ -185,29 +185,30 @@ describe("operations", () => {
   });
 
   it("edits a whole operation, re-admitting its holdings", () => {
-    const opening = state.movements.get(BTC)![0]!;
+    // Tesla's first purchase, which its later sale of every unit needs.
+    const first = state.movements.get(TSLA)![0]!;
     const shrunk = {
-      kind: "opening_balance",
-      source_connection_id: BINANCE,
-      instrument_symbol: "BTC",
-      date: opening.date,
-      currency: "USD",
-      price: "30000",
-      parts: [{ portfolio_id: LARGO, quantity: "0.01" }],
+      kind: "purchase",
+      source_connection_id: COCOS,
+      instrument_symbol: "TSLA",
+      date: first.date,
+      currency: "ARS",
+      price: "20000",
+      parts: [{ portfolio_id: CORTO, quantity: "1" }],
     };
-    const edit = { ...options(opening.operation_id), replacing: true };
+    const edit = { ...options(first.operation_id), replacing: true };
     expect(writeOperation(state, shrunk, edit).result).toEqual({
       ok: false,
       code: "oversold",
     });
     const edited = writeOperation(
       state,
-      { ...shrunk, parts: [{ portfolio_id: LARGO, quantity: "0.2" }] },
+      { ...shrunk, parts: [{ portfolio_id: CORTO, quantity: "30" }] },
       edit,
     );
-    expect(edited.result).toEqual({ ok: true, id: opening.operation_id });
-    expect(edited.state.movements.get(BTC)).toHaveLength(
-      state.movements.get(BTC)!.length,
+    expect(edited.result).toEqual({ ok: true, id: first.operation_id });
+    expect(edited.state.movements.get(TSLA)).toHaveLength(
+      state.movements.get(TSLA)!.length,
     );
   });
 
@@ -313,7 +314,7 @@ describe("reads", () => {
           limit: 100,
         }).rows,
     );
-    expect(allYears.some((line) => line.row.id === AL30D)).toBe(true);
+    expect(allYears.some((line) => line.row.id === TSLA)).toBe(true);
   });
 
   it("filters the sales by the holdings' filters", () => {

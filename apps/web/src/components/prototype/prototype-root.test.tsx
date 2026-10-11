@@ -11,6 +11,6 @@ it("renders the banner and today's snapshot", async () => {
     "Datos de prueba. Lo que cambies se pierde al recargar.",
   );
   expect(Object.keys(provider.props.snapshot.prices)).toEqual(
-    expect.arrayContaining(["BTC", "AAPL", "AL30"]),
+    expect.arrayContaining(["BTC", "AAPL", "SPY"]),
   );
 });

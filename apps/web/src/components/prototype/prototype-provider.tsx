@@ -1,11 +1,12 @@
 "use client";
 
-import type { QuoteSnapshot } from "@plant/core";
+import { type QuoteSnapshot, withManualPrices } from "@plant/core";
 import { createContext, type ReactNode, useContext } from "react";
 
 import type {
   HoldingActions,
   MovementActions,
+  PriceActions,
 } from "@/components/holdings/assets-setup";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -13,6 +14,7 @@ import {
   createHolding,
   initialState,
   type PrototypeState,
+  setPrice,
   updateHolding,
   writeOperation,
 } from "./prototype-store";
@@ -22,8 +24,16 @@ type Prototype = {
   state: PrototypeState;
   // The state as of the last write, for reads that run between renders.
   latest: () => PrototypeState;
+  // Today's quotes with the user's manual prices, and the date of each
+  // manual price they took.
   snapshot: QuoteSnapshot;
-  actions: { holdings: HoldingActions; movements: MovementActions };
+  manual: ReadonlyMap<string, { price: string; date: string }>;
+  fed: (symbol: string) => boolean;
+  actions: {
+    holdings: HoldingActions;
+    movements: MovementActions;
+    prices: PriceActions;
+  };
 };
 
 const PrototypeContext = createContext<Prototype | null>(null);
@@ -71,10 +81,26 @@ export function PrototypeProvider({
           }),
         ),
     },
+    prices: { set: (input) => write((s) => setPrice(s, input)) },
   };
+  const priced = withManualPrices(snapshot, state.manualPrices);
+  // Whether the feeds priced a symbol today, before any manual price.
+  const fed = (symbol: string) => snapshot.prices[symbol] !== undefined;
   return (
     <PrototypeContext
-      value={{ state, latest: () => latest.current, snapshot, actions }}
+      value={{
+        state,
+        latest: () => latest.current,
+        snapshot: priced.snapshot,
+        manual: new Map(
+          [...priced.manual].map(([symbol, date]) => [
+            symbol,
+            { price: priced.snapshot.prices[symbol]!.price, date },
+          ]),
+        ),
+        fed,
+        actions,
+      }}
     >
       {children}
     </PrototypeContext>

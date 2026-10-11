@@ -77,6 +77,7 @@ const SAMPLES: Record<AssetClass, HoldingFields> = {
 const CHOSEN = {
   account: { id: ACCOUNT, institution: "IOL" },
   portfolio: { id: PORTFOLIO, name: "Principal" },
+  instrumentType: null,
 };
 
 describe.each(CLASSES)("a %s holding", (assetClass) => {

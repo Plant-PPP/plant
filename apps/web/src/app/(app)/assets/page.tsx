@@ -106,7 +106,7 @@ export default async function AssetsPage({
   const unit = chosenUnit ?? reference;
   const filtered =
     filter.portfolioId !== null ||
-    filter.assetClass !== null ||
+    filter.holdingClass !== null ||
     filter.search !== "";
 
   let valuation: HoldingsValuation;
@@ -133,7 +133,7 @@ export default async function AssetsPage({
     "plant.assets.unit": unit,
     // The valuation's counts cover only the shown holdings when filtered.
     "plant.assets.filtered": filtered,
-    "plant.assets.asset_class": filter.assetClass ?? "all",
+    "plant.assets.class": filter.holdingClass ?? "all",
     "plant.assets.searched": filter.search !== "",
     "plant.assets.tab": tab,
     "plant.assets.invalid_unit": invalid.unit,

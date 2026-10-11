@@ -24,7 +24,12 @@ const ACCOUNT: SourceConnectionRow = {
   portfolio: { ...PRINCIPAL, archived: false },
 };
 const INSTRUMENTS = [
-  { symbol: "BTC", name: "Bitcoin", currency: "USD" as const },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    currency: "USD" as const,
+    type: "crypto" as const,
+  },
 ];
 const TODAY = "2026-10-10";
 
@@ -49,6 +54,8 @@ function render(
           {
             account: { id: "a1", institution: "IOL" },
             portfolio: PRINCIPAL,
+            instrumentType:
+              initial.assetClass === "instrument" ? "crypto" : null,
           },
         )
       : undefined;

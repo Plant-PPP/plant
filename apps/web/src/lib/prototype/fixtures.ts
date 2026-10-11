@@ -2,6 +2,7 @@ import {
   admitMovement,
   type Charge,
   isTrade,
+  type ManualPrice,
   type Movement,
   type MovementDraft,
   type ReferenceDollar,
@@ -18,9 +19,11 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 
-// The prototype's made-up data: accounts, portfolios and holdings of every
-// class, two years of dollar rates, today's prices, and the movements of the
-// instrument holdings. Built from `today`, so the same day gives the same data.
+// The prototype's made-up data, sized like most users' net worth: a dozen
+// holdings across CEDEARs and crypto, some cash and one apartment, with two
+// years of purchases, sales and dividends, the dollar rates and prices of every
+// day, and the manual prices of what the feeds do not price. Built from
+// `today`, so the same day gives the same data.
 export type Fixtures = {
   referenceDollar: ReferenceDollar;
   accounts: SourceConnectionRow[];
@@ -32,6 +35,7 @@ export type Fixtures = {
   closed: string[];
   movements: Movement[];
   quotes: StoredQuotes;
+  manualPrices: ManualPrice[];
 };
 
 const HISTORY_DAYS = 730;
@@ -62,56 +66,142 @@ const ACCOUNTS = {
 } as const;
 
 const INSTRUMENTS: InstrumentRow[] = [
-  { symbol: "BTC", name: "Bitcoin", currency: "USD" },
-  { symbol: "ETH", name: "Ethereum", currency: "USD" },
-  { symbol: "AAPL", name: "Apple (CEDEAR)", currency: "ARS" },
-  { symbol: "KO", name: "Coca-Cola (CEDEAR)", currency: "ARS" },
-  { symbol: "AL30", name: "Bonar 2030", currency: "ARS" },
-  { symbol: "AL30D", name: "Bonar 2030 (dólares)", currency: "USD" },
-  { symbol: "FIMAPREA", name: "FIMA Premium Clase A", currency: "ARS" },
+  { symbol: "BTC", name: "Bitcoin", currency: "USD", type: "crypto" },
+  { symbol: "ETH", name: "Ethereum", currency: "USD", type: "crypto" },
+  { symbol: "SOL", name: "Solana", currency: "USD", type: "crypto" },
+  { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
+  { symbol: "KO", name: "Coca-Cola", currency: "ARS", type: "cedear" },
+  { symbol: "MELI", name: "MercadoLibre", currency: "ARS", type: "cedear" },
+  { symbol: "MSFT", name: "Microsoft", currency: "ARS", type: "cedear" },
+  { symbol: "NVDA", name: "NVIDIA", currency: "ARS", type: "cedear" },
+  { symbol: "SPY", name: "SPDR S&P 500", currency: "ARS", type: "cedear" },
+  { symbol: "TSLA", name: "Tesla", currency: "ARS", type: "cedear" },
+  { symbol: "AL30", name: "Bonar 2030", currency: "ARS", type: "bond" },
 ];
 
-// Each feed price: today's and the days before it, a little lower each day
-// back. KO and FIMAPREA have none.
-const PRICES: [symbol: string, cents: number, currency: "ARS" | "USD"][] = [
-  ["BTC", 6_512_345, "USD"],
-  ["ETH", 251_020, "USD"],
-  ["AAPL", 1_865_000, "ARS"],
-  // A bond's price is per unit: AL30 quotes ARS 85.300 per 100 nominal.
-  ["AL30", 85_300, "ARS"],
-  ["AL30D", 62, "USD"],
-];
+// The dollars in cents, `day` days into the history: they climb over the two
+// years with a small weekly wobble. CEDEARs follow the CCL.
+const mepCents = (day: number) => 90_000 + day * 45 + (day % 5) * 150;
+const cclCents = (day: number) => mepCents(day) + 4_000 + day * 2;
+const officialCents = (day: number) => mepCents(day) - 15_000 - day * 3;
 
-const cents = (value: number): string =>
-  `${Math.floor(value / 100)}.${String(value % 100).padStart(2, "0")}`;
+// How a symbol's dollar price moves: today's, what share of it it was two
+// years back (in percent), and a wave of `amplitude` per mille every
+// `period` days on top.
+type PriceModel = {
+  usdCents: number;
+  startPercent: number;
+  amplitude: number;
+  period: number;
+  // A CEDEAR's price is its dollar price at the CCL, in pesos.
+  cedear?: true;
+};
+
+const MODELS: Record<string, PriceModel> = {
+  BTC: { usdCents: 6_512_345, startPercent: 45, amplitude: 120, period: 97 },
+  ETH: { usdCents: 251_020, startPercent: 70, amplitude: 150, period: 71 },
+  SOL: { usdCents: 15_230, startPercent: 60, amplitude: 200, period: 53 },
+  AAPL: {
+    usdCents: 1_480,
+    startPercent: 80,
+    amplitude: 60,
+    period: 89,
+    cedear: true,
+  },
+  KO: {
+    usdCents: 520,
+    startPercent: 92,
+    amplitude: 40,
+    period: 120,
+    cedear: true,
+  },
+  MELI: {
+    usdCents: 2_050,
+    startPercent: 70,
+    amplitude: 90,
+    period: 61,
+    cedear: true,
+  },
+  NVDA: {
+    usdCents: 910,
+    startPercent: 40,
+    amplitude: 110,
+    period: 67,
+    cedear: true,
+  },
+  SPY: {
+    usdCents: 3_100,
+    startPercent: 78,
+    amplitude: 40,
+    period: 101,
+    cedear: true,
+  },
+  TSLA: {
+    usdCents: 1_800,
+    startPercent: 60,
+    amplitude: 150,
+    period: 59,
+    cedear: true,
+  },
+};
+
+// The feeds price every symbol above but KO, which takes manual prices.
+const FED = ["BTC", "ETH", "SOL", "AAPL", "MELI", "NVDA", "SPY", "TSLA"];
+
+// A symbol's price in cents `daysAgo` days back, in its currency.
+function priceCents(symbol: string, daysAgo: number): number {
+  const model = MODELS[symbol];
+  if (!model) throw new RangeError(`No price model for ${symbol}`);
+  const day = HISTORY_DAYS - daysAgo;
+  const trend =
+    (model.usdCents *
+      (model.startPercent * HISTORY_DAYS + (100 - model.startPercent) * day)) /
+    (100 * HISTORY_DAYS);
+  // A triangle wave from -500 to 500.
+  const phase = (daysAgo % model.period) * 2000;
+  const wave = Math.abs(phase / model.period - 1000) - 500;
+  const usd = (trend * (1000 + (model.amplitude * wave) / 500)) / 1000;
+  const cents = model.cedear ? (usd * cclCents(day)) / 100 : usd;
+  return Math.max(1, Math.round(cents));
+}
+
+const decimal = (cents: number): string =>
+  `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+
+const priceOn = (symbol: string, daysAgo: number): string =>
+  decimal(priceCents(symbol, daysAgo));
 
 function quotesFor(today: string): StoredQuotes {
   const fxRates: StoredQuotes["fxRates"] = [];
+  const prices: StoredQuotes["prices"] = [];
   for (let day = 0; day <= HISTORY_DAYS; day += 1) {
-    const date = addDays(today, day - HISTORY_DAYS);
-    // The dollars climb over the two years, with a small weekly wobble.
-    const mep = 90_000 + day * 45 + (day % 5) * 150;
+    const daysAgo = HISTORY_DAYS - day;
+    const date = addDays(today, -daysAgo);
     fxRates.push(
-      { kind: "mep", rate_date: date, sell: cents(mep) },
-      { kind: "ccl", rate_date: date, sell: cents(mep + 4_000 + day * 2) },
-      {
-        kind: "official",
-        rate_date: date,
-        sell: cents(mep - 15_000 - day * 3),
-      },
+      { kind: "mep", rate_date: date, sell: decimal(mepCents(day)) },
+      { kind: "ccl", rate_date: date, sell: decimal(cclCents(day)) },
+      { kind: "official", rate_date: date, sell: decimal(officialCents(day)) },
     );
-  }
-  const prices: StoredQuotes["prices"] = PRICES.flatMap(
-    ([symbol, value, currency]) =>
-      [0, 1, 2, 3].map((back) => ({
+    for (const symbol of FED) {
+      prices.push({
         symbol,
-        price_date: addDays(today, -back),
-        price: cents(value - back * Math.ceil(value / 200)),
-        currency,
-      })),
-  );
+        price_date: date,
+        price: priceOn(symbol, daysAgo),
+        currency: MODELS[symbol]!.cedear ? "ARS" : "USD",
+      });
+    }
+  }
   return { fxRates, prices };
 }
+
+// KO's prices as the user stated them, the latest twelve days back.
+const manualPricesFor = (today: string): ManualPrice[] =>
+  [75, 40, 12].map((daysAgo) => ({
+    symbol: "KO",
+    price_date: addDays(today, -daysAgo),
+    price: priceOn("KO", daysAgo),
+    currency: "ARS",
+  }));
 
 type Placed = Pick<HoldingRow, "account" | "portfolio">;
 const at = (account: SourceConnectionRow, portfolio: PortfolioRow): Placed => ({
@@ -119,47 +209,86 @@ const at = (account: SourceConnectionRow, portfolio: PortfolioRow): Placed => ({
   portfolio,
 });
 
-// A movement as a fixture writes it: its kind, how many days back, and its
-// fields.
-// A step's charges as the broker lists them, its reference, and the operation
-// it shares with a step of another portfolio's holding.
-type Charges = {
-  fees?: string;
-  market?: string;
-  vat?: string;
-  taxes?: string;
+// How each account charges a trade of `gross` cents: its commission and
+// market fee in per ten thousand, with VAT on the commission.
+type Broker = { commission: number; market: number; vat: boolean };
+const BROKERS: Record<string, Broker> = {
+  IOL: { commission: 50, market: 8, vat: true },
+  Balanz: { commission: 40, market: 8, vat: true },
+  Cocos: { commission: 30, market: 8, vat: true },
+  Binance: { commission: 10, market: 0, vat: false },
+};
+
+function brokerCharges(institution: string, grossCents: number): Charge[] {
+  const broker = BROKERS[institution]!;
+  const commission = Math.max(
+    1,
+    Math.round((grossCents * broker.commission) / 10_000),
+  );
+  const market = Math.round((grossCents * broker.market) / 10_000);
+  const vat = broker.vat ? Math.round((commission * 21) / 100) : 0;
+  return [
+    { kind: "commission", label: null, amount: decimal(commission) },
+    ...(market > 0
+      ? [{ kind: "market_fee" as const, label: null, amount: decimal(market) }]
+      : []),
+    ...(vat > 0
+      ? [{ kind: "vat" as const, label: null, amount: decimal(vat) }]
+      : []),
+  ];
+}
+
+// A step as a fixture writes it: a trade of a quantity at that day's price,
+// or a dividend in dollars with its withholding, `daysAgo` days back.
+type TradeStep = {
+  kind: "opening_balance" | "purchase" | "sale";
+  daysAgo: number;
+  quantity: string;
   reference?: string;
   operation?: string;
 };
+type DividendStep = {
+  kind: "dividend";
+  daysAgo: number;
+  usd: string;
+  withheld: string;
+};
+type Step = TradeStep | DividendStep;
 
-function chargeItems({ fees, market, vat, taxes }: Charges): Charge[] {
-  return [
-    ...(fees
-      ? [{ kind: "commission" as const, label: null, amount: fees }]
-      : []),
-    ...(market
-      ? [{ kind: "market_fee" as const, label: null, amount: market }]
-      : []),
-    ...(vat ? [{ kind: "vat" as const, label: null, amount: vat }] : []),
-    ...(taxes ? [{ kind: "tax" as const, label: null, amount: taxes }] : []),
-  ];
-}
-type TradeStep = [
-  kind: "opening_balance" | "purchase" | "sale",
-  daysAgo: number,
+const buy = (daysAgo: number, quantity: string, reference?: string): Step => ({
+  kind: "purchase",
+  daysAgo,
+  quantity,
+  reference,
+});
+const sell = (daysAgo: number, quantity: string, reference?: string): Step => ({
+  kind: "sale",
+  daysAgo,
+  quantity,
+  reference,
+});
+const open = (daysAgo: number, quantity: string): Step => ({
+  kind: "opening_balance",
+  daysAgo,
+  quantity,
+});
+const dividend = (daysAgo: number, usd: string, withheld: string): Step => ({
+  kind: "dividend",
+  daysAgo,
+  usd,
+  withheld,
+});
+
+// A purchase every `every` days from `first` days back, of `quantity` each.
+const monthly = (
+  first: number,
+  every: number,
+  times: number,
   quantity: string,
-  price: string,
-  charges?: Charges,
-];
-type IncomeStep = [
-  kind: "dividend" | "coupon",
-  daysAgo: number,
-  amount: string,
-  charges?: Charges,
-];
-type Step = TradeStep | IncomeStep;
-const isIncomeStep = (step: Step): step is IncomeStep =>
-  step[0] === "dividend" || step[0] === "coupon";
+): Step[] =>
+  Array.from({ length: times }, (_, n) =>
+    buy(first - n * every, quantity, `OP-${first - n * every}`),
+  );
 
 type InstrumentHolding = {
   id: string;
@@ -167,32 +296,6 @@ type InstrumentHolding = {
   currency: "ARS" | "USD";
   placed: Placed;
   steps: Step[];
-};
-
-// Apple's monthly purchases and a few sales: the holding with the longest
-// history, so its movements take more than one page.
-const appleSteps = (): Step[] => {
-  const steps: Step[] = [
-    ["opening_balance", 700, "20", "9000", { fees: "45", taxes: "10" }],
-  ];
-  for (let month = 1; month <= 22; month += 1) {
-    const daysAgo = 700 - month * 30;
-    const price = String(9000 + month * 400);
-    steps.push(
-      month % 6 === 0
-        ? ["sale", daysAgo, "5", price, { fees: "60", taxes: "12" }]
-        : [
-            "purchase",
-            daysAgo,
-            "2",
-            price,
-            { fees: "25", market: "3", vat: "5.25" },
-          ],
-    );
-  }
-  steps.push(["dividend", 45, "1800", { taxes: "270" }]);
-  steps.push(["dividend", 200, "1500", { taxes: "225" }]);
-  return steps;
 };
 
 const ETH_SPLIT = "f2000000-0000-4000-8000-000000000001";
@@ -204,9 +307,9 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
     currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
     steps: [
-      ["opening_balance", 690, "0.3", "30000", { fees: "5" }],
-      ["purchase", 380, "0.1", "45000", { fees: "3", reference: "BIN-48213" }],
-      ["sale", 90, "0.15", "60000", { fees: "4" }],
+      open(700, "0.25"),
+      ...monthly(640, 60, 10, "0.02"),
+      sell(150, "0.1", "BIN-48213"),
     ],
   },
   {
@@ -215,73 +318,111 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
     currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.principal),
     steps: [
-      ["opening_balance", 650, "2", "1800"],
-      ["sale", 400, "0.5", "3000", { fees: "2" }],
+      open(650, "1.5"),
+      sell(400, "0.5"),
       // One purchase split with the holding in Largo plazo.
-      ["purchase", 120, "0.6", "2400", { fees: "1.2", operation: ETH_SPLIT }],
-      ["sale", 30, "0.5", "2600", { fees: "2" }],
+      {
+        kind: "purchase",
+        daysAgo: 120,
+        quantity: "0.6",
+        operation: ETH_SPLIT,
+        reference: "BIN-77310",
+      },
+      sell(30, "0.3"),
     ],
   },
+  // Started by its part of the purchase split with Principal.
   {
     id: "c1000000-0000-4000-8000-000000000003",
-    symbol: "AAPL",
-    currency: "ARS",
-    placed: at(ACCOUNTS.iol, PORTFOLIOS.principal),
-    steps: appleSteps(),
-  },
-  {
-    id: "c1000000-0000-4000-8000-000000000004",
-    symbol: "KO",
-    currency: "ARS",
-    placed: at(ACCOUNTS.cocos, PORTFOLIOS.largo),
-    steps: [
-      ["opening_balance", 500, "30", "8000", { fees: "40" }],
-      ["dividend", 120, "2100", { taxes: "315" }],
-    ],
-  },
-  {
-    id: "c1000000-0000-4000-8000-000000000005",
-    symbol: "AL30",
-    currency: "ARS",
-    placed: at(ACCOUNTS.iol, PORTFOLIOS.corto),
-    steps: [
-      ["opening_balance", 600, "10000", "700", { fees: "350" }],
-      ["coupon", 300, "30000"],
-      ["sale", 60, "4000", "820", { fees: "160", taxes: "20" }],
-      ["coupon", 20, "24000"],
-    ],
-  },
-  // Started by its part of a purchase split with Principal.
-  {
-    id: "c1000000-0000-4000-8000-000000000008",
     symbol: "ETH",
     currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
     steps: [
-      ["purchase", 120, "0.4", "2400", { fees: "0.8", operation: ETH_SPLIT }],
+      {
+        kind: "purchase",
+        daysAgo: 120,
+        quantity: "0.4",
+        operation: ETH_SPLIT,
+        reference: "BIN-77310",
+      },
     ],
   },
-  // Sold to zero: closed, its sales still count.
+  {
+    id: "c1000000-0000-4000-8000-000000000004",
+    symbol: "SOL",
+    currency: "USD",
+    placed: at(ACCOUNTS.binance, PORTFOLIOS.corto),
+    steps: [buy(300, "20"), buy(200, "10"), sell(60, "12")],
+  },
+  {
+    id: "c1000000-0000-4000-8000-000000000005",
+    symbol: "AAPL",
+    currency: "ARS",
+    placed: at(ACCOUNTS.iol, PORTFOLIOS.principal),
+    steps: [
+      open(700, "40"),
+      ...monthly(670, 30, 22, "4"),
+      sell(400, "20", "IOL-58120"),
+      sell(160, "15", "IOL-61877"),
+      dividend(320, "9.60", "2.88"),
+      dividend(230, "9.80", "2.94"),
+      dividend(140, "10.10", "3.03"),
+      dividend(50, "10.40", "3.12"),
+    ],
+  },
   {
     id: "c1000000-0000-4000-8000-000000000006",
-    symbol: "AL30D",
-    currency: "USD",
-    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
+    symbol: "KO",
+    currency: "ARS",
+    placed: at(ACCOUNTS.cocos, PORTFOLIOS.largo),
     steps: [
-      ["opening_balance", 550, "5000", "0.55", { fees: "3" }],
-      ["coupon", 360, "120"],
-      ["sale", 100, "5000", "0.61", { fees: "3" }],
+      open(500, "60"),
+      buy(330, "20"),
+      dividend(410, "11.70", "3.51"),
+      dividend(320, "11.70", "3.51"),
+      dividend(230, "15.30", "4.59"),
+      dividend(140, "15.30", "4.59"),
+      dividend(50, "15.90", "4.77"),
     ],
   },
   {
     id: "c1000000-0000-4000-8000-000000000007",
-    symbol: "FIMAPREA",
+    symbol: "MELI",
     currency: "ARS",
-    placed: at(ACCOUNTS.balanz, PORTFOLIOS.corto),
+    placed: at(ACCOUNTS.iol, PORTFOLIOS.principal),
+    steps: [buy(540, "15"), buy(380, "10"), buy(95, "8")],
+  },
+  {
+    id: "c1000000-0000-4000-8000-000000000008",
+    symbol: "NVDA",
+    currency: "ARS",
+    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
+    steps: [...monthly(360, 30, 12, "10"), sell(45, "30", "BAL-30418")],
+  },
+  {
+    id: "c1000000-0000-4000-8000-000000000009",
+    symbol: "SPY",
+    currency: "ARS",
+    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [
-      ["opening_balance", 400, "100000", "38"],
-      ["purchase", 150, "50000", "41.5"],
+      ...monthly(715, 30, 24, "6"),
+      dividend(640, "4.10", "1.23"),
+      dividend(550, "4.20", "1.26"),
+      dividend(460, "4.30", "1.29"),
+      dividend(370, "4.40", "1.32"),
+      dividend(280, "4.50", "1.35"),
+      dividend(190, "4.60", "1.38"),
+      dividend(100, "4.70", "1.41"),
+      dividend(10, "4.80", "1.44"),
     ],
+  },
+  // Sold to zero: closed, its sales still count.
+  {
+    id: "c1000000-0000-4000-8000-000000000010",
+    symbol: "TSLA",
+    currency: "ARS",
+    placed: at(ACCOUNTS.cocos, PORTFOLIOS.corto),
+    steps: [buy(420, "25"), buy(350, "15"), sell(100, "40", "COC-90215")],
   },
 ];
 
@@ -289,21 +430,16 @@ const OTHER_HOLDINGS: [id: string, columns: Record<string, unknown>, Placed][] =
   [
     [
       "c2000000-0000-4000-8000-000000000001",
-      { asset_class: "cash", currency: "ARS", amount: "250000", label: null },
+      { asset_class: "cash", currency: "ARS", amount: "350000", label: null },
       at(ACCOUNTS.iol, PORTFOLIOS.corto),
     ],
     [
       "c2000000-0000-4000-8000-000000000002",
-      { asset_class: "cash", currency: "USD", amount: "3200", label: null },
+      { asset_class: "cash", currency: "USD", amount: "2500", label: null },
       at(ACCOUNTS.cocos, PORTFOLIOS.principal),
     ],
     [
       "c2000000-0000-4000-8000-000000000003",
-      { asset_class: "fixed_term", currency: "ARS", amount: "1000000" },
-      at(ACCOUNTS.balanz, PORTFOLIOS.corto),
-    ],
-    [
-      "c2000000-0000-4000-8000-000000000004",
       {
         asset_class: "real_estate",
         currency: "USD",
@@ -328,39 +464,59 @@ let movementCount = 0;
 const movementId = () =>
   `d1000000-0000-4000-8000-${String((movementCount += 1)).padStart(12, "0")}`;
 
-// A step as a movement, with its date's rates read from the quotes.
+// A step as a movement, at its day's price and rates.
 function draft(
   holding: InstrumentHolding,
   step: Step,
   today: string,
   quotes: StoredQuotes,
 ): MovementDraft {
-  const date = addDays(today, -step[1]);
+  const date = addDays(today, -step.daysAgo);
   const { fx } = snapshotOn(quotes, date, {
     fxKinds: UNIT_FX_KINDS,
     symbols: [],
   }).snapshot;
   const id = movementId();
-  const options = step[step.length - 1];
-  const extras: Charges = typeof options === "object" ? options : {};
   const common = {
     id,
     holding_id: holding.id,
-    operation_id: extras.operation ?? id.replace(/^d1/, "f1"),
+    operation_id:
+      (step.kind !== "dividend" && step.operation) || id.replace(/^d1/, "f1"),
     date,
-    currency: holding.currency,
-    charges: chargeItems(extras),
-    reference: extras.reference ?? null,
     note: null,
     rates: fx,
   };
-  if (isIncomeStep(step)) {
-    const [kind, , amount] = step;
-    return { ...common, kind, amount };
+  if (step.kind === "dividend") {
+    return {
+      ...common,
+      kind: "dividend",
+      currency: "USD",
+      amount: step.usd,
+      charges: [{ kind: "tax", label: "Retención", amount: step.withheld }],
+      reference: null,
+    };
   }
-  const [kind, , quantity, price] = step;
-  return { ...common, kind, quantity, price };
+  const priceCentsNow = priceCents(holding.symbol, step.daysAgo);
+  const [whole = "0", fraction = ""] = step.quantity.split(".");
+  const quantityMillis =
+    Number(whole) * 1000 + Number(fraction.padEnd(3, "0").slice(0, 3));
+  const gross = Math.round((priceCentsNow * quantityMillis) / 1000);
+  return {
+    ...common,
+    kind: step.kind,
+    currency: holding.currency,
+    quantity: step.quantity,
+    price: decimal(priceCentsNow),
+    charges:
+      step.kind === "opening_balance"
+        ? []
+        : brokerCharges(holding.placed.account.institution, gross),
+    reference: step.reference ?? null,
+  };
 }
+
+const typeOf = (symbol: string) =>
+  INSTRUMENTS.find((row) => row.symbol === symbol)?.type ?? null;
 
 export function buildFixtures(today: string): Fixtures {
   movementCount = 0;
@@ -371,7 +527,8 @@ export function buildFixtures(today: string): Fixtures {
   for (const holding of INSTRUMENT_HOLDINGS) {
     const own: Movement[] = [];
     let quantity = "0";
-    for (const step of holding.steps) {
+    const steps = [...holding.steps].sort((a, b) => b.daysAgo - a.daysAgo);
+    for (const step of steps) {
       const movement = draft(holding, step, today, quotes);
       const admitted = admitMovement({ prior: null, after: own }, movement, {
         today,
@@ -396,23 +553,22 @@ export function buildFixtures(today: string): Fixtures {
           // takes a zero amount; nothing values or lists it.
           amount: isClosed ? own.find(isTrade)!.quantity : quantity,
         },
-        holding.placed,
+        { ...holding.placed, instrumentType: typeOf(holding.symbol) },
       ),
     );
   }
   for (const [id, columns, placed] of OTHER_HOLDINGS) {
-    const term =
-      columns.asset_class === "fixed_term"
-        ? {
-            annual_rate: "0.32",
-            started_on: addDays(today, -20),
-            matures_on: addDays(today, 10),
-            label: null,
-          }
-        : columns.asset_class === "real_estate"
-          ? { valued_on: addDays(today, -180) }
-          : {};
-    holdings.push(rowOf(id, { ...EMPTY_COLUMNS, ...columns, ...term }, placed));
+    const valued =
+      columns.asset_class === "real_estate"
+        ? { valued_on: addDays(today, -180) }
+        : {};
+    holdings.push(
+      rowOf(
+        id,
+        { ...EMPTY_COLUMNS, ...columns, ...valued },
+        { ...placed, instrumentType: null },
+      ),
+    );
   }
   return {
     referenceDollar: "mep",
@@ -423,5 +579,6 @@ export function buildFixtures(today: string): Fixtures {
     closed,
     movements,
     quotes,
+    manualPrices: manualPricesFor(today),
   };
 }

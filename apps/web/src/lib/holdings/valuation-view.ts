@@ -18,7 +18,8 @@ import {
 
 import { SMALL_PRICE_DIGITS } from "@/lib/format/amount";
 
-import type { AssetClass } from "./messages";
+import { classOf, type HoldingClass } from "./classes";
+import type { HoldingRow } from "./read";
 
 type HoldingValue = HoldingsValue["items"][number] & {
   // One unit of the instrument or currency, in the page's unit.
@@ -66,7 +67,7 @@ export type HoldingsValuation = {
   portfolios: Record<string, Sum>;
   accounts: Record<string, Breakdown>;
   kinds: Breakdown;
-  classes: Partial<Record<AssetClass, Sum>>;
+  classes: Partial<Record<HoldingClass, Sum>>;
 };
 
 // The caller passes the holdings the page shows. Each sum is rounded once from
@@ -78,7 +79,9 @@ export function holdingsValuation({
   unit,
   referenceDollar,
 }: {
-  holdings: readonly { holding: Holding; account: { id: string } }[];
+  holdings: readonly (Pick<HoldingRow, "holding" | "instrumentType"> & {
+    account: { id: string };
+  })[];
   truncated: boolean;
   snapshot: QuoteSnapshot;
   unit: Denominator;
@@ -127,6 +130,9 @@ export function holdingsValuation({
   const accountOf = new Map(
     holdings.map((row) => [row.holding.id, row.account.id]),
   );
+  const classById = new Map(
+    holdings.map((row) => [row.holding.id, classOf(row)]),
+  );
 
   const priceOf = (holding: Holding): string | null => {
     if (!hasUnitPrice(holding)) return null;
@@ -166,7 +172,9 @@ export function holdingsValuation({
     ),
     kinds: breakdown(all),
     classes: Object.fromEntries(
-      groupBy((h) => h.asset_class).map(([id, subset]) => [id, sum(subset)]),
+      groupBy((h) => classById.get(h.id) ?? h.asset_class).map(
+        ([id, subset]) => [id, sum(subset)],
+      ),
     ),
   };
 }
