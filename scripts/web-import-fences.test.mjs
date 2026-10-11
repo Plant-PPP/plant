@@ -566,6 +566,29 @@ flagged.push(
   ],
 );
 
+// Only the prototype's own files import it, and none holds a server action.
+flagged.push(
+  [
+    "src/components/holdings/x.tsx",
+    'import "@/components/prototype/prototype-store";',
+  ],
+  [
+    "src/app/(app)/assets/page.tsx",
+    'import { buildFixtures } from "@/lib/prototype/fixtures";',
+  ],
+  [
+    "src/components/holdings/x.tsx",
+    'import "../prototype/prototype-store.ts";',
+  ],
+  ["src/components/prototype/x.ts", 'import "@/lib/supabase/service-role";'],
+  ["src/components/prototype/x.ts", '"use server";\nexport const x = 1;'],
+  [
+    "src/app/(app)/prototype/assets/page.tsx",
+    '"use server";\nexport const x = 1;',
+  ],
+  ["src/lib/prototype/x.ts", 'export async function f() {\n  "use server";\n}'],
+);
+
 for (const [filePath, code] of flagged) {
   test(`${filePath}: ${code} is fenced`, async () => {
     assert.notDeepEqual(await fenced(filePath, code), []);
@@ -691,6 +714,18 @@ allowed.push(
   ],
 );
 
+allowed.push(
+  [
+    "src/app/(app)/prototype/assets/page.tsx",
+    'import { PrototypeAssets } from "@/components/prototype/prototype-assets";',
+  ],
+  ["src/components/prototype/x.tsx", 'import "@/lib/prototype/fixtures";'],
+  ["src/components/prototype/x.test.ts", 'import "@plant/shared/testing";'],
+  ["src/lib/prototype/x.test.ts", 'import "@plant/shared/testing";'],
+  // Only a path segment named prototype is fenced.
+  ["src/lib/x.ts", 'import "./prototypes";'],
+);
+
 for (const [filePath, code] of allowed) {
   test(`${filePath}: ${code} is allowed`, async () => {
     assert.deepEqual(await fenced(filePath, code), []);
@@ -721,6 +756,9 @@ const OVERRIDES = [
   ["src/lib/auth/mfa-disable.test.ts", []],
   ["src/lib/x.test.ts", ["testing"]],
   ["src/components/x.test.tsx", ["testing"]],
+  ["src/components/prototype/x.ts", ["prototype"]],
+  ["src/app/(app)/prototype/assets/page.tsx", ["prototype"]],
+  ["src/lib/prototype/x.test.ts", ["prototype", "testing"]],
 ];
 const PROBES = {
   reader: READER,
@@ -731,6 +769,7 @@ const PROBES = {
   quoteSink: 'import "@/lib/quotes/quote-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   testing: 'import "@plant/shared/testing";',
+  prototype: 'import "@/lib/prototype/fixtures";',
   dynamic: 'const m = "ai";\nexport const f = () => import(m);',
 };
 for (const [filePath, exempt] of OVERRIDES) {

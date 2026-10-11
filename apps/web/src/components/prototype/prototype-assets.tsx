@@ -1,0 +1,84 @@
+"use client";
+
+import { referenceUnit } from "@plant/core";
+
+import { AssetsSetup } from "@/components/holdings/assets-setup";
+import { SALES_TABS } from "@/lib/holdings/assets-filter";
+import { assetsSelection } from "@/lib/holdings/assets-selection";
+import { instrumentNames } from "@/lib/holdings/holding-name";
+import type { MovementsInput } from "@/lib/holdings/movements-input";
+import { holdingsValuation } from "@/lib/holdings/valuation-view";
+import { SALES_LIMIT } from "@/lib/portfolio-setup/limits";
+import type { KeysetParams } from "@/lib/supabase/keyset";
+
+import { usePrototype } from "./prototype-provider";
+import {
+  holdingsView,
+  movementsPage,
+  positionsOf,
+  salesOf,
+  yearsOf,
+} from "./prototype-store";
+
+// Activos over the prototype's store, with movements and the sales tab.
+export function PrototypeAssets({ params }: { params: KeysetParams }) {
+  const { state, latest, snapshot, actions } = usePrototype();
+  const names = instrumentNames(state.instruments);
+  const view = holdingsView(state);
+  const years = yearsOf(state);
+  const {
+    unit: chosenUnit,
+    year,
+    filter,
+    shown,
+  } = assetsSelection({
+    params,
+    rows: view.active,
+    portfolioIds: state.portfolios.map(({ id }) => id),
+    tabs: SALES_TABS,
+    salesYears: years,
+    names,
+  });
+  const reference = referenceUnit(state.referenceDollar);
+  const unit = chosenUnit ?? reference;
+  const valuation = holdingsValuation({
+    holdings: shown,
+    truncated: false,
+    snapshot,
+    unit,
+    referenceDollar: state.referenceDollar,
+  });
+  const movements: MovementsInput = {
+    positions: positionsOf(state, unit),
+    revisions: state.revisions,
+    sales: salesOf(state, {
+      year,
+      unit,
+      filter,
+      names,
+      limit: SALES_LIMIT,
+    }),
+    years,
+    loadMovements: async (scope, inUnit, cursor) =>
+      movementsPage(latest(), scope, inUnit, cursor),
+  };
+
+  return (
+    <AssetsSetup
+      holdings={view}
+      valuation={valuation}
+      unit={unit}
+      referenceUnit={reference}
+      filter={filter}
+      params={params}
+      accounts={state.accounts}
+      portfolios={state.portfolios}
+      instruments={state.instruments}
+      today={state.today}
+      tabs={SALES_TABS}
+      actions={actions.holdings}
+      movements={movements}
+      movementActions={actions.movements}
+    />
+  );
+}

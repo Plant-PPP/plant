@@ -1,5 +1,5 @@
 import type { QuoteRange, StoredQuotes } from "./contract/port";
-import { readSnapshot, snapshotFromRows } from "./snapshot";
+import { readSnapshot, snapshotFromRows, snapshotOn } from "./snapshot";
 
 const RANGE: QuoteRange = {
   from: "2026-10-03",
@@ -139,5 +139,22 @@ describe("readSnapshot", () => {
         symbols: [],
       }),
     ).rejects.toBe(failure);
+  });
+});
+
+describe("snapshotOn", () => {
+  it("reads a day from rows already read, as readSnapshot would", async () => {
+    const stored = rows({
+      fxRates: [fx("2026-10-02", "1100"), fx("2026-10-05", "1150")],
+      prices: [price("BTC", "2026-10-11", "61000")],
+    });
+    const need = { fxKinds: ["mep" as const], symbols: ["BTC"] };
+    const read = jest.fn().mockResolvedValue(stored);
+    expect(snapshotOn(stored, "2026-10-10", need)).toEqual(
+      await readSnapshot({ read }, "2026-10-10", need),
+    );
+    expect(snapshotOn(stored, "2026-10-10", need).snapshot.fx.mep?.sell).toBe(
+      "1150",
+    );
   });
 });
