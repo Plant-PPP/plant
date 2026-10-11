@@ -16,8 +16,8 @@ it("sums the open holdings' value and cost, and every holding's results", () => 
       { row, closed: true, position: position("0", "0", "15"), value: null },
     ],
     [
-      { date: "2025-01-01", amount: "-100", kind: "buy" },
-      { date: "2025-06-01", amount: "40", kind: "sell" },
+      { date: "2025-01-01", amount: "-100", kind: "buy", charges: "0" },
+      { date: "2025-06-01", amount: "40", kind: "sell", charges: "0" },
     ],
     "2025-12-01",
   );

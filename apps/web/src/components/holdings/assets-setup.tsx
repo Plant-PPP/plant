@@ -1156,6 +1156,27 @@ export function AssetsSetup({
           }
           initialError={dialog.initialError}
           onSubmit={(fields, chosen: ChosenHolding) => {
+            // Where movements are kept, an instrument comes in as an opening
+            // balance, which asks for the price its units cost.
+            if (movement && fields.assetClass === "instrument") {
+              openMovementDialog({
+                kind: "create",
+                row: null,
+                initial: {
+                  ...newOperationFields(null, "opening_balance"),
+                  accountId: fields.accountId,
+                  instrument: fields.instrument,
+                  currency:
+                    instruments.find(
+                      (each) => each.symbol === fields.instrument,
+                    )?.currency ?? "ARS",
+                  parts: [
+                    { portfolioId: fields.portfolioId, size: fields.amount },
+                  ],
+                },
+              });
+              return true;
+            }
             const row = holdingRow(temporaryId(), fields, chosen);
             return submit(
               dialog,

@@ -1,4 +1,4 @@
-import { compareExact, exactOf, minus, plus, toDecimal } from "@plant/shared";
+import { compareExact, exactOf, minus, plus, stored } from "@plant/shared";
 import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
 import {
   isTrade,
@@ -51,7 +51,7 @@ export function admitMovements({ prior, after }: MovementWindow): Admission {
       quantity = plus(quantity, moved);
     }
   }
-  return { ok: true, quantity: toDecimal(quantity, 8) };
+  return { ok: true, quantity: stored(quantity) };
 }
 
 // A new or edited movement, before its rates are known to be complete: the
