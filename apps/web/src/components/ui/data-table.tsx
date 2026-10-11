@@ -15,6 +15,7 @@ import {
   TableBody,
   TableCaption,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -50,15 +51,18 @@ const ACTIONS_COLUMN = "actions";
 
 // Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
-// the table's width with `@`-variants.
+// the table's width with `@`-variants. `footer` is one more row after the
+// body, such as a total.
 function DataTable<T extends DataTableRow>({
   columns,
   data,
   caption,
+  footer,
 }: {
   columns: ColumnDef<T>[];
   data: T[];
   caption: string;
+  footer?: React.ReactNode;
 }) {
   // The app has no React Compiler, and nothing memoizes the table instance.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -128,6 +132,7 @@ function DataTable<T extends DataTableRow>({
             </TableRow>
           ))}
         </TableBody>
+        {footer && <TableFooter>{footer}</TableFooter>}
       </Table>
     </div>
   );

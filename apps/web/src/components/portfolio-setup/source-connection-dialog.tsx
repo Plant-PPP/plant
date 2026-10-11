@@ -34,6 +34,7 @@ import {
   typedInstitution,
 } from "./institution-field";
 import { NewHolderField } from "./new-holder-field";
+import { useFieldAlert } from "./field-alert";
 import { useSavedFocus } from "./saved-focus";
 import { PendingButton } from "@/components/ui/pending-button";
 
@@ -110,14 +111,6 @@ export function missingChoice(
   if (fields.holder === "") return "holder";
   if (fields.defaultPortfolioId === "") return "portfolio";
   return undefined;
-}
-
-// Radix's hidden native select reports "" when the value is set before its
-// option renders, as for a holder just created here; no option is "".
-export function choose(set: (value: string) => void) {
-  return (value: string) => {
-    if (value !== "") set(value);
-  };
 }
 
 // The holders to offer: the page's, then those created here that the page
@@ -220,15 +213,8 @@ export function SourceConnectionDialog({
   // after its field was closed only adds the holder, without choosing it.
   const [holderFieldKey, setHolderFieldKey] = useState(0);
   const openHolderField = useRef<number | null>(null);
-  const [alert, setAlert] = useState<
-    { text: string; field: AccountField | null } | undefined
-  >(() =>
-    initialError
-      ? { text: initialError, field: refusedField(initialError) }
-      : undefined,
-  );
-  // A reopened dialog starts on the field its alert is about.
-  const [firstField] = useState(() => alert?.field ?? "institution");
+  const { alert, setAlert, firstField, invalid, settle, pick } =
+    useFieldAlert<AccountField>(initialError, refusedField, "institution");
   // A new holder still saving holds the dialog and its submit: the holder it
   // saves may be the one the account picks.
   const [holderPending, setHolderPending] = useState(false);
@@ -267,16 +253,6 @@ export function SourceConnectionDialog({
   const holderOptions = holderChoices(holders, added);
   const { holder: chosenHolder, defaultPortfolioId: chosenPortfolio } =
     offeredChoices(holder, portfolio, holderOptions, portfolios);
-  const invalid = (field: AccountField) =>
-    alert?.field === field ? true : undefined;
-  function settle(field: AccountField) {
-    if (alert?.field === field) setAlert(undefined);
-  }
-  const pick = (field: AccountField, set: (value: string) => void) =>
-    choose((value) => {
-      set(value);
-      settle(field);
-    });
 
   function submit() {
     if (holderPending) return;

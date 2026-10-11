@@ -5,7 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { createQuoteWriter, GUARD_SQLSTATE } from "./quote-writer";
+import { createQuoteWriter } from "./quote-writer";
+import { GUARD_SQLSTATE } from "./store-error";
 
 const [FX_SOURCE, , PRICE_SOURCE] = Constants.public.Enums.quote_source;
 

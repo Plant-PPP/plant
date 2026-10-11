@@ -1,38 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { repoRoot, tablesUnder, value } from "@/test/supabase-config";
+
 import {
   OTP_EXPIRY_MINUTES,
   OTP_LENGTH,
   RESEND_COOLDOWN_SECONDS,
   TOTP_CODE_LENGTH,
 } from "./otp-config";
-
-const root = join(__dirname, "../../../../..");
-const config = readFileSync(join(root, "supabase/config.toml"), "utf8");
-
-// The body of one [table], up to the next table header.
-function table(name: string): string {
-  const start = config.indexOf(`\n[${name}]\n`);
-  if (start === -1) throw new Error(`[${name}] not found`);
-  const body = config.slice(start + name.length + 4);
-  const end = body.search(/^\[/m);
-  return end === -1 ? body : body.slice(0, end);
-}
-
-function value(tableName: string, key: string): string {
-  const matches = [
-    ...table(tableName).matchAll(new RegExp(`^${key} = (.+)$`, "gm")),
-  ];
-  expect(matches).toHaveLength(1);
-  return (matches[0]?.[1] ?? "").trim();
-}
-
-function tablesUnder(prefix: string): string[] {
-  return [...config.matchAll(/^\[([^\]]+)\]$/gm)]
-    .map((m) => m[1] ?? "")
-    .filter((name) => name.startsWith(`${prefix}.`))
-    .map((name) => name.slice(prefix.length + 1));
-}
 
 describe("supabase/config.toml [auth.email]", () => {
   it("sends codes of OTP_LENGTH digits", () => {
@@ -64,7 +40,7 @@ describe("the sign-in mail", () => {
   const magicLink = value("auth.email.template.magic_link", "content_path");
   const recovery = value("auth.email.template.recovery", "content_path");
   const template = readFileSync(
-    join(root, JSON.parse(confirmation) as string),
+    join(repoRoot, JSON.parse(confirmation) as string),
     "utf8",
   );
 

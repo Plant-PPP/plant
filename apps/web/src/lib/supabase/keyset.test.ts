@@ -1,4 +1,10 @@
-import { firstPageHref, keysetFilter, keysetHref, parseKeyset } from "./keyset";
+import {
+  firstPageHref,
+  keysetFilter,
+  keysetHref,
+  paramHref,
+  parseKeyset,
+} from "./keyset";
 
 const ID = "6f1c2b1e-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
 const AT = "2026-10-09T14:18:15.123456+00:00";
@@ -72,4 +78,13 @@ test("firstPageHref drops its own param and keeps the others", () => {
     firstPageHref({ carteras: `${AT},${ID}`, titulares: "a" }, "carteras"),
   ).toBe("?titulares=a");
   expect(firstPageHref({ carteras: `${AT},${ID}` }, "carteras")).toBe("?");
+});
+
+test("paramHref sets or drops one param and keeps the others", () => {
+  expect(paramHref({ moneda: "ars", cartera: "p1" }, "moneda", "btc")).toBe(
+    "?cartera=p1&moneda=btc",
+  );
+  expect(paramHref({ moneda: "ars", cartera: "p1" }, "cartera", null)).toBe(
+    "?moneda=ars",
+  );
 });

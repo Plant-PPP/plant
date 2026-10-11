@@ -468,6 +468,11 @@ describe("isSensitiveKey", () => {
     "authCode",
     "inngest.event_key",
     "eventKey",
+    "plant.assets.total",
+    "plant.portfolio.subtotal",
+    "plant.holding.value",
+    "plant.fx.rate",
+    "plant.holding.label",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
@@ -484,6 +489,9 @@ describe("isSensitiveKey", () => {
     "enduser.id",
     "error.type",
     "plant.request_id",
+    "plant.assets.holding_count",
+    "plant.quotes.fx_rate_count",
+    "plant.value.id",
   ])("passes %s", (key) => {
     expect(isSensitiveKey(key)).toBe(false);
   });

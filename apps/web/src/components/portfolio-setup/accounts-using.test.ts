@@ -20,14 +20,11 @@ const ACTIVE = [row("c1", "IOL", null), row("c2", "Balanz", LUCIA)];
 
 describe("accountsUsing", () => {
   it("names the accounts that default to a portfolio", () => {
-    expect(accountsUsing(ACTIVE, "portfolio", "p2")).toEqual([
-      "tu IOL",
-      "Balanz de Lucía",
-    ]);
+    expect(accountsUsing(ACTIVE, "portfolio", "p2")).toEqual(["IOL", "Balanz"]);
   });
 
   it("names the accounts of a holder, never the user's own", () => {
-    expect(accountsUsing(ACTIVE, "holder", "h1")).toEqual(["Balanz de Lucía"]);
+    expect(accountsUsing(ACTIVE, "holder", "h1")).toEqual(["Balanz"]);
     expect(accountsUsing(ACTIVE, "holder", "p2")).toEqual([]);
   });
 });

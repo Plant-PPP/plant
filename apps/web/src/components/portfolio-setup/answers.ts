@@ -21,7 +21,7 @@ export function rowAnswer(
   usedBy: string[] = [],
 ): Answer {
   if (result !== "rejected" && !result.ok) {
-    if (result.code === "duplicate_name" && action === "restore") {
+    if (result.code === "duplicate" && action === "restore") {
       return { kind: "ask_name" };
     }
     if (result.code === "portfolio_in_use" || result.code === "holder_in_use") {

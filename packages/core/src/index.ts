@@ -1,9 +1,12 @@
 export type {
   GetJson,
   QuoteFeedPort,
+  QuoteRange,
+  QuoteReaderPort,
   QuoteRows,
   QuoteStorePort,
   SavedCounts,
+  StoredQuotes,
 } from "./quotes/contract/port";
 export {
   feedErrorForStatus,
@@ -16,6 +19,7 @@ export {
   type QuoteFeedCode,
   QuoteFeedError,
   quoteFailureOf,
+  type QuoteNeed,
   type QuoteSnapshot,
   type QuoteStage,
   type QuoteStoreCode,
@@ -24,15 +28,30 @@ export {
   REFUSALS,
 } from "./quotes/contract/quote";
 export { quoteFeeds } from "./quotes/factory";
-export { DENOMINATORS, type Denominator } from "./valuation/denominators";
+export { readSnapshot, type SnapshotRead } from "./quotes/snapshot";
+export {
+  DENOMINATORS,
+  type Denominator,
+  isDenominator,
+} from "./valuation/denominators";
 export {
   rate,
+  referenceUnit,
   type ReferenceDollar,
   type Value,
 } from "./valuation/denominator";
 export {
+  classBranch,
+  HOLDING_DATE_MAX,
+  HOLDING_DATE_MIN,
   type Holding,
   holdingSchema,
   instrumentValue,
+  MAX_ANNUAL_RATE,
+  type OmittableColumn,
 } from "./valuation/holding";
-export { type HoldingsValue, valueHoldings } from "./valuation/holdings";
+export {
+  type HoldingsValue,
+  quotesNeeded,
+  valueHoldings,
+} from "./valuation/holdings";

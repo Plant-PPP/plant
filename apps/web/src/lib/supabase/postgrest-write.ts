@@ -18,9 +18,15 @@ export type PostgrestFailure = { code: string; mayHaveCommitted: boolean };
 // id) passes too; select the row to tell.
 export function classifyPostgrestResult(
   { error, status }: { error: PostgrestError | null; status: number },
-  expectedStatus: number,
+  expected: number | readonly number[],
 ): PostgrestFailure | null {
-  if (status === expectedStatus) return null;
+  if (
+    typeof expected === "number"
+      ? status === expected
+      : expected.includes(status)
+  ) {
+    return null;
+  }
   if (status === 0) return { code: "fetch_error", mayHaveCommitted: true };
   const code = typeof error?.code === "string" ? error.code : "";
   return {
@@ -29,15 +35,15 @@ export function classifyPostgrestResult(
   };
 }
 
-// PostgREST answers an insert with 201; data is null when the insert returns
-// no representation or postgrest-js could not parse its body. A timeout or any
-// other answer resolves as a PostgrestFailure; a query that rejects or throws
-// still rejects. Not for `.maybeSingle()`: postgrest-js turns its 2xx with
-// several rows into a 406 after the write committed.
-export async function postgrestInsert<T>(
+// A query raced against a timer: it resolves with the answer when its status
+// is one of `expected`, else as a PostgrestFailure (a timeout too); a query
+// that rejects or throws still rejects. `count` is the total PostgREST counted
+// when the query asked for one.
+export async function postgrestCall<T>(
   query: (signal: AbortSignal) => PromiseLike<PostgrestSingleResponse<T>>,
   ms: number,
-): Promise<{ data: T | null } | PostgrestFailure> {
+  expected: readonly number[],
+): Promise<{ data: T | null; count: number | null } | PostgrestFailure> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<PostgrestFailure>((resolve) => {
@@ -50,8 +56,25 @@ export async function postgrestInsert<T>(
   try {
     const result = await Promise.race([query(controller.signal), timeout]);
     if (!("status" in result)) return result;
-    return classifyPostgrestResult(result, 201) ?? { data: result.data };
+    return (
+      classifyPostgrestResult(result, expected) ?? {
+        data: result.data,
+        count: result.count,
+      }
+    );
   } finally {
     clearTimeout(timer);
   }
+}
+
+// PostgREST answers an insert with 201; data is null when the insert returns
+// no representation or postgrest-js could not parse its body. Not for
+// `.maybeSingle()`: postgrest-js turns its 2xx with several rows into a 406
+// after the write committed.
+export async function postgrestInsert<T>(
+  query: (signal: AbortSignal) => PromiseLike<PostgrestSingleResponse<T>>,
+  ms: number,
+): Promise<{ data: T | null } | PostgrestFailure> {
+  const result = await postgrestCall(query, ms, [201]);
+  return "code" in result ? result : { data: result.data };
 }

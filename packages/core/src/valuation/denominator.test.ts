@@ -1,5 +1,5 @@
 import { compareExact, exactOf, times, toDecimal } from "@plant/shared";
-import { convert, express, lift, rate } from "./denominator";
+import { convert, express, lift, rate, referenceUnit } from "./denominator";
 import { DENOMINATORS, type Denominator } from "./denominators";
 import { SNAPSHOT } from "./fixtures.test-support";
 
@@ -175,5 +175,14 @@ describe("express", () => {
     );
     if ("missing" in shown) throw new Error(shown.missing);
     expect(shown.asOf).toBe("2026-10-01");
+  });
+});
+
+describe("referenceUnit", () => {
+  it.each([
+    ["mep", "usd_mep"],
+    ["ccl", "usd_ccl"],
+  ] as const)("maps %s to %s", (dollar, unit) => {
+    expect(referenceUnit(dollar)).toBe(unit);
   });
 });

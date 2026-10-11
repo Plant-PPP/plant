@@ -5,6 +5,7 @@ import { NAME_LIMITS } from "./limits";
 const PINNING_TESTS = [
   "portfolio_setup_isolation_test.sql",
   "holders_accounts_isolation_test.sql",
+  "holdings_isolation_test.sql",
 ];
 
 // The pgTAP files pin each CHECK as Postgres renders it; this reads the upper

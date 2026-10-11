@@ -15,8 +15,7 @@ import { PendingButton } from "@/components/ui/pending-button";
 import type { ListView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { type Answer, type WriteMessages, dialogAnswer } from "./answers";
-import type { SetupChange } from "./list-change";
-import type { SetupRun } from "./setup-actions";
+import type { OptimisticRun } from "./optimistic-writes";
 
 type SetupCardState = ReturnType<typeof useSetupCard>;
 
@@ -24,17 +23,13 @@ type SetupCardState = ReturnType<typeof useSetupCard>;
 // alert.
 export type Retry<Initial> = { initial?: Initial; initialError?: string };
 
-type RowChange = SetupChange & {
-  change: { kind: "archive" | "restore" };
-};
-
-// The heading of one list section on the accounts page and the feedback of its
-// actions, which the page runs.
-export function useSetupCard({
+// The heading of one list section and the feedback of its actions, which the
+// page runs.
+export function useSetupCard<C>({
   run,
   pending,
 }: {
-  run: SetupRun;
+  run: OptimisticRun<C>;
   pending: boolean;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -83,7 +78,7 @@ export function useSetupCard({
   // so focus goes to the section's heading, never the page; a refusal brings the
   // row back and focus returns to its button.
   function rowAction(
-    change: RowChange,
+    change: C,
     call: () => Promise<WriteResult>,
     answerOf: (result: WriteResult | "rejected") => Answer,
     {
@@ -109,7 +104,7 @@ export function useSetupCard({
   // dialog again with its alert (a toast once the section is gone). False when
   // another write is running, so the dialog stays open with what the user typed.
   function dialogAction(
-    change: SetupChange,
+    change: C,
     call: () => Promise<WriteResult>,
     messages: WriteMessages,
     { done, reopen }: { done: string; reopen: (error: string) => void },

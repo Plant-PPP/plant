@@ -255,3 +255,23 @@ describe("the header row", () => {
     expect(row).not.toMatch(/class="[^"]*(?<![\w:-])collapse\b/);
   });
 });
+
+describe("the footer", () => {
+  it("renders after the body", () => {
+    const html = renderToStaticMarkup(
+      <DataTable
+        columns={[{ id: "name", header: "Nombre", cell: () => "Caja" }]}
+        data={[{ id: "r1" }]}
+        caption="Tenencias"
+        footer={
+          <tr>
+            <td>Total</td>
+          </tr>
+        }
+      />,
+    );
+    expect(html).toMatch(
+      /<\/tbody><tfoot[^>]*><tr><td>Total<\/td><\/tr><\/tfoot>/,
+    );
+  });
+});

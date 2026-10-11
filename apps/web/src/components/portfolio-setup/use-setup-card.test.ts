@@ -20,8 +20,8 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { SetupRun } from "./setup-actions";
 import { useSetupCard } from "./setup-card";
 
-const refused: WriteResult = { ok: false, code: "duplicate_name" };
-const alert = WRITE_MESSAGES.portfolios.duplicate_name;
+const refused: WriteResult = { ok: false, code: "duplicate" };
+const alert = WRITE_MESSAGES.portfolios.duplicate;
 
 function rendered(run: SetupRun, pending: boolean) {
   mockRender.effects = [];

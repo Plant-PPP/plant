@@ -1,15 +1,143 @@
+import { quotesNeeded, readSnapshot, referenceUnit } from "@plant/core";
+import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
+
+import { AssetsSetup } from "@/components/holdings/assets-setup";
+import { getSessionClaims } from "@/lib/auth/session-claims";
+import { matchesFilter, parseAssetsParams } from "@/lib/holdings/assets-filter";
+import {
+  ASSETS_VIEW_EVENT,
+  assetsViewFailure,
+} from "@/lib/holdings/assets-view";
+import { instrumentNames } from "@/lib/holdings/holding-name";
+import {
+  readHoldings,
+  readInstruments,
+  readReferenceDollar,
+} from "@/lib/holdings/read";
+import {
+  type HoldingsValuation,
+  holdingsValuation,
+} from "@/lib/holdings/valuation-view";
+import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
+import {
+  contextFields,
+  readPortfolios,
+  readSourceConnections,
+} from "@/lib/portfolio-setup/read";
+import { createQuoteReader } from "@/lib/quotes/quote-reader";
+import { currentRequestId } from "@/lib/request-id-server";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: navTitle("/assets") };
+export const dynamic = "force-dynamic";
 
-export default function AssetsPage() {
+// The user's holdings valued at today's quotes in one unit (the reference
+// dollar unless ?moneda= names another), in one portfolio (?cartera=) or all,
+// of one class (?tipo=) or all, matching a search (?buscar=) or not; shown in
+// the holdings tab unless ?vista= names another. An invalid param falls back
+// to the default and is logged.
+export default async function AssetsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const claims = await getSessionClaims();
+  const client = await createClient();
+  const context = {
+    userId: claims.sub,
+    requestId: await currentRequestId(),
+    page: "/assets" as const,
+    params: await searchParams,
+  };
+  const today = buenosAiresDate(new Date());
+  const [{ holdings, quotes }, accounts, portfolios, instruments, dollar] =
+    await Promise.all([
+      readHoldings(client, context).then(async (holdings) => ({
+        holdings,
+        quotes: await readSnapshot(
+          createQuoteReader(client),
+          today,
+          quotesNeeded(holdings.active.map((row) => row.holding)),
+        ).catch((error: unknown) =>
+          assetsViewFailure(context, "snapshot", error),
+        ),
+      })),
+      readSourceConnections(client, context, { archived: false }),
+      readPortfolios(client, context, { archived: false }),
+      readInstruments(client, context),
+      readReferenceDollar(client, context),
+    ]);
+
+  const {
+    unit: chosenUnit,
+    tab,
+    filter,
+    invalid,
+  } = parseAssetsParams(
+    context.params,
+    portfolios.active.map(({ id }) => id),
+  );
+  const unit = chosenUnit ?? referenceUnit(dollar);
+  const names = instrumentNames(instruments.rows);
+  const shown = holdings.active.filter((row) =>
+    matchesFilter(row, filter, names),
+  );
+  const filtered =
+    filter.portfolioId !== null ||
+    filter.assetClass !== null ||
+    filter.search !== "";
+
+  let valuation: HoldingsValuation;
+  try {
+    valuation = holdingsValuation({
+      holdings: shown,
+      truncated: holdings.activeTruncated,
+      snapshot: quotes.snapshot,
+      unit,
+      referenceDollar: dollar,
+    });
+  } catch (error) {
+    assetsViewFailure(context, "valuation", error);
+  }
+
+  serverLog.info(ASSETS_VIEW_EVENT, {
+    ...contextFields(context),
+    "plant.outcome": valuation.kinds.total.complete ? "ok" : "incomplete",
+    "plant.assets.holding_count": holdings.active.length,
+    "plant.assets.shown_count": shown.length,
+    "plant.assets.missing_count": valuation.kinds.total.missing,
+    "plant.assets.truncated": holdings.activeTruncated,
+    "plant.assets.instruments_truncated": instruments.truncated,
+    "plant.assets.unit": unit,
+    // The valuation's counts cover only the shown holdings when filtered.
+    "plant.assets.filtered": filtered,
+    "plant.assets.asset_class": filter.assetClass ?? "all",
+    "plant.assets.searched": filter.search !== "",
+    "plant.assets.tab": tab,
+    "plant.assets.invalid_unit": invalid.unit,
+    "plant.assets.invalid_portfolio": invalid.portfolio,
+    "plant.assets.invalid_class": invalid.class,
+    "plant.assets.invalid_search": invalid.search,
+    "plant.assets.invalid_tab": invalid.tab,
+    "plant.quotes.dropped_count": quotes.invalidCount,
+  });
+
   return (
     <div>
       <h1 className="sr-only">{navTitle("/assets")}</h1>
-      <p className="text-sm text-muted-foreground">
-        Todavía no cargaste activos.
-      </p>
+      <AssetsSetup
+        holdings={holdings}
+        valuation={valuation}
+        unit={unit}
+        filter={filter}
+        params={context.params}
+        accounts={accounts.active}
+        portfolios={portfolios.active}
+        instruments={instruments.rows}
+        today={today}
+      />
     </div>
   );
 }

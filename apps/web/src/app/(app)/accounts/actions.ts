@@ -3,6 +3,7 @@
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
 import { namedRowWrites } from "@/lib/portfolio-setup/named-row-writes";
 import {
+  restoreWrite,
   runArchive,
   runInsert,
   runUpdate,
@@ -82,7 +83,12 @@ export async function createSourceConnection(
   input: unknown,
 ): Promise<WriteResult> {
   return runInsert(
-    { action: "create_source_connection", schema: sourceConnection, input },
+    {
+      table: "source_connections",
+      action: "create_source_connection",
+      schema: sourceConnection,
+      input,
+    },
     ({ client, input }) =>
       client
         .from("source_connections")
@@ -97,7 +103,12 @@ export async function updateSourceConnection(
   input: unknown,
 ): Promise<WriteResult> {
   return runUpdate(
-    { action: "update_source_connection", schema: sourceConnection, input },
+    {
+      table: "source_connections",
+      action: "update_source_connection",
+      schema: sourceConnection,
+      input,
+    },
     id,
     ({ client, userId, input, id }) =>
       client
@@ -123,15 +134,13 @@ export async function restoreSourceConnection(
   input: unknown,
 ): Promise<WriteResult> {
   return runUpdate(
-    { action: "restore_source_connection", schema: sourceConnection, input },
+    {
+      table: "source_connections",
+      action: "restore_source_connection",
+      schema: sourceConnection,
+      input,
+    },
     id,
-    ({ client, userId, input, id }) =>
-      client
-        .from("source_connections")
-        .update({ ...sourceConnectionRow(input), archived_at: null })
-        .eq("user_id", userId)
-        .eq("id", id)
-        .not("archived_at", "is", null)
-        .select("id"),
+    restoreWrite("source_connections", sourceConnectionRow),
   );
 }

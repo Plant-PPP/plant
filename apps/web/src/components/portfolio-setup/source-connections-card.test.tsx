@@ -75,14 +75,14 @@ it("gives the holder, portfolio and report status their own wide columns", () =>
 });
 
 it("names each row's buttons after its account", () => {
-  expect(html).toContain('aria-label="Editar tu Banco Uno"');
-  expect(html).toContain('aria-label="Archivar Broker Dos de Ana"');
+  expect(html).toContain('aria-label="Editar Banco Uno"');
+  expect(html).toContain('aria-label="Archivar Broker Dos"');
 });
 
 it("lists archived accounts in their own table with a restore button", () => {
   const archived = render({ active: [], archived: [shared] });
   expect(archived).toMatch(/<caption[^>]*>Cuentas archivadas<\/caption>/);
-  expect(archived).toContain('aria-label="Restaurar Broker Dos de Ana"');
+  expect(archived).toContain('aria-label="Restaurar Broker Dos"');
   expect(archived).toContain("Todavía no agregaste cuentas.");
 });
 

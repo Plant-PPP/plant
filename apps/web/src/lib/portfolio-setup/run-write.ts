@@ -9,7 +9,7 @@ import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 import { PortfolioSetupError } from "./errors";
-import type { SetupTable } from "./limits";
+import { PAGE_BY_TABLE, type SetupTable } from "./limits";
 import { idSchema, noInput } from "./schemas";
 import {
   toWriteResult,
@@ -20,9 +20,10 @@ import { currentRequestId } from "@/lib/request-id-server";
 
 type PortfolioSetupAction =
   | `${"create" | "rename" | "archive" | "restore" | "restore_rename"}_${"portfolio" | "holder"}`
-  | `${"create" | "update" | "archive" | "restore"}_source_connection`;
+  | `${"create" | "update" | "archive" | "restore"}_${"source_connection" | "holding"}`;
 
 type Client = SupabaseClient<Database>;
+type Tables = Database["public"]["Tables"];
 
 // A write with `.select("id")`, so the rows it touched come back.
 type WriteResponse = PromiseLike<{
@@ -39,12 +40,11 @@ export type UpdateArgs<I> = {
 };
 
 type Spec<I> = {
+  table: SetupTable;
   action: PortfolioSetupAction;
   schema: z.ZodType<I>;
   input: unknown;
 };
-
-const PAGE = "/accounts";
 
 // The target of an insert, which has no id to parse.
 const INSERT = Symbol("insert");
@@ -88,7 +88,7 @@ function log(
 // outcome but invalid input revalidates the page, so a write that failed after
 // committing shows before the user retries.
 async function run<I>(
-  { action, schema, input }: Spec<I>,
+  { table, action, schema, input }: Spec<I>,
   target: typeof INSERT | { id: unknown },
   write: (args: {
     client: Client;
@@ -146,7 +146,8 @@ async function run<I>(
     },
     error,
   );
-  if (result.ok || result.code !== "invalid") revalidatePath(PAGE);
+  if (result.ok || result.code !== "invalid")
+    revalidatePath(PAGE_BY_TABLE[table]);
   return result;
 }
 
@@ -175,7 +176,7 @@ export function runArchive(
   id: unknown,
 ): Promise<WriteResult> {
   return runUpdate(
-    { action, schema: noInput, input: {} },
+    { table, action, schema: noInput, input: {} },
     id,
     ({ client, userId, id }) =>
       client
@@ -186,4 +187,28 @@ export function runArchive(
         .is("archived_at", null)
         .select("id"),
   );
+}
+
+// The write of a restore: one archived row of the user back to active, with
+// the fields toFields takes from the parsed input.
+export function restoreWrite<I, T extends SetupTable>(
+  table: T,
+  toFields: (input: I) => Tables[T]["Update"] = () => ({}),
+) {
+  return ({ client, userId, input, id }: UpdateArgs<I>): WriteResponse => {
+    const fields: Tables[T]["Update"] = {
+      ...toFields(input),
+      archived_at: null,
+    };
+    const from: SetupTable = table;
+    // supabase-js types an update against one table, not a union of them;
+    // the signature above types the fields per table.
+    return client
+      .from(from)
+      .update(fields as never)
+      .eq("user_id", userId)
+      .eq("id", id)
+      .not("archived_at", "is", null)
+      .select("id");
+  };
 }

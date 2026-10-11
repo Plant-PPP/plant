@@ -8,7 +8,12 @@ import {
   type Refusal,
   REFUSALS,
 } from "@plant/core";
-import { BUENOS_AIRES_TZ, type LogFields, type Logger } from "@plant/shared";
+import {
+  BUENOS_AIRES_TZ,
+  type LogFields,
+  type Logger,
+  logList,
+} from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
@@ -95,9 +100,6 @@ const REFUSAL_FIELD = {
   invalid: "plant.quotes.invalid_keys",
 } as const satisfies Record<Refusal, string>;
 
-const list = (values: readonly string[]) =>
-  [...new Set(values)].sort().join(",");
-
 type Outcome = "ok" | "stale" | "partial" | "failed";
 const LEVEL = {
   ok: "info",
@@ -147,15 +149,15 @@ function runLine(
     "plant.quotes.fx_rate_count": fxRates,
     "plant.quotes.price_count": prices,
     "plant.quotes.invalid_count": invalidCount,
-    "plant.quotes.unread": list(done.flatMap(({ unread }) => unread)),
-    "plant.quotes.failed_codes": list(
+    "plant.quotes.unread": logList(done.flatMap(({ unread }) => unread)),
+    "plant.quotes.failed_codes": logList(
       failed.map(({ feed, stage, code }) => `${feed}:${stage}:${code}`),
     ),
     "plant.quotes.stage": first?.stage,
     "error.type": first?.code,
   };
   for (const refusal of REFUSALS) {
-    fields[REFUSAL_FIELD[refusal]] = list(keys(refusal));
+    fields[REFUSAL_FIELD[refusal]] = logList(keys(refusal));
   }
   return { outcome, fxRates, prices, fields };
 }

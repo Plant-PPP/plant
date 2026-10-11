@@ -25,3 +25,6 @@ export const DENOMINATORS = {
   usd_official: { fx: "official", scale: 2, heldUsd: "self" },
   btc: { via: "usd_mep", priced: "BTC", scale: 8, heldUsd: "usd_mep" },
 } as const satisfies Record<Denominator, DenominatorSpec>;
+
+export const isDenominator = (value: unknown): value is Denominator =>
+  typeof value === "string" && Object.hasOwn(DENOMINATORS, value);

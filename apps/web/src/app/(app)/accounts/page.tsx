@@ -23,6 +23,7 @@ export default async function AccountsPage({
   const context = {
     userId: claims.sub,
     requestId: await currentRequestId(),
+    page: "/accounts" as const,
     params: await searchParams,
   };
   const [sourceConnections, portfolios, holders] = await Promise.all([

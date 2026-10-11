@@ -18,6 +18,10 @@ export type ReferenceDollar = Database["public"]["Enums"]["reference_dollar"];
 // An amount in a unit; exact until it is shown.
 export type Value = { amount: Exact; denominator: Denominator };
 
+// The dollar a user values in by default.
+export const referenceUnit = (referenceDollar: ReferenceDollar): Denominator =>
+  `usd_${referenceDollar}`;
+
 // Money a user holds, as a value in a view's unit. Pesos are pesos; a held
 // dollar becomes the dollar the view's entry names, so it keeps its face
 // value in any dollar view and an ARS view prices it at the reference dollar.
@@ -37,7 +41,7 @@ export function lift(
     held === "self"
       ? view
       : held === "reference"
-        ? `usd_${referenceDollar}`
+        ? referenceUnit(referenceDollar)
         : held;
   return { amount: money.amount, denominator };
 }

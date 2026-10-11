@@ -46,6 +46,27 @@ function utc(
   return instant.getTime();
 }
 
+const DAY_MS = 86_400_000;
+
+// Throws a RangeError on anything but a YYYY-MM-DD date that exists.
+function isoDay(date: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new RangeError("Expected a YYYY-MM-DD date");
+  const day = utc(Number(match[1]), Number(match[2]), Number(match[3]));
+  if (isoDate(day) !== date)
+    throw new RangeError("Expected a date that exists");
+  return day;
+}
+
+// The UTC calendar day of an instant, for the years 1 to 9999.
+function isoDate(instant: number): string {
+  const date = new Date(instant);
+  const year = date.getUTCFullYear();
+  if (year < 1 || year > 9999)
+    throw new RangeError("Expected a year 1 to 9999");
+  return `${String(year).padStart(4, "0")}${date.toISOString().slice(-20, -14)}`;
+}
+
 // How far Buenos Aires' wall clock is from UTC at an instant, in ms.
 function offsetAt(instant: number): number {
   const parts = wallClockParts(new Date(instant));
@@ -68,18 +89,20 @@ function offsetAt(instant: number): number {
 // at UTC midnight differ from the offset at the day's start, so both are tried
 // and the earliest instant dated that day wins.
 export function startOfBuenosAiresDay(date: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!match || match[1] === "0000") {
-    throw new RangeError("Expected a YYYY-MM-DD date from the year 1");
-  }
-  const midnightUtc = utc(Number(match[1]), Number(match[2]), Number(match[3]));
-  if (new Date(midnightUtc).toISOString().slice(0, 10) !== date) {
-    throw new RangeError("Expected a date that exists");
-  }
+  const midnightUtc = isoDay(date);
   const first = midnightUtc - offsetAt(midnightUtc);
   const second = midnightUtc - offsetAt(first);
   const starts = [first, second].filter(
     (instant) => buenosAiresDate(new Date(instant)) === date,
   );
   return new Date(Math.min(...(starts.length > 0 ? starts : [first])));
+}
+
+// Calendar arithmetic on YYYY-MM-DD dates, free of any time zone.
+export function addDays(date: string, days: number): string {
+  return isoDate(isoDay(date) + days * DAY_MS);
+}
+
+export function daysBetween(from: string, to: string): number {
+  return Math.round((isoDay(to) - isoDay(from)) / DAY_MS);
 }

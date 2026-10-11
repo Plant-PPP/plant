@@ -7,7 +7,6 @@ import {
 } from "@/lib/portfolio-setup/schemas";
 import {
   accountRow,
-  choose,
   holderChoices,
   initialFields,
   missingChoice,
@@ -96,15 +95,6 @@ describe("the dialog's values and the action's schema", () => {
         institution: "IOL",
       }).success,
     ).toBe(true);
-  });
-});
-
-describe("choose", () => {
-  it("ignores the empty value Radix reports before an option renders", () => {
-    const set = jest.fn();
-    choose(set)("");
-    choose(set)("h1");
-    expect(set.mock.calls).toEqual([["h1"]]);
   });
 });
 

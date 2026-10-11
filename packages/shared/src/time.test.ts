@@ -1,6 +1,8 @@
 import {
+  addDays,
   buenosAiresDate,
   buenosAiresHour,
+  daysBetween,
   startOfBuenosAiresDay,
 } from "./time";
 
@@ -114,4 +116,46 @@ describe("startOfBuenosAiresDay", () => {
       );
     },
   );
+});
+
+describe("addDays", () => {
+  it.each([
+    ["2026-10-31", 1, "2026-11-01"],
+    ["2026-12-31", 1, "2027-01-01"],
+    ["2028-02-28", 1, "2028-02-29"],
+    ["2028-03-01", -1, "2028-02-29"],
+    ["2026-10-10", -7, "2026-10-03"],
+  ])("%s plus %i is %s", (date, days, expected) => {
+    expect(addDays(date, days)).toBe(expected);
+  });
+});
+
+describe("daysBetween", () => {
+  it.each([
+    ["2026-10-03", "2026-10-10", 7],
+    ["2028-02-28", "2028-03-01", 2],
+    ["2026-10-10", "2026-10-03", -7],
+    ["1900-01-01", "9999-12-31", 2_958_463],
+  ])("from %s to %s is %i", (from, to, expected) => {
+    expect(daysBetween(from, to)).toBe(expected);
+  });
+
+  it("rejects a date that is not YYYY-MM-DD", () => {
+    expect(() => daysBetween("2026-10-9", "2026-10-10")).toThrow(RangeError);
+  });
+
+  it.each([
+    ["2026-02-30", "2026-03-02"],
+    ["2026-13-01", "2026-12-31"],
+  ])("rejects %s, a date that does not exist", (from, to) => {
+    expect(() => daysBetween(from, to)).toThrow("Expected a date that exists");
+    expect(() => addDays(from, 0)).toThrow(RangeError);
+  });
+
+  it("keeps a result within the years 1 to 9999", () => {
+    expect(addDays("9999-12-30", 1)).toBe("9999-12-31");
+    expect(() => addDays("9999-12-31", 1)).toThrow(RangeError);
+    expect(addDays("0001-01-02", -1)).toBe("0001-01-01");
+    expect(() => addDays("0001-01-01", -1)).toThrow(RangeError);
+  });
 });
