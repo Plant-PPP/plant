@@ -293,3 +293,37 @@ it("moves units in and out at their worth, so a transfer makes no market result"
     2,
   );
 });
+
+it("marks a month whose start an earlier trade's price values", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const purchase = (date: string, price: string) => ({
+    kind: "purchase" as const,
+    source_connection_id: iol.id,
+    instrument_symbol: "MSFT",
+    date,
+    currency: "ARS",
+    price,
+    charges: [],
+    reference: null,
+    note: null,
+    parts: [{ portfolio_id: iol.portfolio.id, quantity: "10" }],
+  });
+  const newId = () => crypto.randomUUID();
+  const march = writeOperation(state, purchase("2026-03-10", "100"), {
+    operationId: "march",
+    newId,
+  }).state;
+  const april = writeOperation(march, purchase("2026-04-10", "150"), {
+    operationId: "april",
+    newId,
+  }).state;
+  // MSFT has no quote, so its March purchase values April's start.
+  const repriced = writeOperation(april, purchase("2026-03-10", "300"), {
+    operationId: "march",
+    replacing: true,
+    newId,
+  }).state;
+  const marked = markRecalculated(april, repriced, "usd_mep");
+  expect(marked.recalculated.get("2026-03")).toBe(TODAY);
+  expect(marked.recalculated.get("2026-04")).toBe(TODAY);
+});

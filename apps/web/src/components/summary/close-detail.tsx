@@ -59,10 +59,13 @@ function CloseFigures({
   figures,
   unit,
   complete,
+  year = false,
 }: {
   figures: Figures;
   unit: Denominator;
   complete: boolean;
+  // A year's return also leaves out a month whose own could not be measured.
+  year?: boolean;
 }) {
   return (
     <div className="grid gap-3">
@@ -110,9 +113,9 @@ function CloseFigures({
       {!complete && (
         <p className="text-muted-foreground text-xs">
           Faltó algún dato: la cotización de un activo al inicio o al final, un
-          movimiento que no se puede pasar a esta moneda, el precio de un saldo
-          inicial o un ajuste ese día (entra a su costo) o el rendimiento de un
-          mes sin nada invertido.
+          movimiento que no se puede pasar a esta moneda o el precio de un saldo
+          inicial o un ajuste de salida ese día, que cuentan a su costo
+          {year && ", o el rendimiento de algún mes, que no se pudo medir"}.
         </p>
       )}
     </div>
@@ -185,7 +188,8 @@ export function MonthCloseDetail({
     },
     {
       id: "amount",
-      header: "Costo",
+      // A trade's cost, or what an income paid.
+      header: "Importe",
       size: 136,
       meta: { className: NUMBER_CELL },
       cell: ({ row: { original } }) => (
@@ -213,7 +217,7 @@ export function MonthCloseDetail({
           </p>
         ) : (
           <DataTable
-            caption={`Movimientos de ${monthName(close.period)}`}
+            caption={`Movimientos de ${monthName(close.period).toLowerCase()}`}
             columns={columns}
             data={lines.map((line) => ({ ...line, id: line.movement.id }))}
           />
@@ -261,6 +265,7 @@ export function YearCloseDetail({
         figures={year.totals}
         unit={unit}
         complete={year.complete}
+        year
       />
       <section className="grid gap-3">
         <h2 className="text-base font-semibold">Mes a mes</h2>

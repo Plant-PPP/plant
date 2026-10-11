@@ -300,10 +300,7 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
         // A month that made something with nothing at work has no return
         // of its own, so the year's leaves it out and says so.
         complete: months.every(
-          (each) =>
-            each.complete &&
-            (each.figures.share !== null ||
-              exactOf(each.figures.result).n === 0n),
+          (each) => each.complete && each.figures.share !== null,
         ),
         open: months.some((each) => each.open),
       };
@@ -341,22 +338,17 @@ export function monthDetail(
   return { close, lines };
 }
 
-// What a write to a month or an earlier one changes in its close, per
-// account and instrument so moving units between portfolios changes
-// nothing: the month's own movements, the units held at its end, the price
-// of each instrument's latest trade (which values days with no quote), and
-// what its flows and sales came to, to the cent so how a figure splits across
-// portfolios does not show. Quotes move every close, so they are left out.
+// What a write to a month or an earlier one changes in its close. A write
+// moves no quote, so every value that moved, moved because of it: the
+// month's figures to the cent (so how a figure splits across portfolios does
+// not show), plus its own movements and the units held at its end, per
+// account and instrument so moving units between portfolios changes nothing.
 function movedBy(state: PrototypeState, close: MonthClose): string {
   const own = new Map<string, Exact[]>();
   const held = new Map<string, Exact>();
-  // The price of each instrument's latest trade up to the month's end, which
-  // values a day no feed or manual price covers.
-  const traded = new Map<string, Movement>();
   for (const each of state.holdings) {
     if (each.holding.asset_class !== "instrument") continue;
-    const symbol = each.holding.instrument_symbol;
-    const at = JSON.stringify([each.accountId, symbol]);
+    const at = JSON.stringify([each.accountId, each.holding.instrument_symbol]);
     const upTo = (state.movements.get(each.holding.id) ?? []).filter(
       (movement) => movement.date <= close.to,
     );
@@ -365,12 +357,6 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
       held.set(at, plus(held.get(at) ?? ZERO, exactOf(admitted.quantity)));
     }
     for (const movement of upTo) {
-      if (movement.kind === "purchase" || movement.kind === "sale") {
-        const kept = traded.get(symbol);
-        if (!kept || compareMovements(kept, movement) < 0) {
-          traded.set(symbol, movement);
-        }
-      }
       if (movement.date <= close.from) continue;
       const key = JSON.stringify([
         at,
@@ -393,22 +379,21 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
   }
   const cents = (value: string | null) =>
     value === null ? null : toDecimal(exactOf(value), 2);
+  const { figures } = close;
   return JSON.stringify([
     [...own]
       .map(([key, [size, charges]]) => [key, stored(size!), stored(charges!)])
       .sort(),
     [...held].map(([key, units]) => [key, stored(units)]).sort(),
-    [...traded]
-      .map(([symbol, movement]) => [
-        symbol,
-        "price" in movement ? movement.price : null,
-      ])
-      .sort(),
-    cents(close.figures.paidIn),
-    cents(close.figures.proceeds),
-    cents(close.figures.income),
-    cents(close.figures.charges),
-    cents(close.realized),
+    [
+      figures.startValue,
+      figures.endValue,
+      figures.paidIn,
+      figures.proceeds,
+      figures.income,
+      figures.charges,
+      close.realized,
+    ].map(cents),
   ]);
 }
 
