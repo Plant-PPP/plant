@@ -15,7 +15,10 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { MissingFigure } from "@/components/holdings/sum-text";
+import {
+  holdingsCountText,
+  MissingFigure,
+} from "@/components/holdings/sum-text";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -33,7 +36,7 @@ import {
   parseAmountInput,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { currencyOf } from "@/lib/holdings/holding-name";
+import { currencyOf, instrumentNames } from "@/lib/holdings/holding-name";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
@@ -113,7 +116,7 @@ export function ImportReview({
   actions: ReviewActions;
 }) {
   const router = useRouter();
-  const names = new Map(instruments.map((each) => [each.symbol, each.name]));
+  const names = instrumentNames(instruments);
   const types = new Map(instruments.map((each) => [each.symbol, each.type]));
   const [rows, setRows] = useState(() =>
     item.rows.map((row) => edited(row, types.get(row.symbol))),
@@ -295,9 +298,7 @@ export function ImportReview({
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold">
-            {rows.filter((row) => !row.discarded).length === 1
-              ? "1 tenencia"
-              : `${rows.filter((row) => !row.discarded).length} tenencias`}
+            {holdingsCountText(rows.filter((row) => !row.discarded).length)}
             {doubtful > 0 && (
               <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
                 {doubtful === 1 ? "1 dudosa" : `${doubtful} dudosas`}

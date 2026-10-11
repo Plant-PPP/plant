@@ -17,8 +17,7 @@ import { CloseStatus, ResultText } from "./figures";
 
 type Row = MonthClose & { id: string };
 
-// A close that left out a holding without a price or a movement the unit
-// cannot express, as its detail explains.
+// A close that left something out, as its detail explains.
 function PartialMark() {
   return (
     <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
