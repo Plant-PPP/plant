@@ -17,12 +17,10 @@ import type { CashFlow } from "./returns";
 const ONE: Exact = { n: 1n, d: 1n };
 
 // What a period made, in one unit, from what the holdings were worth at its
-// start and end and the cash flows between them:
-// - paidIn: purchases, opening balances and adjustments in, at their cost
-//   before charges;
-// - proceeds: sales before charges, and adjustments out at the cost they
-//   take, so units an adjustment removes carry their unrealized gain into
-//   the market result of its period;
+// start and end and the cash flows between them, each flow at the amount the
+// caller gives it:
+// - paidIn: purchases, opening balances and adjustments in, before charges;
+// - proceeds: sales before charges, and adjustments out;
 // - income: dividends and coupons before withholding;
 // - charges: commissions, fees, taxes and withholding;
 // - contributed: paidIn less proceeds, what the holder put in net;
@@ -31,8 +29,9 @@ const ONE: Exact = { n: 1n, d: 1n };
 // - result: market plus income less charges;
 // - share: result over the money at work, each flow weighted by the part of
 //   the period it was in (the modified Dietz return), so putting money in
-//   is not a gain; 0 when nothing was at work and nothing was made, and null
-//   when something was made out of no money at work.
+//   is not a gain; 0 when nothing was made with nothing at work, and null
+//   when the money at work is not above zero but something was made (nothing
+//   at work, or a large outflow early in the period).
 export type PeriodResult = {
   startValue: string;
   endValue: string;

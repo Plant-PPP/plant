@@ -20,6 +20,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { CURRENCY_LABELS } from "@/lib/holdings/messages";
 import type { InstrumentRow } from "@/lib/holdings/read";
+import { instrumentLabel } from "@/lib/holdings/holding-name";
 
 import {
   type DebtFields,
@@ -154,7 +155,7 @@ export function DebtDialog({
                     .filter((each) => each.type === "crypto")
                     .map((each) => (
                       <SelectItem key={each.symbol} value={each.symbol}>
-                        {`${each.symbol} · ${each.name}`}
+                        {instrumentLabel(each.symbol, each.name)}
                       </SelectItem>
                     ))}
                 </SelectContent>
