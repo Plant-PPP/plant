@@ -3,6 +3,7 @@ import { Constants } from "@plant/shared";
 import {
   INSTRUMENT_TYPES,
   PENDING_INSTRUMENT_TYPES,
+  exactUnitPrice,
   quotedPrice,
   unitPrice,
 } from "./instruments";
@@ -24,4 +25,10 @@ it("prices a bond per 100 nominal and anything else per unit", () => {
 
 it("rounds a unit price to 8 decimals", () => {
   expect(unitPrice("bond", "0.00000123")).toBe("0.00000001");
+});
+
+it("refuses a typed quote whose unit price 8 decimals cannot hold", () => {
+  expect(exactUnitPrice("bond", "98.12345678")).toBeNull();
+  expect(exactUnitPrice("bond", "98.123456")).toBe("0.98123456");
+  expect(exactUnitPrice("cedear", "18650.5")).toBe("18650.5");
 });

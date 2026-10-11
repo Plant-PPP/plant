@@ -2,6 +2,8 @@ import { type Denominator, isDenominator } from "@plant/core";
 
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
+import { folded } from "@/lib/format/text";
+
 import { holdingName } from "./holding-name";
 import { classOf, type HoldingClass, isHoldingClass } from "./classes";
 import type { HoldingRow } from "./read";
@@ -15,13 +17,6 @@ export type AssetsFilter = {
 };
 
 export const SEARCH_MAX_LENGTH = 60;
-
-// Case and accents ignored: "credito" finds "Crédito".
-const folded = (text: string): string =>
-  text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
 
 // A search the page accepts, or null for one it ignores (and logs).
 function parseSearch(raw: unknown): string | null {
