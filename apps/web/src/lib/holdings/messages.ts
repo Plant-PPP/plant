@@ -85,3 +85,12 @@ export const PRICE_MESSAGES: Record<
   failed: FAILED,
   future_date: FUTURE_DATE_MESSAGE,
 };
+
+// A delete refused for what the holding would be left with.
+export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
+  ...MOVEMENT_MESSAGES,
+  oversold:
+    "No podés borrarlo: una venta posterior quedaría vendiendo más de lo que tenías.",
+  opening_balance:
+    "No podés borrarlo: la tenencia tiene que empezar con un saldo inicial o una compra.",
+};

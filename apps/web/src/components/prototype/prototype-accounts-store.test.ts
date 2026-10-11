@@ -5,6 +5,8 @@ import {
   archivePortfolio,
   createAccount,
   createPortfolio,
+  deleteAccount,
+  deletePortfolio,
   renamePortfolio,
   restorePortfolio,
 } from "./prototype-accounts-store";
@@ -68,4 +70,19 @@ it("archives an unused portfolio and restores it", () => {
   expect(archived.state.archivedPortfolios[0]!.id).toBe(NEW_ID);
   const restored = restorePortfolio(archived.state, NEW_ID);
   expect(restored.state.portfolios.some((row) => row.id === NEW_ID)).toBe(true);
+});
+
+it("deletes only what nothing uses", () => {
+  expect(deleteAccount(state, state.accounts[0]!.id).result).toEqual({
+    ok: false,
+    code: "source_connection_has_holdings",
+  });
+  expect(deletePortfolio(state, PRINCIPAL).result).toEqual({
+    ok: false,
+    code: "portfolio_in_use",
+  });
+  const created = createPortfolio(state, { name: "Viajes" }, NEW_ID).state;
+  const deleted = deletePortfolio(created, NEW_ID);
+  expect(deleted.result).toEqual({ ok: true, id: NEW_ID });
+  expect(deleted.state.portfolios.some((row) => row.id === NEW_ID)).toBe(false);
 });

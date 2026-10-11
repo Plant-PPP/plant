@@ -258,3 +258,77 @@ export function restoreAccount(
     row.id,
   );
 }
+
+// --- Deletes ----------------------------------------------------------------
+
+const holdsEver = (
+  state: PrototypeState,
+  key: "accountId" | "portfolioId",
+  id: string,
+) => state.holdings.some((each) => each[key] === id);
+
+// An account that never held anything, active or archived.
+export function deleteAccount(
+  state: PrototypeState,
+  rawId: unknown,
+): Write<WriteResult> {
+  const id = idSchema.safeParse(rawId);
+  if (!id.success) return refused(state, "invalid");
+  const known = [...state.accounts, ...state.archivedAccounts].some(
+    (each) => each.id === id.data,
+  );
+  if (!known) return refused(state, "not_found");
+  if (holdsEver(state, "accountId", id.data)) {
+    return refused(state, "source_connection_has_holdings");
+  }
+  return done(
+    {
+      ...state,
+      accounts: state.accounts.filter((each) => each.id !== id.data),
+      archivedAccounts: state.archivedAccounts.filter(
+        (each) => each.id !== id.data,
+      ),
+    },
+    id.data,
+  );
+}
+
+// A portfolio no account defaults to and that never held anything, active or
+// archived; the last active one stays.
+export function deletePortfolio(
+  state: PrototypeState,
+  rawId: unknown,
+): Write<WriteResult> {
+  const id = idSchema.safeParse(rawId);
+  if (!id.success) return refused(state, "invalid");
+  const active = state.portfolios.some((each) => each.id === id.data);
+  if (
+    !active &&
+    !state.archivedPortfolios.some((each) => each.id === id.data)
+  ) {
+    return refused(state, "not_found");
+  }
+  if (active && state.portfolios.length === 1) {
+    return refused(state, "last_active_portfolio");
+  }
+  if (
+    [...state.accounts, ...state.archivedAccounts].some(
+      (each) => each.portfolio.id === id.data,
+    )
+  ) {
+    return refused(state, "portfolio_in_use");
+  }
+  if (holdsEver(state, "portfolioId", id.data)) {
+    return refused(state, "portfolio_has_holdings");
+  }
+  return done(
+    {
+      ...state,
+      portfolios: state.portfolios.filter((each) => each.id !== id.data),
+      archivedPortfolios: state.archivedPortfolios.filter(
+        (each) => each.id !== id.data,
+      ),
+    },
+    id.data,
+  );
+}

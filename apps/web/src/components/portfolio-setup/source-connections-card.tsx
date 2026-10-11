@@ -1,11 +1,13 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
+  deleteMessages,
   SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
@@ -16,7 +18,7 @@ import type {
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
 import { InstitutionIcon } from "./institution-field";
-import { rowAnswer } from "./answers";
+import { dialogAnswer, rowAnswer } from "./answers";
 import { temporaryId } from "./list-change";
 import {
   ActiveList,
@@ -59,6 +61,8 @@ export type SourceConnectionActions = {
   update: (id: string, input: unknown) => Promise<WriteResult>;
   archive: (id: string) => Promise<WriteResult>;
   restore: (id: string, input: unknown) => Promise<WriteResult>;
+  // A page that deletes accounts that never held anything.
+  delete?: (id: string) => Promise<WriteResult>;
 };
 
 // Below @2xl the holder follows the institution and the portfolio and report
@@ -139,6 +143,31 @@ export function SourceConnectionsCard({
   const columns = dataColumns(holders !== undefined);
   const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [deleting, setDeleting] = useState<SourceConnectionRow | null>(null);
+  const remove = actions.delete;
+  const deleteAction = remove && {
+    id: "delete",
+    icon: Trash2,
+    tooltip: "Borrar",
+    label: (row: SourceConnectionRow) => `Borrar ${row.institution}`,
+    onClick: (row: SourceConnectionRow) => !pending && setDeleting(row),
+  };
+
+  function deleteRow(
+    row: SourceConnectionRow,
+    call: (id: string) => Promise<WriteResult>,
+  ) {
+    card.rowAction(
+      { list: "sourceConnections", change: { kind: "delete", id: row.id } },
+      () => call(row.id),
+      (result) => dialogAnswer(result, deleteMessages(MESSAGES)),
+      {
+        done: `Borraste ${row.institution}`,
+        rowId: row.id,
+        actionId: "delete",
+      },
+    );
+  }
 
   function openDialog(next: DialogState) {
     if (pending) return;
@@ -225,6 +254,7 @@ export function SourceConnectionsCard({
                 label: (row) => `Archivar ${row.institution}`,
                 onClick: archive,
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
@@ -248,11 +278,22 @@ export function SourceConnectionsCard({
                 label: (row) => `Restaurar ${row.institution}`,
                 onClick: (row) => openDialog({ kind: "restore", row }),
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
         ]}
       />
+      {deleting && remove && (
+        <ConfirmDialog
+          title={`¿Borrar ${deleting.institution}?`}
+          description="No se puede deshacer."
+          confirmLabel="Borrar"
+          returnFocusTo={card.focusHeading}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => deleteRow(deleting, remove)}
+        />
+      )}
       {dialog?.kind === "create" && (
         <SourceConnectionDialog
           title="Agregar cuenta"

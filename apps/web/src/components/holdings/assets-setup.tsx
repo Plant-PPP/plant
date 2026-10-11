@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
@@ -62,12 +63,14 @@ import {
 } from "@/lib/holdings/price-input";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import {
+  MOVEMENT_DELETE_MESSAGES,
   MOVEMENT_KIND_LABELS,
   MOVEMENT_MESSAGES,
   PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
 import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
 import type {
+  MovementLine,
   MovementResult,
   MovementsInput,
   OperationParts,
@@ -97,6 +100,7 @@ import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
 import { PriceDialog } from "./price-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   type HoldingFields,
   holdingRow,
@@ -167,6 +171,8 @@ export type HoldingActions = {
     archive: (id: string) => Promise<WriteResult>;
     restore: (id: string) => Promise<WriteResult>;
   };
+  // A page that deletes holdings, each with its movements.
+  delete?: (id: string) => Promise<WriteResult>;
 };
 
 export type ScopeHrefs = {
@@ -177,6 +183,7 @@ export type ScopeHrefs = {
 
 export type PriceActions = {
   set: (input: unknown) => Promise<PriceResult>;
+  delete?: (symbol: string, date: string) => Promise<PriceResult>;
 };
 
 // The manual price the valuation took for each symbol, per unit in the
@@ -192,6 +199,8 @@ export type ManualPrices = {
 export type MovementActions = {
   create: (input: unknown) => Promise<MovementResult>;
   update: (id: string, input: unknown) => Promise<MovementResult>;
+  // Deletes a whole operation, every portfolio's part of it.
+  delete?: (operationId: string) => Promise<MovementResult>;
 };
 
 // A page offers the sales tab exactly when it passes movements.
@@ -255,7 +264,7 @@ export function AssetsSetup({
   const url = useAssetsUrl(params);
   // The tab shows at once; its data is already on the page.
   const tab = tabOf(url.params.tab, tabs);
-  const { archiving } = actions;
+  const { archiving, delete: deleteHolding } = actions;
   // The movement columns, rows and tab, for a page that passes movements.
   const movement = movements &&
     movementActions && { input: movements, actions: movementActions };
@@ -265,6 +274,12 @@ export function AssetsSetup({
   const [movementDialog, setMovementDialog] =
     useState<MovementDialogState | null>(null);
   const [priceDialog, setPriceDialog] = useState<PriceDialogState | null>(null);
+  // A delete waiting for the user to confirm it.
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    description: string;
+    run: () => void;
+  } | null>(null);
   const names = instrumentNames(instruments);
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
@@ -296,7 +311,7 @@ export function AssetsSetup({
     change: ListChange<HoldingRow>,
     call: () => Promise<WriteResult>,
     row: HoldingRow,
-    actionId: "archive" | "restore",
+    actionId: "archive" | "restore" | "delete",
     done: string,
   ) {
     card.rowAction(change, call, (result) => dialogAnswer(result, MESSAGES), {
@@ -402,6 +417,36 @@ export function AssetsSetup({
           }),
       },
     );
+  }
+
+  // A movement as a delete names it: "compra del 01/09/2026".
+  const movementName = (line: MovementLine) =>
+    `${MOVEMENT_KIND_LABELS[line.movement.kind].toLowerCase()} del ${formatDate(line.movement.date)}`;
+
+  function confirmDeleteMovement(
+    line: MovementLine,
+    row: HoldingRow,
+    remove: NonNullable<MovementActions["delete"]>,
+  ) {
+    const parts = line.operation.parts.length;
+    setConfirm({
+      title: `¿Borrar ${movementName(line)}?`,
+      description:
+        parts > 1
+          ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
+          : "No se puede deshacer.",
+      run: () =>
+        card.rowAction(
+          { kind: "update", row },
+          () => remove(line.movement.operation_id),
+          (result) => dialogAnswer(result, MOVEMENT_DELETE_MESSAGES),
+          {
+            done: `Borraste ${movementName(line)} de ${named(row)}`,
+            rowId: row.id,
+            actionId: "edit",
+          },
+        ),
+    });
   }
 
   // The account and instrument a holding's dialog keeps, by name.
@@ -712,6 +757,31 @@ export function AssetsSetup({
               },
             ]
           : []),
+        ...(deleteHolding
+          ? [
+              {
+                id: "delete",
+                icon: Trash2,
+                tooltip: "Borrar",
+                label: (row: ShownHolding) => `Borrar ${named(row)}`,
+                onClick: (row: ShownHolding) =>
+                  setConfirm({
+                    title: `¿Borrar ${named(row)}?`,
+                    description: takesMovements(row.holding)
+                      ? "Se borran también sus movimientos. No se puede deshacer."
+                      : "No se puede deshacer.",
+                    run: () =>
+                      rowAction(
+                        { kind: "delete", id: row.id },
+                        () => deleteHolding(row.id),
+                        row,
+                        "delete",
+                        "Borraste",
+                      ),
+                  }),
+              },
+            ]
+          : []),
       ],
       { pending },
     ),
@@ -903,6 +973,23 @@ export function AssetsSetup({
                             operation: line.operation,
                           }),
                       },
+                      ...(movement.actions.delete
+                        ? [
+                            {
+                              id: "delete",
+                              icon: Trash2,
+                              tooltip: "Borrar",
+                              label: (line: MovementLine) =>
+                                `Borrar ${movementName(line)}`,
+                              onClick: (line: MovementLine) =>
+                                confirmDeleteMovement(
+                                  line,
+                                  row,
+                                  movement.actions.delete!,
+                                ),
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                   <div>
@@ -1144,6 +1231,16 @@ export function AssetsSetup({
           }
         />
       )}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          description={confirm.description}
+          confirmLabel="Borrar"
+          returnFocusTo={card.focusHeading}
+          onClose={() => setConfirm(null)}
+          onConfirm={confirm.run}
+        />
+      )}
       {priceDialog && prices && (
         <PriceDialogFor
           state={priceDialog}
@@ -1168,6 +1265,18 @@ export function AssetsSetup({
               },
             )
           }
+          onDelete={(date) =>
+            card.dialogAction(
+              null,
+              () => prices.actions.delete!(priceDialog.symbol, date),
+              PRICE_MESSAGES,
+              {
+                done: `Borraste el precio manual de ${priceDialog.symbol}`,
+                reopen: (error) =>
+                  setPriceDialog({ ...priceDialog, initialError: error }),
+              },
+            )
+          }
         />
       )}
     </div>
@@ -1183,6 +1292,7 @@ function PriceDialogFor({
   returnFocusTo,
   onClose,
   onSubmit,
+  onDelete,
 }: {
   state: PriceDialogState;
   instruments: InstrumentRow[];
@@ -1191,25 +1301,27 @@ function PriceDialogFor({
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   onSubmit: (fields: PriceFields, instrument: InstrumentRow) => boolean;
+  onDelete: (date: string) => boolean;
 }) {
   const instrument = instruments.find((each) => each.symbol === state.symbol);
   if (!instrument) return null;
+  const latest = prices.manual.get(state.symbol);
   return (
     <PriceDialog
       instrument={instrument}
       initial={
-        state.initial ??
-        priceFields(
-          instrument.type,
-          prices.manual.get(state.symbol) ?? null,
-          today,
-        )
+        state.initial ?? priceFields(instrument.type, latest ?? null, today)
       }
       initialError={state.initialError}
       today={today}
       returnFocusTo={returnFocusTo}
       onClose={onClose}
       onSubmit={(fields) => onSubmit(fields, instrument)}
+      onDelete={
+        latest && prices.actions.delete
+          ? () => onDelete(latest.date)
+          : undefined
+      }
     />
   );
 }

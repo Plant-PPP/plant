@@ -39,6 +39,7 @@ export function PriceDialog({
   returnFocusTo,
   onClose,
   onSubmit,
+  onDelete,
 }: {
   instrument: {
     symbol: string;
@@ -53,6 +54,8 @@ export function PriceDialog({
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
   onSubmit: (fields: PriceFields) => boolean;
+  // Deletes the manual price it opened with, when it opened with one.
+  onDelete?: () => boolean;
 }) {
   const id = useId();
   const fieldId = (field: PriceField) => `${id}-${field}`;
@@ -127,6 +130,21 @@ export function PriceDialog({
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
         <DialogFooter>
+          {onDelete && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-destructive sm:mr-auto"
+              onClick={() => {
+                if (!onDelete()) return;
+                focus.markSaved();
+                onClose();
+              }}
+            >
+              Borrar este precio
+            </Button>
+          )}
           <Button
             type="submit"
             size="sm"

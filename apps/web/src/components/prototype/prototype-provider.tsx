@@ -14,6 +14,9 @@ import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
   createHolding,
+  deleteHolding,
+  deleteOperation,
+  deletePrice,
   initialState,
   type PrototypeState,
   setPrice,
@@ -68,6 +71,7 @@ export function PrototypeProvider({
       create: (input) =>
         write((s) => createHolding(s, input, crypto.randomUUID())),
       update: (id, input) => write((s) => updateHolding(s, id, input)),
+      delete: (id) => write((s) => deleteHolding(s, id)),
     },
     movements: {
       create: (input) =>
@@ -85,8 +89,12 @@ export function PrototypeProvider({
             newId: () => crypto.randomUUID(),
           }),
         ),
+      delete: (operationId) => write((s) => deleteOperation(s, operationId)),
     },
-    prices: { set: (input) => write((s) => setPrice(s, input)) },
+    prices: {
+      set: (input) => write((s) => setPrice(s, input)),
+      delete: (symbol, date) => write((s) => deletePrice(s, symbol, date)),
+    },
     sourceConnections: {
       create: (input) =>
         write((s) => accounts.createAccount(s, input, crypto.randomUUID())),
@@ -94,6 +102,7 @@ export function PrototypeProvider({
       archive: (id) => write((s) => accounts.archiveAccount(s, id)),
       restore: (id, input) =>
         write((s) => accounts.restoreAccount(s, id, input)),
+      delete: (id) => write((s) => accounts.deleteAccount(s, id)),
     },
     portfolios: {
       create: (input) =>
@@ -103,6 +112,7 @@ export function PrototypeProvider({
       archive: (id) => write((s) => accounts.archivePortfolio(s, id)),
       restore: (id, input) =>
         write((s) => accounts.restorePortfolio(s, id, input)),
+      delete: (id) => write((s) => accounts.deletePortfolio(s, id)),
     },
   };
   const priced = withManualPrices(snapshot, state.manualPrices);

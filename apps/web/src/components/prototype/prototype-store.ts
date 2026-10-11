@@ -774,3 +774,68 @@ export function setPrice(
     result: { ok: true },
   };
 }
+
+// A holding and every movement it has. An operation it shared keeps its other
+// portfolios' parts.
+export function deleteHolding(
+  state: PrototypeState,
+  id: string,
+): Write<WriteResult> {
+  if (!state.holdings.some((each) => each.holding.id === id)) {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  const movements = new Map(state.movements);
+  movements.delete(id);
+  const revisions = new Map(state.revisions);
+  revisions.delete(id);
+  return {
+    state: {
+      ...state,
+      holdings: state.holdings.filter((each) => each.holding.id !== id),
+      movements,
+      revisions,
+    },
+    result: { ok: true, id },
+  };
+}
+
+// Every part of an operation, each holding re-admitted without it: refused
+// when a later sale would then sell more than was held, or a holding would no
+// longer start with units coming in. A holding left with no movement goes.
+export function deleteOperation(
+  state: PrototypeState,
+  operationId: string,
+): Write<MovementResult> {
+  let next = state;
+  let found = false;
+  for (const [holdingId, own] of state.movements) {
+    if (!own.some((each) => each.operation_id === operationId)) continue;
+    found = true;
+    const kept = own.filter((each) => each.operation_id !== operationId);
+    if (kept.length === 0) {
+      next = deleteHolding(next, holdingId).state;
+      continue;
+    }
+    const admitted = admitMovements({ prior: null, after: kept });
+    if (!admitted.ok) {
+      return refused(state, { ok: false, code: admitted.code });
+    }
+    next = withMovements(next, holdingId, kept, admitted.quantity);
+  }
+  if (!found) return refused(state, { ok: false, code: "not_found" });
+  return { state: next, result: { ok: true, id: operationId } };
+}
+
+// The manual price an instrument had on a date.
+export function deletePrice(
+  state: PrototypeState,
+  symbol: string,
+  date: string,
+): Write<PriceResult> {
+  const manualPrices = state.manualPrices.filter(
+    (each) => each.symbol !== symbol || each.price_date !== date,
+  );
+  return manualPrices.length === state.manualPrices.length
+    ? refused(state, { ok: false, code: "invalid" })
+    : { state: { ...state, manualPrices }, result: { ok: true } };
+}

@@ -6,6 +6,9 @@ import { buildFixtures } from "@/lib/prototype/fixtures";
 import {
   allRows,
   createHolding,
+  deleteHolding,
+  deleteOperation,
+  deletePrice,
   holdingsView,
   initialState,
   instrumentHoldings,
@@ -390,5 +393,52 @@ describe("instrument history", () => {
         ),
       ),
     );
+  });
+});
+
+describe("deletes", () => {
+  it("deletes a holding with its movements", () => {
+    const { state: next, result } = deleteHolding(state, AAPL);
+    expect(result).toEqual({ ok: true, id: AAPL });
+    expect(allRows(next).some((row) => row.id === AAPL)).toBe(false);
+    expect(next.movements.has(AAPL)).toBe(false);
+  });
+
+  it("deletes every part of a split operation", () => {
+    const split = state.movements
+      .get(idOf("ETH"))!
+      .find((each) => each.reference === "BIN-77310")!;
+    const { state: next, result } = deleteOperation(state, split.operation_id);
+    expect(result).toEqual({ ok: true, id: split.operation_id });
+    const left = [...next.movements.values()]
+      .flat()
+      .filter((each) => each.operation_id === split.operation_id);
+    expect(left).toEqual([]);
+    // The Largo plazo holding had only its part, so it goes too.
+    expect(
+      allRows(next).filter(
+        (row) =>
+          row.holding.asset_class === "instrument" &&
+          row.holding.instrument_symbol === "ETH",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("refuses a delete that leaves a later sale selling more than held", () => {
+    const first = state.movements.get(TSLA)![0]!;
+    expect(deleteOperation(state, first.operation_id).result).toEqual({
+      ok: false,
+      code: "oversold",
+    });
+  });
+
+  it("deletes a manual price on its date", () => {
+    const [price] = state.manualPrices;
+    const { state: next } = deletePrice(
+      state,
+      price!.symbol,
+      price!.price_date,
+    );
+    expect(next.manualPrices).toHaveLength(state.manualPrices.length - 1);
   });
 });

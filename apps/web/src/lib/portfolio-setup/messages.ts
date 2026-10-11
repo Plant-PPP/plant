@@ -23,10 +23,9 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
 export const invalidName = (max: number) =>
   `Usá entre 1 y ${max} letras, números o signos.`;
 
-export const WRITE_MESSAGES: Record<
-  SetupTable,
-  Record<WriteResultCode, string>
-> = {
+type WriteMessages = Record<WriteResultCode, string>;
+
+export const WRITE_MESSAGES: Record<SetupTable, WriteMessages> = {
   portfolios: {
     ...GUARD_MESSAGES,
     duplicate: "Ya tenés una cartera con ese nombre.",
@@ -61,6 +60,20 @@ export const WRITE_MESSAGES: Record<
     failed: FAILED,
   },
 };
+
+// A delete's refusals, which ask for a delete or a move where an archive's ask
+// for an archive.
+export function deleteMessages(messages: WriteMessages): WriteMessages {
+  return {
+    ...messages,
+    portfolio_in_use:
+      "Para borrar esta cartera, primero elegí otra en las cuentas que la usan.",
+    portfolio_has_holdings:
+      "Para borrar esta cartera, primero borrá o mové sus tenencias.",
+    source_connection_has_holdings:
+      "Para borrar esta cuenta, primero borrá sus tenencias.",
+  };
+}
 
 // An account's select left unchosen, caught before the write.
 export const CHOICE_MESSAGES = {
