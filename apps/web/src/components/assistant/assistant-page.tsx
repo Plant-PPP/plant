@@ -62,7 +62,7 @@ function Answer({
   message: AssistantMessage;
   animate: boolean;
   onFollowUp: (question: string) => void;
-  // No questions left this month.
+  // While an answer is on its way, or no questions are left this month.
   disabled: boolean;
 }) {
   const text = useRevealed(message.text, animate);
@@ -145,9 +145,9 @@ export function AssistantPage({
     setActiveId(conversationId);
     setDraft("");
     setArrived(null);
-    // The clicked suggestion unmounts with the empty conversation, so focus
-    // stays in the question field, or on the title when this question used
-    // the month's last one and the field goes disabled.
+    // A clicked suggestion unmounts and a clicked follow-up goes disabled
+    // while waiting, so focus moves to the question field, or to the title
+    // when this question used the month's last one.
     (left > 1 ? questionField : heading).current?.focus();
     setWaiting(true);
     void actions

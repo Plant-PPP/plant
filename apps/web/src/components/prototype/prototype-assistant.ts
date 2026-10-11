@@ -212,7 +212,7 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (pusiste ${formatAmount(thisYear.totals.contributed, unit)} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : WITHOUT_PRICE}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${thisYear.totals.contributed.startsWith("-") ? `sacaste ${formatAmount(thisYear.totals.contributed.slice(1), unit)}` : `pusiste ${formatAmount(thisYear.totals.contributed, unit)}`} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(current.figures.result, unit)}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
@@ -226,7 +226,8 @@ export function prototypeAnswer(
     };
   }
 
-  if (/patrimon|tengo|vale|neto|total/.test(asked)) {
+  const today = closes.at(-1);
+  if (/patrimon|tengo|vale|neto|total/.test(asked) && today) {
     const valuation = holdingsValuation({
       holdings: holdingsView(state).active,
       truncated: false,
@@ -240,7 +241,9 @@ export function prototypeAnswer(
     });
     return {
       ...base,
-      text: `Tu patrimonio neto es ${formatAmount(closes.at(-1)?.figures.endValue ?? "0", unit)}${valuation.kinds.total.complete && owed.complete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(valuation.kinds.total.value, unit)} en activos y debés ${formatAmount(owed.total, unit)}.`,
+      // Today's net worth as Resumen shows it, and what is held as that
+      // figure plus what is owed, so the three add up.
+      text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos y debés ${formatAmount(owed.total, unit)}.`,
       chart: {
         title: "Cómo está repartido",
         unit,
