@@ -11,7 +11,7 @@ import {
 import type { QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import type { Denominator } from "../valuation/denominators";
-import { isIncome, isTrade, type Movement } from "./movement";
+import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
 
 // The digits a position keeps between movements: its stored precision.
 const STATE_DIGITS = 8;
@@ -25,12 +25,12 @@ const text = (x: Exact): string => toDecimal(x, STATE_DIGITS);
 // A holding's position in one unit after a movement. Money is in the view's
 // unit, each movement converted at its own date's rates; it is null when a
 // movement's money could not be expressed in that unit (a historic BTC price,
-// say). Cost is what the units still held were bought for; fees and taxes are
-// kept apart from it, and income is what dividends and coupons paid.
+// say). Cost is what the units still held were bought for; charges are kept
+// apart from it, income is what dividends and coupons paid, and realized is
+// what sales made.
 export type PositionMoney = {
   cost: string;
-  fees: string;
-  taxes: string;
+  charges: string;
   income: string;
   realized: string;
 };
@@ -38,11 +38,10 @@ export type Position = { quantity: string; money: PositionMoney | null };
 
 // What one sale made, in the view's unit: gross is quantity times price, cost
 // the share of the average cost the units sold carried, and result is gross
-// less fees, taxes and cost.
+// less charges and cost.
 export type SaleResult = {
   gross: string;
-  fees: string;
-  taxes: string;
+  charges: string;
   cost: string;
   result: string;
 };
@@ -56,7 +55,7 @@ export type LedgerStep = {
 
 export const EMPTY_POSITION: Position = {
   quantity: "0",
-  money: { cost: "0", fees: "0", taxes: "0", income: "0", realized: "0" },
+  money: { cost: "0", charges: "0", income: "0", realized: "0" },
 };
 
 // A replay that met a quantity it cannot hold. Admission refuses such a list
@@ -68,29 +67,25 @@ export class PositionError extends Error {
   }
 }
 
-type Money = {
-  cost: Exact;
-  fees: Exact;
-  taxes: Exact;
-  income: Exact;
-  realized: Exact;
-};
+type Money = { cost: Exact; charges: Exact; income: Exact; realized: Exact };
 
 const moneyOf = (money: PositionMoney): Money => ({
   cost: exactOf(money.cost),
-  fees: exactOf(money.fees),
-  taxes: exactOf(money.taxes),
+  charges: exactOf(money.charges),
   income: exactOf(money.income),
   realized: exactOf(money.realized),
 });
 
 const moneyText = (money: Money): PositionMoney => ({
   cost: text(money.cost),
-  fees: text(money.fees),
-  taxes: text(money.taxes),
+  charges: text(money.charges),
   income: text(money.income),
   realized: text(money.realized),
 });
+
+// The sum of a movement's charges, in its currency.
+export const chargesOf = (movement: Movement): Exact =>
+  plus(...movement.charges.map((charge) => exactOf(charge.amount)));
 
 // How many of the view's unit one unit of the movement's currency was worth on
 // its date, from the rates it carries.
@@ -130,38 +125,39 @@ export function replay(
   for (const movement of movements) {
     const factor = money && factorOf(movement, view, referenceDollar);
     if (!factor) money = null;
-    const inView = (amount: string) => times(exactOf(amount), factor ?? ZERO);
+    const inView = (amount: Exact) => times(amount, factor ?? ZERO);
+    const charges = inView(chargesOf(movement));
     let sale: SaleResult | null | undefined;
     if (isTrade(movement)) {
       const moved = exactOf(movement.quantity);
-      if (movement.kind === "sale") {
-        if (compareExact(moved, quantity) > 0)
+      const value = times(inView(exactOf(movement.price)), moved);
+      const isSale = movement.kind === "sale";
+      if (takesUnits(movement)) {
+        if (compareExact(moved, quantity) > 0) {
           throw new PositionError("oversold");
+        }
         if (money) {
           const cost =
             compareExact(moved, quantity) === 0
               ? money.cost
               : kept(over(times(money.cost, moved), quantity));
-          const gross = inView(movement.price);
-          const grossTotal = times(gross, moved);
-          const fees = inView(movement.fees);
-          const taxes = inView(movement.taxes);
-          const result = minus(minus(minus(grossTotal, fees), taxes), cost);
-          sale = {
-            gross: text(grossTotal),
-            fees: text(fees),
-            taxes: text(taxes),
-            cost: text(cost),
-            result: text(result),
-          };
+          // An adjustment out takes its cost and makes no result.
+          const result = isSale ? minus(minus(value, charges), cost) : ZERO;
+          if (isSale) {
+            sale = {
+              gross: text(value),
+              charges: text(charges),
+              cost: text(cost),
+              result: text(result),
+            };
+          }
           money = {
             cost: kept(minus(money.cost, cost)),
-            fees: kept(plus(money.fees, fees)),
-            taxes: kept(plus(money.taxes, taxes)),
+            charges: kept(plus(money.charges, charges)),
             income: money.income,
             realized: kept(plus(money.realized, result)),
           };
-        } else {
+        } else if (isSale) {
           sale = null;
         }
         quantity = kept(minus(quantity, moved));
@@ -169,9 +165,8 @@ export function replay(
         if (money) {
           money = {
             ...money,
-            cost: kept(plus(money.cost, times(inView(movement.price), moved))),
-            fees: kept(plus(money.fees, inView(movement.fees))),
-            taxes: kept(plus(money.taxes, inView(movement.taxes))),
+            cost: kept(plus(money.cost, value)),
+            charges: kept(plus(money.charges, charges)),
           };
         }
         quantity = kept(plus(quantity, moved));
@@ -179,9 +174,8 @@ export function replay(
     } else if (money && isIncome(movement.kind)) {
       money = {
         ...money,
-        income: kept(plus(money.income, inView(movement.amount))),
-        fees: kept(plus(money.fees, inView(movement.fees))),
-        taxes: kept(plus(money.taxes, inView(movement.taxes))),
+        income: kept(plus(money.income, inView(exactOf(movement.amount)))),
+        charges: kept(plus(money.charges, charges)),
       };
     }
     steps.push({

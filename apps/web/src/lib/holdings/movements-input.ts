@@ -16,22 +16,34 @@ export type MovementScope =
 
 // A movement as a list shows it, its money in the page's unit (null when it
 // cannot be expressed in that unit): what it cost or paid (a sale's cost is
-// that of the units it sold), and its fees and taxes together.
+// that of the units it sold), and its charges.
 export type MovementLine = {
   movement: Movement;
   cost: string | null;
   charges: string | null;
+  operation: OperationParts;
+};
+
+// An operation's account and instrument, and every part of it: one movement
+// per portfolio.
+export type OperationParts = {
+  accountId: string;
+  instrument: string;
+  parts: { movement: Movement; portfolioId: string }[];
 };
 
 export type MovementsPage =
   | { ok: true; rows: MovementLine[]; next: MovementCursor | null }
   | { ok: false; code: "failed" };
 
-// A sale with its holding, open or closed.
+// A sale operation as the sales tab lists it: its parts the filters keep
+// (each a portfolio's movement), the holding of its instrument in its account
+// (open or closed), and what the parts made together.
 export type SaleLine = {
-  movement: Movement;
-  sale: SaleResult | null;
+  operationId: string;
+  movements: Movement[];
   row: HoldingRow;
+  sale: SaleResult | null;
 };
 
 // The sales of one year whose holding, active or not, matches the page's

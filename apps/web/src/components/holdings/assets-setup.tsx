@@ -1,9 +1,8 @@
 "use client";
 
 import {
-  allowedKinds,
   type Denominator,
-  type Movement,
+  type MovementKind,
   type Position,
   takesMovements,
 } from "@plant/core";
@@ -15,6 +14,7 @@ import {
   ArrowLeftRight,
   Pencil,
   Plus,
+  SlidersHorizontal,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
@@ -63,6 +63,7 @@ import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
 import type {
   MovementResult,
   MovementsInput,
+  OperationParts,
 } from "@/lib/holdings/movements-input";
 import type {
   HoldingRow,
@@ -101,9 +102,10 @@ import { useAssetsUrl } from "./assets-url";
 import { PortfoliosBreakdown } from "./portfolios-breakdown";
 import { MovementDialog } from "./movement-dialog";
 import {
-  initialMovementFields,
   type MovementFields,
-  toMovementInput,
+  newMovementFields,
+  operationFields,
+  toOperationInput,
 } from "./movement-fields";
 import { MovementsTable } from "./movements-table";
 import { SalesSummary } from "./sales-summary";
@@ -125,9 +127,15 @@ const MOVEMENT_FIGURE = 112;
 
 type ShownHolding = HoldingRow & { unsaved?: true };
 
+// A new operation, from the header or for one holding (`kind` preset for an
+// adjustment), or an edit of one.
 type MovementDialogState =
-  | ({ kind: "create"; holdingId: string | null } & Retry<MovementFields>)
-  | ({ kind: "edit"; movement: Movement } & Retry<MovementFields>);
+  | ({
+      kind: "create";
+      row: HoldingRow | null;
+      preset?: MovementKind;
+    } & Retry<MovementFields>)
+  | ({ kind: "edit"; operation: OperationParts } & Retry<MovementFields>);
 
 type DialogState =
   | ({ kind: "create" } & Retry<HoldingFields>)
@@ -201,8 +209,11 @@ export function AssetsSetup({
     shown: view,
     pending,
     run,
-  } = useOptimisticWrites(holdings, (state, change: ListChange<HoldingRow>) =>
-    applyChange(state, change),
+  } = useOptimisticWrites(
+    holdings,
+    // An operation may touch no holding the list shows yet.
+    (state, change: ListChange<HoldingRow> | null) =>
+      change ? applyChange(state, change) : state,
   );
   const card = useSetupCard({ run, pending });
   const url = useAssetsUrl(params);
@@ -273,46 +284,44 @@ export function AssetsSetup({
     });
   }
 
-  // The instrument holdings a movement can be recorded for.
-  const movementHoldings = view.active.flatMap((row) =>
-    takesMovements(row.holding) && !("unsaved" in row && row.unsaved)
-      ? [
-          {
-            id: row.id,
-            name: named(row),
-            hasMovements: movement?.input.positions.has(row.id) ?? false,
-            row,
-          },
-        ]
-      : [],
-  );
-
   function openMovementDialog(next: MovementDialogState) {
     if (pending) return;
-    if (next.kind === "create" && movementHoldings.length === 0) {
-      toast.error("Primero agregá una tenencia de un instrumento.");
+    if (next.kind === "create" && accounts.length === 0) {
+      toast.error("Primero agregá una cuenta en Cuentas.");
       return;
     }
     setMovementDialog(next);
   }
 
-  // A new movement's fields: today, the holding's first allowed kind, its
-  // instrument's currency, and its amount as an opening balance's quantity.
-  function newMovementFields(holdingId: string | null): MovementFields {
-    const chosen =
-      movementHoldings.find((each) => each.id === holdingId) ??
-      movementHoldings[0]!;
-    const [kind] = allowedKinds(chosen.hasMovements);
-    const { holding } = chosen.row;
+  // A new operation's fields: today, in the holding's account, instrument and
+  // portfolio when opened from one (its amount as an opening balance), else
+  // the first account's and its portfolio.
+  function newOperationFields(
+    row: HoldingRow | null,
+    preset: MovementKind | undefined,
+  ): MovementFields {
     const symbol =
-      holding.asset_class === "instrument" ? holding.instrument_symbol : "";
-    return initialMovementFields(null, {
-      kind: kind!,
-      holdingId: chosen.id,
-      date: today,
+      row?.holding.asset_class === "instrument"
+        ? row.holding.instrument_symbol
+        : (instruments[0]?.symbol ?? "");
+    const account = row?.account ?? accounts[0];
+    const hasMovements = row
+      ? (movement?.input.positions.has(row.id) ?? false)
+      : true;
+    const kind = preset ?? (hasMovements ? "purchase" : "opening_balance");
+    return newMovementFields({
+      kind,
+      accountId: account?.id ?? "",
+      instrument: symbol,
       currency:
         instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS",
-      ...(kind === "opening_balance" && { quantity: holding.amount }),
+      date: today,
+      portfolioId:
+        row?.portfolio.id ??
+        accounts[0]?.portfolio.id ??
+        portfolios[0]?.id ??
+        "",
+      ...(kind === "opening_balance" && row && { size: row.holding.amount }),
     });
   }
 
@@ -321,24 +330,33 @@ export function AssetsSetup({
     actions: MovementActions,
     fields: MovementFields,
   ): boolean {
-    const chosen = movementHoldings.find(
-      (each) => each.id === fields.holdingId,
+    const input = toOperationInput(fields);
+    const instrument =
+      instruments.find((each) => each.symbol === fields.instrument)?.name ??
+      fields.instrument;
+    // The holdings it touches show as saving until they are read again.
+    const shown = view.active.find(
+      (row) =>
+        row.account.id === fields.accountId &&
+        row.holding.asset_class === "instrument" &&
+        row.holding.instrument_symbol === fields.instrument &&
+        fields.parts.some((part) => part.portfolioId === row.portfolio.id),
     );
-    if (!chosen) return false;
-    const input = toMovementInput(fields);
     return card.dialogAction(
-      // The holding shows as saving until its movements are read again.
-      { kind: "update", row: chosen.row },
+      shown ? { kind: "update", row: shown } : null,
       () =>
         state.kind === "edit"
-          ? actions.update(state.movement.id, input)
+          ? actions.update(
+              state.operation.parts[0]!.movement.operation_id,
+              input,
+            )
           : actions.create(input),
       MOVEMENT_MESSAGES,
       {
         done:
           state.kind === "edit"
-            ? `Guardaste el movimiento de ${chosen.name}`
-            : `Agregaste un movimiento a ${chosen.name}`,
+            ? `Guardaste el movimiento de ${instrument}`
+            : `Agregaste un movimiento de ${instrument}`,
         reopen: (error) =>
           setMovementDialog({
             ...state,
@@ -348,6 +366,17 @@ export function AssetsSetup({
       },
     );
   }
+
+  // The account and instrument a holding's dialog keeps, by name.
+  const fixedOf = (accountId: string, symbol: string) => ({
+    account:
+      accounts.find((each) => each.id === accountId)?.institution ??
+      view.active.find((row) => row.account.id === accountId)?.account
+        .institution ??
+      "",
+    instrument:
+      instruments.find((each) => each.symbol === symbol)?.name ?? symbol,
+  });
 
   // What the server valued for a row; nothing yet for one it has not saved.
   const valued = (row: ShownHolding) =>
@@ -552,6 +581,11 @@ export function AssetsSetup({
     ];
   }
 
+  // With movements, an instrument holding changes through them: it takes an
+  // adjustment instead of an edit.
+  const adjusts = (row: HoldingRow) =>
+    movement !== undefined && takesMovements(row.holding);
+
   const tableColumns: ColumnDef<ShownHolding>[] = [
     ...(movement
       ? [
@@ -567,8 +601,20 @@ export function AssetsSetup({
           id: "edit",
           icon: Pencil,
           tooltip: "Editar",
-          label: (row) => `Editar ${named(row)}`,
-          onClick: (row) => openDialog({ kind: "edit", row }),
+          label: (row) =>
+            `${adjusts(row) ? "Ajustar" : "Editar"} ${named(row)}`,
+          variant: (row) =>
+            adjusts(row)
+              ? { icon: SlidersHorizontal, tooltip: "Ajustar" }
+              : undefined,
+          onClick: (row) =>
+            adjusts(row)
+              ? openMovementDialog({
+                  kind: "create",
+                  row,
+                  preset: "adjustment",
+                })
+              : openDialog({ kind: "edit", row }),
         },
         ...(archiving
           ? [
@@ -774,7 +820,7 @@ export function AssetsSetup({
                         onClick: (line) =>
                           openMovementDialog({
                             kind: "edit",
-                            movement: line.movement,
+                            operation: line.operation,
                           }),
                       },
                     ]}
@@ -785,10 +831,7 @@ export function AssetsSetup({
                       variant="outline"
                       pending={pending}
                       onClick={() =>
-                        openMovementDialog({
-                          kind: "create",
-                          holdingId: row.id,
-                        })
+                        openMovementDialog({ kind: "create", row })
                       }
                     >
                       <Plus />
@@ -859,9 +902,7 @@ export function AssetsSetup({
               size="sm"
               variant="outline"
               pending={pending}
-              onClick={() =>
-                openMovementDialog({ kind: "create", holdingId: null })
-              }
+              onClick={() => openMovementDialog({ kind: "create", row: null })}
             >
               <ArrowLeftRight />
               Agregar movimiento
@@ -988,27 +1029,30 @@ export function AssetsSetup({
       {movement && movementDialog && (
         <MovementDialog
           mode={movementDialog.kind}
-          holdings={
+          accounts={accounts}
+          portfolios={portfolios}
+          instruments={instruments}
+          fixed={
             movementDialog.kind === "edit"
-              ? movementHoldings.filter(
-                  (each) => each.id === movementDialog.movement.holding_id,
+              ? fixedOf(
+                  movementDialog.operation.accountId,
+                  movementDialog.operation.instrument,
                 )
-              : movementDialog.holdingId === null
-                ? movementHoldings
-                : movementHoldings.filter(
-                    (each) => each.id === movementDialog.holdingId,
+              : movementDialog.row?.holding.asset_class === "instrument"
+                ? fixedOf(
+                    movementDialog.row.account.id,
+                    movementDialog.row.holding.instrument_symbol,
                   )
+                : undefined
           }
           initial={
             movementDialog.initial ??
             (movementDialog.kind === "edit"
-              ? initialMovementFields(movementDialog.movement, {
-                  kind: movementDialog.movement.kind,
-                  holdingId: movementDialog.movement.holding_id,
-                  currency: movementDialog.movement.currency,
-                  date: movementDialog.movement.date,
+              ? operationFields(movementDialog.operation.parts, {
+                  accountId: movementDialog.operation.accountId,
+                  instrument: movementDialog.operation.instrument,
                 })
-              : newMovementFields(movementDialog.holdingId))
+              : newOperationFields(movementDialog.row, movementDialog.preset))
           }
           initialError={movementDialog.initialError}
           today={today}

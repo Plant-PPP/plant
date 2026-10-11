@@ -1,4 +1,9 @@
-import type { Denominator, Holding, MovementKind } from "@plant/core";
+import type {
+  ChargeKind,
+  Denominator,
+  Holding,
+  MovementKind,
+} from "@plant/core";
 import type { Currency } from "@plant/shared";
 
 import { FAILED } from "@/lib/portfolio-setup/messages";
@@ -44,6 +49,15 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   sale: "Venta",
   dividend: "Dividendo",
   coupon: "Cupón",
+  adjustment: "Ajuste",
+};
+
+export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
+  commission: "Comisión",
+  market_fee: "Derechos de mercado",
+  vat: "IVA",
+  tax: "Impuesto",
+  other: "Otro",
 };
 
 export const FUTURE_DATE_MESSAGE = "La fecha no puede ser posterior a hoy.";
@@ -57,7 +71,7 @@ export const MOVEMENT_MESSAGES: Record<
   failed: FAILED,
   oversold: "No podés vender más de lo que tenías en esa fecha.",
   opening_balance:
-    "El saldo inicial va una sola vez, antes que cualquier otro movimiento.",
+    "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez.",
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
 };

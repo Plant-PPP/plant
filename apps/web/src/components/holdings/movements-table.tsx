@@ -155,7 +155,7 @@ export function MovementsTable({
     },
     {
       id: "charges",
-      header: "Comis. + imp.",
+      header: "Gastos",
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) => money(original.charges, unit),
     },

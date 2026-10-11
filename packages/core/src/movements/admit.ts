@@ -1,6 +1,11 @@
 import { compareExact, exactOf, plus, toDecimal } from "@plant/shared";
 import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
-import { isTrade, type Movement, type MovementRates } from "./movement";
+import {
+  isTrade,
+  type Movement,
+  type MovementRates,
+  takesUnits,
+} from "./movement";
 import { compareMovements } from "./order";
 
 export type MovementRefusal =
@@ -18,21 +23,26 @@ export type MovementWindow = {
   after: readonly Movement[];
 };
 
-// Whether a holding's movements make a history: the opening balance first and
-// only once, and no sale of more than is held at that point. Only quantities
-// are read, so the answer is the same in every unit. Returns the quantity held
-// after the last one.
+// Whether a holding's movements make a history: it starts with units coming
+// in (an opening balance, a purchase or an adjustment in), an opening balance
+// only ever first, and nothing takes out more units than are held at that
+// point. Only quantities are read, so the answer is the same in every unit.
+// Returns the quantity held after the last one.
 export function admitMovements({ prior, after }: MovementWindow): Admission {
   const sorted = [...after].sort(compareMovements);
   let quantity = exactOf(prior?.quantity ?? "0");
   for (const [index, movement] of sorted.entries()) {
-    const opens = movement.kind === "opening_balance";
-    if (opens !== (prior === null && index === 0)) {
+    const first = prior === null && index === 0;
+    const startsHolding = isTrade(movement) && !takesUnits(movement);
+    if (
+      (movement.kind === "opening_balance" && !first) ||
+      (first && !startsHolding)
+    ) {
       return { ok: false, code: "opening_balance" };
     }
     if (!isTrade(movement)) continue;
     const moved = exactOf(movement.quantity);
-    if (movement.kind === "sale") {
+    if (takesUnits(movement)) {
       if (compareExact(moved, quantity) > 0) {
         return { ok: false, code: "oversold" };
       }

@@ -1,14 +1,13 @@
-import type { Movement, MovementKind } from "./movement";
+import { isIncome, type Movement, takesUnits } from "./movement";
 
-// Within a day, the opening balance comes first and sales last, so a sale can
-// use what was bought that same day.
-const RANK: Record<MovementKind, number> = {
-  opening_balance: 0,
-  purchase: 1,
-  dividend: 2,
-  coupon: 2,
-  sale: 3,
-};
+// Within a day, the opening balance comes first and what takes units out
+// last, so a sale can use what was bought that same day.
+function rankOf(movement: Movement): number {
+  if (movement.kind === "opening_balance") return 0;
+  if (takesUnits(movement)) return 3;
+  if (isIncome(movement.kind)) return 2;
+  return 1;
+}
 
 // Where a movement sits in a holding's history, and the cursor a page of
 // movements resumes after.
@@ -16,7 +15,7 @@ export type MovementCursor = { date: string; rank: number; id: string };
 
 export const movementKey = (movement: Movement): MovementCursor => ({
   date: movement.date,
-  rank: RANK[movement.kind],
+  rank: rankOf(movement),
   id: movement.id,
 });
 

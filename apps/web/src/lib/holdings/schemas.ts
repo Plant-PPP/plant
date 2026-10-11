@@ -1,9 +1,5 @@
-import {
-  classBranch,
-  type MovementKind,
-  movementBranch,
-  type OmittableColumn,
-} from "@plant/core";
+import { classBranch, movementBranch, type OmittableColumn } from "@plant/core";
+import { positiveDecimalSchema } from "@plant/shared";
 import { z } from "zod";
 
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
@@ -47,16 +43,75 @@ export const holdingUpdateSchema = z.discriminatedUnion("asset_class", [
 ]);
 export type HoldingUpdate = z.output<typeof holdingUpdateSchema>;
 
-// A new or edited movement: its holding and its kind's columns. Its rates are
-// the store's to add, from the quotes of its date.
-const movementInputBranch = <K extends MovementKind>(kind: K) =>
-  movementBranch(kind).extend({ holding_id: id }).strict();
+// An operation as the dialog sends it: one kind of movement of one
+// instrument in one account, split across portfolios, each once. A trade's
+// part is a quantity and an income's an amount. Charges, reference and note
+// are the whole operation's; the store splits the charges across the parts.
+const inAccount = {
+  source_connection_id: id,
+  instrument_symbol: z.string().min(1),
+};
+const onePerPortfolio = (
+  operation: { parts: readonly { portfolio_id: string }[] },
+  context: z.RefinementCtx,
+) => {
+  const seen = new Set<string>();
+  operation.parts.forEach((each, index) => {
+    if (seen.has(each.portfolio_id)) {
+      context.addIssue({
+        code: "custom",
+        message: "A portfolio appears once",
+        path: ["parts", index, "portfolio_id"],
+      });
+    }
+    seen.add(each.portfolio_id);
+  });
+};
+const parts = <S extends z.ZodRawShape>(shape: S) =>
+  z
+    .array(z.object({ portfolio_id: id, ...shape }).strict())
+    .min(1)
+    .max(10);
 
-export const movementInputSchema = z.discriminatedUnion("kind", [
-  movementInputBranch("opening_balance"),
-  movementInputBranch("purchase"),
-  movementInputBranch("sale"),
-  movementInputBranch("dividend"),
-  movementInputBranch("coupon"),
+const tradeParts = {
+  ...inAccount,
+  parts: parts({ quantity: positiveDecimalSchema }),
+};
+const incomeParts = {
+  ...inAccount,
+  parts: parts({ amount: positiveDecimalSchema }),
+};
+
+export const operationInputSchema = z.discriminatedUnion("kind", [
+  movementBranch("opening_balance")
+    .omit({ quantity: true })
+    .extend(tradeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
+  movementBranch("purchase")
+    .omit({ quantity: true })
+    .extend(tradeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
+  movementBranch("sale")
+    .omit({ quantity: true })
+    .extend(tradeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
+  movementBranch("dividend")
+    .omit({ amount: true })
+    .extend(incomeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
+  movementBranch("coupon")
+    .omit({ amount: true })
+    .extend(incomeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
+  movementBranch("adjustment")
+    .omit({ quantity: true })
+    .extend(tradeParts)
+    .strict()
+    .superRefine(onePerPortfolio),
 ]);
-export type MovementInput = z.output<typeof movementInputSchema>;
+export type OperationInput = z.output<typeof operationInputSchema>;

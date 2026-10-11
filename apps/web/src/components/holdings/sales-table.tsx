@@ -1,6 +1,7 @@
 "use client";
 
 import { type Denominator, isTrade } from "@plant/core";
+import { exactOf, plus, toDecimal } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
@@ -13,6 +14,17 @@ import { AccountCell, TickerChip } from "./holding-cells";
 import { GainLossText, MissingFigure, NUMBER_CELL } from "./sum-text";
 
 type Row = SaleLine & { id: string };
+
+// What a sale's parts sold together.
+const quantityOf = (line: SaleLine): string =>
+  toDecimal(
+    plus(
+      ...line.movements.map((movement) =>
+        exactOf(isTrade(movement) ? movement.quantity : "0"),
+      ),
+    ),
+    8,
+  );
 
 const FIGURE = 112;
 
@@ -39,7 +51,7 @@ export function SalesTable({
       header: "Fecha",
       size: 96,
       meta: { className: "tabular-nums" },
-      cell: ({ row: { original } }) => formatDate(original.movement.date),
+      cell: ({ row: { original } }) => formatDate(original.movements[0]!.date),
     },
     {
       id: "name",
@@ -72,20 +84,19 @@ export function SalesTable({
       header: "Cantidad",
       size: FIGURE,
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original } }) =>
-        isTrade(original.movement)
-          ? formatQuantity(original.movement.quantity)
-          : null,
+      cell: ({ row: { original } }) => formatQuantity(quantityOf(original)),
     },
     {
       id: "price",
       header: "Precio",
       size: FIGURE,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original } }) =>
-        isTrade(original.movement)
-          ? formatPrice(original.movement.price, original.movement.currency)
-          : null,
+      cell: ({ row: { original } }) => {
+        const [first] = original.movements;
+        return first && isTrade(first)
+          ? formatPrice(first.price, first.currency)
+          : null;
+      },
     },
     {
       id: "gross",
@@ -95,18 +106,11 @@ export function SalesTable({
       cell: ({ row: { original } }) => inUnit(original.sale?.gross),
     },
     {
-      id: "fees",
-      header: "Comis.",
+      id: "charges",
+      header: "Gastos",
       size: 96,
-      meta: { className: `hidden @6xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original } }) => inUnit(original.sale?.fees),
-    },
-    {
-      id: "taxes",
-      header: "Imp.",
-      size: 96,
-      meta: { className: `hidden @6xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original } }) => inUnit(original.sale?.taxes),
+      meta: { className: `hidden @5xl:table-cell ${NUMBER_CELL}` },
+      cell: ({ row: { original } }) => inUnit(original.sale?.charges),
     },
     {
       id: "cost",
@@ -133,7 +137,7 @@ export function SalesTable({
   return (
     <DataTable
       columns={columns}
-      data={sales.map((line) => ({ ...line, id: line.movement.id }))}
+      data={sales.map((line) => ({ ...line, id: line.operationId }))}
       caption="Ventas"
     />
   );

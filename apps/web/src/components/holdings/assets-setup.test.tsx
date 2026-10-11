@@ -423,8 +423,10 @@ describe("with movements", () => {
     currency: "USD" as const,
     quantity: "0.5",
     price: "60000",
-    fees: "4",
-    taxes: "0",
+    charges: [{ kind: "commission" as const, label: null, amount: "4" }],
+    reference: null,
+    note: null,
+    operation_id: "op2",
     rates: {
       mep: { sell: "1200", date: "2026-03-02" },
       ccl: { sell: "1250", date: "2026-03-02" },
@@ -439,8 +441,7 @@ describe("with movements", () => {
           quantity: "0.5",
           money: {
             cost: "15000",
-            fees: "9",
-            taxes: "0",
+            charges: "9",
             income: "0",
             realized: "14996",
           },
@@ -451,11 +452,11 @@ describe("with movements", () => {
     sales: {
       rows: [
         {
-          movement: sale,
+          operationId: "op2",
+          movements: [sale],
           sale: {
             gross: "30000",
-            fees: "4",
-            taxes: "0",
+            charges: "4",
             cost: "15000",
             result: "14996",
           },

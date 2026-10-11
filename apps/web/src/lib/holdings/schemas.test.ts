@@ -7,7 +7,7 @@ import { without } from "@/test/without";
 import {
   holdingInsertSchema,
   holdingUpdateSchema,
-  movementInputSchema,
+  operationInputSchema,
 } from "./schemas";
 
 const ACCOUNT = "a1000000-0000-4000-8000-0000000000a1";
@@ -184,29 +184,61 @@ it("takes a cash label as null, never missing", () => {
   ).toBe(false);
 });
 
-describe("movementInputSchema", () => {
+describe("operationInputSchema", () => {
   const purchase = {
-    holding_id: ACCOUNT,
     kind: "purchase",
+    source_connection_id: ACCOUNT,
+    instrument_symbol: "BTC",
     date: "2026-03-02",
     currency: "USD",
-    quantity: "10",
-    price: "150",
+    price: "60000",
+    parts: [
+      { portfolio_id: PORTFOLIO, quantity: "0.5" },
+      { portfolio_id: ACCOUNT, quantity: "0.5" },
+    ],
   };
 
-  it("takes a movement for its holding, without rates", () => {
-    expect(movementInputSchema.parse(purchase)).toMatchObject({
-      fees: "0",
-      taxes: "0",
+  it("takes one operation split across portfolios, without rates", () => {
+    expect(operationInputSchema.parse(purchase)).toMatchObject({
+      charges: [],
+      reference: null,
+      note: null,
+      parts: purchase.parts,
     });
+  });
+
+  it("takes an income's parts as amounts", () => {
+    expect(
+      operationInputSchema.safeParse({
+        ...without(purchase, "price"),
+        kind: "dividend",
+        parts: [{ portfolio_id: PORTFOLIO, amount: "12" }],
+      }).success,
+    ).toBe(true);
   });
 
   it.each([
     ["rates", { ...purchase, rates: {} }],
-    ["an id", { ...purchase, id: ACCOUNT }],
-    ["a holding that is no uuid", { ...purchase, holding_id: "h1" }],
-    ["an amount on a purchase", { ...purchase, amount: "1" }],
+    ["no parts", { ...purchase, parts: [] }],
+    [
+      "a portfolio twice",
+      {
+        ...purchase,
+        parts: [
+          { portfolio_id: PORTFOLIO, quantity: "1" },
+          { portfolio_id: PORTFOLIO, quantity: "1" },
+        ],
+      },
+    ],
+    [
+      "an amount on a trade's part",
+      { ...purchase, parts: [{ portfolio_id: PORTFOLIO, amount: "1" }] },
+    ],
+    [
+      "a portfolio that is no uuid",
+      { ...purchase, parts: [{ portfolio_id: "p1", quantity: "1" }] },
+    ],
   ])("refuses %s", (_, input) => {
-    expect(movementInputSchema.safeParse(input).success).toBe(false);
+    expect(operationInputSchema.safeParse(input).success).toBe(false);
   });
 });

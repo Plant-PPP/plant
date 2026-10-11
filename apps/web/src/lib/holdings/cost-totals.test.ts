@@ -5,9 +5,7 @@ import { averageCost, costTotals, gainLoss } from "./cost-totals";
 const position = (quantity: string, cost: string | null): Position => ({
   quantity,
   money:
-    cost === null
-      ? null
-      : { cost, fees: "5", taxes: "1", income: "0", realized: "0" },
+    cost === null ? null : { cost, charges: "6", income: "0", realized: "0" },
 });
 
 describe("gainLoss", () => {

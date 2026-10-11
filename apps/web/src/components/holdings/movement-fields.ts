@@ -1,10 +1,11 @@
 import {
+  type ChargeKind,
   isIncome,
   isTrade,
   type Movement,
   type MovementKind,
 } from "@plant/core";
-import type { Currency } from "@plant/shared";
+import { type Currency, exactOf, plus, toDecimal } from "@plant/shared";
 import type { z } from "zod";
 
 import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
@@ -12,116 +13,191 @@ import { firstRefused } from "@/components/portfolio-setup/refusal";
 import { amountInput, parseAmountInput } from "@/lib/format/amount";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 
+// One portfolio's part of an operation, as typed: its quantity, or an
+// income's amount.
+export type PartFields = { portfolioId: string; size: string };
+export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
+
 // What the movement dialog holds, as typed.
 export type MovementFields = {
   kind: MovementKind;
-  holdingId: string;
+  direction: "in" | "out";
+  accountId: string;
+  instrument: string;
   date: string;
-  quantity: string;
   price: string;
-  amount: string;
   currency: Currency;
-  fees: string;
-  taxes: string;
+  parts: PartFields[];
+  charges: ChargeFields[];
+  reference: string;
+  note: string;
 };
 
 export type MovementField =
   | "kind"
-  | "holding"
+  | "direction"
+  | "account"
+  | "instrument"
   | "date"
-  | "quantity"
   | "price"
-  | "amount"
   | "currency"
-  | "fees"
-  | "taxes";
+  | "parts"
+  | "charges"
+  | "reference"
+  | "note";
 
-export function initialMovementFields(
-  movement: Movement | null,
-  defaults: Pick<MovementFields, "kind" | "holdingId" | "currency" | "date"> & {
-    quantity?: string;
-  },
+export function newMovementFields(
+  defaults: Pick<
+    MovementFields,
+    "kind" | "accountId" | "instrument" | "currency" | "date"
+  > & { portfolioId: string; size?: string },
 ): MovementFields {
-  if (!movement) {
-    return {
-      ...defaults,
-      quantity: defaults.quantity ? amountInput(defaults.quantity) : "",
-      price: "",
-      amount: "",
-      fees: "",
-      taxes: "",
-    };
-  }
   return {
-    kind: movement.kind,
-    holdingId: movement.holding_id,
-    date: movement.date,
-    currency: movement.currency,
-    quantity: isTrade(movement) ? amountInput(movement.quantity) : "",
-    price: isTrade(movement) ? amountInput(movement.price) : "",
-    amount: isTrade(movement) ? "" : amountInput(movement.amount),
-    fees: amountInput(movement.fees),
-    taxes: amountInput(movement.taxes),
+    kind: defaults.kind,
+    direction: "in",
+    accountId: defaults.accountId,
+    instrument: defaults.instrument,
+    date: defaults.date,
+    price: "",
+    currency: defaults.currency,
+    parts: [
+      {
+        portfolioId: defaults.portfolioId,
+        size: defaults.size ? amountInput(defaults.size) : "",
+      },
+    ],
+    charges: [],
+    reference: "",
+    note: "",
   };
 }
 
-// An empty charge is none; a value the parser refuses goes as null, for the
-// schema to name its field.
-const charge = (text: string) =>
-  text.trim() === "" ? "0" : parseAmountInput(text);
+// An operation's fields from its parts, one movement per portfolio, with the
+// portfolio of each part's holding and each charge added back up across
+// the parts.
+export function operationFields(
+  parts: readonly { movement: Movement; portfolioId: string }[],
+  { accountId, instrument }: { accountId: string; instrument: string },
+): MovementFields {
+  const [first] = parts;
+  if (!first) throw new RangeError("An operation has a part");
+  const { movement } = first;
+  const charges = new Map<
+    string,
+    { kind: ChargeKind; label: string; amounts: string[] }
+  >();
+  for (const charge of parts.flatMap((part) => part.movement.charges)) {
+    const key = `${charge.kind}:${charge.label ?? ""}`;
+    const item = charges.get(key) ?? {
+      kind: charge.kind,
+      label: charge.label ?? "",
+      amounts: [],
+    };
+    item.amounts.push(charge.amount);
+    charges.set(key, item);
+  }
+  return {
+    kind: movement.kind,
+    direction: movement.kind === "adjustment" ? movement.direction : "in",
+    accountId,
+    instrument,
+    date: movement.date,
+    price: isTrade(movement) ? amountInput(movement.price) : "",
+    currency: movement.currency,
+    parts: parts.map((part) => ({
+      portfolioId: part.portfolioId,
+      size: amountInput(
+        isTrade(part.movement) ? part.movement.quantity : part.movement.amount,
+      ),
+    })),
+    charges: [...charges.values()].map(({ kind, label, amounts }) => ({
+      kind,
+      label,
+      amount: amountInput(toDecimal(plus(...amounts.map(exactOf)), 8)),
+    })),
+    reference: movement.reference ?? "",
+    note: movement.note ?? "",
+  };
+}
 
-// What the dialog sends: the kind's fields only.
-export function toMovementInput(fields: MovementFields) {
-  const common = {
-    holding_id: fields.holdingId,
+// An empty text is none.
+const optional = (text: string) => (text.trim() === "" ? null : text);
+
+// What the dialog sends: the kind's fields, each part, each charge. A value
+// the parsers refuse goes as null, for the schema to name its field.
+export function toOperationInput(fields: MovementFields) {
+  const income = isIncome(fields.kind);
+  return {
     kind: fields.kind,
+    source_connection_id: fields.accountId,
+    instrument_symbol: fields.instrument,
     date: fields.date,
     currency: fields.currency,
-    fees: charge(fields.fees),
-    taxes: charge(fields.taxes),
+    ...(income
+      ? {}
+      : fields.kind === "adjustment"
+        ? {
+            direction: fields.direction,
+            price:
+              fields.direction === "in" && fields.price.trim() !== ""
+                ? parseAmountInput(fields.price)
+                : "0",
+          }
+        : { price: parseAmountInput(fields.price) }),
+    parts: fields.parts.map((part) => ({
+      portfolio_id: part.portfolioId,
+      [income ? "amount" : "quantity"]: parseAmountInput(part.size),
+    })),
+    charges: fields.charges.map((charge) => ({
+      kind: charge.kind,
+      label: optional(charge.label),
+      amount: parseAmountInput(charge.amount),
+    })),
+    reference: optional(fields.reference),
+    note: optional(fields.note),
   };
-  return isIncome(fields.kind)
-    ? { ...common, amount: parseAmountInput(fields.amount) }
-    : {
-        ...common,
-        quantity: parseAmountInput(fields.quantity),
-        price: parseAmountInput(fields.price),
-      };
 }
 
 export const MOVEMENT_FIELD_MESSAGES: Record<MovementField, string> = {
   kind: "Elegí qué pasó.",
-  holding: "Elegí una tenencia.",
+  direction: "Elegí si las unidades entran o salen.",
+  account: "Elegí una cuenta.",
+  instrument: "Elegí un instrumento.",
   date: "Elegí una fecha.",
-  quantity: "Ingresá una cantidad mayor a 0.",
   price: "Ingresá un precio de 0 o más.",
-  amount: "Ingresá un monto mayor a 0.",
   currency: "Elegí una moneda.",
-  fees: "Ingresá las comisiones como un número, o dejalas vacías.",
-  taxes: "Ingresá los impuestos como un número, o dejalos vacíos.",
+  parts: "Elegí cada cartera una vez, con una cantidad mayor a 0.",
+  charges:
+    "Cada gasto necesita un monto mayor a 0; un gasto de tipo Otro, un nombre.",
+  reference: "La referencia puede tener hasta 40 caracteres.",
+  note: "La nota puede tener hasta 200 caracteres.",
 };
 
 const FIELD_BY_COLUMN: Record<string, MovementField> = {
   kind: "kind",
-  holding_id: "holding",
+  direction: "direction",
+  source_connection_id: "account",
+  instrument_symbol: "instrument",
   date: "date",
-  quantity: "quantity",
   price: "price",
-  amount: "amount",
   currency: "currency",
-  fees: "fees",
-  taxes: "taxes",
+  parts: "parts",
+  charges: "charges",
+  reference: "reference",
+  note: "note",
 };
 const FORM_ORDER: readonly MovementField[] = [
   "kind",
-  "holding",
+  "direction",
+  "account",
+  "instrument",
   "date",
-  "quantity",
-  "price",
-  "amount",
   "currency",
-  "fees",
-  "taxes",
+  "price",
+  "parts",
+  "charges",
+  "reference",
+  "note",
 ];
 
 export function movementRefusal(error: z.ZodError): FieldAlert<MovementField> {
@@ -133,9 +209,10 @@ export function movementRefusal(error: z.ZodError): FieldAlert<MovementField> {
 
 // The field a refused write's alert is about, when it is about one.
 export function refusedMovementField(text: string): MovementField | null {
-  if (text === MOVEMENT_MESSAGES.oversold) return "quantity";
+  if (text === MOVEMENT_MESSAGES.oversold) return "parts";
   if (text === MOVEMENT_MESSAGES.future_date) return "date";
   if (text === MOVEMENT_MESSAGES.no_rate) return "date";
   if (text === MOVEMENT_MESSAGES.opening_balance) return "kind";
+  if (text === MOVEMENT_MESSAGES.not_found) return "parts";
   return null;
 }

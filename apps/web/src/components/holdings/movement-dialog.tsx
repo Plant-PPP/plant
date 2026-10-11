@@ -1,7 +1,14 @@
 "use client";
 
-import { allowedKinds, isIncome, type MovementKind } from "@plant/core";
+import {
+  CHARGE_KINDS,
+  type ChargeKind,
+  isIncome,
+  MOVEMENT_KINDS,
+  type MovementKind,
+} from "@plant/core";
 import type { Currency } from "@plant/shared";
+import { Plus, X } from "lucide-react";
 import type * as React from "react";
 import { useId, useState } from "react";
 
@@ -18,32 +25,47 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useFieldAlert } from "@/components/portfolio-setup/field-alert";
+import {
+  choose,
+  useFieldAlert,
+} from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
-import { CURRENCY_LABELS, MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
-import { movementInputSchema } from "@/lib/holdings/schemas";
+import {
+  CHARGE_KIND_LABELS,
+  CURRENCY_LABELS,
+  MOVEMENT_KIND_LABELS,
+} from "@/lib/holdings/messages";
+import type { InstrumentRow } from "@/lib/holdings/read";
+import { operationInputSchema } from "@/lib/holdings/schemas";
+import type {
+  PortfolioRow,
+  SourceConnectionRow,
+} from "@/lib/portfolio-setup/read";
 
 import {
   type MovementField,
   type MovementFields,
   movementRefusal,
   refusedMovementField,
-  toMovementInput,
+  toOperationInput,
 } from "./movement-fields";
 
-// A holding the dialog can record a movement for, and whether it has any.
-export type MovementHolding = {
-  id: string;
-  name: string;
-  hasMovements: boolean;
-};
+const DIRECTION_LABELS = { in: "Entran unidades", out: "Salen unidades" };
+// The charges whose name the user writes: one that must say what it is, and a
+// tax that may say which.
+const NAMED_CHARGES: readonly ChargeKind[] = ["tax", "other"];
 
-// Records a movement of an instrument holding, or edits one, handing its
-// fields to `onSubmit` as it closes; a refused write opens it again with the
-// fields and the alert. A holding's first movement is its opening balance.
+// Records an operation of an instrument in one account, split across
+// portfolios, or edits one; it hands its fields to `onSubmit` as it closes,
+// and a refused write opens it again with the fields and the alert. An
+// operation opened from a holding, or edited, keeps its account and
+// instrument.
 export function MovementDialog({
   mode,
-  holdings,
+  accounts,
+  portfolios,
+  instruments,
+  fixed,
   initial,
   initialError,
   today,
@@ -52,8 +74,11 @@ export function MovementDialog({
   onSubmit,
 }: {
   mode: "create" | "edit";
-  // The holdings to choose from; one when opened from a holding.
-  holdings: MovementHolding[];
+  accounts: SourceConnectionRow[];
+  portfolios: PortfolioRow[];
+  instruments: InstrumentRow[];
+  // The account and instrument, named, when they cannot change.
+  fixed?: { account: string; instrument: string };
   initial: MovementFields;
   initialError?: string;
   today: string;
@@ -67,37 +92,46 @@ export function MovementDialog({
   const alertId = `${id}-alert`;
   const [fields, setFields] = useState(initial);
   const { alert, setAlert, firstField, invalid, settle, pick } =
-    useFieldAlert<MovementField>(
-      initialError,
-      refusedMovementField,
-      holdings.length > 1 ? "holding" : "kind",
-    );
+    useFieldAlert<MovementField>(initialError, refusedMovementField, "kind");
   const focus = useSavedFocus(returnFocusTo, false);
-  const holding = holdings.find((each) => each.id === fields.holdingId);
-  // An edit keeps its kind among those the holding takes: the opening balance
-  // stays one, and nothing else becomes one.
-  const kinds: MovementKind[] =
-    mode === "edit"
-      ? fields.kind === "opening_balance"
-        ? ["opening_balance"]
-        : allowedKinds(true)
-      : allowedKinds(holding?.hasMovements ?? false);
   const income = isIncome(fields.kind);
+  const adjustment = fields.kind === "adjustment";
+  const unused = portfolios.filter(
+    (each) => !fields.parts.some((part) => part.portfolioId === each.id),
+  );
 
   const set =
     <K extends keyof MovementFields>(key: K) =>
     (value: MovementFields[K]) =>
       setFields((current) => ({ ...current, [key]: value }));
+  const setPart = (
+    index: number,
+    change: Partial<MovementFields["parts"][0]>,
+  ) =>
+    setFields((current) => ({
+      ...current,
+      parts: current.parts.map((part, at) =>
+        at === index ? { ...part, ...change } : part,
+      ),
+    }));
+  const setCharge = (
+    index: number,
+    change: Partial<MovementFields["charges"][0]>,
+  ) =>
+    setFields((current) => ({
+      ...current,
+      charges: current.charges.map((charge, at) =>
+        at === index ? { ...charge, ...change } : charge,
+      ),
+    }));
 
   const control = (field: MovementField) => ({
-    id: fieldId(field),
     "aria-invalid": invalid(field),
     "aria-describedby": invalid(field) && alertId,
-    autoFocus: firstField === field,
   });
 
   function submit() {
-    const parsed = movementInputSchema.safeParse(toMovementInput(fields));
+    const parsed = operationInputSchema.safeParse(toOperationInput(fields));
     if (!parsed.success) {
       const refused = movementRefusal(parsed.error);
       setAlert(refused);
@@ -111,15 +145,49 @@ export function MovementDialog({
     onClose();
   }
 
+  const select = <V extends string>(
+    field: MovementField,
+    label: string,
+    value: V,
+    options: readonly (readonly [V, string])[],
+    onChange: (value: V) => void,
+  ) => (
+    <div className="grid gap-2">
+      <Label htmlFor={fieldId(field)}>{label}</Label>
+      <Select
+        value={value}
+        onValueChange={pick(field, (next) => onChange(next as V))}
+      >
+        <SelectTrigger
+          id={fieldId(field)}
+          {...control(field)}
+          autoFocus={firstField === field}
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(([option, text]) => (
+            <SelectItem key={option} value={option}>
+              {text}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   const textField = (
-    field: Extract<MovementField, keyof MovementFields>,
+    field: "date" | "price" | "reference" | "note",
     label: string,
     props: React.ComponentProps<typeof Input> = {},
   ) => (
     <div className="grid gap-2">
       <Label htmlFor={fieldId(field)}>{label}</Label>
       <Input
+        id={fieldId(field)}
         {...control(field)}
+        autoFocus={firstField === field}
         value={fields[field]}
         onChange={(event) => {
           set(field)(event.target.value);
@@ -136,9 +204,9 @@ export function MovementDialog({
       onClose={onClose}
       title={mode === "create" ? "Agregar movimiento" : "Editar movimiento"}
       description={
-        holding && holdings.length === 1
-          ? holding.name
-          : "Una compra, una venta o un cobro de una tenencia."
+        fixed
+          ? `${fixed.instrument} en ${fixed.account}`
+          : "Una compra, una venta, un cobro o un ajuste de un instrumento."
       }
       returnFocusTo={focus.returnFocusTo}
     >
@@ -151,95 +219,264 @@ export function MovementDialog({
         }}
       >
         <div className="grid gap-4">
-          {holdings.length > 1 && (
-            <div className="grid gap-2">
-              <Label htmlFor={fieldId("holding")}>Tenencia</Label>
-              <Select
-                value={fields.holdingId}
-                onValueChange={pick("holding", (value) => {
-                  const next = holdings.find((each) => each.id === value);
+          <div className="grid grid-cols-2 gap-3">
+            {select(
+              "kind",
+              "Tipo",
+              fields.kind,
+              MOVEMENT_KINDS.map((each) => [each, MOVEMENT_KIND_LABELS[each]]),
+              (value: MovementKind) => set("kind")(value),
+            )}
+            {adjustment
+              ? select(
+                  "direction",
+                  "Unidades",
+                  fields.direction,
+                  (["in", "out"] as const).map((each) => [
+                    each,
+                    DIRECTION_LABELS[each],
+                  ]),
+                  (value) => set("direction")(value),
+                )
+              : textField("date", "Fecha", { type: "date", max: today })}
+          </div>
+          {adjustment &&
+            textField("date", "Fecha", { type: "date", max: today })}
+          {!fixed && (
+            <div className="grid grid-cols-2 gap-3">
+              {select(
+                "account",
+                "Cuenta",
+                fields.accountId,
+                accounts.map((each) => [each.id, each.institution]),
+                (value) => set("accountId")(value),
+              )}
+              {select(
+                "instrument",
+                "Instrumento",
+                fields.instrument,
+                instruments.map((each) => [
+                  each.symbol,
+                  `${each.symbol} · ${each.name}`,
+                ]),
+                (value) => {
+                  const instrument = instruments.find(
+                    (each) => each.symbol === value,
+                  );
                   setFields((current) => ({
                     ...current,
-                    holdingId: value,
-                    kind: allowedKinds(next?.hasMovements ?? false).includes(
-                      current.kind,
-                    )
-                      ? current.kind
-                      : allowedKinds(next?.hasMovements ?? false)[0]!,
+                    instrument: value,
+                    currency: instrument?.currency ?? current.currency,
                   }));
-                })}
-              >
-                <SelectTrigger {...control("holding")} className="w-full">
-                  <SelectValue placeholder="Elegí una tenencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  {holdings.map((each) => (
-                    <SelectItem key={each.id} value={each.id}>
-                      {each.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                },
+              )}
             </div>
           )}
-          <div className="grid gap-2">
-            <Label htmlFor={fieldId("kind")}>Tipo</Label>
-            <Select
-              value={fields.kind}
-              onValueChange={pick("kind", (value) =>
-                set("kind")(value as MovementKind),
-              )}
-            >
-              <SelectTrigger {...control("kind")} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {kinds.map((each) => (
-                  <SelectItem key={each} value={each}>
-                    {MOVEMENT_KIND_LABELS[each]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {textField("date", "Fecha", { type: "date", max: today })}
-          {income ? (
-            textField("amount", "Monto", { inputMode: "decimal" })
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {textField("quantity", "Cantidad", { inputMode: "decimal" })}
-              {textField("price", "Precio por unidad", {
-                inputMode: "decimal",
-              })}
-            </div>
-          )}
-          <div className="grid gap-2">
-            <Label htmlFor={fieldId("currency")}>Moneda</Label>
-            <Select
-              value={fields.currency}
-              onValueChange={pick("currency", (value) =>
-                set("currency")(value as Currency),
-              )}
-            >
-              <SelectTrigger {...control("currency")} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(CURRENCY_LABELS) as Currency[]).map((each) => (
-                  <SelectItem key={each} value={each}>
-                    {CURRENCY_LABELS[each]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="grid grid-cols-2 gap-3">
-            {textField("fees", "Comisiones (opcional)", {
-              inputMode: "decimal",
+            {select(
+              "currency",
+              "Moneda",
+              fields.currency,
+              (Object.keys(CURRENCY_LABELS) as Currency[]).map((each) => [
+                each,
+                CURRENCY_LABELS[each],
+              ]),
+              (value) => set("currency")(value),
+            )}
+            {!income &&
+              !(adjustment && fields.direction === "out") &&
+              textField(
+                "price",
+                adjustment
+                  ? "Costo por unidad (opcional)"
+                  : "Precio por unidad",
+                { inputMode: "decimal" },
+              )}
+          </div>
+
+          <fieldset className="grid gap-2">
+            <legend className="mb-2 text-sm font-medium">
+              {income ? "Monto por cartera" : "Cantidad por cartera"}
+            </legend>
+            {fields.parts.map((part, index) => (
+              <div
+                key={part.portfolioId || index}
+                className="grid grid-cols-[1fr_8rem_auto] items-center gap-2"
+              >
+                <Select
+                  value={part.portfolioId}
+                  onValueChange={choose((value) => {
+                    setPart(index, { portfolioId: value });
+                    settle("parts");
+                  })}
+                >
+                  <SelectTrigger
+                    aria-label={`Cartera ${index + 1}`}
+                    id={index === 0 ? fieldId("parts") : undefined}
+                    {...control("parts")}
+                    className="w-full"
+                  >
+                    <SelectValue placeholder="Elegí una cartera" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {portfolios
+                      .filter(
+                        (each) =>
+                          each.id === part.portfolioId ||
+                          unused.some(({ id }) => id === each.id),
+                      )
+                      .map((each) => (
+                        <SelectItem key={each.id} value={each.id}>
+                          {each.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  aria-label={`${income ? "Monto" : "Cantidad"} en la cartera ${index + 1}`}
+                  {...control("parts")}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={part.size}
+                  onChange={(event) => {
+                    setPart(index, { size: event.target.value });
+                    settle("parts");
+                  }}
+                />
+                <RemoveButton
+                  label={`Quitar la cartera ${index + 1}`}
+                  disabled={fields.parts.length === 1}
+                  onClick={() =>
+                    setFields((current) => ({
+                      ...current,
+                      parts: current.parts.filter((_, at) => at !== index),
+                    }))
+                  }
+                />
+              </div>
+            ))}
+            {unused.length > 0 && (
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setFields((current) => ({
+                      ...current,
+                      parts: [
+                        ...current.parts,
+                        { portfolioId: unused[0]!.id, size: "" },
+                      ],
+                    }))
+                  }
+                >
+                  <Plus />
+                  Repartir en otra cartera
+                </Button>
+              </div>
+            )}
+          </fieldset>
+
+          <fieldset className="grid gap-2">
+            <legend className="mb-2 text-sm font-medium">
+              Gastos (opcional)
+            </legend>
+            {fields.charges.map((charge, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-[9rem_1fr_7rem_auto] items-center gap-2"
+              >
+                <Select
+                  value={charge.kind}
+                  onValueChange={choose((value) => {
+                    setCharge(index, { kind: value as ChargeKind });
+                    settle("charges");
+                  })}
+                >
+                  <SelectTrigger
+                    aria-label={`Tipo del gasto ${index + 1}`}
+                    id={index === 0 ? fieldId("charges") : undefined}
+                    {...control("charges")}
+                    className="w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHARGE_KINDS.map((each) => (
+                      <SelectItem key={each} value={each}>
+                        {CHARGE_KIND_LABELS[each]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {NAMED_CHARGES.includes(charge.kind) ? (
+                  <Input
+                    aria-label={`Nombre del gasto ${index + 1}`}
+                    placeholder={
+                      charge.kind === "tax"
+                        ? "Sellos, IIBB… (opcional)"
+                        : "Nombre"
+                    }
+                    autoComplete="off"
+                    value={charge.label}
+                    onChange={(event) => {
+                      setCharge(index, { label: event.target.value });
+                      settle("charges");
+                    }}
+                  />
+                ) : (
+                  <span aria-hidden />
+                )}
+                <Input
+                  aria-label={`Monto del gasto ${index + 1}`}
+                  {...control("charges")}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={charge.amount}
+                  onChange={(event) => {
+                    setCharge(index, { amount: event.target.value });
+                    settle("charges");
+                  }}
+                />
+                <RemoveButton
+                  label={`Quitar el gasto ${index + 1}`}
+                  disabled={false}
+                  onClick={() =>
+                    setFields((current) => ({
+                      ...current,
+                      charges: current.charges.filter((_, at) => at !== index),
+                    }))
+                  }
+                />
+              </div>
+            ))}
+            <div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setFields((current) => ({
+                    ...current,
+                    charges: [
+                      ...current.charges,
+                      { kind: "commission", label: "", amount: "" },
+                    ],
+                  }))
+                }
+              >
+                <Plus />
+                Agregar gasto
+              </Button>
+            </div>
+          </fieldset>
+
+          <div className="grid grid-cols-2 gap-3">
+            {textField("reference", "Referencia (opcional)", {
+              placeholder: "N.º de operación",
             })}
-            {textField("taxes", "Impuestos (opcional)", {
-              inputMode: "decimal",
-            })}
+            {textField("note", "Nota (opcional)")}
           </div>
           {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
         </div>
@@ -254,5 +491,31 @@ export function MovementDialog({
         </DialogFooter>
       </form>
     </AppDialog>
+  );
+}
+
+// Takes a part or a charge out of the operation.
+function RemoveButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      title="Quitar"
+      disabled={disabled}
+      className="size-7 text-muted-foreground hover:text-foreground"
+      onClick={onClick}
+    >
+      <X className="size-3.5" />
+    </Button>
   );
 }

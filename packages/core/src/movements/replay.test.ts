@@ -1,4 +1,4 @@
-import { income, ratesOf, trade } from "./fixtures.test-support";
+import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 import type { Movement } from "./movement";
 import {
   EMPTY_POSITION,
@@ -27,36 +27,23 @@ const HISTORY: Movement[] = [
 describe("replay", () => {
   const steps = replay(HISTORY, "usd_mep", "mep");
 
-  it("keeps the average cost over purchases, fees and taxes apart", () => {
+  it("keeps the average cost over purchases, charges apart", () => {
     expect(steps[1]!.position).toEqual({
       quantity: "20",
-      money: {
-        cost: "3000",
-        fees: "5",
-        taxes: "1",
-        income: "0",
-        realized: "0",
-      },
+      money: { cost: "3000", charges: "6", income: "0", realized: "0" },
     });
   });
 
   it("gives a partial sale its share of the average cost", () => {
     expect(steps[2]!.sale).toEqual({
       gross: "1500",
-      fees: "2",
-      taxes: "1",
+      charges: "3",
       cost: "750",
       result: "747",
     });
     expect(steps[2]!.position).toEqual({
       quantity: "15",
-      money: {
-        cost: "2250",
-        fees: "7",
-        taxes: "2",
-        income: "0",
-        realized: "747",
-      },
+      money: { cost: "2250", charges: "9", income: "0", realized: "747" },
     });
   });
 
@@ -124,6 +111,24 @@ describe("replay", () => {
     );
     expect(withIt[3]!.sale?.cost).toBe("500");
     expect(steps[2]!.sale?.cost).toBe("750");
+  });
+
+  it("adds units at their cost and takes them out with theirs, with no result", () => {
+    const adjusted = replay(
+      [
+        ...HISTORY.slice(0, 2),
+        adjustment("in", "5", { date: "2026-02-10", price: "0" }),
+        adjustment("out", "5", { date: "2026-02-20" }),
+      ],
+      "usd_mep",
+      "mep",
+    );
+    expect(adjusted[2]!.position.money?.cost).toBe("3000");
+    expect(adjusted[3]!.position).toEqual({
+      quantity: "20",
+      money: { cost: "2400", charges: "6", income: "0", realized: "0" },
+    });
+    expect(adjusted[3]).not.toHaveProperty("sale");
   });
 
   it("sells what was bought the same day", () => {

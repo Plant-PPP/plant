@@ -1,5 +1,6 @@
 import {
   admitMovement,
+  type Charge,
   isTrade,
   type Movement,
   type MovementDraft,
@@ -120,7 +121,29 @@ const at = (account: SourceConnectionRow, portfolio: PortfolioRow): Placed => ({
 
 // A movement as a fixture writes it: its kind, how many days back, and its
 // fields.
-type Charges = { fees?: string; taxes?: string };
+// A step's charges as the broker lists them, its reference, and the operation
+// it shares with a step of another portfolio's holding.
+type Charges = {
+  fees?: string;
+  market?: string;
+  vat?: string;
+  taxes?: string;
+  reference?: string;
+  operation?: string;
+};
+
+function chargeItems({ fees, market, vat, taxes }: Charges): Charge[] {
+  return [
+    ...(fees
+      ? [{ kind: "commission" as const, label: null, amount: fees }]
+      : []),
+    ...(market
+      ? [{ kind: "market_fee" as const, label: null, amount: market }]
+      : []),
+    ...(vat ? [{ kind: "vat" as const, label: null, amount: vat }] : []),
+    ...(taxes ? [{ kind: "tax" as const, label: null, amount: taxes }] : []),
+  ];
+}
 type TradeStep = [
   kind: "opening_balance" | "purchase" | "sale",
   daysAgo: number,
@@ -158,13 +181,21 @@ const appleSteps = (): Step[] => {
     steps.push(
       month % 6 === 0
         ? ["sale", daysAgo, "5", price, { fees: "60", taxes: "12" }]
-        : ["purchase", daysAgo, "2", price, { fees: "25" }],
+        : [
+            "purchase",
+            daysAgo,
+            "2",
+            price,
+            { fees: "25", market: "3", vat: "5.25" },
+          ],
     );
   }
   steps.push(["dividend", 45, "1800", { taxes: "270" }]);
   steps.push(["dividend", 200, "1500", { taxes: "225" }]);
   return steps;
 };
+
+const ETH_SPLIT = "f2000000-0000-4000-8000-000000000001";
 
 const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
@@ -174,7 +205,7 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
     placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
     steps: [
       ["opening_balance", 690, "0.3", "30000", { fees: "5" }],
-      ["purchase", 380, "0.1", "45000", { fees: "3" }],
+      ["purchase", 380, "0.1", "45000", { fees: "3", reference: "BIN-48213" }],
       ["sale", 90, "0.15", "60000", { fees: "4" }],
     ],
   },
@@ -186,6 +217,8 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
     steps: [
       ["opening_balance", 650, "2", "1800"],
       ["sale", 400, "0.5", "3000", { fees: "2" }],
+      // One purchase split with the holding in Largo plazo.
+      ["purchase", 120, "0.6", "2400", { fees: "1.2", operation: ETH_SPLIT }],
       ["sale", 30, "0.5", "2600", { fees: "2" }],
     ],
   },
@@ -216,6 +249,16 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
       ["coupon", 300, "30000"],
       ["sale", 60, "4000", "820", { fees: "160", taxes: "20" }],
       ["coupon", 20, "24000"],
+    ],
+  },
+  // Started by its part of a purchase split with Principal.
+  {
+    id: "c1000000-0000-4000-8000-000000000008",
+    symbol: "ETH",
+    currency: "USD",
+    placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
+    steps: [
+      ["purchase", 120, "0.4", "2400", { fees: "0.8", operation: ETH_SPLIT }],
     ],
   },
   // Sold to zero: closed, its sales still count.
@@ -297,32 +340,26 @@ function draft(
     fxKinds: UNIT_FX_KINDS,
     symbols: [],
   }).snapshot;
+  const id = movementId();
+  const options = step[step.length - 1];
+  const extras: Charges = typeof options === "object" ? options : {};
   const common = {
-    id: movementId(),
+    id,
     holding_id: holding.id,
+    operation_id: extras.operation ?? id.replace(/^d1/, "f1"),
     date,
     currency: holding.currency,
+    charges: chargeItems(extras),
+    reference: extras.reference ?? null,
+    note: null,
     rates: fx,
   };
   if (isIncomeStep(step)) {
-    const [kind, , amount, charges = {}] = step;
-    return {
-      ...common,
-      kind,
-      amount,
-      fees: charges.fees ?? "0",
-      taxes: charges.taxes ?? "0",
-    };
+    const [kind, , amount] = step;
+    return { ...common, kind, amount };
   }
-  const [kind, , quantity, price, charges = {}] = step;
-  return {
-    ...common,
-    kind,
-    quantity,
-    price,
-    fees: charges.fees ?? "0",
-    taxes: charges.taxes ?? "0",
-  };
+  const [kind, , quantity, price] = step;
+  return { ...common, kind, quantity, price };
 }
 
 export function buildFixtures(today: string): Fixtures {

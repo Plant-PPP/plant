@@ -1,5 +1,11 @@
 import {
   admitMovement,
+  admitMovements,
+  isIncome,
+  type MovementDraft,
+  type SaleResult,
+  splitCharges,
+  takesUnits,
   compareKeys,
   compareMovements,
   type Denominator,
@@ -11,12 +17,10 @@ import {
   type MovementCursor,
   movementKey,
   type Position,
-  type PositionMoney,
   replay,
   type ReferenceDollar,
   type StoredQuotes,
   snapshotOn,
-  takesMovements,
   UNIT_FX_KINDS,
 } from "@plant/core";
 import { type Exact, exactOf, plus, toDecimal } from "@plant/shared";
@@ -25,6 +29,7 @@ import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
 import type {
   MovementLine,
+  OperationParts,
   MovementResult,
   MovementScope,
   MovementsPage,
@@ -39,7 +44,7 @@ import type {
 import {
   holdingInsertSchema,
   holdingUpdateSchema,
-  movementInputSchema,
+  operationInputSchema,
 } from "@/lib/holdings/schemas";
 import { MOVEMENTS_PAGE } from "@/lib/portfolio-setup/limits";
 import type {
@@ -217,7 +222,11 @@ export function salesOf(
     limit: number;
   },
 ): SalesSlice {
-  const lines: SaleLine[] = [];
+  // Each sale operation's parts the filters keep, by operation.
+  const operations = new Map<
+    string,
+    { movements: Movement[]; sales: (SaleResult | null)[]; row: HoldingRow }
+  >();
   if (year !== null) {
     for (const row of allRows(state)) {
       if (!matchesFilter(row, filter, names)) continue;
@@ -225,52 +234,99 @@ export function salesOf(
       const steps = stepsOf(state, row.id, unit);
       movements.forEach((movement, index) => {
         if (movement.kind !== "sale" || !movement.date.startsWith(year)) return;
-        lines.push({ movement, sale: steps[index]?.sale ?? null, row });
+        const operation = operations.get(movement.operation_id) ?? {
+          movements: [],
+          sales: [],
+          row,
+        };
+        operation.movements.push(movement);
+        operation.sales.push(steps[index]?.sale ?? null);
+        operations.set(movement.operation_id, operation);
       });
     }
   }
-  lines.sort((a, b) => compareMovements(b.movement, a.movement));
+  const lines: SaleLine[] = [...operations].map(
+    ([operationId, { movements, sales, row }]) => ({
+      operationId,
+      movements,
+      row,
+      sale: sales.includes(null)
+        ? null
+        : {
+            gross: sum(sales.map((each) => each!.gross))!,
+            charges: sum(sales.map((each) => each!.charges))!,
+            cost: sum(sales.map((each) => each!.cost))!,
+            result: sum(sales.map((each) => each!.result))!,
+          },
+    }),
+  );
+  lines.sort((a, b) => compareMovements(b.movements[0]!, a.movements[0]!));
   return {
     rows: lines.slice(0, limit),
     truncated: lines.length > limit,
     totals: {
       count: lines.length,
       gross: sum(lines.map((line) => line.sale?.gross ?? null)),
-      charges: sum(
-        lines.flatMap((line) =>
-          line.sale ? [line.sale.fees, line.sale.taxes] : [null],
-        ),
-      ),
+      charges: sum(lines.map((line) => line.sale?.charges ?? null)),
       result: sum(lines.map((line) => line.sale?.result ?? null)),
     },
   };
 }
 
 const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
-const minus = (a: Exact, b: Exact): string => toDecimal(plus(a, negated(b)), 8);
-const chargesOf = (money: PositionMoney): Exact =>
-  plus(exactOf(money.fees), exactOf(money.taxes));
+const minus = (a: string, b: string): string =>
+  toDecimal(plus(exactOf(a), negated(exactOf(b))), 8);
 
-// A movement's line from its step and the position before it: what its step
-// added to the cost (or income), or took from it on a sale.
+// A movement's line from its step and the position before it: the cost its
+// units added or took out (a sale's being that of the units sold), or what an
+// income paid; and its charges.
 function lineOf(
   movement: Movement,
   before: Position,
   step: LedgerStep,
+  operation: OperationParts,
 ): MovementLine {
   const was = before.money;
   const now = step.position.money;
-  if (!was || !now) return { movement, cost: null, charges: null };
-  const charges = minus(chargesOf(now), chargesOf(was));
-  if (step.sale) return { movement, cost: step.sale.cost, charges };
-  const field =
-    movement.kind === "dividend" || movement.kind === "coupon"
-      ? "income"
-      : "cost";
+  if (!was || !now) return { movement, cost: null, charges: null, operation };
+  const charges = minus(now.charges, was.charges);
+  if (isIncome(movement.kind)) {
+    return {
+      movement,
+      cost: minus(now.income, was.income),
+      charges,
+      operation,
+    };
+  }
   return {
     movement,
-    cost: minus(exactOf(now[field]), exactOf(was[field])),
+    cost: takesUnits(movement)
+      ? minus(was.cost, now.cost)
+      : minus(now.cost, was.cost),
     charges,
+    operation,
+  };
+}
+
+// Every part of an operation, from the holdings it touched.
+export function operationOf(
+  state: PrototypeState,
+  operationId: string,
+): OperationParts | null {
+  const parts: OperationParts["parts"] = [];
+  let placed: StoredHolding | undefined;
+  for (const stored of state.holdings) {
+    for (const movement of state.movements.get(stored.holding.id) ?? []) {
+      if (movement.operation_id !== operationId) continue;
+      placed ??= stored;
+      parts.push({ movement, portfolioId: stored.portfolioId });
+    }
+  }
+  if (!placed || placed.holding.asset_class !== "instrument") return null;
+  return {
+    accountId: placed.accountId,
+    instrument: placed.holding.instrument_symbol,
+    parts,
   };
 }
 
@@ -334,6 +390,7 @@ export function movementsPage(
         best.movements[index]!,
         index === 0 ? EMPTY_POSITION : best.steps[index - 1]!.position,
         best.steps[index]!,
+        operationOf(state, best.movements[index]!.operation_id)!,
       ),
     );
     best.next -= 1;
@@ -460,43 +517,165 @@ function withMovements(
   };
 }
 
-// Records a new movement (`replacing` none) or an edit, admitted against the
-// holding's other movements, with the rates of its date.
-export function writeMovement(
+// The open or closed holding of an instrument in an account and portfolio.
+const holdingIn = (
+  state: PrototypeState,
+  accountId: string,
+  symbol: string,
+  portfolioId: string,
+): StoredHolding | undefined =>
+  state.holdings.find(
+    (each) =>
+      each.accountId === accountId &&
+      each.portfolioId === portfolioId &&
+      each.holding.asset_class === "instrument" &&
+      each.holding.instrument_symbol === symbol,
+  );
+
+// Records an operation (`replacing` none) or an edit of one: each part becomes
+// a movement of its portfolio's holding, which a purchase or opening balance
+// creates when missing; the charges split across the parts by quantity (or
+// amount). Every touched holding is admitted again, or nothing changes.
+export function writeOperation(
   state: PrototypeState,
   input: unknown,
-  { id, replacing }: { id: string; replacing?: string },
+  {
+    operationId,
+    replacing = false,
+    newId,
+  }: { operationId: string; replacing?: boolean; newId: () => string },
 ): Write<MovementResult> {
-  const parsed = movementInputSchema.safeParse(input);
+  const parsed = operationInputSchema.safeParse(input);
   if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
-  const stored = state.holdings.find(
-    (each) => each.holding.id === parsed.data.holding_id,
+  const operation = parsed.data;
+  const { parts, source_connection_id: accountId, ...fields } = operation;
+  const account = state.accounts.find(({ id }) => id === accountId);
+  const instrument = state.instruments.find(
+    ({ symbol }) => symbol === operation.instrument_symbol,
   );
-  if (!stored || !takesMovements(stored.holding)) {
+  if (!account || !instrument) {
     return refused(state, { ok: false, code: "not_found" });
   }
-  const own = state.movements.get(stored.holding.id) ?? [];
-  if (replacing !== undefined && !own.some((each) => each.id === replacing)) {
+  if (
+    replacing &&
+    ![...state.movements.values()].some((own) =>
+      own.some((each) => each.operation_id === operationId),
+    )
+  ) {
     return refused(state, { ok: false, code: "not_found" });
   }
-  const others = own.filter((each) => each.id !== replacing);
-  const rates = snapshotOn(state.quotes, parsed.data.date, {
+  const rates = snapshotOn(state.quotes, operation.date, {
     fxKinds: UNIT_FX_KINDS,
     symbols: [],
   }).snapshot.fx;
-  const draft = { ...parsed.data, id, rates };
-  const admitted = admitMovement({ prior: null, after: others }, draft, {
-    today: state.today,
-  });
-  if (!admitted.ok) return refused(state, { ok: false, code: admitted.code });
-  const movements = [...others, draft as Movement].sort(compareMovements);
-  return {
-    state: withMovements(
-      state,
-      stored.holding.id,
-      movements,
+  const sizes = parts.map((part) =>
+    "quantity" in part ? part.quantity : part.amount,
+  );
+  const charges = splitCharges(operation.charges, sizes);
+  const addsUnits =
+    operation.kind === "opening_balance" ||
+    operation.kind === "purchase" ||
+    (operation.kind === "adjustment" && operation.direction === "in");
+  let next = state;
+  const touched = new Map<string, Movement[]>();
+  // An edit first takes the operation's movements out of their holdings.
+  for (const [holdingId, own] of state.movements) {
+    if (own.some((each) => each.operation_id === operationId)) {
+      touched.set(
+        holdingId,
+        own.filter((each) => each.operation_id !== operationId),
+      );
+    }
+  }
+  for (const [index, part] of parts.entries()) {
+    const portfolio = state.portfolios.find(
+      ({ id }) => id === part.portfolio_id,
+    );
+    if (!portfolio) return refused(state, { ok: false, code: "not_found" });
+    let stored = holdingIn(next, account.id, instrument.symbol, portfolio.id);
+    if (!stored) {
+      if (!addsUnits) return refused(state, { ok: false, code: "not_found" });
+      const created = createdHolding(next, account, instrument, portfolio, {
+        id: newId(),
+        quantity: sizes[index]!,
+      });
+      next = created;
+      stored = next.holdings[0]!;
+    }
+    const holdingId = stored.holding.id;
+    const own = touched.get(holdingId) ?? [
+      ...(next.movements.get(holdingId) ?? []),
+    ];
+    const draft = {
+      ...fields,
+      ...("quantity" in part
+        ? { quantity: part.quantity }
+        : { amount: part.amount }),
+      charges: charges[index]!,
+      id: newId(),
+      holding_id: holdingId,
+      operation_id: operationId,
+      rates,
+    } as MovementDraft;
+    const admitted = admitMovement({ prior: null, after: own }, draft, {
+      today: state.today,
+    });
+    if (!admitted.ok) {
+      return refused(state, { ok: false, code: admitted.code });
+    }
+    touched.set(holdingId, [...own, draft as Movement]);
+  }
+  for (const [holdingId, own] of touched) {
+    const admitted = admitMovements({ prior: null, after: own });
+    if (!admitted.ok) {
+      return refused(state, { ok: false, code: admitted.code });
+    }
+    next = withMovements(
+      next,
+      holdingId,
+      [...own].sort(compareMovements),
       admitted.quantity,
-    ),
-    result: { ok: true, id },
+    );
+  }
+  return { state: next, result: { ok: true, id: operationId } };
+}
+
+// A new instrument holding in an account and portfolio, first in the list.
+function createdHolding(
+  state: PrototypeState,
+  account: SourceConnectionRow,
+  instrument: InstrumentRow,
+  portfolio: PortfolioRow,
+  { id, quantity }: { id: string; quantity: string },
+): PrototypeState {
+  const { holding } = rowOf(
+    id,
+    {
+      asset_class: "instrument",
+      instrument_symbol: instrument.symbol,
+      amount: quantity,
+      currency: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+      valued_on: null,
+      label: null,
+    },
+    {
+      account: { id: account.id, institution: account.institution },
+      portfolio,
+    },
+  );
+  return {
+    ...state,
+    holdings: [
+      {
+        holding,
+        accountId: account.id,
+        portfolioId: portfolio.id,
+        closed: false,
+      },
+      ...state.holdings,
+    ],
   };
 }

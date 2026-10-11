@@ -1,4 +1,4 @@
-import type { Movement, MovementRates, Trade } from "./movement";
+import type { Charge, Movement, MovementRates, Trade } from "./movement";
 
 // MEP 1200, CCL 1250 and official 1000 unless a test names other rates.
 export const ratesOf = (
@@ -10,8 +10,20 @@ export const ratesOf = (
   official: { sell: official, date },
 });
 
+// A commission and a tax, as a fixture writes them.
+const chargesOf = ({ fees, taxes }: { fees?: string; taxes?: string }) => {
+  const charges: Charge[] = [];
+  if (fees && fees !== "0") {
+    charges.push({ kind: "commission", label: null, amount: fees });
+  }
+  if (taxes && taxes !== "0") {
+    charges.push({ kind: "tax", label: null, amount: taxes });
+  }
+  return charges;
+};
+
 let next = 0;
-const id = () => `m${String((next += 1)).padStart(5, "0")}`;
+const nextId = () => `m${String((next += 1)).padStart(5, "0")}`;
 
 type Common = {
   id?: string;
@@ -28,16 +40,19 @@ export function trade(
   price: string,
   common: Common,
 ): Trade {
+  const id = common.id ?? nextId();
   return {
-    id: common.id ?? id(),
+    id,
     holding_id: "h1",
     kind,
     date: common.date,
     currency: common.currency ?? "USD",
     quantity,
     price,
-    fees: common.fees ?? "0",
-    taxes: common.taxes ?? "0",
+    charges: chargesOf(common),
+    reference: null,
+    note: null,
+    operation_id: `op-${id}`,
     rates: common.rates ?? ratesOf(common.date),
   };
 }
@@ -47,15 +62,41 @@ export function income(
   amount: string,
   common: Common,
 ): Movement {
+  const id = common.id ?? nextId();
   return {
-    id: common.id ?? id(),
+    id,
     holding_id: "h1",
     kind,
     date: common.date,
     currency: common.currency ?? "USD",
     amount,
-    fees: common.fees ?? "0",
-    taxes: common.taxes ?? "0",
+    charges: chargesOf(common),
+    reference: null,
+    note: null,
+    operation_id: `op-${id}`,
+    rates: common.rates ?? ratesOf(common.date),
+  };
+}
+
+export function adjustment(
+  direction: "in" | "out",
+  quantity: string,
+  common: Common & { price?: string },
+): Movement {
+  const id = common.id ?? nextId();
+  return {
+    id,
+    holding_id: "h1",
+    kind: "adjustment",
+    direction,
+    date: common.date,
+    currency: common.currency ?? "USD",
+    quantity,
+    price: common.price ?? "0",
+    charges: chargesOf(common),
+    reference: null,
+    note: null,
+    operation_id: `op-${id}`,
     rates: common.rates ?? ratesOf(common.date),
   };
 }

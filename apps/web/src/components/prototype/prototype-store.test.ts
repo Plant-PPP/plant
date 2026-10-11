@@ -12,7 +12,8 @@ import {
   positionsOf,
   salesOf,
   updateHolding,
-  writeMovement,
+  operationOf,
+  writeOperation,
   yearsOf,
 } from "./prototype-store";
 
@@ -36,13 +37,31 @@ const CASH = fixtures.holdings.find(
 )!.id;
 const NEW_ID = "e1000000-0000-4000-8000-000000000001";
 
+const IOL = fixtures.accounts.find((row) => row.institution === "IOL")!.id;
+const BINANCE = fixtures.accounts.find(
+  (row) => row.institution === "Binance",
+)!.id;
+const [PRINCIPAL, LARGO, CORTO] = fixtures.portfolios.map((row) => row.id) as [
+  string,
+  string,
+  string,
+];
+let ids = 0;
+const options = (operationId = NEW_ID) => ({
+  operationId,
+  newId: () =>
+    `e2000000-0000-4000-8000-${String((ids += 1)).padStart(12, "0")}`,
+});
+
+// A sale of Apple, held in IOL's Principal.
 const sale = (quantity: string, date = TODAY) => ({
-  holding_id: AAPL,
   kind: "sale",
+  source_connection_id: IOL,
+  instrument_symbol: "AAPL",
   date,
   currency: "ARS",
-  quantity,
   price: "18000",
+  parts: [{ portfolio_id: PRINCIPAL, quantity }],
 });
 
 describe("holdings", () => {
@@ -96,10 +115,10 @@ describe("holdings", () => {
   });
 });
 
-describe("movements", () => {
+describe("operations", () => {
   it("records a sale, revises the holding and sets its amount", () => {
     const before = fixtures.holdings.find((row) => row.id === AAPL)!;
-    const written = writeMovement(state, sale("1"), { id: NEW_ID });
+    const written = writeOperation(state, sale("1"), options());
     expect(written.result).toEqual({ ok: true, id: NEW_ID });
     expect(written.state.revisions.get(AAPL)).toBe(
       state.revisions.get(AAPL)! + 1,
@@ -113,35 +132,80 @@ describe("movements", () => {
   it.each([
     ["oversold", sale("100000")],
     ["future_date", sale("1", addDays(TODAY, 1))],
-    ["invalid", { ...sale("1"), quantity: "0" }],
-    ["not_found", { ...sale("1"), holding_id: CASH }],
-  ])("refuses with %s", (code, input) => {
-    expect(writeMovement(state, input, { id: NEW_ID })).toEqual({
+    ["invalid", sale("0")],
+    ["not_found", { ...sale("1"), instrument_symbol: "XYZ" }],
+    // Nothing of Apple sits in Largo plazo to sell.
+    [
+      "not_found",
+      { ...sale("1"), parts: [{ portfolio_id: LARGO, quantity: "1" }] },
+    ],
+  ])("refuses with %s and changes nothing", (code, input) => {
+    expect(writeOperation(state, input, options())).toEqual({
       state,
       result: { ok: false, code },
     });
   });
 
-  it("re-admits an edit against the other movements", () => {
+  it("splits one purchase across portfolios, creating the holding it needs, and its charges by quantity", () => {
+    const purchase = {
+      kind: "purchase",
+      source_connection_id: BINANCE,
+      instrument_symbol: "BTC",
+      date: TODAY,
+      currency: "USD",
+      price: "60000",
+      parts: [
+        { portfolio_id: LARGO, quantity: "0.75" },
+        { portfolio_id: CORTO, quantity: "0.25" },
+      ],
+      charges: [{ kind: "commission", label: null, amount: "8" }],
+      reference: "BIN-1",
+    };
+    const written = writeOperation(state, purchase, options());
+    expect(written.result).toEqual({ ok: true, id: NEW_ID });
+    const parts = operationOf(written.state, NEW_ID)!.parts;
+    expect(parts.map((part) => part.portfolioId).sort()).toEqual(
+      [LARGO, CORTO].sort(),
+    );
+    expect(
+      parts.map((part) => [part.portfolioId, part.movement.charges[0]?.amount]),
+    ).toEqual(
+      expect.arrayContaining([
+        [LARGO, "6"],
+        [CORTO, "2"],
+      ]),
+    );
+    const btcInCorto = holdingsView(written.state).active.find(
+      (row) =>
+        row.portfolio.id === CORTO &&
+        row.holding.asset_class === "instrument" &&
+        row.holding.instrument_symbol === "BTC",
+    );
+    expect(btcInCorto?.holding.amount).toBe("0.25");
+  });
+
+  it("edits a whole operation, re-admitting its holdings", () => {
     const opening = state.movements.get(BTC)![0]!;
     const shrunk = {
-      holding_id: BTC,
       kind: "opening_balance",
+      source_connection_id: BINANCE,
+      instrument_symbol: "BTC",
       date: opening.date,
       currency: "USD",
-      quantity: "0.01",
       price: "30000",
+      parts: [{ portfolio_id: LARGO, quantity: "0.01" }],
     };
-    expect(
-      writeMovement(state, shrunk, { id: opening.id, replacing: opening.id })
-        .result,
-    ).toEqual({ ok: false, code: "oversold" });
-    const edited = writeMovement(
+    const edit = { ...options(opening.operation_id), replacing: true };
+    expect(writeOperation(state, shrunk, edit).result).toEqual({
+      ok: false,
+      code: "oversold",
+    });
+    const edited = writeOperation(
       state,
-      { ...shrunk, quantity: "0.2" },
-      { id: opening.id, replacing: opening.id },
+      { ...shrunk, parts: [{ portfolio_id: LARGO, quantity: "0.2" }] },
+      edit,
     );
-    expect(edited.result).toEqual({ ok: true, id: opening.id });
+    expect(edited.result).toEqual({ ok: true, id: opening.operation_id });
     expect(edited.state.movements.get(BTC)).toHaveLength(
       state.movements.get(BTC)!.length,
     );
@@ -149,7 +213,7 @@ describe("movements", () => {
 
   it("closes a holding sold to zero and keeps its sales", () => {
     const held = fixtures.holdings.find((row) => row.id === AAPL)!.holding;
-    const soldOut = writeMovement(state, sale(held.amount), { id: NEW_ID });
+    const soldOut = writeOperation(state, sale(held.amount), options());
     expect(
       holdingsView(soldOut.state).active.map((row) => row.id),
     ).not.toContain(AAPL);
@@ -160,13 +224,13 @@ describe("movements", () => {
       names: NAMES,
       limit: 100,
     });
-    expect(sales.rows[0]!.movement.id).toBe(NEW_ID);
+    expect(sales.rows[0]!.operationId).toBe(NEW_ID);
   });
 
   it("gives a movement on a weekend or today a cost in pesos", () => {
     // 2026-10-10 is a Saturday.
     for (const date of ["2026-10-10", TODAY]) {
-      const written = writeMovement(state, sale("1", date), { id: NEW_ID });
+      const written = writeOperation(state, sale("1", date), options());
       const page = movementsPage(
         written.state,
         { holdingId: AAPL },
@@ -174,10 +238,41 @@ describe("movements", () => {
         null,
       );
       if (!page.ok) throw new Error("page failed");
-      const line = page.rows.find((row) => row.movement.id === NEW_ID)!;
+      const line = page.rows.find(
+        (row) => row.movement.operation_id === NEW_ID,
+      )!;
       expect(line.cost).not.toBeNull();
     }
   });
+});
+
+it("lists a split sale once, with its parts' totals", () => {
+  const split = {
+    kind: "sale",
+    source_connection_id: BINANCE,
+    instrument_symbol: "ETH",
+    date: TODAY,
+    currency: "USD",
+    price: "2500",
+    parts: [
+      { portfolio_id: PRINCIPAL, quantity: "0.1" },
+      { portfolio_id: LARGO, quantity: "0.1" },
+    ],
+    charges: [{ kind: "commission", label: null, amount: "2" }],
+  };
+  const written = writeOperation(state, split, options());
+  expect(written.result).toEqual({ ok: true, id: NEW_ID });
+  const sales = salesOf(written.state, {
+    year: TODAY.slice(0, 4),
+    unit: "usd_mep",
+    filter: NO_FILTER,
+    names: NAMES,
+    limit: 100,
+  });
+  const line = sales.rows.find((row) => row.operationId === NEW_ID)!;
+  expect(line.movements).toHaveLength(2);
+  expect(line.sale?.gross).toBe("500");
+  expect(line.sale?.charges).toBe("2");
 });
 
 describe("reads", () => {
@@ -218,9 +313,7 @@ describe("reads", () => {
           limit: 100,
         }).rows,
     );
-    expect(allYears.some((line) => line.movement.holding_id === AL30D)).toBe(
-      true,
-    );
+    expect(allYears.some((line) => line.row.id === AL30D)).toBe(true);
   });
 
   it("filters the sales by the holdings' filters", () => {
@@ -232,9 +325,7 @@ describe("reads", () => {
       names: NAMES,
       limit: 100,
     });
-    expect(
-      crypto.rows.every((line) => line.movement.holding_id === idOf("BTC")),
-    ).toBe(true);
+    expect(crypto.rows.every((line) => line.row.id === idOf("BTC"))).toBe(true);
   });
 
   it("pages every scope's movements newest first, in pages that join up", () => {

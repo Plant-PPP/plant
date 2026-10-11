@@ -9,6 +9,7 @@ import {
 const purchase = {
   id: "m1",
   holding_id: "h1",
+  operation_id: "o1",
   kind: "purchase",
   date: "2026-03-02",
   currency: "USD",
@@ -18,15 +19,45 @@ const purchase = {
 };
 
 describe("movementSchema", () => {
-  it("reads a purchase, with no fees or taxes by default", () => {
+  it("reads a purchase, with no charges, reference or note by default", () => {
     expect(movementSchema.parse(purchase)).toMatchObject({
-      fees: "0",
-      taxes: "0",
+      charges: [],
+      reference: null,
+      note: null,
     });
   });
 
+  it("keeps each charge as the broker lists it", () => {
+    const charges = [
+      { kind: "commission", label: null, amount: "10" },
+      { kind: "vat", label: null, amount: "2.1" },
+      { kind: "other", label: "Custodia", amount: "1" },
+    ];
+    expect(movementSchema.parse({ ...purchase, charges }).charges).toEqual(
+      charges,
+    );
+  });
+
+  it("trims the reference and note", () => {
+    expect(
+      movementSchema.parse({ ...purchase, reference: " 123-A ", note: " x " }),
+    ).toMatchObject({ reference: "123-A", note: "x" });
+  });
+
   it.each([
-    ["a negative fee", { ...purchase, fees: "-1" }],
+    [
+      "a negative charge",
+      {
+        ...purchase,
+        charges: [{ kind: "commission", label: null, amount: "-1" }],
+      },
+    ],
+    [
+      "another charge without a name",
+      { ...purchase, charges: [{ kind: "other", label: null, amount: "1" }] },
+    ],
+    ["an empty reference", { ...purchase, reference: "  " }],
+    ["an adjustment without direction", { ...purchase, kind: "adjustment" }],
     [
       "a sale without quantity",
       { ...purchase, kind: "sale", quantity: undefined },
@@ -56,21 +87,30 @@ describe("movementSchema", () => {
   });
 
   it("reads a dividend as an amount", () => {
-    const { id, holding_id, date, currency, rates } = purchase;
-    const dividend = { id, holding_id, date, currency, rates, amount: "12" };
+    const { id, holding_id, operation_id, date, currency, rates } = purchase;
+    const dividend = {
+      id,
+      holding_id,
+      operation_id,
+      date,
+      currency,
+      rates,
+      amount: "12",
+    };
     expect(
       movementSchema.parse({ ...dividend, kind: "dividend" }),
     ).toMatchObject({ kind: "dividend", amount: "12" });
   });
 });
 
-it("opens a holding with its balance, then takes anything else", () => {
-  expect(allowedKinds(false)).toEqual(["opening_balance"]);
+it("starts a holding with its balance or a purchase, then takes anything else", () => {
+  expect(allowedKinds(false)).toEqual(["opening_balance", "purchase"]);
   expect(allowedKinds(true)).toEqual([
     "purchase",
     "sale",
     "dividend",
     "coupon",
+    "adjustment",
   ]);
 });
 

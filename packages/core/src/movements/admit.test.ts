@@ -1,5 +1,5 @@
 import { admitMovement, admitMovements } from "./admit";
-import { income, ratesOf, trade } from "./fixtures.test-support";
+import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 
 const TODAY = "2026-10-12";
 const opening = trade("opening_balance", "10", "100", { date: "2026-01-05" });
@@ -33,9 +33,19 @@ describe("admitMovement", () => {
     });
   });
 
-  it("refuses a first movement that is not the opening balance", () => {
+  it("starts a holding with units coming in, never with a sale or income", () => {
     expect(
       admitMovement({ prior: null, after: [] }, purchase, { today: TODAY }),
+    ).toEqual({ ok: true, quantity: "5" });
+    expect(
+      admitMovement({ prior: null, after: [] }, sale, { today: TODAY }),
+    ).toEqual({ ok: false, code: "opening_balance" });
+    expect(
+      admitMovement(
+        { prior: null, after: [] },
+        income("dividend", "1", { date: "2026-01-01" }),
+        { today: TODAY },
+      ),
     ).toEqual({ ok: false, code: "opening_balance" });
   });
 
@@ -109,6 +119,15 @@ describe("admitMovement", () => {
   });
 });
 
+it("counts an adjustment out like a sale", () => {
+  const out = adjustment("out", "16", { date: "2026-03-01" });
+  expect(
+    admitMovement({ prior: null, after: [opening, purchase] }, out, {
+      today: TODAY,
+    }),
+  ).toEqual({ ok: false, code: "oversold" });
+});
+
 describe("admitMovements", () => {
   it("refuses a removal that leaves a later sale overselling", () => {
     expect(admitMovements({ prior: null, after: [opening, sale] })).toEqual({
@@ -117,8 +136,8 @@ describe("admitMovements", () => {
     });
   });
 
-  it("refuses removing the opening balance while movements remain", () => {
-    expect(admitMovements({ prior: null, after: [purchase] })).toEqual({
+  it("refuses removing what started the holding before a sale", () => {
+    expect(admitMovements({ prior: null, after: [sale] })).toEqual({
       ok: false,
       code: "opening_balance",
     });

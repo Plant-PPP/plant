@@ -60,6 +60,11 @@ export {
 } from "./valuation/holdings";
 export {
   allowedKinds,
+  CHARGE_KINDS,
+  CHARGE_LABEL_MAX,
+  type Charge,
+  type ChargeKind,
+  chargeSchema,
   isIncome,
   isTrade,
   MOVEMENT_KINDS,
@@ -70,9 +75,13 @@ export {
   type MovementRates,
   movementRatesSchema,
   movementSchema,
+  NOTE_MAX,
+  REFERENCE_MAX,
   takesMovements,
+  takesUnits,
   type Trade,
 } from "./movements/movement";
+export { splitCharges } from "./movements/operation";
 export {
   compareKeys,
   compareMovements,
@@ -80,6 +89,7 @@ export {
   movementKey,
 } from "./movements/order";
 export {
+  chargesOf,
   EMPTY_POSITION,
   type LedgerStep,
   type Position,

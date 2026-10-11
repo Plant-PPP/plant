@@ -14,7 +14,7 @@ import {
   initialState,
   type PrototypeState,
   updateHolding,
-  writeMovement,
+  writeOperation,
 } from "./prototype-store";
 import { usePrototypeStore } from "./use-prototype-store";
 
@@ -56,9 +56,20 @@ export function PrototypeProvider({
     },
     movements: {
       create: (input) =>
-        write((s) => writeMovement(s, input, { id: crypto.randomUUID() })),
-      update: (id, input) =>
-        write((s) => writeMovement(s, input, { id, replacing: id })),
+        write((s) =>
+          writeOperation(s, input, {
+            operationId: crypto.randomUUID(),
+            newId: () => crypto.randomUUID(),
+          }),
+        ),
+      update: (operationId, input) =>
+        write((s) =>
+          writeOperation(s, input, {
+            operationId,
+            replacing: true,
+            newId: () => crypto.randomUUID(),
+          }),
+        ),
     },
   };
   return (

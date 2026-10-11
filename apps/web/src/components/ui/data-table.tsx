@@ -192,6 +192,8 @@ type RowAction<T> = {
   // A row the action does not apply to keeps its place empty, so the
   // buttons line up.
   hidden?: (row: T) => boolean;
+  // The icon and tooltip for a row the action reads differently on.
+  variant?: (row: T) => { icon: LucideIcon; tooltip: string } | undefined;
 };
 
 // A row's icon actions, right-aligned. Sized to its buttons: each IconButton
@@ -213,8 +215,10 @@ function actionsColumn<T>(
             <IconButton
               key={action.id}
               actionId={action.id}
-              icon={action.icon}
-              tooltip={action.tooltip}
+              icon={action.variant?.(row.original)?.icon ?? action.icon}
+              tooltip={
+                action.variant?.(row.original)?.tooltip ?? action.tooltip
+              }
               label={action.label(row.original)}
               pending={pending}
               onClick={() => action.onClick(row.original)}
