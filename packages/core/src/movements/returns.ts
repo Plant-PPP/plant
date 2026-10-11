@@ -17,8 +17,9 @@ import type { LedgerStep } from "./replay";
 const text = (x: Exact): string => toDecimal(x, 8);
 
 // Money between the holder and a holding on a date, in the view's unit:
-// negative is paid in (a purchase and its charges), positive paid out (a sale
-// less its charges, an income less its withholding). Its kind says which.
+// negative is paid in (a purchase or an adjustment in, at its cost, with its
+// charges), positive paid out (a sale less its charges, an adjustment out at
+// the cost it takes, an income less its withholding). Its kind says which.
 export type CashFlow = {
   date: string;
   amount: string;

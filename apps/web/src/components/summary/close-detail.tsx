@@ -12,9 +12,10 @@ import {
   SummaryTile,
 } from "@/components/holdings/sum-text";
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
-import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
+import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
+import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import {
   type MonthClose,
   type MonthDetail,
@@ -25,19 +26,7 @@ import {
 import { ClosesTable } from "./closes-table";
 import { CloseStatus, ResultText } from "./figures";
 
-type Figures = {
-  startValue: string;
-  endValue: string;
-  paidIn: string;
-  proceeds: string;
-  income: string;
-  contributed: string;
-  market: string;
-  result: string;
-  charges: string | null;
-  realized: string | null;
-  share: string | null;
-};
+type Figures = YearClose["totals"];
 
 function Header({
   title,
@@ -182,7 +171,11 @@ export function MonthCloseDetail({
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
         isTrade(original.movement)
-          ? formatPrice(original.movement.price, original.movement.currency)
+          ? formatQuotedPrice(
+              original.movement.price,
+              original.movement.currency,
+              original.instrumentType,
+            )
           : null,
     },
     {

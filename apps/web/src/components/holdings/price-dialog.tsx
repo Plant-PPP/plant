@@ -54,7 +54,8 @@ export function PriceDialog({
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
   onSubmit: (fields: PriceFields) => boolean;
-  // Deletes the manual price it opened with, when it opened with one.
+  // Asks to delete the manual price it opened with, when it opened with one;
+  // false keeps the dialog open.
   onDelete?: () => boolean;
 }) {
   const id = useId();

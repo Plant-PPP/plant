@@ -6,8 +6,8 @@ import { PrototypeProvider } from "@/components/prototype/prototype-provider";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 import { createFixtureQuoteReader } from "@/lib/prototype/quote-reader";
 
-// Every page over made-up data held in the browser, for `next dev` and
-// previews: the app layout renders it only outside production.
+// Every data page over made-up data held in the browser, for `next dev` and
+// previews: the `(data)` layout renders it only outside production.
 export async function PrototypeRoot({ children }: { children: ReactNode }) {
   const today = buenosAiresDate(new Date());
   const fixtures = buildFixtures(today);

@@ -30,6 +30,7 @@ import { NameLink } from "./holding-cells";
 import { MovementsTable } from "./movements-table";
 import {
   GainLossText,
+  holdingsCountText,
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
@@ -169,7 +170,7 @@ export function ScopePage({
             </h1>
             <p className="text-muted-foreground text-sm">
               {scope.kind === "account" ? "Cuenta" : "Cartera"} ·{" "}
-              {rows.length === 1 ? "1 tenencia" : `${rows.length} tenencias`}
+              {holdingsCountText(rows.length)}
             </p>
           </div>
           <FilterSelect
