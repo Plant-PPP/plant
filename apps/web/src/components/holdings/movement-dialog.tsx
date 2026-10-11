@@ -35,6 +35,7 @@ import {
   CURRENCY_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
+import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 import type {
@@ -95,6 +96,9 @@ export function MovementDialog({
     useFieldAlert<MovementField>(initialError, refusedMovementField, "kind");
   const focus = useSavedFocus(returnFocusTo, false);
   const income = isIncome(fields.kind);
+  const instrumentType =
+    instruments.find((each) => each.symbol === fields.instrument)?.type ?? null;
+  const basis = instrumentType ? priceBasisLabel(instrumentType) : "por unidad";
   const adjustment = fields.kind === "adjustment";
   const unused = portfolios.filter(
     (each) => !fields.parts.some((part) => part.portfolioId === each.id),
@@ -131,7 +135,9 @@ export function MovementDialog({
   });
 
   function submit() {
-    const parsed = operationInputSchema.safeParse(toOperationInput(fields));
+    const parsed = operationInputSchema.safeParse(
+      toOperationInput(fields, instrumentType),
+    );
     if (!parsed.success) {
       const refused = movementRefusal(parsed.error);
       setAlert(refused);
@@ -287,9 +293,7 @@ export function MovementDialog({
               !(adjustment && fields.direction === "out") &&
               textField(
                 "price",
-                adjustment
-                  ? "Costo por unidad (opcional)"
-                  : "Precio por unidad",
+                adjustment ? `Costo ${basis} (opcional)` : `Precio ${basis}`,
                 { inputMode: "decimal" },
               )}
           </div>

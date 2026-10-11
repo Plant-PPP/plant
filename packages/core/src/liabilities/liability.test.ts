@@ -98,3 +98,16 @@ it("refuses a unit that does not fit the kind", () => {
     input({ kind: "crypto_loan", currency: null, instrument_symbol: null }),
   ).toBe(false);
 });
+
+it("refuses a rate it cannot read instead of throwing", () => {
+  const row: Partial<Liability> = debt({ annual_rate: "abc" });
+  delete row.id;
+  expect(liabilityInputSchema.safeParse(row).success).toBe(false);
+  expect(
+    liabilityInputSchema.safeParse({ ...row, annual_rate: "10.5" }).success,
+  ).toBe(false);
+});
+
+it("leaves a debt with no currency unvalued, never as pesos", () => {
+  expect(value({ currency: null })).toEqual({ missing: "currency" });
+});

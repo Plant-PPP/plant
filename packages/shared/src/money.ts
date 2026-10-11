@@ -103,6 +103,22 @@ export const plus = (...xs: Exact[]): Exact =>
     d: 1n,
   });
 
+export const ZERO: Exact = { n: 0n, d: 1n };
+
+export const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
+
+export const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
+
+// The exact sum of decimal strings to `digits` decimals, or null when one of
+// them is unknown.
+export const sumOrNull = (
+  values: readonly (string | null)[],
+  digits: number,
+): string | null =>
+  values.includes(null)
+    ? null
+    : toDecimal(plus(...values.map((value) => exactOf(value!))), digits);
+
 export function compareExact(a: Exact, b: Exact): number {
   const difference = a.n * b.d - b.n * a.d;
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;

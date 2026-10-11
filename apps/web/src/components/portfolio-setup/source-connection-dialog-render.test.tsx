@@ -1,4 +1,3 @@
-jest.mock("@/app/(app)/accounts/actions", () => ({}));
 jest.mock("radix-ui", () =>
   jest.requireActual("@/test/inline-dialog-portal").radixWithInlinePortal(),
 );

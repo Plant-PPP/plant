@@ -1,5 +1,7 @@
 import { type Position, unrealized } from "@plant/core";
-import { exactOf, over, plus, times, toDecimal } from "@plant/shared";
+import { exactOf, over, sumOrNull, toDecimal } from "@plant/shared";
+
+import { percentOf } from "@/lib/format/amount";
 
 import type { HoldingsValuation } from "./valuation-view";
 
@@ -7,15 +9,9 @@ import type { HoldingsValuation } from "./valuation-view";
 // percent of cost to one decimal (null when cost is 0).
 export type GainLoss = { amount: string; percent: string | null };
 
-function gainOf(cost: string, value: string): GainLoss {
+export function gainOf(cost: string, value: string): GainLoss {
   const { amount, share } = unrealized(cost, value);
-  return {
-    amount,
-    percent:
-      share === null
-        ? null
-        : toDecimal(times(exactOf(share), exactOf("100")), 1),
-  };
+  return { amount, percent: share === null ? null : percentOf(share) };
 }
 
 // A holding's gain at its value, or null when its cost or value is unknown in
@@ -49,12 +45,19 @@ export function costTotals(
       ? [{ money: position.money, value: valuation.values[row.id]?.value }]
       : [];
   });
-  const costs = held.map(({ money }) => money?.cost ?? null);
-  const values = held.map(({ value }) => value ?? null);
-  if (costs.includes(null))
-    return { count: held.length, cost: null, gain: null };
-  const cost = toDecimal(plus(...costs.map((each) => exactOf(each!))), 8);
-  if (values.includes(null)) return { count: held.length, cost, gain: null };
-  const value = toDecimal(plus(...values.map((each) => exactOf(each!))), 8);
-  return { count: held.length, cost, gain: gainOf(cost, value) };
+  // No holding with movements has no cost to show, not a cost of 0.
+  if (held.length === 0) return { count: 0, cost: null, gain: null };
+  const cost = sumOrNull(
+    held.map(({ money }) => money?.cost ?? null),
+    8,
+  );
+  const value = sumOrNull(
+    held.map(({ value }) => value ?? null),
+    8,
+  );
+  return {
+    count: held.length,
+    cost,
+    gain: cost === null || value === null ? null : gainOf(cost, value),
+  };
 }

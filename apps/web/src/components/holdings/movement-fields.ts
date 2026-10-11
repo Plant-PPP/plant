@@ -1,9 +1,12 @@
 import {
   type ChargeKind,
+  type InstrumentType,
   isIncome,
   isTrade,
   type Movement,
   type MovementKind,
+  quotedPrice,
+  unitPrice,
 } from "@plant/core";
 import { type Currency, exactOf, plus, toDecimal } from "@plant/shared";
 import type { z } from "zod";
@@ -77,7 +80,15 @@ export function newMovementFields(
 // the parts.
 export function operationFields(
   parts: readonly { movement: Movement; portfolioId: string }[],
-  { accountId, instrument }: { accountId: string; instrument: string },
+  {
+    accountId,
+    instrument,
+    type,
+  }: {
+    accountId: string;
+    instrument: string;
+    type: InstrumentType | null;
+  },
 ): MovementFields {
   const [first] = parts;
   if (!first) throw new RangeError("An operation has a part");
@@ -102,7 +113,9 @@ export function operationFields(
     accountId,
     instrument,
     date: movement.date,
-    price: isTrade(movement) ? amountInput(movement.price) : "",
+    price: isTrade(movement)
+      ? amountInput(type ? quotedPrice(type, movement.price) : movement.price)
+      : "",
     currency: movement.currency,
     parts: parts.map((part) => ({
       portfolioId: part.portfolioId,
@@ -123,9 +136,17 @@ export function operationFields(
 // An empty text is none.
 const optional = (text: string) => (text.trim() === "" ? null : text);
 
-// What the dialog sends: the kind's fields, each part, each charge. A value
-// the parsers refuse goes as null, for the schema to name its field.
-export function toOperationInput(fields: MovementFields) {
+// What the dialog sends: the kind's fields, each part, each charge, the price
+// typed as the market quotes it sent per unit. A value the parsers refuse goes
+// as null, for the schema to name its field.
+export function toOperationInput(
+  fields: MovementFields,
+  type: InstrumentType | null,
+) {
+  const perUnit = (typed: string): string | null => {
+    const quoted = parseAmountInput(typed);
+    return quoted === null || !type ? quoted : unitPrice(type, quoted);
+  };
   const income = isIncome(fields.kind);
   return {
     kind: fields.kind,
@@ -140,10 +161,10 @@ export function toOperationInput(fields: MovementFields) {
             direction: fields.direction,
             price:
               fields.direction === "in" && fields.price.trim() !== ""
-                ? parseAmountInput(fields.price)
+                ? perUnit(fields.price)
                 : "0",
           }
-        : { price: parseAmountInput(fields.price) }),
+        : { price: perUnit(fields.price) }),
     parts: fields.parts.map((part) => ({
       portfolio_id: part.portfolioId,
       [income ? "amount" : "quantity"]: parseAmountInput(part.size),

@@ -5,13 +5,14 @@ import { exactOf, plus, toDecimal } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
-import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
+import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { tickerOf } from "@/lib/holdings/assets-filter";
+import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type { SaleLine } from "@/lib/holdings/movements-input";
 
 import { AccountCell, TickerChip } from "./holding-cells";
-import { GainLossText, MissingFigure, NUMBER_CELL } from "./sum-text";
+import { AmountText, GainLossText, NUMBER_CELL } from "./sum-text";
 
 type Row = SaleLine & { id: string };
 
@@ -39,12 +40,9 @@ export function SalesTable({
   unit: Denominator;
   assetName: (row: SaleLine["row"]) => string;
 }) {
-  const inUnit = (value: string | undefined) =>
-    value === undefined ? (
-      <MissingFigure text="Sin valor en esta moneda" />
-    ) : (
-      formatAmount(value, unit)
-    );
+  const inUnit = (value: string | undefined) => (
+    <AmountText amount={value} unit={unit} />
+  );
   const columns: ColumnDef<Row>[] = [
     {
       id: "date",
@@ -94,7 +92,11 @@ export function SalesTable({
       cell: ({ row: { original } }) => {
         const [first] = original.movements;
         return first && isTrade(first)
-          ? formatPrice(first.price, first.currency)
+          ? formatQuotedPrice(
+              first.price,
+              first.currency,
+              original.row.instrumentType,
+            )
           : null;
       },
     },

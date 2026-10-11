@@ -80,8 +80,12 @@ export function withKind(fields: DebtFields, kind: LiabilityKind): DebtFields {
 
 const optional = (text: string) => (text.trim() === "" ? null : text.trim());
 
-// What the dialog sends. A value the parsers refuse goes as null, or as the
-// text, for the schema to refuse.
+// An optional field as its parser reads it, or as typed when it cannot.
+const parsedOr = (text: string, parse: (text: string) => string | null) =>
+  optional(text) === null ? null : (parse(text) ?? text);
+
+// What the dialog sends. A typed value the parsers refuse goes as the text,
+// for the schema to refuse; a field left empty goes as null.
 export function toLiabilityInput(fields: DebtFields) {
   const crypto = fields.kind === "crypto_loan";
   const left = optional(fields.installmentsLeft);
@@ -93,9 +97,8 @@ export function toLiabilityInput(fields: DebtFields) {
     uva: !crypto && fields.currency === "ARS" && fields.uva,
     instrument_symbol: crypto ? optional(fields.instrument) : null,
     balance: parseAmountInput(fields.balance),
-    installment:
-      optional(fields.installment) && parseAmountInput(fields.installment),
-    annual_rate: optional(fields.rate) && percentToFraction(fields.rate),
+    installment: parsedOr(fields.installment, parseAmountInput),
+    annual_rate: parsedOr(fields.rate, percentToFraction),
     installments_left: left === null ? null : Number(left),
     next_due_on: optional(fields.nextDueOn),
     matures_on: optional(fields.maturesOn),

@@ -44,7 +44,7 @@ const none = z.null();
 // The holdings_annual_rate CHECK's bound: 1000% a year.
 export const MAX_ANNUAL_RATE = "10";
 
-const annualRate = nonNegativeDecimalSchema.refine(
+export const annualRate = nonNegativeDecimalSchema.refine(
   (rate) => compareDecimals(rate, MAX_ANNUAL_RATE) <= 0,
   {
     message: `A rate is a fraction from 0 to ${MAX_ANNUAL_RATE}`,

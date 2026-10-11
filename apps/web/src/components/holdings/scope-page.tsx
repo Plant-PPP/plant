@@ -208,6 +208,15 @@ export function ScopePage({
           key={`${revision}:${unit}`}
           scope={movementScope}
           unit={unit}
+          instrumentTypes={
+            new Map(
+              [...rows, ...soldRows].flatMap((row) =>
+                row.holding.asset_class === "instrument" && row.instrumentType
+                  ? [[row.holding.instrument_symbol, row.instrumentType]]
+                  : [],
+              ),
+            )
+          }
           load={loadMovements}
           holdingName={(holdingId) => {
             const row = byId.get(holdingId);

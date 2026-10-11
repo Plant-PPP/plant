@@ -20,7 +20,7 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 - **Every form opens in a centered `Dialog`**, never a `Sheet`. A long form scrolls inside the dialog. `ui/sheet.tsx` is only for the sidebar on mobile.
 - The dialog has a title, a one-line description, the fields stacked as `Label` over `Input` (`grid gap-2`) and the primary button in the footer. A dialog that changes a list closes on submit and opens again with the fields and the alert when the write is refused. A field the dialog still needs the result of (the new holder inside the account dialog) waits for the server: its button reads "Agregando…" and the dialog cannot be dismissed meanwhile.
 - On close, focus returns to the control that opened the dialog, or to the nearest heading when that control is gone.
-- **Irreversible actions ask first**, in an `AlertDialog`: the title names the action, the description states the consequence, "Cancelar" comes first and the action button is `destructive`. Reversible actions (archive, restore) run without asking.
+- **Irreversible actions ask first**, in a `ConfirmDialog`: the title names the action as a question, the description states the consequence, "Cancelar" comes first and takes focus (so Enter never confirms by itself), and the action button is `destructive`. Reversible actions (archive, restore) run without asking.
 
 ## Lists and amounts
 
@@ -34,6 +34,10 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 - **Summary tiles** open a screen whose figures are the point: a row of tiles (`bg-muted/60`, an 11px label, the value semibold, a muted note such as its share), and below them a distribution bar in the chart colors with its legend.
 - **Tabs** switch between tables of the same data: a segmented control (`bg-muted`, the chosen tab on `bg-background` with `shadow-xs`) with each tab's row count, kept in the URL (`?tab=`); the chosen tab shows at once and the page loads behind it.
 - An account shows its institution's icon beside its name (`InstitutionIcon`).
+- **A row can open under itself** (`DataTable`'s `expandable` and `renderExpanded`, through `expandColumn`'s chevron), as a holding opens its movements; the panel spans the columns the table shows at its width.
+- A name that has its own page is a link (`NameLink`): an instrument opens its history, an account or a portfolio its page.
+- A filter is a compact `FilterSelect` (a hidden label, the choice in the trigger), kept in the URL like the tabs.
+- Outside production the data pages carry a dashed note, "Datos de prueba. Lo que cambies se pierde al recargar."
 
 ## Density and type
 

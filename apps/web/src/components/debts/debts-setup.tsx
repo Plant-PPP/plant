@@ -6,7 +6,6 @@ import {
   type LiabilitiesValue,
   type Liability,
 } from "@plant/core";
-import { exactOf, times, toDecimal } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
@@ -38,7 +37,12 @@ import {
 } from "@/components/portfolio-setup/setup-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
-import { formatAmount, formatQuantity, formatShare } from "@/lib/format/amount";
+import {
+  formatAmount,
+  formatQuantity,
+  formatShare,
+  percentOf,
+} from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { unitParam } from "@/lib/holdings/assets-filter";
 import type { InstrumentRow } from "@/lib/holdings/read";
@@ -189,9 +193,7 @@ export function DebtsSetup({
         debt.annual_rate === null ? (
           <MissingFigure text="Sin tasa" />
         ) : (
-          formatShare(
-            toDecimal(times(exactOf(debt.annual_rate), exactOf("100")), 1),
-          )
+          formatShare(percentOf(debt.annual_rate))
         ),
     },
     {
