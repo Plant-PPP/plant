@@ -4,7 +4,11 @@ import type { Denominator } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 
-import { NUMBER_CELL, VALUE_CELL } from "@/components/holdings/sum-text";
+import {
+  AmountText,
+  NUMBER_CELL,
+  VALUE_CELL,
+} from "@/components/holdings/sum-text";
 import { DataTable } from "@/components/ui/data-table";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
@@ -13,7 +17,7 @@ import {
   type YearClose,
 } from "@/lib/summary/closes";
 
-import { CloseStatus, Money, ResultText } from "./figures";
+import { CloseStatus, ResultText } from "./figures";
 
 type Row = MonthClose & { id: string };
 
@@ -51,7 +55,7 @@ export function ClosesTable({
       size: 152,
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: close } }) => (
-        <Money amount={close.figures.contributed} unit={unit} />
+        <AmountText amount={close.figures.contributed} unit={unit} />
       ),
     },
     {
@@ -72,7 +76,7 @@ export function ClosesTable({
       header: "Patrimonio",
       meta: { className: VALUE_CELL },
       cell: ({ row: { original: close } }) => (
-        <Money amount={close.figures.endValue} unit={unit} />
+        <AmountText amount={close.figures.endValue} unit={unit} />
       ),
     },
   ];
@@ -95,7 +99,7 @@ export function ClosesTable({
             </Link>
           </TableCell>
           <TableCell className={`hidden @2xl:table-cell ${NUMBER_CELL}`}>
-            <Money amount={totals.contributed} unit={unit} />
+            <AmountText amount={totals.contributed} unit={unit} />
           </TableCell>
           <TableCell className={NUMBER_CELL}>
             <ResultText
@@ -105,7 +109,7 @@ export function ClosesTable({
             />
           </TableCell>
           <TableCell className={VALUE_CELL}>
-            <Money amount={totals.endValue} unit={unit} />
+            <AmountText amount={totals.endValue} unit={unit} />
           </TableCell>
         </TableRow>
       }

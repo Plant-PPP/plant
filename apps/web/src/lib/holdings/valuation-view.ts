@@ -172,9 +172,10 @@ export function holdingsValuation({
     ),
     kinds: breakdown(all),
     classes: Object.fromEntries(
-      groupBy((h) => classById.get(h.id) ?? h.asset_class).map(
-        ([id, subset]) => [id, sum(subset)],
-      ),
+      groupBy((h) => classById.get(h.id)!).map(([id, subset]) => [
+        id,
+        sum(subset),
+      ]),
     ),
   };
 }

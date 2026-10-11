@@ -29,6 +29,21 @@ export function MissingFigure({ text }: { text: string }) {
   );
 }
 
+// An amount in the page's unit, or a dash when it cannot be expressed in it.
+export function AmountText({
+  amount,
+  unit,
+}: {
+  amount: string | null | undefined;
+  unit: Denominator;
+}) {
+  return amount == null ? (
+    <MissingFigure text="Sin valor en esta moneda" />
+  ) : (
+    formatAmount(amount, unit)
+  );
+}
+
 // The mark of a figure that leaves holdings out (no quote, or past the list's
 // cap); the page's footnotes explain it.
 function IncompleteMark() {

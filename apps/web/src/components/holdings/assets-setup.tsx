@@ -50,12 +50,14 @@ import {
   type AssetsTab,
   type SALES_TABS,
   type TABS,
+  parseAssetsParams,
   tabOf,
   matchesFilter,
   tickerOf,
 } from "@/lib/holdings/assets-filter";
 import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import {
+  formatQuotedPrice,
   type PriceFields,
   type PriceResult,
   priceFields,
@@ -281,6 +283,8 @@ export function AssetsSetup({
     run: () => void;
   } | null>(null);
   const names = instrumentNames(instruments);
+  const types = new Map(instruments.map((each) => [each.symbol, each.type]));
+  const typeOf = (symbol: string) => types.get(symbol) ?? null;
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
   // ticker.
@@ -382,7 +386,7 @@ export function AssetsSetup({
     actions: MovementActions,
     fields: MovementFields,
   ): boolean {
-    const input = toOperationInput(fields);
+    const input = toOperationInput(fields, typeOf(fields.instrument));
     const instrument =
       instruments.find((each) => each.symbol === fields.instrument)?.name ??
       fields.instrument;
@@ -582,7 +586,7 @@ export function AssetsSetup({
             : null;
         const figure =
           item.price !== null ? (
-            formatPrice(item.price, unit)
+            formatQuotedPrice(item.price, unit, row.instrumentType)
           ) : (
             // A valued holding whose unit is worth less than the decimals
             // show.
@@ -860,12 +864,12 @@ export function AssetsSetup({
   // The sales of the chosen year: those of every holding the filters keep,
   // open or not, so they show even when no open holding matches.
   function salesPanel(input: MovementsInput): ReactNode {
-    const year =
-      typeof url.params.year === "string" &&
-      input.years.includes(url.params.year)
-        ? url.params.year
-        : input.years[0];
-    if (year === undefined) {
+    const { year } = parseAssetsParams(url.params, {
+      portfolioIds: portfolios.map(({ id }) => id),
+      tabs,
+      salesYears: input.years,
+    });
+    if (year === null) {
       return (
         <p className="text-sm text-muted-foreground">
           Todavía no registraste ventas.
@@ -958,6 +962,7 @@ export function AssetsSetup({
                     key={`${row.id}:${movement.input.revisions.get(row.id) ?? 0}:${unit}`}
                     scope={{ holdingId: row.id }}
                     unit={unit}
+                    instrumentTypes={types}
                     load={movement.input.loadMovements}
                     pending={pending}
                     actions={[
@@ -1169,9 +1174,6 @@ export function AssetsSetup({
           mode="edit"
           row={dialog.row}
           {...dialogBase}
-          amountFromMovements={
-            movement?.input.positions.has(dialog.row.id) ?? false
-          }
           initial={
             dialog.initial ??
             initialFields(dialog.row, { accountId: "", portfolioId: "", today })
@@ -1219,6 +1221,7 @@ export function AssetsSetup({
               ? operationFields(movementDialog.operation.parts, {
                   accountId: movementDialog.operation.accountId,
                   instrument: movementDialog.operation.instrument,
+                  type: typeOf(movementDialog.operation.instrument),
                 })
               : newOperationFields(movementDialog.row, movementDialog.preset))
           }
@@ -1265,18 +1268,26 @@ export function AssetsSetup({
               },
             )
           }
-          onDelete={(date) =>
-            card.dialogAction(
-              null,
-              () => prices.actions.delete!(priceDialog.symbol, date),
-              PRICE_MESSAGES,
-              {
-                done: `Borraste el precio manual de ${priceDialog.symbol}`,
-                reopen: (error) =>
-                  setPriceDialog({ ...priceDialog, initialError: error }),
-              },
-            )
-          }
+          onDelete={(date) => {
+            const { symbol } = priceDialog;
+            setConfirm({
+              title: `¿Borrar el precio manual de ${symbol}?`,
+              description:
+                "Vuelve a valer el precio manual anterior, si cargaste otro. No se puede deshacer.",
+              run: () =>
+                card.dialogAction(
+                  null,
+                  () => prices.actions.delete!(symbol, date),
+                  PRICE_MESSAGES,
+                  {
+                    done: `Borraste el precio manual de ${symbol}`,
+                    reopen: (error) =>
+                      setPriceDialog({ symbol, initialError: error }),
+                  },
+                ),
+            });
+            return true;
+          }}
         />
       )}
     </div>

@@ -6,7 +6,11 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { NUMBER_CELL, SummaryTile } from "@/components/holdings/sum-text";
+import {
+  AmountText,
+  NUMBER_CELL,
+  SummaryTile,
+} from "@/components/holdings/sum-text";
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import { formatAmount, formatPrice, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -19,7 +23,7 @@ import {
 } from "@/lib/summary/closes";
 
 import { ClosesTable } from "./closes-table";
-import { CloseStatus, Money, ResultText } from "./figures";
+import { CloseStatus, ResultText } from "./figures";
 
 type Figures = {
   startValue: string;
@@ -75,10 +79,10 @@ function CloseFigures({
     <div className="grid gap-3">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryTile label="Patrimonio al inicio">
-          <Money amount={figures.startValue} unit={unit} />
+          <AmountText amount={figures.startValue} unit={unit} />
         </SummaryTile>
         <SummaryTile label="Patrimonio al final">
-          <Money amount={figures.endValue} unit={unit} />
+          <AmountText amount={figures.endValue} unit={unit} />
         </SummaryTile>
         <SummaryTile
           label="Resultado"
@@ -94,7 +98,7 @@ function CloseFigures({
           label="Aportes netos"
           note={`Compraste ${formatAmount(figures.paidIn, unit)} y vendiste ${formatAmount(figures.proceeds, unit)}`}
         >
-          <Money amount={figures.contributed} unit={unit} />
+          <AmountText amount={figures.contributed} unit={unit} />
         </SummaryTile>
       </dl>
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -102,13 +106,13 @@ function CloseFigures({
           <ResultText amount={figures.market} share={null} unit={unit} />
         </SummaryTile>
         <SummaryTile label="Dividendos y cupones">
-          <Money amount={figures.income} unit={unit} />
+          <AmountText amount={figures.income} unit={unit} />
         </SummaryTile>
         <SummaryTile label="Resultado de ventas">
-          <Money amount={figures.realized} unit={unit} />
+          <AmountText amount={figures.realized} unit={unit} />
         </SummaryTile>
         <SummaryTile label="Gastos" note="Comisiones, derechos e impuestos">
-          <Money amount={figures.charges} unit={unit} />
+          <AmountText amount={figures.charges} unit={unit} />
         </SummaryTile>
       </dl>
       {!complete && (
@@ -183,11 +187,11 @@ export function MonthCloseDetail({
     },
     {
       id: "amount",
-      header: "Monto",
+      header: "Costo",
       size: 136,
       meta: { className: NUMBER_CELL },
       cell: ({ row: { original } }) => (
-        <Money amount={original.cost} unit={unit} />
+        <AmountText amount={original.cost} unit={unit} />
       ),
     },
   ];

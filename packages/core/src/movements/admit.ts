@@ -1,9 +1,10 @@
-import { compareExact, exactOf, plus, toDecimal } from "@plant/shared";
+import { compareExact, exactOf, minus, plus, toDecimal } from "@plant/shared";
 import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
 import {
   isTrade,
   type Movement,
   type MovementRates,
+  startsHolding,
   takesUnits,
 } from "./movement";
 import { compareMovements } from "./order";
@@ -33,10 +34,9 @@ export function admitMovements({ prior, after }: MovementWindow): Admission {
   let quantity = exactOf(prior?.quantity ?? "0");
   for (const [index, movement] of sorted.entries()) {
     const first = prior === null && index === 0;
-    const startsHolding = isTrade(movement) && !takesUnits(movement);
     if (
       (movement.kind === "opening_balance" && !first) ||
-      (first && !startsHolding)
+      (first && !startsHolding(movement))
     ) {
       return { ok: false, code: "opening_balance" };
     }
@@ -46,7 +46,7 @@ export function admitMovements({ prior, after }: MovementWindow): Admission {
       if (compareExact(moved, quantity) > 0) {
         return { ok: false, code: "oversold" };
       }
-      quantity = plus(quantity, { n: -moved.n, d: moved.d });
+      quantity = minus(quantity, moved);
     } else {
       quantity = plus(quantity, moved);
     }

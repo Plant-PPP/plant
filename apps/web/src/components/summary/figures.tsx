@@ -1,29 +1,9 @@
 import type { Denominator } from "@plant/core";
-import { exactOf, times, toDecimal } from "@plant/shared";
 
-import { GainLossText, MissingFigure } from "@/components/holdings/sum-text";
-import { formatAmount } from "@/lib/format/amount";
+import { GainLossText } from "@/components/holdings/sum-text";
+import { percentOf } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import type { MonthClose } from "@/lib/summary/closes";
-
-// A fraction as a percent to one decimal: "0.0523" is "5.2".
-export const percentOf = (fraction: string): string =>
-  toDecimal(times(exactOf(fraction), exactOf("100")), 1);
-
-// An amount, a dash when unknown in the unit.
-export function Money({
-  amount,
-  unit,
-}: {
-  amount: string | null;
-  unit: Denominator;
-}) {
-  return amount === null ? (
-    <MissingFigure text="Sin valor en esta moneda" />
-  ) : (
-    formatAmount(amount, unit)
-  );
-}
 
 // A result, green when up and red when down, with its return under it.
 export function ResultText({

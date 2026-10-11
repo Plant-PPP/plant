@@ -55,8 +55,8 @@ const EXPAND_COLUMN = "expand";
 // Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
 // the table's width with `@`-variants. `footer` is one more row after the
-// body, such as a total. A row `expandable` says opens under itself to what
-// `renderExpanded` renders, through `expandColumn`'s button.
+// body, such as a total. A row for which `expandable` is true opens what
+// `renderExpanded` renders beneath it, through `expandColumn`'s button.
 function DataTable<T extends DataTableRow>({
   columns,
   data,

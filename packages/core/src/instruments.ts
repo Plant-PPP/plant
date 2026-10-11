@@ -1,8 +1,8 @@
 import { Constants, exactOf, over, times, toDecimal } from "@plant/shared";
 
-// The instrument types the database does not hold yet: the prototype shows
-// them before their migration adds them to the instrument_type enum, and the
-// test that keeps both lists apart fails the day it does.
+// The instrument types the instrument_type enum does not hold yet. The test
+// that keeps both lists apart fails the day a migration adds them, which is
+// when they leave this list.
 export const PENDING_INSTRUMENT_TYPES = ["cedear", "bond", "fci"] as const;
 
 export const INSTRUMENT_TYPES = [

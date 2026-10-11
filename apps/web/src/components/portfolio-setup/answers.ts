@@ -1,8 +1,8 @@
-import { inUseMessage } from "@/lib/portfolio-setup/messages";
-import type {
-  WriteResult,
-  WriteResultCode,
-} from "@/lib/portfolio-setup/write-result";
+import {
+  inUseMessage,
+  type WriteMessages,
+} from "@/lib/portfolio-setup/messages";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { Result } from "./optimistic-writes";
 
 // The copy for each code a write can be refused with, and for a failed call.
@@ -11,7 +11,7 @@ export type MessagesFor<R extends Result> = Record<
   string
 >;
 
-export type WriteMessages = Record<WriteResultCode, string>;
+export type { WriteMessages };
 
 // What the section does with an action's answer, or with a rejected call
 // (network, version skew).

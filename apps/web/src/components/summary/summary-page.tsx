@@ -8,7 +8,7 @@ import { useId } from "react";
 import { AssetsSummary } from "@/components/holdings/assets-summary";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { FilterSelect } from "@/components/holdings/filter-select";
-import { SummaryTile } from "@/components/holdings/sum-text";
+import { AmountText, SummaryTile } from "@/components/holdings/sum-text";
 import { unitParam } from "@/lib/holdings/assets-filter";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
@@ -21,7 +21,7 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import { cn } from "@/lib/utils";
 
 import { ClosesTable } from "./closes-table";
-import { CloseStatus, Money, ResultText } from "./figures";
+import { CloseStatus, ResultText } from "./figures";
 import { NetWorthChart } from "./net-worth-chart";
 
 // The months the chart shows, back from the one in progress.
@@ -97,7 +97,7 @@ export function SummaryPage({
       {current && thisYear && (
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <SummaryTile label="Patrimonio" note="Hoy">
-            <Money amount={current.figures.endValue} unit={unit} />
+            <AmountText amount={current.figures.endValue} unit={unit} />
           </SummaryTile>
           <SummaryTile
             label={monthName(current.period)}
@@ -123,7 +123,7 @@ export function SummaryPage({
             label={`Aportes en ${thisYear.year}`}
             note="Compras menos ventas"
           >
-            <Money amount={thisYear.totals.contributed} unit={unit} />
+            <AmountText amount={thisYear.totals.contributed} unit={unit} />
           </SummaryTile>
         </dl>
       )}

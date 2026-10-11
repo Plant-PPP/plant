@@ -59,7 +59,6 @@ export {
   valueHoldings,
 } from "./valuation/holdings";
 export {
-  allowedKinds,
   CHARGE_KINDS,
   CHARGE_LABEL_MAX,
   type Charge,
@@ -77,6 +76,7 @@ export {
   movementSchema,
   NOTE_MAX,
   REFERENCE_MAX,
+  startsHolding,
   takesMovements,
   takesUnits,
   type Trade,

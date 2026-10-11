@@ -4,15 +4,15 @@ import { DENOMINATORS, type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { exactOf, times, toDecimal } from "@plant/shared";
+
 import { useId } from "react";
 
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import {
   formatAmount,
-  formatPrice,
   formatQuantity,
   formatShare,
+  percentOf,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { unitParam } from "@/lib/holdings/assets-filter";
@@ -23,6 +23,7 @@ import type {
 } from "@/lib/holdings/instrument-history";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
+import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
@@ -31,6 +32,7 @@ import { FilterSelect } from "./filter-select";
 import { AccountCell, TickerChip } from "./holding-cells";
 import { MovementsTable } from "./movements-table";
 import {
+  AmountText,
   GainLossText,
   MissingFigure,
   NO_QUOTE,
@@ -40,16 +42,12 @@ import {
 
 type Row = InstrumentHolding & { id: string };
 
-const money = (amount: string | null | undefined, unit: Denominator) =>
-  amount == null ? (
-    <MissingFigure text="Sin valor en esta moneda" />
-  ) : (
-    formatAmount(amount, unit)
-  );
+const money = (value: string | null | undefined, unit: Denominator) => (
+  <AmountText amount={value} unit={unit} />
+);
 
 // A fraction as a percent to one decimal.
-const percentOf = (fraction: string) =>
-  formatShare(toDecimal(times(exactOf(fraction), exactOf("100")), 1));
+const shareText = (fraction: string) => formatShare(percentOf(fraction));
 
 // Everything that happened to one instrument, in every account and
 // portfolio: what it is worth and what it made, where it is held, and each
@@ -150,7 +148,7 @@ export function InstrumentHistory({
               {HOLDING_CLASS_LABELS[instrument.type]} ·{" "}
               {price.value === null
                 ? NO_QUOTE
-                : `${formatPrice(price.value, unit)} ${
+                : `${formatQuotedPrice(price.value, unit, instrument.type)} ${
                     price.source === "manual" && price.date
                       ? `(manual, ${formatDate(price.date)})`
                       : price.date
@@ -186,7 +184,7 @@ export function InstrumentHistory({
           note={
             returns?.share == null
               ? "Ventas, cobros y lo que tenés hoy"
-              : `${percentOf(returns.share)} sobre lo invertido`
+              : `${shareText(returns.share)} sobre lo invertido`
           }
         >
           {returns ? (
@@ -207,7 +205,7 @@ export function InstrumentHistory({
           }
         >
           {returns?.annual != null ? (
-            percentOf(returns.annual)
+            shareText(returns.annual)
           ) : (
             <MissingFigure text="Sin rendimiento anual" />
           )}
@@ -259,6 +257,7 @@ export function InstrumentHistory({
           key={`${revision}:${unit}`}
           scope={{ symbol: instrument.symbol }}
           unit={unit}
+          instrumentTypes={new Map([[instrument.symbol, instrument.type]])}
           load={loadMovements}
           holdingName={(id) => {
             const row = byId.get(id);

@@ -6,7 +6,7 @@ import {
   monthDetail,
   yearsOfCloses,
 } from "./prototype-closes";
-import { deleteOperation, initialState } from "./prototype-store";
+import { deleteOperation, initialState, setPrice } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -50,4 +50,27 @@ it("marks the closed months a deleted operation changes", () => {
   const marked = markRecalculated(state, after, "usd_mep");
   expect(marked.recalculated.get(sale.date.slice(0, 7))).toBe(TODAY);
   expect(marked.recalculated.has("2026-10")).toBe(false);
+});
+
+it("marks nothing for a write that moves no month's movements", () => {
+  const priced = setPrice(state, {
+    symbol: "KO",
+    price_date: "2026-01-15",
+    price: "9000",
+    currency: "ARS",
+  }).state;
+  expect(markRecalculated(state, priced, "usd_mep").recalculated.size).toBe(0);
+});
+
+it("counts a holding with no movements in every month's net worth", () => {
+  const cash = state.holdings.find(
+    (each) => each.holding.asset_class === "cash",
+  )!;
+  const without = {
+    ...state,
+    holdings: state.holdings.filter((each) => each !== cash),
+  };
+  const [first] = closesOf(state, "ars");
+  const [firstWithout] = closesOf(without, "ars");
+  expect(first!.figures.endValue).not.toBe(firstWithout!.figures.endValue);
 });
