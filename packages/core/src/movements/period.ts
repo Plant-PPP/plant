@@ -31,7 +31,7 @@ const ONE: Exact = { n: 1n, d: 1n };
 //   the period it was in (the modified Dietz return), so putting money in
 //   is not a gain; 0 when nothing was made with nothing at work, and null
 //   when the money at work is not above zero but something was made (nothing
-//   at work, or a large outflow early in the period).
+//   at work, or a large outflow early in the period) or the loss exceeds it.
 export type PeriodResult = {
   startValue: string;
   endValue: string;
@@ -120,13 +120,16 @@ export function periodResult({
     contributed: stored(contributed),
     market: stored(market),
     result: stored(result),
-    share:
-      compareExact(atWork, ZERO) > 0
-        ? stored(over(result, atWork))
-        : result.n === 0n
-          ? "0"
-          : null,
+    share: shareOf(result, atWork),
   };
+}
+
+// A return no money at work could make (all of it lost and more) is not one
+// the approximation can measure.
+function shareOf(result: Exact, atWork: Exact): string | null {
+  if (compareExact(atWork, ZERO) <= 0) return result.n === 0n ? "0" : null;
+  const share = over(result, atWork);
+  return compareExact(share, negated(ONE)) < 0 ? null : stored(share);
 }
 
 // Periods' returns one after another as one: each grows what the last left.

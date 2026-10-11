@@ -1,5 +1,5 @@
 import { compareMovements } from "@plant/core";
-import { addDays } from "@plant/shared";
+import { addDays, exactOf, stored, times } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -246,7 +246,7 @@ describe("operations", () => {
       const line = page.rows.find(
         (row) => row.movement.operation_id === NEW_ID,
       )!;
-      expect(line.cost).not.toBeNull();
+      expect(line.amount).not.toBeNull();
     }
   });
 });
@@ -441,4 +441,24 @@ describe("deletes", () => {
     );
     expect(next.manualPrices).toHaveLength(state.manualPrices.length - 1);
   });
+});
+
+it("shows a sale's amount as what it brought before charges", () => {
+  const sale = [...state.movements.values()]
+    .flat()
+    .find(
+      (each): each is Extract<typeof each, { kind: "sale" }> =>
+        each.kind === "sale" && each.currency === "ARS",
+    )!;
+  const page = movementsPage(
+    state,
+    { holdingId: sale.holding_id },
+    "ars",
+    null,
+  );
+  if (!page.ok) throw new Error("page failed");
+  const line = page.rows.find((row) => row.movement.id === sale.id)!;
+  expect(line.amount).toBe(
+    stored(times(exactOf(sale.quantity), exactOf(sale.price))),
+  );
 });

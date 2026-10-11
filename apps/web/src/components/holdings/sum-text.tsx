@@ -1,8 +1,8 @@
-import { DENOMINATORS, type Denominator } from "@plant/core";
-import { exactOf, toDecimal } from "@plant/shared";
+import type { Denominator } from "@plant/core";
+import { exactOf } from "@plant/shared";
 import type { ReactNode } from "react";
 
-import { formatAmount, formatShare } from "@/lib/format/amount";
+import { formatAmount, formatShare, shownAmount } from "@/lib/format/amount";
 import type { GainLoss } from "@/lib/holdings/cost-totals";
 import type { Sum } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
@@ -117,8 +117,8 @@ export const signed = (text: string, amount: string) =>
   amount.startsWith("-") || /^0(\.0+)?$/.test(amount) ? text : `+${text}`;
 
 // A gain or loss: "Calculando…" until the page has it (undefined), a dash
-// when it is unknown in the unit (null); green when up, red when down, with
-// its percent of cost.
+// when it is unknown in the unit (null); green when up, red when down, muted
+// when it shows as zero, with its percent of cost.
 export function GainLossText({
   gain,
   unit,
@@ -128,13 +128,18 @@ export function GainLossText({
 }) {
   if (gain === undefined) return CALCULATING;
   if (gain === null) return <MissingFigure text="Sin resultado" />;
-  // The sign of what shows: a result under a cent is no gain or loss.
-  const shown = toDecimal(exactOf(gain.amount), DENOMINATORS[unit].scale);
-  const loss = shown.startsWith("-");
+  // The sign of what shows: a result that rounds to zero in the unit is
+  // neither a gain nor a loss.
+  const shown = shownAmount(gain.amount, unit);
+  const zero = exactOf(shown).n === 0n;
   return (
     <span
       className={cn(
-        loss ? "text-destructive" : "text-emerald-700 dark:text-emerald-400",
+        zero
+          ? "text-muted-foreground"
+          : shown.startsWith("-")
+            ? "text-destructive"
+            : "text-emerald-700 dark:text-emerald-400",
       )}
     >
       {signed(formatAmount(gain.amount, unit), shown)}
