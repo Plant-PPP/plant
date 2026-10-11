@@ -19,7 +19,7 @@ Everything a server action receives comes from the browser: the holding id, ever
 
 1. `/assets` (server) reads the user's holdings, accounts, portfolios, instruments and reference dollar with the user's client, then the quotes through `createQuoteReader(client)`, and values them in `@plant/core`.
 2. The page hands the rows and the computed values to the client component, which shows them and runs one write at a time.
-3. A write calls a server action in `app/(app)/assets/actions.ts`, which goes through the portfolio-setup runner: the session's user, a zod parse of every argument, the write with the user's client, one log line, a page refresh.
+3. A write calls a server action in `app/(app)/(data)/assets/actions.ts`, which goes through the portfolio-setup runner: the session's user, a zod parse of every argument, the write with the user's client, one log line, a page refresh.
 
 ## Where it is enforced
 
@@ -44,10 +44,10 @@ Everything a server action receives comes from the browser: the holding id, ever
 
 ## Controls as built
 
-- `app/(app)/assets/actions.test.ts`: the exact write chains and filters, unknown keys and the account or instrument refused with no write, another user's account or portfolio (`23503`) and a missing column (`23502`) answered as `failed` and logged by code only, the logged lines free of amounts.
+- `app/(app)/(data)/assets/actions.test.ts`: the exact write chains and filters, unknown keys and the account or instrument refused with no write, another user's account or portfolio (`23503`) and a missing column (`23502`) answered as `failed` and logged by code only, the logged lines free of amounts.
 - `lib/holdings/schemas.test.ts`: every class's keys against the pgTAP grant pin.
 - `lib/quotes/quote-reader.test.ts`: the filters, casts, counts and limits, truncation (206) refused, range bounds, error codes with no row data.
-- `app/(app)/assets/page.test.tsx` and `lib/holdings/read.test.ts`: the `user_id` filters, the log lines, invalid params.
+- `app/(app)/(data)/assets/page.test.tsx` and `lib/holdings/read.test.ts`: the `user_id` filters, the log lines, invalid params.
 
 ## Residual risk
 

@@ -150,9 +150,12 @@ export default defineConfig([
       syntax: PROTOTYPE_SYNTAX,
     }),
   },
-  // The app's layout and pages pick the prototype outside production.
+  // The data pages and their layout pick the prototype outside production.
   {
-    files: [`src/app/(app)/layout.tsx`, `src/app/(app)/**/page.tsx`],
+    files: [
+      `src/app/(app)/(data)/layout.tsx`,
+      `src/app/(app)/(data)/**/page.tsx`,
+    ],
     rules: webRules({ allow: [PROTOTYPE], syntax: BASE_SYNTAX }),
   },
   {

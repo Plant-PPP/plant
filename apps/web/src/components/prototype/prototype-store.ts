@@ -494,21 +494,44 @@ export function createHolding(
     portfolio,
     instrumentType: null,
   });
-  return {
-    state: {
-      ...state,
-      holdings: [
-        {
-          holding,
-          accountId: account.id,
-          portfolioId: portfolio.id,
-          closed: false,
-        },
-        ...state.holdings,
-      ],
-    },
-    result: { ok: true, id },
+  const created: PrototypeState = {
+    ...state,
+    holdings: [
+      {
+        holding,
+        accountId: account.id,
+        portfolioId: portfolio.id,
+        closed: false,
+      },
+      ...state.holdings,
+    ],
   };
+  if (holding.asset_class !== "instrument") {
+    return { state: created, result: { ok: true, id } };
+  }
+  // An instrument holding's quantity is what its movements leave, so one
+  // created with a quantity starts with it as its opening balance, at no
+  // cost until the user edits it.
+  const instrument = state.instruments.find(
+    ({ symbol }) => symbol === holding.instrument_symbol,
+  );
+  if (!instrument) return refused(state, { ok: false, code: "not_found" });
+  const opened = writeOperation(
+    created,
+    {
+      kind: "opening_balance",
+      source_connection_id: account.id,
+      instrument_symbol: instrument.symbol,
+      date: state.today,
+      currency: instrument.currency,
+      price: "0",
+      parts: [{ portfolio_id: portfolio.id, quantity: holding.amount }],
+    },
+    { operationId: `${id}-opening`, newId: () => `${id}-opening` },
+  );
+  return opened.result.ok
+    ? { state: opened.state, result: { ok: true, id } }
+    : refused(state, { ok: false, code: "invalid" });
 }
 
 export function updateHolding(
@@ -690,6 +713,11 @@ export function writeOperation(
     touched.set(holdingId, [...own, draft as Movement]);
   }
   for (const [holdingId, own] of touched) {
+    // A holding an edit left with no movement goes, as a delete would leave it.
+    if (own.length === 0) {
+      next = deleteHolding(next, holdingId).state;
+      continue;
+    }
     const admitted = admitMovements({ prior: null, after: own });
     if (!admitted.ok) {
       return refused(state, { ok: false, code: admitted.code });

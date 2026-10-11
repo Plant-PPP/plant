@@ -50,6 +50,7 @@ import {
   type AssetsTab,
   type SALES_TABS,
   type TABS,
+  parseAssetsParams,
   tabOf,
   matchesFilter,
   tickerOf,
@@ -863,12 +864,12 @@ export function AssetsSetup({
   // The sales of the chosen year: those of every holding the filters keep,
   // open or not, so they show even when no open holding matches.
   function salesPanel(input: MovementsInput): ReactNode {
-    const year =
-      typeof url.params.year === "string" &&
-      input.years.includes(url.params.year)
-        ? url.params.year
-        : input.years[0];
-    if (year === undefined) {
+    const { year } = parseAssetsParams(url.params, {
+      portfolioIds: portfolios.map(({ id }) => id),
+      tabs,
+      salesYears: input.years,
+    });
+    if (year === null) {
       return (
         <p className="text-sm text-muted-foreground">
           Todavía no registraste ventas.
@@ -1173,9 +1174,6 @@ export function AssetsSetup({
           mode="edit"
           row={dialog.row}
           {...dialogBase}
-          amountFromMovements={
-            movement?.input.positions.has(dialog.row.id) ?? false
-          }
           initial={
             dialog.initial ??
             initialFields(dialog.row, { accountId: "", portfolioId: "", today })
@@ -1270,18 +1268,26 @@ export function AssetsSetup({
               },
             )
           }
-          onDelete={(date) =>
-            card.dialogAction(
-              null,
-              () => prices.actions.delete!(priceDialog.symbol, date),
-              PRICE_MESSAGES,
-              {
-                done: `Borraste el precio manual de ${priceDialog.symbol}`,
-                reopen: (error) =>
-                  setPriceDialog({ ...priceDialog, initialError: error }),
-              },
-            )
-          }
+          onDelete={(date) => {
+            const { symbol } = priceDialog;
+            setConfirm({
+              title: `¿Borrar el precio manual de ${symbol}?`,
+              description:
+                "Vuelve a valer el precio manual anterior, si cargaste otro. No se puede deshacer.",
+              run: () =>
+                card.dialogAction(
+                  null,
+                  () => prices.actions.delete!(symbol, date),
+                  PRICE_MESSAGES,
+                  {
+                    done: `Borraste el precio manual de ${symbol}`,
+                    reopen: (error) =>
+                      setPriceDialog({ symbol, initialError: error }),
+                  },
+                ),
+            });
+            return true;
+          }}
         />
       )}
     </div>

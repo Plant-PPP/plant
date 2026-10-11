@@ -574,8 +574,17 @@ flagged.push(
     'import "@/components/prototype/prototype-store";',
   ],
   [
-    "src/app/(app)/assets/actions.ts",
+    "src/app/(app)/(data)/assets/actions.ts",
     'import { buildFixtures } from "@/lib/prototype/fixtures";',
+  ],
+  // Pages outside the data group never show the prototype.
+  [
+    "src/app/(app)/settings/page.tsx",
+    'import { PrototypeRoot } from "@/components/prototype/prototype-root";',
+  ],
+  [
+    "src/app/(app)/layout.tsx",
+    'import { PrototypeRoot } from "@/components/prototype/prototype-root";',
   ],
   [
     "src/app/auth/mfa/page.tsx",
@@ -717,11 +726,11 @@ allowed.push(
 
 allowed.push(
   [
-    "src/app/(app)/assets/page.tsx",
+    "src/app/(app)/(data)/assets/page.tsx",
     'import { PrototypeAssets } from "@/components/prototype/prototype-assets";',
   ],
   [
-    "src/app/(app)/layout.tsx",
+    "src/app/(app)/(data)/layout.tsx",
     'import { PrototypeRoot } from "@/components/prototype/prototype-root";',
   ],
   ["src/components/prototype/x.tsx", 'import "@/lib/prototype/fixtures";'],
@@ -762,8 +771,8 @@ const OVERRIDES = [
   ["src/lib/x.test.ts", ["testing"]],
   ["src/components/x.test.tsx", ["testing"]],
   ["src/components/prototype/x.ts", ["prototype"]],
-  ["src/app/(app)/assets/page.tsx", ["prototype"]],
-  ["src/app/(app)/layout.tsx", ["prototype"]],
+  ["src/app/(app)/(data)/assets/page.tsx", ["prototype"]],
+  ["src/app/(app)/(data)/layout.tsx", ["prototype"]],
   ["src/lib/prototype/x.test.ts", ["prototype", "testing"]],
 ];
 const PROBES = {
