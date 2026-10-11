@@ -130,3 +130,14 @@ it("lets a sale on the month's first day count the day the money worked", () => 
   });
   expect(Number(result.share)).toBeGreaterThan(-0.5);
 });
+
+it("has no return for a loss beyond the money at work", () => {
+  // 10 held, 1000 put in on the last day at 60 over what it was worth.
+  const result = periodResult({
+    ...MONTH,
+    startValue: "10",
+    endValue: "950",
+    flows: [{ date: "2026-09-30", amount: "-1000", kind: "buy", charges: "0" }],
+  });
+  expect(result.share).toBeNull();
+});

@@ -160,10 +160,9 @@ export function MovementsTable({
     },
     {
       id: "cost",
-      // A trade's cost, or what an income paid.
       header: "Importe",
       meta: { className: NUMBER_CELL },
-      cell: ({ row: { original } }) => money(original.cost, unit),
+      cell: ({ row: { original } }) => money(original.amount, unit),
     },
     {
       id: "charges",

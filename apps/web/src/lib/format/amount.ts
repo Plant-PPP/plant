@@ -28,6 +28,11 @@ const QUANTITY_DIGITS = 8;
 const digitsOf = (unit: Unit): number =>
   isDenominator(unit) ? DENOMINATORS[unit].scale : CURRENCY_DIGITS;
 
+// An amount as it shows in `unit`, rounded to the digits the unit shows, so
+// its sign is the sign a reader sees.
+export const shownAmount = (decimal: string, unit: Unit): string =>
+  toDecimal(exactOf(decimal), digitsOf(unit));
+
 // A decimal string in es-AR digits: "." groups thousands, "," marks decimals.
 // Rounded half away from zero only when it has more decimals than `digits`;
 // padded to `digits` unless `trim`; the thousands go ungrouped unless `group`.
