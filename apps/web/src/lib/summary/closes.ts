@@ -34,13 +34,11 @@ export function monthsBetween(first: string, today: string): Month[] {
   return months;
 }
 
-// One month's close in the page's unit: its period's result, plus its charges
-// and the result of its sales (null when unknown in the unit), whether every
-// holding had a price at both ends, and when it was last recalculated after
-// it closed.
+// One month's close in the page's unit: its period's result, plus the result
+// of its sales (null when unknown in the unit), whether every holding had a
+// price at both ends, and when it was last recalculated after it closed.
 export type MonthClose = Month & {
   figures: PeriodResult;
-  charges: string | null;
   realized: string | null;
   complete: boolean;
   recalculatedOn: string | null;
@@ -56,10 +54,10 @@ export type YearClose = {
     paidIn: string;
     proceeds: string;
     income: string;
+    charges: string;
     contributed: string;
     market: string;
     result: string;
-    charges: string | null;
     realized: string | null;
     share: string | null;
   };
@@ -92,7 +90,6 @@ export const MONTH_NAMES = [
   "Diciembre",
 ];
 
-// "Septiembre 2026".
 // A period's month: "Septiembre".
 export const monthOf = (period: string): string =>
   MONTH_NAMES[Number(period.slice(5, 7)) - 1]!;
