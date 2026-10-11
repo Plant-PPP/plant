@@ -1,7 +1,7 @@
 "use client";
 
 import type { Denominator } from "@plant/core";
-import { exactOf, plus, toDecimal } from "@plant/shared";
+import { exactOf, plus, stored } from "@plant/shared";
 import Link from "next/link";
 import { useId } from "react";
 
@@ -11,6 +11,7 @@ import { UnitSelect } from "@/components/holdings/filter-select";
 import { AmountText, SummaryTile } from "@/components/holdings/sum-text";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import {
+  CLOSE_UNITS,
   type MonthClose,
   monthName,
   type YearClose,
@@ -34,7 +35,7 @@ function chartPoints(closes: readonly MonthClose[]) {
     return {
       period: close.period,
       value: close.figures.endValue,
-      contributed: toDecimal(putIn, 8),
+      contributed: stored(putIn),
     };
   });
 }
@@ -84,6 +85,7 @@ export function SummaryPage({
           id={`${id}-unit`}
           unit={unit}
           referenceUnit={referenceUnit}
+          units={CLOSE_UNITS}
           pending={false}
           onChange={(param) => url.set("unit", param)}
         />
@@ -94,7 +96,7 @@ export function SummaryPage({
           <SummaryTile
             label="Patrimonio neto"
             note={
-              current.complete
+              current.endComplete
                 ? "Activos menos deudas, hoy"
                 : "Activos menos deudas, hoy, sin lo que no tiene cotización"
             }
@@ -123,7 +125,7 @@ export function SummaryPage({
           </SummaryTile>
           <SummaryTile
             label={`Aportes en ${thisYear.year}`}
-            note="Compras menos ventas"
+            note="Lo que entró menos lo que salió"
           >
             <AmountText amount={thisYear.totals.contributed} unit={unit} />
           </SummaryTile>

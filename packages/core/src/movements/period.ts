@@ -15,7 +15,6 @@ import {
 import type { CashFlow } from "./returns";
 
 const ONE: Exact = { n: 1n, d: 1n };
-const text = stored;
 
 // What a period made, in one unit, from what the holdings were worth at its
 // start and end and the cash flows between them:
@@ -68,7 +67,8 @@ export function periodResult({
   let income = ZERO;
   let charges = ZERO;
   // The money at work: the start value, plus each flow in for the part of
-  // the period after it, less each flow out likewise.
+  // the period from the start of its day, less each flow out likewise. An
+  // income is what the money made, not money put in or taken out.
   let atWork = start;
   for (const flow of flows) {
     const amount = exactOf(flow.amount);
@@ -76,12 +76,15 @@ export function periodResult({
     charges = plus(charges, paid);
     // What changed hands before charges: a purchase cost the flow less its
     // charges, a sale or an income brought it plus them.
-    if (flow.kind === "income") income = plus(income, amount, paid);
-    else if (compareExact(amount, ZERO) < 0) {
+    if (flow.kind === "income") {
+      income = plus(income, amount, paid);
+      continue;
+    }
+    if (flow.kind === "buy") {
       paidIn = plus(paidIn, negated(amount), negated(paid));
     } else proceeds = plus(proceeds, amount, paid);
     const weight = over(
-      { n: BigInt(daysBetween(flow.date, to)), d: 1n },
+      { n: BigInt(daysBetween(flow.date, to) + 1), d: 1n },
       { n: BigInt(days), d: 1n },
     );
     atWork = minus(atWork, times(amount, weight));
@@ -90,18 +93,18 @@ export function periodResult({
   const market = minus(minus(end, start), contributed);
   const result = minus(plus(market, income), charges);
   return {
-    startValue: text(start),
-    endValue: text(end),
-    paidIn: text(paidIn),
-    proceeds: text(proceeds),
-    income: text(income),
-    charges: text(charges),
-    contributed: text(contributed),
-    market: text(market),
-    result: text(result),
+    startValue: stored(start),
+    endValue: stored(end),
+    paidIn: stored(paidIn),
+    proceeds: stored(proceeds),
+    income: stored(income),
+    charges: stored(charges),
+    contributed: stored(contributed),
+    market: stored(market),
+    result: stored(result),
     share:
       compareExact(atWork, ZERO) > 0
-        ? text(over(result, atWork))
+        ? stored(over(result, atWork))
         : result.n === 0n
           ? "0"
           : null,
@@ -118,5 +121,5 @@ export function chainedShare(
     if (share === null) return null;
     grown = times(grown, plus(ONE, exactOf(share)));
   }
-  return text(minus(grown, ONE));
+  return stored(minus(grown, ONE));
 }

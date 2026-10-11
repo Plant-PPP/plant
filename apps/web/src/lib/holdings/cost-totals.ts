@@ -1,5 +1,5 @@
 import { type Position, unrealized } from "@plant/core";
-import { exactOf, over, sumOrNull, toDecimal } from "@plant/shared";
+import { exactOf, over, stored, sumOrNull } from "@plant/shared";
 
 import { percentOf } from "@/lib/format/amount";
 
@@ -25,10 +25,7 @@ export const gainLoss = (
 // The cost of one unit held, or null when there is none to price.
 export function averageCost(position: Position): string | null {
   if (!position.money || exactOf(position.quantity).n === 0n) return null;
-  return toDecimal(
-    over(exactOf(position.money.cost), exactOf(position.quantity)),
-    8,
-  );
+  return stored(over(exactOf(position.money.cost), exactOf(position.quantity)));
 }
 
 // The cost and gain of the shown holdings that have movements, each summed
@@ -47,14 +44,8 @@ export function costTotals(
   });
   // No holding with movements has no cost to show, not a cost of 0.
   if (held.length === 0) return { count: 0, cost: null, gain: null };
-  const cost = sumOrNull(
-    held.map(({ money }) => money?.cost ?? null),
-    8,
-  );
-  const value = sumOrNull(
-    held.map(({ value }) => value ?? null),
-    8,
-  );
+  const cost = sumOrNull(held.map(({ money }) => money?.cost ?? null));
+  const value = sumOrNull(held.map(({ value }) => value ?? null));
   return {
     count: held.length,
     cost,

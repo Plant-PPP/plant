@@ -297,15 +297,19 @@ export function AssetsSetup({
   const named = (row: HoldingRow) =>
     `${name(row)} de ${row.account.institution} en ${row.portfolio.name}`;
 
+  function noAccount() {
+    toast.error("Primero agregá una cuenta en Cuentas.", {
+      action: {
+        label: "Ir a Cuentas",
+        onClick: () => router.push("/accounts"),
+      },
+    });
+  }
+
   function openDialog(next: DialogState) {
     if (pending) return;
     if (next.kind === "create" && accounts.length === 0) {
-      toast.error("Primero agregá una cuenta en Cuentas.", {
-        action: {
-          label: "Ir a Cuentas",
-          onClick: () => router.push("/accounts"),
-        },
-      });
+      noAccount();
       return;
     }
     setDialog(next);
@@ -343,11 +347,14 @@ export function AssetsSetup({
   function openMovementDialog(next: MovementDialogState) {
     if (pending) return;
     if (next.kind === "create" && accounts.length === 0) {
-      toast.error("Primero agregá una cuenta en Cuentas.");
+      noAccount();
       return;
     }
     setMovementDialog(next);
   }
+
+  const currencyOf = (symbol: string) =>
+    instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS";
 
   // A new operation's fields: today, in the holding's account, instrument and
   // portfolio when opened from one (its amount as an opening balance), else
@@ -369,8 +376,7 @@ export function AssetsSetup({
       kind,
       accountId: account?.id ?? "",
       instrument: symbol,
-      currency:
-        instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS",
+      currency: currencyOf(symbol),
       date: today,
       portfolioId:
         row?.portfolio.id ??
@@ -1137,6 +1143,8 @@ export function AssetsSetup({
       </SetupCard>
       {dialog?.kind === "create" && (
         <HoldingDialog
+          // A refusal found before any write shows on a fresh dialog.
+          key={dialog.initialError ?? "create"}
           mode="create"
           {...dialogBase}
           initial={
@@ -1157,8 +1165,24 @@ export function AssetsSetup({
           initialError={dialog.initialError}
           onSubmit={(fields, chosen: ChosenHolding) => {
             // Where movements are kept, an instrument comes in as an opening
-            // balance, which asks for the price its units cost.
+            // balance, which asks for the price its units cost; one the
+            // portfolio already holds is refused here, as the store would.
             if (movement && fields.assetClass === "instrument") {
+              const held = view.active.some(
+                (row) =>
+                  row.account.id === fields.accountId &&
+                  row.portfolio.id === fields.portfolioId &&
+                  row.holding.asset_class === "instrument" &&
+                  row.holding.instrument_symbol === fields.instrument,
+              );
+              if (held) {
+                setDialog({
+                  kind: "create",
+                  initial: fields,
+                  initialError: MESSAGES.duplicate,
+                });
+                return false;
+              }
               openMovementDialog({
                 kind: "create",
                 row: null,
@@ -1166,10 +1190,7 @@ export function AssetsSetup({
                   ...newOperationFields(null, "opening_balance"),
                   accountId: fields.accountId,
                   instrument: fields.instrument,
-                  currency:
-                    instruments.find(
-                      (each) => each.symbol === fields.instrument,
-                    )?.currency ?? "ARS",
+                  currency: currencyOf(fields.instrument),
                   parts: [
                     { portfolioId: fields.portfolioId, size: fields.amount },
                   ],
