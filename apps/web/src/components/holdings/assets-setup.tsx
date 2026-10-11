@@ -63,7 +63,11 @@ import {
   priceFields,
   toPriceInput,
 } from "@/lib/holdings/price-input";
-import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import {
+  currencyOf,
+  holdingName,
+  instrumentNames,
+} from "@/lib/holdings/holding-name";
 import {
   MOVEMENT_DELETE_MESSAGES,
   MOVEMENT_KIND_LABELS,
@@ -154,7 +158,9 @@ type MovementDialogState =
 type PriceDialogState = { symbol: string } & Retry<PriceFields>;
 
 type DialogState =
-  | ({ kind: "create" } & Retry<HoldingFields>)
+  // `attempt` counts the refusals found before any write, each shown on a
+  // fresh dialog.
+  | ({ kind: "create"; attempt?: number } & Retry<HoldingFields>)
   | ({ kind: "edit"; row: HoldingRow } & Retry<HoldingFields>);
 
 // What a holding is: its quantity or amount, in its own unit.
@@ -353,9 +359,6 @@ export function AssetsSetup({
     setMovementDialog(next);
   }
 
-  const currencyOf = (symbol: string) =>
-    instruments.find((each) => each.symbol === symbol)?.currency ?? "ARS";
-
   // A new operation's fields: today, in the holding's account, instrument and
   // portfolio when opened from one (its amount as an opening balance), else
   // the first account's and its portfolio.
@@ -376,7 +379,7 @@ export function AssetsSetup({
       kind,
       accountId: account?.id ?? "",
       instrument: symbol,
-      currency: currencyOf(symbol),
+      currency: currencyOf(instruments, symbol),
       date: today,
       portfolioId:
         row?.portfolio.id ??
@@ -1143,8 +1146,7 @@ export function AssetsSetup({
       </SetupCard>
       {dialog?.kind === "create" && (
         <HoldingDialog
-          // A refusal found before any write shows on a fresh dialog.
-          key={dialog.initialError ?? "create"}
+          key={dialog.attempt ?? 0}
           mode="create"
           {...dialogBase}
           initial={
@@ -1180,6 +1182,7 @@ export function AssetsSetup({
                   kind: "create",
                   initial: fields,
                   initialError: MESSAGES.duplicate,
+                  attempt: (dialog.attempt ?? 0) + 1,
                 });
                 return false;
               }
@@ -1190,7 +1193,7 @@ export function AssetsSetup({
                   ...newOperationFields(null, "opening_balance"),
                   accountId: fields.accountId,
                   instrument: fields.instrument,
-                  currency: currencyOf(fields.instrument),
+                  currency: currencyOf(instruments, fields.instrument),
                   parts: [
                     { portfolioId: fields.portfolioId, size: fields.amount },
                   ],

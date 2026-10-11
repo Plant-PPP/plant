@@ -1,7 +1,7 @@
 "use client";
 
 import { type Denominator, isTrade } from "@plant/core";
-import { exactOf, plus, toDecimal } from "@plant/shared";
+import { exactOf, plus, stored } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
@@ -18,13 +18,12 @@ type Row = SaleLine & { id: string };
 
 // What a sale's parts sold together.
 const quantityOf = (line: SaleLine): string =>
-  toDecimal(
+  stored(
     plus(
       ...line.movements.map((movement) =>
         exactOf(isTrade(movement) ? movement.quantity : "0"),
       ),
     ),
-    8,
   );
 
 const FIGURE = 112;

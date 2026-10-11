@@ -678,7 +678,6 @@ function withMovements(
   };
 }
 
-// The open or closed holding of an instrument in an account and portfolio.
 // Whether a holding sits in an account or portfolio the user archived, where
 // no holding may stay open.
 const archivedHome = (state: PrototypeState, holdingId: string): boolean => {
@@ -690,6 +689,7 @@ const archivedHome = (state: PrototypeState, holdingId: string): boolean => {
   );
 };
 
+// The open or closed holding of an instrument in an account and portfolio.
 const holdingIn = (
   state: PrototypeState,
   accountId: string,
