@@ -11,7 +11,7 @@ Out of scope: holders and accounts (PLA-24) and holdings (PLA-25), which extend 
 
 ## Trust boundary
 
-The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, `archived_at`, filters, and the `carteras` param that pages the archived list on `/accounts`.
+The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, `archived_at`, filters, and the `portfolios` param that pages the archived list on `/accounts`.
 
 ## Data flow
 
@@ -27,7 +27,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - Triggers (`SECURITY INVOKER`, `search_path = ''`, not executable by the API roles): the lock serializes one user's writes, the stamp sets `archived_at` to the server's time the row was archived, the guard refuses archiving the last active portfolio with `PT409` and the hint `last_active_portfolio`. They key on the row's `user_id`, never on `auth.uid()`, because the signup function, the seed and the owner write past RLS.
 - `UNIQUE (user_id, id)`: the target of the composite foreign keys PLA-24 and PLA-25 add, so a row can only point at a portfolio of its own user.
 
-- The page: the `carteras` cursor is parsed to one Postgres-readable timestamp and one uuid before it reaches a filter (`lib/supabase/keyset.ts`); anything else reads the first page and logs `invalid_cursor`.
+- The page: the `portfolios` cursor is parsed to one Postgres-readable timestamp and one uuid before it reaches a filter (`lib/supabase/keyset.ts`); anything else reads the first page and logs `invalid_cursor`.
 - Server actions: each calls `getSessionClaims()`, parses every argument with zod (a uuid id, a trimmed name within the CHECK's limit), filters by the session's `user_id` and the id besides RLS, and logs one line without names or PostgREST's text.
 
 ## STRIDE

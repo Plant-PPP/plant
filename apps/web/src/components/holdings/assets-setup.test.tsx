@@ -3,7 +3,7 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-import { holdingSchema } from "@plant/core";
+import { type Denominator, holdingSchema } from "@plant/core";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { AssetsTab } from "@/lib/holdings/assets-filter";
@@ -109,13 +109,17 @@ function render(
   {
     accounts = [ACCOUNT],
     portfolioId = null,
-    view = "tenencias",
+    tab = "holdings",
     valuation = VALUATION,
+    referenceUnit = "ars",
+    urlUnit,
   }: {
     accounts?: (typeof ACCOUNT)[];
     portfolioId?: string | null;
-    view?: AssetsTab;
+    tab?: AssetsTab;
     valuation?: HoldingsValuation;
+    referenceUnit?: Denominator;
+    urlUnit?: Denominator;
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -123,8 +127,12 @@ function render(
       holdings={list(holdings)}
       valuation={valuation}
       unit="ars"
+      referenceUnit={referenceUnit}
       filter={{ portfolioId, assetClass: null, search: "" }}
-      params={view === "tenencias" ? {} : { vista: view }}
+      params={{
+        ...(tab === "holdings" ? {} : { tab }),
+        ...(urlUnit ? { unit: urlUnit } : {}),
+      }}
       accounts={accounts}
       // Newest first, as the page reads them.
       portfolios={[LARGO, PRINCIPAL]}
@@ -207,21 +215,28 @@ it("prices each instrument or currency and gives its share", () => {
 });
 
 it("shows the accounts tab as one table of accounts", () => {
-  const accounts = render([row("h1", PRINCIPAL, "1000")], { view: "cuentas" });
+  const accounts = render([row("h1", PRINCIPAL, "1000")], { tab: "accounts" });
   expect(accounts).toMatch(/Valor por cuenta.*IOL.*1 tenencia/);
   expect(accounts).toMatch(/<tfoot[^>]*>.*Total/);
+  expect(accounts).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Cuentas /);
+  expect(accounts).toMatch(
+    /role="tabpanel"[^>]*aria-labelledby="[^"]*-tab-accounts"/,
+  );
 });
 
 it("shows the portfolios tab largest first, with each share", () => {
   const byPortfolio = render(
     [row("h1", PRINCIPAL, "1000"), row("h3", LARGO, "2500.5")],
-    { view: "carteras" },
+    { tab: "portfolios" },
   );
   expect(byPortfolio).toContain("Valor por cartera");
   expect(byPortfolio.indexOf("Largo plazo")).toBeLessThan(
     byPortfolio.indexOf("Principal"),
   );
   expect(byPortfolio).toContain("71,4 %");
+  expect(byPortfolio).toMatch(
+    /role="tab"[^>]*aria-selected="true"[^>]*>Carteras /,
+  );
 });
 
 it("marks a total that leaves a holding out", () => {
@@ -276,7 +291,7 @@ it("leaves out of the bar a class with no share, largest share first", () => {
 
 it("puts the panel of the chosen tab under the tabs", () => {
   expect(html).toMatch(
-    /role="tabpanel"[^>]*aria-labelledby="[^"]*-tab-tenencias"/,
+    /role="tabpanel"[^>]*aria-labelledby="[^"]*-tab-holdings"/,
   );
   expect(html).toMatch(/role="tab"[^>]*aria-controls="[^"]*-panel"/);
 });
@@ -317,7 +332,7 @@ it("shows no share, never 0,0 %, for a kind core could not value", () => {
 it("marks a share when the whole leaves a holding out", () => {
   const byPortfolio = render(
     [row("h1", PRINCIPAL, "1000"), row("h3", LARGO, "2500.5")],
-    { view: "carteras" },
+    { tab: "portfolios" },
   );
   // Largo plazo is complete itself, but the whole misses a quote.
   expect(byPortfolio).toMatch(/71,4 %<span aria-hidden="true">\*<\/span>/);
@@ -329,8 +344,18 @@ it("marks the missing-quote note only when the total is marked", () => {
 
 it("shows a share as calculating until the server values its part", () => {
   const fresh = render([row("h1", PRINCIPAL, "1000")], {
-    view: "carteras",
+    tab: "portfolios",
     valuation: { ...VALUATION, portfolios: {} },
   });
   expect(fresh.match(/Calculando…/g)).toHaveLength(2);
+});
+
+it("shows the reference unit chosen once its param is cleared", () => {
+  // The page still values in pesos until the server answers; the choice shows first.
+  const cleared = render([], { referenceUnit: "usd_ccl" });
+  expect(cleared).toContain("Dólar CCL");
+  expect(cleared).not.toContain(">Pesos<");
+  expect(render([], { referenceUnit: "usd_ccl", urlUnit: "ars" })).toContain(
+    ">Pesos<",
+  );
 });

@@ -49,10 +49,10 @@ export function AssetsTabs({
   counts: Record<AssetsTab, number>;
   pending: boolean;
 }) {
-  const shown = tabOf(url.params.vista);
+  const shown = tabOf(url.params.tab);
   const choose = (next: AssetsTab) => {
     if (pending || next === shown) return;
-    url.set("vista", next === DEFAULT_TAB ? null : next);
+    url.set("tab", next === DEFAULT_TAB ? null : next);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const next = nextTab(shown, event.key);

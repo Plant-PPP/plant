@@ -32,7 +32,7 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 - Amounts are right-aligned with `tabular-nums`, formatted `es-AR` with their currency (`$ 1.234.567,89`, `US$ 12.345,67`) by `formatAmount` (`lib/format/amount.ts`), and never pass through a `number` to be summed.
 - A `footer` row closes a table with its total. A sum shown while a write runs is dimmed (`opacity-60`, `aria-busy`), a row the server has not valued yet reads "Calculando…", and a sum of nothing reads "—".
 - **Summary tiles** open a screen whose figures are the point: a row of tiles (`bg-muted/60`, an 11px label, the value semibold, a muted note such as its share), and below them a distribution bar in the chart colors with its legend.
-- **Tabs** switch between tables of the same data: a segmented control (`bg-muted`, the chosen tab on `bg-background` with `shadow-xs`) with each tab's row count, kept in the URL (`?vista=`); the chosen tab shows at once and the page loads behind it.
+- **Tabs** switch between tables of the same data: a segmented control (`bg-muted`, the chosen tab on `bg-background` with `shadow-xs`) with each tab's row count, kept in the URL (`?tab=`); the chosen tab shows at once and the page loads behind it.
 - An account shows its institution's icon beside its name (`InstitutionIcon`).
 
 ## Density and type

@@ -56,35 +56,35 @@ test("keysetFilter gives the rows after the cursor", () => {
 describe("keysetHref", () => {
   test("sets its own param and keeps the others", () => {
     const href = keysetHref(
-      { titulares: "a,b", carteras: "old", tags: ["x", "y"] },
-      "carteras",
+      { holders: "a,b", portfolios: "old", tags: ["x", "y"] },
+      "portfolios",
       { at: AT, id: ID },
     );
     const search = new URLSearchParams(href.slice(1));
-    expect(search.getAll("titulares")).toEqual(["a,b"]);
+    expect(search.getAll("holders")).toEqual(["a,b"]);
     expect(search.getAll("tags")).toEqual(["x", "y"]);
-    expect(search.getAll("carteras")).toEqual([`${AT},${ID}`]);
+    expect(search.getAll("portfolios")).toEqual([`${AT},${ID}`]);
   });
 
   test("round-trips through parseKeyset", () => {
-    const href = keysetHref({}, "carteras", { at: AT, id: ID });
-    const raw = new URLSearchParams(href.slice(1)).get("carteras") ?? "";
+    const href = keysetHref({}, "portfolios", { at: AT, id: ID });
+    const raw = new URLSearchParams(href.slice(1)).get("portfolios") ?? "";
     expect(parseKeyset(raw)).toEqual({ ok: true, cursor: { at: AT, id: ID } });
   });
 });
 
 test("firstPageHref drops its own param and keeps the others", () => {
   expect(
-    firstPageHref({ carteras: `${AT},${ID}`, titulares: "a" }, "carteras"),
-  ).toBe("?titulares=a");
-  expect(firstPageHref({ carteras: `${AT},${ID}` }, "carteras")).toBe("?");
+    firstPageHref({ portfolios: `${AT},${ID}`, holders: "a" }, "portfolios"),
+  ).toBe("?holders=a");
+  expect(firstPageHref({ portfolios: `${AT},${ID}` }, "portfolios")).toBe("?");
 });
 
 test("paramHref sets or drops one param and keeps the others", () => {
-  expect(paramHref({ moneda: "ars", cartera: "p1" }, "moneda", "btc")).toBe(
-    "?cartera=p1&moneda=btc",
+  expect(paramHref({ unit: "ars", portfolio: "p1" }, "unit", "btc")).toBe(
+    "?portfolio=p1&unit=btc",
   );
-  expect(paramHref({ moneda: "ars", cartera: "p1" }, "cartera", null)).toBe(
-    "?moneda=ars",
+  expect(paramHref({ unit: "ars", portfolio: "p1" }, "portfolio", null)).toBe(
+    "?unit=ars",
   );
 });

@@ -7,6 +7,7 @@ import {
   matchesFilter,
   SEARCH_MAX_LENGTH,
   tickerOf,
+  unitParam,
 } from "./assets-filter";
 import { instrumentNames } from "./holding-name";
 import type { HoldingRow } from "./read";
@@ -78,8 +79,8 @@ describe("matchesFilter", () => {
 });
 
 it("trims a search, and keeps one at the limit once trimmed", () => {
-  const search = (buscar: string) =>
-    parseAssetsParams({ buscar }, []).filter.search;
+  const search = (raw: string) =>
+    parseAssetsParams({ search: raw }, []).filter.search;
   expect(search("  btc ")).toBe("btc");
   expect(search(` ${"x".repeat(SEARCH_MAX_LENGTH)} `)).toHaveLength(
     SEARCH_MAX_LENGTH,
@@ -92,26 +93,71 @@ it("lists an instrument by its symbol and cash by its currency", () => {
 
 it("knows the page's tabs, and falls back to the first", () => {
   expect(
-    ["tenencias", "cuentas", "carteras", "tablero", undefined].map(tabOf),
-  ).toEqual(["tenencias", "cuentas", "carteras", "tenencias", "tenencias"]);
+    [
+      "holdings",
+      "accounts",
+      "portfolios",
+      "tablero",
+      "constructor",
+      "__proto__",
+      "toString",
+      undefined,
+    ].map(tabOf),
+  ).toEqual([
+    "holdings",
+    "accounts",
+    "portfolios",
+    "holdings",
+    "holdings",
+    "holdings",
+    "holdings",
+    "holdings",
+  ]);
 });
 
 describe("parseAssetsParams", () => {
+  it("ignores params it does not read, without flagging them", () => {
+    expect(
+      parseAssetsParams(
+        {
+          vista: "cuentas",
+          moneda: "ars",
+          cartera: "p1",
+          tipo: "cash",
+          buscar: "btc",
+          holdings: "x",
+        },
+        ["p1"],
+      ),
+    ).toEqual({
+      unit: null,
+      tab: "holdings",
+      filter: { portfolioId: null, assetClass: null, search: "" },
+      invalid: {
+        unit: false,
+        portfolio: false,
+        class: false,
+        search: false,
+        tab: false,
+      },
+    });
+  });
+
   it("reads every param the page takes", () => {
     expect(
       parseAssetsParams(
         {
-          moneda: "ars",
-          cartera: "p1",
-          tipo: "cash",
-          buscar: " btc ",
-          vista: "cuentas",
+          unit: "ars",
+          portfolio: "p1",
+          class: "cash",
+          search: " btc ",
+          tab: "accounts",
         },
         ["p1"],
       ),
     ).toEqual({
       unit: "ars",
-      tab: "cuentas",
+      tab: "accounts",
       filter: { portfolioId: "p1", assetClass: "cash", search: "btc" },
       invalid: {
         unit: false,
@@ -127,17 +173,17 @@ describe("parseAssetsParams", () => {
     expect(
       parseAssetsParams(
         {
-          moneda: "xyz",
-          cartera: "p9",
-          tipo: "toString",
-          buscar: "x".repeat(SEARCH_MAX_LENGTH + 1),
-          vista: ["cuentas", "carteras"],
+          unit: "xyz",
+          portfolio: "p9",
+          class: "toString",
+          search: "x".repeat(SEARCH_MAX_LENGTH + 1),
+          tab: ["accounts", "portfolios"],
         },
         ["p1"],
       ),
     ).toEqual({
       unit: null,
-      tab: "tenencias",
+      tab: "holdings",
       filter: { portfolioId: null, assetClass: null, search: "" },
       invalid: {
         unit: true,
@@ -158,4 +204,9 @@ describe("parseAssetsParams", () => {
       tab: false,
     });
   });
+});
+
+it("leaves the reference unit out of the URL", () => {
+  expect(unitParam("usd_ccl", "usd_ccl")).toBeNull();
+  expect(unitParam("ars", "usd_ccl")).toBe("ars");
 });

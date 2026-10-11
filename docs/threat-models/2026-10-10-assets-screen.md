@@ -13,7 +13,7 @@ Out of scope: manual prices, instruments beyond crypto, transactions and imports
 
 ## Trust boundary
 
-Everything a server action receives comes from the browser: the holding id, every field of the payload, and any extra key. The page's search params (`moneda`, `cartera`, `tipo`, `buscar`, `vista`, `tenencias`) are untrusted too. The session comes from the Supabase cookie, verified by `getSessionClaims`.
+Everything a server action receives comes from the browser: the holding id, every field of the payload, and any extra key. The page's search params (`unit`, `portfolio`, `class`, `search`, `tab`, `holdings`) are untrusted too. The session comes from the Supabase cookie, verified by `getSessionClaims`.
 
 ## Data flow
 
@@ -26,21 +26,21 @@ Everything a server action receives comes from the browser: the holding id, ever
 - **Every read and write uses the user's JWT**: RLS and the MFA gate apply, and owned reads add `.eq("user_id", …)`. Nothing here uses the service role.
 - **Server actions** parse the id as a uuid and the payload with a strict schema per class (`lib/holdings/schemas.ts`): unknown keys (`user_id`, `id`, `archived_at`) are refused, and an edit cannot carry the account or the instrument. A test checks every key the schemas write against the grants the pgTAP pin asserts. An edit filters by `user_id`, `id`, `asset_class` and `archived_at IS NULL`; archive and restore filter by `user_id`, `id` and the archived state, and a restore only clears `archived_at`.
 - **Foreign keys and guards** (unchanged) keep a holding on its own user's account and portfolio and refuse an archived one; another user's ids fail with no hint.
-- **Search params** are matched against known values (a unit in `DENOMINATORS`, a portfolio id the user's read returned, a holding class, a tab); anything else falls back to the default. `buscar` is free text: it is trimmed, refused past 60 characters, matched in memory against the holdings already read, and never logged (only whether there was one).
+- **Search params** are matched against known values (a unit in `DENOMINATORS`, a portfolio id the user's read returned, a holding class, a tab); anything else falls back to the default. `search` is free text: it is trimmed, refused past 60 characters, matched in memory against the holdings already read, and never logged (only whether there was one).
 - **Logs** carry ids, counts, booleans, the unit and outcome codes, never amounts, labels or values; `credential-scrub.ts` masks keys named for totals, values, rates and labels.
 
 ## STRIDE
 
-|       | Vector                                                              | Control                                                                                    |
-| ----- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **S** | Calling an action as another user                                   | The user comes from the session's claims, never from the payload                          |
-| **T** | Editing, moving or archiving another user's holding                 | `user_id` filter plus RLS: no row matches, `not_found`                                     |
+|       | Vector                                                                                       | Control                                                                                                                                             |
+| ----- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S** | Calling an action as another user                                                            | The user comes from the session's claims, never from the payload                                                                                    |
+| **T** | Editing, moving or archiving another user's holding                                          | `user_id` filter plus RLS: no row matches, `not_found`                                                                                              |
 | **T** | Moving a holding into another user's portfolio, or changing its class, account or instrument | Composite foreign keys; the update filters by class; the schema refuses the account and the instrument; the grants refuse the account and the class |
-| **R** | An action with no trace                                             | One `portfolio_setup.write` line per call, with the request id, user, action and outcome  |
-| **I** | Values or labels in logs                                            | Only ids and counts are logged; the scrubber masks value-named keys                        |
-| **I** | Another user's holdings through an embed or a crafted param         | RLS on every embedded table; params only pick among the user's own rows                    |
-| **D** | A huge quote read, or a cut one taken as whole                      | The range is bounded and symbols chunked under `max_rows`; an exact count refuses a cut answer |
-| **E** | A server action used as a privileged primitive                      | No service role; each action derives the user itself                                       |
+| **R** | An action with no trace                                                                      | One `portfolio_setup.write` line per call, with the request id, user, action and outcome                                                            |
+| **I** | Values or labels in logs                                                                     | Only ids and counts are logged; the scrubber masks value-named keys                                                                                 |
+| **I** | Another user's holdings through an embed or a crafted param                                  | RLS on every embedded table; params only pick among the user's own rows                                                                             |
+| **D** | A huge quote read, or a cut one taken as whole                                               | The range is bounded and symbols chunked under `max_rows`; an exact count refuses a cut answer                                                      |
+| **E** | A server action used as a privileged primitive                                               | No service role; each action derives the user itself                                                                                                |
 
 ## Controls as built
 

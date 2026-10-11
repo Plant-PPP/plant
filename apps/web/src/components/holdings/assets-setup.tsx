@@ -106,6 +106,7 @@ export function AssetsSetup({
   holdings,
   valuation,
   unit,
+  referenceUnit,
   filter,
   params,
   accounts,
@@ -116,6 +117,7 @@ export function AssetsSetup({
   holdings: HoldingsView;
   valuation: HoldingsValuation;
   unit: Denominator;
+  referenceUnit: Denominator;
   filter: AssetsFilter;
   params: KeysetParams;
   accounts: SourceConnectionRow[];
@@ -133,7 +135,7 @@ export function AssetsSetup({
   const card = useSetupCard({ run, pending });
   const url = useAssetsUrl(params);
   // The tab shows at once; its data is already on the page.
-  const tab = tabOf(url.params.vista);
+  const tab = tabOf(url.params.tab);
   const tabsId = useId();
   const router = useRouter();
   const [dialog, setDialog] = useState<DialogState | null>(null);
@@ -372,9 +374,9 @@ export function AssetsSetup({
   );
   const { missing } = valuation.kinds.total;
   const counts: Record<AssetsTab, number> = {
-    tenencias: shownRows.length,
-    cuentas: new Set(shownRows.map((row) => row.account.id)).size,
-    carteras: new Set(shownRows.map((row) => row.portfolio.id)).size,
+    holdings: shownRows.length,
+    accounts: new Set(shownRows.map((row) => row.account.id)).size,
+    portfolios: new Set(shownRows.map((row) => row.portfolio.id)).size,
   };
 
   const archivedColumns: ColumnDef<ShownHolding>[] = [
@@ -457,7 +459,7 @@ export function AssetsSetup({
         />
         <AssetsFilters
           url={url}
-          unit={unit}
+          referenceUnit={referenceUnit}
           filter={filter}
           portfolios={portfolios}
           pending={pending}
@@ -488,7 +490,7 @@ export function AssetsSetup({
                 "Todavía no cargaste tenencias."
               )}
             </p>
-          ) : tab === "cuentas" ? (
+          ) : tab === "accounts" ? (
             <AccountsBreakdown
               rows={shownRows}
               accounts={valuation.accounts}
@@ -496,7 +498,7 @@ export function AssetsSetup({
               unit={unit}
               pending={pending}
             />
-          ) : tab === "carteras" ? (
+          ) : tab === "portfolios" ? (
             <PortfoliosBreakdown
               rows={shownRows}
               portfolios={valuation.portfolios}

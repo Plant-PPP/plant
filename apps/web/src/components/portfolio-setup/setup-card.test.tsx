@@ -89,7 +89,7 @@ describe("ArchivedList", () => {
     const paged = listView<NamedRow>({
       archived: rows,
       archivedFirstHref: "/accounts",
-      archivedNextHref: "/accounts?carteras=x",
+      archivedNextHref: "/accounts?portfolios=x",
     });
     expect(archived(paged)).not.toMatch(/<a [^>]*aria-disabled=/);
     expect(

@@ -227,7 +227,7 @@ export function readPortfolios(
     client,
     {
       table: "portfolios",
-      param: "carteras",
+      param: "portfolios",
       columns: "id, name",
       toRow: namedRow,
     },
@@ -244,7 +244,7 @@ export function readHolders(
     client,
     {
       table: "holders",
-      param: "titulares",
+      param: "holders",
       columns: "id, name",
       toRow: namedRow,
     },
@@ -263,7 +263,7 @@ export function readSourceConnections(
     client,
     {
       table: "source_connections",
-      param: "cuentas",
+      param: "accounts",
       columns:
         "id, institution, include_in_tax_report, " +
         "holder:holders!source_connections_user_id_holder_id_fkey(id, name, archived_at), " +

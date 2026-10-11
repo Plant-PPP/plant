@@ -56,7 +56,7 @@ export function readHoldings(
     client,
     {
       table: "holdings",
-      param: "tenencias",
+      param: "holdings",
       columns: HOLDING_COLUMNS,
       toRow: (data) => {
         const { source_connection: account, portfolio } = embeds.parse(data);

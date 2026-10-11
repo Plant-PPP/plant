@@ -12,7 +12,7 @@ Out of scope: holdings (PLA-25), which extend these guards to portfolios that st
 
 ## Trust boundary
 
-The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, institutions, `holder_id`, `default_portfolio_id`, `include_in_tax_report`, `archived_at`, filters, and the `cuentas` and `titulares` params that page the archived lists.
+The browser talks to PostgREST with the user's JWT (role `authenticated`) or without a session (`anon`). Everything the client sends is untrusted: ids, names, institutions, `holder_id`, `default_portfolio_id`, `include_in_tax_report`, `archived_at`, filters, and the `accounts` and `holders` params that page the archived lists.
 
 ## Data flow
 

@@ -42,6 +42,8 @@ function fakeClient(...responses: Response[]) {
         "eq",
         "is",
         "not",
+        "lte",
+        "or",
         "order",
         "limit",
         "single",
@@ -139,6 +141,39 @@ describe("readHoldings", () => {
       "plant.portfolio_setup.row_id": "h1",
     });
     expect(JSON.stringify(lines)).not.toContain("987654");
+  });
+
+  it("pages archived holdings by their own param, keeping the page's others", async () => {
+    const AT = "2026-10-09T14:18:15.123456+00:00";
+    const ID = "22222222-2222-4222-8222-222222222222";
+    const { client, calls } = fakeClient(ok([]), ok([]));
+    const view = await readHoldings(client, {
+      ...CONTEXT,
+      params: { holdings: `${AT},${ID}`, tab: "accounts" },
+    });
+    expect(calls[1]).toContainEqual(["from", "holdings"]);
+    expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
+    expect(view.archivedPage).toBe(`${AT},${ID}`);
+    expect(view.archivedFirstHref).toBe("?tab=accounts");
+  });
+
+  it("reads the first archived page and warns on an invalid cursor", async () => {
+    const { client, calls } = fakeClient(ok([]), ok([]));
+    const view = await readHoldings(client, {
+      ...CONTEXT,
+      params: { holdings: "x),y" },
+    });
+    expect(calls[1]!.map(([method]) => method)).not.toContain("or");
+    expect(view.archivedPage).toBeNull();
+    expect(lines).toEqual([
+      expect.objectContaining({
+        level: "warn",
+        event: "portfolio_setup.read",
+        "plant.page": "/assets",
+        "plant.portfolio_setup.table": "holdings",
+        "plant.outcome": "invalid_cursor",
+      }),
+    ]);
   });
 });
 
