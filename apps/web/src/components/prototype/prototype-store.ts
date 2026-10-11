@@ -73,6 +73,8 @@ export type PrototypeState = {
   instruments: InstrumentRow[];
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
+  archivedAccounts: SourceConnectionRow[];
+  archivedPortfolios: PortfolioRow[];
   // Newest first, as the real page lists them.
   holdings: StoredHolding[];
   // Each holding's movements, oldest first; a new array on every change.
@@ -106,6 +108,8 @@ export function initialState(
     instruments: fixtures.instruments,
     accounts: fixtures.accounts,
     portfolios: fixtures.portfolios,
+    archivedAccounts: [],
+    archivedPortfolios: [],
     holdings: fixtures.holdings.map((row) => ({
       holding: row.holding,
       accountId: row.account.id,
@@ -125,8 +129,11 @@ function rowOfStored(
   state: PrototypeState,
   stored: StoredHolding,
 ): HoldingRow | null {
-  const account = state.accounts.find(({ id }) => id === stored.accountId);
-  const portfolio = state.portfolios.find(
+  // A holding sold to zero may sit in an account or portfolio archived since.
+  const account = [...state.accounts, ...state.archivedAccounts].find(
+    ({ id }) => id === stored.accountId,
+  );
+  const portfolio = [...state.portfolios, ...state.archivedPortfolios].find(
     ({ id }) => id === stored.portfolioId,
   );
   if (!account || !portfolio) return null;

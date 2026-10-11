@@ -1,15 +1,13 @@
 "use client";
 
-import {
-  archivePortfolio,
-  createPortfolio,
-  renamePortfolio,
-  restorePortfolio,
-} from "@/app/(app)/accounts/actions";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { PortfoliosView } from "@/lib/portfolio-setup/read";
-import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
+import {
+  type NamedRowsActions,
+  type NamedRowsCopy,
+  NamedRowsCard,
+} from "./named-rows-card";
 import type { SetupRun } from "./setup-actions";
 
 const COPY: NamedRowsCopy = {
@@ -36,23 +34,18 @@ const COPY: NamedRowsCopy = {
   },
 };
 
-const ACTIONS = {
-  create: createPortfolio,
-  rename: renamePortfolio,
-  archive: archivePortfolio,
-  restore: restorePortfolio,
-};
-
 export function PortfoliosCard({
   view,
   pending,
   run,
   usedBy,
+  actions,
 }: {
   view: PortfoliosView;
   pending: boolean;
   run: SetupRun;
   usedBy: (id: string) => string[];
+  actions: NamedRowsActions;
 }) {
   return (
     <NamedRowsCard
@@ -61,7 +54,7 @@ export function PortfoliosCard({
       pending={pending}
       run={run}
       copy={COPY}
-      actions={ACTIONS}
+      actions={actions}
       messages={WRITE_MESSAGES.portfolios}
       usedBy={usedBy}
     />

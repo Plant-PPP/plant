@@ -1,15 +1,13 @@
 "use client";
 
-import {
-  archiveHolder,
-  createHolder,
-  renameHolder,
-  restoreHolder,
-} from "@/app/(app)/accounts/actions";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { HoldersView } from "@/lib/portfolio-setup/read";
-import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
+import {
+  type NamedRowsActions,
+  type NamedRowsCopy,
+  NamedRowsCard,
+} from "./named-rows-card";
 import type { SetupRun } from "./setup-actions";
 
 const COPY: NamedRowsCopy = {
@@ -37,23 +35,18 @@ const COPY: NamedRowsCopy = {
   },
 };
 
-const ACTIONS = {
-  create: createHolder,
-  rename: renameHolder,
-  archive: archiveHolder,
-  restore: restoreHolder,
-};
-
 export function HoldersCard({
   view,
   pending,
   run,
   usedBy,
+  actions,
 }: {
   view: HoldersView;
   pending: boolean;
   run: SetupRun;
   usedBy: (id: string) => string[];
+  actions: NamedRowsActions;
 }) {
   return (
     <NamedRowsCard
@@ -62,7 +55,7 @@ export function HoldersCard({
       pending={pending}
       run={run}
       copy={COPY}
-      actions={ACTIONS}
+      actions={actions}
       messages={WRITE_MESSAGES.holders}
       usedBy={usedBy}
     />

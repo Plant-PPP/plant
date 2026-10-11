@@ -8,6 +8,8 @@ import type {
   MovementActions,
   PriceActions,
 } from "@/components/holdings/assets-setup";
+import type { NamedRowsActions } from "@/components/portfolio-setup/named-rows-card";
+import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -18,6 +20,7 @@ import {
   updateHolding,
   writeOperation,
 } from "./prototype-store";
+import * as accounts from "./prototype-accounts-store";
 import { usePrototypeStore } from "./use-prototype-store";
 
 type Prototype = {
@@ -33,6 +36,8 @@ type Prototype = {
     holdings: HoldingActions;
     movements: MovementActions;
     prices: PriceActions;
+    sourceConnections: SourceConnectionActions;
+    portfolios: NamedRowsActions;
   };
 };
 
@@ -82,6 +87,23 @@ export function PrototypeProvider({
         ),
     },
     prices: { set: (input) => write((s) => setPrice(s, input)) },
+    sourceConnections: {
+      create: (input) =>
+        write((s) => accounts.createAccount(s, input, crypto.randomUUID())),
+      update: (id, input) => write((s) => accounts.updateAccount(s, id, input)),
+      archive: (id) => write((s) => accounts.archiveAccount(s, id)),
+      restore: (id, input) =>
+        write((s) => accounts.restoreAccount(s, id, input)),
+    },
+    portfolios: {
+      create: (input) =>
+        write((s) => accounts.createPortfolio(s, input, crypto.randomUUID())),
+      rename: (id, input) =>
+        write((s) => accounts.renamePortfolio(s, id, input)),
+      archive: (id) => write((s) => accounts.archivePortfolio(s, id)),
+      restore: (id, input) =>
+        write((s) => accounts.restorePortfolio(s, id, input)),
+    },
   };
   const priced = withManualPrices(snapshot, state.manualPrices);
   // Whether the feeds priced a symbol today, before any manual price.

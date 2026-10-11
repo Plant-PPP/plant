@@ -2,10 +2,10 @@
 
 import type * as React from "react";
 import { useEffect } from "react";
-import { createHolder } from "@/app/(app)/accounts/actions";
 import { Button } from "@/components/ui/button";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { HolderRow } from "@/lib/portfolio-setup/read";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { NameField, useNameSubmit } from "./name-field";
 import { PendingButton } from "@/components/ui/pending-button";
 
@@ -22,16 +22,18 @@ export function submitOnEnter(submit: () => void) {
 // its own, its input no name, so the account's form never sends it, and its
 // buttons do not submit.
 export function NewHolderField({
+  create,
   onCreated,
   onCancel,
   onPendingChange,
 }: {
+  create: (input: unknown) => Promise<WriteResult>;
   onCreated: (row: HolderRow) => void;
   onCancel: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
   const field = useNameSubmit({
-    onSubmit: (name) => createHolder({ name }),
+    onSubmit: (name) => create({ name }),
     messages: WRITE_MESSAGES.holders,
     onSaved: (name, id) => onCreated({ id, name }),
   });

@@ -1,10 +1,9 @@
-jest.mock("@/app/(app)/accounts/actions", () => ({ createHolder: jest.fn() }));
-
 import { renderToStaticMarkup } from "react-dom/server";
 import { NewHolderField, submitOnEnter } from "./new-holder-field";
 
 const html = renderToStaticMarkup(
   <NewHolderField
+    create={jest.fn()}
     onCreated={() => {}}
     onCancel={() => {}}
     onPendingChange={() => {}}

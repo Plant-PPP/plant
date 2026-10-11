@@ -30,7 +30,7 @@ function render(
         ...change,
       }}
       initialError={initialError}
-      holders={holders}
+      holders={holders && { rows: holders, create: jest.fn() }}
       portfolios={[PRINCIPAL]}
       returnFocusTo={() => null}
       onClose={() => {}}

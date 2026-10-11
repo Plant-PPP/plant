@@ -33,6 +33,7 @@ import {
   institutionChoice,
   typedInstitution,
 } from "./institution-field";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { NewHolderField } from "./new-holder-field";
 import { useFieldAlert } from "./field-alert";
 import { useSavedFocus } from "./saved-focus";
@@ -159,6 +160,13 @@ function offeredChoices(
   };
 }
 
+export type HolderChoices = {
+  rows: HolderRow[];
+  create: (input: unknown) => Promise<WriteResult>;
+};
+
+const NO_HOLDERS: HolderRow[] = [];
+
 // Creates, edits or restores an account, handing its fields to `onSubmit` as
 // it closes; a refused write opens it again with the fields and the alert. A
 // new holder can be added from the dialog without leaving it: its field has no
@@ -181,7 +189,9 @@ export function SourceConnectionDialog({
   submitLabel: string;
   initial: SourceConnectionFields;
   initialError?: string;
-  holders: HolderRow[];
+  // The holders to choose from and how to add one; a page without holders
+  // asks for none, and every account is the user's own.
+  holders?: HolderChoices;
   portfolios: PortfolioRow[];
   // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
@@ -207,7 +217,8 @@ export function SourceConnectionDialog({
   );
   // Holders created here, until the page's refresh lists them.
   const [added, setAdded] = useState<HolderRow[]>([]);
-  const [listed, setListed] = useState(holders);
+  const holderRows = holders?.rows ?? NO_HOLDERS;
+  const [listed, setListed] = useState(holderRows);
   const [addingHolder, setAddingHolder] = useState(false);
   // Each opening of the new holder's field gets a key; a save that lands
   // after its field was closed only adds the holder, without choosing it.
@@ -224,9 +235,9 @@ export function SourceConnectionDialog({
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
 
-  if (listed !== holders) {
-    setListed(holders);
-    setAdded((rows) => pruneAdded(listed, holders, rows));
+  if (listed !== holderRows) {
+    setListed(holderRows);
+    setAdded((rows) => pruneAdded(listed, holderRows, rows));
   }
 
   function showHolderField() {
@@ -250,9 +261,11 @@ export function SourceConnectionDialog({
     closeHolderField();
   }
 
-  const holderOptions = holderChoices(holders, added);
-  const { holder: chosenHolder, defaultPortfolioId: chosenPortfolio } =
-    offeredChoices(holder, portfolio, holderOptions, portfolios);
+  const holderOptions = holderChoices(holderRows, added);
+  const offered = offeredChoices(holder, portfolio, holderOptions, portfolios);
+  // Without holders every account is the user's own.
+  const chosenHolder = holders ? offered.holder : SELF_HOLDER;
+  const chosenPortfolio = offered.defaultPortfolioId;
 
   function submit() {
     if (holderPending) return;
@@ -339,56 +352,59 @@ export function SourceConnectionDialog({
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor={ids.holder}>Titular</Label>
-            <div className="flex gap-2">
-              <Select
-                value={chosenHolder}
-                onValueChange={pick("holder", setHolder)}
-              >
-                <SelectTrigger
-                  ref={holderTrigger}
-                  id={ids.holder}
-                  className="min-w-0 flex-1"
-                  aria-invalid={invalid("holder")}
-                  aria-describedby={invalid("holder") && ids.alert}
-                  autoFocus={firstField === "holder"}
+          {holders && (
+            <div className="grid gap-2">
+              <Label htmlFor={ids.holder}>Titular</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={chosenHolder}
+                  onValueChange={pick("holder", setHolder)}
                 >
-                  <SelectValue placeholder="Elegí un titular" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SELF_HOLDER}>
-                    {SELF_HOLDER_LABEL}
-                  </SelectItem>
-                  {holderOptions.map((row) => (
-                    <SelectItem key={row.id} value={row.id}>
-                      {row.name}
+                  <SelectTrigger
+                    ref={holderTrigger}
+                    id={ids.holder}
+                    className="min-w-0 flex-1"
+                    aria-invalid={invalid("holder")}
+                    aria-describedby={invalid("holder") && ids.alert}
+                    autoFocus={firstField === "holder"}
+                  >
+                    <SelectValue placeholder="Elegí un titular" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SELF_HOLDER}>
+                      {SELF_HOLDER_LABEL}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!addingHolder && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  onClick={showHolderField}
-                >
-                  <Plus />
-                  Nuevo titular
-                </Button>
+                    {holderOptions.map((row) => (
+                      <SelectItem key={row.id} value={row.id}>
+                        {row.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!addingHolder && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={showHolderField}
+                  >
+                    <Plus />
+                    Nuevo titular
+                  </Button>
+                )}
+              </div>
+              {addingHolder && (
+                <NewHolderField
+                  key={holderFieldKey}
+                  create={holders.create}
+                  onCreated={(row) => holderCreated(row, holderFieldKey)}
+                  onCancel={closeHolderField}
+                  onPendingChange={setHolderPending}
+                />
               )}
             </div>
-            {addingHolder && (
-              <NewHolderField
-                key={holderFieldKey}
-                onCreated={(row) => holderCreated(row, holderFieldKey)}
-                onCancel={closeHolderField}
-                onPendingChange={setHolderPending}
-              />
-            )}
-          </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor={ids.portfolio}>Cartera por defecto</Label>
