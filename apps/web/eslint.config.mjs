@@ -99,11 +99,7 @@ const READER_CALLS_ONLY = [
 
 // The prototype's directories, and what its files may not do: hold a server
 // action, which would be a public endpoint writing nothing real.
-const PROTOTYPE_FILES = [
-  "src/app/(app)/prototype",
-  "src/components/prototype",
-  "src/lib/prototype",
-];
+const PROTOTYPE_FILES = ["src/components/prototype", "src/lib/prototype"];
 const PROTOTYPE_SYNTAX = [
   ...BASE_SYNTAX,
   ...noServerAction(
@@ -153,6 +149,11 @@ export default defineConfig([
       allow: [PROTOTYPE, TESTING],
       syntax: PROTOTYPE_SYNTAX,
     }),
+  },
+  // The app's layout and pages pick the prototype outside production.
+  {
+    files: [`src/app/(app)/layout.tsx`, `src/app/(app)/**/page.tsx`],
+    rules: webRules({ allow: [PROTOTYPE], syntax: BASE_SYNTAX }),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],

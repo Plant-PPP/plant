@@ -9,7 +9,9 @@ import {
   updateHolding,
 } from "@/app/(app)/assets/actions";
 import { AssetsSetup } from "@/components/holdings/assets-setup";
+import { PrototypeAssets } from "@/components/prototype/prototype-assets";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { isProductionDeployment } from "@/lib/deployment";
 import { TABS } from "@/lib/holdings/assets-filter";
 import { assetsSelection } from "@/lib/holdings/assets-selection";
 import {
@@ -44,12 +46,20 @@ export const dynamic = "force-dynamic";
 // dollar unless ?unit= names another), in one portfolio (?portfolio=) or all,
 // of one class (?class=) or all, matching a search (?search=) or not; shown in
 // the holdings tab unless ?tab= names another. An invalid param falls back
-// to the default and is logged.
+// to the default and is logged. Outside production it shows made-up data.
 export default async function AssetsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!isProductionDeployment()) {
+    return (
+      <div>
+        <h1 className="sr-only">{navTitle("/assets")}</h1>
+        <PrototypeAssets params={await searchParams} />
+      </div>
+    );
+  }
   const claims = await getSessionClaims();
   const client = await createClient();
   const context = {

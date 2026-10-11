@@ -30,6 +30,9 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 jest.mock("@/components/holdings/assets-setup", () => ({
   AssetsSetup: () => null,
 }));
+jest.mock("@/components/prototype/prototype-assets", () => ({
+  PrototypeAssets: () => null,
+}));
 
 import { QuoteStoreError, holdingSchema } from "@plant/core";
 import type * as React from "react";
@@ -77,6 +80,15 @@ const holding = (id: string, portfolio_id: string, amount: string) => ({
 });
 
 let lines: Record<string, unknown>[];
+
+const savedEnv = process.env.VERCEL_ENV;
+beforeAll(() => {
+  process.env.VERCEL_ENV = "production";
+});
+afterAll(() => {
+  if (savedEnv === undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV = savedEnv;
+});
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -145,6 +157,22 @@ const VIEW_KEYS = [
   "plant.quotes.dropped_count",
   "plant.request_id",
 ];
+
+it("shows made-up data outside production, reading nothing", async () => {
+  process.env.VERCEL_ENV = "preview";
+  try {
+    const page = (await AssetsPage({
+      searchParams: Promise.resolve({ tab: "sales" }),
+    })) as React.ReactElement<{
+      children: React.ReactElement<{ params: unknown }>[];
+    }>;
+    expect(page.props.children[1]!.props.params).toEqual({ tab: "sales" });
+    expect(getSessionClaims).not.toHaveBeenCalled();
+    expect(readHoldings).not.toHaveBeenCalled();
+  } finally {
+    process.env.VERCEL_ENV = "production";
+  }
+});
 
 it("values in the reference dollar by default", async () => {
   const props = await render();
