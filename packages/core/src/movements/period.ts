@@ -46,31 +46,26 @@ export type PeriodResult = {
   share: string | null;
 };
 
-// The flows are those dated after `from` and on or before `to`. The money at
-// work starts from `atWorkAtStart` when only part of the start value works,
-// as net worth less debts does; the start value otherwise.
+// The flows are those dated after `from` and on or before `to`.
 export function periodResult({
   from,
   to,
   startValue,
   endValue,
-  atWorkAtStart = startValue,
   flows,
 }: {
   from: string;
   to: string;
   startValue: string;
   endValue: string;
-  atWorkAtStart?: string;
   flows: readonly CashFlow[];
 }): PeriodResult {
   const start = exactOf(startValue);
-  const working = exactOf(atWorkAtStart);
   const end = exactOf(endValue);
   // Money first put to work inside the period works from the start of that
   // day, so a first purchase on its last day counts for the whole of it.
   const firstIn =
-    working.n === 0n
+    start.n === 0n
       ? flows
           .filter((flow) => flow.kind !== "income")
           .map((flow) => flow.date)
@@ -87,9 +82,10 @@ export function periodResult({
   let income = ZERO;
   let charges = ZERO;
   // The money at work: the start value, plus each flow in for the part of
-  // the period from the start of its day, less each flow out likewise. An
+  // the period from the start of its day, less each flow out for the part
+  // after the end of its day, since the money worked the day it left. An
   // income is what the money made, not money put in or taken out.
-  let atWork = working;
+  let atWork = start;
   for (const flow of flows) {
     const amount = exactOf(flow.amount);
     const paid = exactOf(flow.charges);
@@ -104,7 +100,10 @@ export function periodResult({
       paidIn = plus(paidIn, negated(amount), negated(paid));
     } else proceeds = plus(proceeds, amount, paid);
     const weight = over(
-      { n: BigInt(daysBetween(flow.date, to) + 1), d: 1n },
+      {
+        n: BigInt(daysBetween(flow.date, to) + (flow.kind === "buy" ? 1 : 0)),
+        d: 1n,
+      },
       { n: BigInt(days), d: 1n },
     );
     atWork = minus(atWork, times(amount, weight));

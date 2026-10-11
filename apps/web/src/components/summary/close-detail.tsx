@@ -109,8 +109,10 @@ function CloseFigures({
       </dl>
       {!complete && (
         <p className="text-muted-foreground text-xs">
-          Algún activo o deuda no tenía cotización al inicio o al final, o algún
-          movimiento no se pudo pasar a esta moneda: las cifras lo dejan afuera.
+          Faltó algún dato: la cotización de un activo o una deuda al inicio o
+          al final, un movimiento que no se puede pasar a esta moneda, el precio
+          de un saldo inicial o un ajuste ese día (entra a su costo) o el
+          rendimiento de un mes sin nada invertido.
         </p>
       )}
     </div>

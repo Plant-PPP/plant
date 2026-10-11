@@ -38,10 +38,10 @@ it("splits a month's change into market, income and contributions", () => {
     result: "60",
   });
   // 60 over 1000, plus 200 from the start of the 10th (21 of 30 days),
-  // less 100 from the start of the 20th (11 days); the income is what the
-  // money made: 1103.33…
+  // less 100 from the end of the 20th (10 days); the income is what the
+  // money made: 1106.67…
   expect(Number(result.share)).toBeCloseTo(
-    60 / (1000 + (200 * 21) / 30 - (100 * 11) / 30),
+    60 / (1000 + (200 * 21) / 30 - (100 * 10) / 30),
     6,
   );
 });
@@ -120,14 +120,13 @@ it("files a sale whose charges exceed it under proceeds", () => {
   expect(result).toMatchObject({ paidIn: "0", proceeds: "0.5" });
 });
 
-it("puts only what was held to work, not net worth less debts", () => {
-  // 1000 held against 1500 owed: net worth -500, and 100 made.
+it("lets a sale on the month's first day count the day the money worked", () => {
+  // 1000 held, all sold on the 1st for 1000 less 5 of commission.
   const result = periodResult({
     ...MONTH,
-    startValue: "-500",
-    endValue: "-400",
-    atWorkAtStart: "1000",
-    flows: [],
+    startValue: "1000",
+    endValue: "0",
+    flows: [{ date: "2026-09-01", amount: "995", kind: "sell", charges: "5" }],
   });
-  expect(result.share).toBe("0.1");
+  expect(Number(result.share)).toBeGreaterThan(-0.5);
 });
