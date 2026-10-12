@@ -853,20 +853,25 @@ function withMovements(
   };
 }
 
-// The archived account or portfolio a holding sits in, if any: no holding may
-// stay open there.
-function archivedHome(
+// The refusal for an account or portfolio the user archived, the account's
+// first; null when neither is archived.
+function archivedCode(
   state: PrototypeState,
-  holdingId: string,
+  { accountId, portfolioId }: { accountId?: string; portfolioId?: string },
 ): "source_connection_archived" | "portfolio_archived" | null {
-  const stored = state.holdings.find((each) => each.holding.id === holdingId);
-  if (!stored) return null;
-  if (state.archivedAccounts.some(({ id }) => id === stored.accountId)) {
+  if (state.archivedAccounts.some(({ id }) => id === accountId)) {
     return "source_connection_archived";
   }
-  return state.archivedPortfolios.some(({ id }) => id === stored.portfolioId)
+  return state.archivedPortfolios.some(({ id }) => id === portfolioId)
     ? "portfolio_archived"
     : null;
+}
+
+// The archived account or portfolio a holding sits in, if any: no holding may
+// stay open there.
+function archivedHome(state: PrototypeState, holdingId: string) {
+  const stored = state.holdings.find((each) => each.holding.id === holdingId);
+  return stored ? archivedCode(state, stored) : null;
 }
 
 // The open or closed holding of an instrument in an account and portfolio.
@@ -913,9 +918,7 @@ export function writeOperation(
   if (!account || !instrument) {
     return refused(state, {
       ok: false,
-      code: state.archivedAccounts.some(({ id }) => id === accountId)
-        ? "source_connection_archived"
-        : "not_found",
+      code: archivedCode(state, { accountId }) ?? "not_found",
     });
   }
   const was = operationOf(state, operationId);
@@ -959,9 +962,7 @@ export function writeOperation(
       if (!portfolio) {
         return refused(state, {
           ok: false,
-          code: state.archivedPortfolios.some(({ id }) => id === portfolioId)
-            ? "portfolio_archived"
-            : "not_found",
+          code: archivedCode(state, { portfolioId }) ?? "not_found",
         });
       }
       const stored = holdingIn(
