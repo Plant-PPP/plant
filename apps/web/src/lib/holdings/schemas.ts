@@ -115,8 +115,7 @@ const transferParts = {
     )
     .length(2),
 };
-// One quantity out of one portfolio and into another; skipped once a part
-// failed, since its quantities may not be decimals.
+// One quantity out of one portfolio and into another.
 const oneEachWay = (operation: {
   parts: readonly { direction: "in" | "out"; quantity: string }[];
 }) => {
