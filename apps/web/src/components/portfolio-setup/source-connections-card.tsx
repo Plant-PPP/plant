@@ -141,7 +141,6 @@ export function SourceConnectionsCard({
   holders?: HolderChoices;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
-  // Whether deleting an account also deletes its uploads.
   deletesUploads?: (accountId: string) => boolean;
 }) {
   const columns = dataColumns(holders !== undefined);

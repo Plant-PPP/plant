@@ -77,8 +77,7 @@ export function deleteMessages(messages: WriteMessages): WriteMessages {
   };
 }
 
-// An account delete's confirmation. Its uploads go with it but still count
-// toward the month's limit.
+// An account delete's confirmation.
 export const deleteAccountDescription = (deletesUploads: boolean): string =>
   deletesUploads
     ? "Las cargas de esta cuenta se borran y siguen contando para este mes. No se puede deshacer."
