@@ -108,6 +108,7 @@ describe("deletesUploads", () => {
 
   it("lists the accounts, archived ones too, whose delete takes an upload", () => {
     expect(accountsDeletingUploads(lemon)).toEqual([]);
+    expect(accountsDeletingUploads(upload(lemon, LEMON))).toEqual([LEMON]);
     const archived = archiveAccount(upload(lemon, LEMON), LEMON).state;
     expect(archived.archivedAccounts.some((row) => row.id === LEMON)).toBe(
       true,
