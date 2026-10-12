@@ -912,8 +912,8 @@ export function deleteHolding(
   if (!state.holdings.some((each) => each.holding.id === id)) {
     return refused(state, { ok: false, code: "not_found" });
   }
-  // A holding with no movements leaves the movements as they were, so no
-  // close counts its delete as a change to what moved.
+  // A holding with no movements leaves the movements map the same object,
+  // so nothing that watches it sees a change.
   if (!state.movements.has(id)) {
     return {
       state: {
