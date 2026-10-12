@@ -118,12 +118,12 @@ export function MovementDialog({
     editing: mode === "edit" ? initial.kind : null,
     transfers: transfer !== undefined,
   });
+  const destinationId = `${fieldId("parts")}-to`;
+  const costHelpId = `${fieldId("price")}-help`;
   // A transfer with no portfolio to move to points its alert there.
   const noDestination = moving && !fields.parts[1]?.portfolioId;
   const controlId = (field: MovementField) =>
-    field === "parts" && noDestination
-      ? `${fieldId("parts")}-to`
-      : fieldId(field);
+    field === "parts" && noDestination ? destinationId : fieldId(field);
   const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : null;
   const unused = portfolios.filter(
     (each) => !fields.parts.some((part) => part.portfolioId === each.id),
@@ -327,9 +327,7 @@ export function MovementDialog({
                 <Input
                   id={fieldId("price")}
                   {...control("price")}
-                  aria-describedby={
-                    invalid("price") ? alertId : `${fieldId("price")}-help`
-                  }
+                  aria-describedby={invalid("price") ? alertId : costHelpId}
                   autoFocus={firstField === "price"}
                   inputMode="decimal"
                   autoComplete="off"
@@ -363,7 +361,7 @@ export function MovementDialog({
 
           {moving && (
             <div
-              id={`${fieldId("price")}-help`}
+              id={costHelpId}
               className="-mt-2 grid gap-1 text-xs text-muted-foreground"
             >
               {suggested === null ? (
@@ -413,7 +411,7 @@ export function MovementDialog({
                 </span>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`${fieldId("parts")}-to`}>Hacia</Label>
+                <Label htmlFor={destinationId}>Hacia</Label>
                 <Select
                   value={fields.parts[1]?.portfolioId ?? ""}
                   onValueChange={pick("parts", (value) =>
@@ -421,7 +419,7 @@ export function MovementDialog({
                   )}
                 >
                   <SelectTrigger
-                    id={`${fieldId("parts")}-to`}
+                    id={destinationId}
                     {...control("parts")}
                     autoFocus={firstField === "parts" && noDestination}
                     className="w-full"

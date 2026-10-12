@@ -1,10 +1,17 @@
-import { admitMovements, compareMovements, replayHoldings } from "@plant/core";
+import {
+  admitMovements,
+  compareMovements,
+  positionOf,
+  replayHoldings,
+} from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  archiveAccount,
   archivePortfolio,
+  createAccount,
   createPortfolio,
   deleteAccount,
   deletePortfolio,
@@ -79,7 +86,7 @@ function integrity(state: PrototypeState): string[] {
     if (!admitMovements({ prior: null, after: own }).ok) {
       problems.push(`${id}: movements that do not make a history`);
     }
-    const quantity = steps.get(id)?.at(-1)?.position.quantity ?? "0";
+    const quantity = positionOf(steps.get(id) ?? []).quantity;
     const held = stored.closed ? "0" : stored.holding.amount;
     if (compareDecimals(quantity, held) !== 0) {
       problems.push(`${id}: holds ${held}, its movements leave ${quantity}`);
@@ -457,6 +464,75 @@ it("never reopens a holding inside an archived portfolio", () => {
   const refused = deleteOperation(state, sale);
   expect(refused.result).toEqual({ ok: false, code: "portfolio_archived" });
   expect(refused.state).toBe(state);
+});
+
+it("never reopens a holding inside an archived account, nor by an edit", () => {
+  // A new account that bought and then sold all it held, archived with
+  // nothing open; and a portfolio left the same way.
+  const LEMON = "e9000000-0000-4000-8000-888888888888";
+  let state = createAccount(
+    start,
+    {
+      institution: "Lemon",
+      holder: "self",
+      includeInTaxReport: true,
+      defaultPortfolioId: PRINCIPAL,
+    },
+    LEMON,
+  ).state;
+  state = createPortfolio(state, { name: "Temporal" }, TEMP).state;
+  const held = (portfolio: string) => ({
+    ...trade("purchase", "ETH", "Binance", "2026-03-02", [
+      { portfolio_id: portfolio, quantity: "0.2" },
+    ]),
+  });
+  const inLemon = (input: ReturnType<typeof held>) => ({
+    ...input,
+    source_connection_id: LEMON,
+  });
+  state = writeOperation(state, inLemon(held(PRINCIPAL)), write()).state;
+  const lemonSale = newId();
+  state = writeOperation(
+    state,
+    inLemon(
+      trade("sale", "ETH", "Binance", "2026-04-02", [
+        { portfolio_id: PRINCIPAL, quantity: "0.2" },
+      ]),
+    ),
+    write(lemonSale),
+  ).state;
+  state = writeOperation(state, held(TEMP), write()).state;
+  state = writeOperation(state, held(PRINCIPAL), write()).state;
+  const tempSale = newId();
+  state = writeOperation(
+    state,
+    trade("sale", "ETH", "Binance", "2026-04-02", [
+      { portfolio_id: TEMP, quantity: "0.2" },
+    ]),
+    write(tempSale),
+  ).state;
+  const archived = archiveAccount(state, LEMON);
+  expect(archived.result.ok).toBe(true);
+  state = archivePortfolio(archived.state, TEMP).state;
+  expect(integrity(state)).toEqual([]);
+
+  const deleted = deleteOperation(state, lemonSale);
+  expect(deleted.result).toEqual({
+    ok: false,
+    code: "source_connection_archived",
+  });
+  expect(deleted.state).toBe(state);
+
+  // The sale moved to Principal would leave Temporal's units open.
+  const moved = writeOperation(
+    state,
+    trade("sale", "ETH", "Binance", "2026-04-02", [
+      { portfolio_id: PRINCIPAL, quantity: "0.2" },
+    ]),
+    { ...write(tempSale), replacing: true },
+  );
+  expect(moved.result).toEqual({ ok: false, code: "portfolio_archived" });
+  expect(moved.state).toBe(state);
 });
 
 const instrumentInput = (
