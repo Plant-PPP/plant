@@ -1,4 +1,4 @@
-import { compareMovements } from "@plant/core";
+import { compareMovements, referenceUnit } from "@plant/core";
 import { addDays, exactOf, stored, times } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -461,6 +461,43 @@ it("shows a sale's amount as what it brought before charges", () => {
   expect(line.amount).toBe(
     stored(times(exactOf(sale.quantity), exactOf(sale.price))),
   );
+});
+
+it("shows an income's amount as what it paid, and a line's charges", () => {
+  const income = [...state.movements.values()]
+    .flat()
+    .find(
+      (each): each is Extract<typeof each, { kind: "dividend" | "coupon" }> =>
+        each.kind === "dividend" || each.kind === "coupon",
+    )!;
+  const page = movementsPage(
+    state,
+    { holdingId: income.holding_id },
+    income.currency === "ARS" ? "ars" : referenceUnit(state.referenceDollar),
+    null,
+  );
+  if (!page.ok) throw new Error("page failed");
+  expect(page.rows.find((row) => row.movement.id === income.id)!.amount).toBe(
+    stored(exactOf(income.amount)),
+  );
+
+  const bought = writeOperation(
+    state,
+    {
+      ...sale("1"),
+      kind: "purchase",
+      charges: [{ kind: "commission", label: null, amount: "8" }],
+    },
+    options("e2000000-0000-4000-8000-0000000000aa"),
+  ).state;
+  const own = movementsPage(bought, { holdingId: AAPL }, "ars", null);
+  if (!own.ok) throw new Error("page failed");
+  expect(
+    own.rows.find(
+      (row) =>
+        row.movement.operation_id === "e2000000-0000-4000-8000-0000000000aa",
+    )!.charges,
+  ).toBe("8");
 });
 
 describe("entry order", () => {

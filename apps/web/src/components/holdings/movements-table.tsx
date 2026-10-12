@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/data-table";
 import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { movementLabel } from "@/lib/holdings/messages";
-import { formatQuotedPrice } from "@/lib/holdings/price-input";
+import { lineLabel } from "@/lib/holdings/messages";
+import { formatQuotedPrice, shownPrice } from "@/lib/holdings/price-input";
 import type {
   MovementLine,
   MovementScope,
@@ -133,7 +133,7 @@ export function MovementsTable({
       id: "kind",
       header: "Tipo",
       size: 112,
-      cell: ({ row: { original } }) => movementLabel(original.movement),
+      cell: ({ row: { original } }) => lineLabel(original),
     },
     {
       id: "quantity",
@@ -149,9 +149,9 @@ export function MovementsTable({
       header: "Precio",
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement)
+        shownPrice(original.movement) !== null
           ? formatQuotedPrice(
-              original.movement.price,
+              shownPrice(original.movement)!,
               original.movement.currency,
               instrumentTypes?.get(original.operation.instrument),
             )

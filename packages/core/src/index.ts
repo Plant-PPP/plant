@@ -37,6 +37,7 @@ export {
   type UnitFxKind,
 } from "./valuation/denominators";
 export {
+  lift,
   rate,
   referenceUnit,
   type ReferenceDollar,
@@ -97,6 +98,7 @@ export {
   type PositionMoney,
   positionOf,
   replay,
+  replayHoldings,
   type SaleResult,
   unrealized,
 } from "./movements/replay";

@@ -9,9 +9,11 @@ import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
 import { holdingDateSchema } from "../valuation/holding";
 
 // What can happen to an instrument holding. A holding starts with units
-// coming in: its opening balance, a purchase or an adjustment in. An adjustment changes the
-// quantity without trading it: units in at a cost (0 unless given), or units
-// out with their share of the cost and no result.
+// coming in: its opening balance, a purchase, an adjustment in or a transfer
+// in. An adjustment changes the quantity without trading it: units in at a
+// cost (0 unless given), or units out with their share of the cost and no
+// result. A transfer moves units between two portfolios of one account: they
+// leave with their share of the cost and arrive carrying it, with no result.
 export const MOVEMENT_KINDS = [
   "opening_balance",
   "purchase",
@@ -19,6 +21,7 @@ export const MOVEMENT_KINDS = [
   "dividend",
   "coupon",
   "adjustment",
+  "transfer",
 ] as const;
 export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 
@@ -76,6 +79,11 @@ const trade = {
   quantity: positiveDecimalSchema,
   price: nonNegativeDecimalSchema,
 };
+// Units moved in or out without a trade.
+const moved = {
+  direction: z.enum(["in", "out"]),
+  quantity: positiveDecimalSchema,
+};
 const KIND_FIELDS = {
   opening_balance: trade,
   purchase: trade,
@@ -83,10 +91,16 @@ const KIND_FIELDS = {
   dividend: { amount: positiveDecimalSchema },
   coupon: { amount: positiveDecimalSchema },
   adjustment: {
-    direction: z.enum(["in", "out"]),
-    quantity: positiveDecimalSchema,
+    ...moved,
     // The cost of each unit that comes in; units that go out take theirs.
     price: nonNegativeDecimalSchema.default("0"),
+  },
+  transfer: {
+    ...moved,
+    // The cost of each unit that comes in, when the user sets one; null
+    // carries the cost the units left with. Units that go out take theirs.
+    price: nonNegativeDecimalSchema.nullable().default(null),
+    charges: z.tuple([]).default([]),
   },
 } as const satisfies Record<MovementKind, z.ZodRawShape>;
 
@@ -105,7 +119,8 @@ export type MovementRates = z.output<typeof movementRatesSchema>;
 export type MovementRate = MovementRates[UnitFxKind];
 
 // A movement is one holding's part of an operation: the operation's other
-// parts are the same purchase or sale in the account's other portfolios.
+// parts are the same movement in the account's other portfolios, or a
+// transfer's other side.
 // Every part shares its operation's entry order, which orders the movements
 // of one day after any opening balance.
 const stored = {
@@ -123,6 +138,13 @@ export const movementSchema = z.discriminatedUnion("kind", [
   movementBranch("dividend").extend(stored).strict(),
   movementBranch("coupon").extend(stored).strict(),
   movementBranch("adjustment").extend(stored).strict(),
+  movementBranch("transfer")
+    .extend(stored)
+    .strict()
+    .refine(
+      (movement) => movement.direction === "in" || movement.price === null,
+      { message: "Units going out carry their own cost", path: ["price"] },
+    ),
 ]);
 export type Movement = z.output<typeof movementSchema>;
 // A movement that moves units.
@@ -131,10 +153,11 @@ export type Trade = Extract<Movement, { quantity: string }>;
 export const isTrade = (movement: Movement): movement is Trade =>
   "quantity" in movement;
 
-// Whether a movement takes units out: a sale, or an adjustment out.
+// Whether a movement takes units out: a sale, or an adjustment or transfer
+// out.
 export const takesUnits = (movement: Movement): boolean =>
   movement.kind === "sale" ||
-  (movement.kind === "adjustment" && movement.direction === "out");
+  ("direction" in movement && movement.direction === "out");
 
 // Movements apply to instrument holdings only.
 export const takesMovements = (holding: { asset_class: string }): boolean =>

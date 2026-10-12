@@ -4,7 +4,7 @@ import type { z } from "zod";
 // each issue is about maps to a field, and `empty` says the value was missing
 // rather than wrong. Undefined when no issue names a field.
 export function firstRefused<F extends string>(
-  error: z.ZodError,
+  error: Pick<z.ZodError, "issues">,
   fieldByColumn: Readonly<Record<string, F>>,
   order: readonly F[],
 ): { field: F; empty: boolean } | undefined {

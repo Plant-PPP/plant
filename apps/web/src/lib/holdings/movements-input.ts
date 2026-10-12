@@ -6,6 +6,7 @@ import type {
   Position,
   SaleResult,
 } from "@plant/core";
+import type { PortfolioSetupGuardHint } from "@plant/shared";
 
 import type { HoldingRow } from "./read";
 
@@ -29,12 +30,15 @@ export type MovementLine = {
 };
 
 // An operation's account and instrument, and every part of it: one movement
-// per portfolio.
+// per portfolio, with the portfolio's name.
 export type OperationParts = {
   accountId: string;
   instrument: string;
-  parts: { movement: Movement; portfolioId: string }[];
+  parts: { movement: Movement; portfolioId: string; portfolioName: string }[];
 };
+
+// A transfer as its dialog would send it, and the operation an edit replaces.
+export type TransferCostQuery = { input: unknown; operationId: string | null };
 
 export type MovementsPage =
   | { ok: true; rows: MovementLine[]; next: MovementCursor | null }
@@ -78,11 +82,23 @@ export type MovementsInput = {
     unit: Denominator,
     cursor: MovementCursor | null,
   ) => Promise<MovementsPage>;
+  // The cost per unit, in the transfer's currency, its units would carry if
+  // their cost were left to them; null when the transfer cannot be written. A
+  // page that passes it offers transfers between portfolios.
+  transferCost?: (query: TransferCostQuery) => string | null;
 };
 
 export type MovementResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      code: "invalid" | "not_found" | "failed" | MovementRefusal;
+      code:
+        | "invalid"
+        | "not_found"
+        | "failed"
+        | Extract<
+            PortfolioSetupGuardHint,
+            "portfolio_archived" | "source_connection_archived"
+          >
+        | MovementRefusal;
     };

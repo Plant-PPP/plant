@@ -5,6 +5,7 @@ import {
   type MovementKind,
   type Position,
   takesMovements,
+  takesUnits,
 } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -17,18 +18,24 @@ import {
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ComponentProps, type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { dialogAnswer } from "@/components/portfolio-setup/answers";
+import {
+  dialogAnswer,
+  type MessagesFor,
+} from "@/components/portfolio-setup/answers";
 import {
   applyChange,
   type ListChange,
   temporaryId,
 } from "@/components/portfolio-setup/list-change";
-import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
+import {
+  type Result,
+  useOptimisticWrites,
+} from "@/components/portfolio-setup/optimistic-writes";
 import {
   ArchivedList,
   type Retry,
@@ -45,6 +52,7 @@ import { PendingButton } from "@/components/ui/pending-button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { inSentence } from "@/lib/format/text";
 import {
   type AssetsFilter,
   type AssetsTab,
@@ -69,12 +77,14 @@ import {
   instrumentNames,
 } from "@/lib/holdings/holding-name";
 import {
+  HOLDING_DELETE_MESSAGES,
   MOVEMENT_DELETE_MESSAGES,
-  movementLabel,
+  lineLabel,
   MOVEMENT_MESSAGES,
   PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
 import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
+import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
 import type {
   MovementLine,
   MovementResult,
@@ -180,7 +190,7 @@ export type HoldingActions = {
     restore: (id: string) => Promise<WriteResult>;
   };
   // A page that deletes holdings, each with its movements.
-  delete?: (id: string) => Promise<WriteResult>;
+  delete?: (id: string) => Promise<HoldingDeleteResult>;
 };
 
 export type ScopeHrefs = {
@@ -321,14 +331,15 @@ export function AssetsSetup({
     setDialog(next);
   }
 
-  function rowAction(
+  function rowAction<R extends Result>(
     change: ListChange<HoldingRow>,
-    call: () => Promise<WriteResult>,
+    call: () => Promise<R>,
+    messages: MessagesFor<R>,
     row: HoldingRow,
     actionId: "archive" | "restore" | "delete",
     done: string,
   ) {
-    card.rowAction(change, call, (result) => dialogAnswer(result, MESSAGES), {
+    card.rowAction(change, call, (result) => dialogAnswer(result, messages), {
       done: `${done} ${named(row)}`,
       rowId: row.id,
       actionId,
@@ -432,9 +443,44 @@ export function AssetsSetup({
     );
   }
 
+  // A transfer the dialog offers: from the instrument holding it was opened
+  // from, or the portfolio an edited transfer's units leave.
+  function transferOf(
+    state: MovementDialogState,
+    input: MovementsInput,
+  ): ComponentProps<typeof MovementDialog>["transfer"] {
+    const { transferCost } = input;
+    if (!transferCost) return undefined;
+    const from =
+      state.kind === "edit"
+        ? state.operation.parts.find(({ movement }) => takesUnits(movement))
+            ?.portfolioId
+        : state.row?.holding.asset_class === "instrument"
+          ? state.row.portfolio.id
+          : undefined;
+    if (
+      from === undefined ||
+      (state.kind === "edit" &&
+        state.operation.parts[0]!.movement.kind !== "transfer")
+    ) {
+      return undefined;
+    }
+    return {
+      from,
+      suggestedCost: (fields) =>
+        transferCost({
+          input: toOperationInput(fields, typeOf(fields.instrument)),
+          operationId:
+            state.kind === "edit"
+              ? state.operation.parts[0]!.movement.operation_id
+              : null,
+        }),
+    };
+  }
+
   // A movement as its actions name it: "compra del 01/09/2026".
   const movementName = (line: MovementLine) =>
-    `${movementLabel(line.movement).toLowerCase()} del ${formatDate(line.movement.date)}`;
+    `${inSentence(lineLabel(line))} del ${formatDate(line.movement.date)}`;
 
   function confirmDeleteMovement(
     line: MovementLine,
@@ -445,9 +491,11 @@ export function AssetsSetup({
     setConfirm({
       title: `¿Borrar ${movementName(line)}?`,
       description:
-        parts > 1
-          ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
-          : "No se puede deshacer.",
+        line.movement.kind === "transfer"
+          ? "Es un traspaso: se borra en las dos carteras. No se puede deshacer."
+          : parts > 1
+            ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
+            : "No se puede deshacer.",
       run: () =>
         card.rowAction(
           { kind: "update", row },
@@ -763,6 +811,7 @@ export function AssetsSetup({
                   rowAction(
                     { kind: "archive", id: row.id },
                     () => archiving.archive(row.id),
+                    MESSAGES,
                     row,
                     "archive",
                     "Archivaste",
@@ -787,6 +836,7 @@ export function AssetsSetup({
                       rowAction(
                         { kind: "delete", id: row.id },
                         () => deleteHolding(row.id),
+                        HOLDING_DELETE_MESSAGES,
                         row,
                         "delete",
                         "Borraste",
@@ -860,6 +910,7 @@ export function AssetsSetup({
             rowAction(
               { kind: "restore", row },
               () => archiving.restore(row.id),
+              MESSAGES,
               row,
               "restore",
               "Restauraste",
@@ -1242,6 +1293,7 @@ export function AssetsSetup({
       )}
       {movement && movementDialog && (
         <MovementDialog
+          transfer={transferOf(movementDialog, movement.input)}
           mode={movementDialog.kind}
           accounts={accounts}
           portfolios={portfolios}

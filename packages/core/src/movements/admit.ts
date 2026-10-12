@@ -36,9 +36,9 @@ export type MovementWindow = {
 };
 
 // Whether a holding's movements make a history: it starts with units coming
-// in (an opening balance, a purchase or an adjustment in), an opening balance
-// only ever first, and nothing takes out more units than are held at that
-// point. Only quantities are read, so the answer is the same in every unit.
+// in (an opening balance, a purchase, an adjustment in or a transfer in), an
+// opening balance only ever first, and nothing takes out more units than are
+// held at that point. Only quantities are read, so the answer is the same in every unit.
 // Returns the quantity held after the last one.
 export function admitMovements({ prior, after }: MovementWindow): Admission {
   const sorted = [...after].sort(compareMovements);

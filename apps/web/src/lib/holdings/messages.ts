@@ -7,9 +7,10 @@ import type {
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
-import { FAILED } from "@/lib/portfolio-setup/messages";
+import { FAILED, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 
-import type { MovementResult } from "./movements-input";
+import type { HoldingDeleteResult } from "./delete-result";
+import type { MovementLine, MovementResult } from "./movements-input";
 import type { PriceResult } from "./price-input";
 
 export type AssetClass = Holding["asset_class"];
@@ -45,15 +46,28 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   dividend: "Dividendo",
   coupon: "Cupón",
   adjustment: "Ajuste",
+  transfer: "Traspaso",
 };
 
-// How a list names a movement: an adjustment says which way its units went.
-export const movementLabel = (movement: Movement): string =>
-  movement.kind === "adjustment"
-    ? movement.direction === "in"
-      ? "Ajuste (entran)"
-      : "Ajuste (salen)"
+const movementLabel = (movement: Movement): string =>
+  "direction" in movement
+    ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`
     : MOVEMENT_KIND_LABELS[movement.kind];
+
+// A movement as a list names it: a transfer by the portfolio on its other
+// side.
+export function lineLabel({
+  movement,
+  operation,
+}: Pick<MovementLine, "movement" | "operation">): string {
+  const other = operation.parts.find(
+    (part) => part.movement.holding_id !== movement.holding_id,
+  );
+  if (movement.kind !== "transfer" || !other) return movementLabel(movement);
+  return movement.direction === "out"
+    ? `Traspaso a ${other.portfolioName}`
+    : `Traspaso desde ${other.portfolioName}`;
+}
 
 export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
   commission: "Comisión",
@@ -76,9 +90,12 @@ export const MOVEMENT_MESSAGES: Record<
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
   oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
-  opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
+  opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
+  portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
+  source_connection_archived:
+    WRITE_MESSAGES.holdings.source_connection_archived,
 };
 
 export const PRICE_MESSAGES: Record<
@@ -94,5 +111,14 @@ export const PRICE_MESSAGES: Record<
 export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   ...MOVEMENT_MESSAGES,
   oversold: `No podés borrarlo: un movimiento posterior sacaría más unidades de las que tenías. ${SAME_DAY_ORDER}`,
-  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
+  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
+};
+
+export const HOLDING_DELETE_MESSAGES: Record<
+  Extract<HoldingDeleteResult, { ok: false }>["code"],
+  string
+> = {
+  ...WRITE_MESSAGES.holdings,
+  holding_has_transfers:
+    "Tiene traspasos con otra cartera. Borralos primero desde sus movimientos.",
 };

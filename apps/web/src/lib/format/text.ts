@@ -6,6 +6,11 @@ export const folded = (text: string): string =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
 
+// A label inside a sentence: its first letter in lower case ("Dólar MEP" →
+// "dólar MEP").
+export const inSentence = (label: string): string =>
+  label.charAt(0).toLowerCase() + label.slice(1);
+
 // How many of `days` fall in `today`'s month, what a monthly allowance has
 // used.
 export const usedThisMonth = (days: readonly string[], today: string) =>

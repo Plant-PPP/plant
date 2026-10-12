@@ -3,6 +3,8 @@ import {
   type InstrumentType,
   type ManualPriceRefusal,
   exactUnitPrice,
+  isTrade,
+  type Movement,
   quotedPrice,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
@@ -28,9 +30,16 @@ export const priceFields = (
   latest: { price: string; date: string } | null,
   today: string,
 ): PriceFields => ({
-  price: latest ? amountInput(quotedPrice(type, latest.price)) : "",
+  price: latest ? quotedInput(latest.price, type) : "",
   date: latest?.date ?? today,
 });
+
+// A unit's price as typed in a form: as the market quotes it, per 100
+// nominal for a bond, or per unit when the type is not known.
+export const quotedInput = (
+  perUnit: string,
+  type: InstrumentType | null | undefined,
+): string => amountInput(type ? quotedPrice(type, perUnit) : perUnit);
 
 // What the dialog sends: the price of one unit. A price the parser refuses
 // goes as null, for the schema to refuse.
@@ -60,3 +69,8 @@ export function formatQuotedPrice(
   }
   return `${formatPrice(quotedPrice(type, perUnit), unit)} c/100 VN`;
 }
+
+// The price a movement's row shows per unit: a trade's, but not a transfer's,
+// whose cost shows as its amount.
+export const shownPrice = (movement: Movement): string | null =>
+  isTrade(movement) && movement.kind !== "transfer" ? movement.price : null;

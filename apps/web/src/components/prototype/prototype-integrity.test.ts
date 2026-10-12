@@ -2,14 +2,16 @@ import {
   admitMovements,
   compareMovements,
   positionOf,
-  replay,
+  replayHoldings,
 } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  archiveAccount,
   archivePortfolio,
+  createAccount,
   createPortfolio,
   deleteAccount,
   deletePortfolio,
@@ -18,7 +20,9 @@ import {
   createHolding,
   deleteHolding,
   deleteOperation,
+  groupKey,
   initialState,
+  type StoredHolding,
   updateHolding,
   type PrototypeState,
   type Write,
@@ -28,9 +32,16 @@ import {
 // The rules a database's foreign keys and checks would keep, read off the
 // prototype's state: every movement belongs to a holding there is, every
 // holding to an account and a portfolio there are, an instrument holding's
-// quantity is what its movements leave, and an operation's parts agree.
+// quantity is what its movements leave, and an operation's parts agree. A
+// transfer moves one quantity out of one portfolio's holding of an instrument
+// and into another portfolio's holding of it in the same account.
 function integrity(state: PrototypeState): string[] {
   const problems: string[] = [];
+  const steps = replayHoldings(
+    [...state.movements.values()].flat(),
+    "ars",
+    state.referenceDollar,
+  );
   const holdings = new Map(
     state.holdings.map((each) => [each.holding.id, each]),
   );
@@ -75,7 +86,7 @@ function integrity(state: PrototypeState): string[] {
     if (!admitMovements({ prior: null, after: own }).ok) {
       problems.push(`${id}: movements that do not make a history`);
     }
-    const { quantity } = positionOf(replay(own, "ars", state.referenceDollar));
+    const quantity = positionOf(steps.get(id) ?? []).quantity;
     const held = stored.closed ? "0" : stored.holding.amount;
     if (compareDecimals(quantity, held) !== 0) {
       problems.push(`${id}: holds ${held}, its movements leave ${quantity}`);
@@ -83,7 +94,14 @@ function integrity(state: PrototypeState): string[] {
   }
   const parts = new Map<
     string,
-    { kind: string; date: string; entryOrder: number }[]
+    {
+      kind: string;
+      date: string;
+      entryOrder: number;
+      direction: string | null;
+      quantity: string | null;
+      holding: StoredHolding | undefined;
+    }[]
   >();
   for (const [holdingId, own] of state.movements) {
     if (!holdings.has(holdingId)) {
@@ -99,6 +117,9 @@ function integrity(state: PrototypeState): string[] {
           kind: movement.kind,
           date: movement.date,
           entryOrder: movement.entry_order,
+          direction: "direction" in movement ? movement.direction : null,
+          quantity: "quantity" in movement ? movement.quantity : null,
+          holding: holdings.get(holdingId),
         },
       ]);
       // Written as !(<) so a missing entry order fails too.
@@ -116,6 +137,27 @@ function integrity(state: PrototypeState): string[] {
     }
     if (each.some((part) => part.entryOrder !== each[0]!.entryOrder)) {
       problems.push(`${operationId}: parts in different entry orders`);
+    }
+    if (each[0]!.kind !== "transfer") continue;
+    const [out, arrived] = [...each].sort((a, b) =>
+      a.direction === "out" ? -1 : b.direction === "out" ? 1 : 0,
+    );
+    if (
+      each.length !== 2 ||
+      out!.direction !== "out" ||
+      arrived!.direction !== "in" ||
+      compareDecimals(out!.quantity!, arrived!.quantity!) !== 0
+    ) {
+      problems.push(`${operationId}: a transfer without one side each way`);
+    } else if (
+      !out!.holding ||
+      !arrived!.holding ||
+      groupKey(out!.holding) !== groupKey(arrived!.holding) ||
+      out!.holding.portfolioId === arrived!.holding.portfolioId
+    ) {
+      problems.push(
+        `${operationId}: a transfer outside one account's instrument`,
+      );
     }
   }
   const byEntryOrder = new Map<number, string>();
@@ -280,6 +322,44 @@ it("stays consistent through every kind of write", () => {
     ),
   );
   apply("the split deleted", (s) => deleteOperation(s, split));
+  const btcFrom = start.holdings.find(
+    (each) => each.holding.id === idOf("BTC"),
+  )!.portfolioId;
+  const btcTo = btcFrom === PRINCIPAL ? LARGO : PRINCIPAL;
+  const transfer = (quantity: string, to = btcTo, date = "2026-09-25") => ({
+    kind: "transfer",
+    source_connection_id: account("Binance"),
+    instrument_symbol: "BTC",
+    date,
+    currency: "USD",
+    reference: null,
+    note: null,
+    parts: [
+      { portfolio_id: btcFrom, direction: "out", quantity },
+      { portfolio_id: to, direction: "in", quantity, price: null },
+    ],
+  });
+  const moving = newId();
+  apply("a transfer between portfolios", (s) =>
+    writeOperation(s, transfer("0.1"), write(moving)),
+  );
+  apply("the transfer edited", (s) =>
+    writeOperation(s, transfer("0.2", btcTo, "2026-09-26"), {
+      ...write(moving),
+      replacing: true,
+    }),
+  );
+  apply("the transfer moved to a new portfolio", (s) => {
+    const other = createPortfolio(s, { name: "Otra" }, TEMP).state;
+    return writeOperation(other, transfer("0.2", TEMP), {
+      ...write(moving),
+      replacing: true,
+    });
+  });
+  apply("the transfer deleted", (s) => deleteOperation(s, moving));
+  apply("a transfer that stays", (s) =>
+    writeOperation(s, transfer("0.05"), write()),
+  );
   apply("an instrument holding created with a quantity", (s) =>
     createHolding(
       s,
@@ -382,8 +462,77 @@ it("never reopens a holding inside an archived portfolio", () => {
   state = archivePortfolio(state, TEMP).state;
   expect(integrity(state)).toEqual([]);
   const refused = deleteOperation(state, sale);
-  expect(refused.result).toEqual({ ok: false, code: "not_found" });
+  expect(refused.result).toEqual({ ok: false, code: "portfolio_archived" });
   expect(refused.state).toBe(state);
+});
+
+it("never reopens a holding inside an archived account, nor by an edit", () => {
+  // A new account that bought and then sold all it held, archived with
+  // nothing open; and a portfolio left the same way.
+  const LEMON = "e9000000-0000-4000-8000-888888888888";
+  let state = createAccount(
+    start,
+    {
+      institution: "Lemon",
+      holder: "self",
+      includeInTaxReport: true,
+      defaultPortfolioId: PRINCIPAL,
+    },
+    LEMON,
+  ).state;
+  state = createPortfolio(state, { name: "Temporal" }, TEMP).state;
+  const held = (portfolio: string) => ({
+    ...trade("purchase", "ETH", "Binance", "2026-03-02", [
+      { portfolio_id: portfolio, quantity: "0.2" },
+    ]),
+  });
+  const inLemon = (input: ReturnType<typeof held>) => ({
+    ...input,
+    source_connection_id: LEMON,
+  });
+  state = writeOperation(state, inLemon(held(PRINCIPAL)), write()).state;
+  const lemonSale = newId();
+  state = writeOperation(
+    state,
+    inLemon(
+      trade("sale", "ETH", "Binance", "2026-04-02", [
+        { portfolio_id: PRINCIPAL, quantity: "0.2" },
+      ]),
+    ),
+    write(lemonSale),
+  ).state;
+  state = writeOperation(state, held(TEMP), write()).state;
+  state = writeOperation(state, held(PRINCIPAL), write()).state;
+  const tempSale = newId();
+  state = writeOperation(
+    state,
+    trade("sale", "ETH", "Binance", "2026-04-02", [
+      { portfolio_id: TEMP, quantity: "0.2" },
+    ]),
+    write(tempSale),
+  ).state;
+  const archived = archiveAccount(state, LEMON);
+  expect(archived.result.ok).toBe(true);
+  state = archivePortfolio(archived.state, TEMP).state;
+  expect(integrity(state)).toEqual([]);
+
+  const deleted = deleteOperation(state, lemonSale);
+  expect(deleted.result).toEqual({
+    ok: false,
+    code: "source_connection_archived",
+  });
+  expect(deleted.state).toBe(state);
+
+  // The sale moved to Principal would leave Temporal's units open.
+  const moved = writeOperation(
+    state,
+    trade("sale", "ETH", "Binance", "2026-04-02", [
+      { portfolio_id: PRINCIPAL, quantity: "0.2" },
+    ]),
+    { ...write(tempSale), replacing: true },
+  );
+  expect(moved.result).toEqual({ ok: false, code: "portfolio_archived" });
+  expect(moved.state).toBe(state);
 });
 
 const instrumentInput = (

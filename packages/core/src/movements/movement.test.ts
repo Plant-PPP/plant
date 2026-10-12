@@ -4,6 +4,7 @@ import {
   movementSchema,
   startsHolding,
   takesMovements,
+  takesUnits,
 } from "./movement";
 
 const purchase = {
@@ -141,4 +142,47 @@ it("starts a holding only with units coming in", () => {
   expect(startsHolding(income("dividend", "1", { date: "2025-01-01" }))).toBe(
     false,
   );
+});
+
+describe("a transfer", () => {
+  const leg = {
+    id: "t1",
+    holding_id: "h1",
+    operation_id: "op",
+    entry_order: 1,
+    kind: "transfer",
+    date: "2026-03-02",
+    currency: "USD",
+    quantity: "5",
+    rates: ratesOf("2026-03-02"),
+  };
+
+  it("reads both sides, carrying the cost unless one is set", () => {
+    expect(movementSchema.parse({ ...leg, direction: "out" })).toMatchObject({
+      price: null,
+      charges: [],
+    });
+    expect(
+      movementSchema.parse({ ...leg, direction: "in", price: "400" }),
+    ).toMatchObject({ price: "400" });
+  });
+
+  it.each([
+    [
+      "charges",
+      { direction: "in", charges: [{ kind: "tax", label: null, amount: "1" }] },
+    ],
+    ["a negative cost", { direction: "in", price: "-1" }],
+    ["a cost on the side units leave", { direction: "out", price: "400" }],
+  ])("refuses %s", (_, change) => {
+    expect(movementSchema.safeParse({ ...leg, ...change }).success).toBe(false);
+  });
+
+  it("takes units out only on the side they leave", () => {
+    const out = movementSchema.parse({ ...leg, direction: "out" });
+    const into = movementSchema.parse({ ...leg, direction: "in" });
+    expect(takesUnits(out)).toBe(true);
+    expect(takesUnits(into)).toBe(false);
+    expect(startsHolding(into)).toBe(true);
+  });
 });

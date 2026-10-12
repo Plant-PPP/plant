@@ -1,5 +1,11 @@
 import { classBranch, movementBranch, type OmittableColumn } from "@plant/core";
-import { positiveDecimalSchema } from "@plant/shared";
+import {
+  compareExact,
+  exactOf,
+  fieldsPassed,
+  nonNegativeDecimalSchema,
+  positiveDecimalSchema,
+} from "@plant/shared";
 import { z } from "zod";
 
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
@@ -81,6 +87,46 @@ const incomeParts = {
   ...inAccount,
   parts: parts({ amount: positiveDecimalSchema }),
 };
+// A transfer moves its quantity out of one portfolio's holding and into
+// another's. The side units arrive in may name their cost per unit; without
+// one they carry the cost they left with.
+const transferParts = {
+  ...inAccount,
+  parts: z
+    .array(
+      z.discriminatedUnion("direction", [
+        z
+          .object({
+            portfolio_id: id,
+            direction: z.literal("out"),
+            quantity: positiveDecimalSchema,
+            price: z.null().default(null),
+          })
+          .strict(),
+        z
+          .object({
+            portfolio_id: id,
+            direction: z.literal("in"),
+            quantity: positiveDecimalSchema,
+            price: nonNegativeDecimalSchema.nullable().default(null),
+          })
+          .strict(),
+      ]),
+    )
+    .length(2),
+};
+// One quantity out of one portfolio and into another.
+const oneEachWay = (operation: {
+  parts: readonly { direction: "in" | "out"; quantity: string }[];
+}) => {
+  const [first, second] = operation.parts;
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.direction !== second.direction &&
+    compareExact(exactOf(first.quantity), exactOf(second.quantity)) === 0
+  );
+};
 
 export const operationInputSchema = z.discriminatedUnion("kind", [
   movementBranch("opening_balance")
@@ -113,4 +159,15 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
     .extend(tradeParts)
     .strict()
     .superRefine(onePerPortfolio),
+  movementBranch("transfer")
+    .omit({ quantity: true, direction: true, price: true, charges: true })
+    .extend(transferParts)
+    .strict()
+    .superRefine(onePerPortfolio)
+    .refine(oneEachWay, {
+      message:
+        "A transfer moves one quantity out of one portfolio into another",
+      path: ["parts"],
+      when: fieldsPassed,
+    }),
 ]);
