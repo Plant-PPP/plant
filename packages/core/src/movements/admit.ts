@@ -13,8 +13,15 @@ export type MovementRefusal =
   "oversold" | "opening_balance" | "future_date" | "no_rate";
 
 // The refusals that depend on where a movement stands within its day.
-export const isOrderRefusal = (code: string): boolean =>
-  code === "oversold" || code === "opening_balance";
+const ORDER_REFUSALS = [
+  "oversold",
+  "opening_balance",
+] as const satisfies readonly MovementRefusal[];
+
+export const isOrderRefusal = (
+  code: string,
+): code is (typeof ORDER_REFUSALS)[number] =>
+  (ORDER_REFUSALS as readonly string[]).includes(code);
 
 export type Admission =
   | { ok: true; quantity: string }

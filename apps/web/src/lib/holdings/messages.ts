@@ -65,7 +65,7 @@ export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
 
 export const FUTURE_DATE_MESSAGE = "La fecha no puede ser posterior a hoy.";
 
-const SAME_DAY_ORDER =
+export const SAME_DAY_ORDER =
   "Si es del mismo día, cuenta el orden en que cargaste los movimientos.";
 
 export const MOVEMENT_MESSAGES: Record<
