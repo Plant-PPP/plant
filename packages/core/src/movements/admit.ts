@@ -12,7 +12,7 @@ import { compareMovements } from "./order";
 export type MovementRefusal =
   "oversold" | "opening_balance" | "future_date" | "no_rate";
 
-// The refusals that depend on where a movement stands within its day.
+// The refusals that another place within the day can change.
 const ORDER_REFUSALS = [
   "oversold",
   "opening_balance",

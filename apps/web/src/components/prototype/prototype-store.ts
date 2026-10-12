@@ -867,7 +867,8 @@ export function writeOperation(
   // (which sits first in its day whatever its place), goes last on the day,
   // as if entered again, unless going last leaves something taking out more
   // than was held before it, or a holding no longer starting with units
-  // coming in. An opening balance keeps its own number: it ranks first anyway.
+  // coming in; then it keeps its number on the new date. An opening balance
+  // keeps its own number: it ranks first anyway.
   const kept = was?.parts[0]?.movement;
   if (!kept) return writeAt(state.nextEntryOrder);
   if (

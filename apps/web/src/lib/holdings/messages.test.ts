@@ -20,3 +20,9 @@ it.each([
     }
   },
 );
+
+it("words a refused delete apart from a refused edit", () => {
+  for (const code of ["oversold", "opening_balance"] as const) {
+    expect(MOVEMENT_DELETE_MESSAGES[code]).toMatch(/^No podés borrarlo: /);
+  }
+});
