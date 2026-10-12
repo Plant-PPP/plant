@@ -1,6 +1,14 @@
 import type { Denominator } from "@plant/core";
+import type { ReactNode } from "react";
 
-import { formatAmount, formatShare } from "@/lib/format/amount";
+import {
+  formatAmount,
+  formatShare,
+  shownAmount,
+  shownSign,
+  signed,
+} from "@/lib/format/amount";
+import type { GainLoss } from "@/lib/holdings/cost-totals";
 import type { Sum } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +32,21 @@ export function MissingFigure({ text }: { text: string }) {
       </span>
       <span className="sr-only">{text}</span>
     </>
+  );
+}
+
+// An amount in the page's unit, or a dash when it cannot be expressed in it.
+export function AmountText({
+  amount,
+  unit,
+}: {
+  amount: string | null | undefined;
+  unit: Denominator;
+}) {
+  return amount == null ? (
+    <MissingFigure text="Sin valor en esta moneda" />
+  ) : (
+    formatAmount(amount, unit)
   );
 }
 
@@ -91,5 +114,70 @@ export function ShareText({
       {formatShare(share)}
       <IncompleteMark />
     </>
+  );
+}
+
+const SIGN_COLOURS = {
+  [-1]: "text-destructive",
+  0: "text-muted-foreground",
+  1: "text-emerald-700 dark:text-emerald-400",
+} as const;
+
+// A gain or loss: "Calculando…" until the page has it (undefined), a dash
+// when it is unknown in the unit (null); green when up, red when down, muted
+// when it shows as zero, with its percent (of cost, or a return).
+export function GainLossText({
+  gain,
+  unit,
+}: {
+  gain: GainLoss | null | undefined;
+  unit: Denominator;
+}) {
+  if (gain === undefined) return CALCULATING;
+  if (gain === null) return <MissingFigure text="Sin resultado" />;
+  const sign = shownSign(gain.amount, unit);
+  return (
+    <span className={SIGN_COLOURS[sign]}>
+      {signed(formatAmount(gain.amount, unit), shownAmount(gain.amount, unit))}
+      {gain.percent !== null && (
+        // The percent is coloured by its own sign: a return measured on what
+        // was held can differ from a result net of what is owed.
+        <span
+          className={cn(
+            "block text-xs",
+            shownSign(gain.percent, unit) !== sign &&
+              SIGN_COLOURS[shownSign(gain.percent, unit)],
+          )}
+        >
+          {signed(formatShare(gain.percent), gain.percent)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// One figure of a summary's row of tiles, inside its `dl`: a label, the
+// figure, and a muted note under it.
+export function SummaryTile({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  note?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-muted/60 grid gap-1 rounded-lg p-3">
+      <dt className="text-muted-foreground text-[11px]">{label}</dt>
+      <dd className="truncate text-base font-semibold tabular-nums">
+        {children}
+      </dd>
+      {note !== undefined && (
+        <dd className="text-muted-foreground text-[11px] tabular-nums">
+          {note}
+        </dd>
+      )}
+    </div>
   );
 }

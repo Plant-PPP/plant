@@ -2,9 +2,18 @@ import { quotesNeeded, readSnapshot, referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 
+import {
+  archiveHolding,
+  createHolding,
+  restoreHolding,
+  updateHolding,
+} from "@/app/(app)/(data)/assets/actions";
 import { AssetsSetup } from "@/components/holdings/assets-setup";
+import { PrototypeAssets } from "@/components/prototype/prototype-assets";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { matchesFilter, parseAssetsParams } from "@/lib/holdings/assets-filter";
+import { isProductionDeployment } from "@/lib/deployment";
+import { TABS } from "@/lib/holdings/assets-filter";
+import { assetsSelection } from "@/lib/holdings/assets-selection";
 import {
   ASSETS_VIEW_EVENT,
   assetsViewFailure,
@@ -37,12 +46,20 @@ export const dynamic = "force-dynamic";
 // dollar unless ?unit= names another), in one portfolio (?portfolio=) or all,
 // of one class (?class=) or all, matching a search (?search=) or not; shown in
 // the holdings tab unless ?tab= names another. An invalid param falls back
-// to the default and is logged.
+// to the default and is logged. Outside production it shows made-up data.
 export default async function AssetsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!isProductionDeployment()) {
+    return (
+      <div>
+        <h1 className="sr-only">{navTitle("/assets")}</h1>
+        <PrototypeAssets params={await searchParams} />
+      </div>
+    );
+  }
   const claims = await getSessionClaims();
   const client = await createClient();
   const context = {
@@ -70,24 +87,26 @@ export default async function AssetsPage({
       readReferenceDollar(client, context),
     ]);
 
+  const names = instrumentNames(instruments.rows);
   const {
     unit: chosenUnit,
     tab,
     filter,
     invalid,
-  } = parseAssetsParams(
-    context.params,
-    portfolios.active.map(({ id }) => id),
-  );
+    shown,
+  } = assetsSelection({
+    params: context.params,
+    rows: holdings.active,
+    portfolioIds: portfolios.active.map(({ id }) => id),
+    tabs: TABS,
+    salesYears: [],
+    names,
+  });
   const reference = referenceUnit(dollar);
   const unit = chosenUnit ?? reference;
-  const names = instrumentNames(instruments.rows);
-  const shown = holdings.active.filter((row) =>
-    matchesFilter(row, filter, names),
-  );
   const filtered =
     filter.portfolioId !== null ||
-    filter.assetClass !== null ||
+    filter.holdingClass !== null ||
     filter.search !== "";
 
   let valuation: HoldingsValuation;
@@ -114,7 +133,7 @@ export default async function AssetsPage({
     "plant.assets.unit": unit,
     // The valuation's counts cover only the shown holdings when filtered.
     "plant.assets.filtered": filtered,
-    "plant.assets.asset_class": filter.assetClass ?? "all",
+    "plant.assets.class": filter.holdingClass ?? "all",
     "plant.assets.searched": filter.search !== "",
     "plant.assets.tab": tab,
     "plant.assets.invalid_unit": invalid.unit,
@@ -139,6 +158,12 @@ export default async function AssetsPage({
         portfolios={portfolios.active}
         instruments={instruments.rows}
         today={today}
+        tabs={TABS}
+        actions={{
+          create: createHolding,
+          update: updateHolding,
+          archiving: { archive: archiveHolding, restore: restoreHolding },
+        }}
       />
     </div>
   );

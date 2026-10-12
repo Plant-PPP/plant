@@ -1,6 +1,7 @@
 import {
   type Denominator,
   DENOMINATORS,
+  INSTRUMENT_PRICING,
   type Holding,
   type HoldingsValue,
   type QuoteSnapshot,
@@ -18,7 +19,8 @@ import {
 
 import { SMALL_PRICE_DIGITS } from "@/lib/format/amount";
 
-import type { AssetClass } from "./messages";
+import { classOf, type HoldingClass } from "./classes";
+import type { HoldingRow } from "./read";
 
 type HoldingValue = HoldingsValue["items"][number] & {
   // One unit of the instrument or currency, in the page's unit.
@@ -66,7 +68,7 @@ export type HoldingsValuation = {
   portfolios: Record<string, Sum>;
   accounts: Record<string, Breakdown>;
   kinds: Breakdown;
-  classes: Partial<Record<AssetClass, Sum>>;
+  classes: Partial<Record<HoldingClass, Sum>>;
 };
 
 // The caller passes the holdings the page shows. Each sum is rounded once from
@@ -78,7 +80,9 @@ export function holdingsValuation({
   unit,
   referenceDollar,
 }: {
-  holdings: readonly { holding: Holding; account: { id: string } }[];
+  holdings: readonly (Pick<HoldingRow, "holding" | "instrumentType"> & {
+    account: { id: string };
+  })[];
   truncated: boolean;
   snapshot: QuoteSnapshot;
   unit: Denominator;
@@ -127,15 +131,26 @@ export function holdingsValuation({
   const accountOf = new Map(
     holdings.map((row) => [row.holding.id, row.account.id]),
   );
+  const classById = new Map(
+    holdings.map((row) => [row.holding.id, classOf(row)]),
+  );
 
+  const typeById = new Map(
+    holdings.map((row) => [row.holding.id, row.instrumentType]),
+  );
   const priceOf = (holding: Holding): string | null => {
     if (!hasUnitPrice(holding)) return null;
     const one = value([{ ...holding, amount: "1" }]);
     if (!one.complete) return null;
     const small = compareExact(one.exactTotal, exactOf("1")) < 0;
+    // A price quoted for more than one unit keeps every digit, so the quote
+    // is rounded once, after it is scaled.
+    const type = typeById.get(holding.id);
+    const quotedInBulk =
+      type !== null && type !== undefined && INSTRUMENT_PRICING[type].basis > 1;
     const price = toDecimal(
       one.exactTotal,
-      Math.max(DENOMINATORS[unit].scale, small ? SMALL_PRICE_DIGITS : 0),
+      quotedInBulk || small ? SMALL_PRICE_DIGITS : DENOMINATORS[unit].scale,
     );
     // A price too small for its decimals is unknown here, never zero.
     return compareDecimals(price, "0") === 0 ? null : price;
@@ -166,7 +181,10 @@ export function holdingsValuation({
     ),
     kinds: breakdown(all),
     classes: Object.fromEntries(
-      groupBy((h) => h.asset_class).map(([id, subset]) => [id, sum(subset)]),
+      groupBy((h) => classById.get(h.id)!).map(([id, subset]) => [
+        id,
+        sum(subset),
+      ]),
     ),
   };
 }

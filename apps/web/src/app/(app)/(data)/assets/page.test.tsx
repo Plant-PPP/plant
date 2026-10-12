@@ -30,6 +30,9 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 jest.mock("@/components/holdings/assets-setup", () => ({
   AssetsSetup: () => null,
 }));
+jest.mock("@/components/prototype/prototype-assets", () => ({
+  PrototypeAssets: () => null,
+}));
 
 import { QuoteStoreError, holdingSchema } from "@plant/core";
 import type * as React from "react";
@@ -70,6 +73,7 @@ const holding = (id: string, portfolio_id: string, amount: string) => ({
     label: null,
   }),
   account: { id: "a1", institution: "IOL" },
+  instrumentType: null,
   portfolio: {
     id: portfolio_id,
     name: portfolio_id === P1 ? "Principal" : "Largo plazo",
@@ -77,6 +81,15 @@ const holding = (id: string, portfolio_id: string, amount: string) => ({
 });
 
 let lines: Record<string, unknown>[];
+
+const savedEnv = process.env.VERCEL_ENV;
+beforeAll(() => {
+  process.env.VERCEL_ENV = "production";
+});
+afterAll(() => {
+  if (savedEnv === undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV = savedEnv;
+});
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -125,7 +138,7 @@ const VIEW_KEYS = [
   "enduser.id",
   "event",
   "level",
-  "plant.assets.asset_class",
+  "plant.assets.class",
   "plant.assets.filtered",
   "plant.assets.holding_count",
   "plant.assets.instruments_truncated",
@@ -146,6 +159,22 @@ const VIEW_KEYS = [
   "plant.request_id",
 ];
 
+it("shows made-up data outside production, reading nothing", async () => {
+  process.env.VERCEL_ENV = "preview";
+  try {
+    const page = (await AssetsPage({
+      searchParams: Promise.resolve({ tab: "sales" }),
+    })) as React.ReactElement<{
+      children: React.ReactElement<{ params: unknown }>[];
+    }>;
+    expect(page.props.children[1]!.props.params).toEqual({ tab: "sales" });
+    expect(getSessionClaims).not.toHaveBeenCalled();
+    expect(readHoldings).not.toHaveBeenCalled();
+  } finally {
+    process.env.VERCEL_ENV = "production";
+  }
+});
+
 it("values in the reference dollar by default", async () => {
   const props = await render();
   expect(props.unit).toBe("usd_ccl");
@@ -159,7 +188,7 @@ it("values in the reference dollar by default", async () => {
       "plant.assets.holding_count": 2,
       "plant.assets.shown_count": 2,
       "plant.assets.tab": "holdings",
-      "plant.assets.asset_class": "all",
+      "plant.assets.class": "all",
       "plant.assets.searched": false,
       "plant.assets.invalid_class": false,
       "plant.assets.invalid_search": false,
@@ -196,7 +225,7 @@ it("applies ?unit and ?portfolio", async () => {
   expect(props.referenceUnit).toBe("usd_ccl");
   expect(props.filter).toEqual({
     portfolioId: P2,
-    assetClass: null,
+    holdingClass: null,
     search: "",
   });
   expect(props.valuation.kinds.total.value).toBe("62500");
@@ -235,7 +264,7 @@ it("falls back on invalid params and logs that they were", async () => {
   expect(props.unit).toBe("usd_ccl");
   expect(props.filter).toEqual({
     portfolioId: null,
-    assetClass: null,
+    holdingClass: null,
     search: "",
   });
   expect(viewLine()).toMatchObject({
@@ -252,7 +281,7 @@ it("falls back on invalid params and logs that they were", async () => {
 it("values only the holdings of ?class matching ?search, and never logs the search", async () => {
   const props = await render({ class: "cash", search: "efectivo" });
   expect(props.filter).toMatchObject({
-    assetClass: "cash",
+    holdingClass: "cash",
     search: "efectivo",
   });
   expect(Object.keys(props.valuation.values)).toHaveLength(
@@ -260,19 +289,57 @@ it("values only the holdings of ?class matching ?search, and never logs the sear
   );
   expect(JSON.stringify(lines)).not.toContain("efectivo");
   expect(viewLine()).toMatchObject({
-    "plant.assets.asset_class": "cash",
+    "plant.assets.class": "cash",
     "plant.assets.searched": true,
   });
 });
 
+it("refuses the old instrument class, which is now a type", async () => {
+  await render({ class: "instrument" });
+  expect(viewLine()).toMatchObject({
+    "plant.assets.class": "all",
+    "plant.assets.invalid_class": true,
+  });
+});
+
 it("leaves out the holdings no filter matches", async () => {
-  const props = await render({ class: "instrument" });
+  const props = await render({ class: "crypto" });
   expect(props.valuation.values).toEqual({});
   expect(props.valuation.kinds.total.count).toBe(0);
   expect(viewLine()).toMatchObject({
     "plant.assets.holding_count": 2,
     "plant.assets.shown_count": 0,
   });
+});
+
+it("does not offer the sales tab, and reads no year", async () => {
+  await render({ tab: "sales", year: "2025" });
+  expect(viewLine()).toMatchObject({
+    "plant.assets.tab": "holdings",
+    "plant.assets.invalid_tab": true,
+  });
+  expect(Object.keys(viewLine()!).sort()).toEqual(VIEW_KEYS);
+});
+
+it("logs a failed valuation once and throws it as logged", async () => {
+  // A currency no unit holds makes the valuation throw.
+  readHoldings.mockResolvedValue(
+    list([
+      {
+        ...holding("h1", P1, "1"),
+        holding: { ...holding("h1", P1, "1").holding, currency: "EUR" },
+      },
+    ]),
+  );
+  const error: unknown = await render().catch((e: unknown) => e);
+  expect(isLoggedError(error)).toBe(true);
+  expect(lines).toEqual([
+    expect.objectContaining({
+      level: "error",
+      event: "assets.view",
+      "plant.assets.read": "valuation",
+    }),
+  ]);
 });
 
 it("logs a failed quote read once, by its code, and throws it as logged", async () => {

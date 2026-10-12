@@ -17,10 +17,19 @@ jest.mock("sonner", () => ({
 import { toast } from "sonner";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import type { Answer } from "./answers";
 import type { SetupRun } from "./setup-actions";
 import { useSetupCard } from "./setup-card";
 
 const refused: WriteResult = { ok: false, code: "duplicate" };
+
+// One run's arguments, as the page's write calls it.
+type RunArgs = [
+  change: unknown,
+  call: () => Promise<WriteResult>,
+  answerOf: (result: WriteResult | "rejected") => Answer,
+  after: (answer: Answer) => void,
+];
 const alert = WRITE_MESSAGES.portfolios.duplicate;
 
 function rendered(run: SetupRun, pending: boolean) {
@@ -35,9 +44,9 @@ function rendered(run: SetupRun, pending: boolean) {
 // Shows the section, then submits a dialog whose write the test settles.
 function submitted() {
   mockRender.refs = [];
-  const runs: Parameters<SetupRun>[] = [];
+  const runs: RunArgs[] = [];
   const run: SetupRun = (...args) => {
-    runs.push(args);
+    runs.push(args as unknown as RunArgs);
     return true;
   };
   const { card, effects } = rendered(run, false);
@@ -149,9 +158,9 @@ describe("a refused row action", () => {
 
   it("returns focus to its button in the heading's section once it ends", () => {
     mockRender.refs = [];
-    const runs: Parameters<SetupRun>[] = [];
+    const runs: RunArgs[] = [];
     const run: SetupRun = (...args) => {
-      runs.push(args);
+      runs.push(args as unknown as RunArgs);
       return true;
     };
     const { card, effects } = rendered(run, false);

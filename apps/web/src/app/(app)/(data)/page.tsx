@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isProductionDeployment } from "@/lib/deployment";
 import { navTitle } from "@/lib/navigation";
 import { requireSupabaseEnv } from "@/lib/supabase/env";
 
@@ -22,8 +23,7 @@ async function supabaseStatus(): Promise<string> {
 
 export default async function Home() {
   // The connection check is a dev aid; production does not expose it.
-  const status =
-    process.env.VERCEL_ENV === "production" ? null : await supabaseStatus();
+  const status = isProductionDeployment() ? null : await supabaseStatus();
 
   return (
     <div>

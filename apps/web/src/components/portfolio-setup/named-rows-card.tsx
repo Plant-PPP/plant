@@ -1,12 +1,14 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
+import { deleteMessages } from "@/lib/portfolio-setup/messages";
 import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { type WriteMessages, rowAnswer } from "./answers";
+import { type WriteMessages, dialogAnswer, rowAnswer } from "./answers";
 import { type ListChange, temporaryId } from "./list-change";
 import { NameDialog } from "./name-dialog";
 import {
@@ -46,6 +48,8 @@ export type NamedRowsActions = {
   rename: (id: unknown, input: unknown) => Promise<WriteResult>;
   archive: (id: unknown) => Promise<WriteResult>;
   restore: (id: unknown, input?: unknown) => Promise<WriteResult>;
+  // A page that deletes rows no account or holding uses.
+  delete?: (id: unknown) => Promise<WriteResult>;
 };
 
 const DATA_COLUMNS: ColumnDef<NamedRow>[] = [
@@ -80,6 +84,27 @@ export function NamedRowsCard({
 }) {
   const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [deleting, setDeleting] = useState<NamedRow | null>(null);
+  const remove = actions.delete;
+  const deleteAction = remove && {
+    id: "delete",
+    icon: Trash2,
+    tooltip: "Borrar",
+    label: (row: NamedRow) => `Borrar ${row.name}`,
+    onClick: (row: NamedRow) => !pending && setDeleting(row),
+  };
+
+  function deleteRow(
+    row: NamedRow,
+    call: (id: unknown) => Promise<WriteResult>,
+  ) {
+    card.rowAction(
+      { list, change: { kind: "delete", id: row.id } },
+      () => call(row.id),
+      (result) => dialogAnswer(result, deleteMessages(messages)),
+      { done: `Borraste ${row.name}`, rowId: row.id, actionId: "delete" },
+    );
+  }
 
   function openDialog(next: DialogState) {
     if (pending) return;
@@ -155,6 +180,7 @@ export function NamedRowsCard({
                 label: (row) => `Archivar ${row.name}`,
                 onClick: (row) => rowAction(row, "archive"),
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
@@ -178,11 +204,22 @@ export function NamedRowsCard({
                 label: (row) => `Restaurar ${row.name}`,
                 onClick: (row) => rowAction(row, "restore"),
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
         ]}
       />
+      {deleting && remove && (
+        <ConfirmDialog
+          title={`¿Borrar ${deleting.name}?`}
+          description="No se puede deshacer."
+          confirmLabel="Borrar"
+          returnFocusTo={card.focusHeading}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => deleteRow(deleting, remove)}
+        />
+      )}
       {dialog?.kind === "create" && (
         <NameDialog
           onClose={() => setDialog(null)}

@@ -1,29 +1,24 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import {
-  archiveSourceConnection,
-  createSourceConnection,
-  restoreSourceConnection,
-  updateSourceConnection,
-} from "@/app/(app)/accounts/actions";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
+  deleteMessages,
   SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type {
-  HolderRow,
   PortfolioRow,
   SourceConnectionRow,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
 import { InstitutionIcon } from "./institution-field";
-import { rowAnswer } from "./answers";
+import { dialogAnswer, rowAnswer } from "./answers";
 import { temporaryId } from "./list-change";
 import {
   ActiveList,
@@ -34,6 +29,7 @@ import {
 } from "./setup-card";
 import type { SetupRun } from "./setup-actions";
 import {
+  type HolderChoices,
   SourceConnectionDialog,
   type SourceConnectionFields,
   accountRow,
@@ -60,9 +56,21 @@ function reportStatus(row: SourceConnectionRow): string {
   return row.includeInTaxReport ? "Incluida" : "No incluida";
 }
 
+export type SourceConnectionActions = {
+  create: (input: unknown) => Promise<WriteResult>;
+  update: (id: string, input: unknown) => Promise<WriteResult>;
+  archive: (id: string) => Promise<WriteResult>;
+  restore: (id: string, input: unknown) => Promise<WriteResult>;
+  // A page that deletes accounts that never held anything.
+  delete?: (id: string) => Promise<WriteResult>;
+};
+
 // Below @2xl the holder follows the institution and the portfolio and report
-// status take a muted second line; from @2xl each has its own column.
-const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
+// status take a muted second line; from @2xl each has its own column. A page
+// without holders shows none.
+const dataColumns = (
+  withHolders: boolean,
+): ColumnDef<SourceConnectionRow>[] => [
   {
     id: "institution",
     header: "Cuenta",
@@ -73,10 +81,16 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
           <InstitutionIcon name={row.institution} />
           <span
             className="block truncate"
-            title={`${row.institution} · ${holderName(row)}`}
+            title={
+              withHolders
+                ? `${row.institution} · ${holderName(row)}`
+                : row.institution
+            }
           >
             {row.institution}
-            <span className="@2xl:hidden"> · {holderName(row)}</span>
+            {withHolders && (
+              <span className="@2xl:hidden"> · {holderName(row)}</span>
+            )}
           </span>
         </span>
         <TruncatedText
@@ -86,12 +100,16 @@ const DATA_COLUMNS: ColumnDef<SourceConnectionRow>[] = [
       </>
     ),
   },
-  {
-    id: "holder",
-    header: "Titular",
-    meta: { className: "hidden @2xl:table-cell" },
-    cell: ({ row }) => <TruncatedText text={holderName(row.original)} />,
-  },
+  ...(withHolders
+    ? [
+        {
+          id: "holder",
+          header: "Titular",
+          meta: { className: "hidden @2xl:table-cell" },
+          cell: ({ row }) => <TruncatedText text={holderName(row.original)} />,
+        } satisfies ColumnDef<SourceConnectionRow>,
+      ]
+    : []),
   {
     id: "portfolio",
     header: "Cartera",
@@ -113,15 +131,43 @@ export function SourceConnectionsCard({
   run,
   holders,
   portfolios,
+  actions,
 }: {
   view: SourceConnectionsView;
   pending: boolean;
   run: SetupRun;
-  holders: HolderRow[];
+  holders?: HolderChoices;
   portfolios: PortfolioRow[];
+  actions: SourceConnectionActions;
 }) {
+  const columns = dataColumns(holders !== undefined);
   const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [deleting, setDeleting] = useState<SourceConnectionRow | null>(null);
+  const remove = actions.delete;
+  const deleteAction = remove && {
+    id: "delete",
+    icon: Trash2,
+    tooltip: "Borrar",
+    label: (row: SourceConnectionRow) => `Borrar ${row.institution}`,
+    onClick: (row: SourceConnectionRow) => !pending && setDeleting(row),
+  };
+
+  function deleteRow(
+    row: SourceConnectionRow,
+    call: (id: string) => Promise<WriteResult>,
+  ) {
+    card.rowAction(
+      { list: "sourceConnections", change: { kind: "delete", id: row.id } },
+      () => call(row.id),
+      (result) => dialogAnswer(result, deleteMessages(MESSAGES)),
+      {
+        done: `Borraste ${row.institution}`,
+        rowId: row.id,
+        actionId: "delete",
+      },
+    );
+  }
 
   function openDialog(next: DialogState) {
     if (pending) return;
@@ -131,7 +177,7 @@ export function SourceConnectionsCard({
   function archive(row: SourceConnectionRow) {
     card.rowAction(
       { list: "sourceConnections", change: { kind: "archive", id: row.id } },
-      () => archiveSourceConnection(row.id),
+      () => actions.archive(row.id),
       (result) => rowAnswer(result, "archive", MESSAGES),
       {
         done: `Archivaste ${row.institution}`,
@@ -177,7 +223,11 @@ export function SourceConnectionsCard({
       heading={card.heading}
       pending={pending}
       title="Cuentas"
-      description="Dónde tenés tus inversiones, y de quién son"
+      description={
+        holders
+          ? "Dónde tenés tus inversiones, y de quién son"
+          : "Dónde tenés tus inversiones"
+      }
       addLabel="Agregar cuenta"
       onAdd={() => openDialog({ kind: "create" })}
     >
@@ -187,7 +237,7 @@ export function SourceConnectionsCard({
         emptyText="Todavía no agregaste cuentas."
         truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
         columns={[
-          ...DATA_COLUMNS,
+          ...columns,
           actionsColumn<SourceConnectionRow>(
             [
               {
@@ -204,6 +254,7 @@ export function SourceConnectionsCard({
                 label: (row) => `Archivar ${row.institution}`,
                 onClick: archive,
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
@@ -217,7 +268,7 @@ export function SourceConnectionsCard({
         firstPageLabel="Ver las más recientes"
         pending={pending}
         columns={[
-          ...DATA_COLUMNS,
+          ...columns,
           actionsColumn<SourceConnectionRow>(
             [
               {
@@ -227,11 +278,22 @@ export function SourceConnectionsCard({
                 label: (row) => `Restaurar ${row.institution}`,
                 onClick: (row) => openDialog({ kind: "restore", row }),
               },
+              ...(deleteAction ? [deleteAction] : []),
             ],
             { pending },
           ),
         ]}
       />
+      {deleting && remove && (
+        <ConfirmDialog
+          title={`¿Borrar ${deleting.institution}?`}
+          description="No se puede deshacer."
+          confirmLabel="Borrar"
+          returnFocusTo={card.focusHeading}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => deleteRow(deleting, remove)}
+        />
+      )}
       {dialog?.kind === "create" && (
         <SourceConnectionDialog
           title="Agregar cuenta"
@@ -244,7 +306,7 @@ export function SourceConnectionsCard({
               fields,
               "create",
               accountRow(temporaryId(), fields, chosen),
-              () => createSourceConnection(fields),
+              () => actions.create(fields),
               "Agregaste",
             )
           }
@@ -263,7 +325,7 @@ export function SourceConnectionsCard({
               fields,
               "update",
               accountRow(dialog.row.id, fields, chosen),
-              () => updateSourceConnection(dialog.row.id, fields),
+              () => actions.update(dialog.row.id, fields),
               "Guardaste",
             )
           }
@@ -283,7 +345,7 @@ export function SourceConnectionsCard({
               fields,
               "restore",
               accountRow(dialog.row.id, fields, chosen),
-              () => restoreSourceConnection(dialog.row.id, fields),
+              () => actions.restore(dialog.row.id, fields),
               "Restauraste",
             )
           }

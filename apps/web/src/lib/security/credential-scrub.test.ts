@@ -490,6 +490,7 @@ describe("isSensitiveKey", () => {
     "error.type",
     "plant.request_id",
     "plant.assets.holding_count",
+    "plant.assets.class",
     "plant.quotes.fx_rate_count",
     "plant.value.id",
   ])("passes %s", (key) => {

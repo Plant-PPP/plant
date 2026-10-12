@@ -6,28 +6,21 @@ import { useEffect, useId, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { choose } from "@/components/portfolio-setup/field-alert";
-import {
   type AssetsFilter,
   type AssetsParam,
+  type AssetsTabs,
   SEARCH_MAX_LENGTH,
   parseAssetsParams,
-  unitParam,
 } from "@/lib/holdings/assets-filter";
 import {
-  ASSET_CLASSES,
-  ASSET_CLASS_LABELS,
-  UNIT_LABELS,
-} from "@/lib/holdings/messages";
+  HOLDING_CLASSES,
+  HOLDING_CLASS_LABELS,
+  type HoldingClass,
+} from "@/lib/holdings/classes";
 import type { PortfolioRow } from "@/lib/portfolio-setup/read";
 
 import { type AssetsUrl, searchParamValue } from "./assets-url";
+import { FilterSelect, UnitSelect } from "./filter-select";
 
 const ALL = "all";
 const SEARCH_DELAY_MS = 250;
@@ -37,15 +30,23 @@ const SEARCH_DELAY_MS = 250;
 // does; a search typed meanwhile is sent once it ends.
 export function AssetsFilters({
   url,
+  tabs,
+  salesYears = [],
   referenceUnit,
   filter,
   portfolios,
+  classes,
   pending,
 }: {
   url: AssetsUrl;
+  tabs: AssetsTabs;
+  // The years with sales, newest first, for the sales tab's year.
+  salesYears?: readonly string[];
   referenceUnit: Denominator;
   filter: AssetsFilter;
   portfolios: PortfolioRow[];
+  // The classes of the user's holdings, which the class filter offers.
+  classes: ReadonlySet<HoldingClass>;
   pending: boolean;
 }) {
   const ids = {
@@ -53,13 +54,15 @@ export function AssetsFilters({
     kind: useId(),
     portfolio: useId(),
     unit: useId(),
+    year: useId(),
   };
   // The user's choices, ahead of the page that loads them, read as the page
   // reads them.
-  const chosen = parseAssetsParams(
-    url.params,
-    portfolios.map(({ id }) => id),
-  );
+  const chosen = parseAssetsParams(url.params, {
+    portfolioIds: portfolios.map(({ id }) => id),
+    tabs,
+    salesYears,
+  });
   const shown = { ...chosen.filter, unit: chosen.unit ?? referenceUnit };
   const go = (key: AssetsParam, value: string | null) => {
     if (!pending) url.set(key, value);
@@ -109,20 +112,20 @@ export function AssetsFilters({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <Filter
+      <FilterSelect
         id={ids.kind}
         label="Tipo"
-        value={shown.assetClass ?? ALL}
+        value={shown.holdingClass ?? ALL}
         pending={pending}
         options={[
           [ALL, "Todos los tipos"],
-          ...ASSET_CLASSES.map(
-            (each) => [each, ASSET_CLASS_LABELS[each]] as const,
-          ),
+          ...HOLDING_CLASSES.filter(
+            (each) => classes.has(each) || each === shown.holdingClass,
+          ).map((each) => [each, HOLDING_CLASS_LABELS[each]] as const),
         ]}
         onChange={(value) => go("class", value === ALL ? null : value)}
       />
-      <Filter
+      <FilterSelect
         id={ids.portfolio}
         label="Cartera"
         value={shown.portfolioId ?? ALL}
@@ -133,71 +136,27 @@ export function AssetsFilters({
         ]}
         onChange={(value) => go("portfolio", value === ALL ? null : value)}
       />
-      <Filter
+      {chosen.tab === "sales" && chosen.year !== null && (
+        <FilterSelect
+          id={ids.year}
+          label="Año"
+          shownLabel
+          value={chosen.year}
+          pending={pending}
+          options={salesYears.map((year) => [year, year] as const)}
+          onChange={(value) =>
+            go("year", value === salesYears[0] ? null : value)
+          }
+        />
+      )}
+      <UnitSelect
         id={ids.unit}
-        label="Valuar en"
         shownLabel
-        value={shown.unit}
+        unit={shown.unit}
+        referenceUnit={referenceUnit}
         pending={pending}
-        options={(Object.keys(UNIT_LABELS) as Denominator[]).map(
-          (each) => [each, UNIT_LABELS[each]] as const,
-        )}
-        onChange={(value) => go("unit", unitParam(value, referenceUnit))}
+        onChange={(param) => go("unit", param)}
       />
     </div>
-  );
-}
-
-function Filter({
-  id,
-  label,
-  shownLabel = false,
-  value,
-  pending,
-  options,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  // Shown inside the select, for a value that does not say what it is.
-  shownLabel?: boolean;
-  value: string;
-  pending: boolean;
-  options: readonly (readonly [string, string])[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <>
-      <label htmlFor={id} className="sr-only">
-        {label}
-      </label>
-      <Select disabled={pending} value={value} onValueChange={choose(onChange)}>
-        <SelectTrigger
-          id={id}
-          size="sm"
-          className="w-[calc(50%-0.25rem)] sm:w-auto"
-        >
-          {shownLabel && (
-            <span
-              aria-hidden
-              className="text-muted-foreground hidden sm:inline"
-            >
-              {label}
-            </span>
-          )}
-          {/* The chosen option's text, so the server render shows it too. */}
-          <SelectValue>
-            {options.find(([option]) => option === value)?.[1]}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(([option, text]) => (
-            <SelectItem key={option} value={option}>
-              {text}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
   );
 }

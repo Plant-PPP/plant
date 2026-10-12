@@ -1,4 +1,3 @@
-jest.mock("@/app/(app)/accounts/actions", () => ({}));
 jest.mock("radix-ui", () =>
   jest.requireActual("@/test/inline-dialog-portal").radixWithInlinePortal(),
 );
@@ -30,7 +29,7 @@ function render(
         ...change,
       }}
       initialError={initialError}
-      holders={holders}
+      holders={holders && { rows: holders, create: jest.fn() }}
       portfolios={[PRINCIPAL]}
       returnFocusTo={() => null}
       onClose={() => {}}

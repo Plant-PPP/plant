@@ -15,7 +15,8 @@ export type ListChange<Row> =
   | { kind: "create"; row: Row }
   | { kind: "update"; row: Row }
   | { kind: "archive"; id: string }
-  | { kind: "restore"; row: Row };
+  | { kind: "restore"; row: Row }
+  | { kind: "delete"; id: string };
 
 export type SetupLists = {
   sourceConnections: ListView<SourceConnectionRow>;
@@ -48,7 +49,7 @@ function prepend<Row extends DataTableRow>(
 }
 
 // A change applied again over the server's refreshed list shows the same
-// rows: archiving or restoring a row already moved changes nothing, and an
+// rows: archiving, restoring or deleting a row already moved changes nothing, and an
 // update rewrites the row as it already reads. A create skips a row the list
 // already shows by its id.
 export function applyChange<Row extends DataTableRow>(
@@ -97,6 +98,14 @@ export function applyChange<Row extends DataTableRow>(
         ...prepend(view, { ...change.row, unsaved: true }),
         archived,
       };
+    }
+    case "delete": {
+      const active = view.active.filter(({ id }) => id !== change.id);
+      const archived = view.archived.filter(({ id }) => id !== change.id);
+      return active.length === view.active.length &&
+        archived.length === view.archived.length
+        ? view
+        : { ...view, active, archived };
     }
   }
 }

@@ -28,6 +28,21 @@ const QUANTITY_DIGITS = 8;
 const digitsOf = (unit: Unit): number =>
   isDenominator(unit) ? DENOMINATORS[unit].scale : CURRENCY_DIGITS;
 
+// An amount as it shows in `unit`, rounded to the digits the unit shows, so
+// its sign is the sign a reader sees.
+export const shownAmount = (decimal: string, unit: Unit): string =>
+  toDecimal(exactOf(decimal), digitsOf(unit));
+
+// The sign an amount shows with in `unit`: one that rounds to zero has none.
+export const shownSign = (decimal: string, unit: Unit): -1 | 0 | 1 => {
+  const { n } = exactOf(shownAmount(decimal, unit));
+  return n < 0n ? -1 : n > 0n ? 1 : 0;
+};
+
+// A figure with "+" when the decimal it shows is above zero.
+export const signed = (text: string, shown: string): string =>
+  exactOf(shown).n > 0n ? `+${text}` : text;
+
 // A decimal string in es-AR digits: "." groups thousands, "," marks decimals.
 // Rounded half away from zero only when it has more decimals than `digits`;
 // padded to `digits` unless `trim`; the thousands go ungrouped unless `group`.
@@ -126,6 +141,14 @@ export function parseAmountInput(text: string): string | null {
 const HUNDRED = exactOf("100");
 // annual_rate is numeric(20, 8).
 const FRACTION_DIGITS = 8;
+
+// A fraction as a percent to one decimal, for formatShare: "0.0523" is "5.2".
+export const percentOf = (fraction: string): string =>
+  toDecimal(times(exactOf(fraction), HUNDRED), 1);
+
+// A fraction as a percent to show: "0.0523" is "5,2 %".
+export const formatFraction = (fraction: string): string =>
+  formatShare(percentOf(fraction));
 
 // A fraction as a form field starts with it, in percent: "0.355" is 35,5.
 export function percentInput(fraction: string): string {

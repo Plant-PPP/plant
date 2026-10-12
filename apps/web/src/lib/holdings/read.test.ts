@@ -84,9 +84,42 @@ const HOLDING = {
     institution: "IOL",
   },
   portfolio: { id: "p1", name: "Largo plazo" },
+  instrument: null,
+};
+
+const BTC = {
+  ...HOLDING,
+  id: "h2",
+  asset_class: "instrument",
+  instrument_symbol: "BTC",
+  amount: "0.5",
+  currency: null,
+  instrument: { type: "crypto" },
 };
 
 describe("readHoldings", () => {
+  it("reads an instrument's type through its foreign key", async () => {
+    const { client, calls } = fakeClient(ok([BTC, HOLDING]), ok([]));
+    const view = await readHoldings(client, CONTEXT);
+    expect(String(calls[0]!.find(([m]) => m === "select")![1])).toContain(
+      "instrument:instruments!holdings_instrument_symbol_fkey(type)",
+    );
+    expect(view.active.map((row) => row.instrumentType)).toEqual([
+      "crypto",
+      null,
+    ]);
+  });
+
+  it.each([
+    ["an instrument holding without its type", { ...BTC, instrument: null }],
+    ["a cash holding with one", { ...HOLDING, instrument: { type: "crypto" } }],
+  ])("refuses %s", async (_, row) => {
+    const { client } = fakeClient(ok([row]), ok([]));
+    const error = await readHoldings(client, CONTEXT).catch((e) => e);
+    expect(isLoggedError(error)).toBe(true);
+    expect(lines[0]).toMatchObject({ "plant.outcome": "invalid_row" });
+  });
+
   it("selects amounts as text through the composite keys, by the user", async () => {
     const { client, calls } = fakeClient(ok([HOLDING]), ok([]));
     const view = await readHoldings(client, CONTEXT);
@@ -122,6 +155,7 @@ describe("readHoldings", () => {
         },
         account: { id: "a1", institution: "IOL" },
         portfolio: { id: "p1", name: "Largo plazo" },
+        instrumentType: null,
       },
     ]);
   });

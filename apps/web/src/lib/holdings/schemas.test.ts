@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { repoRoot } from "@/test/supabase-config";
 import { without } from "@/test/without";
 
-import { holdingInsertSchema, holdingUpdateSchema } from "./schemas";
+import {
+  holdingInsertSchema,
+  holdingUpdateSchema,
+  operationInputSchema,
+} from "./schemas";
 
 const ACCOUNT = "a1000000-0000-4000-8000-0000000000a1";
 const PORTFOLIO = "b1000000-0000-4000-8000-0000000000b1";
@@ -178,4 +182,63 @@ it("takes a cash label as null, never missing", () => {
   expect(
     holdingInsertSchema.safeParse(without(insert("cash"), "label")).success,
   ).toBe(false);
+});
+
+describe("operationInputSchema", () => {
+  const purchase = {
+    kind: "purchase",
+    source_connection_id: ACCOUNT,
+    instrument_symbol: "BTC",
+    date: "2026-03-02",
+    currency: "USD",
+    price: "60000",
+    parts: [
+      { portfolio_id: PORTFOLIO, quantity: "0.5" },
+      { portfolio_id: ACCOUNT, quantity: "0.5" },
+    ],
+  };
+
+  it("takes one operation split across portfolios, without rates", () => {
+    expect(operationInputSchema.parse(purchase)).toMatchObject({
+      charges: [],
+      reference: null,
+      note: null,
+      parts: purchase.parts,
+    });
+  });
+
+  it("takes an income's parts as amounts", () => {
+    expect(
+      operationInputSchema.safeParse({
+        ...without(purchase, "price"),
+        kind: "dividend",
+        parts: [{ portfolio_id: PORTFOLIO, amount: "12" }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["rates", { ...purchase, rates: {} }],
+    ["no parts", { ...purchase, parts: [] }],
+    [
+      "a portfolio twice",
+      {
+        ...purchase,
+        parts: [
+          { portfolio_id: PORTFOLIO, quantity: "1" },
+          { portfolio_id: PORTFOLIO, quantity: "1" },
+        ],
+      },
+    ],
+    [
+      "an amount on a trade's part",
+      { ...purchase, parts: [{ portfolio_id: PORTFOLIO, amount: "1" }] },
+    ],
+    [
+      "a portfolio that is no uuid",
+      { ...purchase, parts: [{ portfolio_id: "p1", quantity: "1" }] },
+    ],
+  ])("refuses %s", (_, input) => {
+    expect(operationInputSchema.safeParse(input).success).toBe(false);
+  });
 });

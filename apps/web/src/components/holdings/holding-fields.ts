@@ -17,6 +17,7 @@ import {
 import type { AssetClass } from "@/lib/holdings/messages";
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
+import { firstRefused } from "@/components/portfolio-setup/refusal";
 import { invalidName, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
 
@@ -139,14 +140,26 @@ export function toUpdate(fields: HoldingFields, portfolioBefore: string) {
 
 // The row the page shows until the server's refresh, built from the fields
 // the schema already accepted.
-export function holdingRow(
+export const holdingRow = (
   id: string,
   fields: HoldingFields,
-  chosen: Pick<HoldingRow, "account" | "portfolio">,
+  chosen: Pick<HoldingRow, "account" | "portfolio" | "instrumentType">,
+): HoldingRow => rowOf(id, toInsert(fields), chosen);
+
+// A holding as the page lists it, from a new holding's columns (parsed here;
+// throws on columns the holding schema refuses).
+export function rowOf(
+  id: string,
+  insert: Record<string, unknown>,
+  chosen: Pick<HoldingRow, "account" | "portfolio" | "instrumentType">,
 ): HoldingRow {
   return {
     id,
-    holding: holdingSchema.parse({ ...toInsert(fields), id }),
+    holding: holdingSchema.parse({
+      ...insert,
+      id,
+      portfolio_id: chosen.portfolio.id,
+    }),
     ...chosen,
   };
 }
@@ -222,15 +235,7 @@ const FORM_ORDER: readonly DialogField[] = [
 // The refused field the dialog shows first, with its alert. The rule across a
 // fixed term's dates has no path; it is about the maturity.
 export function refusal(error: z.ZodError): FieldAlert<DialogField> {
-  const refused = error.issues.flatMap((issue) => {
-    const column = issue.path[0];
-    const field =
-      typeof column === "string" ? FIELD_BY_COLUMN[column] : undefined;
-    return field ? [{ field, empty: issue.code === "invalid_type" }] : [];
-  });
-  const first = refused.sort(
-    (a, b) => FORM_ORDER.indexOf(a.field) - FORM_ORDER.indexOf(b.field),
-  )[0];
+  const first = firstRefused(error, FIELD_BY_COLUMN, FORM_ORDER);
   if (!first) return { field: "maturesOn", text: MATURITY_MESSAGE };
   const missing = first.empty ? MISSING_DATE[first.field] : undefined;
   return { field: first.field, text: missing ?? FIELD_MESSAGES[first.field] };

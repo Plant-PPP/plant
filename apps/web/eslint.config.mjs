@@ -15,6 +15,7 @@ import {
   MFA_CALLS_BUT_LIST,
   MFA_CALLS_BUT_UNENROLL,
   MFA_PRIVATE_CALLS,
+  PROTOTYPE,
   QUOTE_SINK,
   secretKeyReads,
   SERVICE_ROLE,
@@ -96,6 +97,16 @@ const READER_CALLS_ONLY = [
   })),
 ];
 
+// The prototype's directories, and what its files may not do: hold a server
+// action, which would be a public endpoint writing nothing real.
+const PROTOTYPE_FILES = ["src/components/prototype", "src/lib/prototype"];
+const PROTOTYPE_SYNTAX = [
+  ...BASE_SYNTAX,
+  ...noServerAction(
+    "The prototype writes nowhere; a server action here would be a public endpoint.",
+  ),
+];
+
 // session-claims.ts exports getSessionClaims alone, so no other export can
 // wrap the unchecked reader without the redirect.
 const ONLY_GET_SESSION_CLAIMS = [
@@ -125,6 +136,31 @@ export default defineConfig([
   {
     files: [`**/*.test.{ts,tsx}`],
     rules: webRules({ allow: [TESTING], syntax: BASE_SYNTAX }),
+  },
+  // The prototype's files import each other and write nowhere. Placed after
+  // the test block, which their tests would otherwise take.
+  {
+    files: PROTOTYPE_FILES.map((dir) => `${dir}/**/*.${SOURCE}`),
+    rules: webRules({ allow: [PROTOTYPE], syntax: PROTOTYPE_SYNTAX }),
+  },
+  {
+    files: PROTOTYPE_FILES.map((dir) => `${dir}/**/*.test.{ts,tsx}`),
+    rules: webRules({
+      allow: [PROTOTYPE, TESTING],
+      syntax: PROTOTYPE_SYNTAX,
+    }),
+  },
+  // The data pages and their layout pick the prototype outside production.
+  {
+    files: [
+      `src/app/(app)/(data)/layout.tsx`,
+      `src/app/(app)/(data)/**/page.tsx`,
+    ],
+    rules: webRules({ allow: [PROTOTYPE], syntax: BASE_SYNTAX }),
+  },
+  {
+    files: [`src/app/(app)/(data)/**/*.test.{ts,tsx}`],
+    rules: webRules({ allow: [PROTOTYPE, TESTING], syntax: BASE_SYNTAX }),
   },
   {
     files: [`src/lib/ai/**/*.${SOURCE}`],

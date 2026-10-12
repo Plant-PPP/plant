@@ -8,6 +8,7 @@ import {
   moneySchema,
   over,
   plus,
+  nonNegativeDecimalSchema,
   positiveDecimalSchema,
   roundedTo,
   times,
@@ -77,6 +78,16 @@ describe("positiveDecimalSchema", () => {
       expect(positiveDecimalSchema.safeParse(value).success).toBe(false);
     },
   );
+});
+
+describe("nonNegativeDecimalSchema", () => {
+  it.each(["0", "0.00000000", "0.5", "1050.5"])("accepts %s", (value) => {
+    expect(nonNegativeDecimalSchema.safeParse(value).success).toBe(true);
+  });
+
+  it.each(["-1", "-0.5", "-0", "1e5"])("rejects %s", (value) => {
+    expect(nonNegativeDecimalSchema.safeParse(value).success).toBe(false);
+  });
 });
 
 describe("toScaled", () => {

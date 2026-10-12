@@ -7,9 +7,26 @@ import type {
 } from "@/lib/portfolio-setup/read";
 import { type AccountLink, accountsUsing } from "./accounts-using";
 import { HoldersCard } from "./holders-card";
+import type { NamedRowsActions } from "./named-rows-card";
 import { PortfoliosCard } from "./portfolios-card";
 import { useSetupActions } from "./setup-actions";
-import { SourceConnectionsCard } from "./source-connections-card";
+import {
+  type SourceConnectionActions,
+  SourceConnectionsCard,
+} from "./source-connections-card";
+
+// The holders a page lists and what it writes them with; a page without them
+// shows no holders anywhere.
+export type HoldersSection = { view: HoldersView; actions: NamedRowsActions };
+
+const NO_HOLDERS: HoldersView = {
+  active: [],
+  activeTruncated: false,
+  archived: [],
+  archivedPage: null,
+  archivedFirstHref: null,
+  archivedNextHref: null,
+};
 
 // The accounts page's list sections, drawn from the lists as the user should
 // see them while a write runs. An archive refused because active accounts use a
@@ -18,18 +35,24 @@ export function AccountsSetup({
   sourceConnections,
   portfolios,
   holders,
+  actions,
 }: {
   sourceConnections: SourceConnectionsView;
   portfolios: PortfoliosView;
-  holders: HoldersView;
+  holders?: HoldersSection;
+  actions: {
+    sourceConnections: SourceConnectionActions;
+    portfolios: NamedRowsActions;
+  };
 }) {
   const { lists, pending, run } = useSetupActions({
     sourceConnections,
     portfolios,
-    holders,
+    holders: holders?.view ?? NO_HOLDERS,
   });
   const usedBy = (key: AccountLink) => (id: string) =>
     accountsUsing(lists.sourceConnections.active, key, id);
+  const createHolder = holders?.actions.create;
 
   return (
     <div className="grid gap-10">
@@ -40,21 +63,31 @@ export function AccountsSetup({
         view={lists.sourceConnections}
         pending={pending}
         run={run}
-        holders={lists.holders.active}
+        holders={
+          createHolder && {
+            rows: lists.holders.active,
+            create: createHolder,
+          }
+        }
         portfolios={lists.portfolios.active}
+        actions={actions.sourceConnections}
       />
       <PortfoliosCard
         view={lists.portfolios}
         pending={pending}
         run={run}
         usedBy={usedBy("portfolio")}
+        actions={actions.portfolios}
       />
-      <HoldersCard
-        view={lists.holders}
-        pending={pending}
-        run={run}
-        usedBy={usedBy("holder")}
-      />
+      {holders && (
+        <HoldersCard
+          view={lists.holders}
+          pending={pending}
+          run={run}
+          usedBy={usedBy("holder")}
+          actions={holders.actions}
+        />
+      )}
     </div>
   );
 }

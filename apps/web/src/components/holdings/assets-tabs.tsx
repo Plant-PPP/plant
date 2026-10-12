@@ -4,32 +4,37 @@ import type { KeyboardEvent } from "react";
 
 import {
   type AssetsTab,
+  type AssetsTabs as Tabs,
   DEFAULT_TAB,
-  TABS,
   tabOf,
 } from "@/lib/holdings/assets-filter";
 import { cn } from "@/lib/utils";
 
 import type { AssetsUrl } from "./assets-url";
 
-const ORDER = Object.keys(TABS) as AssetsTab[];
+const orderOf = (tabs: Tabs) => Object.keys(tabs) as AssetsTab[];
 
 export const tabId = (base: string, tab: AssetsTab) => `${base}-tab-${tab}`;
 export const panelId = (base: string) => `${base}-panel`;
 
 // The tab a key moves to from `current`: the arrows wrap around, Home and End
 // go to the ends, and any other key moves nowhere.
-export function nextTab(current: AssetsTab, key: string): AssetsTab | null {
-  const at = ORDER.indexOf(current);
+export function nextTab(
+  current: AssetsTab,
+  key: string,
+  tabs: Tabs,
+): AssetsTab | null {
+  const order = orderOf(tabs);
+  const at = order.indexOf(current);
   switch (key) {
     case "ArrowRight":
-      return ORDER[(at + 1) % ORDER.length] ?? null;
+      return order[(at + 1) % order.length] ?? null;
     case "ArrowLeft":
-      return ORDER[(at - 1 + ORDER.length) % ORDER.length] ?? null;
+      return order[(at - 1 + order.length) % order.length] ?? null;
     case "Home":
-      return ORDER[0] ?? null;
+      return order[0] ?? null;
     case "End":
-      return ORDER.at(-1) ?? null;
+      return order.at(-1) ?? null;
     default:
       return null;
   }
@@ -40,22 +45,24 @@ export function nextTab(current: AssetsTab, key: string): AssetsTab | null {
 // do. The table below is their panel (`panelId`).
 export function AssetsTabs({
   url,
+  tabs,
   idBase,
   counts,
   pending,
 }: {
   url: AssetsUrl;
+  tabs: Tabs;
   idBase: string;
-  counts: Record<AssetsTab, number>;
+  counts: Partial<Record<AssetsTab, number>>;
   pending: boolean;
 }) {
-  const shown = tabOf(url.params.tab);
+  const shown = tabOf(url.params.tab, tabs);
   const choose = (next: AssetsTab) => {
     if (pending || next === shown) return;
     url.set("tab", next === DEFAULT_TAB ? null : next);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const next = nextTab(shown, event.key);
+    const next = nextTab(shown, event.key, tabs);
     if (!next) return;
     event.preventDefault();
     if (pending) return;
@@ -69,7 +76,7 @@ export function AssetsTabs({
       aria-label="Vista"
       className="bg-muted inline-flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-lg p-0.5"
     >
-      {ORDER.map((each) => (
+      {orderOf(tabs).map((each) => (
         <button
           key={each}
           id={tabId(idBase, each)}
@@ -88,10 +95,15 @@ export function AssetsTabs({
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {TABS[each]}{" "}
-          <span className="text-muted-foreground tabular-nums">
-            {counts[each]}
-          </span>
+          {tabs[each]}
+          {counts[each] !== undefined && (
+            <>
+              {" "}
+              <span className="text-muted-foreground tabular-nums">
+                {counts[each]}
+              </span>
+            </>
+          )}
         </button>
       ))}
     </div>

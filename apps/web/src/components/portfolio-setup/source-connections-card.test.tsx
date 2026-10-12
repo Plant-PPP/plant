@@ -1,5 +1,3 @@
-jest.mock("@/app/(app)/accounts/actions", () => ({}));
-
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   SourceConnectionRow,
@@ -31,8 +29,14 @@ function render(change: Partial<SourceConnectionsView> = {}, pending = false) {
       view={listView({ active: [own, shared], ...change })}
       pending={pending}
       run={() => true}
-      holders={[]}
+      holders={{ rows: [], create: jest.fn() }}
       portfolios={[]}
+      actions={{
+        create: jest.fn(),
+        update: jest.fn(),
+        archive: jest.fn(),
+        restore: jest.fn(),
+      }}
     />,
   );
 }

@@ -1,3 +1,4 @@
+import type { HoldingClass } from "./classes";
 import {
   type Holding,
   holdingSchema,
@@ -68,6 +69,8 @@ const rows = (holdings: readonly Holding[]) =>
   holdings.map((holding) => ({
     holding,
     account: { id: ACCOUNT_OF[holding.id]! },
+    instrumentType:
+      holding.asset_class === "instrument" ? ("crypto" as const) : null,
   }));
 
 const base = {
@@ -215,8 +218,8 @@ describe("holdingsValuation shares", () => {
     const view = holdingsValuation(base);
     expect(view.kinds.total.share).toBe("100");
     expect(
-      ["instrument", "cash", "real_estate"].map(
-        (key) => view.classes[key as Holding["asset_class"]]?.share,
+      ["crypto", "cash", "real_estate"].map(
+        (key) => view.classes[key as HoldingClass]?.share,
       ),
     ).toEqual(SHARES);
     expect(Object.keys(view.classes)).toHaveLength(3);
@@ -228,7 +231,7 @@ describe("holdingsValuation shares", () => {
       snapshot: { ...SNAPSHOT, prices: {} },
     });
     expect(view.kinds.investments).toMatchObject({ missing: 1, share: null });
-    expect(view.classes.instrument?.share).toBeNull();
+    expect(view.classes.crypto?.share).toBeNull();
     expect(view.kinds.cash.share).not.toBeNull();
   });
 

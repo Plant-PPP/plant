@@ -10,6 +10,7 @@ import type { HoldingRow } from "@/lib/holdings/read";
 import type { Breakdown, HoldingKind } from "@/lib/holdings/valuation-view";
 
 import { type BreakdownLine, breakdownLines } from "./breakdown-lines";
+import { NameLink } from "./holding-cells";
 import {
   NUMBER_CELL,
   PendingSum,
@@ -53,12 +54,14 @@ export function AccountsBreakdown({
   whole,
   unit,
   pending,
+  href,
 }: {
   rows: readonly HoldingRow[];
   accounts: Record<string, Breakdown>;
   whole: Breakdown;
   unit: Denominator;
   pending: boolean;
+  href?: (id: string) => string;
 }) {
   const columns: ColumnDef<AccountLine>[] = [
     {
@@ -68,7 +71,11 @@ export function AccountsBreakdown({
         <span className="flex min-w-0 items-center gap-2">
           <InstitutionIcon name={line.institution} />
           <span className="min-w-0">
-            <TruncatedText className="font-medium" text={line.institution} />
+            <NameLink
+              className="font-medium"
+              text={line.institution}
+              href={href?.(line.id)}
+            />
             <TruncatedText
               className="text-muted-foreground text-xs"
               text={holdingsCountText(line.count)}

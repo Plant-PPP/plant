@@ -28,3 +28,14 @@ export const DENOMINATORS = {
 
 export const isDenominator = (value: unknown): value is Denominator =>
   typeof value === "string" && Object.hasOwn(DENOMINATORS, value);
+
+type FxSpec = Extract<
+  (typeof DENOMINATORS)[keyof typeof DENOMINATORS],
+  { fx: string }
+>;
+export type UnitFxKind = FxSpec["fx"];
+
+// The rate kinds the units are priced at: the rates a value in any unit needs.
+export const UNIT_FX_KINDS = Object.values(DENOMINATORS).flatMap(
+  (spec: DenominatorSpec) => ("fx" in spec ? [spec.fx] : []),
+) as [UnitFxKind, ...UnitFxKind[]];

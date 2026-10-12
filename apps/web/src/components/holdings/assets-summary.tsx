@@ -2,17 +2,17 @@ import type { Denominator } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
 import {
-  ASSET_CLASS_GROUP_LABELS,
-  type AssetClass,
-  UNIT_LABELS,
-} from "@/lib/holdings/messages";
+  HOLDING_CLASS_GROUP_LABELS,
+  type HoldingClass,
+} from "@/lib/holdings/classes";
+import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type {
   HoldingKind,
   HoldingsValuation,
 } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
-import { PendingSum, ShareText } from "./sum-text";
+import { PendingSum, ShareText, SummaryTile } from "./sum-text";
 
 const KINDS: { kind: HoldingKind | "total"; label: string }[] = [
   { kind: "total", label: "Total" },
@@ -22,12 +22,15 @@ const KINDS: { kind: HoldingKind | "total"; label: string }[] = [
 ];
 
 // The distribution bar's classes, each with its chart color.
-const CLASS_COLORS: Record<AssetClass, string> = {
+const CLASS_COLORS: Record<HoldingClass, string> = {
   real_estate: "bg-chart-1",
-  instrument: "bg-chart-2",
-  other: "bg-chart-4",
-  fixed_term: "bg-chart-5",
+  crypto: "bg-chart-2",
+  cedear: "bg-chart-5",
+  bond: "bg-chart-6",
+  fci: "bg-chart-7",
   cash: "bg-chart-3",
+  fixed_term: "bg-chart-8",
+  other: "bg-chart-4",
 };
 
 // A unit's name inside a sentence: "dólar MEP", "pesos".
@@ -46,16 +49,16 @@ export function AssetsSummary({
   unit: Denominator;
   pending: boolean;
 }) {
-  const parts = (Object.keys(CLASS_COLORS) as AssetClass[])
-    .flatMap((assetClass) => {
-      const share = classes[assetClass]?.share;
+  const parts = (Object.keys(CLASS_COLORS) as HoldingClass[])
+    .flatMap((holdingClass) => {
+      const share = classes[holdingClass]?.share;
       return share != null && compareDecimals(share, "0") > 0
         ? [
             {
-              assetClass,
+              holdingClass,
               share,
-              label: ASSET_CLASS_GROUP_LABELS[assetClass],
-              color: CLASS_COLORS[assetClass],
+              label: HOLDING_CLASS_GROUP_LABELS[holdingClass],
+              color: CLASS_COLORS[holdingClass],
             },
           ]
         : [];
@@ -66,13 +69,11 @@ export function AssetsSummary({
     <div className="grid gap-4">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {KINDS.map(({ kind, label }) => (
-          <div key={kind} className="bg-muted/60 grid gap-1 rounded-lg p-3">
-            <dt className="text-muted-foreground text-[11px]">{label}</dt>
-            <dd className="truncate text-base font-semibold tabular-nums">
-              <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
-            </dd>
-            <dd className="text-muted-foreground text-[11px] tabular-nums">
-              {kind === "total" ? (
+          <SummaryTile
+            key={kind}
+            label={label}
+            note={
+              kind === "total" ? (
                 `Valuado en ${unitName(unit)}${
                   kinds.total.missing > 0
                     ? ` · ${kinds.total.missing} sin cotización`
@@ -83,9 +84,11 @@ export function AssetsSummary({
                   share={kinds[kind].share}
                   complete={kinds[kind].complete && kinds.total.complete}
                 />
-              )}
-            </dd>
-          </div>
+              )
+            }
+          >
+            <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
+          </SummaryTile>
         ))}
       </dl>
       {parts.length > 0 && (
@@ -99,7 +102,7 @@ export function AssetsSummary({
           >
             {parts.map((part) => (
               <span
-                key={part.assetClass}
+                key={part.holdingClass}
                 className={part.color}
                 style={{ width: `${part.share}%` }}
               />
@@ -108,7 +111,7 @@ export function AssetsSummary({
           <figcaption className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
             {parts.map((part) => (
               <span
-                key={part.assetClass}
+                key={part.holdingClass}
                 className="inline-flex items-center gap-1.5"
               >
                 <span

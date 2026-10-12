@@ -1,5 +1,11 @@
 import "server-only";
-import { type Holding, holdingSchema, type ReferenceDollar } from "@plant/core";
+import {
+  type Holding,
+  holdingSchema,
+  INSTRUMENT_TYPES,
+  type InstrumentType,
+  type ReferenceDollar,
+} from "@plant/core";
 import type { Currency, Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -21,6 +27,8 @@ export type HoldingRow = {
   holding: Holding;
   account: { id: string; institution: string };
   portfolio: { id: string; name: string };
+  // The instrument's type, on an instrument holding only.
+  instrumentType: InstrumentType | null;
 };
 export type HoldingsView = ListView<HoldingRow>;
 
@@ -28,6 +36,7 @@ export type InstrumentRow = {
   symbol: string;
   name: string;
   currency: Currency;
+  type: InstrumentType;
 };
 
 const embeds = z.object({
@@ -36,6 +45,7 @@ const embeds = z.object({
     institution: z.string(),
   }),
   portfolio: z.object({ id: z.string(), name: z.string() }),
+  instrument: z.object({ type: z.enum(INSTRUMENT_TYPES) }).nullable(),
 });
 
 // Amounts are selected as text, so they stay exact decimal strings. The
@@ -46,7 +56,8 @@ const HOLDING_COLUMNS =
   "annual_rate:annual_rate::text, started_on, matures_on, valued_on, label, " +
   "source_connection:source_connections!holdings_user_id_source_connection_id_fkey" +
   "(id, institution), " +
-  "portfolio:portfolios!holdings_user_id_portfolio_id_fkey(id, name)";
+  "portfolio:portfolios!holdings_user_id_portfolio_id_fkey(id, name), " +
+  "instrument:instruments!holdings_instrument_symbol_fkey(type)";
 
 export function readHoldings(
   client: Client,
@@ -59,12 +70,23 @@ export function readHoldings(
       param: "holdings",
       columns: HOLDING_COLUMNS,
       toRow: (data) => {
-        const { source_connection: account, portfolio } = embeds.parse(data);
+        const {
+          source_connection: account,
+          portfolio,
+          instrument,
+        } = embeds.parse(data);
+        const holding = holdingSchema.parse(data);
+        // The instrument's type comes through its foreign key, so only an
+        // instrument holding has one, and it always does.
+        z.literal(holding.asset_class === "instrument").parse(
+          instrument !== null,
+        );
         return {
           id: String(data.id),
-          holding: holdingSchema.parse(data),
+          holding,
           account,
           portfolio,
+          instrumentType: instrument?.type ?? null,
         };
       },
     },
@@ -81,7 +103,7 @@ export async function readInstruments(
 ): Promise<{ rows: InstrumentRow[]; truncated: boolean }> {
   const result = await client
     .from("instruments")
-    .select("symbol, name, currency")
+    .select("symbol, name, currency, type")
     .order("symbol")
     .limit(INSTRUMENT_LIMIT + 1);
   const failure = classifyPostgrestResult(result, 200);

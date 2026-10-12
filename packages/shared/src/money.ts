@@ -11,7 +11,9 @@ export type Currency = z.infer<typeof currencySchema>;
 // and "1.50"; Postgres returns the column padded to 8 decimals), so amounts are
 // compared as decimals, never as strings.
 const DECIMAL_INTEGER_DIGITS = 12;
-const DECIMAL_SCALE_DIGITS = 8;
+// The decimals numeric(20, 8) keeps: every quantity, price and amount
+// stored is exact to this scale.
+export const DECIMAL_SCALE_DIGITS = 8;
 const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
 const DECIMAL_PATTERN = new RegExp(
   `^-?(0|[1-9]\\d{0,${DECIMAL_INTEGER_DIGITS - 1}})(\\.\\d{1,${DECIMAL_SCALE_DIGITS}})?$`,
@@ -21,6 +23,11 @@ export const decimalStringSchema = z
   .string()
   .regex(DECIMAL_PATTERN, "Must be a decimal number, e.g. 1234.56")
   .refine((value) => !/^-0(\.0+)?$/.test(value), "Use 0 instead of -0");
+
+export const nonNegativeDecimalSchema = decimalStringSchema.refine(
+  (value) => !value.startsWith("-"),
+  "Must be 0 or more",
+);
 
 export const positiveDecimalSchema = decimalStringSchema.refine(
   (value) => !/^(-|0(\.0+)?$)/.test(value),
@@ -98,6 +105,22 @@ export const plus = (...xs: Exact[]): Exact =>
     d: 1n,
   });
 
+export const ZERO: Exact = { n: 0n, d: 1n };
+
+export const negated = (x: Exact): Exact => ({ n: -x.n, d: x.d });
+
+export const minus = (a: Exact, b: Exact): Exact => plus(a, negated(b));
+
+// The exact sum of decimal strings to `digits` decimals, or null when one of
+// them is unknown.
+export const sumOrNull = (
+  values: readonly (string | null)[],
+  digits = DECIMAL_SCALE_DIGITS,
+): string | null =>
+  values.includes(null)
+    ? null
+    : toDecimal(plus(...values.map((value) => exactOf(value!))), digits);
+
 export function compareExact(a: Exact, b: Exact): number {
   const difference = a.n * b.d - b.n * a.d;
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;
@@ -131,6 +154,9 @@ export function toDecimal(x: Exact, digits: number): string {
   const rounded = roundedTo(x, digits);
   return fromScaled((rounded.n * DECIMAL_SCALE) / rounded.d);
 }
+
+// x as the decimal string a numeric(20, 8) column keeps.
+export const stored = (x: Exact): string => toDecimal(x, DECIMAL_SCALE_DIGITS);
 
 export const moneySchema = z.object({
   amount: decimalStringSchema,

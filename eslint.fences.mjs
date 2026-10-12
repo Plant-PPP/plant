@@ -60,6 +60,14 @@ export const TESTING = {
   message: "Only tests import a package's testing helpers.",
 };
 
+// The prototype runs on made-up data held in memory: only its own files and
+// the data pages and their layout, which choose it outside production, import
+// it.
+export const PROTOTYPE = {
+  regex: `(^|/)prototype(/.*)?${EXTENSION}$`,
+  message: "Only the prototype's own files and the data pages import it.",
+};
+
 // The modules a block can be allowed to import. Every web block fences each
 // one it does not allow (through fenceExcept) and every package fences them
 // all, so a new fence goes here; fence() also bans node_modules paths and
@@ -72,6 +80,7 @@ export const ALL_FENCED = [
   QUOTE_SINK,
   SESSION_CLAIMS_UNCHECKED,
   TESTING,
+  PROTOTYPE,
 ];
 
 // A path into node_modules reaches a package without naming it.
