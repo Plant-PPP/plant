@@ -33,6 +33,16 @@ const digitsOf = (unit: Unit): number =>
 export const shownAmount = (decimal: string, unit: Unit): string =>
   toDecimal(exactOf(decimal), digitsOf(unit));
 
+// The sign an amount shows with in `unit`: one that rounds to zero has none.
+export const shownSign = (decimal: string, unit: Unit): -1 | 0 | 1 => {
+  const { n } = exactOf(shownAmount(decimal, unit));
+  return n < 0n ? -1 : n > 0n ? 1 : 0;
+};
+
+// A figure with "+" when the decimal it shows is above zero.
+export const signed = (text: string, shown: string): string =>
+  exactOf(shown).n > 0n ? `+${text}` : text;
+
 // A decimal string in es-AR digits: "." groups thousands, "," marks decimals.
 // Rounded half away from zero only when it has more decimals than `digits`;
 // padded to `digits` unless `trim`; the thousands go ungrouped unless `group`.

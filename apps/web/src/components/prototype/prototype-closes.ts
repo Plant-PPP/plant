@@ -167,6 +167,18 @@ function lastTradePrices(
 }
 
 const cache = new WeakMap<PrototypeState, Map<string, MonthClose[]>>();
+const worthCache = new WeakMap<
+  PrototypeState,
+  Map<Denominator, ReadonlyMap<string, string>>
+>();
+const worthsByUnit = (state: PrototypeState) => {
+  let byUnit = worthCache.get(state);
+  if (!byUnit) {
+    byUnit = new Map();
+    worthCache.set(state, byUnit);
+  }
+  return byUnit;
+};
 
 // Every month's close in `unit`, oldest first, from the month of the first
 // movement to the one in progress.
@@ -219,6 +231,8 @@ export function closesOf(
   // that day, exactly, so neither the gain they carry nor their cost shows as
   // the month's market result; a sale keeps its cost for what it makes. A
   // day with no price takes their cost.
+  // What each of those moved at, which the month's detail shows.
+  const worths = new Map<string, string>();
   const flowOf = (
     ledger: Ledger,
     index: number,
@@ -235,6 +249,7 @@ export function closesOf(
       { denominator: unit, referenceDollar: state.referenceDollar },
     );
     if (!worth.complete) return { flow, priced: false };
+    worths.set(movement.id, stored(worth.exactTotal));
     const charges = exactOf(flow.charges);
     return {
       flow: {
@@ -285,6 +300,7 @@ export function closesOf(
     };
   });
   byUnit.set(unit, closes);
+  worthsByUnit(state).set(unit, worths);
   return closes;
 }
 
@@ -323,8 +339,8 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
           realized: sumOrNull(months.map((each) => each.realized)),
           share: chainedShare(months.map((each) => each.figures.share)),
         },
-        // A month that made something with nothing at work has no return
-        // of its own, so the year's leaves it out and says so.
+        // A month whose return could not be measured has none of its own, so
+        // the year's leaves it out and says so.
         complete: months.every(
           (each) => each.complete && each.figures.share !== null,
         ),
@@ -342,19 +358,24 @@ export function monthDetail(
 ): MonthDetail | null {
   const close = closesOf(state, unit).find((each) => each.period === period);
   if (!close) return null;
+  // Units that came in already held or left without a trade show at what
+  // they were worth that day, as the close counts them.
+  const worths = worthsByUnit(state).get(unit);
   const names = instrumentNames(state.instruments);
   const lines: MonthDetail["lines"] = [];
   for (const ledger of ledgersOf(state, unit)) {
     ledger.movements.forEach((movement, index) => {
       if (movement.date <= close.from || movement.date > close.to) return;
       const steps = stepsOf(state, ledger.row.id, unit);
+      const line = lineOf(
+        movement,
+        index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
+        steps[index]!,
+        operationOf(state, movement.operation_id)!,
+      );
       lines.push({
-        ...lineOf(
-          movement,
-          index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
-          steps[index]!,
-          operationOf(state, movement.operation_id)!,
-        ),
+        ...line,
+        amount: worths?.get(movement.id) ?? line.amount,
         holdingName: `${holdingName(ledger.row.holding, names)} · ${ledger.row.account.institution}`,
         instrumentType: ledger.row.instrumentType,
       });

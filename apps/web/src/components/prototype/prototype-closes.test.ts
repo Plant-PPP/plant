@@ -415,3 +415,30 @@ it("marks nothing for an unchanged re-save of a same-day trade", () => {
   }).state;
   expect(markRecalculated(b, resaved).recalculated.size).toBe(0);
 });
+
+it("shows an opening balance in a month's detail at what its figures count", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const quote = state.quotes.prices.find(
+    (each) => each.symbol === "NVDA" && each.price_date === "2026-09-15",
+  )!;
+  const opened = writeOperation(
+    state,
+    {
+      kind: "opening_balance",
+      source_connection_id: iol.id,
+      instrument_symbol: "NVDA",
+      date: "2026-09-15",
+      currency: "ARS",
+      price: "1",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, quantity: "100" }],
+    },
+    { operationId: "opening", newId: () => crypto.randomUUID() },
+  ).state;
+  const line = monthDetail(opened, "ars", "2026-09")!.lines.find(
+    (each) => each.movement.operation_id === "opening",
+  )!;
+  expect(Number(line.amount)).toBeCloseTo(100 * Number(quote.price), 2);
+});

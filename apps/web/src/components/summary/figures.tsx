@@ -5,7 +5,8 @@ import { percentOf } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import type { MonthClose } from "@/lib/summary/closes";
 
-// A result, green when up and red when down, with its return under it.
+// A result, green when up, red when down and muted when it shows zero, with
+// its return under it.
 export function ResultText({
   amount,
   share,
