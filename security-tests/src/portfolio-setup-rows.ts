@@ -65,17 +65,15 @@ export const RACE_ROUNDS = 10;
 
 // Archiving a portfolio and creating an account that defaults to it: exactly
 // one must win, the other refused with its hint. Each round archives the
-// account it created, then runs `afterRound`.
+// account it created and restores the portfolio.
 export async function raceArchivePortfolioAgainstAccount(
   user: TestUser,
   {
     portfolioId: id,
     account,
-    afterRound,
   }: {
     portfolioId: string;
     account: (id: string) => Insert<"source_connections">;
-    afterRound: (id: string) => Promise<void>;
   },
 ): Promise<void> {
   for (let round = 0; round < RACE_ROUNDS; round++) {
@@ -108,11 +106,10 @@ export async function raceArchivePortfolioAgainstAccount(
         );
       }
     } finally {
-      // The account goes first: an active one keeps its row from archiving.
       try {
         if (accountId) await archiveRow(user, "source_connections", accountId);
       } finally {
-        await afterRound(id);
+        await restoreRow(user, "portfolios", id);
       }
     }
   }
