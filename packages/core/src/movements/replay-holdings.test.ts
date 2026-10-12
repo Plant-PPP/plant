@@ -137,6 +137,11 @@ describe("compareInReplay", () => {
     ]);
   });
 
+  it("knows no cost for units arriving alone in a single holding's replay", () => {
+    const [, arrive] = moved("5", "2026-03-02");
+    expect(positionOf(replay([arrive!], "usd_mep", "mep")).money).toBeNull();
+  });
+
   it("carries the cost when the arriving side's id sorts first", () => {
     const [out, arrive] = moved("5", "2026-03-02");
     const steps = replayHoldings(

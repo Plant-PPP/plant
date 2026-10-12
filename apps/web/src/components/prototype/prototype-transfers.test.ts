@@ -193,6 +193,22 @@ describe("a transfer between portfolios", () => {
     expect(positionIn(deleted.state, PRINCIPAL)).toEqual(before);
   });
 
+  it("cannot go once the units it brought were sold", () => {
+    const sold = writeOperation(
+      moved,
+      {
+        ...purchase("2", "1", TODAY),
+        kind: "sale",
+        parts: [{ portfolio_id: LARGO, quantity: "2" }],
+      },
+      options("e3000000-0000-4000-8000-000000000011"),
+    ).state;
+    expect(deleteOperation(sold, TRANSFER)).toEqual({
+      state: sold,
+      result: { ok: false, code: "opening_balance" },
+    });
+  });
+
   it("keeps either holding from being deleted while it is there", () => {
     for (const holding of [AAPL, appleIn(moved, LARGO)!.holding.id]) {
       expect(deleteHolding(moved, holding)).toEqual({
