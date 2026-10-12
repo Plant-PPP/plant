@@ -9,6 +9,7 @@ import {
   finishReading,
   heldIn,
 } from "./prototype-imports-store";
+import { createAccount, deleteAccount } from "./prototype-accounts-store";
 import { holdingsView, initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
@@ -223,4 +224,30 @@ it("books a statement's differences today, against what is held today", () => {
     .flat()
     .find((each) => each.note === "Carga de septiembre.pdf")!;
   expect(added.date).toBe(TODAY);
+});
+
+it("keeps counting a deleted account's uploads against the month", () => {
+  const empty = createAccount(
+    state,
+    {
+      institution: "Banco de prueba",
+      holder: "self",
+      includeInTaxReport: true,
+      defaultPortfolioId: state.portfolios[0]!.id,
+    },
+    "a9000000-0000-4000-8000-000000000009",
+  );
+  expect(empty.result.ok).toBe(true);
+  const uploaded = addImport(empty.state, {
+    id: "i8",
+    fileName: "vacio.pdf",
+    accountId: "a9000000-0000-4000-8000-000000000009",
+  }).state;
+  const deleted = deleteAccount(
+    uploaded,
+    "a9000000-0000-4000-8000-000000000009",
+  );
+  expect(deleted.result.ok).toBe(true);
+  expect(deleted.state.imports.some((each) => each.id === "i8")).toBe(false);
+  expect(deleted.state.uploadedOn).toEqual([TODAY]);
 });

@@ -18,7 +18,11 @@ export function PrototypeImports() {
       accounts={state.accounts}
       archivedAccounts={state.archivedAccounts}
       imports={state.imports}
-      today={state.today}
+      used={
+        state.uploadedOn.filter(
+          (day) => day.slice(0, 7) === state.today.slice(0, 7),
+        ).length
+      }
       reviewHref={reviewHref}
       actions={actions.imports}
     />

@@ -137,3 +137,17 @@ it("says an instrument sold out is no longer held", () => {
   expect(text).not.toMatch(/lo que tenés/i);
   expect(text).toMatch(/entre lo que vendiste y lo que cobraste/);
 });
+
+it.each(["¿Cuál fue mi rentabilidad este año?", "¿Fue rentable mi cartera?"])(
+  "answers %s about the year, not dividends",
+  (question) => {
+    expect(ask(question).text).toMatch(/tu patrimonio/);
+  },
+);
+
+it.each([
+  ["¿Cómo le fue a Mercado Libre?", "MELI"],
+  ["¿Cómo le fue a Coca Cola?", "KO"],
+])("finds the instrument in %s", (question, symbol) => {
+  expect(ask(question).text).toMatch(new RegExp(symbol));
+});

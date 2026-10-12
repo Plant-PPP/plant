@@ -59,7 +59,7 @@ export function ImportPage({
   accounts,
   archivedAccounts,
   imports,
-  today,
+  used,
   reviewHref,
   actions,
 }: {
@@ -67,7 +67,8 @@ export function ImportPage({
   // Named in the list of earlier imports, never offered for a new one.
   archivedAccounts: SourceConnectionRow[];
   imports: ImportItem[];
-  today: string;
+  // The uploads made this month.
+  used: number;
   reviewHref: (id: string) => string;
   actions: ImportActions;
 }) {
@@ -76,9 +77,6 @@ export function ImportPage({
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
-  const used = imports.filter(
-    (item) => item.createdOn.slice(0, 7) === today.slice(0, 7),
-  ).length;
   const left = Math.max(0, IMPORTS_PER_MONTH - used);
   const latestReady = imports.find((item) => item.status === "ready");
   const institution = (accountId: string) =>

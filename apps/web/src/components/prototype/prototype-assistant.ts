@@ -60,43 +60,41 @@ function resultBars(
     : [...bars, { label: "Gastos y retenciones", value: rest }];
 }
 
+// Text with only its letters and digits, so "Mercado Libre" finds
+// "MercadoLibre" and "Coca Cola" finds "Coca-Cola".
+const compact = (text: string) => text.replace(/[^a-z0-9]/g, "");
+
 // What an answer about a year that left something out adds.
 const PARTIAL_YEAR = " Al año le falta algún dato; mirá su cierre.";
 
-// A return in words by the sign it shows with, as `bySign` words amounts.
-const byShare = (
-  share: string,
-  words: {
-    down: (size: string) => string;
-    up: (size: string) => string;
-    even: string;
-  },
-) => {
-  const percent = percentOf(share);
-  const { n } = exactOf(percent);
+// A figure in words by the sign it shows with: `down` or `up` given its
+// unsigned size ("perdió US$ 10", "ganó US$ 10"), or `even` when it shows as
+// zero.
+type Wording = {
+  down: (size: string) => string;
+  up: (size: string) => string;
+  even: string;
+};
+
+const worded = (shown: string, size: string, words: Wording) => {
+  const { n } = exactOf(shown);
   if (n === 0n) return words.even;
-  const size = formatShare(percent.replace(/^-/, ""));
   return n < 0n ? words.down(size) : words.up(size);
+};
+
+// A return, as its percent shows.
+const byShare = (share: string, words: Wording) => {
+  const percent = percentOf(share);
+  return worded(percent, formatShare(percent.replace(/^-/, "")), words);
 };
 
 // What a figure that left something out says after it.
 const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
 
-// An amount in words by the sign it shows with: `down` or `up` given its
-// size ("perdió US$ 10", "ganó US$ 10"), or `even` when it shows as zero.
-const bySign = (
-  amount: string,
-  unit: ChatUnit,
-  words: {
-    down: (size: string) => string;
-    up: (size: string) => string;
-    even: string;
-  },
-) => {
-  const sign = shownSign(amount, unit);
-  if (sign === 0) return words.even;
-  const size = formatAmount(shownAmount(amount, unit).replace(/^-/, ""), unit);
-  return sign < 0 ? words.down(size) : words.up(size);
+// An amount, as it shows in the unit.
+const bySign = (amount: string, unit: ChatUnit, words: Wording) => {
+  const shown = shownAmount(amount, unit);
+  return worded(shown, formatAmount(shown.replace(/^-/, ""), unit), words);
 };
 
 const moved = (amount: string, unit: ChatUnit) =>
@@ -146,7 +144,8 @@ export function prototypeAnswer(
 
   const instrument = state.instruments.find(
     (each) =>
-      words.includes(folded(each.symbol)) || asked.includes(folded(each.name)),
+      words.includes(folded(each.symbol)) ||
+      compact(asked).includes(compact(folded(each.name))),
   );
   if (instrument) {
     const { holdings, flows } = instrumentHoldings(
@@ -252,7 +251,7 @@ export function prototypeAnswer(
     };
   }
 
-  if (/dividend|cupon|cobr|renta/.test(asked) && thisYear) {
+  if (/dividend|cupon|cobr|\brentas?\b/.test(asked) && thisYear) {
     return {
       ...base,
       text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
@@ -269,7 +268,7 @@ export function prototypeAnswer(
     };
   }
 
-  if (/rend|fue|gan|perd|resultado|ano|mes/.test(asked) && thisYear) {
+  if (/rend|rentab|fue|gan|perd|resultado|ano|mes/.test(asked) && thisYear) {
     const current = closes.at(-1)!;
     return {
       ...base,
