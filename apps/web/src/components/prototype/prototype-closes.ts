@@ -417,7 +417,8 @@ export function monthDetail(
 // moves no quote, so every value that moved, moved because of it: the
 // month's figures to the cent (so how a figure splits across portfolios does
 // not show), plus its own movements and the units held at its end, per
-// account and instrument so moving units between portfolios changes nothing.
+// account and instrument so moving a holding to another portfolio changes
+// nothing.
 function movedBy(state: PrototypeState, close: MonthClose): string {
   const own = new Map<string, Exact[]>();
   const held = new Map<string, Exact>();
