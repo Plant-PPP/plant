@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { countOf } from "@/lib/format/text";
 import {
   amountInput,
   formatAmount,
@@ -302,7 +303,7 @@ export function ImportReview({
             {holdingsCountText(rows.filter((row) => !row.discarded).length)}
             {doubtful > 0 && (
               <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
-                {doubtful === 1 ? "1 dudosa" : `${doubtful} dudosas`}
+                {countOf(doubtful, "dudosa", "dudosas")}
               </span>
             )}
           </h2>

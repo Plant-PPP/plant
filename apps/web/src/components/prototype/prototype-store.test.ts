@@ -1,5 +1,12 @@
-import { compareMovements, referenceUnit } from "@plant/core";
-import { addDays, exactOf, stored, times } from "@plant/shared";
+import { compareMovements, DENOMINATORS, referenceUnit } from "@plant/core";
+import {
+  addDays,
+  exactOf,
+  plus,
+  stored,
+  times,
+  toDecimal,
+} from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -380,6 +387,41 @@ describe("instrument history", () => {
         0,
       ),
     );
+  });
+
+  it("values an instrument at its open holdings' exact sum", () => {
+    const { holdings, value } = instrumentHoldings(
+      state,
+      "ETH",
+      "usd_mep",
+      snapshot,
+    );
+    const open = holdings.filter((each) => !each.closed);
+    expect(open.length).toBeGreaterThan(1);
+    const units = plus(...open.map((each) => exactOf(each.row.holding.amount)));
+    expect(value).toBe(
+      toDecimal(times(units, exactOf("2500")), DENOMINATORS.usd_mep.scale),
+    );
+  });
+
+  it("values an instrument with none held at 0", () => {
+    const { holdings, value } = instrumentHoldings(
+      state,
+      "TSLA",
+      "usd_mep",
+      snapshot,
+    );
+    expect(holdings.length).toBeGreaterThan(0);
+    expect(holdings.every((each) => each.closed)).toBe(true);
+    expect(value).toBe("0");
+  });
+
+  it("leaves an instrument's value unknown when a holding has no quote", () => {
+    const { value } = instrumentHoldings(state, "ETH", "usd_mep", {
+      ...snapshot,
+      prices: {},
+    });
+    expect(value).toBeNull();
   });
 
   it("lists an instrument's movements from every holding of it", () => {

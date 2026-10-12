@@ -577,13 +577,18 @@ export function instrumentHoldings(
   symbol: string,
   unit: Denominator,
   snapshot: QuoteSnapshot,
-): { holdings: InstrumentHolding[]; flows: CashFlow[] | null } {
+): {
+  holdings: InstrumentHolding[];
+  flows: CashFlow[] | null;
+  value: string | null;
+} {
   const closed = new Set(
     state.holdings.filter((each) => each.closed).map((each) => each.holding.id),
   );
   const rows = allRows(state).filter((row) => inScope(row, { symbol }));
-  const { values } = holdingsValuation({
-    holdings: rows.filter((row) => !closed.has(row.id)),
+  const open = rows.filter((row) => !closed.has(row.id));
+  const { values, instruments } = holdingsValuation({
+    holdings: open,
     truncated: false,
     snapshot,
     unit,
@@ -603,7 +608,13 @@ export function instrumentHoldings(
       value: values[row.id]?.value ?? null,
     };
   });
-  return { holdings, flows: known ? flows : null };
+  const sum = instruments[symbol];
+  return {
+    holdings,
+    flows: known ? flows : null,
+    // Their exact sum, as Tenencias shows it; none held is worth 0.
+    value: open.length === 0 ? "0" : sum?.missing === 0 ? sum.value : null,
+  };
 }
 
 // One page of a scope's movements, newest first, after `cursor`: each

@@ -9,17 +9,17 @@ import {
   useRef,
 } from "react";
 
-import type {
-  HoldingActions,
-  MovementActions,
-  PriceActions,
-} from "@/components/holdings/assets-setup";
 import type { AssistantActions } from "@/components/assistant/assistant-page";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
 import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
+import type {
+  HoldingActions,
+  MovementActions,
+  PriceActions,
+} from "@/lib/holdings/write-actions";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {

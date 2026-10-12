@@ -15,15 +15,8 @@ import { SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { usePrototype } from "./prototype-provider";
-import {
-  holdingsView,
-  movementsPage,
-  positionsOf,
-  priceOn,
-  salesOf,
-  suggestedTransferCost,
-  yearsOf,
-} from "./prototype-store";
+import { prototypeMovementsInput } from "./prototype-movements";
+import { holdingsView, positionsOf, salesOf, yearsOf } from "./prototype-store";
 
 export const PROTOTYPE_HREFS: ScopeHrefs = {
   instrument: (symbol) => `/assets/${encodeURIComponent(symbol)}`,
@@ -70,10 +63,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       limit: SALES_LIMIT,
     }),
     years,
-    loadMovements: async (scope, inUnit, cursor) =>
-      movementsPage(latest(), scope, inUnit, cursor),
-    transferCost: (query) => suggestedTransferCost(latest(), query),
-    quoteOn: (query) => priceOn(latest(), query),
+    ...prototypeMovementsInput(latest),
   };
 
   return (

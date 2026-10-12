@@ -1,28 +1,11 @@
 "use client";
 
-import {
-  type Denominator,
-  type MovementKind,
-  type Position,
-  takesMovements,
-  takesUnits,
-} from "@plant/core";
+import { type Denominator } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowLeftRight,
-  Pencil,
-  Plus,
-  SlidersHorizontal,
-  Trash2,
-  TrendingUp,
-} from "lucide-react";
-import { type ComponentProps, type ReactNode, useId, useState } from "react";
+import { Archive, ArchiveRestore, ArrowLeftRight, Pencil } from "lucide-react";
+import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 
 import {
   dialogAnswer,
@@ -47,13 +30,10 @@ import {
   DataTable,
   TruncatedText,
   actionsColumn,
-  expandColumn,
 } from "@/components/ui/data-table";
-import { PendingButton } from "@/components/ui/pending-button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { inSentence } from "@/lib/format/text";
 import {
   type AssetsFilter,
   type AssetsTab,
@@ -68,30 +48,31 @@ import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import {
   formatQuotedPrice,
   type PriceFields,
-  type PriceResult,
   priceFields,
   toPriceInput,
 } from "@/lib/holdings/price-input";
 import {
   currencyOf,
+  holdingInSentence,
   holdingName,
+  holdingPlace,
   instrumentNames,
 } from "@/lib/holdings/holding-name";
+import { PRICE_MESSAGES } from "@/lib/holdings/messages";
 import {
-  HOLDING_DELETE_MESSAGES,
-  MOVEMENT_DELETE_MESSAGES,
-  lineLabel,
-  MOVEMENT_MESSAGES,
-  PRICE_MESSAGES,
-} from "@/lib/holdings/messages";
-import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
-import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
-import type {
-  MovementLine,
-  MovementResult,
-  MovementsInput,
-  OperationParts,
-} from "@/lib/holdings/movements-input";
+  averageOf,
+  costTotals,
+  overExactSum,
+} from "@/lib/holdings/cost-totals";
+import {
+  type AssetsRow,
+  byHolding,
+  byInstrument,
+  holdingsOf,
+  type RowFigures,
+  rowFigures,
+} from "@/lib/holdings/assets-rows";
+import type { MovementsInput } from "@/lib/holdings/movements-input";
 import type {
   HoldingRow,
   HoldingsView,
@@ -108,6 +89,11 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import type {
+  HoldingActions,
+  MovementActions,
+  PriceActions,
+} from "@/lib/holdings/write-actions";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
@@ -117,7 +103,7 @@ import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
 import { PriceDialog } from "./price-dialog";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   type HoldingFields,
   holdingRow,
@@ -126,17 +112,15 @@ import {
   toUpdate,
 } from "./holding-fields";
 import { AssetsTabs, panelId, tabId } from "./assets-tabs";
-import { AccountCell, NameLink, TickerChip } from "./holding-cells";
+import {
+  AccountsCell,
+  NameLink,
+  PortfoliosCell,
+  TickerChip,
+} from "./holding-cells";
 import { useAssetsUrl } from "./assets-url";
 import { PortfoliosBreakdown } from "./portfolios-breakdown";
-import { MovementDialog } from "./movement-dialog";
-import {
-  type MovementFields,
-  newMovementFields,
-  operationFields,
-  toOperationInput,
-} from "./movement-fields";
-import { MovementsTable } from "./movements-table";
+import { instrumentPreset, useMovementDialogs } from "./movement-dialogs";
 import { SalesSummary } from "./sales-summary";
 import { SalesTable } from "./sales-table";
 import {
@@ -156,15 +140,8 @@ const MOVEMENT_FIGURE = 112;
 
 type ShownHolding = HoldingRow & { unsaved?: true };
 
-// A new operation, from the header or for one holding (`kind` preset for an
-// adjustment or a yield), or an edit of one.
-type MovementDialogState =
-  | ({
-      kind: "create";
-      row: HoldingRow | null;
-      preset?: MovementKind;
-    } & Retry<MovementFields>)
-  | ({ kind: "edit"; operation: OperationParts } & Retry<MovementFields>);
+// A Tenencias row, unsaved while a write to any of its holdings runs.
+type TenenciaRow = AssetsRow<ShownHolding> & { unsaved?: true };
 
 type PriceDialogState = { symbol: string } & Retry<PriceFields>;
 
@@ -181,28 +158,10 @@ function heldAmount({ holding }: HoldingRow): string {
     : formatAmount(holding.amount, holding.currency);
 }
 
-// What the screen's writes call. A page whose holdings can be archived passes
-// archiving; the page without it lists no archived holdings.
-export type HoldingActions = {
-  create: (input: unknown) => Promise<WriteResult>;
-  update: (id: string, input: unknown) => Promise<WriteResult>;
-  archiving?: {
-    archive: (id: string) => Promise<WriteResult>;
-    restore: (id: string) => Promise<WriteResult>;
-  };
-  // A page that deletes holdings, each with its movements.
-  delete?: (id: string) => Promise<HoldingDeleteResult>;
-};
-
 export type ScopeHrefs = {
   instrument: (symbol: string) => string;
   account: (id: string) => string;
   portfolio: (id: string) => string;
-};
-
-export type PriceActions = {
-  set: (input: unknown) => Promise<PriceResult>;
-  delete?: (symbol: string, date: string) => Promise<PriceResult>;
 };
 
 // The manual price the valuation took for each symbol, per unit in the
@@ -215,24 +174,24 @@ export type ManualPrices = {
   actions: PriceActions;
 };
 
-export type MovementActions = {
-  create: (input: unknown) => Promise<MovementResult>;
-  update: (id: string, input: unknown) => Promise<MovementResult>;
-  // Deletes a whole operation, every portfolio's part of it.
-  delete?: (operationId: string) => Promise<MovementResult>;
-};
-
-// A page offers the sales tab exactly when it passes movements.
+// A page offers the sales tab exactly when it passes movements. Where it
+// keeps movements, Tenencias shows an instrument as one row across its
+// holdings and links it to the instrument's page, which holds each holding's
+// actions; until production has that page (PLA-103), it shows each holding.
 type MovementProps =
   | {
       tabs: typeof TABS & { sales?: never };
       movements?: undefined;
       movementActions?: undefined;
+      // The pages an instrument, account or portfolio opens; a page without
+      // them names each plainly.
+      hrefs?: ScopeHrefs;
     }
   | {
       tabs: typeof SALES_TABS;
       movements: MovementsInput;
       movementActions: MovementActions;
+      hrefs: ScopeHrefs;
     };
 
 export function AssetsSetup({
@@ -265,9 +224,6 @@ export function AssetsSetup({
   today: string;
   actions: HoldingActions;
   prices?: ManualPrices;
-  // The pages an instrument, account or portfolio opens; a page without
-  // them names each plainly.
-  hrefs?: ScopeHrefs;
 } & MovementProps) {
   const {
     shown: view,
@@ -288,20 +244,9 @@ export function AssetsSetup({
   const movement = movements &&
     movementActions && { input: movements, actions: movementActions };
   const tabsId = useId();
-  const router = useRouter();
   const [dialog, setDialog] = useState<DialogState | null>(null);
-  const [movementDialog, setMovementDialog] =
-    useState<MovementDialogState | null>(null);
   const [priceDialog, setPriceDialog] = useState<PriceDialogState | null>(null);
-  // A delete waiting for the user to confirm it.
-  const [confirm, setConfirm] = useState<{
-    title: string;
-    description: string;
-    run: () => void;
-  } | null>(null);
   const names = instrumentNames(instruments);
-  const types = new Map(instruments.map((each) => [each.symbol, each.type]));
-  const typeOf = (symbol: string) => types.get(symbol) ?? null;
   const name = (row: HoldingRow) => holdingName(row.holding, names);
   // What the table calls an asset: an instrument by its name, beside its
   // ticker.
@@ -309,24 +254,24 @@ export function AssetsSetup({
     holding.asset_class === "instrument"
       ? (names.get(holding.instrument_symbol) ?? holding.instrument_symbol)
       : holdingName(holding, names);
-  // A holding as actions and their answers name it: the same instrument can
-  // sit in several accounts and portfolios.
-  const named = (row: HoldingRow) =>
-    `${name(row)} de ${row.account.institution} en ${row.portfolio.name}`;
-
-  function noAccount() {
-    toast.error("Primero agregá una cuenta en Cuentas.", {
-      action: {
-        label: "Ir a Cuentas",
-        onClick: () => router.push("/accounts"),
-      },
-    });
-  }
+  const named = (row: HoldingRow) => holdingInSentence(row, names);
+  const { confirm, dialog: confirmDialog } = useConfirm(card.focusHeading);
+  const dialogs = useMovementDialogs({
+    card,
+    active: view.active,
+    accounts,
+    portfolios,
+    instruments,
+    today,
+    names,
+    confirm,
+    pending,
+  });
 
   function openDialog(next: DialogState) {
     if (pending) return;
     if (next.kind === "create" && accounts.length === 0) {
-      noAccount();
+      dialogs.noAccount();
       return;
     }
     setDialog(next);
@@ -362,192 +307,38 @@ export function AssetsSetup({
     });
   }
 
-  function openMovementDialog(next: MovementDialogState) {
-    if (pending) return;
-    if (next.kind === "create" && accounts.length === 0) {
-      noAccount();
-      return;
-    }
-    setMovementDialog(next);
-  }
-
-  // A new operation's fields: today, in the holding's account, instrument and
-  // portfolio when opened from one (its amount as an opening balance), else
-  // the first account's and its portfolio.
-  function newOperationFields(
-    row: HoldingRow | null,
-    preset: MovementKind | undefined,
-  ): MovementFields {
-    const symbol =
-      row?.holding.asset_class === "instrument"
-        ? row.holding.instrument_symbol
-        : (instruments[0]?.symbol ?? "");
-    const account = row?.account ?? accounts[0];
-    const hasMovements = row
-      ? (movement?.input.positions.has(row.id) ?? false)
-      : true;
-    const kind = preset ?? (hasMovements ? "purchase" : "opening_balance");
-    return newMovementFields({
-      kind,
-      accountId: account?.id ?? "",
-      instrument: symbol,
-      currency: currencyOf(instruments, symbol),
-      date: today,
-      portfolioId:
-        row?.portfolio.id ??
-        accounts[0]?.portfolio.id ??
-        portfolios[0]?.id ??
-        "",
-      ...(kind === "opening_balance" && row && { size: row.holding.amount }),
-    });
-  }
-
-  function submitMovement(
-    state: MovementDialogState,
-    actions: MovementActions,
-    fields: MovementFields,
-  ): boolean {
-    const input = toOperationInput(fields, typeOf(fields.instrument));
-    const instrument =
-      instruments.find((each) => each.symbol === fields.instrument)?.name ??
-      fields.instrument;
-    // The holdings it touches show as saving until they are read again.
-    const shown = view.active.find(
-      (row) =>
-        row.account.id === fields.accountId &&
-        row.holding.asset_class === "instrument" &&
-        row.holding.instrument_symbol === fields.instrument &&
-        fields.parts.some((part) => part.portfolioId === row.portfolio.id),
-    );
-    return card.dialogAction(
-      shown ? { kind: "update", row: shown } : null,
-      () =>
-        state.kind === "edit"
-          ? actions.update(
-              state.operation.parts[0]!.movement.operation_id,
-              input,
-            )
-          : actions.create(input),
-      MOVEMENT_MESSAGES,
-      {
-        done:
-          state.kind === "edit"
-            ? `Guardaste el movimiento de ${instrument}`
-            : `Agregaste un movimiento de ${instrument}`,
-        reopen: (error) =>
-          setMovementDialog({
-            ...state,
-            initial: fields,
-            initialError: error,
-          }),
-      },
-    );
-  }
-
-  // A transfer the dialog offers: from the instrument holding it was opened
-  // from, or the portfolio an edited transfer's units leave.
-  function transferOf(
-    state: MovementDialogState,
-    input: MovementsInput,
-  ): ComponentProps<typeof MovementDialog>["transfer"] {
-    const { transferCost } = input;
-    if (!transferCost) return undefined;
-    const from =
-      state.kind === "edit"
-        ? state.operation.parts.find(({ movement }) => takesUnits(movement))
-            ?.portfolioId
-        : state.row?.holding.asset_class === "instrument"
-          ? state.row.portfolio.id
-          : undefined;
-    if (
-      from === undefined ||
-      (state.kind === "edit" &&
-        state.operation.parts[0]!.movement.kind !== "transfer")
-    ) {
-      return undefined;
-    }
-    return {
-      from,
-      suggestedCost: (fields) =>
-        transferCost({
-          input: toOperationInput(fields, typeOf(fields.instrument)),
-          operationId:
-            state.kind === "edit"
-              ? state.operation.parts[0]!.movement.operation_id
-              : null,
-        }),
-    };
-  }
-
-  // Yields the dialog offers: into the holding it was opened from, once that
-  // holding has movements, or into the one portfolio an edited operation is
-  // in.
-  function yieldsOf(
-    state: MovementDialogState,
-    input: MovementsInput,
-  ): ComponentProps<typeof MovementDialog>["yields"] {
-    const { quoteOn } = input;
-    if (!quoteOn) return undefined;
-    const portfolio =
-      state.kind === "edit"
-        ? state.operation.parts.length === 1
-          ? state.operation.parts[0]!.portfolioId
-          : undefined
-        : state.row && input.positions.has(state.row.id)
-          ? state.row.portfolio.id
-          : undefined;
-    return portfolio === undefined ? undefined : { portfolio, quoteOn };
-  }
-
-  // A movement as its actions name it: "compra del 01/09/2026".
-  const movementName = (line: MovementLine) =>
-    `${inSentence(lineLabel(line))} del ${formatDate(line.movement.date)}`;
-
-  function confirmDeleteMovement(
-    line: MovementLine,
-    row: HoldingRow,
-    remove: NonNullable<MovementActions["delete"]>,
-  ) {
-    const parts = line.operation.parts.length;
-    setConfirm({
-      title: `¿Borrar ${movementName(line)}?`,
-      description:
-        line.movement.kind === "transfer"
-          ? "Es un traspaso: se borra en las dos carteras. No se puede deshacer."
-          : parts > 1
-            ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
-            : "No se puede deshacer.",
-      run: () =>
-        card.rowAction(
-          { kind: "update", row },
-          () => remove(line.movement.operation_id),
-          (result) => dialogAnswer(result, MOVEMENT_DELETE_MESSAGES),
-          {
-            done: `Borraste ${movementName(line)} de ${named(row)}`,
-            rowId: row.id,
-            actionId: "edit",
-          },
-        ),
-    });
-  }
-
-  // The account and instrument a holding's dialog keeps, by name.
-  const fixedOf = (accountId: string, symbol: string) => ({
-    account:
-      accounts.find((each) => each.id === accountId)?.institution ??
-      view.active.find((row) => row.account.id === accountId)?.account
-        .institution ??
-      "",
-    instrument:
-      instruments.find((each) => each.symbol === symbol)?.name ?? symbol,
-  });
-
+  // A row a write has not saved yet carries `unsaved` (list-change.ts).
+  const shownRows: ShownHolding[] = view.active.filter((row) =>
+    matchesFilter(row, filter, names),
+  );
+  // Where movements are kept, an instrument is one row across its holdings,
+  // which its own page lists.
+  const rows: TenenciaRow[] = (
+    movement ? byInstrument(shownRows) : byHolding(shownRows)
+  ).map((row) =>
+    holdingsOf(row).some((each) => each.unsaved)
+      ? { ...row, unsaved: true as const }
+      : row,
+  );
+  const figures = new Map(
+    rows.map((row) => [
+      row.id,
+      rowFigures(row, { valuation, positions: movement?.input.positions }),
+    ]),
+  );
+  const factsOf = (row: TenenciaRow) => figures.get(row.id)!;
   // What the server valued for a row; nothing yet for one it has not saved.
-  const valued = (row: ShownHolding) =>
-    row.unsaved ? undefined : valuation.values[row.id];
+  const valued = (row: TenenciaRow) => (row.unsaved ? undefined : factsOf(row));
+  const firstOf = (row: TenenciaRow) => holdingsOf(row)[0];
+  const symbolOf = (row: TenenciaRow) => {
+    const { holding } = firstOf(row);
+    return holding.asset_class === "instrument"
+      ? holding.instrument_symbol
+      : null;
+  };
 
   // A value carries the date of the oldest quote or valuation it used.
-  const value = (row: ShownHolding) => {
+  const value = (row: TenenciaRow) => {
     const item = valued(row);
     if (!item) return CALCULATING;
     if (item.value === null || item.asOf === null) {
@@ -562,26 +353,44 @@ export function AssetsSetup({
     );
   };
 
-  const columns: ColumnDef<ShownHolding>[] = [
+  // What a row holds: an instrument's units across its holdings, or the
+  // holding's amount in its own unit.
+  const held = (row: TenenciaRow) =>
+    row.kind === "instrument"
+      ? `${formatQuantity(factsOf(row).quantity)} ${row.symbol}`
+      : heldAmount(row.row);
+
+  const columns: ColumnDef<TenenciaRow>[] = [
     {
       id: "name",
       header: "Activo",
-      cell: ({ row: { original: shown } }) => {
-        const ticker = tickerOf(shown);
+      cell: ({ row: { original: row } }) => {
+        const first = firstOf(row);
+        const ticker = tickerOf(first);
+        const symbol = symbolOf(row);
+        const { accounts: where } = factsOf(row);
         return (
           <>
             <NameLink
-              text={assetName(shown)}
-              href={
-                hrefs && shown.holding.asset_class === "instrument"
-                  ? hrefs.instrument(shown.holding.instrument_symbol)
-                  : null
-              }
+              text={assetName(first)}
+              href={hrefs && symbol !== null ? hrefs.instrument(symbol) : null}
             />
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground @2xl:hidden">
-              <TruncatedText text={`${heldAmount(shown)} ·`} />
-              <InstitutionIcon name={shown.account.institution} />
-              <TruncatedText text={shown.account.institution} />
+              <TruncatedText
+                className="max-w-[60%] shrink-0"
+                text={held(row)}
+              />
+              <span aria-hidden className="shrink-0">
+                ·
+              </span>
+              {where.length === 1 ? (
+                <>
+                  <InstitutionIcon name={where[0]!.institution} />
+                  <TruncatedText text={where[0]!.institution} />
+                </>
+              ) : (
+                <AccountsCell accounts={where} />
+              )}
             </span>
             {ticker !== null && (
               <span className="sr-only @3xl:hidden">{`, ${ticker}`}</span>
@@ -600,7 +409,7 @@ export function AssetsSetup({
           : "hidden @3xl:table-cell",
       },
       cell: ({ row: { original: row } }) => {
-        const ticker = tickerOf(row);
+        const ticker = tickerOf(firstOf(row));
         return ticker === null ? null : <TickerChip ticker={ticker} />;
       },
     },
@@ -612,7 +421,7 @@ export function AssetsSetup({
         className: `${movement ? "hidden @6xl:table-cell" : "hidden @4xl:table-cell"} text-muted-foreground`,
       },
       cell: ({ row: { original: row } }) => (
-        <TruncatedText text={HOLDING_CLASS_LABELS[classOf(row)]} />
+        <TruncatedText text={HOLDING_CLASS_LABELS[classOf(firstOf(row))]} />
       ),
     },
     {
@@ -621,7 +430,7 @@ export function AssetsSetup({
       size: movement ? 128 : 144,
       meta: { className: "hidden @2xl:table-cell text-muted-foreground" },
       cell: ({ row: { original: row } }) => (
-        <AccountCell institution={row.account.institution} />
+        <AccountsCell accounts={factsOf(row).accounts} />
       ),
     },
     {
@@ -632,7 +441,7 @@ export function AssetsSetup({
         className: `${movement ? "hidden @7xl:table-cell" : "hidden @4xl:table-cell"} text-muted-foreground`,
       },
       cell: ({ row: { original: row } }) => (
-        <TruncatedText text={row.portfolio.name} />
+        <PortfoliosCell portfolios={factsOf(row).portfolios} />
       ),
     },
     {
@@ -640,9 +449,7 @@ export function AssetsSetup({
       header: "Cantidad",
       size: movement ? MOVEMENT_FIGURE : undefined,
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original: row } }) => (
-        <TruncatedText text={heldAmount(row)} />
-      ),
+      cell: ({ row: { original: row } }) => <TruncatedText text={held(row)} />,
     },
     {
       id: "price",
@@ -650,13 +457,11 @@ export function AssetsSetup({
       size: 128,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: row } }) => {
-        if (!hasUnitPrice(row.holding)) return null;
+        const first = firstOf(row);
+        if (!hasUnitPrice(first.holding)) return null;
         const item = valued(row);
         if (!item) return CALCULATING;
-        const symbol =
-          row.holding.asset_class === "instrument"
-            ? row.holding.instrument_symbol
-            : null;
+        const symbol = symbolOf(row);
         const manualDate = symbol && prices?.manual.get(symbol)?.date;
         const opensPrice =
           prices && symbol !== null && !prices.fed(symbol)
@@ -664,7 +469,7 @@ export function AssetsSetup({
             : null;
         const figure =
           item.price !== null ? (
-            formatQuotedPrice(item.price, unit, row.instrumentType)
+            formatQuotedPrice(item.price, unit, first.instrumentType)
           ) : (
             // A valued holding whose unit is worth less than the decimals
             // show.
@@ -698,7 +503,7 @@ export function AssetsSetup({
         );
       },
     },
-    ...(movement ? movementColumns(movement.input) : []),
+    ...(movement ? movementColumns() : []),
     {
       id: "value",
       header: "Valor",
@@ -726,19 +531,19 @@ export function AssetsSetup({
     },
   ];
 
-  // A holding's cost, average cost and gain, from its movements: "—" for one
-  // with none.
-  function movementColumns(input: MovementsInput): ColumnDef<ShownHolding>[] {
-    const positionOf = (row: ShownHolding) =>
-      row.unsaved ? undefined : (input.positions.get(row.id) ?? null);
+  // A row's cost, average cost and gain, from its holdings' movements: "—"
+  // for one with none.
+  function movementColumns(): ColumnDef<TenenciaRow>[] {
     const figure = (
-      row: ShownHolding,
-      show: (position: Position) => ReactNode,
+      row: TenenciaRow,
+      show: (cost: NonNullable<RowFigures["cost"]>) => ReactNode,
     ) => {
-      const position = positionOf(row);
-      if (position === undefined) return CALCULATING;
-      if (position === null) return <MissingFigure text="Sin movimientos" />;
-      return show(position);
+      if (row.unsaved) return CALCULATING;
+      const { cost } = factsOf(row);
+      if (!cost || cost.count === 0) {
+        return <MissingFigure text="Sin movimientos" />;
+      }
+      return show(cost);
     };
     return [
       {
@@ -747,12 +552,15 @@ export function AssetsSetup({
         header: "Costo prom.",
         meta: { className: `hidden @5xl:table-cell ${NUMBER_CELL}` },
         cell: ({ row: { original: row } }) =>
-          figure(row, (position) => {
-            const average = averageCost(position);
+          figure(row, ({ cost, quantity }) => {
+            const average =
+              cost === null || quantity === null
+                ? null
+                : averageOf(cost, quantity);
             return average === null ? (
               <MissingFigure text="Sin costo" />
             ) : (
-              formatQuotedPrice(average, unit, row.instrumentType)
+              formatQuotedPrice(average, unit, firstOf(row).instrumentType)
             );
           }),
       },
@@ -762,9 +570,9 @@ export function AssetsSetup({
         header: "Costo",
         meta: { className: `hidden @4xl:table-cell ${NUMBER_CELL}` },
         cell: ({ row: { original: row } }) =>
-          figure(row, (position) =>
-            position.money ? (
-              formatAmount(position.money.cost, unit)
+          figure(row, ({ cost }) =>
+            cost !== null ? (
+              formatAmount(cost, unit)
             ) : (
               <MissingFigure text="Sin costo en esta moneda" />
             ),
@@ -776,50 +584,44 @@ export function AssetsSetup({
         header: "G/P",
         meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
         cell: ({ row: { original: row } }) =>
-          figure(row, (position) => (
-            <GainLossText
-              gain={gainLoss(position, valued(row)?.value ?? null)}
-              unit={unit}
-            />
-          )),
+          figure(row, ({ gain }) => <GainLossText gain={gain} unit={unit} />),
       },
     ];
   }
 
-  // With movements, an instrument holding changes through them: it takes an
-  // adjustment instead of an edit.
-  const adjusts = (row: HoldingRow) =>
-    movement !== undefined && takesMovements(row.holding);
+  function addAssetMovement(row: TenenciaRow & { kind: "instrument" }) {
+    dialogs.openMovementDialog({
+      kind: "create",
+      row: null,
+      initial: dialogs.newOperationFields(
+        null,
+        instrumentPreset(row.symbol, holdingsOf(row)),
+      ),
+    });
+  }
 
-  const tableColumns: ColumnDef<ShownHolding>[] = [
-    ...(movement
-      ? [
-          expandColumn<ShownHolding>({
-            label: (row) => `Movimientos de ${named(row)}`,
-          }),
-        ]
-      : []),
+  const isInstrument = (row: TenenciaRow) => row.kind === "instrument";
+
+  const tableColumns: ColumnDef<TenenciaRow>[] = [
     ...columns,
-    actionsColumn<ShownHolding>(
+    actionsColumn<TenenciaRow>(
       [
         {
           id: "edit",
           icon: Pencil,
           tooltip: "Editar",
           label: (row) =>
-            `${adjusts(row) ? "Ajustar" : "Editar"} ${named(row)}`,
+            isInstrument(row)
+              ? `Agregar movimiento de ${name(firstOf(row))}`
+              : `Editar ${named(firstOf(row))}`,
           variant: (row) =>
-            adjusts(row)
-              ? { icon: SlidersHorizontal, tooltip: "Ajustar" }
+            isInstrument(row)
+              ? { icon: ArrowLeftRight, tooltip: "Agregar movimiento" }
               : undefined,
           onClick: (row) =>
-            adjusts(row)
-              ? openMovementDialog({
-                  kind: "create",
-                  row,
-                  preset: "adjustment",
-                })
-              : openDialog({ kind: "edit", row }),
+            row.kind === "instrument"
+              ? addAssetMovement(row)
+              : openDialog({ kind: "edit", row: row.row }),
         },
         ...(archiving
           ? [
@@ -827,13 +629,14 @@ export function AssetsSetup({
                 id: "archive",
                 icon: Archive,
                 tooltip: "Archivar",
-                label: (row: ShownHolding) => `Archivar ${named(row)}`,
-                onClick: (row: ShownHolding) =>
+                hidden: isInstrument,
+                label: (row: TenenciaRow) => `Archivar ${named(firstOf(row))}`,
+                onClick: (row: TenenciaRow) =>
                   rowAction(
                     { kind: "archive", id: row.id },
                     () => archiving.archive(row.id),
                     MESSAGES,
-                    row,
+                    firstOf(row),
                     "archive",
                     "Archivaste",
                   ),
@@ -842,28 +645,9 @@ export function AssetsSetup({
           : []),
         ...(deleteHolding
           ? [
-              {
-                id: "delete",
-                icon: Trash2,
-                tooltip: "Borrar",
-                label: (row: ShownHolding) => `Borrar ${named(row)}`,
-                onClick: (row: ShownHolding) =>
-                  setConfirm({
-                    title: `¿Borrar ${named(row)}?`,
-                    description: takesMovements(row.holding)
-                      ? "Se borran también sus movimientos. No se puede deshacer."
-                      : "No se puede deshacer.",
-                    run: () =>
-                      rowAction(
-                        { kind: "delete", id: row.id },
-                        () => deleteHolding(row.id),
-                        HOLDING_DELETE_MESSAGES,
-                        row,
-                        "delete",
-                        "Borraste",
-                      ),
-                  }),
-              },
+              dialogs.holdingDeleteAction<TenenciaRow>(deleteHolding, (row) =>
+                row.kind === "holding" ? row.row : null,
+              ),
             ]
           : []),
       ],
@@ -871,22 +655,29 @@ export function AssetsSetup({
     ),
   ];
 
-  const shownRows = view.active.filter((row) =>
-    matchesFilter(row, filter, names),
-  );
-  const valueOf = (row: ShownHolding) => valued(row)?.value ?? "0";
-  const sortedRows: ShownHolding[] = [...shownRows].sort((a, b) =>
+  // A row being saved keeps its place until the server values it again.
+  const valueOf = (row: TenenciaRow) => factsOf(row).value ?? "0";
+  const sortedRows = [...rows].sort((a, b) =>
     compareDecimals(valueOf(b), valueOf(a)),
   );
+  // The note counts holdings, as the total it marks does.
   const { missing } = valuation.kinds.total;
   // The cost and gain of the shown holdings with movements; none while a
   // write runs, which may change them.
   const totals =
     movement && !pending
-      ? costTotals(shownRows, movement.input.positions, valuation)
+      ? overExactSum(
+          costTotals(
+            shownRows.map((row) => ({
+              position: movement.input.positions.get(row.id),
+              value: valuation.values[row.id]?.value,
+            })),
+          ),
+          valuation.kinds.total,
+        )
       : undefined;
   const counts: Partial<Record<AssetsTab, number>> = {
-    holdings: shownRows.length,
+    holdings: rows.length,
     accounts: new Set(shownRows.map((row) => row.account.id)).size,
     portfolios: new Set(shownRows.map((row) => row.portfolio.id)).size,
     ...(movement && { sales: movement.input.sales.totals.count }),
@@ -901,7 +692,7 @@ export function AssetsSetup({
           <TruncatedText text={name(row.original)} />
           <TruncatedText
             className="text-xs text-muted-foreground @2xl:hidden"
-            text={`${row.original.account.institution} · ${row.original.portfolio.name}`}
+            text={holdingPlace(row.original)}
           />
         </>
       ),
@@ -1026,90 +817,10 @@ export function AssetsSetup({
             href={hrefs?.portfolio}
           />
         ) : (
-          <DataTable<ShownHolding>
+          <DataTable<TenenciaRow>
             columns={tableColumns}
             data={sortedRows}
             caption="Tenencias"
-            expandable={(row) =>
-              movement !== undefined &&
-              !row.unsaved &&
-              takesMovements(row.holding)
-            }
-            renderExpanded={
-              movement &&
-              ((row) => (
-                <div className="grid gap-2">
-                  <MovementsTable
-                    key={`${row.id}:${movement.input.revisions.get(row.id) ?? 0}:${unit}`}
-                    scope={{ holdingId: row.id }}
-                    unit={unit}
-                    instrumentTypes={types}
-                    load={movement.input.loadMovements}
-                    pending={pending}
-                    actions={[
-                      {
-                        id: "edit",
-                        icon: Pencil,
-                        tooltip: "Editar",
-                        label: (line) => `Editar ${movementName(line)}`,
-                        onClick: (line) =>
-                          openMovementDialog({
-                            kind: "edit",
-                            operation: line.operation,
-                          }),
-                      },
-                      ...(movement.actions.delete
-                        ? [
-                            {
-                              id: "delete",
-                              icon: Trash2,
-                              tooltip: "Borrar",
-                              label: (line: MovementLine) =>
-                                `Borrar ${movementName(line)}`,
-                              onClick: (line: MovementLine) =>
-                                confirmDeleteMovement(
-                                  line,
-                                  row,
-                                  movement.actions.delete!,
-                                ),
-                            },
-                          ]
-                        : []),
-                    ]}
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <PendingButton
-                      size="sm"
-                      variant="outline"
-                      pending={pending}
-                      onClick={() =>
-                        openMovementDialog({ kind: "create", row })
-                      }
-                    >
-                      <Plus />
-                      Agregar movimiento
-                    </PendingButton>
-                    {yieldsOf({ kind: "create", row }, movement.input) && (
-                      <PendingButton
-                        size="sm"
-                        variant="ghost"
-                        pending={pending}
-                        onClick={() =>
-                          openMovementDialog({
-                            kind: "create",
-                            row,
-                            preset: "yield",
-                          })
-                        }
-                      >
-                        <TrendingUp />
-                        Cargar rendimiento
-                      </PendingButton>
-                    )}
-                  </div>
-                </div>
-              ))
-            }
             footer={
               <TableRow>
                 {tableColumns.map((column) => (
@@ -1165,19 +876,7 @@ export function AssetsSetup({
         description="Lo que tenés en cada cuenta, valuado con la última cotización"
         addLabel="Agregar tenencia"
         onAdd={() => openDialog({ kind: "create" })}
-        secondary={
-          movement && (
-            <PendingButton
-              size="sm"
-              variant="outline"
-              pending={pending}
-              onClick={() => openMovementDialog({ kind: "create", row: null })}
-            >
-              <ArrowLeftRight />
-              Agregar movimiento
-            </PendingButton>
-          )
-        }
+        secondary={movement && dialogs.addMovementButton()}
       >
         <AssetsSummary valuation={valuation} unit={unit} pending={pending} />
         <AssetsTabs
@@ -1274,11 +973,13 @@ export function AssetsSetup({
                 });
                 return false;
               }
-              openMovementDialog({
+              dialogs.openMovementDialog({
                 kind: "create",
                 row: null,
                 initial: {
-                  ...newOperationFields(null, "opening_balance"),
+                  ...dialogs.newOperationFields(null, {
+                    kind: "opening_balance",
+                  }),
                   accountId: fields.accountId,
                   instrument: fields.instrument,
                   currency: currencyOf(instruments, fields.instrument),
@@ -1329,56 +1030,8 @@ export function AssetsSetup({
           }}
         />
       )}
-      {movement && movementDialog && (
-        <MovementDialog
-          transfer={transferOf(movementDialog, movement.input)}
-          yields={yieldsOf(movementDialog, movement.input)}
-          mode={movementDialog.kind}
-          accounts={accounts}
-          portfolios={portfolios}
-          instruments={instruments}
-          fixed={
-            movementDialog.kind === "edit"
-              ? fixedOf(
-                  movementDialog.operation.accountId,
-                  movementDialog.operation.instrument,
-                )
-              : movementDialog.row?.holding.asset_class === "instrument"
-                ? fixedOf(
-                    movementDialog.row.account.id,
-                    movementDialog.row.holding.instrument_symbol,
-                  )
-                : undefined
-          }
-          initial={
-            movementDialog.initial ??
-            (movementDialog.kind === "edit"
-              ? operationFields(movementDialog.operation.parts, {
-                  accountId: movementDialog.operation.accountId,
-                  instrument: movementDialog.operation.instrument,
-                  type: typeOf(movementDialog.operation.instrument),
-                })
-              : newOperationFields(movementDialog.row, movementDialog.preset))
-          }
-          initialError={movementDialog.initialError}
-          today={today}
-          returnFocusTo={card.focusHeading}
-          onClose={() => setMovementDialog(null)}
-          onSubmit={(fields) =>
-            submitMovement(movementDialog, movement.actions, fields)
-          }
-        />
-      )}
-      {confirm && (
-        <ConfirmDialog
-          title={confirm.title}
-          description={confirm.description}
-          confirmLabel="Borrar"
-          returnFocusTo={card.focusHeading}
-          onClose={() => setConfirm(null)}
-          onConfirm={confirm.run}
-        />
-      )}
+      {movement && dialogs.render(movement)}
+      {confirmDialog}
       {priceDialog && prices && (
         <PriceDialogFor
           state={priceDialog}
@@ -1405,7 +1058,7 @@ export function AssetsSetup({
           }
           onDelete={(date) => {
             const { symbol } = priceDialog;
-            setConfirm({
+            confirm({
               title: `¿Borrar el precio manual de ${symbol}?`,
               description:
                 "Vuelve a valer el precio manual anterior, si cargaste otro. No se puede deshacer.",

@@ -117,13 +117,14 @@ it("answers about debts with none loaded", () => {
 });
 
 it("draws an instrument's result as bars that add up to it", () => {
-  const { holdings, flows } = instrumentHoldings(
+  const { holdings, flows, value } = instrumentHoldings(
     state,
     "AAPL",
     "usd_mep",
     snapshot,
   );
-  const result = instrumentSummary(holdings, flows, TODAY).returns!.result;
+  const result = instrumentSummary(holdings, flows, TODAY, value).returns!
+    .result;
   const bars = ask("¿Cómo le fue a Apple?").chart!.bars;
   expect(bars.reduce((sum, bar) => sum + Number(bar.value), 0)).toBeCloseTo(
     Number(result),
