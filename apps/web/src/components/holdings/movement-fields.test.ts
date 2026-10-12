@@ -294,6 +294,12 @@ describe("a transfer", () => {
     });
   });
 
+  it("keeps its source when it stops being a transfer, whatever homes the dialog names", () => {
+    expect(
+      withKind(moving, "purchase", { transfer: LARGO, yield: LARGO }).parts,
+    ).toEqual([{ portfolioId: PRINCIPAL, size: "0,5" }]);
+  });
+
   it("drops a changed cost when it stops being a transfer", () => {
     expect(
       withKind(

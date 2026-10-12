@@ -992,12 +992,8 @@ export function writeOperation(
       parts.push({ portfolio, part });
       continue;
     }
-    const home = holdingIn(
-      state,
-      accountId,
-      instrumentSymbol,
-      part.portfolio_id,
-    )?.holding.id;
+    const home = holdingIn(state, accountId, instrumentSymbol, portfolioId)
+      ?.holding.id;
     const own =
       home === undefined
         ? []

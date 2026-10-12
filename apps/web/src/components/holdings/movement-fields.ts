@@ -169,6 +169,7 @@ export function withKind(
   homes: Partial<Record<"transfer" | "yield", string>>,
 ): MovementFields {
   const first = fields.parts[0];
+  const size = first?.size ?? "";
   const portfolio =
     (kind === "transfer" || kind === "yield" ? homes[kind] : undefined) ??
     first?.portfolioId ??
@@ -181,7 +182,6 @@ export function withKind(
     balance: null,
   };
   if (kind === "transfer") {
-    const size = fields.parts[0]?.size ?? "";
     return {
       ...fresh,
       charges: [],
@@ -192,7 +192,6 @@ export function withKind(
     };
   }
   if (kind === "yield") {
-    const size = fields.parts[0]?.size ?? "";
     return { ...fresh, charges: [], parts: [{ portfolioId: portfolio, size }] };
   }
   if (fields.kind === "transfer" || fields.kind === "yield") {
@@ -215,8 +214,8 @@ export const priceInField = (
       : quotedInput(suggested, type);
 
 // The fields as the dialog sends them: a yield's price is the one its field
-// shows. Its value stays unedited, so a dialog opened again with these fields
-// follows the quote of the day it shows then.
+// shows. It leaves `priceEdited` as it was, so an unedited value follows the
+// quote of the day a reopened dialog shows.
 export const withShownPrice = (
   fields: MovementFields,
   suggested: string | null,
