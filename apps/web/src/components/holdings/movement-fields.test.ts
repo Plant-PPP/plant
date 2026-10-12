@@ -1,3 +1,5 @@
+import type { Movement } from "@plant/core";
+
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 
@@ -7,6 +9,7 @@ import {
   operationFields,
   refusedMovementField,
   toOperationInput,
+  withKind,
 } from "./movement-fields";
 
 const ACCOUNT = "a1000000-0000-4000-8000-000000000001";
@@ -183,4 +186,135 @@ it("takes a bond's price as quoted, per 100 nominal, and sends it per unit", () 
       type: "bond",
     }).price,
   ).toBe("85,5");
+});
+
+describe("a transfer", () => {
+  const rates = {
+    mep: { sell: "1", date: "2026-03-02" },
+    ccl: { sell: "1", date: "2026-03-02" },
+    official: { sell: "1", date: "2026-03-02" },
+  };
+  const leg = (direction: "in" | "out", price: string | null): Movement => ({
+    id: `m-${direction}`,
+    holding_id: `h-${direction}`,
+    operation_id: "op",
+    entry_order: 1,
+    kind: "transfer" as const,
+    direction,
+    date: "2026-03-02",
+    currency: "USD" as const,
+    quantity: "0.5",
+    price,
+    charges: [],
+    reference: null,
+    note: null,
+    rates,
+  });
+  const moving = withKind(
+    {
+      ...newMovementFields(defaults),
+      parts: [{ portfolioId: LARGO, size: "0,5" }],
+    },
+    "transfer",
+    PRINCIPAL,
+  );
+
+  it("starts from its portfolio with the quantity typed, no charges and the cost it carries", () => {
+    expect(moving).toMatchObject({
+      kind: "transfer",
+      costEdited: false,
+      price: "",
+      charges: [],
+      parts: [
+        { portfolioId: PRINCIPAL, size: "0,5" },
+        { portfolioId: "", size: "0,5" },
+      ],
+    });
+    expect(withKind(moving, "purchase", PRINCIPAL).parts).toEqual([
+      { portfolioId: PRINCIPAL, size: "0,5" },
+    ]);
+  });
+
+  it("sends one quantity each way, carrying the cost until it is changed", () => {
+    const fields = {
+      ...moving,
+      parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+    };
+    const input = (each: typeof fields) =>
+      operationInputSchema.parse(toOperationInput(each, "crypto"));
+    expect(input(fields).parts).toEqual([
+      {
+        portfolio_id: PRINCIPAL,
+        direction: "out",
+        quantity: "0.5",
+        price: null,
+      },
+      { portfolio_id: LARGO, direction: "in", quantity: "0.5", price: null },
+    ]);
+    expect(
+      input({ ...fields, price: "61000", costEdited: true }).parts[1],
+    ).toMatchObject({ price: "61000" });
+    expect(input({ ...fields, price: "61000" }).parts[1]).toMatchObject({
+      price: null,
+    });
+  });
+
+  it("names a changed cost that does not parse as the price", () => {
+    const parsed = operationInputSchema.safeParse(
+      toOperationInput(
+        {
+          ...moving,
+          parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+          price: "x",
+          costEdited: true,
+        },
+        "crypto",
+      ),
+    );
+    if (parsed.success) throw new Error("expected a refusal");
+    expect(movementRefusal(parsed.error).field).toBe("price");
+  });
+
+  it.each([
+    ["leaving first", [leg("out", null), leg("in", "61000")]],
+    ["arriving first", [leg("in", "61000"), leg("out", null)]],
+  ])("reads back with its side %s", (_, legs) => {
+    const fields = operationFields(
+      legs.map((movement) => ({
+        movement,
+        portfolioId: movement.id === "m-out" ? PRINCIPAL : LARGO,
+      })),
+      { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
+    );
+    expect(fields).toMatchObject({
+      kind: "transfer",
+      costEdited: true,
+      price: "61000",
+      parts: [
+        { portfolioId: PRINCIPAL, size: "0,5" },
+        { portfolioId: LARGO, size: "0,5" },
+      ],
+    });
+  });
+
+  it("reads back a carried cost as not changed", () => {
+    expect(
+      operationFields(
+        [
+          { movement: leg("out", null), portfolioId: PRINCIPAL },
+          { movement: leg("in", null), portfolioId: LARGO },
+        ],
+        { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
+      ),
+    ).toMatchObject({ costEdited: false, price: "" });
+  });
+});
+
+it("points an archived home's refusal at its field", () => {
+  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_portfolio)).toBe(
+    "parts",
+  );
+  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_account)).toBe(
+    "account",
+  );
 });

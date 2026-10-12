@@ -20,6 +20,7 @@ import {
   movementsPage,
   positionsOf,
   salesOf,
+  suggestedTransferCost,
   yearsOf,
 } from "./prototype-store";
 
@@ -70,6 +71,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
     years,
     loadMovements: async (scope, inUnit, cursor) =>
       movementsPage(latest(), scope, inUnit, cursor),
+    transferCost: (query) => suggestedTransferCost(latest(), query),
   };
 
   return (

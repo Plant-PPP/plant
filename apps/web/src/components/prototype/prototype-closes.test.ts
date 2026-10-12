@@ -254,7 +254,7 @@ it("marks nothing when a purchase's units move between portfolios", () => {
   expect(markRecalculated(split, whole).recalculated.size).toBe(0);
 });
 
-it("moves units in and out at their worth, so a transfer makes no market result", () => {
+it("moves units in and out at their worth, so units that change hands without a trade make no market result", () => {
   const iol = state.accounts.find((each) => each.institution === "IOL")!;
   const quoteOn = (date: string) =>
     Number(
@@ -295,6 +295,32 @@ it("moves units in and out at their worth, so a transfer makes no market result"
     100 * (quoteOn("2026-09-20") - quoteOn("2026-09-15")),
     2,
   );
+});
+
+it("counts no money in or out for a transfer between portfolios", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const other = state.portfolios.find((each) => each.id !== iol.portfolio.id)!;
+  const moved = writeOperation(
+    state,
+    {
+      kind: "transfer",
+      source_connection_id: iol.id,
+      instrument_symbol: "AAPL",
+      date: "2026-09-15",
+      currency: "ARS",
+      reference: null,
+      note: null,
+      parts: [
+        { portfolio_id: iol.portfolio.id, direction: "out", quantity: "2" },
+        { portfolio_id: other.id, direction: "in", quantity: "2", price: null },
+      ],
+    },
+    { operationId: "moved", newId: () => crypto.randomUUID() },
+  );
+  expect(moved.result.ok).toBe(true);
+  const figures = (each: typeof state) =>
+    closesOf(each, "ars").find((close) => close.period === "2026-09")!.figures;
+  expect(figures(moved.state)).toEqual(figures(state));
 });
 
 it("measures returns on what is held, even with more owed than held", () => {

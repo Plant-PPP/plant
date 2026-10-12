@@ -14,7 +14,7 @@ import {
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { movementLabel } from "@/lib/holdings/messages";
+import { lineLabel } from "@/lib/holdings/messages";
 import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import {
   type MonthClose,
@@ -150,7 +150,7 @@ export function MonthCloseDetail({
           <TruncatedText className="font-medium" text={original.holdingName} />
           <TruncatedText
             className="text-muted-foreground text-xs @2xl:hidden"
-            text={movementLabel(original.movement)}
+            text={lineLabel(original)}
           />
         </>
       ),
@@ -160,7 +160,7 @@ export function MonthCloseDetail({
       header: "Tipo",
       size: 112,
       meta: { className: "hidden @2xl:table-cell text-muted-foreground" },
-      cell: ({ row: { original } }) => movementLabel(original.movement),
+      cell: ({ row: { original } }) => lineLabel(original),
     },
     {
       id: "quantity",
@@ -179,6 +179,7 @@ export function MonthCloseDetail({
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
         isTrade(original.movement) &&
+        original.movement.kind !== "transfer" &&
         original.movement.price !== null &&
         !original.atWorth
           ? formatQuotedPrice(

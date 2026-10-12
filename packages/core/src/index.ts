@@ -37,6 +37,7 @@ export {
   type UnitFxKind,
 } from "./valuation/denominators";
 export {
+  lift,
   rate,
   referenceUnit,
   type ReferenceDollar,

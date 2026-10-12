@@ -1,4 +1,4 @@
-import { exactOf, plus, stored } from "@plant/shared";
+import { exactOf, over, plus, stored } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -11,6 +11,7 @@ import {
   initialState,
   type PrototypeState,
   stepsOf,
+  suggestedTransferCost,
   writeOperation,
 } from "./prototype-store";
 
@@ -235,5 +236,57 @@ describe("a refused transfer", () => {
       state: archived.state,
       result: { ok: false, code: "archived_portfolio" },
     });
+  });
+});
+
+describe("the cost a transfer suggests", () => {
+  const query = {
+    accountId: IOL,
+    instrument: "AAPL",
+    portfolioId: PRINCIPAL,
+    currency: "ARS" as const,
+    date: TODAY,
+    operationId: null,
+  };
+  const averageIn = (s: PrototypeState) => {
+    const { quantity, money } = positionIn(s, PRINCIPAL)!;
+    return stored(over(exactOf(money!.cost), exactOf(quantity)));
+  };
+
+  it("is the average cost the units have before it", () => {
+    expect(suggestedTransferCost(state, query)).toBe(averageIn(state));
+  });
+
+  it("leaves out the transfer an edit replaces", () => {
+    const moved = written(transfer("2"));
+    expect(
+      suggestedTransferCost(moved, { ...query, operationId: TRANSFER }),
+    ).toBe(averageIn(state));
+  });
+
+  it("leaves out what comes after its day", () => {
+    const later = writeOperation(
+      state,
+      purchase("10", "1", TODAY),
+      options("e3000000-0000-4000-8000-000000000003"),
+    ).state;
+    expect(suggestedTransferCost(later, { ...query, date: "2026-10-11" })).toBe(
+      averageIn(state),
+    );
+  });
+
+  it("is in the dollar the user values in for a dollar cost", () => {
+    const dollars = suggestedTransferCost(state, {
+      ...query,
+      currency: "USD",
+    });
+    expect(dollars).not.toBeNull();
+    expect(Number(dollars)).toBeLessThan(Number(averageIn(state)));
+  });
+
+  it("has none where nothing is held", () => {
+    expect(
+      suggestedTransferCost(state, { ...query, portfolioId: LARGO }),
+    ).toBeNull();
   });
 });

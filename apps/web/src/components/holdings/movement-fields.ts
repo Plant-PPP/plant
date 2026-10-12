@@ -3,6 +3,7 @@ import {
   type InstrumentType,
   isIncome,
   isTrade,
+  takesUnits,
   type Movement,
   type MovementKind,
   exactUnitPrice,
@@ -21,10 +22,14 @@ import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 export type PartFields = { portfolioId: string; size: string };
 export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
 
-// What the movement dialog holds, as typed.
+// What the movement dialog holds, as typed. A transfer's first part is the
+// portfolio its units leave and its second the one they arrive in, both with
+// its quantity; its price is the cost the units arrive with, sent only once
+// the user changes it (`costEdited`), else they carry the cost they had.
 export type MovementFields = {
   kind: MovementKind;
   direction: "in" | "out";
+  costEdited: boolean;
   accountId: string;
   instrument: string;
   date: string;
@@ -58,6 +63,7 @@ export function newMovementFields(
   return {
     kind: defaults.kind,
     direction: "in",
+    costEdited: false,
     accountId: defaults.accountId,
     instrument: defaults.instrument,
     date: defaults.date,
@@ -90,9 +96,14 @@ export function operationFields(
     type: InstrumentType | null;
   },
 ): MovementFields {
-  const [first] = parts;
+  // A transfer lists the side its units leave first.
+  const ordered = [...parts].sort(
+    (a, b) => Number(takesUnits(b.movement)) - Number(takesUnits(a.movement)),
+  );
+  const [first] = ordered;
   if (!first) throw new RangeError("An operation has a part");
   const { movement } = first;
+  const priced = ordered.at(-1)!.movement;
   const charges = new Map<
     string,
     { kind: ChargeKind; label: string; amounts: string[] }
@@ -110,15 +121,16 @@ export function operationFields(
   return {
     kind: movement.kind,
     direction: movement.kind === "adjustment" ? movement.direction : "in",
+    costEdited: priced.kind === "transfer" && priced.price !== null,
     accountId,
     instrument,
     date: movement.date,
     price:
-      isTrade(movement) && movement.price !== null
-        ? amountInput(type ? quotedPrice(type, movement.price) : movement.price)
+      isTrade(priced) && priced.price !== null
+        ? amountInput(type ? quotedPrice(type, priced.price) : priced.price)
         : "",
     currency: movement.currency,
-    parts: parts.map((part) => ({
+    parts: ordered.map((part) => ({
       portfolioId: part.portfolioId,
       size: amountInput(
         isTrade(part.movement) ? part.movement.quantity : part.movement.amount,
@@ -132,6 +144,40 @@ export function operationFields(
     reference: movement.reference ?? "",
     note: movement.note ?? "",
   };
+}
+
+// The fields as another kind: a transfer takes its quantity out of `from`
+// into a portfolio still to choose, with no charges; any other kind keeps
+// the first part.
+export function withKind(
+  fields: MovementFields,
+  kind: MovementKind,
+  from: string,
+): MovementFields {
+  if (kind === "transfer") {
+    const size = fields.parts[0]?.size ?? "";
+    return {
+      ...fields,
+      kind,
+      price: "",
+      costEdited: false,
+      charges: [],
+      parts: [
+        { portfolioId: from, size },
+        { portfolioId: "", size },
+      ],
+    };
+  }
+  if (fields.kind === "transfer") {
+    return {
+      ...fields,
+      kind,
+      price: "",
+      costEdited: false,
+      parts: fields.parts.slice(0, 1),
+    };
+  }
+  return { ...fields, kind };
 }
 
 // An empty text is none.
@@ -150,6 +196,33 @@ export function toOperationInput(
     return exactUnitPrice(type, quoted) ?? typed;
   };
   const income = isIncome(fields.kind);
+  if (fields.kind === "transfer") {
+    // A changed cost that does not parse goes as typed, for the schema to
+    // refuse.
+    const cost = fields.costEdited
+      ? (perUnit(fields.price) ?? fields.price)
+      : null;
+    const quantity = parseAmountInput(fields.parts[0]?.size ?? "");
+    return {
+      kind: fields.kind,
+      source_connection_id: fields.accountId,
+      instrument_symbol: fields.instrument,
+      date: fields.date,
+      currency: fields.currency,
+      parts: fields.parts.map((part, index) =>
+        index === 0
+          ? { portfolio_id: part.portfolioId, direction: "out", quantity }
+          : {
+              portfolio_id: part.portfolioId,
+              direction: "in",
+              quantity,
+              price: cost,
+            },
+      ),
+      reference: optional(fields.reference),
+      note: optional(fields.note),
+    };
+  }
   return {
     kind: fields.kind,
     source_connection_id: fields.accountId,
@@ -224,7 +297,13 @@ const FORM_ORDER: readonly MovementField[] = [
 ];
 
 export function movementRefusal(error: z.ZodError): FieldAlert<MovementField> {
-  const first = firstRefused(error, FIELD_BY_COLUMN, FORM_ORDER);
+  // A transfer's cost sits on the part its units arrive in.
+  const issues = error.issues.map((issue) =>
+    issue.path[0] === "parts" && issue.path[2] === "price"
+      ? { ...issue, path: ["price"] }
+      : issue,
+  );
+  const first = firstRefused({ issues }, FIELD_BY_COLUMN, FORM_ORDER);
   return first
     ? { field: first.field, text: MOVEMENT_FIELD_MESSAGES[first.field] }
     : { field: null, text: MOVEMENT_MESSAGES.invalid };

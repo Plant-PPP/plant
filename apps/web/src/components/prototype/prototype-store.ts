@@ -29,6 +29,8 @@ import {
   type Position,
   replayHoldings,
   type ReferenceDollar,
+  lift,
+  referenceUnit,
   type StoredQuotes,
   snapshotOn,
   UNIT_FX_KINDS,
@@ -45,6 +47,7 @@ import type {
   MovementsPage,
   SaleLine,
   SalesSlice,
+  TransferCostQuery,
 } from "@/lib/holdings/movements-input";
 import type {
   HoldingRow,
@@ -65,6 +68,7 @@ import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
 import type { Conversation } from "@/lib/assistant/chat";
 import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
+import { averageCost } from "@/lib/holdings/cost-totals";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
@@ -300,6 +304,54 @@ export function positionsOf(
   return positions;
 }
 
+// The cost per unit a transfer's units would carry out of a portfolio's
+// holding: its average cost just before the transfer, which goes last on its
+// day (an edit on its own day keeps its place), in the query's currency. The
+// transfer an edit replaces is left out of the holding it leaves.
+export function suggestedTransferCost(
+  state: PrototypeState,
+  {
+    accountId,
+    instrument,
+    portfolioId,
+    currency,
+    date,
+    operationId,
+  }: TransferCostQuery,
+): string | null {
+  const stored = holdingIn(state, accountId, instrument, portfolioId);
+  if (!stored) return null;
+  const holdingId = stored.holding.id;
+  const own = (state.movements.get(holdingId) ?? []).filter(
+    (each) => each.operation_id !== operationId,
+  );
+  const kept = (state.movements.get(holdingId) ?? []).find(
+    (each) => each.operation_id === operationId,
+  );
+  const rank =
+    kept && kept.date === date ? kept.entry_order : Number.POSITIVE_INFINITY;
+  const unit = lift(
+    { amount: { n: 0n, d: 1n }, currency },
+    referenceUnit(state.referenceDollar),
+    state.referenceDollar,
+  ).denominator;
+  const steps = replayHoldings(
+    groupOf(state, holdingId).flatMap((id) =>
+      id === holdingId ? own : (state.movements.get(id) ?? []),
+    ),
+    unit,
+    state.referenceDollar,
+  ).get(holdingId);
+  let before = EMPTY_POSITION;
+  own.forEach((movement, index) => {
+    const at = movementKey(movement);
+    if (at.date < date || (at.date === date && at.rank < rank)) {
+      before = steps![index]!.position;
+    }
+  });
+  return averageCost(before);
+}
+
 // The years with any sale, newest first.
 export function yearsOf(state: PrototypeState): string[] {
   const years = new Set<string>();
@@ -429,7 +481,14 @@ export function operationOf(
     for (const movement of state.movements.get(stored.holding.id) ?? []) {
       if (movement.operation_id !== operationId) continue;
       placed ??= stored;
-      parts.push({ movement, portfolioId: stored.portfolioId });
+      parts.push({
+        movement,
+        portfolioId: stored.portfolioId,
+        portfolioName:
+          [...state.portfolios, ...state.archivedPortfolios].find(
+            ({ id }) => id === stored.portfolioId,
+          )?.name ?? "",
+      });
     }
   }
   if (!placed || placed.holding.asset_class !== "instrument") return null;

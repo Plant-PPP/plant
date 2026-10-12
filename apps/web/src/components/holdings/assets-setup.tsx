@@ -5,6 +5,7 @@ import {
   type MovementKind,
   type Position,
   takesMovements,
+  takesUnits,
 } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -17,7 +18,7 @@ import {
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ComponentProps, type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -439,6 +440,45 @@ export function AssetsSetup({
           }),
       },
     );
+  }
+
+  // A transfer the dialog offers: from the instrument holding it was opened
+  // from, or the portfolio an edited transfer's units leave.
+  function transferOf(
+    state: MovementDialogState,
+    input: MovementsInput,
+  ): ComponentProps<typeof MovementDialog>["transfer"] {
+    const { transferCost } = input;
+    if (!transferCost) return undefined;
+    const from =
+      state.kind === "edit"
+        ? state.operation.parts.find(({ movement }) => takesUnits(movement))
+            ?.portfolioId
+        : state.row?.holding.asset_class === "instrument"
+          ? state.row.portfolio.id
+          : undefined;
+    if (
+      from === undefined ||
+      (state.kind === "edit" &&
+        state.operation.parts[0]!.movement.kind !== "transfer")
+    ) {
+      return undefined;
+    }
+    return {
+      from,
+      suggestedCost: (fields) =>
+        transferCost({
+          accountId: fields.accountId,
+          instrument: fields.instrument,
+          portfolioId: fields.parts[0]?.portfolioId ?? from,
+          currency: fields.currency,
+          date: fields.date,
+          operationId:
+            state.kind === "edit"
+              ? state.operation.parts[0]!.movement.operation_id
+              : null,
+        }),
+    };
   }
 
   // A movement as its actions name it: "compra del 01/09/2026".
@@ -1254,6 +1294,7 @@ export function AssetsSetup({
       )}
       {movement && movementDialog && (
         <MovementDialog
+          transfer={transferOf(movementDialog, movement.input)}
           mode={movementDialog.kind}
           accounts={accounts}
           portfolios={portfolios}

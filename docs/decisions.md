@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-12 · Transfers between portfolios (PLA-118)
+
+- **A value the app computes or fetches (a cost, a price, a market value) shows as a suggestion the user can change.** Left as suggested it follows the data; changed, it is the user's.
+- **A "Traspaso" moves units of an instrument from one portfolio's holding to another portfolio's holding of it in the same account**: one operation with a side out and a side in, of one quantity, with no charges. It is no money in or out (a flow of 0 in closes and returns) and makes no result.
+- **The units arriving carry the cost the units leaving took**, worked out when the holdings are replayed, so an edit to the first portfolio's earlier history reaches the second, in every unit. The dialog shows that cost per unit as "Sugerido"; a cost the user types instead is fixed, and the difference shows as unrealized until those units are sold, then in that sale's result.
+- **One account's holdings of an instrument replay together**, in date and entry order, a transfer's side out before its side in, and a write reloads all of them. A holding's history is not resumed from a stored step, since a transfer's cost comes from another holding.
+- **A holding with a transfer cannot be deleted** ("Tiene traspasos con otra cartera…"); the transfer is deleted first, from its movements, with both sides. An edit to the first portfolio still reaches a second one that is closed or archived. A write that would leave units in an archived account or portfolio is refused with a restore message. When movements persist (PLA-103), the holding-to-movements cascade becomes a guard for transfer sides and `holding_has_transfers` joins the setup guard's hints.
+
 ## 2026-10-12 · Entry order within a day (PLA-116)
 
 - **Within a day, an opening balance comes first and the rest go in the order their operations were entered.** Every movement carries its operation's `entry_order` (all its parts share it, and the store's integrity test checks that); a new operation takes the next one. So a buy-back on the day of a sell-out opens a new cost, and a purchase entered before a sale that day can be sold (dollar MEP). Ordering by kind folded a same-day buy-back into the sale's average cost.

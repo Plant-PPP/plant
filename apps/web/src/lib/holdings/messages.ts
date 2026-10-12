@@ -10,7 +10,7 @@ import type { Currency } from "@plant/shared";
 import { FAILED, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 
 import type { HoldingDeleteResult } from "./delete-result";
-import type { MovementResult } from "./movements-input";
+import type { MovementLine, MovementResult } from "./movements-input";
 import type { PriceResult } from "./price-input";
 
 export type AssetClass = Holding["asset_class"];
@@ -55,6 +55,21 @@ export const movementLabel = (movement: Movement): string =>
   "direction" in movement
     ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`
     : MOVEMENT_KIND_LABELS[movement.kind];
+
+// A movement as a list names it: a transfer by the portfolio on its other
+// side.
+export function lineLabel({
+  movement,
+  operation,
+}: Pick<MovementLine, "movement" | "operation">): string {
+  const other = operation.parts.find(
+    (part) => part.movement.holding_id !== movement.holding_id,
+  );
+  if (movement.kind !== "transfer" || !other) return movementLabel(movement);
+  return movement.direction === "out"
+    ? `Traspaso a ${other.portfolioName}`
+    : `Traspaso desde ${other.portfolioName}`;
+}
 
 export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
   commission: "Comisión",

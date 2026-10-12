@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/data-table";
 import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { movementLabel } from "@/lib/holdings/messages";
+import { lineLabel } from "@/lib/holdings/messages";
 import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type {
   MovementLine,
@@ -133,7 +133,7 @@ export function MovementsTable({
       id: "kind",
       header: "Tipo",
       size: 112,
-      cell: ({ row: { original } }) => movementLabel(original.movement),
+      cell: ({ row: { original } }) => lineLabel(original),
     },
     {
       id: "quantity",
@@ -149,7 +149,9 @@ export function MovementsTable({
       header: "Precio",
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement) && original.movement.price !== null
+        isTrade(original.movement) &&
+        original.movement.kind !== "transfer" &&
+        original.movement.price !== null
           ? formatQuotedPrice(
               original.movement.price,
               original.movement.currency,

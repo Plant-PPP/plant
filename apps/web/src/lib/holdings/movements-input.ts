@@ -6,6 +6,7 @@ import type {
   Position,
   SaleResult,
 } from "@plant/core";
+import type { Currency } from "@plant/shared";
 
 import type { HoldingRow } from "./read";
 
@@ -29,11 +30,22 @@ export type MovementLine = {
 };
 
 // An operation's account and instrument, and every part of it: one movement
-// per portfolio.
+// per portfolio, with the portfolio's name.
 export type OperationParts = {
   accountId: string;
   instrument: string;
-  parts: { movement: Movement; portfolioId: string }[];
+  parts: { movement: Movement; portfolioId: string; portfolioName: string }[];
+};
+
+// A transfer as its dialog has it: where its units leave from, on which day,
+// and the operation an edit replaces.
+export type TransferCostQuery = {
+  accountId: string;
+  instrument: string;
+  portfolioId: string;
+  currency: Currency;
+  date: string;
+  operationId: string | null;
 };
 
 export type MovementsPage =
@@ -78,6 +90,10 @@ export type MovementsInput = {
     unit: Denominator,
     cursor: MovementCursor | null,
   ) => Promise<MovementsPage>;
+  // The cost per unit, in `currency`, that units leaving a portfolio's
+  // holding on `date` would carry; null when it has none to give. A page that
+  // passes it offers transfers between portfolios.
+  transferCost?: (query: TransferCostQuery) => string | null;
 };
 
 export type MovementResult =
