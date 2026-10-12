@@ -15,6 +15,7 @@ import type { QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import type { Denominator } from "../valuation/denominators";
 import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
+import { compareInReplay } from "./order";
 
 // A position's figures, rounded to the stored precision between movements.
 const kept = (x: Exact): Exact => roundedTo(x, DECIMAL_SCALE_DIGITS);
@@ -106,85 +107,150 @@ function factorOf(
   return "missing" in one ? null : one.value.amount;
 }
 
-// Each movement's step, oldest first, from `from` (the position before the
-// first of them; empty when they start the holding). The state is rounded to
-// DECIMAL_SCALE_DIGITS between movements and exact within one, so replaying from any
-// stored step gives the same steps as replaying from the start.
-export function replay(
-  movements: readonly Movement[],
+type Held = { quantity: Exact; money: Money | null };
+
+const heldOf = (position: Position): Held => ({
+  quantity: exactOf(position.quantity),
+  money: position.money && moneyOf(position.money),
+});
+
+// One movement applied to what its holding held. `carried` holds the cost
+// each transfer's units left with, by operation, so the side they arrive in
+// can take it.
+function stepOf(
+  held: Held,
+  movement: Movement,
   view: Denominator,
   referenceDollar: ReferenceDollar,
-  { from = EMPTY_POSITION }: { from?: Position } = {},
-): LedgerStep[] {
-  let quantity = exactOf(from.quantity);
-  let money: Money | null = from.money && moneyOf(from.money);
-  const steps: LedgerStep[] = [];
-  for (const movement of movements) {
-    const factor = money && factorOf(movement, view, referenceDollar);
-    if (!factor) money = null;
-    const inView = (amount: Exact) => times(amount, factor ?? ZERO);
-    const charges = inView(chargesOf(movement));
-    let sale: SaleResult | null | undefined;
-    if (isTrade(movement)) {
-      const moved = exactOf(movement.quantity);
-      const value = times(inView(exactOf(movement.price)), moved);
-      const isSale = movement.kind === "sale";
-      if (takesUnits(movement)) {
-        if (compareExact(moved, quantity) > 0) {
-          throw new PositionError("oversold");
-        }
-        if (money) {
-          const cost =
-            compareExact(moved, quantity) === 0
-              ? money.cost
-              : kept(over(times(money.cost, moved), quantity));
-          // An adjustment out takes its cost and makes no result.
-          const result = isSale ? minus(minus(value, charges), cost) : ZERO;
-          if (isSale) {
-            sale = {
-              gross: stored(value),
-              charges: stored(charges),
-              cost: stored(cost),
-              result: stored(result),
-            };
-          }
-          money = {
-            cost: kept(minus(money.cost, cost)),
-            charges: kept(plus(money.charges, charges)),
-            income: money.income,
-            realized: kept(plus(money.realized, result)),
-          };
-        } else if (isSale) {
-          sale = null;
-        }
-        quantity = kept(minus(quantity, moved));
-      } else {
-        if (money) {
-          money = {
-            ...money,
-            cost: kept(plus(money.cost, value)),
-            charges: kept(plus(money.charges, charges)),
-          };
-        }
-        quantity = kept(plus(quantity, moved));
+  carried: Map<string, Exact | null>,
+): { held: Held; step: LedgerStep } {
+  let { quantity, money } = held;
+  const factor = money && factorOf(movement, view, referenceDollar);
+  if (!factor) money = null;
+  const inView = (amount: Exact) => times(amount, factor ?? ZERO);
+  const charges = inView(chargesOf(movement));
+  let sale: SaleResult | null | undefined;
+  if (isTrade(movement)) {
+    const moved = exactOf(movement.quantity);
+    const isSale = movement.kind === "sale";
+    if (takesUnits(movement)) {
+      if (compareExact(moved, quantity) > 0) {
+        throw new PositionError("oversold");
       }
-    } else if (money && isIncome(movement.kind)) {
-      money = {
-        ...money,
-        income: kept(plus(money.income, inView(exactOf(movement.amount)))),
-        charges: kept(plus(money.charges, charges)),
-      };
+      if (money) {
+        const cost =
+          compareExact(moved, quantity) === 0
+            ? money.cost
+            : kept(over(times(money.cost, moved), quantity));
+        if (movement.kind === "transfer") {
+          carried.set(movement.operation_id, cost);
+        }
+        // An adjustment or transfer out takes its cost and makes no result.
+        const value =
+          movement.price === null
+            ? ZERO
+            : times(inView(exactOf(movement.price)), moved);
+        const result = isSale ? minus(minus(value, charges), cost) : ZERO;
+        if (isSale) {
+          sale = {
+            gross: stored(value),
+            charges: stored(charges),
+            cost: stored(cost),
+            result: stored(result),
+          };
+        }
+        money = {
+          cost: kept(minus(money.cost, cost)),
+          charges: kept(plus(money.charges, charges)),
+          income: money.income,
+          realized: kept(plus(money.realized, result)),
+        };
+      } else {
+        if (movement.kind === "transfer") {
+          carried.set(movement.operation_id, null);
+        }
+        if (isSale) sale = null;
+      }
+      quantity = kept(minus(quantity, moved));
+    } else {
+      if (money) {
+        const cost =
+          movement.price === null
+            ? carried.get(movement.operation_id)
+            : times(inView(exactOf(movement.price)), moved);
+        money =
+          cost == null
+            ? null
+            : {
+                ...money,
+                cost: kept(plus(money.cost, cost)),
+                charges: kept(plus(money.charges, charges)),
+              };
+      }
+      quantity = kept(plus(quantity, moved));
     }
-    steps.push({
+  } else if (money && isIncome(movement.kind)) {
+    money = {
+      ...money,
+      income: kept(plus(money.income, inView(exactOf(movement.amount)))),
+      charges: kept(plus(money.charges, charges)),
+    };
+  }
+  return {
+    held: { quantity, money },
+    step: {
       id: movement.id,
       position: {
         quantity: stored(quantity),
         money: money && moneyText(money),
       },
       ...(sale !== undefined && { sale }),
-    });
+    },
+  };
+}
+
+// Each holding's steps, oldest first, for the movements of holdings that move
+// units between each other (one account's portfolios of one instrument). The
+// state is rounded to DECIMAL_SCALE_DIGITS between movements and exact within
+// one. A transfer's arriving side carries the cost its units left with, so a
+// holding's steps can only be replayed with the holdings it transfers with.
+export function replayHoldings(
+  movements: readonly Movement[],
+  view: Denominator,
+  referenceDollar: ReferenceDollar,
+): Map<string, LedgerStep[]> {
+  const steps = new Map<string, LedgerStep[]>();
+  const held = new Map<string, Held>();
+  const carried = new Map<string, Exact | null>();
+  for (const movement of [...movements].sort(compareInReplay)) {
+    const before = held.get(movement.holding_id) ?? heldOf(EMPTY_POSITION);
+    const next = stepOf(before, movement, view, referenceDollar, carried);
+    held.set(movement.holding_id, next.held);
+    const own = steps.get(movement.holding_id);
+    if (own) own.push(next.step);
+    else steps.set(movement.holding_id, [next.step]);
   }
   return steps;
+}
+
+// One holding's steps, oldest first, from `from` (the position before the
+// first of them; empty when they start the holding), for movements given in
+// order. Replaying from any stored step gives the same steps as replaying
+// from the start, unless the holding receives a transfer, whose cost only
+// replayHoldings carries.
+export function replay(
+  movements: readonly Movement[],
+  view: Denominator,
+  referenceDollar: ReferenceDollar,
+  { from = EMPTY_POSITION }: { from?: Position } = {},
+): LedgerStep[] {
+  let held = heldOf(from);
+  const carried = new Map<string, Exact | null>();
+  return movements.map((movement) => {
+    const next = stepOf(held, movement, view, referenceDollar, carried);
+    held = next.held;
+    return next.step;
+  });
 }
 
 // The position after the last step.

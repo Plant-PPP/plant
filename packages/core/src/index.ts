@@ -83,6 +83,7 @@ export {
 } from "./movements/movement";
 export { splitCharges } from "./movements/operation";
 export {
+  compareInReplay,
   compareKeys,
   compareMovements,
   type MovementCursor,
@@ -97,6 +98,7 @@ export {
   type PositionMoney,
   positionOf,
   replay,
+  replayHoldings,
   type SaleResult,
   unrealized,
 } from "./movements/replay";

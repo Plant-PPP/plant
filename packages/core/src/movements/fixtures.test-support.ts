@@ -102,3 +102,28 @@ export function adjustment(
     rates: common.rates ?? ratesOf(common.date),
   };
 }
+
+// One side of a transfer of units between holdings, in the operation `op`;
+// `price` is a manual cost per unit for the side units arrive in.
+export function transfer(
+  direction: "in" | "out",
+  quantity: string,
+  common: Common & { holding: string; op: string; price?: string | null },
+): Movement {
+  return {
+    ...stampOf(common),
+    operation_id: common.op,
+    entry_order: common.entry_order ?? 1000,
+    holding_id: common.holding,
+    kind: "transfer",
+    direction,
+    date: common.date,
+    currency: common.currency ?? "USD",
+    quantity,
+    price: common.price ?? null,
+    charges: [],
+    reference: null,
+    note: null,
+    rates: common.rates ?? ratesOf(common.date),
+  };
+}

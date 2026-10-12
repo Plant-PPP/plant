@@ -29,7 +29,8 @@ export type CashFlow = {
 // Each movement's cash flow, from the replay of the same movements; null when
 // a step could not be expressed in the view's unit. Units an adjustment brings
 // in are paid in at their cost, and units it takes out are paid out at
-// theirs, as the replay counts them.
+// theirs, as the replay counts them. A transfer moves units within the
+// account, so its flow is zero.
 export function cashFlowsOf(
   movements: readonly Movement[],
   steps: readonly LedgerStep[],
@@ -48,7 +49,11 @@ export function cashFlowsOf(
     const charges = minus(now.charges, before.charges);
     let amount: Exact;
     let kind: CashFlow["kind"] = "buy";
-    if (movement.kind === "sale") {
+    if (movement.kind === "transfer") {
+      // Units moving between the account's portfolios: no money in or out.
+      if (takesUnits(movement)) kind = "sell";
+      amount = ZERO;
+    } else if (movement.kind === "sale") {
       kind = "sell";
       if (!step.sale) return null;
       amount = minus(exactOf(step.sale.gross), exactOf(step.sale.charges));

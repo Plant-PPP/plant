@@ -30,3 +30,18 @@ export function compareKeys(a: MovementCursor, b: MovementCursor): number {
 // Oldest first: the order a position is built in. Lists show it reversed.
 export const compareMovements = (a: Movement, b: Movement): number =>
   compareKeys(movementKey(a), movementKey(b));
+
+// The order movements are replayed in across several holdings: as
+// compareMovements, except that within one operation a transfer's units leave
+// before they arrive, so the side they arrive in can carry their cost.
+export function compareInReplay(a: Movement, b: Movement): number {
+  const ka = movementKey(a);
+  const kb = movementKey(b);
+  if (ka.date !== kb.date) return ka.date < kb.date ? -1 : 1;
+  if (ka.rank !== kb.rank) return ka.rank - kb.rank;
+  if (a.operation_id === b.operation_id) {
+    const leaving = (m: Movement) => "direction" in m && m.direction === "out";
+    if (leaving(a) !== leaving(b)) return leaving(a) ? -1 : 1;
+  }
+  return compareKeys(ka, kb);
+}
