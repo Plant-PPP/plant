@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
+  deleteAccountDescription,
   deleteMessages,
   SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
@@ -132,6 +133,7 @@ export function SourceConnectionsCard({
   holders,
   portfolios,
   actions,
+  deletesUploads,
 }: {
   view: SourceConnectionsView;
   pending: boolean;
@@ -139,6 +141,8 @@ export function SourceConnectionsCard({
   holders?: HolderChoices;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
+  // Whether deleting an account also deletes its uploads.
+  deletesUploads?: (accountId: string) => boolean;
 }) {
   const columns = dataColumns(holders !== undefined);
   const card = useSetupCard({ run, pending });
@@ -287,7 +291,9 @@ export function SourceConnectionsCard({
       {deleting && remove && (
         <ConfirmDialog
           title={`¿Borrar ${deleting.institution}?`}
-          description="No se puede deshacer."
+          description={deleteAccountDescription(
+            deletesUploads?.(deleting.id) ?? false,
+          )}
           confirmLabel="Borrar"
           returnFocusTo={card.focusHeading}
           onClose={() => setDeleting(null)}

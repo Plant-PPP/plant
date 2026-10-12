@@ -77,6 +77,13 @@ export function deleteMessages(messages: WriteMessages): WriteMessages {
   };
 }
 
+// An account delete's confirmation. Its uploads go with it but still count
+// toward the month's limit.
+export const deleteAccountDescription = (deletesUploads: boolean): string =>
+  deletesUploads
+    ? "Las cargas de esta cuenta se borran y siguen contando para este mes. No se puede deshacer."
+    : "No se puede deshacer.";
+
 // An account's select left unchosen, caught before the write.
 export const CHOICE_MESSAGES = {
   institution: "Elegí una institución.",

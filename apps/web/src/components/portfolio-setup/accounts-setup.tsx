@@ -36,6 +36,7 @@ export function AccountsSetup({
   portfolios,
   holders,
   actions,
+  deletesUploads,
 }: {
   sourceConnections: SourceConnectionsView;
   portfolios: PortfoliosView;
@@ -44,6 +45,7 @@ export function AccountsSetup({
     sourceConnections: SourceConnectionActions;
     portfolios: NamedRowsActions;
   };
+  deletesUploads?: (accountId: string) => boolean;
 }) {
   const { lists, pending, run } = useSetupActions({
     sourceConnections,
@@ -71,6 +73,7 @@ export function AccountsSetup({
         }
         portfolios={lists.portfolios.active}
         actions={actions.sourceConnections}
+        deletesUploads={deletesUploads}
       />
       <PortfoliosCard
         view={lists.portfolios}
