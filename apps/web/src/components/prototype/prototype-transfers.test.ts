@@ -10,6 +10,7 @@ import {
   groupOf,
   holdingIn,
   initialState,
+  movementsPage,
   type PrototypeState,
   stepsOf,
   suggestedTransferCost,
@@ -100,6 +101,25 @@ describe("a transfer between portfolios", () => {
     expect(Number(arrived.money!.cost)).toBeCloseTo(share, 4);
     expect(left.money!.realized).toBe(before.money!.realized);
     expect(arrived.money!.realized).toBe("0");
+  });
+
+  it("lists the cost carried on both its lines, with no charges", () => {
+    const left = exactOf(before.money!.cost);
+    const kept = exactOf(positionIn(moved, PRINCIPAL)!.money!.cost);
+    const cost = stored(plus(left, exactOf(`-${stored(kept)}`)));
+    for (const portfolio of [PRINCIPAL, LARGO]) {
+      const page = movementsPage(
+        moved,
+        { holdingId: appleIn(moved, portfolio)!.holding.id },
+        "ars",
+        null,
+      );
+      if (!page.ok) throw new Error("page failed");
+      const line = page.rows.find(
+        (row) => row.movement.operation_id === TRANSFER,
+      )!;
+      expect([line.amount, line.charges]).toEqual([cost, "0"]);
+    }
   });
 
   it("creates the holding it arrives in with the quantity", () => {

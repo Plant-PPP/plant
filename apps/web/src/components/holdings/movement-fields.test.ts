@@ -272,6 +272,21 @@ describe("a transfer", () => {
     ).toMatchObject({ price: null });
   });
 
+  it("keeps every part and the price changing between other kinds", () => {
+    const split = {
+      ...newMovementFields(defaults),
+      price: "5",
+      parts: [
+        { portfolioId: PRINCIPAL, size: "1" },
+        { portfolioId: LARGO, size: "2" },
+      ],
+    };
+    expect(withKind(split, "sale", PRINCIPAL)).toEqual({
+      ...split,
+      kind: "sale",
+    });
+  });
+
   it("drops a changed cost when it stops being a transfer", () => {
     expect(
       withKind(

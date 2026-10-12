@@ -361,6 +361,7 @@ export function suggestedTransferCost(
   )!.holding.id;
   const own = written.movements.get(holding)!;
   const index = own.findIndex((each) => each.operation_id === id);
+  // The unit an amount in the transfer's currency is held in.
   const unit = lift(
     { amount: { n: 0n, d: 1n }, currency: operation.currency },
     referenceUnit(state.referenceDollar),
@@ -468,8 +469,6 @@ export function salesOf(
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
 
-// A movement's line from its step and the position before it: its amount and
-// its charges.
 export function lineOf(
   movement: Movement,
   before: Position,
