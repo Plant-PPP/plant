@@ -1,12 +1,14 @@
-import { isIncome, type Movement, takesUnits } from "./movement";
+import type { Movement } from "./movement";
 
-// Within a day, the opening balance comes first and what takes units out
-// last, so a sale can use what was bought that same day.
+// Below every entry order, which is never negative.
+const OPENING_RANK = -1;
+
+// Within a day, the opening balance comes first (it is what was held before
+// the day) and the rest go in the order their operations were entered.
 function rankOf(movement: Movement): number {
-  if (movement.kind === "opening_balance") return 0;
-  if (takesUnits(movement)) return 3;
-  if (isIncome(movement.kind)) return 2;
-  return 1;
+  return movement.kind === "opening_balance"
+    ? OPENING_RANK
+    : movement.entry_order;
 }
 
 // Where a movement sits in a holding's history, and the cursor a page of

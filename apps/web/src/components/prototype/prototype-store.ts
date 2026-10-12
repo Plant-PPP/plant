@@ -83,6 +83,8 @@ export type PrototypeState = {
   holdings: StoredHolding[];
   // Each holding's movements, oldest first; a new array on every change.
   movements: ReadonlyMap<string, readonly Movement[]>;
+  // The entry order the next operation takes, above every movement's.
+  nextEntryOrder: number;
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
@@ -134,6 +136,8 @@ export function initialState(
       closed: fixtures.closed.includes(row.id),
     })),
     movements,
+    nextEntryOrder:
+      Math.max(-1, ...fixtures.movements.map((each) => each.entry_order)) + 1,
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
@@ -755,9 +759,9 @@ export function writeOperation(
   if (!account || !instrument) {
     return refused(state, { ok: false, code: "not_found" });
   }
+  const was = replacing ? operationOf(state, operationId) : null;
   if (replacing) {
     // An edit keeps the operation's account and instrument, as its dialog does.
-    const was = operationOf(state, operationId);
     if (!was) return refused(state, { ok: false, code: "not_found" });
     if (was.accountId !== account.id || was.instrument !== instrument.symbol) {
       return refused(state, { ok: false, code: "invalid" });
@@ -775,76 +779,100 @@ export function writeOperation(
     operation.kind === "opening_balance" ||
     operation.kind === "purchase" ||
     (operation.kind === "adjustment" && operation.direction === "in");
-  let next = state;
-  const touched = new Map<string, Movement[]>();
   // An edit first takes the operation's movements out of their holdings.
+  const without = new Map<string, Movement[]>();
   for (const [holdingId, own] of state.movements) {
     if (own.some((each) => each.operation_id === operationId)) {
-      touched.set(
+      without.set(
         holdingId,
         own.filter((each) => each.operation_id !== operationId),
       );
     }
   }
-  for (const [index, part] of parts.entries()) {
-    const portfolio = state.portfolios.find(
-      ({ id }) => id === part.portfolio_id,
-    );
-    if (!portfolio) return refused(state, { ok: false, code: "not_found" });
-    let stored = holdingIn(next, account.id, instrument.symbol, portfolio.id);
-    if (!stored) {
-      if (!addsUnits) return refused(state, { ok: false, code: "not_found" });
-      const created = createdHolding(next, account, instrument, portfolio, {
+  const writeAt = (entryOrder: number): Write<MovementResult> => {
+    let next = state;
+    const touched = new Map(without);
+    for (const [index, part] of parts.entries()) {
+      const portfolio = state.portfolios.find(
+        ({ id }) => id === part.portfolio_id,
+      );
+      if (!portfolio) return refused(state, { ok: false, code: "not_found" });
+      let stored = holdingIn(next, account.id, instrument.symbol, portfolio.id);
+      if (!stored) {
+        if (!addsUnits) return refused(state, { ok: false, code: "not_found" });
+        const created = createdHolding(next, account, instrument, portfolio, {
+          id: newId(),
+          quantity: sizes[index]!,
+        });
+        next = created;
+        stored = next.holdings[0]!;
+      }
+      const holdingId = stored.holding.id;
+      const own = touched.get(holdingId) ?? [
+        ...(next.movements.get(holdingId) ?? []),
+      ];
+      const draft = {
+        ...fields,
+        ...("quantity" in part
+          ? { quantity: part.quantity }
+          : { amount: part.amount }),
+        charges: charges[index]!,
         id: newId(),
-        quantity: sizes[index]!,
+        holding_id: holdingId,
+        operation_id: operationId,
+        entry_order: entryOrder,
+        rates,
+      } as MovementDraft;
+      const admitted = admitMovement({ prior: null, after: own }, draft, {
+        today: state.today,
       });
-      next = created;
-      stored = next.holdings[0]!;
+      if (!admitted.ok) {
+        return refused(state, { ok: false, code: admitted.code });
+      }
+      touched.set(holdingId, [...own, draft as Movement]);
     }
-    const holdingId = stored.holding.id;
-    const own = touched.get(holdingId) ?? [
-      ...(next.movements.get(holdingId) ?? []),
-    ];
-    const draft = {
-      ...fields,
-      ...("quantity" in part
-        ? { quantity: part.quantity }
-        : { amount: part.amount }),
-      charges: charges[index]!,
-      id: newId(),
-      holding_id: holdingId,
-      operation_id: operationId,
-      rates,
-    } as MovementDraft;
-    const admitted = admitMovement({ prior: null, after: own }, draft, {
-      today: state.today,
-    });
-    if (!admitted.ok) {
-      return refused(state, { ok: false, code: admitted.code });
+    for (const [holdingId, own] of touched) {
+      // A holding an edit left with no movement goes, as a delete would leave it.
+      if (own.length === 0) {
+        next = deleteHolding(next, holdingId).state;
+        continue;
+      }
+      const admitted = admitMovements({ prior: null, after: own });
+      if (!admitted.ok) {
+        return refused(state, { ok: false, code: admitted.code });
+      }
+      if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
+        return refused(state, { ok: false, code: "not_found" });
+      }
+      next = withMovements(
+        next,
+        holdingId,
+        [...own].sort(compareMovements),
+        admitted.quantity,
+      );
     }
-    touched.set(holdingId, [...own, draft as Movement]);
+    return {
+      state: {
+        ...next,
+        nextEntryOrder: Math.max(next.nextEntryOrder, entryOrder + 1),
+      },
+      result: { ok: true, id: operationId },
+    };
+  };
+  // A new operation is entered last. An edit keeps its operation's place on
+  // its date; one that moves the date goes last on the new day, as if entered
+  // again, unless that leaves a sale with too little or nothing before it.
+  const kept = was?.parts[0]?.movement;
+  if (!kept) return writeAt(state.nextEntryOrder);
+  if (kept.date === operation.date || operation.kind === "opening_balance") {
+    return writeAt(kept.entry_order);
   }
-  for (const [holdingId, own] of touched) {
-    // A holding an edit left with no movement goes, as a delete would leave it.
-    if (own.length === 0) {
-      next = deleteHolding(next, holdingId).state;
-      continue;
-    }
-    const admitted = admitMovements({ prior: null, after: own });
-    if (!admitted.ok) {
-      return refused(state, { ok: false, code: admitted.code });
-    }
-    if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
-      return refused(state, { ok: false, code: "not_found" });
-    }
-    next = withMovements(
-      next,
-      holdingId,
-      [...own].sort(compareMovements),
-      admitted.quantity,
-    );
-  }
-  return { state: next, result: { ok: true, id: operationId } };
+  const moved = writeAt(state.nextEntryOrder);
+  return !moved.result.ok &&
+    (moved.result.code === "oversold" ||
+      moved.result.code === "opening_balance")
+    ? writeAt(kept.entry_order)
+    : moved;
 }
 
 // A new instrument holding in an account and portfolio, first in the list.

@@ -1,28 +1,47 @@
 import { income, trade } from "./fixtures.test-support";
 import { compareKeys, compareMovements, movementKey } from "./order";
 
-it("orders by date, then opening balance, purchases, income and sales", () => {
-  const sale = trade("sale", "1", "10", { id: "a", date: "2026-03-02" });
+it("orders a day as its operations were entered, an opening balance first", () => {
+  const day = "2026-03-02";
+  const sale = trade("sale", "1", "10", { id: "a", date: day, entry_order: 1 });
   const purchase = trade("purchase", "1", "10", {
-    id: "z",
-    date: "2026-03-02",
+    id: "b",
+    date: day,
+    entry_order: 2,
   });
-  const dividend = income("dividend", "1", { id: "b", date: "2026-03-02" });
+  const dividend = income("dividend", "1", {
+    id: "c",
+    date: day,
+    entry_order: 3,
+  });
   const opening = trade("opening_balance", "1", "10", {
-    id: "y",
-    date: "2026-03-02",
+    id: "d",
+    date: day,
+    entry_order: 9,
   });
-  const earlier = trade("sale", "1", "10", { id: "c", date: "2026-03-01" });
+  const earlier = trade("sale", "1", "10", {
+    id: "e",
+    date: "2026-03-01",
+    entry_order: 10,
+  });
   expect(
-    [sale, purchase, dividend, opening, earlier]
+    [dividend, purchase, sale, opening, earlier]
       .sort(compareMovements)
       .map((m) => m.id),
-  ).toEqual(["c", "y", "z", "b", "a"]);
+  ).toEqual(["e", "d", "a", "b", "c"]);
 });
 
 it("breaks a tie by id", () => {
-  const a = trade("purchase", "1", "10", { id: "a", date: "2026-03-02" });
-  const b = trade("purchase", "1", "10", { id: "b", date: "2026-03-02" });
+  const a = trade("purchase", "1", "10", {
+    id: "a",
+    date: "2026-03-02",
+    entry_order: 1,
+  });
+  const b = trade("purchase", "1", "10", {
+    id: "b",
+    date: "2026-03-02",
+    entry_order: 1,
+  });
   expect(compareMovements(a, b)).toBeLessThan(0);
   expect(compareMovements(a, a)).toBe(0);
 });

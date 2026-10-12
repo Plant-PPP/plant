@@ -433,6 +433,7 @@ describe("with movements", () => {
     reference: null,
     note: null,
     operation_id: "op2",
+    entry_order: 2,
     rates: {
       mep: { sell: "1200", date: "2026-03-02" },
       ccl: { sell: "1250", date: "2026-03-02" },

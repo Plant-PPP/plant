@@ -23,10 +23,10 @@ const chargesOf = ({ fees, taxes }: { fees?: string; taxes?: string }) => {
 };
 
 let next = 0;
-const nextId = () => `m${String((next += 1)).padStart(5, "0")}`;
 
 type Common = {
   id?: string;
+  entry_order?: number;
   date: string;
   currency?: "ARS" | "USD";
   fees?: string;
@@ -34,15 +34,22 @@ type Common = {
   rates?: MovementRates;
 };
 
+// A movement's identity and entry order: unless a test names them, each
+// builder call is a new operation, entered after the previous one.
+function stampOf(common: Common) {
+  const n = (next += 1);
+  const id = common.id ?? `m${String(n).padStart(5, "0")}`;
+  return { id, operation_id: `op-${id}`, entry_order: common.entry_order ?? n };
+}
+
 export function trade(
   kind: "opening_balance" | "purchase" | "sale",
   quantity: string,
   price: string,
   common: Common,
 ): Trade {
-  const id = common.id ?? nextId();
   return {
-    id,
+    ...stampOf(common),
     holding_id: "h1",
     kind,
     date: common.date,
@@ -52,7 +59,6 @@ export function trade(
     charges: chargesOf(common),
     reference: null,
     note: null,
-    operation_id: `op-${id}`,
     rates: common.rates ?? ratesOf(common.date),
   };
 }
@@ -62,9 +68,8 @@ export function income(
   amount: string,
   common: Common,
 ): Movement {
-  const id = common.id ?? nextId();
   return {
-    id,
+    ...stampOf(common),
     holding_id: "h1",
     kind,
     date: common.date,
@@ -73,7 +78,6 @@ export function income(
     charges: chargesOf(common),
     reference: null,
     note: null,
-    operation_id: `op-${id}`,
     rates: common.rates ?? ratesOf(common.date),
   };
 }
@@ -83,9 +87,8 @@ export function adjustment(
   quantity: string,
   common: Common & { price?: string },
 ): Movement {
-  const id = common.id ?? nextId();
   return {
-    id,
+    ...stampOf(common),
     holding_id: "h1",
     kind: "adjustment",
     direction,
@@ -96,7 +99,6 @@ export function adjustment(
     charges: chargesOf(common),
     reference: null,
     note: null,
-    operation_id: `op-${id}`,
     rates: common.rates ?? ratesOf(common.date),
   };
 }

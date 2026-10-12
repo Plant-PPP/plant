@@ -462,3 +462,145 @@ it("shows a sale's amount as what it brought before charges", () => {
     stored(times(exactOf(sale.quantity), exactOf(sale.price))),
   );
 });
+
+describe("entry order", () => {
+  // Bitcoin in Binance's Corto plazo, which holds none yet.
+  const btc = (
+    kind: "purchase" | "sale",
+    quantity: string,
+    date: string,
+    price = "100",
+  ) => ({
+    kind,
+    source_connection_id: BINANCE,
+    instrument_symbol: "BTC",
+    date,
+    currency: "USD",
+    price,
+    parts: [{ portfolio_id: CORTO, quantity }],
+  });
+  const [D1, D2, D3] = [3, 2, 1].map((days) => addDays(TODAY, -days)) as [
+    string,
+    string,
+    string,
+  ];
+  const corto = (s: typeof state) =>
+    s.holdings.find(
+      (each) =>
+        each.portfolioId === CORTO &&
+        each.holding.asset_class === "instrument" &&
+        each.holding.instrument_symbol === "BTC",
+    )!.holding.id;
+  const run = (
+    steps: [ReturnType<typeof btc>, string, boolean?][],
+    from = state,
+  ) =>
+    steps.reduce((s, [input, operationId, replacing = false]) => {
+      const written = writeOperation(s, input, {
+        ...options(operationId),
+        replacing,
+      });
+      expect(written.result).toEqual({ ok: true, id: operationId });
+      return written.state;
+    }, from);
+  const costOf = (s: typeof state) =>
+    positionsOf(s, "usd_mep").get(corto(s))!.money!.cost;
+  const entryOf = (s: typeof state, operationId: string) =>
+    operationOf(s, operationId)!.parts[0]!.movement.entry_order;
+  const [A, B, S, P] = [1, 2, 3, 4].map(
+    (n) => `e3000000-0000-4000-8000-00000000000${n}`,
+  ) as [string, string, string, string];
+
+  it("opens a new cost for a buy-back on the day of a sell-out", () => {
+    const written = run([
+      [btc("purchase", "1", D1, "100"), A],
+      [btc("sale", "1", D2, "150"), S],
+      [btc("purchase", "1", D2, "200"), B],
+    ]);
+    expect(costOf(written)).toBe("200");
+  });
+
+  it("sells what was bought earlier the same day", () => {
+    const written = run([
+      [btc("purchase", "1", D2), A],
+      [btc("sale", "1", D2), S],
+    ]);
+    expect(positionsOf(written, "usd_mep").get(corto(written))!.quantity).toBe(
+      "0",
+    );
+  });
+
+  it("keeps an edit's place on its date", () => {
+    const written = run([
+      [btc("purchase", "1", D1, "100"), A],
+      [btc("sale", "1", D2, "150"), S],
+      [btc("purchase", "1", D2, "200"), B],
+      [btc("sale", "1", D2, "160"), S, true],
+    ]);
+    expect(costOf(written)).toBe("200");
+    expect(written.nextEntryOrder).toBe(state.nextEntryOrder + 3);
+  });
+
+  it("puts a sale moved to a later day after what was entered there", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("sale", "1", D2), S],
+      [btc("purchase", "1", D3), B],
+    ]);
+    const moved = run([[btc("sale", "2", D3), S, true]], before);
+    expect(entryOf(moved, S)).toBe(before.nextEntryOrder);
+    expect(moved.nextEntryOrder).toBe(before.nextEntryOrder + 1);
+    const after = run([[btc("purchase", "1", D3), P]], moved);
+    expect(entryOf(after, P)).toBeGreaterThan(entryOf(after, S));
+  });
+
+  it("keeps the place of a purchase moved to a later sale's day when last would leave the sale nothing before it", () => {
+    const before = run([
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "1", D3), S],
+    ]);
+    const moved = run([[btc("purchase", "1", D3), P, true]], before);
+    expect(entryOf(moved, P)).toBe(entryOf(before, P));
+    expect(moved.nextEntryOrder).toBe(before.nextEntryOrder);
+  });
+
+  it("keeps the place of a purchase moved to a later sale's day when last would oversell", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "2", D3), S],
+    ]);
+    const moved = run([[btc("purchase", "1", D3), P, true]], before);
+    expect(entryOf(moved, P)).toBe(entryOf(before, P));
+  });
+
+  it("makes a purchase moved onto a sell-out's day a buy-back", () => {
+    const before = run([
+      [btc("purchase", "1", D1, "100"), A],
+      [btc("purchase", "1", D2, "200"), P],
+      [btc("sale", "1", D3, "150"), S],
+    ]);
+    const moved = run([[btc("purchase", "1", D3, "200"), P, true]], before);
+    expect(costOf(moved)).toBe("200");
+  });
+
+  it("changes nothing when an edit is refused", () => {
+    const before = run([
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "1", D3), S],
+    ]);
+    const refused = writeOperation(
+      before,
+      {
+        ...btc("sale", "1", D1),
+        parts: [
+          { portfolio_id: CORTO, quantity: "1" },
+          { portfolio_id: LARGO, quantity: "1" },
+        ],
+      },
+      { ...options(S), replacing: true },
+    );
+    expect(refused.result.ok).toBe(false);
+    expect(refused.state).toBe(before);
+  });
+});
