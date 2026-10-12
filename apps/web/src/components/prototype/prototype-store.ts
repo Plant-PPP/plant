@@ -27,6 +27,8 @@ import {
   type MovementCursor,
   movementKey,
   type Position,
+  PositionError,
+  positionOf,
   replayHoldings,
   type ReferenceDollar,
   lift,
@@ -311,8 +313,9 @@ export function positionsOf(
 
 // The cost per unit a transfer's units would carry out of a portfolio's
 // holding: its average cost just before the transfer, which goes last on its
-// day (an edit on its own day keeps its place), in the query's currency. The
-// side an edited transfer takes out is left out; its other side gives none.
+// day (an edit on its own day keeps its place), in the query's currency, with
+// the transfer an edit replaces left out. None when, without it, what came
+// before no longer holds up (a sale of the units it brought).
 export function suggestedTransferCost(
   state: PrototypeState,
   {
@@ -326,37 +329,36 @@ export function suggestedTransferCost(
 ): string | null {
   const stored = holdingIn(state, accountId, instrument, portfolioId);
   if (!stored) return null;
-  const holdingId = stored.holding.id;
-  const own = (state.movements.get(holdingId) ?? []).filter(
-    (each) => each.operation_id !== operationId,
+  const group = groupOf(state, stored.holding.id);
+  const kept = group
+    .flatMap((id) => state.movements.get(id) ?? [])
+    .find((each) => each.operation_id === operationId);
+  const at = {
+    date,
+    rank:
+      kept && kept.date === date ? kept.entry_order : Number.POSITIVE_INFINITY,
+  };
+  const before = group.flatMap((id) =>
+    (state.movements.get(id) ?? []).filter((each) => {
+      const key = movementKey(each);
+      return (
+        each.operation_id !== operationId &&
+        (key.date < at.date || (key.date === at.date && key.rank < at.rank))
+      );
+    }),
   );
-  const kept = (state.movements.get(holdingId) ?? []).find(
-    (each) => each.operation_id === operationId,
-  );
-  // Units leave from the side that takes them out.
-  if (kept && !takesUnits(kept)) return null;
-  const rank =
-    kept && kept.date === date ? kept.entry_order : Number.POSITIVE_INFINITY;
   const unit = lift(
     { amount: { n: 0n, d: 1n }, currency },
     referenceUnit(state.referenceDollar),
     state.referenceDollar,
   ).denominator;
-  const steps = replayHoldings(
-    groupOf(state, holdingId).flatMap((id) =>
-      id === holdingId ? own : (state.movements.get(id) ?? []),
-    ),
-    unit,
-    state.referenceDollar,
-  ).get(holdingId);
-  let before = EMPTY_POSITION;
-  own.forEach((movement, index) => {
-    const at = movementKey(movement);
-    if (at.date < date || (at.date === date && at.rank < rank)) {
-      before = steps![index]!.position;
-    }
-  });
-  return averageCost(before);
+  try {
+    const steps = replayHoldings(before, unit, state.referenceDollar);
+    return averageCost(positionOf(steps.get(stored.holding.id) ?? []));
+  } catch (error) {
+    if (error instanceof PositionError) return null;
+    throw error;
+  }
 }
 
 // The years with any sale, newest first.
@@ -833,14 +835,14 @@ function withMovements(
 function archivedHome(
   state: PrototypeState,
   holdingId: string,
-): "archived_account" | "archived_portfolio" | null {
+): "source_connection_archived" | "portfolio_archived" | null {
   const stored = state.holdings.find((each) => each.holding.id === holdingId);
   if (!stored) return null;
   if (state.archivedAccounts.some(({ id }) => id === stored.accountId)) {
-    return "archived_account";
+    return "source_connection_archived";
   }
   return state.archivedPortfolios.some(({ id }) => id === stored.portfolioId)
-    ? "archived_portfolio"
+    ? "portfolio_archived"
     : null;
 }
 
@@ -860,7 +862,7 @@ export const holdingIn = (
   );
 
 // Records an operation (`replacing` none) or an edit of one: each part becomes
-// a movement of its portfolio's holding, which a purchase or opening balance
+// a movement of its portfolio's holding, which a part bringing units in
 // creates when missing; the charges split across the parts by quantity (or
 // amount). Every touched holding is admitted again, or nothing changes.
 export function writeOperation(
@@ -889,13 +891,15 @@ export function writeOperation(
     return refused(state, {
       ok: false,
       code: state.archivedAccounts.some(({ id }) => id === accountId)
-        ? "archived_account"
+        ? "source_connection_archived"
         : "not_found",
     });
   }
-  const was = replacing ? operationOf(state, operationId) : null;
+  const was = operationOf(state, operationId);
   if (replacing && !was)
     return refused(state, { ok: false, code: "not_found" });
+  // A new operation takes an id no operation has.
+  if (!replacing && was) return refused(state, { ok: false, code: "invalid" });
   // An edit keeps the operation's account and instrument, as its dialog does.
   if (
     was &&
@@ -934,7 +938,7 @@ export function writeOperation(
         return refused(state, {
           ok: false,
           code: state.archivedPortfolios.some(({ id }) => id === portfolioId)
-            ? "archived_portfolio"
+            ? "portfolio_archived"
             : "not_found",
         });
       }

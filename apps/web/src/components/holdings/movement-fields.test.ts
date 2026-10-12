@@ -334,10 +334,12 @@ describe("a transfer", () => {
 });
 
 it("points an archived home's refusal at its field", () => {
-  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_portfolio)).toBe(
+  expect(refusedMovementField(MOVEMENT_MESSAGES.portfolio_archived)).toBe(
     "parts",
   );
-  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_account)).toBeNull();
+  expect(
+    refusedMovementField(MOVEMENT_MESSAGES.source_connection_archived),
+  ).toBeNull();
 });
 
 describe("the kinds offered", () => {

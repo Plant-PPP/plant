@@ -66,8 +66,8 @@ const NAMED_CHARGES: readonly ChargeKind[] = ["tax", "other"];
 // portfolios, or edits one; it hands its fields to `onSubmit` as it closes,
 // and a refused write opens it again with the fields and the alert. An
 // operation opened from a holding, or edited, keeps its account and
-// instrument. A page that passes `transfer` offers moving units out of
-// `from` into another portfolio; an edit of a transfer stays one.
+// instrument. A page that passes `transfer` offers a new operation moving
+// units out of `from` into another portfolio; an edited transfer stays one.
 export function MovementDialog({
   mode,
   accounts,
@@ -118,6 +118,12 @@ export function MovementDialog({
     editing: mode === "edit" ? initial.kind : null,
     transfers: transfer !== undefined,
   });
+  // A transfer with no portfolio to move to points its alert there.
+  const noDestination = moving && !fields.parts[1]?.portfolioId;
+  const controlId = (field: MovementField) =>
+    field === "parts" && noDestination
+      ? `${fieldId("parts")}-to`
+      : fieldId(field);
   const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : null;
   const unused = portfolios.filter(
     (each) => !fields.parts.some((part) => part.portfolioId === each.id),
@@ -161,7 +167,7 @@ export function MovementDialog({
       const refused = movementRefusal(parsed.error);
       setAlert(refused);
       if (refused.field)
-        document.getElementById(fieldId(refused.field))?.focus();
+        document.getElementById(controlId(refused.field))?.focus();
       return;
     }
     setAlert(undefined);
@@ -387,20 +393,24 @@ export function MovementDialog({
                   </div>
                 )
               ) : (
-                <p>Sugerido: el costo que tenían.</p>
+                <p>
+                  {suggested === null
+                    ? "Si lo dejás vacío, entran con el costo que tenían."
+                    : "Sugerido: el costo que tenían."}
+                </p>
               )}
               <p>
-                Si lo cambiás, entran con ese costo, y la diferencia aparece
-                cuando las vendas.
+                Si lo cambiás, entran con ese costo y la diferencia se ve en su
+                resultado.
               </p>
             </div>
           )}
 
           {moving ? (
-            <div className="grid grid-cols-[1fr_1fr_8rem] gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_8rem]">
               <div className="grid gap-2">
                 <span className="text-sm font-medium">Desde</span>
-                <span className="flex h-9 items-center text-sm">
+                <span className="flex h-9 min-w-0 items-center truncate text-sm">
                   {portfolios.find(
                     (each) => each.id === fields.parts[0]?.portfolioId,
                   )?.name ?? ""}
@@ -417,6 +427,7 @@ export function MovementDialog({
                   <SelectTrigger
                     id={`${fieldId("parts")}-to`}
                     {...control("parts")}
+                    autoFocus={firstField === "parts" && noDestination}
                     className="w-full"
                   >
                     <SelectValue placeholder="Elegí una cartera" />
@@ -434,12 +445,12 @@ export function MovementDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
+              <div className="col-span-2 grid gap-2 sm:col-span-1">
                 <Label htmlFor={fieldId("parts")}>Cantidad</Label>
                 <Input
                   id={fieldId("parts")}
                   {...control("parts")}
-                  autoFocus={firstField === "parts"}
+                  autoFocus={firstField === "parts" && !noDestination}
                   inputMode="decimal"
                   autoComplete="off"
                   value={fields.parts[0]?.size ?? ""}

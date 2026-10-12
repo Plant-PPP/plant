@@ -28,7 +28,7 @@ export const priceFields = (
   latest: { price: string; date: string } | null,
   today: string,
 ): PriceFields => ({
-  price: latest ? amountInput(quotedPrice(type, latest.price)) : "",
+  price: latest ? quotedInput(latest.price, type) : "",
   date: latest?.date ?? today,
 });
 

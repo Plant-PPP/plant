@@ -6,7 +6,7 @@ import type {
   Position,
   SaleResult,
 } from "@plant/core";
-import type { Currency } from "@plant/shared";
+import type { Currency, PortfolioSetupGuardHint } from "@plant/shared";
 
 import type { HoldingRow } from "./read";
 
@@ -104,7 +104,9 @@ export type MovementResult =
         | "invalid"
         | "not_found"
         | "failed"
-        | "archived_portfolio"
-        | "archived_account"
+        | Extract<
+            PortfolioSetupGuardHint,
+            "portfolio_archived" | "source_connection_archived"
+          >
         | MovementRefusal;
     };

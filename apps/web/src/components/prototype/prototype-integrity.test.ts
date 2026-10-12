@@ -455,7 +455,7 @@ it("never reopens a holding inside an archived portfolio", () => {
   state = archivePortfolio(state, TEMP).state;
   expect(integrity(state)).toEqual([]);
   const refused = deleteOperation(state, sale);
-  expect(refused.result).toEqual({ ok: false, code: "archived_portfolio" });
+  expect(refused.result).toEqual({ ok: false, code: "portfolio_archived" });
   expect(refused.state).toBe(state);
 });
 

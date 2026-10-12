@@ -52,6 +52,7 @@ import { PendingButton } from "@/components/ui/pending-button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { inSentence } from "@/lib/format/text";
 import {
   type AssetsFilter,
   type AssetsTab,
@@ -482,10 +483,8 @@ export function AssetsSetup({
   }
 
   // A movement as its actions name it: "compra del 01/09/2026".
-  const movementName = (line: MovementLine) => {
-    const label = lineLabel(line);
-    return `${label.charAt(0).toLowerCase()}${label.slice(1)} del ${formatDate(line.movement.date)}`;
-  };
+  const movementName = (line: MovementLine) =>
+    `${inSentence(lineLabel(line))} del ${formatDate(line.movement.date)}`;
 
   function confirmDeleteMovement(
     line: MovementLine,

@@ -25,8 +25,9 @@ export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
 
 // What the movement dialog holds, as typed. A transfer's first part is the
 // portfolio its units leave and its second the one they arrive in, both with
-// its quantity; its price is the cost the units arrive with, sent only once
-// the user changes it (`costEdited`), else they carry the cost they had.
+// its quantity; its price is the cost the units arrive with, sent when the
+// user changed it (`costEdited`) and left it filled, else they carry the cost
+// they had.
 export type MovementFields = {
   kind: MovementKind;
   direction: "in" | "out";
@@ -181,8 +182,8 @@ export function withKind(
   return { ...fields, kind };
 }
 
-// The kinds an operation's dialog offers: a transfer only where the page
-// takes them, and an edit of a transfer stays one.
+// The kinds an operation's dialog offers: a transfer only on a new operation
+// where the page takes them, and an edited transfer stays one.
 export function kindsOffered({
   editing,
   transfers,
@@ -333,6 +334,6 @@ export function refusedMovementField(text: string): MovementField | null {
   if (text === MOVEMENT_MESSAGES.no_rate) return "date";
   if (text === MOVEMENT_MESSAGES.opening_balance) return "kind";
   if (text === MOVEMENT_MESSAGES.not_found) return "parts";
-  if (text === MOVEMENT_MESSAGES.archived_portfolio) return "parts";
+  if (text === MOVEMENT_MESSAGES.portfolio_archived) return "parts";
   return null;
 }

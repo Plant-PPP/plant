@@ -72,7 +72,7 @@ it("shows where the units leave from, the cost they carry and no charges", () =>
   expect(html).toContain('value="60000"');
   expect(html).toContain("Sugerido: el costo que tenían.");
   expect(html).toContain(
-    "Si lo cambiás, entran con ese costo, y la diferencia aparece cuando las vendas.",
+    "Si lo cambiás, entran con ese costo y la diferencia se ve en su resultado.",
   );
   expect(html).not.toContain("Gastos");
   expect(html).not.toContain("Repartir en otra cartera");
@@ -83,4 +83,21 @@ it("keeps a changed cost and offers the suggestion back", () => {
   expect(html).toContain('value="61000"');
   expect(html).toContain("Usar el sugerido (US$ 60.000,00)");
   expect(html).not.toContain("Sugerido: el costo que tenían.");
+});
+
+it("labels every control it names and describes the cost by its help", () => {
+  const html = render(moving, "60000");
+  const ids = new Set([...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
+  const targets = [...html.matchAll(/ for="([^"]+)"/g)].map((m) => m[1]);
+  expect(targets.length).toBeGreaterThan(0);
+  for (const target of targets) expect(ids).toContain(target);
+  const cost = html.match(/<input[^>]*id="([^"]+-price)"[^>]*>/)!;
+  expect(cost[0]).toContain(`aria-describedby="${cost[1]}-help"`);
+  expect(ids).toContain(`${cost[1]}-help`);
+});
+
+it("says a cost left empty carries the one the units had when none is suggested", () => {
+  expect(render(moving, null)).toContain(
+    "Si lo dejás vacío, entran con el costo que tenían.",
+  );
 });

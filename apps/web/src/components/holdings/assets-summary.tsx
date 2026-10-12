@@ -5,6 +5,7 @@ import {
   HOLDING_CLASS_GROUP_LABELS,
   type HoldingClass,
 } from "@/lib/holdings/classes";
+import { inSentence } from "@/lib/format/text";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import type {
   HoldingKind,
@@ -34,8 +35,7 @@ const CLASS_COLORS: Record<HoldingClass, string> = {
 };
 
 // A unit's name inside a sentence: "dólar MEP", "pesos".
-const unitName = (unit: Denominator) =>
-  UNIT_LABELS[unit].charAt(0).toLowerCase() + UNIT_LABELS[unit].slice(1);
+const unitName = (unit: Denominator) => inSentence(UNIT_LABELS[unit]);
 
 // The shown holdings' total and its split by kind, each part with its share;
 // the total names its unit and how many holdings it leaves out for lack of a
