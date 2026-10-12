@@ -536,7 +536,8 @@ const EMPTY_COLUMNS = {
 let movementCount = 0;
 const movementId = () =>
   `d1000000-0000-4000-8000-${String((movementCount += 1)).padStart(12, "0")}`;
-// Each operation's entry order, the first time one of its parts is built.
+// Each operation's entry order, in the order the steps are built: holding by
+// holding, not by date, which only matters within one holding's day.
 const entryOrders = new Map<string, number>();
 const entryOrderOf = (operationId: string): number => {
   if (!entryOrders.has(operationId)) {

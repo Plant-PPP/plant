@@ -62,3 +62,40 @@ it("orders cursors as it orders movements", () => {
     .map((m) => m.id);
   expect(byCursor).toEqual(reversed);
 });
+
+it("orders a day by entry order, not id", () => {
+  const day = "2026-03-02";
+  const late = trade("purchase", "1", "10", {
+    id: "a",
+    date: day,
+    entry_order: 2,
+  });
+  const early = trade("sale", "1", "10", {
+    id: "b",
+    date: day,
+    entry_order: 1,
+  });
+  expect([late, early].sort(compareMovements).map((m) => m.id)).toEqual([
+    "b",
+    "a",
+  ]);
+});
+
+it("puts an opening balance before a movement entered first that day", () => {
+  const day = "2026-03-02";
+  const first = trade("purchase", "1", "10", {
+    id: "a",
+    date: day,
+    entry_order: 0,
+  });
+  const opening = trade("opening_balance", "1", "10", {
+    id: "b",
+    date: day,
+    entry_order: 5,
+  });
+  expect([first, opening].sort(compareMovements).map((m) => m.id)).toEqual([
+    "b",
+    "a",
+  ]);
+  expect(compareKeys(movementKey(opening), movementKey(first))).toBeLessThan(0);
+});

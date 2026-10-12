@@ -72,7 +72,8 @@ export const MOVEMENT_MESSAGES: Record<
   invalid: "Revisá los datos del movimiento.",
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
-  oversold: "No podés vender más de lo que tenías en esa fecha.",
+  oversold:
+    "No podés vender más de lo que tenías en ese momento: dentro de un día cuenta el orden en que cargaste las operaciones.",
   opening_balance:
     "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez.",
   future_date: FUTURE_DATE_MESSAGE,

@@ -584,6 +584,74 @@ describe("entry order", () => {
     expect(costOf(moved)).toBe("200");
   });
 
+  it("refuses an edit on its date that would sell what was bought after it", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("sale", "1", D2), S],
+      [btc("purchase", "1", D2), B],
+    ]);
+    const refused = writeOperation(before, btc("sale", "2", D2), {
+      ...options(S),
+      replacing: true,
+    });
+    expect(refused.result).toEqual({ ok: false, code: "oversold" });
+    expect(refused.state).toBe(before);
+    // Entered again, it goes after the purchase.
+    const again = run(
+      [[btc("sale", "2", D2), P]],
+      deleteOperation(before, S).state,
+    );
+    expect(positionsOf(again, "usd_mep").get(corto(again))!.quantity).toBe("0");
+  });
+
+  it("refuses a date move no place admits, changing nothing", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "2", D2), S],
+    ]);
+    const refused = writeOperation(before, btc("purchase", "1", D3), {
+      ...options(P),
+      replacing: true,
+    });
+    expect(refused.result).toEqual({ ok: false, code: "oversold" });
+    expect(refused.state).toBe(before);
+  });
+
+  it("refuses moving a purchase onto the day of a sale entered before it", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("sale", "1", D3), S],
+      [btc("purchase", "1", D2), P],
+    ]);
+    const deleted = deleteOperation(before, A).state;
+    const refused = writeOperation(deleted, btc("purchase", "1", D3), {
+      ...options(P),
+      replacing: true,
+    });
+    expect(refused.result).toEqual({ ok: false, code: "opening_balance" });
+  });
+
+  it("puts a purchase moved to an earlier day last there", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("sale", "1", D1), S],
+      [btc("purchase", "1", D3), P],
+    ]);
+    const moved = run([[btc("purchase", "1", D1, "200"), P, true]], before);
+    expect(entryOf(moved, P)).toBe(before.nextEntryOrder);
+  });
+
+  it("refuses an operation that names its own entry order", () => {
+    expect(
+      writeOperation(
+        state,
+        { ...btc("purchase", "1", D1), entry_order: 0 },
+        options(A),
+      ).result,
+    ).toEqual({ ok: false, code: "invalid" });
+  });
+
   it("changes nothing when an edit is refused", () => {
     const before = run([
       [btc("purchase", "1", D2), P],

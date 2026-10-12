@@ -101,8 +101,12 @@ function integrity(state: PrototypeState): string[] {
           entryOrder: movement.entry_order,
         },
       ]);
-      if (movement.entry_order >= state.nextEntryOrder) {
-        problems.push(`${movement.id}: an entry order not yet given`);
+      if (
+        !Number.isSafeInteger(movement.entry_order) ||
+        movement.entry_order < 0 ||
+        movement.entry_order >= state.nextEntryOrder
+      ) {
+        problems.push(`${movement.id}: an entry order not given`);
       }
     }
   }

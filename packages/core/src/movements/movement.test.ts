@@ -69,6 +69,8 @@ describe("movementSchema", () => {
     ],
     ["a zero quantity", { ...purchase, quantity: "0" }],
     ["a negative entry order", { ...purchase, entry_order: -1 }],
+    ["a fractional entry order", { ...purchase, entry_order: 1.5 }],
+    ["no entry order", { ...purchase, entry_order: undefined }],
     [
       "a rate kind no unit uses",
       {

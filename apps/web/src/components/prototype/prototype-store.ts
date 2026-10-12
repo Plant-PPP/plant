@@ -760,12 +760,14 @@ export function writeOperation(
     return refused(state, { ok: false, code: "not_found" });
   }
   const was = replacing ? operationOf(state, operationId) : null;
-  if (replacing) {
-    // An edit keeps the operation's account and instrument, as its dialog does.
-    if (!was) return refused(state, { ok: false, code: "not_found" });
-    if (was.accountId !== account.id || was.instrument !== instrument.symbol) {
-      return refused(state, { ok: false, code: "invalid" });
-    }
+  if (replacing && !was)
+    return refused(state, { ok: false, code: "not_found" });
+  // An edit keeps the operation's account and instrument, as its dialog does.
+  if (
+    was &&
+    (was.accountId !== account.id || was.instrument !== instrument.symbol)
+  ) {
+    return refused(state, { ok: false, code: "invalid" });
   }
   const rates = snapshotOn(state.quotes, operation.date, {
     fxKinds: UNIT_FX_KINDS,
@@ -854,14 +856,15 @@ export function writeOperation(
     return {
       state: {
         ...next,
-        nextEntryOrder: Math.max(next.nextEntryOrder, entryOrder + 1),
+        nextEntryOrder: Math.max(state.nextEntryOrder, entryOrder + 1),
       },
       result: { ok: true, id: operationId },
     };
   };
   // A new operation is entered last. An edit keeps its operation's place on
   // its date; one that moves the date goes last on the new day, as if entered
-  // again, unless that leaves a sale with too little or nothing before it.
+  // again, unless going last leaves something taking out more than was held
+  // before it, or a holding no longer starting with units coming in.
   const kept = was?.parts[0]?.movement;
   if (!kept) return writeAt(state.nextEntryOrder);
   if (kept.date === operation.date || operation.kind === "opening_balance") {
