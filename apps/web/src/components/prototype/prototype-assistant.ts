@@ -119,14 +119,6 @@ const moved = (amount: string, unit: ChatUnit) =>
     even: "no ganó ni perdió",
   });
 
-const FOLLOW_UPS = {
-  netWorth: ["¿Cómo me fue este año?", "¿Cuánto debo?"],
-  year: ["¿Cuánto cobré de dividendos?", "¿Cuánto vale mi patrimonio hoy?"],
-  income: ["¿Cómo me fue este año?", "¿Cómo le fue a Apple?"],
-  debts: ["¿Cuánto vale mi patrimonio hoy?", "¿Cómo me fue este año?"],
-  instrument: ["¿Cómo me fue este año?", "¿Cuánto cobré de dividendos?"],
-};
-
 // What the assistant would answer, standing in for the model: it picks what
 // the question is about and builds the answer from the user's own data, its
 // figures and its chart computed here, never written by a model. A question
@@ -153,7 +145,6 @@ export function prototypeAnswer(
       text: "No te puedo decir qué comprar ni qué vender: Plant explica tus datos y no recomienda. Sí te puedo contar cómo vienen tus inversiones, cuánto ganaste o cuánto cobraste.",
       chart: null,
       sources: [],
-      followUps: ["¿Cómo me fue este año?", "¿Cuánto vale mi patrimonio hoy?"],
     };
   }
 
@@ -173,7 +164,6 @@ export function prototypeAnswer(
         text: `No tenés ni tuviste ${instrument.name} en Plant.`,
         chart: null,
         sources: ["Tus tenencias"],
-        followUps: FOLLOW_UPS.instrument,
       };
     }
     const summary = instrumentSummary(holdings, flows, state.today);
@@ -219,7 +209,6 @@ export function prototypeAnswer(
           }
         : null,
       sources: ["Movimientos", "Cotizaciones"],
-      followUps: FOLLOW_UPS.instrument,
     };
   }
 
@@ -238,7 +227,6 @@ export function prototypeAnswer(
         text: "No tenés deudas cargadas en Plant.",
         chart: null,
         sources: ["Deudas"],
-        followUps: FOLLOW_UPS.debts,
       };
     }
     const byId = new Map(owed.items.map((item) => [item.id, item.value]));
@@ -260,7 +248,6 @@ export function prototypeAnswer(
           ? { title: "Lo que debés", unit, bars: valued }
           : null,
       sources: ["Deudas", "Cotizaciones"],
-      followUps: FOLLOW_UPS.debts,
     };
   }
 
@@ -280,7 +267,6 @@ export function prototypeAnswer(
         })),
       },
       sources: ["Movimientos"],
-      followUps: FOLLOW_UPS.income,
     };
   }
 
@@ -319,7 +305,6 @@ export function prototypeAnswer(
         })),
       },
       sources: ["Cierres", "Cotizaciones"],
-      followUps: FOLLOW_UPS.year,
     };
   }
 
@@ -357,7 +342,6 @@ export function prototypeAnswer(
           .sort((a, b) => compareDecimals(b.value, a.value)),
       },
       sources: ["Tus tenencias", "Deudas", "Cotizaciones"],
-      followUps: FOLLOW_UPS.netWorth,
     };
   }
 
@@ -366,7 +350,6 @@ export function prototypeAnswer(
     text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
     chart: null,
     sources: [],
-    followUps: ["¿Cuánto vale mi patrimonio hoy?", "¿Cómo me fue este año?"],
   };
 }
 

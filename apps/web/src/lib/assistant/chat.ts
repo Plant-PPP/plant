@@ -32,7 +32,6 @@ export type AssistantMessage = {
   // The day it was calculated, and the dollar it used when the unit is one.
   asOf: string;
   rate: { label: string; sell: string } | null;
-  followUps: string[];
 };
 
 export type ChatMessage = UserMessage | AssistantMessage;
