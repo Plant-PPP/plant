@@ -668,6 +668,36 @@ describe("entry order", () => {
     expect(entryOf(relabelled, A)).toBeGreaterThan(entryOf(relabelled, B));
   });
 
+  it("refuses an edit of an operation there is not, changing nothing", () => {
+    const refused = writeOperation(state, btc("purchase", "1", D1), {
+      ...options(A),
+      replacing: true,
+    });
+    expect(refused.result).toEqual({ ok: false, code: "not_found" });
+    expect(refused.state).toBe(state);
+  });
+
+  it("keeps the place of an opening balance turned into a purchase when last would leave a sale first", () => {
+    const before = run([
+      [btc("opening_balance", "1", D2), A],
+      [btc("sale", "1", D2), S],
+    ]);
+    const relabelled = run([[btc("purchase", "1", D2), A, true]], before);
+    expect(entryOf(relabelled, A)).toBe(entryOf(before, A));
+  });
+
+  it("refuses deleting the purchase that a sale entered before a same-day purchase needs", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("sale", "1", D3), S],
+      [btc("purchase", "1", D3), P],
+    ]);
+    expect(deleteOperation(before, A).result).toEqual({
+      ok: false,
+      code: "opening_balance",
+    });
+  });
+
   it("changes nothing when an edit is refused", () => {
     const before = run([
       [btc("purchase", "1", D2), P],

@@ -75,7 +75,7 @@ export const MOVEMENT_MESSAGES: Record<
   oversold:
     "No podés vender más de lo que tenías en ese momento. En un mismo día cuenta el orden en que cargaste los movimientos.",
   opening_balance:
-    "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez.",
+    "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez. En un mismo día cuenta el orden en que cargaste los movimientos.",
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
 };
@@ -95,5 +95,5 @@ export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   oversold:
     "No podés borrarlo: una venta posterior quedaría vendiendo más de lo que tenías.",
   opening_balance:
-    "No podés borrarlo: la tenencia tiene que empezar con un saldo inicial o una compra.",
+    "No podés borrarlo: la tenencia tiene que empezar con un saldo inicial o una compra. En un mismo día cuenta el orden en que cargaste los movimientos.",
 };

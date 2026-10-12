@@ -101,7 +101,7 @@ function integrity(state: PrototypeState): string[] {
           entryOrder: movement.entry_order,
         },
       ]);
-      // Also true of a missing one.
+      // Written as !(<) so a missing entry order fails too.
       if (!(movement.entry_order < state.nextEntryOrder)) {
         problems.push(`${movement.id}: an entry order not below the next`);
       }
