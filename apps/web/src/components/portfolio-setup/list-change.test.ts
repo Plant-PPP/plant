@@ -275,7 +275,7 @@ describe("applySetupChange", () => {
     ).toBe(lists);
   });
 
-  it("changes an account without touching the named lists", () => {
+  it("changes an account without touching the portfolios", () => {
     const next = applySetupChange(lists, {
       list: "sourceConnections",
       change: { kind: "archive", id: "c1" },

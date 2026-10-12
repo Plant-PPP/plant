@@ -69,17 +69,16 @@ export const RACE_ROUNDS = 10;
 export async function raceArchivePortfolioAgainstAccount(
   user: TestUser,
   {
-    target,
+    portfolioId: id,
     account,
     afterRound,
   }: {
-    target: () => Promise<string>;
+    portfolioId: string;
     account: (id: string) => Insert<"source_connections">;
     afterRound: (id: string) => Promise<void>;
   },
 ): Promise<void> {
   for (let round = 0; round < RACE_ROUNDS; round++) {
-    const id = await target();
     let accountId: string | undefined;
     try {
       const [archive, create] = await Promise.all([
