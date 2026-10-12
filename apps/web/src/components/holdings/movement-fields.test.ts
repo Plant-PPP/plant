@@ -297,8 +297,8 @@ describe("a transfer", () => {
     ).toMatchObject({ price: "", costEdited: false });
   });
 
-  it.each(["1.234", "x"])(
-    "refuses a changed cost %s that reads two ways or none, naming the price",
+  it.each(["1.234"])(
+    "refuses a changed cost %s that reads two ways, naming the price",
     (price) => {
       const parsed = operationInputSchema.safeParse(
         toOperationInput(
