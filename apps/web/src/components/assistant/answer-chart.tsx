@@ -26,9 +26,11 @@ export function AnswerChart({ chart }: { chart: ChartPart }) {
           <li
             // Two debts may share a label.
             key={index}
-            className="grid grid-cols-[minmax(0,6rem)_minmax(0,1fr)_auto] items-center gap-2 text-xs"
+            className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 text-xs"
           >
-            <span className="text-muted-foreground truncate">{bar.label}</span>
+            <span className="text-muted-foreground leading-tight break-words">
+              {bar.label}
+            </span>
             <span className="bg-muted h-2 overflow-hidden rounded-full">
               <span
                 className={cn(
