@@ -9,7 +9,6 @@ import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
   deleteAccountDescription,
   deleteMessages,
-  SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -30,7 +29,6 @@ import {
 } from "./setup-card";
 import type { SetupRun } from "./setup-actions";
 import {
-  type HolderChoices,
   SourceConnectionDialog,
   type SourceConnectionFields,
   accountRow,
@@ -47,10 +45,6 @@ type DialogState =
       row: SourceConnectionRow;
     } & Retry<SourceConnectionFields>);
 
-function holderName(row: SourceConnectionRow): string {
-  return row.holder?.name ?? SELF_HOLDER_LABEL;
-}
-
 // The report column's header names the report, so it shows only the status;
 // the narrow second line, with no header, adds it.
 function reportStatus(row: SourceConnectionRow): string {
@@ -66,12 +60,9 @@ export type SourceConnectionActions = {
   delete?: (id: string) => Promise<WriteResult>;
 };
 
-// Below @2xl the holder follows the institution and the portfolio and report
-// status take a muted second line; from @2xl each has its own column. A page
-// without holders shows none.
-const dataColumns = (
-  withHolders: boolean,
-): ColumnDef<SourceConnectionRow>[] => [
+// Below @2xl the portfolio and report status take a muted second line; from
+// @2xl each has its own column.
+const COLUMNS: ColumnDef<SourceConnectionRow>[] = [
   {
     id: "institution",
     header: "Cuenta",
@@ -80,18 +71,8 @@ const dataColumns = (
       <>
         <span className="flex min-w-0 items-center gap-2">
           <InstitutionIcon name={row.institution} />
-          <span
-            className="block truncate"
-            title={
-              withHolders
-                ? `${row.institution} · ${holderName(row)}`
-                : row.institution
-            }
-          >
+          <span className="block truncate" title={row.institution}>
             {row.institution}
-            {withHolders && (
-              <span className="@2xl:hidden"> · {holderName(row)}</span>
-            )}
           </span>
         </span>
         <TruncatedText
@@ -101,16 +82,6 @@ const dataColumns = (
       </>
     ),
   },
-  ...(withHolders
-    ? [
-        {
-          id: "holder",
-          header: "Titular",
-          meta: { className: "hidden @2xl:table-cell" },
-          cell: ({ row }) => <TruncatedText text={holderName(row.original)} />,
-        } satisfies ColumnDef<SourceConnectionRow>,
-      ]
-    : []),
   {
     id: "portfolio",
     header: "Cartera",
@@ -130,7 +101,6 @@ export function SourceConnectionsCard({
   view,
   pending,
   run,
-  holders,
   portfolios,
   actions,
   deletesUploads,
@@ -138,13 +108,11 @@ export function SourceConnectionsCard({
   view: SourceConnectionsView;
   pending: boolean;
   run: SetupRun;
-  holders?: HolderChoices;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
   // The accounts whose delete would go through and take their uploads.
   deletesUploads?: readonly string[];
 }) {
-  const columns = dataColumns(holders !== undefined);
   const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [deleting, setDeleting] = useState<SourceConnectionRow | null>(null);
@@ -215,7 +183,6 @@ export function SourceConnectionsCard({
     return {
       initial: dialog.initial ?? initialFields(row, portfolios),
       initialError: dialog.initialError,
-      holders,
       portfolios,
       returnFocusTo: card.focusHeading,
       onClose: () => setDialog(null),
@@ -227,11 +194,7 @@ export function SourceConnectionsCard({
       heading={card.heading}
       pending={pending}
       title="Cuentas"
-      description={
-        holders
-          ? "Dónde tenés tus inversiones, y de quién son"
-          : "Dónde tenés tus inversiones"
-      }
+      description="Dónde tenés tus inversiones"
       addLabel="Agregar cuenta"
       onAdd={() => openDialog({ kind: "create" })}
     >
@@ -241,7 +204,7 @@ export function SourceConnectionsCard({
         emptyText="Todavía no agregaste cuentas."
         truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
         columns={[
-          ...columns,
+          ...COLUMNS,
           actionsColumn<SourceConnectionRow>(
             [
               {
@@ -272,7 +235,7 @@ export function SourceConnectionsCard({
         firstPageLabel="Ver las más recientes"
         pending={pending}
         columns={[
-          ...columns,
+          ...COLUMNS,
           actionsColumn<SourceConnectionRow>(
             [
               {
@@ -306,12 +269,12 @@ export function SourceConnectionsCard({
           description="Contanos dónde tenés inversiones."
           submitLabel="Agregar"
           {...dialogProps(dialog, null)}
-          onSubmit={(fields, chosen) =>
+          onSubmit={(fields, portfolio) =>
             submit(
               dialog,
               fields,
               "create",
-              accountRow(temporaryId(), fields, chosen),
+              accountRow(temporaryId(), fields, portfolio),
               () => actions.create(fields),
               "Agregaste",
             )
@@ -325,12 +288,12 @@ export function SourceConnectionsCard({
           description="Cambiá los datos de la cuenta."
           submitLabel="Guardar"
           {...dialogProps(dialog, dialog.row)}
-          onSubmit={(fields, chosen) =>
+          onSubmit={(fields, portfolio) =>
             submit(
               dialog,
               fields,
               "update",
-              accountRow(dialog.row.id, fields, chosen),
+              accountRow(dialog.row.id, fields, portfolio),
               () => actions.update(dialog.row.id, fields),
               "Guardaste",
             )
@@ -345,12 +308,12 @@ export function SourceConnectionsCard({
           submitLabel="Restaurar"
           {...dialogProps(dialog, dialog.row)}
           savedRemovesOpener
-          onSubmit={(fields, chosen) =>
+          onSubmit={(fields, portfolio) =>
             submit(
               dialog,
               fields,
               "restore",
-              accountRow(dialog.row.id, fields, chosen),
+              accountRow(dialog.row.id, fields, portfolio),
               () => actions.restore(dialog.row.id, fields),
               "Restauraste",
             )

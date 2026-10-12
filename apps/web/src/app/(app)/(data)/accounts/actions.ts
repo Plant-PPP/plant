@@ -1,15 +1,16 @@
 "use server";
 
-import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
-import { namedRowWrites } from "@/lib/portfolio-setup/named-row-writes";
 import {
+  activeWrite,
   restoreWrite,
   runArchive,
   runInsert,
   runUpdate,
 } from "@/lib/portfolio-setup/run-write";
 import {
-  SELF_HOLDER,
+  noInput,
+  type PortfolioInput,
+  portfolioInputSchema,
   type SourceConnectionInput,
   sourceConnectionInputSchema,
 } from "@/lib/portfolio-setup/schemas";
@@ -19,61 +20,79 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 // filter by the session's user besides RLS and by the parsed id; an insert's
 // user_id is the column default, which RLS checks.
 
-const portfolios = namedRowWrites("portfolios");
-const holders = namedRowWrites("holders");
-
 export async function createPortfolio(input: unknown): Promise<WriteResult> {
-  return portfolios.create(input);
+  return runInsert(
+    {
+      table: "portfolios",
+      action: "create_portfolio",
+      schema: portfolioInputSchema,
+      input,
+    },
+    ({ client, input }) =>
+      client.from("portfolios").insert({ name: input.name }).select("id"),
+  );
 }
 
 export async function renamePortfolio(
   id: unknown,
   input: unknown,
 ): Promise<WriteResult> {
-  return portfolios.rename(id, input);
+  return runUpdate(
+    {
+      table: "portfolios",
+      action: "rename_portfolio",
+      schema: portfolioInputSchema,
+      input,
+    },
+    id,
+    activeWrite("portfolios", (input: PortfolioInput) => ({
+      name: input.name,
+    })),
+  );
 }
 
 export async function archivePortfolio(id: unknown): Promise<WriteResult> {
-  return portfolios.archive(id);
+  return runArchive("portfolios", "archive_portfolio", id);
 }
 
+const restorePortfolioRow = restoreWrite(
+  "portfolios",
+  (input: Partial<PortfolioInput>) =>
+    input.name === undefined ? {} : { name: input.name },
+);
+
+// With a name, renames and restores in one write, for a portfolio whose name
+// an active one took while it was archived.
 export async function restorePortfolio(
   id: unknown,
   input?: unknown,
 ): Promise<WriteResult> {
-  return portfolios.restore(id, input);
+  return input === undefined
+    ? runUpdate(
+        {
+          table: "portfolios",
+          action: "restore_portfolio",
+          schema: noInput,
+          input: {},
+        },
+        id,
+        restorePortfolioRow,
+      )
+    : runUpdate(
+        {
+          table: "portfolios",
+          action: "restore_rename_portfolio",
+          schema: portfolioInputSchema,
+          input,
+        },
+        id,
+        restorePortfolioRow,
+      );
 }
-
-export async function createHolder(input: unknown): Promise<WriteResult> {
-  return holders.create(input);
-}
-
-export async function renameHolder(
-  id: unknown,
-  input: unknown,
-): Promise<WriteResult> {
-  return holders.rename(id, input);
-}
-
-export async function archiveHolder(id: unknown): Promise<WriteResult> {
-  return holders.archive(id);
-}
-
-export async function restoreHolder(
-  id: unknown,
-  input?: unknown,
-): Promise<WriteResult> {
-  return holders.restore(id, input);
-}
-
-const sourceConnection = sourceConnectionInputSchema(
-  NAME_LIMITS.source_connections.institution,
-);
 
 function sourceConnectionRow(input: SourceConnectionInput) {
   return {
     institution: input.institution,
-    holder_id: input.holder === SELF_HOLDER ? null : input.holder,
     include_in_tax_report: input.includeInTaxReport,
     default_portfolio_id: input.defaultPortfolioId,
   };
@@ -86,7 +105,7 @@ export async function createSourceConnection(
     {
       table: "source_connections",
       action: "create_source_connection",
-      schema: sourceConnection,
+      schema: sourceConnectionInputSchema,
       input,
     },
     ({ client, input }) =>
@@ -106,18 +125,11 @@ export async function updateSourceConnection(
     {
       table: "source_connections",
       action: "update_source_connection",
-      schema: sourceConnection,
+      schema: sourceConnectionInputSchema,
       input,
     },
     id,
-    ({ client, userId, input, id }) =>
-      client
-        .from("source_connections")
-        .update(sourceConnectionRow(input))
-        .eq("user_id", userId)
-        .eq("id", id)
-        .is("archived_at", null)
-        .select("id"),
+    activeWrite("source_connections", sourceConnectionRow),
   );
 }
 
@@ -127,8 +139,8 @@ export async function archiveSourceConnection(
   return runArchive("source_connections", "archive_source_connection", id);
 }
 
-// Restores with the fields the user confirmed in one write, since its holder
-// or portfolio may have been archived meanwhile.
+// Restores with the fields the user confirmed in one write, since its
+// portfolio may have been archived meanwhile.
 export async function restoreSourceConnection(
   id: unknown,
   input: unknown,
@@ -137,7 +149,7 @@ export async function restoreSourceConnection(
     {
       table: "source_connections",
       action: "restore_source_connection",
-      schema: sourceConnection,
+      schema: sourceConnectionInputSchema,
       input,
     },
     id,

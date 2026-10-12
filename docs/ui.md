@@ -18,7 +18,7 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 ## Forms and overlays
 
 - **Every form opens in a centered `Dialog`**, never a `Sheet`. A long form scrolls inside the dialog. `ui/sheet.tsx` is only for the sidebar on mobile.
-- The dialog has a title, a one-line description, the fields stacked as `Label` over `Input` (`grid gap-2`) and the primary button in the footer. A dialog that changes a list closes on submit and opens again with the fields and the alert when the write is refused. A field the dialog still needs the result of (the new holder inside the account dialog) waits for the server: its button reads "Agregando…" and the dialog cannot be dismissed meanwhile.
+- The dialog has a title, a one-line description, the fields stacked as `Label` over `Input` (`grid gap-2`) and the primary button in the footer. A dialog that changes a list closes on submit and opens again with the fields and the alert when the write is refused.
 - On close, focus returns to the control that opened the dialog, or to the nearest heading when that control is gone.
 - **Irreversible actions ask first**, in a `ConfirmDialog`: the title names the action as a question, the description states the consequence, "Cancelar" comes first and takes focus (so Enter never confirms by itself), and the action button is `destructive`. Reversible actions (archive, restore) run without asking.
 

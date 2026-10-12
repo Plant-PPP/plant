@@ -7,8 +7,6 @@ test.each([
   ["PT409", "last_active_portfolio", "last_active_portfolio"],
   ["PT409", "portfolio_in_use", "portfolio_in_use"],
   ["PT409", "portfolio_archived", "portfolio_archived"],
-  ["PT409", "holder_in_use", "holder_in_use"],
-  ["PT409", "holder_archived", "holder_archived"],
   ["PT409", "some_other_guard", "failed"],
   ["PT409", undefined, "failed"],
   ["23505", "Key (user_id, lower(name))=(…, mía)", "duplicate"],

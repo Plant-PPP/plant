@@ -6,12 +6,7 @@ import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
 import { z } from "zod";
-import {
-  readHolders,
-  readList,
-  readPortfolios,
-  readSourceConnections,
-} from "./read";
+import { readList, readPortfolios, readSourceConnections } from "./read";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -120,12 +115,12 @@ it("says when active rows were left out", async () => {
 it("links the next page of archived rows from the last one shown", async () => {
   const archived = rows(ARCHIVED_ROW_LIMIT + 1, true);
   const { client } = fakeClient(ok([]), ok(archived));
-  const view = await read(client, { holders: "x" });
+  const view = await read(client, { accounts: "x" });
   expect(view.archived).toHaveLength(ARCHIVED_ROW_LIMIT);
   const last = archived[ARCHIVED_ROW_LIMIT - 1]!;
   const next = new URLSearchParams(view.archivedNextHref!.slice(1));
   expect(next.get("portfolios")).toBe(`${AT},${last.id}`);
-  expect(next.get("holders")).toBe("x");
+  expect(next.get("accounts")).toBe("x");
 });
 
 it("links no next page when exactly a page of archived rows is left", async () => {
@@ -215,18 +210,18 @@ it("names the active list when only it fails", async () => {
   ]);
 });
 
-it("pages archived holders by their own param", async () => {
+it("pages archived portfolios by their own param", async () => {
   const { client, calls } = fakeClient(ok([]), ok([]));
-  const view = await readHolders(client, {
+  const view = await readPortfolios(client, {
     userId: USER,
     requestId: REQUEST_ID,
     page: "/accounts",
-    params: { holders: `${AT},${ID}`, portfolios: "x" },
+    params: { portfolios: `${AT},${ID}`, accounts: "x" },
   });
   expect(calls[0]![0]).toEqual(["select", "id, name"]);
   expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
   expect(view.archivedPage).toBe(`${AT},${ID}`);
-  expect(view.archivedFirstHref).toBe("?portfolios=x");
+  expect(view.archivedFirstHref).toBe("?accounts=x");
 });
 
 it("pages archived accounts by their own param", async () => {
@@ -235,14 +230,14 @@ it("pages archived accounts by their own param", async () => {
     userId: USER,
     requestId: REQUEST_ID,
     page: "/accounts",
-    params: { accounts: `${AT},${ID}`, holders: "x" },
+    params: { accounts: `${AT},${ID}`, portfolios: "x" },
   });
   expect(calls[1]).toContainEqual(["lte", "archived_at", AT]);
   expect(view.archivedPage).toBe(`${AT},${ID}`);
-  expect(view.archivedFirstHref).toBe("?holders=x");
+  expect(view.archivedFirstHref).toBe("?portfolios=x");
 });
 
-it("reads accounts with their holder and portfolio", async () => {
+it("reads accounts with their portfolio", async () => {
   const portfolio = { id: "p1", name: "Principal", archived_at: null };
   const { client, calls } = fakeClient(
     ok([
@@ -250,7 +245,6 @@ it("reads accounts with their holder and portfolio", async () => {
         id: ID,
         institution: "IOL",
         include_in_tax_report: true,
-        holder: null,
         portfolio,
       },
     ]),
@@ -259,7 +253,6 @@ it("reads accounts with their holder and portfolio", async () => {
         id: "c2",
         institution: "Balanz",
         include_in_tax_report: false,
-        holder: { id: "h1", name: "Lucía", archived_at: AT },
         portfolio: { ...portfolio, archived_at: AT },
         archived_at: AT,
       },
@@ -274,7 +267,6 @@ it("reads accounts with their holder and portfolio", async () => {
   expect(calls[0]![0]).toEqual([
     "select",
     "id, institution, include_in_tax_report, " +
-      "holder:holders!source_connections_user_id_holder_id_fkey(id, name, archived_at), " +
       "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
   ]);
   expect(view.active).toEqual([
@@ -282,7 +274,6 @@ it("reads accounts with their holder and portfolio", async () => {
       id: ID,
       institution: "IOL",
       includeInTaxReport: true,
-      holder: null,
       portfolio: { id: "p1", name: "Principal", archived: false },
     },
   ]);
@@ -291,7 +282,6 @@ it("reads accounts with their holder and portfolio", async () => {
       id: "c2",
       institution: "Balanz",
       includeInTaxReport: false,
-      holder: { id: "h1", name: "Lucía", archived: true },
       portfolio: { id: "p1", name: "Principal", archived: true },
     },
   ]);

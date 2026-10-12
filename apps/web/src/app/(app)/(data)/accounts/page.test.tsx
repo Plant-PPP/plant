@@ -12,20 +12,15 @@ jest.mock("@/lib/request-id-server", () => ({
 jest.mock("@/lib/portfolio-setup/read", () => ({
   readSourceConnections: () => read("accounts"),
   readPortfolios: () => read("portfolios"),
-  readHolders: () => read("holders"),
 }));
 jest.mock("./actions", () =>
   Object.fromEntries(
     [
-      "archiveHolder",
       "archivePortfolio",
       "archiveSourceConnection",
-      "createHolder",
       "createPortfolio",
       "createSourceConnection",
-      "renameHolder",
       "renamePortfolio",
-      "restoreHolder",
       "restorePortfolio",
       "restoreSourceConnection",
       "updateSourceConnection",
@@ -65,15 +60,8 @@ it("wires every write to its server action in production", async () => {
   })) as React.ReactElement<{ children: React.ReactElement<Props>[] }>;
   const setup = page.props.children[1]!;
   expect(setup.type).toBe(AccountsSetup);
-  expect(setup.props.holders).toEqual({
-    view: { list: "holders" },
-    actions: {
-      create: actions.createHolder,
-      rename: actions.renameHolder,
-      archive: actions.archiveHolder,
-      restore: actions.restoreHolder,
-    },
-  });
+  expect(setup.props.sourceConnections).toEqual({ list: "accounts" });
+  expect(setup.props.portfolios).toEqual({ list: "portfolios" });
   expect(setup.props.actions).toEqual({
     sourceConnections: {
       create: actions.createSourceConnection,

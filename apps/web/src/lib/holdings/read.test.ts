@@ -132,7 +132,6 @@ describe("readHoldings", () => {
     expect(select).toContain(
       "source_connections!holdings_user_id_source_connection_id_fkey",
     );
-    expect(select).not.toContain("holders");
     expect(select).toContain(
       "portfolios!holdings_user_id_portfolio_id_fkey(id, name)",
     );

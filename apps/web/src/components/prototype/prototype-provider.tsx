@@ -18,7 +18,7 @@ import type { AssistantActions } from "@/components/assistant/assistant-page";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
-import type { NamedRowsActions } from "@/components/portfolio-setup/named-rows-card";
+import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -55,7 +55,7 @@ type Prototype = {
     movements: MovementActions;
     prices: PriceActions;
     sourceConnections: SourceConnectionActions;
-    portfolios: NamedRowsActions;
+    portfolios: PortfolioActions;
     debts: DebtActions;
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;

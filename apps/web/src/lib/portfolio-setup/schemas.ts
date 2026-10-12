@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NAME_LIMITS } from "./limits";
 import { normalizeName } from "./normalize-name";
 
 // At least one letter, digit, punctuation mark or symbol, so no name renders
@@ -38,29 +39,21 @@ export function trimmedName(max: number) {
     );
 }
 
-export function nameInputSchema(max: number) {
-  return z.object({ name: trimmedName(max) });
-}
+export const portfolioInputSchema = z.object({
+  name: trimmedName(NAME_LIMITS.portfolios.name),
+});
+
+export type PortfolioInput = z.infer<typeof portfolioInputSchema>;
 
 export const idSchema = z.uuid();
 
 // The input of a write that takes none, such as an archive.
 export const noInput = z.object({});
 
-// The holder value that stands for the user, stored as a NULL holder_id.
-export const SELF_HOLDER = "self";
+export const sourceConnectionInputSchema = z.object({
+  institution: trimmedName(NAME_LIMITS.source_connections.institution),
+  includeInTaxReport: z.boolean(),
+  defaultPortfolioId: idSchema,
+});
 
-// An account's fields. The holder is required, so a form that never chose one
-// cannot save it as the user's.
-export function sourceConnectionInputSchema(institutionMax: number) {
-  return z.object({
-    institution: trimmedName(institutionMax),
-    holder: z.union([z.literal(SELF_HOLDER), idSchema]),
-    includeInTaxReport: z.boolean(),
-    defaultPortfolioId: idSchema,
-  });
-}
-
-export type SourceConnectionInput = z.infer<
-  ReturnType<typeof sourceConnectionInputSchema>
->;
+export type SourceConnectionInput = z.infer<typeof sourceConnectionInputSchema>;

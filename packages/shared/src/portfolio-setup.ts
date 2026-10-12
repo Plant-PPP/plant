@@ -8,8 +8,6 @@ export const PORTFOLIO_SETUP_GUARD = {
     "last_active_portfolio",
     "portfolio_in_use",
     "portfolio_archived",
-    "holder_in_use",
-    "holder_archived",
     "portfolio_has_holdings",
     "source_connection_has_holdings",
     "source_connection_archived",

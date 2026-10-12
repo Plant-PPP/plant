@@ -107,7 +107,6 @@ const ACCOUNT = {
   id: "a1",
   institution: "IOL",
   includeInTaxReport: true,
-  holder: null,
   portfolio: { ...PRINCIPAL, archived: false },
 };
 

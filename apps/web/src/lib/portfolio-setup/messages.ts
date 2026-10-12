@@ -10,9 +10,6 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
   portfolio_in_use:
     "Para archivar esta cartera, primero elegí otra en las cuentas que la usan o archivalas.",
   portfolio_archived: "Esa cartera está archivada.",
-  holder_in_use:
-    "Para archivar este titular, primero elegí otro en las cuentas que lo usan o archivalas.",
-  holder_archived: "Ese titular está archivado.",
   portfolio_has_holdings:
     "Para archivar esta cartera, primero archivá sus tenencias.",
   source_connection_has_holdings:
@@ -31,13 +28,6 @@ export const WRITE_MESSAGES: Record<SetupTable, WriteMessages> = {
     duplicate: "Ya tenés una cartera con ese nombre.",
     not_found: "Esa cartera cambió hace un momento. Ya actualizamos la lista.",
     invalid: invalidName(NAME_LIMITS.portfolios.name),
-    failed: FAILED,
-  },
-  holders: {
-    ...GUARD_MESSAGES,
-    duplicate: "Ya tenés un titular con ese nombre.",
-    not_found: "Ese titular cambió hace un momento. Ya actualizamos la lista.",
-    invalid: invalidName(NAME_LIMITS.holders.name),
     failed: FAILED,
   },
   source_connections: {
@@ -68,8 +58,6 @@ export function deleteMessages(messages: WriteMessages): WriteMessages {
     ...messages,
     portfolio_in_use:
       "Para borrar esta cartera, primero elegí otra en las cuentas que la usan.",
-    holder_in_use:
-      "Para borrar este titular, primero elegí otro en las cuentas que lo usan.",
     portfolio_has_holdings:
       "Para borrar esta cartera, primero borrá o mové sus tenencias.",
     source_connection_has_holdings:
@@ -85,24 +73,17 @@ export const deleteAccountDescription = (deletesUploads: boolean): string =>
 // An account's select left unchosen, caught before the write.
 export const CHOICE_MESSAGES = {
   institution: "Elegí una institución.",
-  holder: "Elegí un titular.",
   portfolio: "Elegí una cartera por defecto.",
 } as const;
-
-// How the user shows where a holder would: an account with no holder is theirs.
-export const SELF_HOLDER_LABEL = "Vos";
 
 // The most accounts an in-use refusal names before "y N más".
 const LISTED_ACCOUNTS = 3;
 
-// The in-use refusals name the accounts behind them, when the page has them:
+// The in-use refusal names the accounts behind it, when the page has them:
 // two accounts with one name as "IOL (2)", the first few names, after a
 // colon so no "y" has to agree with them.
-export function inUseMessage(
-  hint: "portfolio_in_use" | "holder_in_use",
-  accounts: string[],
-): string {
-  if (accounts.length === 0) return GUARD_MESSAGES[hint];
+export function portfolioInUseMessage(accounts: string[]): string {
+  if (accounts.length === 0) return GUARD_MESSAGES.portfolio_in_use;
   const counts = new Map<string, number>();
   for (const label of accounts) counts.set(label, (counts.get(label) ?? 0) + 1);
   const names = [...counts].map(([label, count]) =>
@@ -113,7 +94,5 @@ export function inUseMessage(
   const list = more > 0 ? `${shown} y ${more} más` : shown;
   const which =
     accounts.length === 1 ? "archivá esta cuenta" : "archivá estas cuentas";
-  return hint === "portfolio_in_use"
-    ? `Para archivar esta cartera, primero elegí otra o ${which}: ${list}.`
-    : `Para archivar este titular, primero elegí otro o ${which}: ${list}.`;
+  return `Para archivar esta cartera, primero elegí otra o ${which}: ${list}.`;
 }

@@ -20,7 +20,6 @@ const ACCOUNT: SourceConnectionRow = {
   id: "a1",
   institution: "IOL",
   includeInTaxReport: true,
-  holder: null,
   portfolio: { ...PRINCIPAL, archived: false },
 };
 const INSTRUMENTS = [

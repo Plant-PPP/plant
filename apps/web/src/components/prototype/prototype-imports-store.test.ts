@@ -231,7 +231,6 @@ it("keeps counting a deleted account's uploads against the month", () => {
     state,
     {
       institution: "Banco de prueba",
-      holder: "self",
       includeInTaxReport: true,
       defaultPortfolioId: state.portfolios[0]!.id,
     },

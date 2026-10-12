@@ -27,6 +27,19 @@ it("opens again with the refused name and its alert", () => {
   expect(html).toMatch(/<p[^>]*role="alert"[^>]*>Ya existe<\/p>/);
 });
 
+it("names the field and points it at its alert", () => {
+  const html = render({ initial: "Principal", initialError: "Ya existe" });
+  const inputId = /<label[^>]*for="([^"]+)"[^>]*>Nombre<\/label>/.exec(
+    html,
+  )?.[1];
+  const alertId = /<p[^>]*id="([^"]+)"[^>]*role="alert"/.exec(html)?.[1];
+  expect(inputId).toBeDefined();
+  expect(alertId).toBeDefined();
+  expect(html).toMatch(
+    new RegExp(`<input[^>]*id="${inputId}"[^>]*aria-describedby="${alertId}"`),
+  );
+});
+
 it("opens empty with no alert", () => {
   const html = render();
   expect(html).toContain("Renombrar cartera");

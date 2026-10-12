@@ -35,7 +35,7 @@ export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 
 const INCOME_KINDS: readonly MovementKind[] = ["dividend", "coupon"];
 
-// Money paid to the holder, kept apart from what the holding cost.
+// Money paid to the user, kept apart from what the holding cost.
 export const isIncome = (kind: MovementKind): boolean =>
   INCOME_KINDS.includes(kind);
 

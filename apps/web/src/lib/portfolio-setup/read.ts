@@ -22,18 +22,14 @@ import {
   type SetupTable,
 } from "./limits";
 
-// A row that is only a name: a portfolio or a holder.
-export type NamedRow = { id: string; name: string };
-export type PortfolioRow = NamedRow;
-export type HolderRow = NamedRow;
+export type PortfolioRow = { id: string; name: string };
 
-// An account with its holder (null is the user) and default portfolio, each
-// marked when archived: only an archived account can point at one.
+// An account with its default portfolio, marked when archived: only an
+// archived account can point at one.
 export type SourceConnectionRow = {
   id: string;
   institution: string;
   includeInTaxReport: boolean;
-  holder: (HolderRow & { archived: boolean }) | null;
   portfolio: PortfolioRow & { archived: boolean };
 };
 
@@ -50,7 +46,6 @@ export type ListView<Row> = {
 };
 
 export type PortfoliosView = ListView<PortfolioRow>;
-export type HoldersView = ListView<HolderRow>;
 export type SourceConnectionsView = ListView<SourceConnectionRow>;
 
 export type ReadContext = {
@@ -209,11 +204,11 @@ export async function readList<Row>(
   };
 }
 
-function namedRow(data: Record<string, unknown>): PortfolioRow {
+function portfolioRow(data: Record<string, unknown>): PortfolioRow {
   return { id: String(data.id), name: String(data.name) };
 }
 
-function linkedRow(data: unknown): PortfolioRow & { archived: boolean } {
+function linkedPortfolio(data: unknown): PortfolioRow & { archived: boolean } {
   const row = data as { id: string; name: string; archived_at: string | null };
   return { id: row.id, name: row.name, archived: row.archived_at !== null };
 }
@@ -229,31 +224,15 @@ export function readPortfolios(
       table: "portfolios",
       param: "portfolios",
       columns: "id, name",
-      toRow: namedRow,
+      toRow: portfolioRow,
     },
     context,
     options,
   );
 }
 
-export function readHolders(
-  client: SupabaseClient<Database>,
-  context: ReadContext,
-): Promise<HoldersView> {
-  return readList(
-    client,
-    {
-      table: "holders",
-      param: "holders",
-      columns: "id, name",
-      toRow: namedRow,
-    },
-    context,
-  );
-}
-
-// The holder and the portfolio are embedded through the composite foreign
-// keys, so RLS on those tables applies to them too.
+// The portfolio is embedded through the composite foreign key, so RLS on
+// portfolios applies to it too.
 export function readSourceConnections(
   client: SupabaseClient<Database>,
   context: ReadContext,
@@ -266,14 +245,12 @@ export function readSourceConnections(
       param: "accounts",
       columns:
         "id, institution, include_in_tax_report, " +
-        "holder:holders!source_connections_user_id_holder_id_fkey(id, name, archived_at), " +
         "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
       toRow: (data) => ({
         id: String(data.id),
         institution: String(data.institution),
         includeInTaxReport: data.include_in_tax_report === true,
-        holder: data.holder ? linkedRow(data.holder) : null,
-        portfolio: linkedRow(data.portfolio),
+        portfolio: linkedPortfolio(data.portfolio),
       }),
     },
     context,

@@ -15,8 +15,6 @@ const view = <Row,>(active: Row[], archived: Row[]): ListView<Row> => ({
   archivedNextHref: null,
 });
 
-// Cuentas over the prototype's store, with no holders: every account is the
-// user's own.
 export function PrototypeAccounts() {
   const { state, actions } = usePrototype();
   return (

@@ -81,20 +81,6 @@ describe("rowAnswer", () => {
       text: "Para archivar esta cartera, primero elegí otra o archivá estas cuentas: tu A, tu B, tu C y 2 más.",
     });
   });
-
-  test("a holder in use names its accounts", () => {
-    expect(
-      rowAnswer(
-        { ok: false, code: "holder_in_use" },
-        "archive",
-        WRITE_MESSAGES.holders,
-        ["IOL"],
-      ),
-    ).toEqual({
-      kind: "alert",
-      text: "Para archivar este titular, primero elegí otro o archivá esta cuenta: IOL.",
-    });
-  });
 });
 
 describe("dialogAnswer", () => {
@@ -114,13 +100,19 @@ describe("dialogAnswer", () => {
 
   test("uses the copy of the table it wrote", () => {
     expect(
-      dialogAnswer({ ok: false, code: "duplicate" }, WRITE_MESSAGES.holders),
-    ).toEqual({ kind: "alert", text: "Ya tenés un titular con ese nombre." });
-    expect(
       dialogAnswer(
-        { ok: false, code: "holder_archived" },
+        { ok: false, code: "portfolio_archived" },
         WRITE_MESSAGES.source_connections,
       ),
-    ).toEqual({ kind: "alert", text: "Ese titular está archivado." });
+    ).toEqual({ kind: "alert", text: "Esa cartera está archivada." });
+    expect(
+      dialogAnswer(
+        { ok: false, code: "portfolio_archived" },
+        WRITE_MESSAGES.holdings,
+      ),
+    ).toEqual({
+      kind: "alert",
+      text: "Esa cartera está archivada. Restaurala en Cuentas primero.",
+    });
   });
 });

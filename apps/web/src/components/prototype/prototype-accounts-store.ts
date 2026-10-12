@@ -1,11 +1,10 @@
-import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
 import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import {
   idSchema,
-  nameInputSchema,
+  portfolioInputSchema,
   sourceConnectionInputSchema,
 } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -17,13 +16,7 @@ import {
 } from "./prototype-store";
 
 // The prototype's accounts and portfolios, written as the real actions write
-// them: parsed with the same schemas and refused by the same guards, with
-// every account the user's own.
-
-const portfolioName = nameInputSchema(NAME_LIMITS.portfolios.name);
-const accountInput = sourceConnectionInputSchema(
-  NAME_LIMITS.source_connections.institution,
-);
+// them: parsed with the same schemas and refused by the same guards.
 
 const done = (state: PrototypeState, id: string): Write<WriteResult> => ({
   state,
@@ -51,7 +44,7 @@ export function createPortfolio(
   input: unknown,
   id: string,
 ): Write<WriteResult> {
-  const parsed = portfolioName.safeParse(input);
+  const parsed = portfolioInputSchema.safeParse(input);
   if (!parsed.success) return refusedWrite(state, "invalid");
   if (takenName(state, parsed.data.name))
     return refusedWrite(state, "duplicate");
@@ -83,7 +76,7 @@ export function renamePortfolio(
   input: unknown,
 ): Write<WriteResult> {
   const id = idSchema.safeParse(rawId);
-  const parsed = portfolioName.safeParse(input);
+  const parsed = portfolioInputSchema.safeParse(input);
   if (!id.success || !parsed.success) return refusedWrite(state, "invalid");
   if (!state.portfolios.some((each) => each.id === id.data)) {
     return refusedWrite(state, "not_found");
@@ -144,7 +137,7 @@ export function restorePortfolio(
   if (!row) return refusedWrite(state, "not_found");
   let name = row.name;
   if (input !== undefined) {
-    const parsed = portfolioName.safeParse(input);
+    const parsed = portfolioInputSchema.safeParse(input);
     if (!parsed.success) return refusedWrite(state, "invalid");
     name = parsed.data.name;
   }
@@ -172,7 +165,7 @@ function accountRow(
   id: string,
   input: unknown,
 ): SourceConnectionRow | "invalid" | "portfolio_archived" {
-  const parsed = accountInput.safeParse(input);
+  const parsed = sourceConnectionInputSchema.safeParse(input);
   if (!parsed.success) return "invalid";
   const portfolio = state.portfolios.find(
     (each) => each.id === parsed.data.defaultPortfolioId,
@@ -182,7 +175,6 @@ function accountRow(
     id,
     institution: parsed.data.institution,
     includeInTaxReport: parsed.data.includeInTaxReport,
-    holder: null,
     portfolio: { ...portfolio, archived: false },
   };
 }

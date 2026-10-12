@@ -19,7 +19,7 @@ import {
 import { currentRequestId } from "@/lib/request-id-server";
 
 type PortfolioSetupAction =
-  | `${"create" | "rename" | "archive" | "restore" | "restore_rename"}_${"portfolio" | "holder"}`
+  | `${"create" | "rename" | "archive" | "restore" | "restore_rename"}_portfolio`
   | `${"create" | "update" | "archive" | "restore"}_${"source_connection" | "holding"}`;
 
 type Client = SupabaseClient<Database>;
@@ -178,37 +178,45 @@ export function runArchive(
   return runUpdate(
     { table, action, schema: noInput, input: {} },
     id,
-    ({ client, userId, id }) =>
-      client
-        .from(table)
-        .update({ archived_at: new Date().toISOString() })
-        .eq("user_id", userId)
-        .eq("id", id)
-        .is("archived_at", null)
-        .select("id"),
+    activeWrite(table, () => ({ archived_at: new Date().toISOString() })),
   );
 }
 
-// The write of a restore: one archived row of the user back to active, with
-// the fields toFields takes from the parsed input.
+// One row of the user, by id, set to `fields`; each caller adds which
+// archive state it may be in.
+function ownRow<T extends SetupTable>(
+  { client, userId, id }: Pick<UpdateArgs<unknown>, "client" | "userId" | "id">,
+  table: T,
+  fields: Tables[T]["Update"],
+) {
+  const from: SetupTable = table;
+  // supabase-js types an update against one table, not a union of them;
+  // the callers' signatures type the fields per table.
+  return client
+    .from(from)
+    .update(fields as never)
+    .eq("user_id", userId)
+    .eq("id", id);
+}
+
+// The write of an edit: one active row of the user.
+export function activeWrite<I, T extends SetupTable>(
+  table: T,
+  toFields: (input: I) => Tables[T]["Update"],
+) {
+  return (args: UpdateArgs<I>): WriteResponse =>
+    ownRow(args, table, toFields(args.input))
+      .is("archived_at", null)
+      .select("id");
+}
+
+// The write of a restore: one archived row of the user back to active.
 export function restoreWrite<I, T extends SetupTable>(
   table: T,
   toFields: (input: I) => Tables[T]["Update"] = () => ({}),
 ) {
-  return ({ client, userId, input, id }: UpdateArgs<I>): WriteResponse => {
-    const fields: Tables[T]["Update"] = {
-      ...toFields(input),
-      archived_at: null,
-    };
-    const from: SetupTable = table;
-    // supabase-js types an update against one table, not a union of them;
-    // the signature above types the fields per table.
-    return client
-      .from(from)
-      .update(fields as never)
-      .eq("user_id", userId)
-      .eq("id", id)
+  return (args: UpdateArgs<I>): WriteResponse =>
+    ownRow(args, table, { ...toFields(args.input), archived_at: null })
       .not("archived_at", "is", null)
       .select("id");
-  };
 }

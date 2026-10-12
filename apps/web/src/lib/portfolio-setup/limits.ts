@@ -4,7 +4,6 @@ import type { RouteHref } from "@/lib/navigation";
 // limits.test.ts.
 export const NAME_LIMITS = {
   portfolios: { name: 40 },
-  holders: { name: 80 },
   source_connections: { institution: 60 },
   holdings: { label: 80 },
 } as const;
@@ -16,7 +15,6 @@ export type SetupPage = Extract<RouteHref, "/accounts" | "/assets">;
 // The page that lists each table's rows, revalidated after a write.
 export const PAGE_BY_TABLE: Record<SetupTable, SetupPage> = {
   portfolios: "/accounts",
-  holders: "/accounts",
   source_connections: "/accounts",
   holdings: "/assets",
 };
