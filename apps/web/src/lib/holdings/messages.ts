@@ -75,8 +75,8 @@ export const MOVEMENT_MESSAGES: Record<
   invalid: "Revisá los datos del movimiento.",
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
-  oversold: `Una venta quedaría vendiendo más de lo que tenías en ese momento. ${SAME_DAY_ORDER}`,
-  opening_balance: `Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez. ${SAME_DAY_ORDER}`,
+  oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
+  opening_balance: `El saldo inicial va una sola vez, y una tenencia empieza con un saldo inicial o una compra. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
 };
@@ -93,6 +93,6 @@ export const PRICE_MESSAGES: Record<
 // A delete refused for what the holding would be left with.
 export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   ...MOVEMENT_MESSAGES,
-  oversold: `No podés borrarlo: una venta posterior quedaría vendiendo más de lo que tenías. ${SAME_DAY_ORDER}`,
+  oversold: `No podés borrarlo: un movimiento posterior sacaría más unidades de las que tenías. ${SAME_DAY_ORDER}`,
   opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial o una compra. ${SAME_DAY_ORDER}`,
 };

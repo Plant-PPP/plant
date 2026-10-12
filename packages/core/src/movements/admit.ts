@@ -12,6 +12,10 @@ import { compareMovements } from "./order";
 export type MovementRefusal =
   "oversold" | "opening_balance" | "future_date" | "no_rate";
 
+// The refusals that depend on where a movement stands within its day.
+export const isOrderRefusal = (code: string): boolean =>
+  code === "oversold" || code === "opening_balance";
+
 export type Admission =
   | { ok: true; quantity: string }
   | { ok: false; code: MovementRefusal; missing?: UnitFxKind[] };

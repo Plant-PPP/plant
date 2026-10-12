@@ -10,6 +10,7 @@ import {
   type ManualPrice,
   manualPriceSchema,
   isIncome,
+  isOrderRefusal,
   type MovementDraft,
   type SaleResult,
   splitCharges,
@@ -876,9 +877,7 @@ export function writeOperation(
     return writeAt(kept.entry_order);
   }
   const moved = writeAt(state.nextEntryOrder);
-  return !moved.result.ok &&
-    (moved.result.code === "oversold" ||
-      moved.result.code === "opening_balance")
+  return !moved.result.ok && isOrderRefusal(moved.result.code)
     ? writeAt(kept.entry_order)
     : moved;
 }

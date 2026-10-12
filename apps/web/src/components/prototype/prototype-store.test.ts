@@ -698,6 +698,17 @@ describe("entry order", () => {
     });
   });
 
+  it("keeps the place of a purchase turned into a sale on its date", () => {
+    const before = run([
+      [btc("purchase", "2", D1), A],
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "1", D2), S],
+    ]);
+    const relabelled = run([[btc("sale", "1", D2), P, true]], before);
+    expect(entryOf(relabelled, P)).toBe(entryOf(before, P));
+    expect(relabelled.nextEntryOrder).toBe(before.nextEntryOrder);
+  });
+
   it("changes nothing when an edit is refused", () => {
     const before = run([
       [btc("purchase", "1", D2), P],

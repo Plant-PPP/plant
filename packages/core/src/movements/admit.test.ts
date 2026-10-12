@@ -1,4 +1,4 @@
-import { admitMovement, admitMovements } from "./admit";
+import { admitMovement, admitMovements, isOrderRefusal } from "./admit";
 import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 
 const TODAY = "2026-10-12";
@@ -167,4 +167,12 @@ describe("admitMovements", () => {
       quantity: "0",
     });
   });
+});
+
+it("names the refusals that depend on the order within a day", () => {
+  expect(
+    ["oversold", "opening_balance", "future_date", "no_rate"].filter(
+      isOrderRefusal,
+    ),
+  ).toEqual(["oversold", "opening_balance"]);
 });
