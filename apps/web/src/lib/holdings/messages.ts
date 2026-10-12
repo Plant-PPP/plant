@@ -1,4 +1,5 @@
 import type {
+  Movement,
   ChargeKind,
   Denominator,
   Holding,
@@ -45,6 +46,14 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   coupon: "Cupón",
   adjustment: "Ajuste",
 };
+
+// How a list names a movement: an adjustment says which way its units went.
+export const movementLabel = (movement: Movement): string =>
+  movement.kind === "adjustment"
+    ? movement.direction === "in"
+      ? "Ajuste (entran)"
+      : "Ajuste (salen)"
+    : MOVEMENT_KIND_LABELS[movement.kind];
 
 export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
   commission: "Comisión",

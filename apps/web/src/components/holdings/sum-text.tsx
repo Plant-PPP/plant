@@ -117,6 +117,12 @@ export function ShareText({
   );
 }
 
+const SIGN_COLOURS = {
+  [-1]: "text-destructive",
+  0: "text-muted-foreground",
+  1: "text-emerald-700 dark:text-emerald-400",
+} as const;
+
 // A gain or loss: "Calculando…" until the page has it (undefined), a dash
 // when it is unknown in the unit (null); green when up, red when down, muted
 // when it shows as zero, with its percent of cost.
@@ -131,18 +137,18 @@ export function GainLossText({
   if (gain === null) return <MissingFigure text="Sin resultado" />;
   const sign = shownSign(gain.amount, unit);
   return (
-    <span
-      className={cn(
-        sign === 0
-          ? "text-muted-foreground"
-          : sign < 0
-            ? "text-destructive"
-            : "text-emerald-700 dark:text-emerald-400",
-      )}
-    >
+    <span className={SIGN_COLOURS[sign]}>
       {signed(formatAmount(gain.amount, unit), shownAmount(gain.amount, unit))}
       {gain.percent !== null && (
-        <span className="block text-xs">
+        // The percent is coloured by its own sign: a return measured on what
+        // was held can differ from a result net of what is owed.
+        <span
+          className={cn(
+            "block text-xs",
+            shownSign(gain.percent, unit) !== sign &&
+              SIGN_COLOURS[shownSign(gain.percent, unit)],
+          )}
+        >
           {signed(formatShare(gain.percent), gain.percent)}
         </span>
       )}
