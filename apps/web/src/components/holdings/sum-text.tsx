@@ -125,7 +125,7 @@ const SIGN_COLOURS = {
 
 // A gain or loss: "Calculando…" until the page has it (undefined), a dash
 // when it is unknown in the unit (null); green when up, red when down, muted
-// when it shows as zero, with its percent of cost.
+// when it shows as zero, with its percent (of cost, or a return).
 export function GainLossText({
   gain,
   unit,
