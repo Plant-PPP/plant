@@ -469,11 +469,7 @@ export function AssetsSetup({
       from,
       suggestedCost: (fields) =>
         transferCost({
-          accountId: fields.accountId,
-          instrument: fields.instrument,
-          portfolioId: fields.parts[0]?.portfolioId ?? from,
-          currency: fields.currency,
-          date: fields.date,
+          input: toOperationInput(fields, typeOf(fields.instrument)),
           operationId:
             state.kind === "edit"
               ? state.operation.parts[0]!.movement.operation_id

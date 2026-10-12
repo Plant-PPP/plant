@@ -311,120 +311,69 @@ describe("a refused transfer", () => {
 });
 
 describe("the cost a transfer suggests", () => {
-  const query = {
-    accountId: IOL,
-    instrument: "AAPL",
-    portfolioId: PRINCIPAL,
-    currency: "ARS" as const,
-    date: TODAY,
-    operationId: null,
-  };
-  const averageIn = (s: PrototypeState) => {
-    const { quantity, money } = positionIn(s, PRINCIPAL)!;
-    return stored(over(exactOf(money!.cost), exactOf(quantity)));
-  };
-
-  it("is the average cost the units have before it", () => {
-    expect(suggestedTransferCost(state, query)).toBe(averageIn(state));
-  });
-
-  it("leaves out the transfer an edit replaces", () => {
-    const moved = written(transfer("2"));
-    expect(
-      suggestedTransferCost(moved, { ...query, operationId: TRANSFER }),
-    ).toBe(averageIn(state));
-  });
-
-  it("leaves out what comes after its day", () => {
-    const later = writeOperation(
-      state,
-      purchase("10", "1", TODAY),
-      options("e3000000-0000-4000-8000-000000000003"),
-    ).state;
-    expect(suggestedTransferCost(later, { ...query, date: "2026-10-11" })).toBe(
-      averageIn(state),
+  // What its units carried into the portfolio they went to, per unit.
+  const carried = (s: PrototypeState, to: string) => {
+    const holding = appleIn(s, to)!.holding.id;
+    const own = s.movements.get(holding)!;
+    const index = own.findIndex((each) => each.operation_id === TRANSFER);
+    const steps = stepsOf(s, holding, "ars");
+    const before = index === 0 ? null : steps[index - 1]!.position.money!;
+    const cost = exactOf(steps[index]!.position.money!.cost);
+    return stored(
+      over(
+        before ? plus(cost, exactOf(`-${before.cost}`)) : cost,
+        exactOf((own[index] as { quantity: string }).quantity),
+      ),
     );
-  });
-
-  it("is in the dollar the user values in for a dollar cost", () => {
-    const dollars = suggestedTransferCost(state, {
-      ...query,
-      currency: "USD",
+  };
+  const suggested = (
+    s: PrototypeState,
+    input: ReturnType<typeof transfer>,
+    editing = false,
+  ) =>
+    suggestedTransferCost(s, {
+      input,
+      operationId: editing ? TRANSFER : null,
     });
-    expect(dollars).not.toBeNull();
-    expect(Number(dollars)).toBeLessThan(Number(averageIn(state)));
+  const edited = (s: PrototypeState, input: ReturnType<typeof transfer>) => {
+    const write = writeOperation(s, input, { ...options(), replacing: true });
+    expect(write.result.ok).toBe(true);
+    return write.state;
+  };
+
+  it("is the cost the units carry once written", () => {
+    const input = transfer("2");
+    expect(suggested(state, input)).toBe(carried(written(input), LARGO));
   });
 
-  it("leaves the edited transfer out of every portfolio it touches", () => {
-    // Largo holds units of its own, so one can go back to Principal after
-    // the transfer that is then moved past it.
-    const own = writeOperation(
-      state,
-      {
-        ...purchase("5", "100", "2026-09-01"),
-        parts: [{ portfolio_id: LARGO, quantity: "5" }],
-      },
-      options("e3000000-0000-4000-8000-000000000007"),
-    ).state;
-    const there = written(transfer("2", { date: "2026-10-01" }), own);
-    const returned = writeOperation(
-      there,
-      {
-        ...transfer("1", { date: "2026-10-05" }),
-        parts: [
-          { portfolio_id: LARGO, direction: "out", quantity: "1" },
-          {
-            portfolio_id: PRINCIPAL,
-            direction: "in",
-            quantity: "1",
-            price: null,
-          },
-        ],
-      },
-      options("e3000000-0000-4000-8000-000000000005"),
-    );
-    expect(returned.result.ok).toBe(true);
-    expect(
-      suggestedTransferCost(returned.state, {
-        ...query,
-        operationId: TRANSFER,
-      }),
-    ).not.toBeNull();
-  });
-
-  it("leaves out what was entered after it on its own day", () => {
+  it("is what an edit carries, the transfer it replaces left out", () => {
     const moved = written(transfer("2"));
     const later = writeOperation(
       moved,
       purchase("10", "1", TODAY),
       options("e3000000-0000-4000-8000-000000000008"),
     ).state;
-    expect(
-      suggestedTransferCost(later, { ...query, operationId: TRANSFER }),
-    ).toBe(averageIn(state));
+    const input = transfer("3");
+    expect(suggested(later, input, true)).toBe(
+      carried(edited(later, input), LARGO),
+    );
+    expect(suggested(later, input, true)).toBe(suggested(state, input));
   });
 
-  it("keeps the place an edit keeps when going last on the new day would oversell", () => {
+  it("is what an edit moved to a later day carries, where the write puts it", () => {
     const moved = written(transfer("2", { date: "2026-10-01" }));
-    const sold = writeOperation(
+    const bought = writeOperation(
       moved,
-      {
-        ...purchase("2", "1", "2026-10-05"),
-        kind: "sale",
-        parts: [{ portfolio_id: LARGO, quantity: "2" }],
-      },
+      purchase("10", "1", "2026-10-05"),
       options("e3000000-0000-4000-8000-000000000009"),
     ).state;
-    const edit = { ...query, date: "2026-10-05", operationId: TRANSFER };
-    const edited = writeOperation(sold, transfer("2", { date: "2026-10-05" }), {
-      ...options(),
-      replacing: true,
-    });
-    expect(edited.result.ok).toBe(true);
-    expect(suggestedTransferCost(sold, edit)).toBe(averageIn(state));
+    const input = transfer("2", { date: "2026-10-05" });
+    expect(suggested(bought, input, true)).toBe(
+      carried(edited(bought, input), LARGO),
+    );
   });
 
-  it("has none when, without the edited transfer, a later sale would sell what it brought", () => {
+  it("is what an edit carries when it keeps its place on a later day", () => {
     const moved = written(transfer("2", { date: "2026-10-01" }));
     const sold = writeOperation(
       moved,
@@ -435,18 +384,36 @@ describe("the cost a transfer suggests", () => {
       },
       options("e3000000-0000-4000-8000-000000000004"),
     ).state;
-    expect(
-      suggestedTransferCost(sold, {
-        ...query,
-        portfolioId: LARGO,
-        operationId: TRANSFER,
-      }),
-    ).toBeNull();
+    const input = transfer("2", { date: "2026-10-05" });
+    expect(suggested(sold, input, true)).toBe(
+      carried(edited(sold, input), LARGO),
+    );
   });
 
-  it("has none where nothing is held", () => {
+  it("is in the dollar the user values in for a dollar cost", () => {
+    const dollars = suggested(state, { ...transfer("2"), currency: "USD" });
+    expect(dollars).not.toBeNull();
+    expect(Number(dollars)).toBeLessThan(
+      Number(suggested(state, transfer("2"))),
+    );
+  });
+
+  it("has none until the transfer can be written", () => {
     expect(
-      suggestedTransferCost(state, { ...query, portfolioId: LARGO }),
+      suggested(state, {
+        ...transfer("2"),
+        parts: [
+          transfer("2").parts[0]!,
+          { ...transfer("2").parts[1]!, portfolio_id: "" },
+        ],
+      }),
     ).toBeNull();
+    expect(suggested(state, transfer("100000"))).toBeNull();
+  });
+
+  it("changes nothing", () => {
+    const before = state.movements;
+    suggested(state, transfer("2"));
+    expect(state.movements).toBe(before);
   });
 });

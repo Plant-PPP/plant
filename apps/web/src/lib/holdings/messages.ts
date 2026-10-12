@@ -49,8 +49,6 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   transfer: "Traspaso",
 };
 
-// A movement's kind, with the way its units went for an adjustment or a
-// transfer.
 const movementLabel = (movement: Movement): string =>
   "direction" in movement
     ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`

@@ -10,6 +10,7 @@ import {
   type ManualPrice,
   manualPriceSchema,
   isIncome,
+  isTrade,
   isOrderRefusal,
   type MovementDraft,
   type SaleResult,
@@ -27,7 +28,6 @@ import {
   type MovementCursor,
   movementKey,
   type Position,
-  PositionError,
   positionOf,
   replayHoldings,
   type ReferenceDollar,
@@ -37,7 +37,7 @@ import {
   snapshotOn,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { exactOf, minus, stored, sumOrNull } from "@plant/shared";
+import { exactOf, minus, over, stored, sumOrNull } from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
@@ -70,7 +70,6 @@ import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
 import type { Conversation } from "@/lib/assistant/chat";
 import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
-import { averageCost } from "@/lib/holdings/cost-totals";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
@@ -308,59 +307,55 @@ export function positionsOf(
   return positions;
 }
 
-// The cost per unit a transfer's units would carry out of a portfolio's
-// holding: its average cost just before the transfer, in the query's
-// currency, with the transfer an edit replaces left out. The transfer goes
-// where writeOperation puts it: last on its day, unless an edit keeps its
-// place (on its own day, or when going last would leave something taking out
-// more than was held). None when no place holds up.
+// The transfer a suggestion writes, in a state it throws away.
+const SUGGESTED = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+
+// The cost per unit a transfer's units carry when it is written with their
+// cost left to them, in its currency: the write itself, run and thrown away,
+// so the suggestion is what saving it carries. None when it cannot be written.
 export function suggestedTransferCost(
   state: PrototypeState,
-  {
-    accountId,
-    instrument,
-    portfolioId,
-    currency,
-    date,
-    operationId,
-  }: TransferCostQuery,
+  { input, operationId }: TransferCostQuery,
 ): string | null {
-  const stored = holdingIn(state, accountId, instrument, portfolioId);
-  if (!stored) return null;
-  const group = groupOf(state, stored.holding.id);
-  const kept = group
-    .flatMap((id) => state.movements.get(id) ?? [])
-    .find((each) => each.operation_id === operationId);
+  const parsed = operationInputSchema.safeParse(input);
+  if (!parsed.success || parsed.data.kind !== "transfer") return null;
+  const id = operationId ?? SUGGESTED;
+  let ids = 0;
+  const { state: written, result } = writeOperation(
+    state,
+    {
+      ...parsed.data,
+      parts: parsed.data.parts.map((part) => ({ ...part, price: null })),
+    },
+    {
+      operationId: id,
+      replacing: operationId !== null,
+      newId: () =>
+        `ffffffff-ffff-4fff-bfff-${String((ids += 1)).padStart(12, "0")}`,
+    },
+  );
+  if (!result.ok) return null;
   const unit = lift(
-    { amount: { n: 0n, d: 1n }, currency },
+    { amount: { n: 0n, d: 1n }, currency: parsed.data.currency },
     referenceUnit(state.referenceDollar),
     state.referenceDollar,
   ).denominator;
-  const costAt = (rank: number): string | null => {
-    const before = group.flatMap((id) =>
-      (state.movements.get(id) ?? []).filter((each) => {
-        const key = movementKey(each);
-        return (
-          each.operation_id !== operationId &&
-          (key.date < date || (key.date === date && key.rank < rank))
-        );
-      }),
+  for (const [holdingId, own] of written.movements) {
+    const index = own.findIndex(
+      (each) => each.operation_id === id && takesUnits(each),
     );
-    const steps = replayHoldings(before, unit, state.referenceDollar);
-    return averageCost(positionOf(steps.get(stored.holding.id) ?? []));
-  };
-  const places =
-    kept === undefined
-      ? [Number.POSITIVE_INFINITY]
-      : kept.date === date
-        ? [kept.entry_order]
-        : [Number.POSITIVE_INFINITY, kept.entry_order];
-  for (const rank of places) {
-    try {
-      return costAt(rank);
-    } catch (error) {
-      if (!(error instanceof PositionError)) throw error;
-    }
+    const movement = own[index];
+    if (!movement || !isTrade(movement)) continue;
+    const steps = stepsOf(written, holdingId, unit);
+    const before = index === 0 ? EMPTY_POSITION : steps[index - 1]!.position;
+    const after = steps[index]!.position;
+    if (!before.money || !after.money) return null;
+    return stored(
+      over(
+        exactOf(difference(before.money.cost, after.money.cost)),
+        exactOf(movement.quantity),
+      ),
+    );
   }
   return null;
 }
