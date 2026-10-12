@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/data-table";
 import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
+import { movementLabel } from "@/lib/holdings/messages";
 import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type {
   MovementLine,
@@ -133,8 +133,7 @@ export function MovementsTable({
       id: "kind",
       header: "Tipo",
       size: 112,
-      cell: ({ row: { original } }) =>
-        MOVEMENT_KIND_LABELS[original.movement.kind],
+      cell: ({ row: { original } }) => movementLabel(original.movement),
     },
     {
       id: "quantity",
