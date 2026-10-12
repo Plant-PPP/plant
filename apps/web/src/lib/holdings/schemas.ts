@@ -2,6 +2,7 @@ import { classBranch, movementBranch, type OmittableColumn } from "@plant/core";
 import {
   compareExact,
   exactOf,
+  fieldsPassed,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -114,26 +115,18 @@ const transferParts = {
     )
     .length(2),
 };
-const oneEachWay = (
-  operation: {
-    parts: readonly { direction: "in" | "out"; quantity: string }[];
-  },
-  context: z.RefinementCtx,
-) => {
+// One quantity out of one portfolio and into another; skipped once a part
+// failed, since its quantities may not be decimals.
+const oneEachWay = (operation: {
+  parts: readonly { direction: "in" | "out"; quantity: string }[];
+}) => {
   const [first, second] = operation.parts;
-  if (
-    !first ||
-    !second ||
-    first.direction === second.direction ||
-    compareExact(exactOf(first.quantity), exactOf(second.quantity)) !== 0
-  ) {
-    context.addIssue({
-      code: "custom",
-      message:
-        "A transfer moves one quantity out of one portfolio into another",
-      path: ["parts"],
-    });
-  }
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.direction !== second.direction &&
+    compareExact(exactOf(first.quantity), exactOf(second.quantity)) === 0
+  );
 };
 
 export const operationInputSchema = z.discriminatedUnion("kind", [
@@ -172,5 +165,10 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
     .extend(transferParts)
     .strict()
     .superRefine(onePerPortfolio)
-    .superRefine(oneEachWay),
+    .refine(oneEachWay, {
+      message:
+        "A transfer moves one quantity out of one portfolio into another",
+      path: ["parts"],
+      when: fieldsPassed,
+    }),
 ]);

@@ -297,6 +297,8 @@ describe("a refused transfer", () => {
       },
     ],
     ["invalid", { ...transfer("2"), charges: [] }],
+    ["invalid", transfer("abc")],
+    ["invalid", transfer("1234567890123")],
   ])("refuses with %s and changes nothing", (code, input) => {
     expect(writeOperation(state, input, options())).toEqual({
       state,
