@@ -237,5 +237,7 @@ export function refusedMovementField(text: string): MovementField | null {
   if (text === MOVEMENT_MESSAGES.no_rate) return "date";
   if (text === MOVEMENT_MESSAGES.opening_balance) return "kind";
   if (text === MOVEMENT_MESSAGES.not_found) return "parts";
+  if (text === MOVEMENT_MESSAGES.archived_portfolio) return "parts";
+  if (text === MOVEMENT_MESSAGES.archived_account) return "account";
   return null;
 }

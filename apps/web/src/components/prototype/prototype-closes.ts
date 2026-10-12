@@ -46,6 +46,7 @@ import {
 import {
   allRows,
   difference,
+  groupKey,
   lineOf,
   operationOf,
   type PrototypeState,
@@ -389,9 +390,9 @@ export function monthDetail(
   const names = instrumentNames(state.instruments);
   const lines: MonthDetail["lines"] = [];
   for (const ledger of ledgersOf(state, unit)) {
+    const steps = stepsOf(state, ledger.row.id, unit);
     ledger.movements.forEach((movement, index) => {
       if (movement.date <= close.from || movement.date > close.to) return;
-      const steps = stepsOf(state, ledger.row.id, unit);
       const line = lineOf(
         movement,
         index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
@@ -422,7 +423,7 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
   const held = new Map<string, Exact>();
   for (const each of state.holdings) {
     if (each.holding.asset_class !== "instrument") continue;
-    const at = JSON.stringify([each.accountId, each.holding.instrument_symbol]);
+    const at = groupKey(each);
     const upTo = (state.movements.get(each.holding.id) ?? []).filter(
       (movement) => movement.date <= close.to,
     );

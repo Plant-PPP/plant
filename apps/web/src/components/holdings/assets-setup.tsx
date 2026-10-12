@@ -22,13 +22,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { dialogAnswer } from "@/components/portfolio-setup/answers";
+import {
+  dialogAnswer,
+  type MessagesFor,
+} from "@/components/portfolio-setup/answers";
 import {
   applyChange,
   type ListChange,
   temporaryId,
 } from "@/components/portfolio-setup/list-change";
-import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
+import {
+  type Result,
+  useOptimisticWrites,
+} from "@/components/portfolio-setup/optimistic-writes";
 import {
   ArchivedList,
   type Retry,
@@ -69,12 +75,14 @@ import {
   instrumentNames,
 } from "@/lib/holdings/holding-name";
 import {
+  HOLDING_DELETE_MESSAGES,
   MOVEMENT_DELETE_MESSAGES,
   movementLabel,
   MOVEMENT_MESSAGES,
   PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
 import { averageCost, costTotals, gainLoss } from "@/lib/holdings/cost-totals";
+import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
 import type {
   MovementLine,
   MovementResult,
@@ -180,7 +188,7 @@ export type HoldingActions = {
     restore: (id: string) => Promise<WriteResult>;
   };
   // A page that deletes holdings, each with its movements.
-  delete?: (id: string) => Promise<WriteResult>;
+  delete?: (id: string) => Promise<HoldingDeleteResult>;
 };
 
 export type ScopeHrefs = {
@@ -321,14 +329,15 @@ export function AssetsSetup({
     setDialog(next);
   }
 
-  function rowAction(
+  function rowAction<R extends Result>(
     change: ListChange<HoldingRow>,
-    call: () => Promise<WriteResult>,
+    call: () => Promise<R>,
+    messages: MessagesFor<R>,
     row: HoldingRow,
     actionId: "archive" | "restore" | "delete",
     done: string,
   ) {
-    card.rowAction(change, call, (result) => dialogAnswer(result, MESSAGES), {
+    card.rowAction(change, call, (result) => dialogAnswer(result, messages), {
       done: `${done} ${named(row)}`,
       rowId: row.id,
       actionId,
@@ -763,6 +772,7 @@ export function AssetsSetup({
                   rowAction(
                     { kind: "archive", id: row.id },
                     () => archiving.archive(row.id),
+                    MESSAGES,
                     row,
                     "archive",
                     "Archivaste",
@@ -787,6 +797,7 @@ export function AssetsSetup({
                       rowAction(
                         { kind: "delete", id: row.id },
                         () => deleteHolding(row.id),
+                        HOLDING_DELETE_MESSAGES,
                         row,
                         "delete",
                         "Borraste",
@@ -860,6 +871,7 @@ export function AssetsSetup({
             rowAction(
               { kind: "restore", row },
               () => archiving.restore(row.id),
+              MESSAGES,
               row,
               "restore",
               "Restauraste",

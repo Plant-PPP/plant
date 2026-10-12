@@ -14,6 +14,7 @@ import {
   type MovementDraft,
   type SaleResult,
   splitCharges,
+  startsHolding,
   takesUnits,
   compareKeys,
   compareMovements,
@@ -26,7 +27,7 @@ import {
   type MovementCursor,
   movementKey,
   type Position,
-  replay,
+  replayHoldings,
   type ReferenceDollar,
   type StoredQuotes,
   snapshotOn,
@@ -66,6 +67,7 @@ import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
 import type { Fixtures } from "@/lib/prototype/fixtures";
 
 // The prototype's data, held in memory: the fixtures as the user changes them.
@@ -199,30 +201,88 @@ export function holdingsView(state: PrototypeState): HoldingsView {
   };
 }
 
-// Each holding's steps in a unit, kept while its movements stay the same
-// array.
-const stepCache = new WeakMap<
-  readonly Movement[],
-  Map<string, readonly LedgerStep[]>
+// The holdings whose movements replay together: one account's holdings of an
+// instrument, which transfers move units between. Any other holding is a
+// group of its own.
+export const groupKey = (stored: StoredHolding): string =>
+  stored.holding.asset_class === "instrument"
+    ? JSON.stringify([stored.accountId, stored.holding.instrument_symbol])
+    : JSON.stringify([stored.holding.id]);
+
+const groupIndex = new WeakMap<
+  readonly StoredHolding[],
+  Map<string, readonly string[]>
 >();
+
+// The ids of the holdings in a holding's group, itself included.
+export function groupOf(
+  state: PrototypeState,
+  holdingId: string,
+): readonly string[] {
+  let byHolding = groupIndex.get(state.holdings);
+  if (!byHolding) {
+    const members = new Map<string, string[]>();
+    for (const each of state.holdings) {
+      const key = groupKey(each);
+      members.set(key, [...(members.get(key) ?? []), each.holding.id]);
+    }
+    byHolding = new Map();
+    for (const ids of members.values()) {
+      for (const id of ids) byHolding.set(id, ids);
+    }
+    groupIndex.set(state.holdings, byHolding);
+  }
+  return byHolding.get(holdingId) ?? [holdingId];
+}
+
+// A group's steps, by holding and unit, kept while each of its holdings'
+// movements stays the same array.
+type GroupSteps = {
+  members: readonly (readonly Movement[])[];
+  byKey: Map<string, Map<string, LedgerStep[]>>;
+};
+const stepCache = new WeakMap<readonly Movement[], GroupSteps>();
+const NO_STEPS: readonly LedgerStep[] = [];
 
 export function stepsOf(
   state: PrototypeState,
   holdingId: string,
   unit: Denominator,
 ): readonly LedgerStep[] {
-  const movements = state.movements.get(holdingId) ?? [];
-  let byUnit = stepCache.get(movements);
-  if (!byUnit) {
-    byUnit = new Map();
-    stepCache.set(movements, byUnit);
+  const members = groupOf(state, holdingId).flatMap((id) => {
+    const own = state.movements.get(id);
+    return own && own.length > 0 ? [own] : [];
+  });
+  const first = members[0];
+  if (!first) return NO_STEPS;
+  let group = stepCache.get(first);
+  if (
+    !group ||
+    group.members.length !== members.length ||
+    group.members.some((each, index) => each !== members[index])
+  ) {
+    group = { members, byKey: new Map() };
+    stepCache.set(first, group);
   }
   const key = `${unit}:${state.referenceDollar}`;
-  const cached = byUnit.get(key);
-  if (cached) return cached;
-  const steps = replay(movements, unit, state.referenceDollar);
-  byUnit.set(key, steps);
-  return steps;
+  let steps = group.byKey.get(key);
+  if (!steps) {
+    steps = replayHoldings(members.flat(), unit, state.referenceDollar);
+    group.byKey.set(key, steps);
+  }
+  return steps.get(holdingId) ?? NO_STEPS;
+}
+
+// The revisions with every holding in the groups of `holdingIds` moved on, so
+// the tables of the holdings a write reaches load again.
+function bumpGroups(
+  state: PrototypeState,
+  revisions: Map<string, number>,
+  holdingIds: readonly string[],
+): Map<string, number> {
+  const reached = new Set(holdingIds.flatMap((id) => groupOf(state, id)));
+  for (const id of reached) revisions.set(id, (revisions.get(id) ?? 0) + 1);
+  return revisions;
 }
 
 export function positionsOf(
@@ -687,10 +747,7 @@ function withMovements(
   return {
     ...state,
     movements: new Map(state.movements).set(holdingId, movements),
-    revisions: new Map(state.revisions).set(
-      holdingId,
-      (state.revisions.get(holdingId) ?? 0) + 1,
-    ),
+    revisions: bumpGroups(state, new Map(state.revisions), [holdingId]),
     holdings: state.holdings.map((each) =>
       each.holding.id !== holdingId
         ? each
@@ -705,16 +762,21 @@ function withMovements(
   };
 }
 
-// Whether a holding sits in an account or portfolio the user archived, where
-// no holding may stay open.
-const archivedHome = (state: PrototypeState, holdingId: string): boolean => {
+// Where a holding sits that the user archived, if it does: no holding may
+// stay open there.
+function archivedHome(
+  state: PrototypeState,
+  holdingId: string,
+): "archived_account" | "archived_portfolio" | null {
   const stored = state.holdings.find((each) => each.holding.id === holdingId);
-  return (
-    stored !== undefined &&
-    (state.archivedAccounts.some(({ id }) => id === stored.accountId) ||
-      state.archivedPortfolios.some(({ id }) => id === stored.portfolioId))
-  );
-};
+  if (!stored) return null;
+  if (state.archivedAccounts.some(({ id }) => id === stored.accountId)) {
+    return "archived_account";
+  }
+  return state.archivedPortfolios.some(({ id }) => id === stored.portfolioId)
+    ? "archived_portfolio"
+    : null;
+}
 
 // The open or closed holding of an instrument in an account and portfolio.
 export const holdingIn = (
@@ -777,11 +839,10 @@ export function writeOperation(
   const sizes = parts.map((part) =>
     "quantity" in part ? part.quantity : part.amount,
   );
-  const charges = splitCharges(operation.charges, sizes);
-  const addsUnits =
-    operation.kind === "opening_balance" ||
-    operation.kind === "purchase" ||
-    (operation.kind === "adjustment" && operation.direction === "in");
+  const charges = splitCharges(
+    "charges" in operation ? operation.charges : [],
+    sizes,
+  );
   // An edit first takes the operation's movements out of their holdings.
   const without = new Map<string, Movement[]>();
   for (const [holdingId, own] of state.movements) {
@@ -796,29 +857,26 @@ export function writeOperation(
     let next = state;
     const touched = new Map(without);
     for (const [index, part] of parts.entries()) {
-      const portfolio = state.portfolios.find(
-        ({ id }) => id === part.portfolio_id,
-      );
-      if (!portfolio) return refused(state, { ok: false, code: "not_found" });
-      let stored = holdingIn(next, account.id, instrument.symbol, portfolio.id);
-      if (!stored) {
-        if (!addsUnits) return refused(state, { ok: false, code: "not_found" });
-        const created = createdHolding(next, account, instrument, portfolio, {
-          id: newId(),
-          quantity: sizes[index]!,
+      const { portfolio_id: portfolioId, ...ownFields } = part;
+      const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
+      if (!portfolio) {
+        return refused(state, {
+          ok: false,
+          code: state.archivedPortfolios.some(({ id }) => id === portfolioId)
+            ? "archived_portfolio"
+            : "not_found",
         });
-        next = created;
-        stored = next.holdings[0]!;
       }
-      const holdingId = stored.holding.id;
-      const own = touched.get(holdingId) ?? [
-        ...(next.movements.get(holdingId) ?? []),
-      ];
+      const stored = holdingIn(
+        next,
+        account.id,
+        instrument.symbol,
+        portfolio.id,
+      );
+      const holdingId = stored?.holding.id ?? newId();
       const draft = {
         ...fields,
-        ...("quantity" in part
-          ? { quantity: part.quantity }
-          : { amount: part.amount }),
+        ...ownFields,
         charges: charges[index]!,
         id: newId(),
         holding_id: holdingId,
@@ -826,6 +884,19 @@ export function writeOperation(
         entry_order: entryOrder,
         rates,
       } as MovementDraft;
+      // A part that brings units in creates its portfolio's missing holding.
+      if (!stored) {
+        if (!startsHolding(draft as Movement)) {
+          return refused(state, { ok: false, code: "not_found" });
+        }
+        next = createdHolding(next, account, instrument, portfolio, {
+          id: holdingId,
+          quantity: sizes[index]!,
+        });
+      }
+      const own = touched.get(holdingId) ?? [
+        ...(next.movements.get(holdingId) ?? []),
+      ];
       const admitted = admitMovement({ prior: null, after: own }, draft, {
         today: state.today,
       });
@@ -837,15 +908,16 @@ export function writeOperation(
     for (const [holdingId, own] of touched) {
       // A holding an edit left with no movement goes, as a delete would leave it.
       if (own.length === 0) {
-        next = deleteHolding(next, holdingId).state;
+        next = removeHolding(next, holdingId);
         continue;
       }
       const admitted = admitMovements({ prior: null, after: own });
       if (!admitted.ok) {
         return refused(state, { ok: false, code: admitted.code });
       }
-      if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
-        return refused(state, { ok: false, code: "not_found" });
+      const archived = archivedHome(next, holdingId);
+      if (exactOf(admitted.quantity).n > 0n && archived) {
+        return refused(state, { ok: false, code: archived });
       }
       next = withMovements(
         next,
@@ -951,48 +1023,33 @@ export function setPrice(
 }
 
 // A holding and every movement it has. An operation it shared keeps its other
-// portfolios' parts.
+// portfolios' parts. A holding with a transfer is refused: the transfer's
+// other side would be left alone.
 export function deleteHolding(
   state: PrototypeState,
   id: string,
-): Write<WriteResult> {
+): Write<HoldingDeleteResult> {
   if (!state.holdings.some((each) => each.holding.id === id)) {
     return refused(state, { ok: false, code: "not_found" });
   }
+  if ((state.movements.get(id) ?? []).some(({ kind }) => kind === "transfer")) {
+    return refused(state, { ok: false, code: "holding_has_transfers" });
+  }
+  return { state: removeHolding(state, id), result: { ok: true, id } };
+}
+
+function removeHolding(state: PrototypeState, id: string): PrototypeState {
+  const holdings = state.holdings.filter((each) => each.holding.id !== id);
   // A holding with no movements leaves the movements map the same object,
   // so nothing that watches it sees a change.
-  if (!state.movements.has(id)) {
-    return {
-      state: {
-        ...state,
-        holdings: state.holdings.filter((each) => each.holding.id !== id),
-      },
-      result: { ok: true, id },
-    };
-  }
+  if (!state.movements.has(id)) return { ...state, holdings };
   const movements = new Map(state.movements);
   movements.delete(id);
-  // The holdings that shared an operation with it show that operation with
-  // one part fewer, so their tables load again.
-  const operations = new Set(
-    (state.movements.get(id) ?? []).map((each) => each.operation_id),
-  );
-  const revisions = new Map(state.revisions);
+  // The holdings it replayed with load their tables again: an operation it
+  // shared shows one part fewer.
+  const revisions = bumpGroups(state, new Map(state.revisions), [id]);
   revisions.delete(id);
-  for (const [holdingId, own] of movements) {
-    if (own.some((each) => operations.has(each.operation_id))) {
-      revisions.set(holdingId, (revisions.get(holdingId) ?? 0) + 1);
-    }
-  }
-  return {
-    state: {
-      ...state,
-      holdings: state.holdings.filter((each) => each.holding.id !== id),
-      movements,
-      revisions,
-    },
-    result: { ok: true, id },
-  };
+  return { ...state, holdings, movements, revisions };
 }
 
 // Every part of an operation, each holding re-admitted without it: refused
@@ -1009,15 +1066,16 @@ export function deleteOperation(
     found = true;
     const kept = own.filter((each) => each.operation_id !== operationId);
     if (kept.length === 0) {
-      next = deleteHolding(next, holdingId).state;
+      next = removeHolding(next, holdingId);
       continue;
     }
     const admitted = admitMovements({ prior: null, after: kept });
     if (!admitted.ok) {
       return refused(state, { ok: false, code: admitted.code });
     }
-    if (exactOf(admitted.quantity).n > 0n && archivedHome(next, holdingId)) {
-      return refused(state, { ok: false, code: "not_found" });
+    const archived = archivedHome(next, holdingId);
+    if (exactOf(admitted.quantity).n > 0n && archived) {
+      return refused(state, { ok: false, code: archived });
     }
     next = withMovements(next, holdingId, kept, admitted.quantity);
   }

@@ -84,5 +84,11 @@ export type MovementResult =
   | { ok: true; id: string }
   | {
       ok: false;
-      code: "invalid" | "not_found" | "failed" | MovementRefusal;
+      code:
+        | "invalid"
+        | "not_found"
+        | "failed"
+        | "archived_portfolio"
+        | "archived_account"
+        | MovementRefusal;
     };

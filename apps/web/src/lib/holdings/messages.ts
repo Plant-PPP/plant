@@ -7,8 +7,9 @@ import type {
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
-import { FAILED } from "@/lib/portfolio-setup/messages";
+import { FAILED, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 
+import type { HoldingDeleteResult } from "./delete-result";
 import type { MovementResult } from "./movements-input";
 import type { PriceResult } from "./price-input";
 
@@ -79,6 +80,8 @@ export const MOVEMENT_MESSAGES: Record<
   opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
+  archived_portfolio: "Esa cartera está archivada: restaurala primero.",
+  archived_account: "Esa cuenta está archivada: restaurala primero.",
 };
 
 export const PRICE_MESSAGES: Record<
@@ -95,4 +98,13 @@ export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   ...MOVEMENT_MESSAGES,
   oversold: `No podés borrarlo: un movimiento posterior sacaría más unidades de las que tenías. ${SAME_DAY_ORDER}`,
   opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
+};
+
+export const HOLDING_DELETE_MESSAGES: Record<
+  Extract<HoldingDeleteResult, { ok: false }>["code"],
+  string
+> = {
+  ...WRITE_MESSAGES.holdings,
+  holding_has_transfers:
+    "Tiene traspasos con otra cartera. Borralos primero desde sus movimientos.",
 };
