@@ -728,7 +728,9 @@ describe("entry order", () => {
       ],
     ]);
     const moved = run([[split(D3), P, true]], before);
-    expect(entryOf(moved, P)).toBe(entryOf(before, P));
+    expect(
+      operationOf(moved, P)!.parts.map((part) => part.movement.entry_order),
+    ).toEqual([entryOf(before, P), entryOf(before, P)]);
     expect(positionIn(moved).quantity).toBe("1");
   });
 
