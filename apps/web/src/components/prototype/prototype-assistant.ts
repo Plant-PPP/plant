@@ -1,0 +1,437 @@
+import {
+  DENOMINATORS,
+  type QuoteSnapshot,
+  valueLiabilities,
+} from "@plant/core";
+import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
+
+import {
+  formatAmount,
+  formatFraction,
+  formatShare,
+  percentOf,
+  shownAmount,
+  shownSign,
+  signed,
+} from "@/lib/format/amount";
+import { folded } from "@/lib/format/text";
+import {
+  type AssistantMessage,
+  type ChatUnit,
+  type Conversation,
+  titleOf,
+} from "@/lib/assistant/chat";
+import {
+  HOLDING_CLASS_GROUP_LABELS,
+  type HoldingClass,
+} from "@/lib/holdings/classes";
+import { instrumentSummary } from "@/lib/holdings/instrument-history";
+import { holdingsValuation } from "@/lib/holdings/valuation-view";
+import { monthOf } from "@/lib/summary/closes";
+
+import { closesOf, yearsOfCloses } from "./prototype-closes";
+import {
+  holdingsView,
+  instrumentHoldings,
+  type PrototypeState,
+} from "./prototype-store";
+
+type Answer = Omit<AssistantMessage, "id">;
+
+// A question that asks what to do, not what happened: "¿qué compro?",
+// "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?",
+// "¿vendo Apple?", "¿qué hago con mis Tesla?", "¿es buen momento?".
+const ADVICE =
+  /\b(que|cual|cuanto) (compro|vendo|invierto)\b|^\W*(compro|vendo|invierto)\b|conviene|recomend|(deberia|debo|tengo que) (comprar|vender|invertir)|me sale (comprar|vender)|que hago con|buen momento/;
+
+// Where a result comes from, bar by bar: what is left once sales (net of
+// their charges), income and the units held are counted is what purchases'
+// charges and withholding took, so the bars add up to the result.
+function resultBars(
+  result: string,
+  unit: ChatUnit,
+  bars: { label: string; value: string }[],
+): { label: string; value: string }[] {
+  const rest = stored(
+    minus(exactOf(result), plus(...bars.map(({ value }) => exactOf(value)))),
+  );
+  return shownSign(rest, unit) === 0
+    ? bars
+    : [...bars, { label: "Gastos y retenciones", value: rest }];
+}
+
+// Text with only its letters and digits.
+const compact = (text: string) => text.replace(/[^a-z0-9]/g, "");
+
+// Whether consecutive whole words of a question spell `name` once joined, so
+// "Mercado Libre" finds "MercadoLibre" and "Coca Cola" finds "Coca-Cola",
+// while "antes la" never finds "Tesla".
+const namesIn = (words: readonly string[], name: string) => {
+  const wanted = compact(folded(name));
+  return words.some((_, start) => {
+    let joined = "";
+    for (const word of words.slice(start)) {
+      joined += word;
+      if (joined === wanted) return true;
+      if (joined.length >= wanted.length) return false;
+    }
+    return false;
+  });
+};
+
+// What an answer about a year that left something out adds.
+const PARTIAL_YEAR = " Al año le falta algún dato; mirá su cierre.";
+
+// A figure in words by the sign it shows with: `down` or `up` given its
+// unsigned size ("perdió US$ 10", "ganó US$ 10"), or `even` when it shows as
+// zero.
+type Wording = {
+  down: (size: string) => string;
+  up: (size: string) => string;
+  even: string;
+};
+
+const worded = (shown: string, size: string, words: Wording) => {
+  const { n } = exactOf(shown);
+  if (n === 0n) return words.even;
+  return n < 0n ? words.down(size) : words.up(size);
+};
+
+// A return, as its percent shows.
+const byShare = (share: string, words: Wording) => {
+  const percent = percentOf(share);
+  return worded(percent, formatShare(percent.replace(/^-/, "")), words);
+};
+
+// What a figure that left something out says after it.
+const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
+
+// An amount, as it shows in the unit.
+const bySign = (amount: string, unit: ChatUnit, words: Wording) => {
+  const shown = shownAmount(amount, unit);
+  return worded(shown, formatAmount(shown.replace(/^-/, ""), unit), words);
+};
+
+const moved = (amount: string, unit: ChatUnit) =>
+  bySign(amount, unit, {
+    down: (size) => `perdió ${size}`,
+    up: (size) => `ganó ${size}`,
+    even: "no ganó ni perdió",
+  });
+
+const FOLLOW_UPS = {
+  netWorth: ["¿Cómo me fue este año?", "¿Cuánto debo?"],
+  year: ["¿Cuánto cobré de dividendos?", "¿Cuánto vale mi patrimonio hoy?"],
+  income: ["¿Cómo me fue este año?", "¿Cómo le fue a Apple?"],
+  debts: ["¿Cuánto vale mi patrimonio hoy?", "¿Cómo me fue este año?"],
+  instrument: ["¿Cómo me fue este año?", "¿Cuánto cobré de dividendos?"],
+};
+
+// What the assistant would answer, standing in for the model: it picks what
+// the question is about and builds the answer from the user's own data, its
+// figures and its chart computed here, never written by a model. A question
+// about what to buy or sell gets the fixed answer.
+export function prototypeAnswer(
+  state: PrototypeState,
+  question: string,
+  unit: ChatUnit,
+  snapshot: QuoteSnapshot,
+): Answer {
+  const asked = folded(question);
+  const words = asked.split(/[^a-z0-9]+/);
+  const spec = DENOMINATORS[unit];
+  const dollar = "fx" in spec ? snapshot.fx[spec.fx] : undefined;
+  const rate =
+    "fx" in spec && dollar
+      ? { label: spec.fx.toUpperCase(), sell: dollar.sell }
+      : null;
+  const base = { role: "assistant" as const, asOf: state.today, rate };
+
+  if (ADVICE.test(asked)) {
+    return {
+      ...base,
+      text: "No te puedo decir qué comprar ni qué vender: Plant explica tus datos y no recomienda. Sí te puedo contar cómo vienen tus inversiones, cuánto ganaste o cuánto cobraste.",
+      chart: null,
+      sources: [],
+      followUps: ["¿Cómo me fue este año?", "¿Cuánto vale mi patrimonio hoy?"],
+    };
+  }
+
+  const instrument = state.instruments.find(
+    (each) => words.includes(folded(each.symbol)) || namesIn(words, each.name),
+  );
+  if (instrument) {
+    const { holdings, flows } = instrumentHoldings(
+      state,
+      instrument.symbol,
+      unit,
+      snapshot,
+    );
+    if (holdings.length === 0) {
+      return {
+        ...base,
+        text: `No tenés ni tuviste ${instrument.name} en Plant.`,
+        chart: null,
+        sources: ["Tus tenencias"],
+        followUps: FOLLOW_UPS.instrument,
+      };
+    }
+    const summary = instrumentSummary(holdings, flows, state.today);
+    const returns = summary.returns;
+    const held = exactOf(summary.quantity).n !== 0n;
+    return {
+      ...base,
+      text: [
+        !held
+          ? `Ya no tenés ${instrument.symbol}.`
+          : `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
+        returns
+          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share && shownSign(returns.result, unit) !== 0 ? ` (${formatFraction(returns.share.replace(/^-/, ""))} de lo que pusiste)` : ""}.${returns.annual ? ` ${byShare(returns.annual, { down: (size) => `Por año, perdió un ${size}.`, up: (size) => `Por año, rindió un ${size}.`, even: "Por año, no rindió ni perdió." })}` : ""}`
+          : "",
+        held && summary.unrealized
+          ? bySign(summary.unrealized.amount, unit, {
+              down: (size) =>
+                `Lo que tenés hoy vale ${size} menos de lo que te costó.`,
+              up: (size) =>
+                `Lo que tenés hoy vale ${size} más de lo que te costó.`,
+              even: "Lo que tenés hoy vale lo que te costó.",
+            })
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      chart: returns
+        ? {
+            title: `${instrument.symbol}: de dónde sale el resultado`,
+            unit,
+            bars: resultBars(returns.result, unit, [
+              { label: "Ventas", value: summary.realized ?? "0" },
+              { label: "Cobros", value: summary.income ?? "0" },
+              ...(held
+                ? [
+                    {
+                      label: "Lo que tenés",
+                      value: summary.unrealized?.amount ?? "0",
+                    },
+                  ]
+                : []),
+            ]),
+          }
+        : null,
+      sources: ["Movimientos", "Cotizaciones"],
+      followUps: FOLLOW_UPS.instrument,
+    };
+  }
+
+  const closes = closesOf(state, unit);
+  const years = yearsOfCloses(closes);
+  const thisYear = years[0];
+
+  if (/deud|debo|hipotec|prestamo|tarjeta/.test(asked)) {
+    const owed = valueLiabilities(state.liabilities, snapshot, {
+      denominator: unit,
+      referenceDollar: state.referenceDollar,
+    });
+    if (state.liabilities.length === 0) {
+      return {
+        ...base,
+        text: "No tenés deudas cargadas en Plant.",
+        chart: null,
+        sources: ["Deudas"],
+        followUps: FOLLOW_UPS.debts,
+      };
+    }
+    const byId = new Map(owed.items.map((item) => [item.id, item.value]));
+    // Only the debts with a value in the unit are ranked and drawn.
+    const valued = state.liabilities
+      .flatMap((debt) => {
+        const value = byId.get(debt.id);
+        return value ? [{ label: debt.label, value }] : [];
+      })
+      .sort((a, b) => compareDecimals(b.value, a.value));
+    const count = state.liabilities.length;
+    return {
+      ...base,
+      text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${count === 1 ? "1 deuda" : `${count} deudas`}.${
+        count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
+      }`,
+      chart:
+        valued.length > 0
+          ? { title: "Lo que debés", unit, bars: valued }
+          : null,
+      sources: ["Deudas", "Cotizaciones"],
+      followUps: FOLLOW_UPS.debts,
+    };
+  }
+
+  if (
+    /dividend|cupon|cobr|\brentas?\b(?! (fija|variable))/.test(asked) &&
+    thisYear
+  ) {
+    return {
+      ...base,
+      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
+      chart: {
+        title: `Cobros de ${thisYear.year}`,
+        unit,
+        bars: thisYear.months.map((month) => ({
+          label: monthOf(month.period).slice(0, 3),
+          value: month.figures.income,
+        })),
+      },
+      sources: ["Movimientos"],
+      followUps: FOLLOW_UPS.income,
+    };
+  }
+
+  if (
+    /rend|rind|rentab|fue|gan|perd|resultado|ano|mes/.test(asked) &&
+    thisYear
+  ) {
+    const current = closes.at(-1)!;
+    return {
+      ...base,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}.${bySign(
+        thisYear.totals.contributed,
+        unit,
+        {
+          down: (size) => ` Sacaste ${size} neto.`,
+          up: (size) => ` Pusiste ${size} neto.`,
+          even: "",
+        },
+      )}${
+        thisYear.totals.share === null
+          ? ""
+          : ` ${byShare(thisYear.totals.share, {
+              down: (size) =>
+                `Sin contar lo que pusiste, lo que tenías perdió un ${size}.`,
+              up: (size) =>
+                `Sin contar lo que pusiste, lo que tenías rindió un ${size}.`,
+              even: "Sin contar lo que pusiste, lo que tenías no rindió ni perdió.",
+            })}`
+      }${thisYear.complete ? "" : PARTIAL_YEAR} En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
+      chart: {
+        title: `Resultado por mes de ${thisYear.year}`,
+        unit,
+        bars: thisYear.months.map((month) => ({
+          label: monthOf(month.period).slice(0, 3),
+          value: month.figures.result,
+        })),
+      },
+      sources: ["Cierres", "Cotizaciones"],
+      followUps: FOLLOW_UPS.year,
+    };
+  }
+
+  const today = closes.at(-1);
+  if (/patrimon|tengo|vale|neto|total/.test(asked) && today) {
+    const valuation = holdingsValuation({
+      holdings: holdingsView(state).active,
+      truncated: false,
+      snapshot,
+      unit,
+      referenceDollar: state.referenceDollar,
+    });
+    const owed = valueLiabilities(state.liabilities, snapshot, {
+      denominator: unit,
+      referenceDollar: state.referenceDollar,
+    });
+    return {
+      ...base,
+      // Today's net worth as Resumen shows it, and what is held as that
+      // figure plus what is owed, so the three add up.
+      text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
+      chart: {
+        title: "Cómo está repartido",
+        unit,
+        bars: (
+          Object.entries(valuation.classes) as [
+            HoldingClass,
+            { value: string },
+          ][]
+        )
+          .map(([holdingClass, sum]) => ({
+            label: HOLDING_CLASS_GROUP_LABELS[holdingClass],
+            value: sum.value,
+          }))
+          .sort((a, b) => compareDecimals(b.value, a.value)),
+      },
+      sources: ["Tus tenencias", "Deudas", "Cotizaciones"],
+      followUps: FOLLOW_UPS.netWorth,
+    };
+  }
+
+  return {
+    ...base,
+    text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
+    chart: null,
+    sources: [],
+    followUps: ["¿Cuánto vale mi patrimonio hoy?", "¿Cómo me fue este año?"],
+  };
+}
+
+// A question in a conversation; a new one when no conversation has that id.
+export function addQuestion(
+  state: PrototypeState,
+  {
+    conversationId,
+    id,
+    question,
+    unit,
+  }: {
+    conversationId: string;
+    id: string;
+    question: string;
+    unit: ChatUnit;
+  },
+): PrototypeState {
+  const message = { id, role: "user" as const, text: question };
+  const existing = state.conversations.find(
+    (each) => each.id === conversationId,
+  );
+  const conversation: Conversation = existing
+    ? {
+        ...existing,
+        unit,
+        messages: [...existing.messages, message],
+        updatedOn: state.today,
+      }
+    : {
+        id: conversationId,
+        title: titleOf(question),
+        unit,
+        messages: [message],
+        updatedOn: state.today,
+      };
+  return {
+    ...state,
+    askedOn: [...state.askedOn, state.today],
+    conversations: [
+      conversation,
+      ...state.conversations.filter((each) => each.id !== conversationId),
+    ],
+  };
+}
+
+export function addAnswer(
+  state: PrototypeState,
+  conversationId: string,
+  message: AssistantMessage,
+): PrototypeState {
+  return {
+    ...state,
+    conversations: state.conversations.map((each) =>
+      each.id === conversationId
+        ? { ...each, messages: [...each.messages, message] }
+        : each,
+    ),
+  };
+}
+
+export const deleteConversation = (
+  state: PrototypeState,
+  id: string,
+): PrototypeState => ({
+  ...state,
+  conversations: state.conversations.filter((each) => each.id !== id),
+});

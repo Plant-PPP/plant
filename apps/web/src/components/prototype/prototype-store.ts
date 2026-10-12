@@ -60,6 +60,7 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
+import type { Conversation } from "@/lib/assistant/chat";
 import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
@@ -94,6 +95,10 @@ export type PrototypeState = {
   // The day of each upload, deleted accounts' included: the monthly limit
   // counts them all.
   uploadedOn: string[];
+  // Newest first.
+  conversations: Conversation[];
+  // The day of each question asked, deleted conversations' included.
+  askedOn: string[];
 };
 
 export type StoredHolding = {
@@ -136,6 +141,8 @@ export function initialState(
     liabilities: fixtures.liabilities,
     imports: [],
     uploadedOn: [],
+    conversations: [],
+    askedOn: [],
   };
 }
 

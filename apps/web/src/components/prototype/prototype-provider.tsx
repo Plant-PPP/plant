@@ -14,6 +14,7 @@ import type {
   MovementActions,
   PriceActions,
 } from "@/components/holdings/assets-setup";
+import type { AssistantActions } from "@/components/assistant/assistant-page";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
@@ -36,6 +37,7 @@ import {
 import * as accounts from "./prototype-accounts-store";
 import * as debts from "./prototype-debts-store";
 import * as imports from "./prototype-imports-store";
+import * as assistant from "./prototype-assistant";
 import { markRecalculated } from "./prototype-closes";
 import { usePrototypeStore } from "./use-prototype-store";
 
@@ -56,6 +58,7 @@ type Prototype = {
     portfolios: NamedRowsActions;
     debts: DebtActions;
     imports: ImportActions & ReviewActions;
+    assistant: AssistantActions;
   };
 };
 
@@ -147,6 +150,42 @@ export function PrototypeProvider({
       restore: (id, input) =>
         write((s) => accounts.restoreAccount(s, id, input)),
       delete: (id) => write((s) => accounts.deleteAccount(s, id)),
+    },
+    assistant: {
+      // The question shows at once and the answer a moment later, as the
+      // model's would after reading its tools.
+      ask: (conversationId, question, unit) =>
+        new Promise((resolve) => {
+          const id = crypto.randomUUID();
+          void write((s) => ({
+            state: assistant.addQuestion(s, {
+              conversationId,
+              id: crypto.randomUUID(),
+              question,
+              unit,
+            }),
+            result: null,
+          }));
+          later(() => {
+            void write((s) => ({
+              state: assistant.addAnswer(s, conversationId, {
+                id,
+                ...assistant.prototypeAnswer(
+                  s,
+                  question,
+                  unit,
+                  withManualPrices(snapshot, s.manualPrices).snapshot,
+                ),
+              }),
+              result: null,
+            })).then(() => resolve(id));
+          }, 1100);
+        }),
+      delete: (conversationId) =>
+        void write((s) => ({
+          state: assistant.deleteConversation(s, conversationId),
+          result: null,
+        })),
     },
     imports: {
       // Each file is queued, read a moment later and ready after that, as
