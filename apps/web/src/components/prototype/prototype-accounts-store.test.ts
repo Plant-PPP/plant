@@ -1,16 +1,19 @@
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  accountsDeletingUploads,
   archiveAccount,
   archivePortfolio,
   createAccount,
   createPortfolio,
   deleteAccount,
   deletePortfolio,
+  deletesUploads,
   renamePortfolio,
   restorePortfolio,
 } from "./prototype-accounts-store";
-import { holdingsView, initialState } from "./prototype-store";
+import { addImport, finishReading } from "./prototype-imports-store";
+import { deleteHolding, holdingsView, initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -85,4 +88,62 @@ it("deletes only what nothing uses", () => {
   const deleted = deletePortfolio(created, NEW_ID);
   expect(deleted.result).toEqual({ ok: true, id: NEW_ID });
   expect(deleted.state.portfolios.some((row) => row.id === NEW_ID)).toBe(false);
+});
+
+describe("deletesUploads", () => {
+  const LEMON = "e3000000-0000-4000-8000-000000000002";
+  const UPLOAD = "e3000000-0000-4000-8000-000000000003";
+  const lemon = createAccount(
+    state,
+    {
+      institution: "Lemon",
+      holder: "self",
+      includeInTaxReport: true,
+      defaultPortfolioId: PRINCIPAL,
+    },
+    LEMON,
+  ).state;
+  const upload = (s: typeof state, accountId: string) =>
+    addImport(s, { id: UPLOAD, fileName: "resumen.pdf", accountId }).state;
+
+  it("lists the accounts, archived ones too, whose delete takes an upload", () => {
+    expect(accountsDeletingUploads(lemon)).toEqual([]);
+    expect(accountsDeletingUploads(upload(lemon, LEMON))).toEqual([LEMON]);
+    const archived = archiveAccount(upload(lemon, LEMON), LEMON).state;
+    expect(archived.archivedAccounts.some((row) => row.id === LEMON)).toBe(
+      true,
+    );
+    expect(accountsDeletingUploads(archived)).toEqual([LEMON]);
+  });
+
+  it("is false for an account with no uploads", () => {
+    expect(deletesUploads(lemon, LEMON)).toBe(false);
+  });
+
+  it("is true when the delete goes through and takes an upload", () => {
+    expect(deletesUploads(upload(lemon, LEMON), LEMON)).toBe(true);
+  });
+
+  it("is false when another account has the upload", () => {
+    const other = state.accounts[0]!.id;
+    expect(deletesUploads(upload(lemon, other), LEMON)).toBe(false);
+  });
+
+  it("is false when the delete is refused", () => {
+    const account = state.accounts[0]!.id;
+    expect(deletesUploads(upload(state, account), account)).toBe(false);
+  });
+
+  it("is true for an upload read for review once the account holds nothing", () => {
+    const account = state.accounts[0]!.id;
+    const read = finishReading(upload(state, account), UPLOAD);
+    expect(read.imports[0]!.status).toBe("ready");
+    const emptied = read.holdings
+      .filter((each) => each.accountId === account)
+      .reduce((s, each) => deleteHolding(s, each.holding.id).state, read);
+    expect(deletesUploads(emptied, account)).toBe(true);
+    const deleted = deleteAccount(emptied, account);
+    expect(deleted.result).toEqual({ ok: true, id: account });
+    expect(deleted.state.imports).toEqual([]);
+  });
 });

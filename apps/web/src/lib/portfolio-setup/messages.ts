@@ -77,6 +77,11 @@ export function deleteMessages(messages: WriteMessages): WriteMessages {
   };
 }
 
+export const deleteAccountDescription = (deletesUploads: boolean): string =>
+  deletesUploads
+    ? "Las cargas de esta cuenta se borran y siguen contando para este mes. No se puede deshacer."
+    : "No se puede deshacer.";
+
 // An account's select left unchosen, caught before the write.
 export const CHOICE_MESSAGES = {
   institution: "Elegí una institución.",
