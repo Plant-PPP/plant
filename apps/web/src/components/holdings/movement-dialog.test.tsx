@@ -250,6 +250,7 @@ describe("a yield", () => {
     const focused = [...html.matchAll(/<input[^>]*autofocus[^>]*>/gi)];
     expect(focused).toHaveLength(1);
     expect(focused[0]![0]).toMatch(/ id="[^"]+-parts"/);
+    expect(focused[0]![0]).toContain('aria-invalid="true"');
     const described = focused[0]![0].match(/aria-describedby="([^"]+)"/)![1]!;
     expect(described.split(" ")).toEqual([
       expect.stringMatching(/-alert$/),

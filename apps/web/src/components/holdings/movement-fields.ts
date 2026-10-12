@@ -229,8 +229,8 @@ export const withShownPrice = (
 const OFFERED_KINDS: readonly MovementKind[] = ["transfer", "yield"];
 
 // The kinds an operation's dialog offers: every kind but those `offers`
-// leaves out; a transfer only on a new operation, and an edited transfer
-// stays one.
+// leaves out, with the edited kind kept; a transfer only on a new operation,
+// and an edited transfer stays one.
 export function kindsOffered({
   editing,
   offers,
@@ -265,14 +265,19 @@ export function toOperationInput(
     return exactUnitPrice(type, quoted) ?? typed;
   };
   const income = isIncome(fields.kind);
+  const envelope = {
+    kind: fields.kind,
+    source_connection_id: fields.accountId,
+    instrument_symbol: fields.instrument,
+    date: fields.date,
+    currency: fields.currency,
+    reference: optional(fields.reference),
+    note: optional(fields.note),
+  };
   if (fields.kind === "yield") {
     const portfolioId = fields.parts[0]?.portfolioId ?? "";
     return {
-      kind: fields.kind,
-      source_connection_id: fields.accountId,
-      instrument_symbol: fields.instrument,
-      date: fields.date,
-      currency: fields.currency,
+      ...envelope,
       price: perUnit(fields.price),
       parts: [
         fields.balance === null
@@ -286,8 +291,6 @@ export function toOperationInput(
               balance: parseAmountInput(fields.balance),
             },
       ],
-      reference: optional(fields.reference),
-      note: optional(fields.note),
     };
   }
   if (fields.kind === "transfer") {
@@ -297,11 +300,7 @@ export function toOperationInput(
         : null;
     const quantity = parseAmountInput(fields.parts[0]?.size ?? "");
     return {
-      kind: fields.kind,
-      source_connection_id: fields.accountId,
-      instrument_symbol: fields.instrument,
-      date: fields.date,
-      currency: fields.currency,
+      ...envelope,
       parts: fields.parts.map((part, index) =>
         index === 0
           ? { portfolio_id: part.portfolioId, direction: "out", quantity }
@@ -312,16 +311,10 @@ export function toOperationInput(
               price: cost,
             },
       ),
-      reference: optional(fields.reference),
-      note: optional(fields.note),
     };
   }
   return {
-    kind: fields.kind,
-    source_connection_id: fields.accountId,
-    instrument_symbol: fields.instrument,
-    date: fields.date,
-    currency: fields.currency,
+    ...envelope,
     ...(income
       ? {}
       : fields.kind === "adjustment"
@@ -342,8 +335,6 @@ export function toOperationInput(
       label: optional(charge.label),
       amount: parseAmountInput(charge.amount),
     })),
-    reference: optional(fields.reference),
-    note: optional(fields.note),
   };
 }
 

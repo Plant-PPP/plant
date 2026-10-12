@@ -157,7 +157,7 @@ const MOVEMENT_FIGURE = 112;
 type ShownHolding = HoldingRow & { unsaved?: true };
 
 // A new operation, from the header or for one holding (`kind` preset for an
-// adjustment), or an edit of one.
+// adjustment or a yield), or an edit of one.
 type MovementDialogState =
   | ({
       kind: "create";
