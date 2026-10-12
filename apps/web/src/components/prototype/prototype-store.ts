@@ -744,13 +744,13 @@ export function writeOperation(
   if (!account || !instrument) {
     return refused(state, { ok: false, code: "not_found" });
   }
-  if (
-    replacing &&
-    ![...state.movements.values()].some((own) =>
-      own.some((each) => each.operation_id === operationId),
-    )
-  ) {
-    return refused(state, { ok: false, code: "not_found" });
+  if (replacing) {
+    // An edit keeps the operation's account and instrument, as its dialog does.
+    const was = operationOf(state, operationId);
+    if (!was) return refused(state, { ok: false, code: "not_found" });
+    if (was.accountId !== account.id || was.instrument !== instrument.symbol) {
+      return refused(state, { ok: false, code: "invalid" });
+    }
   }
   const rates = snapshotOn(state.quotes, operation.date, {
     fxKinds: UNIT_FX_KINDS,
