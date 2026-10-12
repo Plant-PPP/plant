@@ -178,7 +178,7 @@ export function MonthCloseDetail({
       size: 136,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement)
+        isTrade(original.movement) && !original.atWorth
           ? formatQuotedPrice(
               original.movement.price,
               original.movement.currency,
@@ -215,11 +215,19 @@ export function MonthCloseDetail({
             No hubo movimientos este mes.
           </p>
         ) : (
-          <DataTable
-            caption={`Movimientos de ${monthInText(close.period)}`}
-            columns={columns}
-            data={lines.map((line) => ({ ...line, id: line.movement.id }))}
-          />
+          <>
+            <DataTable
+              caption={`Movimientos de ${monthInText(close.period)}`}
+              columns={columns}
+              data={lines.map((line) => ({ ...line, id: line.movement.id }))}
+            />
+            {lines.some((line) => line.atWorth) && (
+              <p className="text-muted-foreground text-xs">
+                Los saldos iniciales y los ajustes de salida figuran a lo que
+                valían ese día, como los cuenta el cierre.
+              </p>
+            )}
+          </>
         )}
       </section>
     </div>
