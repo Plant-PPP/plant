@@ -113,9 +113,10 @@ export function operationFields(
     accountId,
     instrument,
     date: movement.date,
-    price: isTrade(movement)
-      ? amountInput(type ? quotedPrice(type, movement.price) : movement.price)
-      : "",
+    price:
+      isTrade(movement) && movement.price !== null
+        ? amountInput(type ? quotedPrice(type, movement.price) : movement.price)
+        : "",
     currency: movement.currency,
     parts: parts.map((part) => ({
       portfolioId: part.portfolioId,

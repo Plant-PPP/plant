@@ -178,7 +178,9 @@ export function MonthCloseDetail({
       size: 136,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement) && !original.atWorth
+        isTrade(original.movement) &&
+        original.movement.price !== null &&
+        !original.atWorth
           ? formatQuotedPrice(
               original.movement.price,
               original.movement.currency,

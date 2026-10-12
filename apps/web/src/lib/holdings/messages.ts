@@ -45,14 +45,14 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   dividend: "Dividendo",
   coupon: "Cupón",
   adjustment: "Ajuste",
+  transfer: "Traspaso",
 };
 
-// How a list names a movement: an adjustment says which way its units went.
+// How a list names a movement: an adjustment or a transfer says which way
+// its units went.
 export const movementLabel = (movement: Movement): string =>
-  movement.kind === "adjustment"
-    ? movement.direction === "in"
-      ? "Ajuste (entran)"
-      : "Ajuste (salen)"
+  "direction" in movement
+    ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`
     : MOVEMENT_KIND_LABELS[movement.kind];
 
 export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
