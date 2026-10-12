@@ -86,8 +86,8 @@ export type YearClose = {
   open: boolean;
 };
 
-// A month's detail: its close and its purchases, sales and income, newest
-// first, each with the name of its holding.
+// A month's detail: its close and every movement in it, newest first, each
+// with the name of its holding.
 export type MonthDetail = {
   close: MonthClose;
   // `atWorth`: an opening balance or adjustment out shown at what it was
