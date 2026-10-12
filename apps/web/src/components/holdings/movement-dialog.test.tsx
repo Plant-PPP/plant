@@ -13,6 +13,7 @@ import {
   type MovementFields,
   newMovementFields,
   withKind,
+  withShownPrice,
 } from "./movement-fields";
 
 const PRINCIPAL = { id: "p1", name: "Principal", archived: false };
@@ -162,9 +163,12 @@ describe("a yield", () => {
         portfolios={[PRINCIPAL, LARGO]}
         instruments={INSTRUMENTS}
         fixed={{ account: "IOL", instrument: "Bitcoin" }}
-        quoteOn={(query) => {
-          asked.push(query);
-          return quote;
+        yields={{
+          portfolio: "p1",
+          quoteOn: (query) => {
+            asked.push(query);
+            return quote;
+          },
         }}
         initial={initial}
         today={TODAY}
@@ -207,7 +211,7 @@ describe("a yield", () => {
           { symbol: "AL30", name: "Bonar", currency: "USD", type: "bond" },
         ]}
         fixed={{ account: "IOL", instrument: "Bonar" }}
-        quoteOn={() => null}
+        yields={{ portfolio: "p1", quoteOn: () => null }}
         initial={{ ...earning, instrument: "AL30" }}
         today={TODAY}
         returnFocusTo={() => null}
@@ -219,6 +223,38 @@ describe("a yield", () => {
     expect(html).toContain(
       "No hay precio para ese día: ingresá el valor cada 100 VN.",
     );
+  });
+
+  it("keeps following the day's quote when it opens again", () => {
+    const sent = withShownPrice(earning, "61000", "crypto");
+    expect(renderYield(sent, "59000")).toContain('value="59000"');
+  });
+
+  it("points a refused balance at its field, with its help", () => {
+    const html = renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL]}
+        instruments={INSTRUMENTS}
+        fixed={{ account: "IOL", instrument: "Bitcoin" }}
+        yields={{ portfolio: "p1", quoteOn: () => "61000" }}
+        initial={{ ...earning, balance: "3" }}
+        initialError={MOVEMENT_MESSAGES.same_balance}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+    const focused = [...html.matchAll(/<input[^>]*autofocus[^>]*>/gi)];
+    expect(focused).toHaveLength(1);
+    expect(focused[0]![0]).toMatch(/ id="[^"]+-parts"/);
+    const described = focused[0]![0].match(/aria-describedby="([^"]+)"/)![1]!;
+    expect(described.split(" ")).toEqual([
+      expect.stringMatching(/-alert$/),
+      expect.stringMatching(/-parts-help$/),
+    ]);
   });
 
   it("takes the final balance instead of the units", () => {
@@ -243,7 +279,7 @@ describe("a yield", () => {
       for (const [, described] of html.matchAll(
         / aria-describedby="([^"]+)"/g,
       )) {
-        expect(ids).toContain(described);
+        for (const each of described!.split(" ")) expect(ids).toContain(each);
       }
     }
   });

@@ -4,6 +4,8 @@ import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 
 import {
+  MOVEMENT_FIELD_MESSAGES,
+  type MovementFields,
   movementRefusal,
   newMovementFields,
   operationFields,
@@ -143,11 +145,15 @@ it("points at the first refused field in the form's order", () => {
     toOperationInput(fields, "crypto"),
   );
   if (parsed.success) throw new Error("expected a refusal");
-  expect(movementRefusal(parsed.error, "purchase").field).toBe("price");
+  expect(
+    movementRefusal(parsed.error, { kind: "purchase", balance: null }).field,
+  ).toBe("price");
 });
 
 it("points a refused write at its field", () => {
   expect(refusedMovementField(MOVEMENT_MESSAGES.oversold)).toBe("parts");
+  expect(refusedMovementField(MOVEMENT_MESSAGES.same_balance)).toBe("parts");
+  expect(refusedMovementField(MOVEMENT_MESSAGES.not_found)).toBe("parts");
   expect(refusedMovementField(MOVEMENT_MESSAGES.future_date)).toBe("date");
   expect(refusedMovementField(MOVEMENT_MESSAGES.no_rate)).toBe("date");
   expect(refusedMovementField(MOVEMENT_MESSAGES.opening_balance)).toBe("kind");
@@ -313,7 +319,10 @@ describe("a transfer", () => {
         ),
       );
       if (parsed.success) throw new Error("expected a refusal");
-      expect(movementRefusal(parsed.error, "transfer").field).toBe("price");
+      expect(
+        movementRefusal(parsed.error, { kind: "transfer", balance: null })
+          .field,
+      ).toBe("price");
     },
   );
 
@@ -330,7 +339,9 @@ describe("a transfer", () => {
       ),
     );
     if (parsed.success) throw new Error("expected a refusal");
-    expect(movementRefusal(parsed.error, "transfer").field).toBe("price");
+    expect(
+      movementRefusal(parsed.error, { kind: "transfer", balance: null }).field,
+    ).toBe("price");
   });
 
   it.each([
@@ -460,21 +471,53 @@ describe("a yield's fields", () => {
     ["no value", { price: "" }, "price"],
     ["a balance that does not parse", { price: "1", balance: "x" }, "parts"],
   ] as const)("refuses %s, naming its field", (_, change, field) => {
+    const fields = { ...earning, ...change };
     const parsed = operationInputSchema.safeParse(
-      toOperationInput({ ...earning, ...change }, "crypto"),
+      toOperationInput(fields, "crypto"),
     );
     if (parsed.success) throw new Error("expected a refusal");
-    expect(movementRefusal(parsed.error, "yield").field).toBe(field);
+    expect(movementRefusal(parsed.error, fields).field).toBe(field);
   });
 
-  it("asks for a quantity or a balance, never a portfolio", () => {
+  it.each([
+    ["no value", { price: "" }, "price", "Ingresá un valor de 0 o más."],
+    [
+      "no units",
+      { price: "1", parts: [{ portfolioId: PRINCIPAL, size: "" }] },
+      "parts",
+      "Ingresá una cantidad mayor a 0.",
+    ],
+    [
+      "no balance",
+      { price: "1", balance: "" },
+      "parts",
+      "Ingresá un saldo final de 0 o más.",
+    ],
+  ] as const)(
+    "asks for what is missing in its words: %s",
+    (_, change, field, text) => {
+      const fields: MovementFields = {
+        ...earning,
+        ...change,
+        parts: "parts" in change ? [...change.parts] : earning.parts,
+      };
+      const parsed = operationInputSchema.safeParse(
+        toOperationInput(fields, "crypto"),
+      );
+      if (parsed.success) throw new Error("expected a refusal");
+      expect(movementRefusal(parsed.error, fields)).toEqual({ field, text });
+    },
+  );
+
+  it("keeps the other kinds' words", () => {
+    const fields = { ...newMovementFields(defaults), price: "1" };
     const parsed = operationInputSchema.safeParse(
-      toOperationInput({ ...earning, price: "1", balance: "" }, "crypto"),
+      toOperationInput(fields, "crypto"),
     );
     if (parsed.success) throw new Error("expected a refusal");
-    expect(movementRefusal(parsed.error, "yield")).toEqual({
+    expect(movementRefusal(parsed.error, fields)).toEqual({
       field: "parts",
-      text: "Ingresá una cantidad mayor a 0, o un saldo final de 0 o más.",
+      text: MOVEMENT_FIELD_MESSAGES.parts,
     });
   });
 
@@ -542,9 +585,10 @@ describe("a yield's fields", () => {
   });
 
   it("sends the day's quote it shows until the user types a value", () => {
-    expect(withShownPrice(earning, "61000.5", "crypto")).toMatchObject({
+    // Not marked as typed, so a dialog opened again follows the new day's.
+    expect(withShownPrice(earning, "61000.5", "crypto")).toEqual({
+      ...earning,
       price: "61000,5",
-      priceEdited: true,
     });
     const typed = { ...earning, price: "1", priceEdited: true };
     expect(withShownPrice(typed, "61000.5", "crypto")).toBe(typed);

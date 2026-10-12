@@ -6,7 +6,7 @@ import type {
   Position,
   SaleResult,
 } from "@plant/core";
-import type { PortfolioSetupGuardHint } from "@plant/shared";
+import type { Currency, PortfolioSetupGuardHint } from "@plant/shared";
 
 import type { HoldingRow } from "./read";
 
@@ -92,7 +92,7 @@ export type MovementsInput = {
   quoteOn?: (query: QuoteQuery) => string | null;
 };
 
-export type QuoteQuery = { symbol: string; currency: string; date: string };
+export type QuoteQuery = { symbol: string; currency: Currency; date: string };
 
 export type MovementResult =
   | { ok: true; id: string }

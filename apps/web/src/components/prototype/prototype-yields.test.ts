@@ -336,6 +336,47 @@ describe("a balance and the day it is for", () => {
     expect(heldOn(after)).toBe("2");
   });
 
+  it("ends the day at the balance when a purchase is edited into one", () => {
+    const first = written(purchase(DAY, "1"));
+    const bought = writeOperation(
+      first,
+      purchase(DAY, "5"),
+      options("e5000000-0000-4000-8000-00000000000b"),
+    ).state;
+    const after = written(yielded({ balance: "2" }), bought, true);
+    expect(heldOn(after)).toBe("2");
+    expect(
+      movementsOf(after).find((each) => each.operation_id === YIELD),
+    ).toMatchObject({ kind: "yield", direction: "out" });
+  });
+
+  it("refuses a balance that leaves a later sale selling more than held", () => {
+    const later = writeOperation(
+      state,
+      purchase(
+        "2026-10-05",
+        stored(minus(exactOf(heldOn(state)), exactOf("1"))),
+        "sale",
+      ),
+      options("e5000000-0000-4000-8000-00000000000c"),
+    ).state;
+    expect(refusal(yielded({ balance: "0" }), later)).toEqual({
+      ok: false,
+      code: "oversold",
+    });
+  });
+
+  it("names a missing portfolio before the balance it already held", () => {
+    const gone = {
+      ...state,
+      portfolios: state.portfolios.filter(({ id }) => id !== PRINCIPAL),
+    };
+    expect(refusal(yielded({ balance: heldOn(state) }), gone)).toEqual({
+      ok: false,
+      code: "not_found",
+    });
+  });
+
   it("marks the month a yield's edit changes as recalculated", () => {
     const first = written(yielded({ direction: "in", quantity: "1" }));
     const edited = markRecalculated(

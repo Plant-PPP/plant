@@ -1,4 +1,9 @@
-import { admitMovement, admitMovements, isOrderRefusal } from "./admit";
+import {
+  admitMovement,
+  admitMovements,
+  isOrderRefusal,
+  quantityOn,
+} from "./admit";
 import {
   adjustment,
   income,
@@ -187,6 +192,18 @@ describe("admitMovements", () => {
     });
   });
 
+  it("lets a yield take out every unit held, and another reopen the holding", () => {
+    const lost = yielded("out", "5", "110", { date: "2026-02-10" });
+    const earned = yielded("in", "1", "110", { date: "2026-02-11" });
+    expect(admitMovements({ prior: null, after: [purchase, lost] })).toEqual({
+      ok: true,
+      quantity: "0",
+    });
+    expect(
+      admitMovements({ prior: null, after: [purchase, lost, earned] }),
+    ).toEqual({ ok: true, quantity: "1" });
+  });
+
   it("admits an empty history", () => {
     expect(admitMovements({ prior: null, after: [] })).toEqual({
       ok: true,
@@ -201,4 +218,21 @@ it("names the refusals that depend on the order within a day", () => {
       isOrderRefusal,
     ),
   ).toEqual(["oversold", "opening_balance"]);
+});
+
+describe("quantityOn", () => {
+  const earned = yielded("in", "2", "110", { date: "2026-02-02" });
+  const history = [opening, purchase, earned, sale];
+
+  it("counts the units held at the end of a date, that day included", () => {
+    expect(quantityOn(history, "2026-02-01")).toBe("10");
+    expect(quantityOn(history, "2026-02-02")).toBe("17");
+    expect(quantityOn(history, "2026-03-02")).toBe("5");
+  });
+
+  it("counts nothing for income or no movements", () => {
+    const dividend = income("dividend", "1", { date: "2026-03-05" });
+    expect(quantityOn([...history, dividend], "2026-03-05")).toBe("5");
+    expect(quantityOn([], "2026-03-05")).toBe("0");
+  });
 });

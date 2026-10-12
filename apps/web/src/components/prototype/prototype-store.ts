@@ -41,6 +41,7 @@ import {
 } from "@plant/core";
 import {
   compareExact,
+  type Currency,
   exactOf,
   minus,
   negated,
@@ -699,7 +700,7 @@ export function priceOn(
 
 export const priceToday = (
   state: PrototypeState,
-  instrument: { symbol: string; currency: string },
+  instrument: { symbol: string; currency: Currency },
 ): string | null => priceOn(state, { ...instrument, date: state.today });
 
 export function createHolding(
@@ -972,6 +973,14 @@ export function writeOperation(
       );
     }
   }
+  for (const { portfolio_id: portfolioId } of given) {
+    if (!state.portfolios.some(({ id }) => id === portfolioId)) {
+      return refused(state, {
+        ok: false,
+        code: archivedCode(state, { portfolioId }) ?? "not_found",
+      });
+    }
+  }
   // A yield given as a balance is the difference from what its holding held
   // at the end of that day.
   const parts: Exclude<(typeof given)[number], { balance: string }>[] = [];
@@ -1014,13 +1023,7 @@ export function writeOperation(
     const touched = new Map(without);
     for (const [index, part] of parts.entries()) {
       const { portfolio_id: portfolioId, ...ownFields } = part;
-      const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
-      if (!portfolio) {
-        return refused(state, {
-          ok: false,
-          code: archivedCode(state, { portfolioId }) ?? "not_found",
-        });
-      }
+      const portfolio = state.portfolios.find(({ id }) => id === portfolioId)!;
       const stored = holdingIn(
         next,
         account.id,

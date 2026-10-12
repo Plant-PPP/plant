@@ -445,9 +445,8 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
     if (quantity.n !== 0n) {
       held.set(at, plus(held.get(at) ?? ZERO, quantity));
     }
-    const upTo = movements.filter((movement) => movement.date <= close.to);
-    for (const movement of upTo) {
-      if (movement.date <= close.from) continue;
+    for (const movement of movements) {
+      if (movement.date <= close.from || movement.date > close.to) continue;
       const key = JSON.stringify([
         at,
         movement.operation_id,

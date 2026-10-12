@@ -479,6 +479,26 @@ export function AssetsSetup({
     };
   }
 
+  // Yields the dialog offers: into the holding it was opened from, once that
+  // holding has movements, or into the one portfolio an edited operation is
+  // in.
+  function yieldsOf(
+    state: MovementDialogState,
+    input: MovementsInput,
+  ): ComponentProps<typeof MovementDialog>["yields"] {
+    const { quoteOn } = input;
+    if (!quoteOn) return undefined;
+    const portfolio =
+      state.kind === "edit"
+        ? state.operation.parts.length === 1
+          ? state.operation.parts[0]!.portfolioId
+          : undefined
+        : state.row && input.positions.has(state.row.id)
+          ? state.row.portfolio.id
+          : undefined;
+    return portfolio === undefined ? undefined : { portfolio, quoteOn };
+  }
+
   // A movement as its actions name it: "compra del 01/09/2026".
   const movementName = (line: MovementLine) =>
     `${inSentence(lineLabel(line))} del ${formatDate(line.movement.date)}`;
@@ -1069,24 +1089,23 @@ export function AssetsSetup({
                       <Plus />
                       Agregar movimiento
                     </PendingButton>
-                    {movement.input.quoteOn &&
-                      movement.input.positions.has(row.id) && (
-                        <PendingButton
-                          size="sm"
-                          variant="ghost"
-                          pending={pending}
-                          onClick={() =>
-                            openMovementDialog({
-                              kind: "create",
-                              row,
-                              preset: "yield",
-                            })
-                          }
-                        >
-                          <TrendingUp />
-                          Cargar rendimiento
-                        </PendingButton>
-                      )}
+                    {yieldsOf({ kind: "create", row }, movement.input) && (
+                      <PendingButton
+                        size="sm"
+                        variant="ghost"
+                        pending={pending}
+                        onClick={() =>
+                          openMovementDialog({
+                            kind: "create",
+                            row,
+                            preset: "yield",
+                          })
+                        }
+                      >
+                        <TrendingUp />
+                        Cargar rendimiento
+                      </PendingButton>
+                    )}
                   </div>
                 </div>
               ))
@@ -1313,13 +1332,7 @@ export function AssetsSetup({
       {movement && movementDialog && (
         <MovementDialog
           transfer={transferOf(movementDialog, movement.input)}
-          quoteOn={
-            movementDialog.kind === "edit" ||
-            (movementDialog.row &&
-              movement.input.positions.has(movementDialog.row.id))
-              ? movement.input.quoteOn
-              : undefined
-          }
+          yields={yieldsOf(movementDialog, movement.input)}
           mode={movementDialog.kind}
           accounts={accounts}
           portfolios={portfolios}

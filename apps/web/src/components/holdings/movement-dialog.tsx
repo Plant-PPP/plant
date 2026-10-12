@@ -71,8 +71,8 @@ const NAMED_CHARGES: readonly ChargeKind[] = ["tax", "other"];
 // operation opened from a holding, or edited, keeps its account and
 // instrument. A page that passes `transfer` offers a new operation moving
 // units out of `from` into another portfolio; an edited transfer stays one.
-// One that passes `quoteOn` offers yields, valued at the day's quote unless
-// the user types another value.
+// One that passes `yields` offers yields in `portfolio`'s holding, valued at
+// the day's quote unless the user types another value.
 export function MovementDialog({
   mode,
   accounts,
@@ -80,7 +80,7 @@ export function MovementDialog({
   instruments,
   fixed,
   transfer,
-  quoteOn,
+  yields,
   initial,
   initialError,
   today,
@@ -99,7 +99,10 @@ export function MovementDialog({
     // The cost per unit the units would carry, as stored; null when none.
     suggestedCost: (fields: MovementFields) => string | null;
   };
-  quoteOn?: (query: QuoteQuery) => string | null;
+  yields?: {
+    portfolio: string;
+    quoteOn: (query: QuoteQuery) => string | null;
+  };
   initial: MovementFields;
   initialError?: string;
   today: string;
@@ -126,7 +129,7 @@ export function MovementDialog({
     editing: mode === "edit" ? initial.kind : null,
     offers: new Set([
       ...(transfer ? (["transfer"] as const) : []),
-      ...(quoteOn ? (["yield"] as const) : []),
+      ...(yields ? (["yield"] as const) : []),
     ]),
   });
   const destinationId = `${fieldId("parts")}-to`;
@@ -140,10 +143,10 @@ export function MovementDialog({
   const { instrument, currency, date } = fields;
   const quote = useMemo(
     () =>
-      yielding && quoteOn
-        ? quoteOn({ symbol: instrument, currency, date })
+      yielding && yields
+        ? yields.quoteOn({ symbol: instrument, currency, date })
         : null,
-    [yielding, quoteOn, instrument, currency, date],
+    [yielding, yields, instrument, currency, date],
   );
   const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : quote;
   // A price shown as a suggestion until the user changes it.
@@ -188,7 +191,7 @@ export function MovementDialog({
       toOperationInput(sent, instrumentType),
     );
     if (!parsed.success) {
-      const refused = movementRefusal(parsed.error, fields.kind);
+      const refused = movementRefusal(parsed.error, fields);
       setAlert(refused);
       if (refused.field)
         document.getElementById(controlId(refused.field))?.focus();
@@ -285,7 +288,9 @@ export function MovementDialog({
                   withKind(
                     current,
                     value,
-                    transfer?.from ?? current.parts[0]?.portfolioId ?? "",
+                    value === "yield" && yields
+                      ? yields.portfolio
+                      : (transfer?.from ?? current.parts[0]?.portfolioId ?? ""),
                   ),
                 ),
             )}
@@ -353,7 +358,9 @@ export function MovementDialog({
                 <Input
                   id={fieldId("price")}
                   {...control("price")}
-                  aria-describedby={invalid("price") ? alertId : costHelpId}
+                  aria-describedby={
+                    invalid("price") ? `${alertId} ${costHelpId}` : costHelpId
+                  }
                   autoFocus={firstField === "price"}
                   inputMode="decimal"
                   autoComplete="off"
@@ -480,11 +487,10 @@ export function MovementDialog({
                   id={fieldId("parts")}
                   {...control("parts")}
                   aria-describedby={
-                    invalid("parts")
-                      ? alertId
-                      : fields.balance === null
-                        ? undefined
-                        : balanceHelpId
+                    [
+                      ...(invalid("parts") ? [alertId] : []),
+                      ...(fields.balance === null ? [] : [balanceHelpId]),
+                    ].join(" ") || undefined
                   }
                   autoFocus={firstField === "parts"}
                   inputMode="decimal"

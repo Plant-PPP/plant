@@ -196,14 +196,15 @@ export function withKind(
 }
 
 // The fields as the dialog sends them: a yield whose value the user left
-// takes the day's quote it shows.
+// takes the day's quote it shows, and keeps following the quote if the dialog
+// opens again with them.
 export const withShownPrice = (
   fields: MovementFields,
   suggested: string | null,
   type: InstrumentType | null,
 ): MovementFields =>
   fields.kind === "yield" && !fields.priceEdited && suggested !== null
-    ? { ...fields, price: quotedInput(suggested, type), priceEdited: true }
+    ? { ...fields, price: quotedInput(suggested, type) }
     : fields;
 
 // The kinds only some pages and holdings take.
@@ -343,10 +344,13 @@ export const MOVEMENT_FIELD_MESSAGES: Record<MovementField, string> = {
   note: "La nota puede tener hasta 200 caracteres.",
 };
 
-// A yield's one portfolio is the holding's: only its quantity or balance can
-// be wrong.
-const YIELD_PARTS_MESSAGE =
-  "Ingresá una cantidad mayor a 0, o un saldo final de 0 o más.";
+// A yield's one portfolio is the holding's: only its value, quantity or
+// balance can be wrong.
+const YIELD_MESSAGES = {
+  price: "Ingresá un valor de 0 o más.",
+  quantity: "Ingresá una cantidad mayor a 0.",
+  balance: "Ingresá un saldo final de 0 o más.",
+};
 
 const FIELD_BY_COLUMN: Record<string, MovementField> = {
   kind: "kind",
@@ -377,7 +381,7 @@ const FORM_ORDER: readonly MovementField[] = [
 
 export function movementRefusal(
   error: z.ZodError,
-  kind: MovementKind,
+  { kind, balance }: Pick<MovementFields, "kind" | "balance">,
 ): FieldAlert<MovementField> {
   // A transfer's cost sits on the part its units arrive in.
   const issues = error.issues.map((issue) =>
@@ -390,9 +394,13 @@ export function movementRefusal(
   return {
     field: first.field,
     text:
-      kind === "yield" && first.field === "parts"
-        ? YIELD_PARTS_MESSAGE
-        : MOVEMENT_FIELD_MESSAGES[first.field],
+      kind !== "yield"
+        ? MOVEMENT_FIELD_MESSAGES[first.field]
+        : first.field === "price"
+          ? YIELD_MESSAGES.price
+          : first.field === "parts"
+            ? YIELD_MESSAGES[balance === null ? "quantity" : "balance"]
+            : MOVEMENT_FIELD_MESSAGES[first.field],
   };
 }
 

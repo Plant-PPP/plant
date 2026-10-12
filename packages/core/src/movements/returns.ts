@@ -32,7 +32,7 @@ export type CashFlow = {
 // a step could not be expressed in the view's unit. Units an adjustment brings
 // in are paid in at their cost, and units it takes out are paid out at
 // theirs, as the replay counts them. A transfer moves units within the
-// account, so its flow is zero.
+// account, so its flow is zero; a yield's is the income it moved.
 export function cashFlowsOf(
   movements: readonly Movement[],
   steps: readonly LedgerStep[],
