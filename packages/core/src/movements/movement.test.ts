@@ -222,6 +222,12 @@ describe("a yield", () => {
     expect(movementSchema.safeParse({ ...leg, ...change }).success).toBe(false);
   });
 
+  it("reads a worthless yield", () => {
+    expect(
+      movementSchema.safeParse({ ...leg, direction: "in", price: "0" }).success,
+    ).toBe(true);
+  });
+
   it("takes units out when lost and never starts a holding", () => {
     const out = movementSchema.parse({ ...leg, direction: "out" });
     const into = movementSchema.parse({ ...leg, direction: "in" });

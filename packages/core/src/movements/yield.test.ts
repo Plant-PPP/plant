@@ -1,4 +1,4 @@
-import { trade, yielded } from "./fixtures.test-support";
+import { adjustment, trade, yielded } from "./fixtures.test-support";
 import type { Movement } from "./movement";
 import { periodResult } from "./period";
 import { positionOf, replay } from "./replay";
@@ -155,4 +155,31 @@ it("leaves the yearly rate to the money paid in and out", () => {
   const without = returnsOf(flowsOf([bought])!, value);
   expect(returnsOf(flowsOf([bought, earned])!, value)).toEqual(without);
   expect(without.annual).not.toBeNull();
+});
+
+it("does not start the money at work with an income", () => {
+  const result = periodResult({
+    from: "2026-08-31",
+    to: "2026-09-30",
+    startValue: "0",
+    endValue: "1000",
+    flows: [
+      { date: "2026-09-15", amount: "100", kind: "income", charges: "0" },
+      { date: "2026-09-20", amount: "-1000", kind: "buy", charges: "0" },
+    ],
+  });
+  expect(result).toMatchObject({ income: "100", market: "0", share: "0.1" });
+});
+
+it("takes no income or result for an adjustment out, whatever its price", () => {
+  const steps = replay(
+    [BOUGHT, adjustment("out", "5", { date: "2026-09-10", price: "50" })],
+    "usd_mep",
+    "mep",
+  );
+  expect(positionOf(steps).money).toMatchObject({
+    cost: "500",
+    income: "0",
+    realized: "0",
+  });
 });

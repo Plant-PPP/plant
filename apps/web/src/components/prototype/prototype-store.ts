@@ -391,7 +391,7 @@ export function suggestedTransferCost(
   ).get(holding)!;
   const amount = amountOf(
     own[index]!,
-    steps[index - 1]!.position,
+    positionBefore(steps, index),
     steps[index]!,
   );
   return amount === null
@@ -482,6 +482,12 @@ export function salesOf(
 // a − b, to the decimals the store keeps.
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
+
+// The position before a holding's step `index`: empty before its first.
+export const positionBefore = (
+  steps: readonly LedgerStep[],
+  index: number,
+): Position => steps[index - 1]?.position ?? EMPTY_POSITION;
 
 // Null when either side has no money in the unit.
 export function moneyChange(
@@ -652,7 +658,7 @@ export function movementsPage(
     rows.push(
       lineOf(
         best.movements[index]!,
-        index === 0 ? EMPTY_POSITION : best.steps[index - 1]!.position,
+        positionBefore(best.steps, index),
         best.steps[index]!,
         operationOf(state, best.movements[index]!.operation_id)!,
       ),

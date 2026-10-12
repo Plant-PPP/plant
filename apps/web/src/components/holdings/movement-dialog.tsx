@@ -130,7 +130,7 @@ export function MovementDialog({
     ]),
   });
   const destinationId = `${fieldId("parts")}-to`;
-  const costHelpId = `${fieldId("price")}-help`;
+  const priceHelpId = `${fieldId("price")}-help`;
   const modeId = `${id}-mode`;
   const balanceHelpId = `${fieldId("parts")}-help`;
   // A transfer with no portfolio to move to points its alert there.
@@ -176,6 +176,11 @@ export function MovementDialog({
         at === index ? { ...charge, ...change } : charge,
       ),
     }));
+
+  // A field's description: the alert when it is refused, then its help.
+  const describedBy = (field: MovementField, help?: string) =>
+    [...(invalid(field) ? [alertId] : []), ...(help ? [help] : [])].join(" ") ||
+    undefined;
 
   const control = (field: MovementField) => ({
     "aria-invalid": invalid(field),
@@ -352,9 +357,7 @@ export function MovementDialog({
                 <Input
                   id={fieldId("price")}
                   {...control("price")}
-                  aria-describedby={
-                    invalid("price") ? `${alertId} ${costHelpId}` : costHelpId
-                  }
+                  aria-describedby={describedBy("price", priceHelpId)}
                   autoFocus={firstField === "price"}
                   inputMode="decimal"
                   autoComplete="off"
@@ -382,7 +385,7 @@ export function MovementDialog({
 
           {suggesting && (
             <div
-              id={costHelpId}
+              id={priceHelpId}
               className="-mt-2 grid gap-1 text-xs text-muted-foreground"
             >
               {suggested === null ? (
@@ -476,12 +479,10 @@ export function MovementDialog({
                 <Input
                   id={fieldId("parts")}
                   {...control("parts")}
-                  aria-describedby={
-                    [
-                      ...(invalid("parts") ? [alertId] : []),
-                      ...(fields.balance === null ? [] : [balanceHelpId]),
-                    ].join(" ") || undefined
-                  }
+                  aria-describedby={describedBy(
+                    "parts",
+                    fields.balance === null ? undefined : balanceHelpId,
+                  )}
                   autoFocus={firstField === "parts"}
                   inputMode="decimal"
                   autoComplete="off"

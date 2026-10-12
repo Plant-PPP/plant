@@ -4,7 +4,6 @@ import {
   chainedShare,
   compareMovements,
   type Denominator,
-  EMPTY_POSITION,
   holdingSchema,
   isYield,
   type Movement,
@@ -52,6 +51,7 @@ import {
   lineOf,
   moneyChange,
   operationOf,
+  positionBefore,
   type PrototypeState,
   stepsOf,
 } from "./prototype-store";
@@ -81,11 +81,7 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
           const movement = movements[index]!;
           if (step.sale !== undefined) return step.sale?.result ?? null;
           return isYield(movement) && takesUnits(movement)
-            ? moneyChange(
-                steps[index - 1]?.position ?? EMPTY_POSITION,
-                step,
-                "realized",
-              )
+            ? moneyChange(positionBefore(steps, index), step, "realized")
             : "0";
         }),
       },
@@ -409,7 +405,7 @@ export function monthDetail(
       if (movement.date <= close.from || movement.date > close.to) return;
       const line = lineOf(
         movement,
-        index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
+        positionBefore(steps, index),
         steps[index]!,
         operationOf(state, movement.operation_id)!,
       );
