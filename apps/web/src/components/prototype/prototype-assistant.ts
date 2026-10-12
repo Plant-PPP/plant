@@ -8,6 +8,8 @@ import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 import {
   formatAmount,
   formatFraction,
+  formatShare,
+  percentOf,
   shownAmount,
   shownSign,
   signed,
@@ -53,10 +55,29 @@ function resultBars(
   const rest = stored(
     minus(exactOf(result), plus(...bars.map(({ value }) => exactOf(value)))),
   );
-  return exactOf(shownAmount(rest, unit)).n === 0n
+  return shownSign(rest, unit) === 0
     ? bars
     : [...bars, { label: "Gastos y retenciones", value: rest }];
 }
+
+// What an answer about a year that left something out adds.
+const PARTIAL_YEAR = " Al año le falta algún dato; mirá su cierre.";
+
+// A return in words by the sign it shows with, as `bySign` words amounts.
+const byShare = (
+  share: string,
+  words: {
+    down: (size: string) => string;
+    up: (size: string) => string;
+    even: string;
+  },
+) => {
+  const percent = percentOf(share);
+  const { n } = exactOf(percent);
+  if (n === 0n) return words.even;
+  const size = formatShare(percent.replace(/^-/, ""));
+  return n < 0n ? words.down(size) : words.up(size);
+};
 
 // What a figure that left something out says after it.
 const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
@@ -153,14 +174,14 @@ export function prototypeAnswer(
           ? `Ya no tenés ${instrument.symbol}.`
           : `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
         returns
-          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share)} sobre lo que pusiste)` : ""}${returns.annual ? `, un ${formatFraction(returns.annual)} por año` : ""}.`
+          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share.replace(/^-/, ""))} de lo que pusiste)` : ""}.${returns.annual ? ` ${byShare(returns.annual, { down: (size) => `Por año, perdió un ${size}.`, up: (size) => `Por año, rindió un ${size}.`, even: "Por año, no rindió ni perdió." })}` : ""}`
           : "",
         held && summary.unrealized
           ? bySign(summary.unrealized.amount, unit, {
               down: (size) =>
-                `Lo que tenés hoy está abajo ${size} contra lo que te costó.`,
+                `Lo que tenés hoy vale ${size} menos de lo que te costó.`,
               up: (size) =>
-                `Lo que tenés hoy está arriba ${size} contra lo que te costó.`,
+                `Lo que tenés hoy vale ${size} más de lo que te costó.`,
               even: "Lo que tenés hoy vale lo que te costó.",
             })
           : "",
@@ -234,7 +255,7 @@ export function prototypeAnswer(
   if (/dividend|cupon|cobr|renta/.test(asked) && thisYear) {
     return {
       ...base,
-      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.`,
+      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
       chart: {
         title: `Cobros de ${thisYear.year}`,
         unit,
@@ -252,21 +273,25 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : " (con algún dato que falta; mirá el cierre del año)"}${bySign(
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}.${bySign(
         thisYear.totals.contributed,
         unit,
         {
-          down: (size) => ` (sacaste ${size} neto)`,
-          up: (size) => ` (pusiste ${size} neto)`,
+          down: (size) => ` Sacaste ${size} neto.`,
+          up: (size) => ` Pusiste ${size} neto.`,
           even: "",
         },
-      )}.${
+      )}${
         thisYear.totals.share === null
           ? ""
-          : ` Sin contar lo que pusiste, lo que tenías ${
-              thisYear.totals.share.startsWith("-") ? "perdió" : "rindió"
-            } un ${formatFraction(thisYear.totals.share.replace(/^-/, ""))}.`
-      } En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
+          : ` ${byShare(thisYear.totals.share, {
+              down: (size) =>
+                `Sin contar lo que pusiste, lo que tenías perdió un ${size}.`,
+              up: (size) =>
+                `Sin contar lo que pusiste, lo que tenías rindió un ${size}.`,
+              even: "Sin contar lo que pusiste, lo que tenías no rindió ni perdió.",
+            })}`
+      }${thisYear.complete ? "" : PARTIAL_YEAR} En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,
@@ -297,7 +322,7 @@ export function prototypeAnswer(
       ...base,
       // Today's net worth as Resumen shows it, and what is held as that
       // figure plus what is owed, so the three add up.
-      text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos y debés ${formatAmount(owed.total, unit)}.`,
+      text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
       chart: {
         title: "Cómo está repartido",
         unit,

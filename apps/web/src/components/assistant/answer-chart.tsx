@@ -1,6 +1,6 @@
 import { compareDecimals } from "@plant/shared";
 
-import { formatAmount, shownAmount } from "@/lib/format/amount";
+import { formatAmount, shownSign } from "@/lib/format/amount";
 import type { ChartPart } from "@/lib/assistant/chat";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +33,7 @@ export function AnswerChart({ chart }: { chart: ChartPart }) {
               <span
                 className={cn(
                   "block h-full rounded-full",
-                  shownAmount(bar.value, chart.unit).startsWith("-")
+                  shownSign(bar.value, chart.unit) < 0
                     ? "bg-destructive"
                     : "bg-chart-3",
                 )}
