@@ -60,9 +60,24 @@ function resultBars(
     : [...bars, { label: "Gastos y retenciones", value: rest }];
 }
 
-// Text with only its letters and digits, so "Mercado Libre" finds
-// "MercadoLibre" and "Coca Cola" finds "Coca-Cola".
+// Text with only its letters and digits.
 const compact = (text: string) => text.replace(/[^a-z0-9]/g, "");
+
+// Whether consecutive whole words of a question spell `name` once joined, so
+// "Mercado Libre" finds "MercadoLibre" and "Coca Cola" finds "Coca-Cola",
+// while "antes la" never finds "Tesla".
+const namesIn = (words: readonly string[], name: string) => {
+  const wanted = compact(folded(name));
+  return words.some((_, start) => {
+    let joined = "";
+    for (const word of words.slice(start)) {
+      joined += word;
+      if (joined === wanted) return true;
+      if (joined.length >= wanted.length) return false;
+    }
+    return false;
+  });
+};
 
 // What an answer about a year that left something out adds.
 const PARTIAL_YEAR = " Al año le falta algún dato; mirá su cierre.";
@@ -143,9 +158,7 @@ export function prototypeAnswer(
   }
 
   const instrument = state.instruments.find(
-    (each) =>
-      words.includes(folded(each.symbol)) ||
-      compact(asked).includes(compact(folded(each.name))),
+    (each) => words.includes(folded(each.symbol)) || namesIn(words, each.name),
   );
   if (instrument) {
     const { holdings, flows } = instrumentHoldings(
@@ -173,7 +186,7 @@ export function prototypeAnswer(
           ? `Ya no tenés ${instrument.symbol}.`
           : `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
         returns
-          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share.replace(/^-/, ""))} de lo que pusiste)` : ""}.${returns.annual ? ` ${byShare(returns.annual, { down: (size) => `Por año, perdió un ${size}.`, up: (size) => `Por año, rindió un ${size}.`, even: "Por año, no rindió ni perdió." })}` : ""}`
+          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share && shownSign(returns.result, unit) !== 0 ? ` (${formatFraction(returns.share.replace(/^-/, ""))} de lo que pusiste)` : ""}.${returns.annual ? ` ${byShare(returns.annual, { down: (size) => `Por año, perdió un ${size}.`, up: (size) => `Por año, rindió un ${size}.`, even: "Por año, no rindió ni perdió." })}` : ""}`
           : "",
         held && summary.unrealized
           ? bySign(summary.unrealized.amount, unit, {
@@ -251,7 +264,10 @@ export function prototypeAnswer(
     };
   }
 
-  if (/dividend|cupon|cobr|\brentas?\b/.test(asked) && thisYear) {
+  if (
+    /dividend|cupon|cobr|\brentas?\b(?! (fija|variable))/.test(asked) &&
+    thisYear
+  ) {
     return {
       ...base,
       text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
@@ -268,7 +284,10 @@ export function prototypeAnswer(
     };
   }
 
-  if (/rend|rentab|fue|gan|perd|resultado|ano|mes/.test(asked) && thisYear) {
+  if (
+    /rend|rind|rentab|fue|gan|perd|resultado|ano|mes/.test(asked) &&
+    thisYear
+  ) {
     const current = closes.at(-1)!;
     return {
       ...base,

@@ -151,3 +151,15 @@ it.each([
 ])("finds the instrument in %s", (question, symbol) => {
   expect(ask(question).text).toMatch(new RegExp(symbol));
 });
+
+it.each(["¿Cuánto tenía antes la cartera?", "¿Cuánto tengo en renta fija?"])(
+  "does not mistake %s for an instrument or for income",
+  (question) => {
+    const text = ask(question).text;
+    expect(text).not.toMatch(/TSLA|Tesla|de dividendos y cupones/);
+  },
+);
+
+it("answers how the portfolio did when asked what it yielded", () => {
+  expect(ask("¿Cuánto rindió mi cartera?").text).toMatch(/tu patrimonio/);
+});

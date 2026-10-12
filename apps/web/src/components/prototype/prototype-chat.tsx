@@ -3,6 +3,7 @@
 import { referenceUnit } from "@plant/core";
 
 import { AssistantPage } from "@/components/assistant/assistant-page";
+import { usedThisMonth } from "@/lib/format/text";
 
 import { usePrototype } from "./prototype-provider";
 
@@ -12,11 +13,7 @@ export function PrototypeChat() {
   return (
     <AssistantPage
       conversations={state.conversations}
-      used={
-        state.askedOn.filter(
-          (day) => day.slice(0, 7) === state.today.slice(0, 7),
-        ).length
-      }
+      used={usedThisMonth(state.askedOn, state.today)}
       defaultUnit={referenceUnit(state.referenceDollar)}
       actions={actions.assistant}
     />
