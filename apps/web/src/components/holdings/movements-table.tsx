@@ -159,7 +159,7 @@ export function MovementsTable({
           : null,
     },
     {
-      id: "cost",
+      id: "amount",
       header: "Importe",
       meta: { className: NUMBER_CELL },
       cell: ({ row: { original } }) => money(original.amount, unit),

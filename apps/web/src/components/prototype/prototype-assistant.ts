@@ -5,8 +5,13 @@ import {
 } from "@plant/core";
 import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
-import { signed } from "@/components/holdings/sum-text";
-import { formatAmount, formatFraction, shownAmount } from "@/lib/format/amount";
+import {
+  formatAmount,
+  formatFraction,
+  shownAmount,
+  shownSign,
+  signed,
+} from "@/lib/format/amount";
 import { folded } from "@/lib/format/text";
 import {
   type AssistantMessage,
@@ -56,22 +61,29 @@ function resultBars(
 // What a figure that left something out says after it.
 const WITHOUT_PRICE = " (sin contar lo que no tiene cotización)";
 
-// An amount by its sign as it shows, in words: "ganó US$ 10", "perdió
-// US$ 10", or `even` when it shows as zero.
+// An amount in words by the sign it shows with: `down` or `up` given its
+// size ("perdió US$ 10", "ganó US$ 10"), or `even` when it shows as zero.
 const bySign = (
   amount: string,
   unit: ChatUnit,
-  [down, up, even]: readonly [string, string, string?],
+  words: {
+    down: (size: string) => string;
+    up: (size: string) => string;
+    even: string;
+  },
 ) => {
-  const shown = shownAmount(amount, unit);
-  if (even !== undefined && exactOf(shown).n === 0n) return even;
-  return shown.startsWith("-")
-    ? `${down} ${formatAmount(shown.slice(1), unit)}`
-    : `${up} ${formatAmount(shown, unit)}`;
+  const sign = shownSign(amount, unit);
+  if (sign === 0) return words.even;
+  const size = formatAmount(shownAmount(amount, unit).replace(/^-/, ""), unit);
+  return sign < 0 ? words.down(size) : words.up(size);
 };
 
 const moved = (amount: string, unit: ChatUnit) =>
-  bySign(amount, unit, ["perdió", "ganó", "no ganó ni perdió"]);
+  bySign(amount, unit, {
+    down: (size) => `perdió ${size}`,
+    up: (size) => `ganó ${size}`,
+    even: "no ganó ni perdió",
+  });
 
 const FOLLOW_UPS = {
   netWorth: ["¿Cómo me fue este año?", "¿Cuánto debo?"],
@@ -141,10 +153,16 @@ export function prototypeAnswer(
           ? `Ya no tenés ${instrument.symbol}.`
           : `Hoy tenés ${instrument.symbol} por ${summary.value ? formatAmount(summary.value, unit) : "un valor sin cotización"}.`,
         returns
-          ? `En total, entre lo que vendiste, lo que cobraste${held ? " y lo que tenés" : ""}, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share)} sobre lo que pusiste)` : ""}${returns.annual ? `, un ${formatFraction(returns.annual)} por año` : ""}.`
+          ? `En total, entre lo que vendiste${held ? ", lo que cobraste y lo que tenés" : " y lo que cobraste"}, tu inversión ${moved(returns.result, unit)}${returns.share ? ` (${formatFraction(returns.share)} sobre lo que pusiste)` : ""}${returns.annual ? `, un ${formatFraction(returns.annual)} por año` : ""}.`
           : "",
         held && summary.unrealized
-          ? `Lo que tenés hoy está ${bySign(summary.unrealized.amount, unit, ["abajo", "arriba"])} contra lo que te costó.`
+          ? bySign(summary.unrealized.amount, unit, {
+              down: (size) =>
+                `Lo que tenés hoy está abajo ${size} contra lo que te costó.`,
+              up: (size) =>
+                `Lo que tenés hoy está arriba ${size} contra lo que te costó.`,
+              even: "Lo que tenés hoy vale lo que te costó.",
+            })
           : "",
       ]
         .filter(Boolean)
@@ -234,7 +252,21 @@ export function prototypeAnswer(
     const current = closes.at(-1)!;
     return {
       ...base,
-      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : " (con algún dato que falta; mirá el cierre del año)"}${thisYear.totals.share ? `, un ${formatFraction(thisYear.totals.share)} sin contar lo que pusiste` : ""} (${bySign(thisYear.totals.contributed, unit, ["sacaste", "pusiste"])} neto). En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
+      text: `En ${thisYear.year} tu patrimonio ${moved(thisYear.totals.result, unit)}${thisYear.complete ? "" : " (con algún dato que falta; mirá el cierre del año)"}${bySign(
+        thisYear.totals.contributed,
+        unit,
+        {
+          down: (size) => ` (sacaste ${size} neto)`,
+          up: (size) => ` (pusiste ${size} neto)`,
+          even: "",
+        },
+      )}.${
+        thisYear.totals.share === null
+          ? ""
+          : ` Sin contar lo que pusiste, lo que tenías ${
+              thisYear.totals.share.startsWith("-") ? "perdió" : "rindió"
+            } un ${formatFraction(thisYear.totals.share.replace(/^-/, ""))}.`
+      } En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
       chart: {
         title: `Resultado por mes de ${thisYear.year}`,
         unit,

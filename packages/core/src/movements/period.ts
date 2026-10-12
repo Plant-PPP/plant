@@ -133,7 +133,7 @@ function shareOf(result: Exact, atWork: Exact): string | null {
 }
 
 // Periods' returns one after another as one: each grows what the last left.
-// A period with no return of its own (nothing at work) adds nothing; null
+// A period whose return could not be measured adds nothing; null
 // when none of them has one.
 export function chainedShare(
   shares: readonly (string | null)[],

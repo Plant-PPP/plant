@@ -1,3 +1,4 @@
+import { admitMovements } from "@plant/core";
 import {
   compareDecimals,
   exactOf,
@@ -16,9 +17,9 @@ import {
 } from "@/lib/imports/review";
 
 import {
+  allRows,
   difference,
   holdingIn,
-  holdingsView,
   priceToday,
   type PrototypeState,
   type Write,
@@ -65,21 +66,44 @@ export function addImport(
 export const startReading = (state: PrototypeState, id: string) =>
   withImport(state, id, (item) => ({ ...item, status: "reading" }));
 
-// Each instrument the account holds, summed across its portfolios.
+// What a holding's movements left by the end of `date`.
+function quantityAt(state: PrototypeState, holdingId: string, date: string) {
+  const admitted = admitMovements({
+    prior: null,
+    after: (state.movements.get(holdingId) ?? []).filter(
+      (movement) => movement.date <= date,
+    ),
+  });
+  return admitted.ok ? admitted.quantity : "0";
+}
+
+// The account's instrument holdings with what each held by the end of
+// `date`, largest first; those that held nothing then are left out.
+function holdingsAt(state: PrototypeState, accountId: string, date: string) {
+  return allRows(state)
+    .flatMap((row) =>
+      row.account.id === accountId && row.holding.asset_class === "instrument"
+        ? [{ row, quantity: quantityAt(state, row.id, date) }]
+        : [],
+    )
+    .filter(({ quantity }) => exactOf(quantity).n > 0n)
+    .sort((a, b) => compareDecimals(b.quantity, a.quantity));
+}
+
+// Each instrument the account held by the end of `date` (today unless
+// given), summed across its portfolios.
 export function heldIn(
   state: PrototypeState,
   accountId: string,
+  date = state.today,
 ): Map<string, string> {
   const held = new Map<string, string>();
-  for (const row of holdingsView(state).active) {
-    if (row.account.id !== accountId) continue;
+  for (const { row, quantity } of holdingsAt(state, accountId, date)) {
     if (row.holding.asset_class !== "instrument") continue;
     const symbol = row.holding.instrument_symbol;
     held.set(
       symbol,
-      stored(
-        plus(exactOf(held.get(symbol) ?? "0"), exactOf(row.holding.amount)),
-      ),
+      stored(plus(exactOf(held.get(symbol) ?? "0"), exactOf(quantity))),
     );
   }
   return held;
@@ -213,7 +237,10 @@ export function confirmImport(
     return { state, result: { ok: false, code: "invalid" } };
   }
   let next = state;
-  const held = heldIn(state, account.id);
+  // The statement says what the account held on its date, so each row is
+  // weighed against that day, and the difference is booked on it.
+  const date = item.documentDate ?? state.today;
+  const held = heldIn(state, account.id, date);
   for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,
@@ -222,15 +249,12 @@ export function confirmImport(
     const diff = difference(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
-    // The account's holdings of it, largest first.
-    const holdings = holdingsView(next)
-      .active.filter(
-        (each) =>
-          each.account.id === account.id &&
-          each.holding.asset_class === "instrument" &&
-          each.holding.instrument_symbol === row.symbol,
-      )
-      .sort((a, b) => compareDecimals(b.holding.amount, a.holding.amount));
+    // The account's holdings of it on that day, largest first.
+    const holdings = holdingsAt(next, account.id, date).filter(
+      ({ row: each }) =>
+        each.holding.asset_class === "instrument" &&
+        each.holding.instrument_symbol === row.symbol,
+    );
     // More units come in at the price read, to the portfolio holding the
     // most, or the account's default for a new instrument; fewer go out of
     // the largest holdings first.
@@ -241,19 +265,16 @@ export function confirmImport(
       }
       parts = [
         {
-          portfolio_id: holdings[0]?.portfolio.id ?? account.portfolio.id,
+          portfolio_id: holdings[0]?.row.portfolio.id ?? account.portfolio.id,
           quantity: diff,
         },
       ];
     } else {
       let left = difference("0", diff);
       parts = [];
-      for (const each of holdings) {
+      for (const { row: each, quantity } of holdings) {
         if (compareDecimals(left, "0") <= 0) break;
-        const taken =
-          compareDecimals(each.holding.amount, left) < 0
-            ? each.holding.amount
-            : left;
+        const taken = compareDecimals(quantity, left) < 0 ? quantity : left;
         parts.push({ portfolio_id: each.portfolio.id, quantity: taken });
         left = difference(left, taken);
       }
@@ -271,7 +292,7 @@ export function confirmImport(
         ...(!opens && { direction: order > 0 ? "in" : "out" }),
         source_connection_id: account.id,
         instrument_symbol: row.symbol,
-        date: item.documentDate ?? state.today,
+        date,
         currency: instrument.currency,
         price: order > 0 ? row.price : "0",
         parts,

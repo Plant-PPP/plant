@@ -135,4 +135,5 @@ it("says an instrument sold out is no longer held", () => {
   const text = ask("¿Cómo le fue a Tesla?").text;
   expect(text).toMatch(/^Ya no tenés TSLA\./);
   expect(text).not.toMatch(/lo que tenés/i);
+  expect(text).toMatch(/entre lo que vendiste y lo que cobraste/);
 });

@@ -7,8 +7,9 @@ import {
   addImport,
   confirmImport,
   finishReading,
+  heldIn,
 } from "./prototype-imports-store";
-import { holdingsView, initialState } from "./prototype-store";
+import { holdingsView, initialState, writeOperation } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -188,4 +189,55 @@ it("refuses a kept row with no units, changing nothing", () => {
   const refused = confirmImport(after, "i1", rows, newId);
   expect(refused.result).toEqual({ ok: false, code: "invalid" });
   expect(refused.state).toBe(after);
+});
+
+it("weighs a past statement against what was held on its date", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  // 2 AAPL sold after the statement's date.
+  const sold = writeOperation(
+    state,
+    {
+      kind: "sale",
+      source_connection_id: iol.id,
+      instrument_symbol: "AAPL",
+      date: "2026-10-05",
+      currency: "ARS",
+      price: "20000",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, quantity: "2" }],
+    },
+    { operationId: "sold", newId },
+  ).state;
+  const read = finishReading(
+    addImport(sold, { id: "i9", fileName: "septiembre.pdf", accountId: IOL })
+      .state,
+    "i9",
+  );
+  const onTheFirst = heldIn(read, IOL, "2026-10-01");
+  const dated = {
+    ...read,
+    imports: read.imports.map((each) =>
+      each.id === "i9" ? { ...each, documentDate: "2026-10-01" } : each,
+    ),
+  };
+  // The statement lists AAPL exactly as held on its date.
+  const rows = [
+    {
+      id: "aapl",
+      symbol: "AAPL",
+      quantity: onTheFirst.get("AAPL")!,
+      price: "20000",
+      currency: "ARS" as const,
+      confidence: "high" as const,
+      source: "Página 1",
+      discarded: false,
+    },
+  ];
+  const confirmed = confirmImport(dated, "i9", rows, newId);
+  expect(confirmed.result.ok).toBe(true);
+  expect(heldIn(confirmed.state, IOL).get("AAPL")).toBe(
+    heldIn(sold, IOL).get("AAPL"),
+  );
 });
