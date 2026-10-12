@@ -398,3 +398,28 @@ it("reloads the other parts' holdings when one is deleted", () => {
   );
   expect(integrity(deleted)).toEqual([]);
 });
+
+it("keeps an edited operation's account and instrument", () => {
+  const sale = newId();
+  const sold = writeOperation(
+    start,
+    trade("sale", "AAPL", "IOL", "2026-09-20", [
+      { portfolio_id: PRINCIPAL, quantity: "1" },
+    ]),
+    write(sale),
+  ).state;
+  for (const [symbol, institution] of [
+    ["MELI", "IOL"],
+    ["AAPL", "Cocos"],
+  ] as const) {
+    const moved = writeOperation(
+      sold,
+      trade("sale", symbol, institution, "2026-09-20", [
+        { portfolio_id: PRINCIPAL, quantity: "1" },
+      ]),
+      { ...write(sale), replacing: true },
+    );
+    expect(moved.result).toEqual({ ok: false, code: "invalid" });
+    expect(moved.state).toBe(sold);
+  }
+});
