@@ -177,14 +177,12 @@ export function MovementDialog({
       ),
     }));
 
-  // A field's description: the alert when it is refused, then its help.
-  const describedBy = (field: MovementField, help?: string) =>
-    [...(invalid(field) ? [alertId] : []), ...(help ? [help] : [])].join(" ") ||
-    undefined;
-
-  const control = (field: MovementField) => ({
+  const control = (field: MovementField, help?: string) => ({
     "aria-invalid": invalid(field),
-    "aria-describedby": invalid(field) && alertId,
+    "aria-describedby":
+      [...(invalid(field) ? [alertId] : []), ...(help ? [help] : [])].join(
+        " ",
+      ) || undefined,
   });
 
   function submit() {
@@ -356,8 +354,7 @@ export function MovementDialog({
                 </Label>
                 <Input
                   id={fieldId("price")}
-                  {...control("price")}
-                  aria-describedby={describedBy("price", priceHelpId)}
+                  {...control("price", priceHelpId)}
                   autoFocus={firstField === "price"}
                   inputMode="decimal"
                   autoComplete="off"
@@ -403,13 +400,14 @@ export function MovementDialog({
                     size="sm"
                     variant="link"
                     className="h-auto p-0 text-xs"
-                    onClick={() =>
+                    onClick={() => {
                       setFields((current) => ({
                         ...current,
                         price: "",
                         priceEdited: false,
-                      }))
-                    }
+                      }));
+                      settle("price");
+                    }}
                   >
                     Usar el sugerido (
                     {formatQuotedPrice(
@@ -478,8 +476,7 @@ export function MovementDialog({
                 </Label>
                 <Input
                   id={fieldId("parts")}
-                  {...control("parts")}
-                  aria-describedby={describedBy(
+                  {...control(
                     "parts",
                     fields.balance === null ? undefined : balanceHelpId,
                   )}

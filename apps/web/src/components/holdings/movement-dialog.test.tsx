@@ -295,6 +295,13 @@ describe("a yield", () => {
     expect(html).not.toContain("Sugerido: el precio de ese día.");
   });
 
+  it("describes the units by nothing while nothing is refused", () => {
+    const units = renderYield(earning, "61000").match(
+      /<input[^>]*id="[^"]+-parts"[^>]*>/,
+    )![0];
+    expect(units).not.toContain("aria-describedby");
+  });
+
   it("takes the final balance instead of the units", () => {
     const html = renderYield({ ...earning, balance: "3" }, "61000");
     expect(html).toContain("Saldo final");
