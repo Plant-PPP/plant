@@ -138,3 +138,15 @@ export {
   type PeriodResult,
   periodResult,
 } from "./movements/period";
+export {
+  LIABILITY_KINDS,
+  LIABILITY_LABEL_MAX,
+  type LiabilitiesValue,
+  type Liability,
+  liabilityInputSchema,
+  type LiabilityKind,
+  liabilitySchema,
+  liabilityValue,
+  unitsAgree,
+  valueLiabilities,
+} from "./liabilities/liability";

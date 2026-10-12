@@ -17,6 +17,8 @@ export async function PrototypeRoot({ children }: { children: ReactNode }) {
     today,
     {
       ...need,
+      // Every UVA debt is owed at the UVA of the day.
+      fxKinds: [...need.fxKinds, "uva"],
       symbols: [
         ...need.symbols,
         ...fixtures.instruments.map(({ symbol }) => symbol),

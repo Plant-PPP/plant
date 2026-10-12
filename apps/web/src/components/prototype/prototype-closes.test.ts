@@ -9,6 +9,7 @@ import {
   yearsOfCloses,
 } from "./prototype-closes";
 import {
+  deleteHolding,
   deleteOperation,
   initialState,
   setPrice,
@@ -294,6 +295,20 @@ it("moves units in and out at their worth, so a transfer makes no market result"
     100 * (quoteOn("2026-09-20") - quoteOn("2026-09-15")),
     2,
   );
+});
+
+it("measures returns on what is held, even with more owed than held", () => {
+  const property = state.holdings.find(
+    (each) => each.holding.asset_class === "real_estate",
+  )!;
+  const indebted = deleteHolding(state, property.holding.id).state;
+  for (const close of closesOf(indebted, "usd_mep")) {
+    if (close.figures.share === null) continue;
+    // Only what is held is at work, so it can lose all of it but no more.
+    expect(Number(close.figures.share)).toBeGreaterThanOrEqual(-1);
+  }
+  const [current] = yearsOfCloses(closesOf(indebted, "usd_mep"));
+  expect(current!.totals.share).not.toBeNull();
 });
 
 it("marks a month whose start an earlier trade's price values", () => {

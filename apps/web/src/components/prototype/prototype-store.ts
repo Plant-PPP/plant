@@ -1,6 +1,7 @@
 import {
   admitManualPrice,
   type CashFlow,
+  type Liability,
   withManualPrices,
   cashFlowsOf,
   type QuoteSnapshot,
@@ -85,6 +86,8 @@ export type PrototypeState = {
   manualPrices: readonly ManualPrice[];
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
+  // Newest first.
+  liabilities: Liability[];
 };
 
 export type StoredHolding = {
@@ -124,6 +127,7 @@ export function initialState(
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
     recalculated: new Map(),
+    liabilities: fixtures.liabilities,
   };
 }
 

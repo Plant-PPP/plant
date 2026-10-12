@@ -13,6 +13,7 @@ import {
   quotesNeeded,
   snapshotOn,
   valueHoldings,
+  valueLiabilities,
   withManualPrices,
 } from "@plant/core";
 import {
@@ -44,6 +45,7 @@ import {
 
 import {
   allRows,
+  difference,
   lineOf,
   operationOf,
   type PrototypeState,
@@ -205,6 +207,7 @@ export function closesOf(
     const quoted = withManualPrices(
       snapshotOn(state.quotes, date, {
         ...need,
+        fxKinds: [...need.fxKinds, "uva"],
         symbols: state.instruments.map(({ symbol }) => symbol),
       }).snapshot,
       state.manualPrices,
@@ -215,17 +218,30 @@ export function closesOf(
     };
   };
   const valued = (holdings: HoldingRow[], date: string) => {
+    const snapshot = snapshotAt(date);
     const total = holdingsValuation({
       holdings,
       truncated: false,
-      snapshot: snapshotAt(date),
+      snapshot,
       unit,
       referenceDollar: state.referenceDollar,
     }).kinds.total;
-    return { value: total.value, complete: total.complete };
+    return { value: total.value, complete: total.complete, snapshot };
   };
-  const valueAt = (date: string) =>
-    valued(holdingsAt(state, ledgers, date), date);
+  // Net worth: what is held less what is owed. A debt keeps today's balance
+  // on every past day, in its own unit, until debts have a history.
+  const valueAt = (date: string) => {
+    const held = valued(holdingsAt(state, ledgers, date), date);
+    const owed = valueLiabilities(state.liabilities, held.snapshot, {
+      denominator: unit,
+      referenceDollar: state.referenceDollar,
+    });
+    return {
+      value: difference(held.value, owed.total),
+      held: held.value,
+      complete: held.complete && owed.complete,
+    };
+  };
   // What each opening balance and adjustment out moved at, which the month's
   // detail shows.
   const worths = new Map<string, string>();
@@ -270,6 +286,7 @@ export function closesOf(
     const end = valueAt(month.to);
     const inMonth = (date: string) => date > month.from && date <= month.to;
     const flows: CashFlow[] = [];
+    const period = { from: month.from, to: month.to, flows };
     const realized: (string | null)[] = [];
     // Whether every movement of the month could be expressed in the unit,
     // and every opening balance and adjustment out priced on its day.
@@ -287,13 +304,20 @@ export function closesOf(
     }
     return {
       ...month,
-      figures: periodResult({
-        from: month.from,
-        to: month.to,
-        startValue: start.value,
-        endValue: end.value,
-        flows,
-      }),
+      figures: {
+        ...periodResult({
+          ...period,
+          startValue: start.value,
+          endValue: end.value,
+        }),
+        // The return is what was held made: a debt counts in net worth but
+        // earns nothing, and its balance moving is not a return.
+        share: periodResult({
+          ...period,
+          startValue: start.held,
+          endValue: end.held,
+        }).share,
+      },
       realized: sumOrNull(realized),
       complete: start.complete && end.complete && known,
       endComplete: end.complete,

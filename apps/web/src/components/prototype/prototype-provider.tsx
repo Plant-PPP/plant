@@ -8,6 +8,7 @@ import type {
   MovementActions,
   PriceActions,
 } from "@/components/holdings/assets-setup";
+import type { DebtActions } from "@/components/debts/debts-setup";
 import type { NamedRowsActions } from "@/components/portfolio-setup/named-rows-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -25,6 +26,7 @@ import {
   writeOperation,
 } from "./prototype-store";
 import * as accounts from "./prototype-accounts-store";
+import * as debts from "./prototype-debts-store";
 import { markRecalculated } from "./prototype-closes";
 import { usePrototypeStore } from "./use-prototype-store";
 
@@ -43,6 +45,7 @@ type Prototype = {
     prices: PriceActions;
     sourceConnections: SourceConnectionActions;
     portfolios: NamedRowsActions;
+    debts: DebtActions;
   };
 };
 
@@ -118,6 +121,12 @@ export function PrototypeProvider({
       restore: (id, input) =>
         write((s) => accounts.restoreAccount(s, id, input)),
       delete: (id) => write((s) => accounts.deleteAccount(s, id)),
+    },
+    debts: {
+      create: (input) =>
+        write((s) => debts.createLiability(s, input, crypto.randomUUID())),
+      update: (id, input) => write((s) => debts.updateLiability(s, id, input)),
+      delete: (id) => write((s) => debts.deleteLiability(s, id)),
     },
     portfolios: {
       create: (input) =>

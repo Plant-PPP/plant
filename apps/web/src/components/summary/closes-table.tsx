@@ -79,7 +79,7 @@ export function ClosesTable({
     },
     {
       id: "end",
-      header: "Patrimonio",
+      header: "Patrimonio neto",
       meta: { className: VALUE_CELL },
       cell: ({ row: { original: close } }) => (
         <AmountText amount={close.figures.endValue} unit={unit} />

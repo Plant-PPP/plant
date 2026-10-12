@@ -70,10 +70,10 @@ function CloseFigures({
   return (
     <div className="grid gap-3">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Patrimonio al inicio">
+        <SummaryTile label="Patrimonio neto al inicio">
           <AmountText amount={figures.startValue} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Patrimonio al final">
+        <SummaryTile label="Patrimonio neto al final">
           <AmountText amount={figures.endValue} unit={unit} />
         </SummaryTile>
         <SummaryTile
@@ -112,9 +112,10 @@ function CloseFigures({
       </dl>
       {!complete && (
         <p className="text-muted-foreground text-xs">
-          Faltó algún dato: la cotización de un activo al inicio o al final, un
-          movimiento que no se puede pasar a esta moneda o el precio de un saldo
-          inicial o un ajuste de salida ese día, que cuentan a su costo
+          Faltó algún dato: la cotización de un activo o una deuda al inicio o
+          al final, un movimiento que no se puede pasar a esta moneda o el
+          precio de un saldo inicial o un ajuste de salida ese día, que cuentan
+          a su costo
           {year && ", o el rendimiento de algún mes, que no se pudo medir"}.
         </p>
       )}
