@@ -1,4 +1,4 @@
-import { compareDecimals } from "@plant/shared";
+import { compareDecimals, exactOf, plus, stored } from "@plant/shared";
 
 import { readTotals, totalsMatch } from "@/lib/imports/review";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -9,7 +9,7 @@ import {
   finishReading,
   heldIn,
 } from "./prototype-imports-store";
-import { holdingsView, initialState, writeOperation } from "./prototype-store";
+import { holdingsView, initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
@@ -191,43 +191,24 @@ it("refuses a kept row with no units, changing nothing", () => {
   expect(refused.state).toBe(after);
 });
 
-it("weighs a past statement against what was held on its date", () => {
-  const iol = state.accounts.find((each) => each.institution === "IOL")!;
-  // 2 AAPL sold after the statement's date.
-  const sold = writeOperation(
-    state,
-    {
-      kind: "sale",
-      source_connection_id: iol.id,
-      instrument_symbol: "AAPL",
-      date: "2026-10-05",
-      currency: "ARS",
-      price: "20000",
-      charges: [],
-      reference: null,
-      note: null,
-      parts: [{ portfolio_id: iol.portfolio.id, quantity: "2" }],
-    },
-    { operationId: "sold", newId },
-  ).state;
+it("books a statement's differences today, against what is held today", () => {
   const read = finishReading(
-    addImport(sold, { id: "i9", fileName: "septiembre.pdf", accountId: IOL })
+    addImport(state, { id: "i9", fileName: "septiembre.pdf", accountId: IOL })
       .state,
     "i9",
   );
-  const onTheFirst = heldIn(read, IOL, "2026-10-01");
   const dated = {
     ...read,
     imports: read.imports.map((each) =>
-      each.id === "i9" ? { ...each, documentDate: "2026-10-01" } : each,
+      each.id === "i9" ? { ...each, documentDate: "2026-09-01" } : each,
     ),
   };
-  // The statement lists AAPL exactly as held on its date.
+  const held = heldIn(state, IOL).get("AAPL")!;
   const rows = [
     {
       id: "aapl",
       symbol: "AAPL",
-      quantity: onTheFirst.get("AAPL")!,
+      quantity: stored(plus(exactOf(held), exactOf("3"))),
       price: "20000",
       currency: "ARS" as const,
       confidence: "high" as const,
@@ -237,7 +218,9 @@ it("weighs a past statement against what was held on its date", () => {
   ];
   const confirmed = confirmImport(dated, "i9", rows, newId);
   expect(confirmed.result.ok).toBe(true);
-  expect(heldIn(confirmed.state, IOL).get("AAPL")).toBe(
-    heldIn(sold, IOL).get("AAPL"),
-  );
+  expect(heldIn(confirmed.state, IOL).get("AAPL")).toBe(rows[0]!.quantity);
+  const added = [...confirmed.state.movements.values()]
+    .flat()
+    .find((each) => each.note === "Carga de septiembre.pdf")!;
+  expect(added.date).toBe(TODAY);
 });
