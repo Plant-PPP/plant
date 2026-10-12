@@ -500,6 +500,12 @@ describe("a yield's fields", () => {
       "parts",
       "Ingresá un saldo final de 0 o más.",
     ],
+    [
+      "a negative balance",
+      { price: "1", balance: "-1" },
+      "parts",
+      "Ingresá un saldo final de 0 o más.",
+    ],
   ] as const)(
     "asks for what is missing in its words: %s",
     (_, change, field, text) => {

@@ -218,6 +218,7 @@ describe("a yield", () => {
     ],
     ["no value", { direction: "in", price: undefined }],
     ["a null value", { direction: "in", price: null }],
+    ["an unknown key", { direction: "in", broker: "x" }],
   ])("refuses %s", (_, change) => {
     expect(movementSchema.safeParse({ ...leg, ...change }).success).toBe(false);
   });
