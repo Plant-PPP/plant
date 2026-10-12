@@ -107,7 +107,7 @@ export type MovementRate = MovementRates[UnitFxKind];
 // A movement is one holding's part of an operation: the operation's other
 // parts are the same purchase or sale in the account's other portfolios.
 // Every part shares its operation's entry order, which orders the movements
-// of one day.
+// of one day after any opening balance.
 const stored = {
   id: z.string(),
   holding_id: z.string(),
