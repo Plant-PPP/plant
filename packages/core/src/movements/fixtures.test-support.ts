@@ -127,3 +127,26 @@ export function transfer(
     rates: common.rates ?? ratesOf(common.date),
   };
 }
+
+// Units a holding earned (in) or lost (out), each worth `price` that day.
+export function yielded(
+  direction: "in" | "out",
+  quantity: string,
+  price: string,
+  common: Common,
+): Movement {
+  return {
+    ...stampOf(common),
+    holding_id: "h1",
+    kind: "yield",
+    direction,
+    date: common.date,
+    currency: common.currency ?? "USD",
+    quantity,
+    price,
+    charges: [],
+    reference: null,
+    note: null,
+    rates: common.rates ?? ratesOf(common.date),
+  };
+}

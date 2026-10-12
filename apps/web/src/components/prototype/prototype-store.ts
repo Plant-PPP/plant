@@ -11,6 +11,7 @@ import {
   manualPriceSchema,
   isIncome,
   isOrderRefusal,
+  isYield,
   type MovementDraft,
   type SaleResult,
   splitCharges,
@@ -27,7 +28,9 @@ import {
   type MovementCursor,
   movementKey,
   type Position,
+  type PositionMoney,
   positionOf,
+  quantityOn,
   replayHoldings,
   type ReferenceDollar,
   lift,
@@ -36,7 +39,17 @@ import {
   snapshotOn,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { exactOf, minus, over, stored, sumOrNull } from "@plant/shared";
+import {
+  compareExact,
+  type Currency,
+  exactOf,
+  minus,
+  negated,
+  over,
+  stored,
+  sumOrNull,
+  ZERO,
+} from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
@@ -46,6 +59,7 @@ import type {
   MovementResult,
   MovementScope,
   MovementsPage,
+  QuoteQuery,
   SaleLine,
   SalesSlice,
   TransferCostQuery,
@@ -377,7 +391,7 @@ export function suggestedTransferCost(
   ).get(holding)!;
   const amount = amountOf(
     own[index]!,
-    steps[index - 1]!.position,
+    positionBefore(steps, index),
     steps[index]!,
   );
   return amount === null
@@ -469,37 +483,52 @@ export function salesOf(
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
 
+// The position before a holding's step `index`: empty before its first.
+export const positionBefore = (
+  steps: readonly LedgerStep[],
+  index: number,
+): Position => steps[index - 1]?.position ?? EMPTY_POSITION;
+
+// Null when either side has no money in the unit.
+export function moneyChange(
+  before: Position,
+  step: LedgerStep,
+  field: keyof PositionMoney,
+): string | null {
+  const was = before.money;
+  const now = step.position.money;
+  return was && now ? difference(now[field], was[field]) : null;
+}
+
 export function lineOf(
   movement: Movement,
   before: Position,
   step: LedgerStep,
   operation: OperationParts,
 ): MovementLine {
-  const was = before.money;
-  const now = step.position.money;
   return {
     movement,
     amount: amountOf(movement, before, step),
-    charges: was && now ? difference(now.charges, was.charges) : null,
+    charges: moneyChange(before, step, "charges"),
     operation,
   };
 }
 
 // A movement's amount from its step and the position before it: the cost its
-// units added or took out, a sale's gross, or what an income paid.
+// units added or took out, a sale's gross, what an income paid, or what a
+// yield earned (negative when it lost).
 function amountOf(
   movement: Movement,
   before: Position,
   step: LedgerStep,
 ): string | null {
-  const was = before.money;
-  const now = step.position.money;
-  if (!was || !now) return null;
-  if (isIncome(movement.kind)) return difference(now.income, was.income);
+  const cost = moneyChange(before, step, "cost");
+  if (cost === null) return null;
+  if (isIncome(movement.kind) || isYield(movement)) {
+    return moneyChange(before, step, "income");
+  }
   if (movement.kind === "sale") return step.sale?.gross ?? null;
-  return takesUnits(movement)
-    ? difference(was.cost, now.cost)
-    : difference(now.cost, was.cost);
+  return takesUnits(movement) ? stored(negated(exactOf(cost))) : cost;
 }
 
 // Every part of an operation, from the holdings it touched.
@@ -629,7 +658,7 @@ export function movementsPage(
     rows.push(
       lineOf(
         best.movements[index]!,
-        index === 0 ? EMPTY_POSITION : best.steps[index - 1]!.position,
+        positionBefore(best.steps, index),
         best.steps[index]!,
         operationOf(state, best.movements[index]!.operation_id)!,
       ),
@@ -660,21 +689,25 @@ export const refusedWrite = (
   code: Extract<WriteResult, { ok: false }>["code"],
 ): Write<WriteResult> => refused(state, { ok: false, code });
 
-// An instrument's price today in its own currency, from the feeds or else the
-// user's manual price; none when neither has one.
-export function priceToday(
+// An instrument's price on a date when quoted in `currency`, from the feeds or
+// else the user's manual price; none when neither has one in it. prototype-closes'
+// snapshotAt values a day on its own, in any unit and from trades when nothing
+// quotes it; the two become one if a suggestion ever takes that fallback.
+export function priceOn(
   state: PrototypeState,
-  instrument: { symbol: string; currency: string },
+  { symbol, currency, date }: QuoteQuery,
 ): string | null {
   const quote = withManualPrices(
-    snapshotOn(state.quotes, state.today, {
-      fxKinds: [],
-      symbols: [instrument.symbol],
-    }).snapshot,
+    snapshotOn(state.quotes, date, { fxKinds: [], symbols: [symbol] }).snapshot,
     state.manualPrices,
-  ).snapshot.prices[instrument.symbol];
-  return quote && quote.currency === instrument.currency ? quote.price : null;
+  ).snapshot.prices[symbol];
+  return quote && quote.currency === currency ? quote.price : null;
 }
+
+export const priceToday = (
+  state: PrototypeState,
+  instrument: { symbol: string; currency: Currency },
+): string | null => priceOn(state, { ...instrument, date: state.today });
 
 export function createHolding(
   state: PrototypeState,
@@ -890,7 +923,7 @@ export const holdingIn = (
   );
 
 // Records an operation (`replacing` none) or an edit of one: each part becomes
-// a movement of its portfolio's holding, which a part bringing units in
+// a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
 // amount). Every touched holding is admitted again, or nothing changes.
 export function writeOperation(
@@ -906,7 +939,7 @@ export function writeOperation(
   if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
   const operation = parsed.data;
   const {
-    parts,
+    parts: given,
     source_connection_id: accountId,
     instrument_symbol: instrumentSymbol,
     ...fields
@@ -936,13 +969,6 @@ export function writeOperation(
     fxKinds: UNIT_FX_KINDS,
     symbols: [],
   }).snapshot.fx;
-  const sizes = parts.map((part) =>
-    "quantity" in part ? part.quantity : part.amount,
-  );
-  const charges = splitCharges(
-    "charges" in operation ? operation.charges : [],
-    sizes,
-  );
   // An edit first takes the operation's movements out of their holdings.
   const without = new Map<string, Movement[]>();
   for (const [holdingId, own] of state.movements) {
@@ -953,23 +979,63 @@ export function writeOperation(
       );
     }
   }
+  // Each part with its portfolio. A yield given as a balance is the
+  // difference from what its holding held at the end of that day.
+  const parts: {
+    portfolio: PortfolioRow;
+    part: Exclude<(typeof given)[number], { balance: string }>;
+  }[] = [];
+  for (const part of given) {
+    const portfolioId = part.portfolio_id;
+    const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
+    if (!portfolio) {
+      return refused(state, {
+        ok: false,
+        code: archivedCode(state, { portfolioId }) ?? "not_found",
+      });
+    }
+    if (!("balance" in part)) {
+      parts.push({ portfolio, part });
+      continue;
+    }
+    const home = holdingIn(state, accountId, instrumentSymbol, portfolioId)
+      ?.holding.id;
+    const own =
+      home === undefined
+        ? []
+        : (without.get(home) ?? state.movements.get(home) ?? []);
+    const change = minus(
+      exactOf(part.balance),
+      exactOf(quantityOn(own, operation.date)),
+    );
+    const sign = compareExact(change, ZERO);
+    if (sign === 0) return refused(state, { ok: false, code: "same_balance" });
+    parts.push({
+      portfolio,
+      part: {
+        portfolio_id: portfolioId,
+        direction: sign > 0 ? "in" : "out",
+        quantity: stored(sign > 0 ? change : negated(change)),
+      },
+    });
+  }
+  const sizes = parts.map(({ part }) =>
+    "quantity" in part ? part.quantity : part.amount,
+  );
+  const charges = splitCharges(
+    "charges" in operation ? operation.charges : [],
+    sizes,
+  );
   const writeAt = (entryOrder: number): Write<MovementResult> => {
     let next = state;
     const touched = new Map(without);
-    for (const [index, part] of parts.entries()) {
+    for (const [index, { portfolio, part }] of parts.entries()) {
       const { portfolio_id: portfolioId, ...ownFields } = part;
-      const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
-      if (!portfolio) {
-        return refused(state, {
-          ok: false,
-          code: archivedCode(state, { portfolioId }) ?? "not_found",
-        });
-      }
       const stored = holdingIn(
         next,
         account.id,
         instrument.symbol,
-        portfolio.id,
+        portfolioId,
       );
       const holdingId = stored?.holding.id ?? newId();
       const draft = {
@@ -1037,9 +1103,12 @@ export function writeOperation(
   // as if entered again, unless going last leaves something taking out more
   // than was held before it, or a holding no longer starting with units
   // coming in; then it keeps its number on the new date. An opening balance
-  // keeps its own number: it ranks first anyway.
+  // keeps its own number: it ranks first anyway. A yield given as a balance
+  // goes last on its day, new or edited, since the balance is the day's end.
   const kept = was?.parts[0]?.movement;
-  if (!kept) return writeAt(state.nextEntryOrder);
+  if (!kept || given.some((part) => "balance" in part)) {
+    return writeAt(state.nextEntryOrder);
+  }
   if (
     operation.kind === "opening_balance" ||
     (kept.date === operation.date && kept.kind !== "opening_balance")

@@ -17,6 +17,7 @@ import {
   Plus,
   SlidersHorizontal,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useId, useState } from "react";
 import Link from "next/link";
@@ -156,7 +157,7 @@ const MOVEMENT_FIGURE = 112;
 type ShownHolding = HoldingRow & { unsaved?: true };
 
 // A new operation, from the header or for one holding (`kind` preset for an
-// adjustment), or an edit of one.
+// adjustment or a yield), or an edit of one.
 type MovementDialogState =
   | ({
       kind: "create";
@@ -476,6 +477,26 @@ export function AssetsSetup({
               : null,
         }),
     };
+  }
+
+  // Yields the dialog offers: into the holding it was opened from, once that
+  // holding has movements, or into the one portfolio an edited operation is
+  // in.
+  function yieldsOf(
+    state: MovementDialogState,
+    input: MovementsInput,
+  ): ComponentProps<typeof MovementDialog>["yields"] {
+    const { quoteOn } = input;
+    if (!quoteOn) return undefined;
+    const portfolio =
+      state.kind === "edit"
+        ? state.operation.parts.length === 1
+          ? state.operation.parts[0]!.portfolioId
+          : undefined
+        : state.row && input.positions.has(state.row.id)
+          ? state.row.portfolio.id
+          : undefined;
+    return portfolio === undefined ? undefined : { portfolio, quoteOn };
   }
 
   // A movement as its actions name it: "compra del 01/09/2026".
@@ -1056,7 +1077,7 @@ export function AssetsSetup({
                         : []),
                     ]}
                   />
-                  <div>
+                  <div className="flex flex-wrap gap-2">
                     <PendingButton
                       size="sm"
                       variant="outline"
@@ -1068,6 +1089,23 @@ export function AssetsSetup({
                       <Plus />
                       Agregar movimiento
                     </PendingButton>
+                    {yieldsOf({ kind: "create", row }, movement.input) && (
+                      <PendingButton
+                        size="sm"
+                        variant="ghost"
+                        pending={pending}
+                        onClick={() =>
+                          openMovementDialog({
+                            kind: "create",
+                            row,
+                            preset: "yield",
+                          })
+                        }
+                      >
+                        <TrendingUp />
+                        Cargar rendimiento
+                      </PendingButton>
+                    )}
                   </div>
                 </div>
               ))
@@ -1294,6 +1332,7 @@ export function AssetsSetup({
       {movement && movementDialog && (
         <MovementDialog
           transfer={transferOf(movementDialog, movement.input)}
+          yields={yieldsOf(movementDialog, movement.input)}
           mode={movementDialog.kind}
           accounts={accounts}
           portfolios={portfolios}

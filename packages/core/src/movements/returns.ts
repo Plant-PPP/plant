@@ -11,18 +11,20 @@ import {
   ZERO,
 } from "@plant/shared";
 
-import { isIncome, type Movement, takesUnits } from "./movement";
+import { isIncome, isYield, type Movement, takesUnits } from "./movement";
 import type { LedgerStep } from "./replay";
 
 // Money between the holder and a holding on a date, in the view's unit:
 // negative is paid in (a purchase or an adjustment in, at its cost, with its
 // charges), positive paid out (a sale less its charges, an adjustment out at
 // the cost it takes, an income less its withholding). Its kind says which,
-// and `charges` what of it went to commissions, fees and taxes.
+// and `charges` what of it went to commissions, fees and taxes. A yield is
+// what the holding earned (positive) or lost (negative) in its own units,
+// valued that day: a return, never money paid in or out.
 export type CashFlow = {
   date: string;
   amount: string;
-  kind: "buy" | "sell" | "income";
+  kind: "buy" | "sell" | "income" | "yield";
   charges: string;
 };
 
@@ -30,7 +32,7 @@ export type CashFlow = {
 // a step could not be expressed in the view's unit. Units an adjustment brings
 // in are paid in at their cost, and units it takes out are paid out at
 // theirs, as the replay counts them. A transfer moves units within the
-// account, so its flow is zero.
+// account, so its flow is zero; a yield's is the income it moved.
 export function cashFlowsOf(
   movements: readonly Movement[],
   steps: readonly LedgerStep[],
@@ -59,6 +61,9 @@ export function cashFlowsOf(
     } else if (isIncome(movement.kind)) {
       kind = "income";
       amount = minus(minus(now.income, before.income), charges);
+    } else if (isYield(movement)) {
+      kind = "yield";
+      amount = minus(now.income, before.income);
     } else {
       if (takesUnits(movement)) kind = "sell";
       amount = negated(plus(minus(now.cost, before.cost), charges));
@@ -77,9 +82,9 @@ export function cashFlowsOf(
 // What a holding's cash flows made, valued at `value` on `date`: what was paid
 // in and out, the result (out plus value less in), the result as a share of
 // what was paid in, and the yearly rate that makes the flows and the value
-// worth nothing today (the money-weighted return). The yearly rate is null
-// for flows under a year old, where a year's rate overstates a short run, or
-// when no rate solves them.
+// worth nothing today (the money-weighted return). A yield is in the value,
+// not paid in or out. The yearly rate is null for flows under a year old,
+// where a year's rate overstates a short run, or when no rate solves them.
 export type Returns = {
   paidIn: string;
   paidOut: string;
@@ -91,9 +96,10 @@ export type Returns = {
 const YEAR_DAYS = 365;
 
 export function returnsOf(
-  flows: readonly CashFlow[],
+  all: readonly CashFlow[],
   { date, value }: { date: string; value: string },
 ): Returns {
+  const flows = all.filter((flow) => flow.kind !== "yield");
   let paidIn = ZERO;
   let paidOut = ZERO;
   for (const flow of flows) {

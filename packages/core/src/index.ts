@@ -67,6 +67,7 @@ export {
   chargeSchema,
   isIncome,
   isTrade,
+  isYield,
   MOVEMENT_KINDS,
   type Movement,
   movementBranch,
@@ -110,6 +111,7 @@ export {
   type MovementDraft,
   type MovementRefusal,
   type MovementWindow,
+  quantityOn,
 } from "./movements/admit";
 export {
   exactUnitPrice,

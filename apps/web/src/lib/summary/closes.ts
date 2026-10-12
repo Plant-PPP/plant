@@ -51,8 +51,8 @@ export const closeUnit = (
     ? unit
     : reference;
 
-// One month's close in the page's unit: its period's result, plus the result
-// of its sales (null when unknown in the unit), whether nothing was left out
+// One month's close in the page's unit: its period's result, plus what it
+// realized from sales and yields out (null when unknown in the unit), whether nothing was left out
 // (a price at both ends, every movement expressed in the unit, every opening
 // balance and adjustment out priced on its day), and when it was last
 // recalculated after it closed. `endComplete` is the price check for its end
@@ -86,8 +86,8 @@ export type YearClose = {
   open: boolean;
 };
 
-// A month's detail: its close and its purchases, sales and income, newest
-// first, each with the name of its holding.
+// A month's detail: its close and every movement in it, newest first, each
+// with the name of its holding.
 export type MonthDetail = {
   close: MonthClose;
   // `atWorth`: an opening balance or adjustment out shown at what it was

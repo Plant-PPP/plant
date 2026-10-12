@@ -1,11 +1,10 @@
-import { compareExact, exactOf, minus, plus, stored } from "@plant/shared";
+import { compareExact, exactOf, plus, stored, ZERO } from "@plant/shared";
 import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
 import {
-  isTrade,
   type Movement,
   type MovementRates,
   startsHolding,
-  takesUnits,
+  unitsMoved,
 } from "./movement";
 import { compareMovements } from "./order";
 
@@ -51,19 +50,24 @@ export function admitMovements({ prior, after }: MovementWindow): Admission {
     ) {
       return { ok: false, code: "opening_balance" };
     }
-    if (!isTrade(movement)) continue;
-    const moved = exactOf(movement.quantity);
-    if (takesUnits(movement)) {
-      if (compareExact(moved, quantity) > 0) {
-        return { ok: false, code: "oversold" };
-      }
-      quantity = minus(quantity, moved);
-    } else {
-      quantity = plus(quantity, moved);
+    quantity = plus(quantity, unitsMoved(movement));
+    if (compareExact(quantity, ZERO) < 0) {
+      return { ok: false, code: "oversold" };
     }
   }
   return { ok: true, quantity: stored(quantity) };
 }
+
+// The units a holding's movements leave it with at the end of a date.
+export const quantityOn = (
+  movements: readonly Movement[],
+  date: string,
+): string =>
+  stored(
+    plus(
+      ...movements.filter((movement) => movement.date <= date).map(unitsMoved),
+    ),
+  );
 
 // A new or edited movement, before its rates are known to be complete: the
 // dollar rates its date had may be missing some kind.

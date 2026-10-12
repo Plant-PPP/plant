@@ -212,10 +212,10 @@ export function InstrumentHistory({
         <SummaryTile label="Costo de lo que tenés">
           {money(summary.cost, unit)}
         </SummaryTile>
-        <SummaryTile label="Resultado de ventas">
+        <SummaryTile label="Resultado realizado">
           {money(summary.realized, unit)}
         </SummaryTile>
-        <SummaryTile label="Dividendos y cupones">
+        <SummaryTile label="Dividendos, cupones y rendimientos">
           {money(summary.income, unit)}
         </SummaryTile>
         <SummaryTile label="Gastos">{money(summary.charges, unit)}</SummaryTile>

@@ -13,6 +13,7 @@ import {
   type MovementFields,
   newMovementFields,
   withKind,
+  withShownPrice,
 } from "./movement-fields";
 
 const PRINCIPAL = { id: "p1", name: "Principal", archived: false };
@@ -46,7 +47,7 @@ const moving = withKind(
     parts: [{ portfolioId: "p1", size: "0,5" }],
   },
   "transfer",
-  "p1",
+  { transfer: "p1" },
 );
 
 const render = (
@@ -86,7 +87,10 @@ it("shows where the units leave from, the cost they carry and no charges", () =>
 });
 
 it("keeps a changed cost and offers the suggestion back", () => {
-  const html = render({ ...moving, price: "61000", costEdited: true }, "60000");
+  const html = render(
+    { ...moving, price: "61000", priceEdited: true },
+    "60000",
+  );
   expect(html).toContain('value="61000"');
   expect(html).toContain("Usar el sugerido (US$ 60.000,00)");
   expect(html).not.toContain("Sugerido: el costo que tenían.");
@@ -134,5 +138,195 @@ describe("a refused transfer's focus", () => {
     );
     expect(ids).toHaveLength(1);
     expect(ids[0]).toMatch(/-parts$/);
+  });
+});
+
+describe("a yield", () => {
+  const earning = withKind(
+    newMovementFields({
+      kind: "purchase",
+      accountId: "a1",
+      instrument: "BTC",
+      currency: "USD",
+      date: TODAY,
+      portfolioId: "p1",
+    }),
+    "yield",
+    { yield: "p1" },
+  );
+  const asked: unknown[] = [];
+  const renderYield = (initial: MovementFields, quote: string | null) =>
+    renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL, LARGO]}
+        instruments={INSTRUMENTS}
+        fixed={{ account: "IOL", instrument: "Bitcoin" }}
+        yields={{
+          portfolio: "p1",
+          quoteOn: (query) => {
+            asked.push(query);
+            return quote;
+          },
+        }}
+        initial={initial}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+
+  it("suggests the day's quote as each unit's value, with no charges", () => {
+    const html = renderYield(earning, "61000");
+    expect(asked).toContainEqual({
+      symbol: "BTC",
+      currency: "USD",
+      date: TODAY,
+    });
+    expect(html).toContain("Valor por unidad");
+    expect(html).toContain('value="61000"');
+    expect(html).toContain("Sugerido: el precio de ese día.");
+    expect(html).toContain(">Cargar<");
+    expect(html).toContain(">Resultado<");
+    expect(html).toContain(">Cantidad<");
+    expect(html).not.toContain("Gastos");
+    expect(html).not.toContain("Repartir en otra cartera");
+  });
+
+  it("asks for the value when nothing quotes that day", () => {
+    expect(renderYield(earning, null)).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("asks for a bond's value as it is quoted", () => {
+    const html = renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL]}
+        instruments={[
+          { symbol: "AL30", name: "Bonar", currency: "USD", type: "bond" },
+        ]}
+        fixed={{ account: "IOL", instrument: "Bonar" }}
+        yields={{ portfolio: "p1", quoteOn: () => null }}
+        initial={{ ...earning, instrument: "AL30" }}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+    expect(html).toContain("Valor cada 100 VN");
+    expect(html).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor cada 100 VN.",
+    );
+  });
+
+  it("keeps following the day's quote when it opens again", () => {
+    const sent = withShownPrice(earning, "61000", "crypto");
+    expect(renderYield(sent, "59000")).toContain('value="59000"');
+  });
+
+  it("points a refused balance at its field, with its help", () => {
+    const html = renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL]}
+        instruments={INSTRUMENTS}
+        fixed={{ account: "IOL", instrument: "Bitcoin" }}
+        yields={{ portfolio: "p1", quoteOn: () => "61000" }}
+        initial={{ ...earning, balance: "3" }}
+        initialError={MOVEMENT_MESSAGES.same_balance}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+    const focused = [...html.matchAll(/<input[^>]*autofocus[^>]*>/gi)];
+    expect(focused).toHaveLength(1);
+    expect(focused[0]![0]).toMatch(/ id="[^"]+-parts"/);
+    expect(focused[0]![0]).toContain('aria-invalid="true"');
+    const described = focused[0]![0].match(/aria-describedby="([^"]+)"/)![1]!;
+    expect(described.split(" ")).toEqual([
+      expect.stringMatching(/-alert$/),
+      expect.stringMatching(/-parts-help$/),
+    ]);
+  });
+
+  it("does not ask again for a value already entered", () => {
+    const html = renderYield(
+      { ...earning, price: "61000", priceEdited: true },
+      null,
+    );
+    expect(html).toContain('value="61000"');
+    expect(html).toContain("No hay precio en esa moneda para ese día.");
+    expect(html).not.toContain("ingresá el valor");
+  });
+
+  it("asks for the value once the quote it followed is gone", () => {
+    const html = renderYield(withShownPrice(earning, "61000", "crypto"), null);
+    expect(html).not.toContain('value="61000"');
+    expect(html).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("asks again for a value the user cleared", () => {
+    const html = renderYield(
+      { ...earning, price: " ", priceEdited: true },
+      null,
+    );
+    expect(html).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("keeps a cleared value empty and offers the quote back", () => {
+    const html = renderYield(
+      { ...earning, price: "", priceEdited: true },
+      "61000",
+    );
+    expect(html).toMatch(/<input[^>]*-price"[^>]*value=""/);
+    expect(html).toContain("Usar el sugerido (US$ 61.000,00)");
+    expect(html).not.toContain("Sugerido: el precio de ese día.");
+  });
+
+  it("describes the units by nothing while nothing is refused", () => {
+    const units = renderYield(earning, "61000").match(
+      /<input[^>]*id="[^"]+-parts"[^>]*>/,
+    )![0];
+    expect(units).not.toContain("aria-describedby");
+  });
+
+  it("takes the final balance instead of the units", () => {
+    const html = renderYield({ ...earning, balance: "3" }, "61000");
+    expect(html).toContain("Saldo final");
+    expect(html).toContain('value="3"');
+    expect(html).toContain("se carga como rendimiento");
+    expect(html).not.toContain(">Resultado<");
+  });
+
+  it("labels every control it names", () => {
+    for (const html of [
+      renderYield(earning, "61000"),
+      renderYield({ ...earning, balance: "" }, null),
+    ]) {
+      const ids = new Set(
+        [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]),
+      );
+      for (const [, target] of html.matchAll(/ for="([^"]+)"/g)) {
+        expect(ids).toContain(target);
+      }
+      for (const [, described] of html.matchAll(
+        / aria-describedby="([^"]+)"/g,
+      )) {
+        for (const each of described!.split(" ")) expect(ids).toContain(each);
+      }
+    }
   });
 });

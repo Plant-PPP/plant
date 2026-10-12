@@ -78,7 +78,7 @@ function CloseFigures({
         </SummaryTile>
         <SummaryTile
           label="Resultado"
-          note="Mercado más cobros menos gastos; el % no cuenta lo que pusiste"
+          note="Mercado más rentas menos gastos; el % no cuenta lo que pusiste"
         >
           <ResultText
             amount={figures.result}
@@ -97,10 +97,13 @@ function CloseFigures({
         <SummaryTile label="Resultado de mercado" note="Precios y dólar">
           <ResultText amount={figures.market} share={null} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Dividendos y cupones" note="Antes de retenciones">
+        <SummaryTile
+          label="Dividendos, cupones y rendimientos"
+          note="Antes de retenciones"
+        >
           <AmountText amount={figures.income} unit={unit} />
         </SummaryTile>
-        <SummaryTile label="Resultado de ventas">
+        <SummaryTile label="Resultado realizado">
           <AmountText amount={figures.realized} unit={unit} />
         </SummaryTile>
         <SummaryTile
@@ -209,7 +212,7 @@ export function MonthCloseDetail({
         complete={close.complete}
       />
       <section className="grid gap-3">
-        <h2 className="text-base font-semibold">Compras, ventas y cobros</h2>
+        <h2 className="text-base font-semibold">Movimientos del mes</h2>
         {lines.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No hubo movimientos este mes.

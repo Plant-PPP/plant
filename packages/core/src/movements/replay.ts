@@ -14,7 +14,13 @@ import {
 import type { QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import type { Denominator } from "../valuation/denominators";
-import { isIncome, isTrade, type Movement, takesUnits } from "./movement";
+import {
+  isIncome,
+  isTrade,
+  isYield,
+  type Movement,
+  takesUnits,
+} from "./movement";
 import { compareInReplay } from "./order";
 
 // A position's figures, rounded to the stored precision between movements.
@@ -24,8 +30,9 @@ const kept = (x: Exact): Exact => roundedTo(x, DECIMAL_SCALE_DIGITS);
 // unit, each movement converted at its own date's rates; it is null when a
 // movement's money could not be expressed in that unit (a historic BTC price,
 // say). Cost is what the units still held were bought for; charges are kept
-// apart from it, income is what dividends and coupons paid, and realized is
-// what sales made.
+// apart from it, income is what dividends and coupons paid and what yields
+// earned or lost, and realized is what sales made and what the units a yield
+// took out had gained since bought.
 export type PositionMoney = {
   cost: string;
   charges: string;
@@ -146,11 +153,17 @@ function stepOf(
           carried.set(movement.operation_id, cost);
         }
         // An adjustment or transfer out takes its cost and makes no result.
+        // A yield out loses the units' value that day, and realizes what they
+        // had gained over their cost.
         const value =
           movement.price === null
             ? ZERO
             : times(inView(exactOf(movement.price)), moved);
-        const result = isSale ? minus(minus(value, charges), cost) : ZERO;
+        const result = isSale
+          ? minus(minus(value, charges), cost)
+          : isYield(movement)
+            ? minus(value, cost)
+            : ZERO;
         if (isSale) {
           sale = {
             gross: stored(value),
@@ -162,7 +175,9 @@ function stepOf(
         money = {
           cost: kept(minus(money.cost, cost)),
           charges: kept(plus(money.charges, charges)),
-          income: money.income,
+          income: isYield(movement)
+            ? kept(minus(money.income, value))
+            : money.income,
           realized: kept(plus(money.realized, result)),
         };
       } else {
@@ -185,6 +200,10 @@ function stepOf(
                 ...money,
                 cost: kept(plus(money.cost, cost)),
                 charges: kept(plus(money.charges, charges)),
+                // A yield's units came in as what they earned.
+                income: isYield(movement)
+                  ? kept(plus(money.income, cost))
+                  : money.income,
               };
       }
       quantity = kept(plus(quantity, moved));
