@@ -70,7 +70,7 @@ import {
 } from "@/lib/holdings/holding-name";
 import {
   MOVEMENT_DELETE_MESSAGES,
-  MOVEMENT_KIND_LABELS,
+  movementLabel,
   MOVEMENT_MESSAGES,
   PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
@@ -432,9 +432,9 @@ export function AssetsSetup({
     );
   }
 
-  // A movement as a delete names it: "compra del 01/09/2026".
+  // A movement as its actions name it: "compra del 01/09/2026".
   const movementName = (line: MovementLine) =>
-    `${MOVEMENT_KIND_LABELS[line.movement.kind].toLowerCase()} del ${formatDate(line.movement.date)}`;
+    `${movementLabel(line.movement).toLowerCase()} del ${formatDate(line.movement.date)}`;
 
   function confirmDeleteMovement(
     line: MovementLine,
@@ -979,8 +979,7 @@ export function AssetsSetup({
                         id: "edit",
                         icon: Pencil,
                         tooltip: "Editar",
-                        label: (line) =>
-                          `Editar ${MOVEMENT_KIND_LABELS[line.movement.kind].toLowerCase()} del ${formatDate(line.movement.date)}`,
+                        label: (line) => `Editar ${movementName(line)}`,
                         onClick: (line) =>
                           openMovementDialog({
                             kind: "edit",
