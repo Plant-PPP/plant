@@ -159,9 +159,9 @@ export function operationFields(
 }
 
 // The fields as another kind: a transfer takes its quantity out of `from`
-// into a portfolio still to choose, with no charges; a yield keeps the first
-// part, with no charges and the day's quote for a price; leaving either keeps
-// the first part with no price, and any other change keeps every part.
+// into a portfolio still to choose, and a yield is `from`'s, both with no
+// charges or price; leaving either keeps the first part with no price, and
+// any other change keeps every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,
@@ -186,7 +186,8 @@ export function withKind(
     };
   }
   if (kind === "yield") {
-    return { ...fresh, charges: [], parts: fields.parts.slice(0, 1) };
+    const size = fields.parts[0]?.size ?? "";
+    return { ...fresh, charges: [], parts: [{ portfolioId: from, size }] };
   }
   if (fields.kind === "transfer" || fields.kind === "yield") {
     return { ...fresh, parts: fields.parts.slice(0, 1) };
@@ -342,6 +343,11 @@ export const MOVEMENT_FIELD_MESSAGES: Record<MovementField, string> = {
   note: "La nota puede tener hasta 200 caracteres.",
 };
 
+// A yield's one portfolio is the holding's: only its quantity or balance can
+// be wrong.
+const YIELD_PARTS_MESSAGE =
+  "Ingresá una cantidad mayor a 0, o un saldo final de 0 o más.";
+
 const FIELD_BY_COLUMN: Record<string, MovementField> = {
   kind: "kind",
   direction: "direction",
@@ -369,7 +375,10 @@ const FORM_ORDER: readonly MovementField[] = [
   "note",
 ];
 
-export function movementRefusal(error: z.ZodError): FieldAlert<MovementField> {
+export function movementRefusal(
+  error: z.ZodError,
+  kind: MovementKind,
+): FieldAlert<MovementField> {
   // A transfer's cost sits on the part its units arrive in.
   const issues = error.issues.map((issue) =>
     issue.path[0] === "parts" && issue.path[2] === "price"
@@ -377,9 +386,14 @@ export function movementRefusal(error: z.ZodError): FieldAlert<MovementField> {
       : issue,
   );
   const first = firstRefused({ issues }, FIELD_BY_COLUMN, FORM_ORDER);
-  return first
-    ? { field: first.field, text: MOVEMENT_FIELD_MESSAGES[first.field] }
-    : { field: null, text: MOVEMENT_MESSAGES.invalid };
+  if (!first) return { field: null, text: MOVEMENT_MESSAGES.invalid };
+  return {
+    field: first.field,
+    text:
+      kind === "yield" && first.field === "parts"
+        ? YIELD_PARTS_MESSAGE
+        : MOVEMENT_FIELD_MESSAGES[first.field],
+  };
 }
 
 // The field a refused write's alert is about, when it is about one.

@@ -193,7 +193,31 @@ describe("a yield", () => {
 
   it("asks for the value when nothing quotes that day", () => {
     expect(renderYield(earning, null)).toContain(
-      "No hay precio para ese día: ingresá cuánto valía cada unidad.",
+      "No hay precio para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("asks for a bond's value as it is quoted", () => {
+    const html = renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL]}
+        instruments={[
+          { symbol: "AL30", name: "Bonar", currency: "USD", type: "bond" },
+        ]}
+        fixed={{ account: "IOL", instrument: "Bonar" }}
+        quoteOn={() => null}
+        initial={{ ...earning, instrument: "AL30" }}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+    expect(html).toContain("Valor cada 100 VN");
+    expect(html).toContain(
+      "No hay precio para ese día: ingresá el valor cada 100 VN.",
     );
   });
 
@@ -201,7 +225,7 @@ describe("a yield", () => {
     const html = renderYield({ ...earning, balance: "3" }, "61000");
     expect(html).toContain("Saldo final");
     expect(html).toContain('value="3"');
-    expect(html).toContain("se carga la");
+    expect(html).toContain("se carga como rendimiento");
     expect(html).not.toContain(">Resultado<");
   });
 

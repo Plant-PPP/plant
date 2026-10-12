@@ -40,7 +40,6 @@ it.each([
     "Resultado por mes de 2026",
   ],
   ["¿Cuánto cobré de dividendos?", /sumaron/, "Rentas de 2026"],
-  ["¿Cuánto me dieron los rendimientos?", /sumaron/, "Rentas de 2026"],
   ["¿Cuánto debo?", /Debés/, "Lo que debés"],
   ["¿Cómo le fue a Apple?", /AAPL/, "AAPL: de dónde sale el resultado"],
 ])("answers %s from the data, with a chart", (question, text, chart) => {
@@ -163,4 +162,10 @@ it.each(["¿Cuánto tenía antes la cartera?", "¿Cuánto tengo en renta fija?"]
 
 it("answers how the portfolio did when asked what it yielded", () => {
   expect(ask("¿Cuánto rindió mi cartera?").text).toMatch(/tu patrimonio/);
+});
+
+it("reads rendimientos as the year's result, not as income", () => {
+  const answer = ask("¿Cómo vinieron mis rendimientos este año?");
+  expect(answer.text).toMatch(/En 2026 tu patrimonio/);
+  expect(answer.chart?.title).toBe("Resultado por mes de 2026");
 });

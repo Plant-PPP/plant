@@ -99,7 +99,7 @@ export const MOVEMENT_MESSAGES: Record<
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
   same_balance:
-    "Es el saldo que tenía ese día: no hay rendimiento para cargar.",
+    "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

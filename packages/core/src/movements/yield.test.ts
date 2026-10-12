@@ -147,3 +147,12 @@ describe("a yield's cash flow", () => {
     expect(result.share).toBe("0.1");
   });
 });
+
+it("leaves the yearly rate to the money paid in and out", () => {
+  const bought = trade("purchase", "10", "100", { date: "2024-09-01" });
+  const earned = yielded("in", "1", "110", { date: "2025-03-01" });
+  const value = { date: "2026-09-01", value: "1210" };
+  const without = returnsOf(flowsOf([bought])!, value);
+  expect(returnsOf(flowsOf([bought, earned])!, value)).toEqual(without);
+  expect(without.annual).not.toBeNull();
+});

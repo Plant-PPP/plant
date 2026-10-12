@@ -265,9 +265,7 @@ export function prototypeAnswer(
   }
 
   if (
-    /dividend|cupon|cobr|\brendimientos\b|\brentas?\b(?! (fija|variable))/.test(
-      asked,
-    ) &&
+    /dividend|cupon|cobr|\brentas?\b(?! (fija|variable))/.test(asked) &&
     thisYear
   ) {
     return {

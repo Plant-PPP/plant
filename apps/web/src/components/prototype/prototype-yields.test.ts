@@ -1,10 +1,10 @@
-import type { Trade } from "@plant/core";
+import { quantityOn, type Trade } from "@plant/core";
 import { exactOf, minus, stored } from "@plant/shared";
 
 import { lineLabel, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
-import { closesOf } from "./prototype-closes";
+import { closesOf, markRecalculated } from "./prototype-closes";
 import {
   deleteOperation,
   holdingIn,
@@ -12,7 +12,6 @@ import {
   movementsPage,
   priceOn,
   type PrototypeState,
-  quantityOn,
   stepsOf,
   writeOperation,
 } from "./prototype-store";
@@ -284,7 +283,7 @@ describe("a yield given as the balance at the end of its day", () => {
       code: "same_balance",
     });
     expect(MOVEMENT_MESSAGES.same_balance).toBe(
-      "Es el saldo que tenía ese día: no hay rendimiento para cargar.",
+      "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
     );
   });
 
@@ -297,6 +296,57 @@ describe("a yield given as the balance at the end of its day", () => {
     expect(own).toEqual([
       expect.objectContaining({ direction: "in", quantity: "5" }),
     ]);
+  });
+});
+
+describe("a balance and the day it is for", () => {
+  const purchase = (date: string, quantity: string, kind = "purchase") => ({
+    kind,
+    source_connection_id: IOL,
+    instrument_symbol: "AAPL",
+    date,
+    currency: "ARS",
+    price: "20000",
+    parts: [{ portfolio_id: PRINCIPAL, quantity }],
+  });
+
+  it("counts what was held at the end of its own day, not today", () => {
+    const sold = writeOperation(
+      state,
+      purchase("2026-10-05", "1", "sale"),
+      options("e5000000-0000-4000-8000-00000000000a"),
+    ).state;
+    const balance = stored(minus(exactOf(heldOn(sold)), exactOf("-3")));
+    const after = written(yielded({ balance }), sold);
+    expect(
+      movementsOf(after).find((each) => each.operation_id === YIELD),
+    ).toMatchObject({ direction: "in", quantity: "3" });
+  });
+
+  it("ends the day at the balance when edited before a later purchase that day", () => {
+    const first = written(yielded({ direction: "in", quantity: "1" }));
+    const bought = writeOperation(
+      first,
+      purchase(DAY, "5"),
+      options("e5000000-0000-4000-8000-000000000009"),
+    ).state;
+    // Fewer than the 5 bought after it: kept before the purchase, the loss
+    // would take out more than was held then.
+    const after = written(yielded({ balance: "2" }), bought, true);
+    expect(heldOn(after)).toBe("2");
+  });
+
+  it("marks the month a yield's edit changes as recalculated", () => {
+    const first = written(yielded({ direction: "in", quantity: "1" }));
+    const edited = markRecalculated(
+      first,
+      written(
+        yielded({ direction: "in", quantity: "1" }, { price: "21000" }),
+        first,
+        true,
+      ),
+    );
+    expect(edited.recalculated.get("2026-09")).toBe(TODAY);
   });
 });
 

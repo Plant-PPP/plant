@@ -111,6 +111,7 @@ export {
   type MovementDraft,
   type MovementRefusal,
   type MovementWindow,
+  quantityOn,
 } from "./movements/admit";
 export {
   exactUnitPrice,

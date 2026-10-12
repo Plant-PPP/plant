@@ -1315,7 +1315,8 @@ export function AssetsSetup({
           transfer={transferOf(movementDialog, movement.input)}
           quoteOn={
             movementDialog.kind === "edit" ||
-            movementDialog.row?.holding.asset_class === "instrument"
+            (movementDialog.row &&
+              movement.input.positions.has(movementDialog.row.id))
               ? movement.input.quoteOn
               : undefined
           }

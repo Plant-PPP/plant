@@ -1,8 +1,12 @@
 import {
   currencySchema as currency,
+  type Exact,
+  exactOf,
   fieldsPassed,
+  negated,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
+  ZERO,
 } from "@plant/shared";
 import { z } from "zod";
 import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
@@ -169,6 +173,13 @@ export const isTrade = (movement: Movement): movement is Trade =>
 export const takesUnits = (movement: Movement): boolean =>
   movement.kind === "sale" ||
   ("direction" in movement && movement.direction === "out");
+
+// The units a movement brings in (positive) or takes out (negative).
+export const unitsMoved = (movement: Movement): Exact => {
+  if (!isTrade(movement)) return ZERO;
+  const moved = exactOf(movement.quantity);
+  return takesUnits(movement) ? negated(moved) : moved;
+};
 
 // Movements apply to instrument holdings only.
 export const takesMovements = (holding: { asset_class: string }): boolean =>

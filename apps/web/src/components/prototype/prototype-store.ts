@@ -11,7 +11,6 @@ import {
   manualPriceSchema,
   isIncome,
   isOrderRefusal,
-  isTrade,
   isYield,
   type MovementDraft,
   type SaleResult,
@@ -31,6 +30,7 @@ import {
   type Position,
   type PositionMoney,
   positionOf,
+  quantityOn,
   replayHoldings,
   type ReferenceDollar,
   lift,
@@ -45,7 +45,6 @@ import {
   minus,
   negated,
   over,
-  plus,
   stored,
   sumOrNull,
   ZERO,
@@ -483,8 +482,7 @@ export function salesOf(
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
 
-// How much a step moved one of a position's money figures; null when either
-// side has no money in the unit.
+// Null when either side has no money in the unit.
 export function moneyChange(
   before: Position,
   step: LedgerStep,
@@ -685,9 +683,9 @@ export const refusedWrite = (
 ): Write<WriteResult> => refused(state, { ok: false, code });
 
 // An instrument's price on a date in its own currency, from the feeds or else
-// the user's manual price; none when neither has one. The closes value a day
-// apart (snapshotAt), in any unit and from trades when nothing quotes it; the
-// two become one if a suggestion ever takes that fallback.
+// the user's manual price; none when neither has one. prototype-closes'
+// snapshotAt values a day on its own, in any unit and from trades when nothing
+// quotes it; the two become one if a suggestion ever takes that fallback.
 export function priceOn(
   state: PrototypeState,
   { symbol, currency, date }: QuoteQuery,
@@ -703,22 +701,6 @@ export const priceToday = (
   state: PrototypeState,
   instrument: { symbol: string; currency: string },
 ): string | null => priceOn(state, { ...instrument, date: state.today });
-
-// The units a holding's movements leave it with at the end of a date.
-export function quantityOn(
-  movements: readonly Movement[],
-  date: string,
-): string {
-  let quantity = ZERO;
-  for (const movement of movements) {
-    if (movement.date > date || !isTrade(movement)) continue;
-    const moved = exactOf(movement.quantity);
-    quantity = takesUnits(movement)
-      ? minus(quantity, moved)
-      : plus(quantity, moved);
-  }
-  return stored(quantity);
-}
 
 export function createHolding(
   state: PrototypeState,
@@ -934,7 +916,7 @@ export const holdingIn = (
   );
 
 // Records an operation (`replacing` none) or an edit of one: each part becomes
-// a movement of its portfolio's holding, which a part bringing units in
+// a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
 // amount). Every touched holding is admitted again, or nothing changes.
 export function writeOperation(
@@ -1111,9 +1093,12 @@ export function writeOperation(
   // as if entered again, unless going last leaves something taking out more
   // than was held before it, or a holding no longer starting with units
   // coming in; then it keeps its number on the new date. An opening balance
-  // keeps its own number: it ranks first anyway.
+  // keeps its own number: it ranks first anyway. A yield given as a balance
+  // goes last on its day, new or edited, since the balance is the day's end.
   const kept = was?.parts[0]?.movement;
-  if (!kept) return writeAt(state.nextEntryOrder);
+  if (!kept || given.some((part) => "balance" in part)) {
+    return writeAt(state.nextEntryOrder);
+  }
   if (
     operation.kind === "opening_balance" ||
     (kept.date === operation.date && kept.kind !== "opening_balance")

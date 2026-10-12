@@ -10,6 +10,7 @@ import {
   type Movement,
   type QuoteSnapshot,
   periodResult,
+  quantityOn,
   quotesNeeded,
   snapshotOn,
   takesUnits,
@@ -52,7 +53,6 @@ import {
   moneyChange,
   operationOf,
   type PrototypeState,
-  quantityOn,
   stepsOf,
 } from "./prototype-store";
 

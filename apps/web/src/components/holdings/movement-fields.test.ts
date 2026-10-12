@@ -143,7 +143,7 @@ it("points at the first refused field in the form's order", () => {
     toOperationInput(fields, "crypto"),
   );
   if (parsed.success) throw new Error("expected a refusal");
-  expect(movementRefusal(parsed.error).field).toBe("price");
+  expect(movementRefusal(parsed.error, "purchase").field).toBe("price");
 });
 
 it("points a refused write at its field", () => {
@@ -313,7 +313,7 @@ describe("a transfer", () => {
         ),
       );
       if (parsed.success) throw new Error("expected a refusal");
-      expect(movementRefusal(parsed.error).field).toBe("price");
+      expect(movementRefusal(parsed.error, "transfer").field).toBe("price");
     },
   );
 
@@ -330,7 +330,7 @@ describe("a transfer", () => {
       ),
     );
     if (parsed.success) throw new Error("expected a refusal");
-    expect(movementRefusal(parsed.error).field).toBe("price");
+    expect(movementRefusal(parsed.error, "transfer").field).toBe("price");
   });
 
   it.each([
@@ -464,7 +464,43 @@ describe("a yield's fields", () => {
       toOperationInput({ ...earning, ...change }, "crypto"),
     );
     if (parsed.success) throw new Error("expected a refusal");
-    expect(movementRefusal(parsed.error).field).toBe(field);
+    expect(movementRefusal(parsed.error, "yield").field).toBe(field);
+  });
+
+  it("asks for a quantity or a balance, never a portfolio", () => {
+    const parsed = operationInputSchema.safeParse(
+      toOperationInput({ ...earning, price: "1", balance: "" }, "crypto"),
+    );
+    if (parsed.success) throw new Error("expected a refusal");
+    expect(movementRefusal(parsed.error, "yield")).toEqual({
+      field: "parts",
+      text: "Ingresá una cantidad mayor a 0, o un saldo final de 0 o más.",
+    });
+  });
+
+  it("is the portfolio it is moved to, whatever the part showed", () => {
+    expect(
+      withKind(
+        {
+          ...newMovementFields(defaults),
+          parts: [{ portfolioId: LARGO, size: "5" }],
+        },
+        "yield",
+        PRINCIPAL,
+      ).parts,
+    ).toEqual([{ portfolioId: PRINCIPAL, size: "5" }]);
+  });
+
+  it("sends a bond's value as it shows it, per 100 nominal", () => {
+    const sent = withShownPrice(
+      { ...earning, instrument: "AL30" },
+      "0.65432199",
+      "bond",
+    );
+    expect(sent.price).toBe("65,432199");
+    expect(toOperationInput(sent, "bond")).toMatchObject({
+      price: "0.65432199",
+    });
   });
 
   it("reads a loss back as a loss, with its value as typed", () => {

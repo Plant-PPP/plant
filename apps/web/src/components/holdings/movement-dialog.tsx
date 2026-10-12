@@ -188,7 +188,7 @@ export function MovementDialog({
       toOperationInput(sent, instrumentType),
     );
     if (!parsed.success) {
-      const refused = movementRefusal(parsed.error);
+      const refused = movementRefusal(parsed.error, fields.kind);
       setAlert(refused);
       if (refused.field)
         document.getElementById(controlId(refused.field))?.focus();
@@ -394,7 +394,7 @@ export function MovementDialog({
                 <p>
                   {moving
                     ? "Si lo dejás vacío, entran con el costo que tenían."
-                    : "No hay precio para ese día: ingresá cuánto valía cada unidad."}
+                    : `No hay precio para ese día: ingresá el valor ${basis}.`}
                 </p>
               ) : fields.priceEdited ? (
                 <div>
@@ -512,8 +512,8 @@ export function MovementDialog({
                   id={balanceHelpId}
                   className="col-span-2 -mt-2 text-xs text-muted-foreground"
                 >
-                  Las unidades que tenías al terminar ese día: se carga la
-                  diferencia con lo que tenías como rendimiento.
+                  Las unidades que tenías al terminar ese día. La diferencia con
+                  lo que tenías se carga como rendimiento.
                 </p>
               )}
             </div>
