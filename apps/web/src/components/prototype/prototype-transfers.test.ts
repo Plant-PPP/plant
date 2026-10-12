@@ -1,3 +1,4 @@
+import { type Denominator, referenceUnit } from "@plant/core";
 import { exactOf, over, plus, stored } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -312,11 +313,15 @@ describe("a refused transfer", () => {
 
 describe("the cost a transfer suggests", () => {
   // What its units carried into the portfolio they went to, per unit.
-  const carried = (s: PrototypeState, to: string) => {
+  const carried = (
+    s: PrototypeState,
+    to: string,
+    unit: Denominator = "ars",
+  ) => {
     const holding = appleIn(s, to)!.holding.id;
     const own = s.movements.get(holding)!;
     const index = own.findIndex((each) => each.operation_id === TRANSFER);
-    const steps = stepsOf(s, holding, "ars");
+    const steps = stepsOf(s, holding, unit);
     const before = index === 0 ? null : steps[index - 1]!.position.money!;
     const cost = exactOf(steps[index]!.position.money!.cost);
     return stored(
@@ -391,10 +396,9 @@ describe("the cost a transfer suggests", () => {
   });
 
   it("is in the dollar the user values in for a dollar cost", () => {
-    const dollars = suggested(state, { ...transfer("2"), currency: "USD" });
-    expect(dollars).not.toBeNull();
-    expect(Number(dollars)).toBeLessThan(
-      Number(suggested(state, transfer("2"))),
+    const input = { ...transfer("2"), currency: "USD" };
+    expect(suggested(state, input)).toBe(
+      carried(written(input), LARGO, referenceUnit(state.referenceDollar)),
     );
   });
 
@@ -415,9 +419,13 @@ describe("the cost a transfer suggests", () => {
     expect(suggested(state, transfer("2", { price: "abc" }))).toBe(
       suggested(state, transfer("2")),
     );
-    expect(suggested(state, transfer("2", { price: "1" }))).toBe(
-      suggested(state, transfer("2")),
-    );
+    const input = transfer("2");
+    expect(
+      suggested(state, {
+        ...input,
+        parts: [{ ...input.parts[0]!, price: "10" }, input.parts[1]!],
+      }),
+    ).toBe(suggested(state, input));
   });
 
   it("has none for an edit that cannot be written", () => {
@@ -425,15 +433,19 @@ describe("the cost a transfer suggests", () => {
     expect(suggested(moved, transfer("100000"), true)).toBeNull();
   });
 
-  it("changes nothing", () => {
-    const copy = new Map(state.movements);
-    suggested(state, transfer("2"));
-    expect(appleIn(state, LARGO)).toBeUndefined();
-    expect(state.movements).toEqual(copy);
-    expect(
-      [...state.movements.values()]
-        .flat()
-        .some((each) => each.operation_id.startsWith("ffffffff-")),
-    ).toBe(false);
+  it("changes nothing, nor the steps the real state keeps", () => {
+    // Corto's holding, the newest, leads the group and is one a transfer to
+    // Largo leaves alone.
+    const moved = writeOperation(
+      written(transfer("2")),
+      transfer("1", { to: CORTO }),
+      options("e3000000-0000-4000-8000-000000000010"),
+    ).state;
+    const snapshot = structuredClone(moved);
+    const steps = stepsOf(moved, AAPL, "ars");
+    suggested(moved, transfer("3"), true);
+    suggested(moved, transfer("1"));
+    expect(moved).toEqual(snapshot);
+    expect(stepsOf(moved, AAPL, "ars")).toBe(steps);
   });
 });

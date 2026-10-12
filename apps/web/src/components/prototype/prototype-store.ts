@@ -252,15 +252,22 @@ type GroupSteps = {
 const stepCache = new WeakMap<readonly Movement[], GroupSteps>();
 const NO_STEPS: readonly LedgerStep[] = [];
 
+// The movements of each holding in a holding's group that has any.
+const groupMovements = (
+  state: PrototypeState,
+  holdingId: string,
+): readonly (readonly Movement[])[] =>
+  groupOf(state, holdingId).flatMap((id) => {
+    const own = state.movements.get(id);
+    return own && own.length > 0 ? [own] : [];
+  });
+
 export function stepsOf(
   state: PrototypeState,
   holdingId: string,
   unit: Denominator,
 ): readonly LedgerStep[] {
-  const members = groupOf(state, holdingId).flatMap((id) => {
-    const own = state.movements.get(id);
-    return own && own.length > 0 ? [own] : [];
-  });
+  const members = groupMovements(state, holdingId);
   const first = members[0];
   if (!first) return NO_STEPS;
   let group = stepCache.get(first);
@@ -318,7 +325,8 @@ export function suggestedTransferCost(
   state: PrototypeState,
   { input, operationId }: TransferCostQuery,
 ): string | null {
-  // Whatever cost the user typed, the units carry their own.
+  // Every part's price is nulled before parsing, so a cost the user mistyped
+  // still gets the cost the units carry.
   const parsed = operationInputSchema.safeParse(
     typeof input === "object" &&
       input !== null &&
@@ -358,20 +366,18 @@ export function suggestedTransferCost(
     referenceUnit(state.referenceDollar),
     state.referenceDollar,
   ).denominator;
-  // Replayed apart from stepsOf, so the state thrown away leaves its cache to
-  // the real one.
+  // Replayed apart from stepsOf: its cache is keyed on a movements array the
+  // state thrown away can share with the real one, whose entry it would
+  // replace.
   const steps = replayHoldings(
-    groupOf(written, holding).flatMap(
-      (each) => written.movements.get(each) ?? [],
-    ),
+    groupMovements(written, holding).flat(),
     unit,
     state.referenceDollar,
   ).get(holding)!;
-  const { amount } = lineOf(
+  const amount = amountOf(
     own[index]!,
-    index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
+    steps[index - 1]!.position,
     steps[index]!,
-    operationOf(written, id)!,
   );
   return amount === null
     ? null
@@ -473,27 +479,29 @@ export function lineOf(
 ): MovementLine {
   const was = before.money;
   const now = step.position.money;
-  if (!was || !now) return { movement, amount: null, charges: null, operation };
-  const charges = difference(now.charges, was.charges);
-  if (isIncome(movement.kind)) {
-    return {
-      movement,
-      amount: difference(now.income, was.income),
-      charges,
-      operation,
-    };
-  }
   return {
     movement,
-    amount:
-      movement.kind === "sale"
-        ? (step.sale?.gross ?? null)
-        : takesUnits(movement)
-          ? difference(was.cost, now.cost)
-          : difference(now.cost, was.cost),
-    charges,
+    amount: amountOf(movement, before, step),
+    charges: was && now ? difference(now.charges, was.charges) : null,
     operation,
   };
+}
+
+// A movement's amount from its step and the position before it, as lineOf
+// shows it.
+function amountOf(
+  movement: Movement,
+  before: Position,
+  step: LedgerStep,
+): string | null {
+  const was = before.money;
+  const now = step.position.money;
+  if (!was || !now) return null;
+  if (isIncome(movement.kind)) return difference(now.income, was.income);
+  if (movement.kind === "sale") return step.sale?.gross ?? null;
+  return takesUnits(movement)
+    ? difference(was.cost, now.cost)
+    : difference(now.cost, was.cost);
 }
 
 // Every part of an operation, from the holdings it touched.
