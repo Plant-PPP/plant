@@ -297,6 +297,25 @@ describe("a transfer", () => {
     ).toMatchObject({ price: "", costEdited: false });
   });
 
+  it.each(["1.234", "x"])(
+    "refuses a changed cost %s that reads two ways or none, naming the price",
+    (price) => {
+      const parsed = operationInputSchema.safeParse(
+        toOperationInput(
+          {
+            ...moving,
+            parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+            price,
+            costEdited: true,
+          },
+          "crypto",
+        ),
+      );
+      if (parsed.success) throw new Error("expected a refusal");
+      expect(movementRefusal(parsed.error).field).toBe("price");
+    },
+  );
+
   it("names a changed cost that does not parse as the price", () => {
     const parsed = operationInputSchema.safeParse(
       toOperationInput(
