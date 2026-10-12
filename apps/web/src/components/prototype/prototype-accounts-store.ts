@@ -304,7 +304,6 @@ export function deleteAccount(
 export const deletesUploads = (state: PrototypeState, accountId: string) =>
   deleteAccount(state, accountId).state.imports.length < state.imports.length;
 
-// The accounts, active or archived, whose delete takes uploads with it.
 export const accountsDeletingUploads = (state: PrototypeState) =>
   [...state.accounts, ...state.archivedAccounts]
     .map((row) => row.id)
