@@ -254,7 +254,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **The rule lives in `CLAUDE.md` (Language).** This entry records where the line fell.
 - **The bug-report form stays in Spanish.** `.github/ISSUE_TEMPLATE/error.yml` is filled in by people outside the team, who read Spanish. Its field ids are English because nobody sees them; its `error` label stays.
-- **Dev-aid strings on the home page are English.** The Supabase status in `apps/web/src/app/(app)/page.tsx` is a dev aid; production does not render it (previews do).
+- **Dev-aid strings on the home page are English.** The Supabase status in `apps/web/src/app/(app)/(data)/page.tsx` is a dev aid; production does not render it (previews do).
 - **Validation messages in `@plant/shared` are English.** No form shows them today; a form that uses them maps zod issue codes to its own Spanish copy.
 - **Linear names stay quoted in Spanish** ("Carga con IA", "Terminado cuando"), so a grep from the repo still finds the Linear project or heading.
 - **Commits:** `.claude/settings.json` sets `attribution.commit` to `""`, so Claude Code stops adding `Co-Authored-By:`. `Claude-Session:` is dropped only by `attribution.sessionUrl: false`, which also drops the session link from PR bodies, so `CLAUDE.md` covers it instead. What lands on `staging` is one line only when the repo merges with Squash and merge, PR title as the commit title and an empty message.

@@ -1,8 +1,13 @@
 import type { Denominator } from "@plant/core";
-import { exactOf } from "@plant/shared";
 import type { ReactNode } from "react";
 
-import { formatAmount, formatShare, shownAmount } from "@/lib/format/amount";
+import {
+  formatAmount,
+  formatShare,
+  shownAmount,
+  shownSign,
+  signed,
+} from "@/lib/format/amount";
 import type { GainLoss } from "@/lib/holdings/cost-totals";
 import type { Sum } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
@@ -112,10 +117,6 @@ export function ShareText({
   );
 }
 
-// A figure with "+" when it shows above zero; `amount` is as shown, rounded.
-const signed = (text: string, amount: string) =>
-  amount.startsWith("-") || /^0(\.0+)?$/.test(amount) ? text : `+${text}`;
-
 // A gain or loss: "Calculando…" until the page has it (undefined), a dash
 // when it is unknown in the unit (null); green when up, red when down, muted
 // when it shows as zero, with its percent of cost.
@@ -128,21 +129,18 @@ export function GainLossText({
 }) {
   if (gain === undefined) return CALCULATING;
   if (gain === null) return <MissingFigure text="Sin resultado" />;
-  // The sign of what shows: a result that rounds to zero in the unit is
-  // neither a gain nor a loss.
-  const shown = shownAmount(gain.amount, unit);
-  const zero = exactOf(shown).n === 0n;
+  const sign = shownSign(gain.amount, unit);
   return (
     <span
       className={cn(
-        zero
+        sign === 0
           ? "text-muted-foreground"
-          : shown.startsWith("-")
+          : sign < 0
             ? "text-destructive"
             : "text-emerald-700 dark:text-emerald-400",
       )}
     >
-      {signed(formatAmount(gain.amount, unit), shown)}
+      {signed(formatAmount(gain.amount, unit), shownAmount(gain.amount, unit))}
       {gain.percent !== null && (
         <span className="block text-xs">
           {signed(formatShare(gain.percent), gain.percent)}
