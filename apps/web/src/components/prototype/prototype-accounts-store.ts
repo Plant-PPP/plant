@@ -304,6 +304,12 @@ export function deleteAccount(
 export const deletesUploads = (state: PrototypeState, accountId: string) =>
   deleteAccount(state, accountId).state.imports.length < state.imports.length;
 
+// The accounts, active or archived, whose delete takes uploads with it.
+export const accountsDeletingUploads = (state: PrototypeState) =>
+  [...state.accounts, ...state.archivedAccounts]
+    .map((row) => row.id)
+    .filter((id) => deletesUploads(state, id));
+
 // A portfolio no account defaults to and that never held anything, active or
 // archived; the last active one stays.
 export function deletePortfolio(

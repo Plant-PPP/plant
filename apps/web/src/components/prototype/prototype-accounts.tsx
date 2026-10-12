@@ -3,7 +3,7 @@
 import { AccountsSetup } from "@/components/portfolio-setup/accounts-setup";
 import type { ListView } from "@/lib/portfolio-setup/read";
 
-import { deletesUploads } from "./prototype-accounts-store";
+import { accountsDeletingUploads } from "./prototype-accounts-store";
 import { usePrototype } from "./prototype-provider";
 
 const view = <Row,>(active: Row[], archived: Row[]): ListView<Row> => ({
@@ -27,9 +27,7 @@ export function PrototypeAccounts() {
         sourceConnections: actions.sourceConnections,
         portfolios: actions.portfolios,
       }}
-      deletesUploads={[...state.accounts, ...state.archivedAccounts]
-        .map((row) => row.id)
-        .filter((id) => deletesUploads(state, id))}
+      deletesUploads={accountsDeletingUploads(state)}
     />
   );
 }

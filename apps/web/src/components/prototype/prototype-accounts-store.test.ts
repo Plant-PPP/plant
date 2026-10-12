@@ -1,6 +1,7 @@
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  accountsDeletingUploads,
   archiveAccount,
   archivePortfolio,
   createAccount,
@@ -104,6 +105,15 @@ describe("deletesUploads", () => {
   ).state;
   const upload = (s: typeof state, accountId: string) =>
     addImport(s, { id: UPLOAD, fileName: "resumen.pdf", accountId }).state;
+
+  it("lists the accounts, archived ones too, whose delete takes an upload", () => {
+    expect(accountsDeletingUploads(lemon)).toEqual([]);
+    const archived = archiveAccount(upload(lemon, LEMON), LEMON).state;
+    expect(archived.archivedAccounts.some((row) => row.id === LEMON)).toBe(
+      true,
+    );
+    expect(accountsDeletingUploads(archived)).toEqual([LEMON]);
+  });
 
   it("is false for an account with no uploads", () => {
     expect(deletesUploads(lemon, LEMON)).toBe(false);
