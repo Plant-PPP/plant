@@ -466,7 +466,7 @@ it("shows a sale's amount as what it brought before charges", () => {
 describe("entry order", () => {
   // Bitcoin in Binance's Corto plazo, which holds none yet.
   const btc = (
-    kind: "purchase" | "sale",
+    kind: "opening_balance" | "purchase" | "sale",
     quantity: string,
     date: string,
     price = "100",
@@ -503,13 +503,14 @@ describe("entry order", () => {
       expect(written.result).toEqual({ ok: true, id: operationId });
       return written.state;
     }, from);
-  const costOf = (s: typeof state) =>
-    positionsOf(s, "usd_mep").get(corto(s))!.money!.cost;
+  const positionIn = (s: typeof state) =>
+    positionsOf(s, "usd_mep").get(corto(s))!;
+  const costOf = (s: typeof state) => positionIn(s).money!.cost;
   const entryOf = (s: typeof state, operationId: string) =>
     operationOf(s, operationId)!.parts[0]!.movement.entry_order;
-  const [A, B, S, P] = [1, 2, 3, 4].map(
+  const [A, B, S, P, Q] = [1, 2, 3, 4, 5].map(
     (n) => `e3000000-0000-4000-8000-00000000000${n}`,
-  ) as [string, string, string, string];
+  ) as [string, string, string, string, string];
 
   it("opens a new cost for a buy-back on the day of a sell-out", () => {
     const written = run([
@@ -525,9 +526,7 @@ describe("entry order", () => {
       [btc("purchase", "1", D2), A],
       [btc("sale", "1", D2), S],
     ]);
-    expect(positionsOf(written, "usd_mep").get(corto(written))!.quantity).toBe(
-      "0",
-    );
+    expect(positionIn(written).quantity).toBe("0");
   });
 
   it("keeps an edit's place on its date", () => {
@@ -598,10 +597,10 @@ describe("entry order", () => {
     expect(refused.state).toBe(before);
     // Entered again, it goes after the purchase.
     const again = run(
-      [[btc("sale", "2", D2), P]],
+      [[btc("sale", "2", D2), Q]],
       deleteOperation(before, S).state,
     );
-    expect(positionsOf(again, "usd_mep").get(corto(again))!.quantity).toBe("0");
+    expect(positionIn(again).quantity).toBe("0");
   });
 
   it("refuses a date move no place admits, changing nothing", () => {
@@ -650,6 +649,23 @@ describe("entry order", () => {
         options(A),
       ).result,
     ).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("keeps an opening balance's entry order when its date moves", () => {
+    const before = run([[btc("opening_balance", "1", D1), A]]);
+    const moved = run([[btc("opening_balance", "1", D2), A, true]], before);
+    expect(entryOf(moved, A)).toBe(entryOf(before, A));
+    expect(moved.nextEntryOrder).toBe(before.nextEntryOrder);
+  });
+
+  it("puts an opening balance turned into a purchase last on its day", () => {
+    const before = run([
+      [btc("opening_balance", "1", D2), A],
+      [btc("purchase", "1", D2), B],
+    ]);
+    const relabelled = run([[btc("purchase", "1", D2), A, true]], before);
+    expect(entryOf(relabelled, A)).toBe(before.nextEntryOrder);
+    expect(entryOf(relabelled, A)).toBeGreaterThan(entryOf(relabelled, B));
   });
 
   it("changes nothing when an edit is refused", () => {

@@ -101,12 +101,9 @@ function integrity(state: PrototypeState): string[] {
           entryOrder: movement.entry_order,
         },
       ]);
-      if (
-        !Number.isSafeInteger(movement.entry_order) ||
-        movement.entry_order < 0 ||
-        movement.entry_order >= state.nextEntryOrder
-      ) {
-        problems.push(`${movement.id}: an entry order not given`);
+      // Also true of a missing one.
+      if (!(movement.entry_order < state.nextEntryOrder)) {
+        problems.push(`${movement.id}: an entry order not below the next`);
       }
     }
   }
@@ -120,6 +117,14 @@ function integrity(state: PrototypeState): string[] {
     if (each.some((part) => part.entryOrder !== each[0]!.entryOrder)) {
       problems.push(`${operationId}: parts in different entry orders`);
     }
+  }
+  const byEntryOrder = new Map<number, string>();
+  for (const [operationId, [first]] of parts) {
+    const other = byEntryOrder.get(first!.entryOrder);
+    if (other !== undefined) {
+      problems.push(`${operationId}: shares its entry order with ${other}`);
+    }
+    byEntryOrder.set(first!.entryOrder, operationId);
   }
   return problems;
 }

@@ -862,12 +862,17 @@ export function writeOperation(
     };
   };
   // A new operation is entered last. An edit keeps its operation's place on
-  // its date; one that moves the date goes last on the new day, as if entered
-  // again, unless going last leaves something taking out more than was held
-  // before it, or a holding no longer starting with units coming in.
+  // its date. One that moves the date, or stops being an opening balance
+  // (which sits first in its day whatever its place), goes last on the day,
+  // as if entered again, unless going last leaves something taking out more
+  // than was held before it, or a holding no longer starting with units
+  // coming in. An opening balance keeps its own number: it ranks first anyway.
   const kept = was?.parts[0]?.movement;
   if (!kept) return writeAt(state.nextEntryOrder);
-  if (kept.date === operation.date || operation.kind === "opening_balance") {
+  if (
+    operation.kind === "opening_balance" ||
+    (kept.date === operation.date && kept.kind !== "opening_balance")
+  ) {
     return writeAt(kept.entry_order);
   }
   const moved = writeAt(state.nextEntryOrder);

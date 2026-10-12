@@ -73,7 +73,7 @@ export const MOVEMENT_MESSAGES: Record<
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
   oversold:
-    "No podés vender más de lo que tenías en ese momento: dentro de un día cuenta el orden en que cargaste las operaciones.",
+    "No podés vender más de lo que tenías en ese momento. En un mismo día cuenta el orden en que cargaste los movimientos.",
   opening_balance:
     "Una tenencia empieza con un saldo inicial o una compra, y el saldo inicial va una sola vez.",
   future_date: FUTURE_DATE_MESSAGE,
