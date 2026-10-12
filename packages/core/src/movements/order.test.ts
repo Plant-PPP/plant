@@ -99,3 +99,27 @@ it("puts an opening balance before a movement entered first that day", () => {
   ]);
   expect(compareKeys(movementKey(opening), movementKey(first))).toBeLessThan(0);
 });
+
+it("orders every pair both ways, by date, then opening balance and entry order, then id", () => {
+  const day = "2026-03-02";
+  const ascending = [
+    trade("purchase", "1", "10", {
+      id: "z",
+      date: "2026-03-01",
+      entry_order: 9,
+    }),
+    trade("opening_balance", "1", "10", { id: "y", date: day, entry_order: 7 }),
+    trade("purchase", "1", "10", { id: "x", date: day, entry_order: 0 }),
+    trade("sale", "1", "10", { id: "a", date: day, entry_order: 1 }),
+    trade("sale", "1", "10", { id: "b", date: day, entry_order: 1 }),
+  ];
+  ascending.forEach((earlier, i) =>
+    ascending.slice(i + 1).forEach((later) => {
+      expect(compareMovements(earlier, later)).toBeLessThan(0);
+      expect(compareMovements(later, earlier)).toBeGreaterThan(0);
+      expect(
+        compareKeys(movementKey(later), movementKey(earlier)),
+      ).toBeGreaterThan(0);
+    }),
+  );
+});
