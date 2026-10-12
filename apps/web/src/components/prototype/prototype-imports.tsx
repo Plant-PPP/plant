@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ImportPage } from "@/components/imports/import-page";
 import { ImportReview } from "@/components/imports/import-review";
+import { usedThisMonth } from "@/lib/format/text";
 
 import { usePrototype } from "./prototype-provider";
 import { heldIn } from "./prototype-imports-store";
@@ -18,11 +19,7 @@ export function PrototypeImports() {
       accounts={state.accounts}
       archivedAccounts={state.archivedAccounts}
       imports={state.imports}
-      used={
-        state.uploadedOn.filter(
-          (day) => day.slice(0, 7) === state.today.slice(0, 7),
-        ).length
-      }
+      used={usedThisMonth(state.uploadedOn, state.today)}
       reviewHref={reviewHref}
       actions={actions.imports}
     />
