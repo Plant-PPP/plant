@@ -1,4 +1,3 @@
-import { admitMovements } from "@plant/core";
 import {
   compareDecimals,
   exactOf,
@@ -17,9 +16,9 @@ import {
 } from "@/lib/imports/review";
 
 import {
-  allRows,
   difference,
   holdingIn,
+  holdingsView,
   priceToday,
   type PrototypeState,
   type Write,
@@ -66,39 +65,25 @@ export function addImport(
 export const startReading = (state: PrototypeState, id: string) =>
   withImport(state, id, (item) => ({ ...item, status: "reading" }));
 
-// What a holding's movements left by the end of `date`.
-function quantityAt(state: PrototypeState, holdingId: string, date: string) {
-  const admitted = admitMovements({
-    prior: null,
-    after: (state.movements.get(holdingId) ?? []).filter(
-      (movement) => movement.date <= date,
-    ),
-  });
-  return admitted.ok ? admitted.quantity : "0";
-}
-
-// The account's instrument holdings with what each held by the end of
-// `date`, largest first; those that held nothing then are left out.
-function holdingsAt(state: PrototypeState, accountId: string, date: string) {
-  return allRows(state)
-    .flatMap((row) =>
+// The account's open instrument holdings with what each holds, largest
+// first.
+function heldHoldings(state: PrototypeState, accountId: string) {
+  return holdingsView(state)
+    .active.flatMap((row) =>
       row.account.id === accountId && row.holding.asset_class === "instrument"
-        ? [{ row, quantity: quantityAt(state, row.id, date) }]
+        ? [{ row, quantity: row.holding.amount }]
         : [],
     )
-    .filter(({ quantity }) => exactOf(quantity).n > 0n)
     .sort((a, b) => compareDecimals(b.quantity, a.quantity));
 }
 
-// Each instrument the account held by the end of `date` (today unless
-// given), summed across its portfolios.
+// Each instrument the account holds, summed across its portfolios.
 export function heldIn(
   state: PrototypeState,
   accountId: string,
-  date = state.today,
 ): Map<string, string> {
   const held = new Map<string, string>();
-  for (const { row, quantity } of holdingsAt(state, accountId, date)) {
+  for (const { row, quantity } of heldHoldings(state, accountId)) {
     if (row.holding.asset_class !== "instrument") continue;
     const symbol = row.holding.instrument_symbol;
     held.set(
@@ -237,10 +222,11 @@ export function confirmImport(
     return { state, result: { ok: false, code: "invalid" } };
   }
   let next = state;
-  // The statement says what the account held on its date, so each row is
-  // weighed against that day, and the difference is booked on it.
-  const date = item.documentDate ?? state.today;
-  const held = heldIn(state, account.id, date);
+  // Each row is weighed against what the account holds and the difference is
+  // booked today: a statement's own date needs the holdings on that day,
+  // which waits for readings that carry one (PLA-42).
+  const date = state.today;
+  const held = heldIn(state, account.id);
   for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,
@@ -249,8 +235,7 @@ export function confirmImport(
     const diff = difference(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
-    // The account's holdings of it on that day, largest first.
-    const holdings = holdingsAt(next, account.id, date).filter(
+    const holdings = heldHoldings(next, account.id).filter(
       ({ row: each }) =>
         each.holding.asset_class === "instrument" &&
         each.holding.instrument_symbol === row.symbol,

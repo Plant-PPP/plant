@@ -90,9 +90,12 @@ export type YearClose = {
 // first, each with the name of its holding.
 export type MonthDetail = {
   close: MonthClose;
+  // `atWorth`: an opening balance or adjustment out shown at what it was
+  // worth that day, as the close counts it, rather than at its price.
   lines: (MovementLine & {
     holdingName: string;
     instrumentType: InstrumentType | null;
+    atWorth: boolean;
   })[];
 };
 
