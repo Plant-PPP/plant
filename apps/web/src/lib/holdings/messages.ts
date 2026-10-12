@@ -66,7 +66,7 @@ export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
 export const FUTURE_DATE_MESSAGE = "La fecha no puede ser posterior a hoy.";
 
 export const SAME_DAY_ORDER =
-  "Si es del mismo día, cuenta el orden en que cargaste los movimientos.";
+  "Si son del mismo día, cuenta el orden en que cargaste los movimientos.";
 
 export const MOVEMENT_MESSAGES: Record<
   Extract<MovementResult, { ok: false }>["code"],
@@ -76,7 +76,7 @@ export const MOVEMENT_MESSAGES: Record<
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
   oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
-  opening_balance: `El saldo inicial va una sola vez, y una tenencia empieza con un saldo inicial o una compra. ${SAME_DAY_ORDER}`,
+  opening_balance: `Una tenencia empieza con un saldo inicial, una compra o un ajuste en que entran unidades. ${SAME_DAY_ORDER} El saldo inicial va una sola vez.`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
 };
@@ -94,5 +94,5 @@ export const PRICE_MESSAGES: Record<
 export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   ...MOVEMENT_MESSAGES,
   oversold: `No podés borrarlo: un movimiento posterior sacaría más unidades de las que tenías. ${SAME_DAY_ORDER}`,
-  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial o una compra. ${SAME_DAY_ORDER}`,
+  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra o un ajuste en que entran unidades. ${SAME_DAY_ORDER}`,
 };
