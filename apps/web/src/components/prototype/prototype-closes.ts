@@ -242,13 +242,13 @@ export function closesOf(
       complete: held.complete && owed.complete,
     };
   };
+  // What each of those moved at, which the month's detail shows.
+  const worths = new Map<string, string>();
   // Units that come in already held (an opening balance) or leave the
   // holdings without a trade (an adjustment out) move at what they were worth
   // that day, exactly, so neither the gain they carry nor their cost shows as
   // the month's market result; a sale keeps its cost for what it makes. A
   // day with no price takes their cost.
-  // What each of those moved at, which the month's detail shows.
-  const worths = new Map<string, string>();
   const flowOf = (
     ledger: Ledger,
     index: number,
@@ -397,9 +397,11 @@ export function monthDetail(
         steps[index]!,
         operationOf(state, movement.operation_id)!,
       );
+      const worth = worths?.get(movement.id);
       lines.push({
         ...line,
-        amount: worths?.get(movement.id) ?? line.amount,
+        amount: worth ?? line.amount,
+        atWorth: worth !== undefined,
         holdingName: `${holdingName(ledger.row.holding, names)} · ${ledger.row.account.institution}`,
         instrumentType: ledger.row.instrumentType,
       });
