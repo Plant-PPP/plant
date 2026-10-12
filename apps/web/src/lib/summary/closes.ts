@@ -91,7 +91,7 @@ export type YearClose = {
 export type MonthDetail = {
   close: MonthClose;
   // `atWorth`: an opening balance or adjustment out shown at what it was
-  // worth that day, as the close counts it, rather than at its price.
+  // worth that day, as the close counts it; its price is not shown.
   lines: (MovementLine & {
     holdingName: string;
     instrumentType: InstrumentType | null;
