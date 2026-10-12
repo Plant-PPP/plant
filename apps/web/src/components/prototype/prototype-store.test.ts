@@ -709,7 +709,7 @@ describe("entry order", () => {
     expect(relabelled.nextEntryOrder).toBe(before.nextEntryOrder);
   });
 
-  it("starts the fallback place afresh in every portfolio of a split edit", () => {
+  it("keeps every part's number when a split edit falls back", () => {
     const split = (date: string) => ({
       ...btc("purchase", "1", date),
       parts: [
