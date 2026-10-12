@@ -20,10 +20,12 @@ import {
   initialState,
   type PrototypeState,
   setPrice,
+  type Write,
   updateHolding,
   writeOperation,
 } from "./prototype-store";
 import * as accounts from "./prototype-accounts-store";
+import { markRecalculated } from "./prototype-closes";
 import { usePrototypeStore } from "./use-prototype-store";
 
 type Prototype = {
@@ -63,9 +65,22 @@ export function PrototypeProvider({
   snapshot: QuoteSnapshot;
   children: ReactNode;
 }) {
-  const { state, latest, write } = usePrototypeStore(() =>
-    initialState(buildFixtures(today), today),
-  );
+  const {
+    state,
+    latest,
+    write: writeState,
+  } = usePrototypeStore(() => initialState(buildFixtures(today), today));
+  // Every write marks the closed months it changed as recalculated.
+  const write = <R,>(change: (state: PrototypeState) => Write<R>) =>
+    writeState((before) => {
+      const next = change(before);
+      return next.state === before
+        ? next
+        : {
+            ...next,
+            state: markRecalculated(before, next.state),
+          };
+    });
   const actions: Prototype["actions"] = {
     holdings: {
       create: (input) =>

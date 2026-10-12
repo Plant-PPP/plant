@@ -133,3 +133,8 @@ export {
   type Returns,
   returnsOf,
 } from "./movements/returns";
+export {
+  chainedShare,
+  type PeriodResult,
+  periodResult,
+} from "./movements/period";

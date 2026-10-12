@@ -83,6 +83,8 @@ export type PrototypeState = {
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
+  // The closed months a write changed, by period, with the day it did.
+  recalculated: ReadonlyMap<string, string>;
 };
 
 export type StoredHolding = {
@@ -121,6 +123,7 @@ export function initialState(
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
+    recalculated: new Map(),
   };
 }
 
@@ -300,7 +303,7 @@ export const difference = (a: string, b: string): string =>
 // A movement's line from its step and the position before it: its amount
 // (the cost its units added or took out, a sale's gross, or what an income
 // paid) and its charges.
-function lineOf(
+export function lineOf(
   movement: Movement,
   before: Position,
   step: LedgerStep,

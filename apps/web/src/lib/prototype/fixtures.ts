@@ -553,7 +553,7 @@ export function buildFixtures(today: string): Fixtures {
           asset_class: "instrument",
           instrument_symbol: holding.symbol,
           // A closed holding keeps the quantity it opened with, as no schema
-          // takes a zero amount; nothing values or lists it.
+          // takes a zero amount; only its movements and sales are read.
           amount: isClosed ? own.find(isTrade)!.quantity : quantity,
         },
         { ...holding.placed, instrumentType: typeOf(holding.symbol) },
