@@ -1,6 +1,8 @@
 import { isOrderRefusal } from "@plant/core";
 import type { Movement } from "@plant/core";
 
+import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+
 import {
   HOLDING_DELETE_MESSAGES,
   lineLabel,
@@ -80,5 +82,14 @@ describe("a transfer's line", () => {
 it("asks to delete a holding's transfers first", () => {
   expect(HOLDING_DELETE_MESSAGES.holding_has_transfers).toBe(
     "Tiene traspasos con otra cartera. Borralos primero desde sus movimientos.",
+  );
+});
+
+it("says an archived account or portfolio needs restoring as the holding dialog does", () => {
+  expect(MOVEMENT_MESSAGES.portfolio_archived).toBe(
+    "Esa cartera está archivada. Restaurala en Cuentas primero.",
+  );
+  expect(MOVEMENT_MESSAGES.source_connection_archived).toBe(
+    WRITE_MESSAGES.holdings.source_connection_archived,
   );
 });

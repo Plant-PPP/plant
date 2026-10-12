@@ -366,42 +366,38 @@ export function MovementDialog({
               id={`${fieldId("price")}-help`}
               className="-mt-2 grid gap-1 text-xs text-muted-foreground"
             >
-              {fields.costEdited ? (
-                suggested !== null && (
-                  <div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="link"
-                      className="h-auto p-0 text-xs"
-                      onClick={() =>
-                        setFields((current) => ({
-                          ...current,
-                          price: "",
-                          costEdited: false,
-                        }))
-                      }
-                    >
-                      Usar el sugerido (
-                      {formatQuotedPrice(
-                        suggested,
-                        fields.currency,
-                        instrumentType,
-                      )}
-                      )
-                    </Button>
-                  </div>
-                )
+              {suggested === null ? (
+                <p>Si lo dejás vacío, entran con el costo que tenían.</p>
+              ) : fields.costEdited ? (
+                <div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="link"
+                    className="h-auto p-0 text-xs"
+                    onClick={() =>
+                      setFields((current) => ({
+                        ...current,
+                        price: "",
+                        costEdited: false,
+                      }))
+                    }
+                  >
+                    Usar el sugerido (
+                    {formatQuotedPrice(
+                      suggested,
+                      fields.currency,
+                      instrumentType,
+                    )}
+                    )
+                  </Button>
+                </div>
               ) : (
-                <p>
-                  {suggested === null
-                    ? "Si lo dejás vacío, entran con el costo que tenían."
-                    : "Sugerido: el costo que tenían."}
-                </p>
+                <p>Sugerido: el costo que tenían.</p>
               )}
               <p>
-                Si lo cambiás, entran con ese costo y la diferencia se ve en su
-                resultado.
+                Si lo cambiás, entran con ese costo y la diferencia se ve en el
+                resultado de la tenencia.
               </p>
             </div>
           )}

@@ -245,8 +245,8 @@ export function groupOf(
   return byHolding.get(holdingId) ?? [holdingId];
 }
 
-// A group's steps, by holding and unit, kept while each of its holdings'
-// movements stays the same array.
+// A group's steps, by holding, unit and reference dollar, kept while each of
+// its holdings' movements stays the same array.
 type GroupSteps = {
   members: readonly (readonly Movement[])[];
   byKey: Map<string, Map<string, LedgerStep[]>>;
@@ -303,19 +303,17 @@ export function positionsOf(
   const positions = new Map<string, Position>();
   for (const [holdingId, movements] of state.movements) {
     if (movements.length === 0) continue;
-    positions.set(
-      holdingId,
-      stepsOf(state, holdingId, unit).at(-1)?.position ?? EMPTY_POSITION,
-    );
+    positions.set(holdingId, positionOf(stepsOf(state, holdingId, unit)));
   }
   return positions;
 }
 
 // The cost per unit a transfer's units would carry out of a portfolio's
-// holding: its average cost just before the transfer, which goes last on its
-// day (an edit on its own day keeps its place), in the query's currency, with
-// the transfer an edit replaces left out. None when, without it, what came
-// before no longer holds up (a sale of the units it brought).
+// holding: its average cost just before the transfer, in the query's
+// currency, with the transfer an edit replaces left out. The transfer goes
+// where writeOperation puts it: last on its day, unless an edit keeps its
+// place (on its own day, or when going last would leave something taking out
+// more than was held). None when no place holds up.
 export function suggestedTransferCost(
   state: PrototypeState,
   {
@@ -333,32 +331,38 @@ export function suggestedTransferCost(
   const kept = group
     .flatMap((id) => state.movements.get(id) ?? [])
     .find((each) => each.operation_id === operationId);
-  const at = {
-    date,
-    rank:
-      kept && kept.date === date ? kept.entry_order : Number.POSITIVE_INFINITY,
-  };
-  const before = group.flatMap((id) =>
-    (state.movements.get(id) ?? []).filter((each) => {
-      const key = movementKey(each);
-      return (
-        each.operation_id !== operationId &&
-        (key.date < at.date || (key.date === at.date && key.rank < at.rank))
-      );
-    }),
-  );
   const unit = lift(
     { amount: { n: 0n, d: 1n }, currency },
     referenceUnit(state.referenceDollar),
     state.referenceDollar,
   ).denominator;
-  try {
+  const costAt = (rank: number): string | null => {
+    const before = group.flatMap((id) =>
+      (state.movements.get(id) ?? []).filter((each) => {
+        const key = movementKey(each);
+        return (
+          each.operation_id !== operationId &&
+          (key.date < date || (key.date === date && key.rank < rank))
+        );
+      }),
+    );
     const steps = replayHoldings(before, unit, state.referenceDollar);
     return averageCost(positionOf(steps.get(stored.holding.id) ?? []));
-  } catch (error) {
-    if (error instanceof PositionError) return null;
-    throw error;
+  };
+  const places =
+    kept === undefined
+      ? [Number.POSITIVE_INFINITY]
+      : kept.date === date
+        ? [kept.entry_order]
+        : [Number.POSITIVE_INFINITY, kept.entry_order];
+  for (const rank of places) {
+    try {
+      return costAt(rank);
+    } catch (error) {
+      if (!(error instanceof PositionError)) throw error;
+    }
   }
+  return null;
 }
 
 // The years with any sale, newest first.
@@ -547,7 +551,7 @@ export function instrumentHoldings(
     return {
       row,
       closed: closed.has(row.id),
-      position: steps.at(-1)?.position ?? EMPTY_POSITION,
+      position: positionOf(steps),
       value: values[row.id]?.value ?? null,
     };
   });
@@ -898,7 +902,6 @@ export function writeOperation(
   const was = operationOf(state, operationId);
   if (replacing && !was)
     return refused(state, { ok: false, code: "not_found" });
-  // A new operation takes an id no operation has.
   if (!replacing && was) return refused(state, { ok: false, code: "invalid" });
   // An edit keeps the operation's account and instrument, as its dialog does.
   if (

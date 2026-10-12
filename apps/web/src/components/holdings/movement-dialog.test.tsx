@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
 
+import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
+
 import { MovementDialog } from "./movement-dialog";
 import {
   type MovementFields,
@@ -47,7 +49,11 @@ const moving = withKind(
   "p1",
 );
 
-const render = (initial: MovementFields, suggested: string | null) =>
+const render = (
+  initial: MovementFields,
+  suggested: string | null,
+  initialError?: string,
+) =>
   renderToStaticMarkup(
     <MovementDialog
       mode="create"
@@ -57,6 +63,7 @@ const render = (initial: MovementFields, suggested: string | null) =>
       fixed={{ account: "IOL", instrument: "Bitcoin" }}
       transfer={{ from: "p1", suggestedCost: () => suggested }}
       initial={initial}
+      initialError={initialError}
       today={TODAY}
       returnFocusTo={() => null}
       onClose={() => {}}
@@ -72,7 +79,7 @@ it("shows where the units leave from, the cost they carry and no charges", () =>
   expect(html).toContain('value="60000"');
   expect(html).toContain("Sugerido: el costo que tenían.");
   expect(html).toContain(
-    "Si lo cambiás, entran con ese costo y la diferencia se ve en su resultado.",
+    "Si lo cambiás, entran con ese costo y la diferencia se ve en el resultado de la tenencia.",
   );
   expect(html).not.toContain("Gastos");
   expect(html).not.toContain("Repartir en otra cartera");
@@ -100,4 +107,32 @@ it("says a cost left empty carries the one the units had when none is suggested"
   expect(render(moving, null)).toContain(
     "Si lo dejás vacío, entran con el costo que tenían.",
   );
+});
+
+describe("a refused transfer's focus", () => {
+  const focused = (html: string) =>
+    [...html.matchAll(/<(?:input|button)[^>]*autofocus[^>]*>/gi)].map(
+      (tag) => tag[0].match(/ id="([^"]+)"/)?.[1],
+    );
+
+  it("goes to where the units go while none is chosen", () => {
+    const ids = focused(render(moving, "60000", MOVEMENT_MESSAGES.oversold));
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toMatch(/-parts-to$/);
+  });
+
+  it("goes to the quantity once they have somewhere to go", () => {
+    const ids = focused(
+      render(
+        {
+          ...moving,
+          parts: [moving.parts[0]!, { portfolioId: "p2", size: "0,5" }],
+        },
+        "60000",
+        MOVEMENT_MESSAGES.oversold,
+      ),
+    );
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toMatch(/-parts$/);
+  });
 });

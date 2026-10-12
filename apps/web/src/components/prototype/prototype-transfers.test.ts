@@ -392,6 +392,38 @@ describe("the cost a transfer suggests", () => {
     ).not.toBeNull();
   });
 
+  it("leaves out what was entered after it on its own day", () => {
+    const moved = written(transfer("2"));
+    const later = writeOperation(
+      moved,
+      purchase("10", "1", TODAY),
+      options("e3000000-0000-4000-8000-000000000008"),
+    ).state;
+    expect(
+      suggestedTransferCost(later, { ...query, operationId: TRANSFER }),
+    ).toBe(averageIn(state));
+  });
+
+  it("keeps the place an edit keeps when going last on the new day would oversell", () => {
+    const moved = written(transfer("2", { date: "2026-10-01" }));
+    const sold = writeOperation(
+      moved,
+      {
+        ...purchase("2", "1", "2026-10-05"),
+        kind: "sale",
+        parts: [{ portfolio_id: LARGO, quantity: "2" }],
+      },
+      options("e3000000-0000-4000-8000-000000000009"),
+    ).state;
+    const edit = { ...query, date: "2026-10-05", operationId: TRANSFER };
+    const edited = writeOperation(sold, transfer("2", { date: "2026-10-05" }), {
+      ...options(),
+      replacing: true,
+    });
+    expect(edited.result.ok).toBe(true);
+    expect(suggestedTransferCost(sold, edit)).toBe(averageIn(state));
+  });
+
   it("has none when, without the edited transfer, a later sale would sell what it brought", () => {
     const moved = written(transfer("2", { date: "2026-10-01" }));
     const sold = writeOperation(

@@ -202,7 +202,8 @@ const optional = (text: string) => (text.trim() === "" ? null : text);
 
 // What the dialog sends: the kind's fields, each part, each charge, the price
 // typed as the market quotes it sent per unit. A value the parsers refuse goes
-// as null, for the schema to name its field.
+// as null, for the schema to name its field; a transfer's cost goes as typed,
+// since its null carries the units' own.
 export function toOperationInput(
   fields: MovementFields,
   type: InstrumentType | null,
@@ -214,8 +215,6 @@ export function toOperationInput(
   };
   const income = isIncome(fields.kind);
   if (fields.kind === "transfer") {
-    // A cost cleared carries the units' own; one that does not parse goes
-    // as typed, for the schema to refuse.
     const cost =
       fields.costEdited && fields.price.trim() !== ""
         ? (perUnit(fields.price) ?? fields.price)
