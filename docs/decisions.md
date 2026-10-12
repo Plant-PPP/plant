@@ -29,6 +29,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **The prototype's answers are built from the user's data by rules, not a model**, to settle the chat's shape before PLA-47: each answer's text, figures and chart come from the same functions the screens use, with the day it was calculated, today's rate of the dollar a dollar answer is in, and what it read; a total that left something out says so, and a question that asks what to buy, sell or do gets the fixed answer. It answers net worth, the year and the month in progress, income, debts and one instrument, in the user's reference dollar unless the conversation picks another unit.
 - **It never says what to buy or sell.** A question that asks what to do ("¿qué compro?", "¿me conviene vender?", "¿me recomendás…?") gets the fixed answer; a question about what happened ("¿cuánto invertí?", "¿qué vendí?") gets its answer. Every screen of the chat says it is not financial advice.
+- **Suggested questions only start a conversation.** An empty chat offers a few; an answer offers none, so a started conversation is the user's own questions, and no click spends one of the month's questions by accident. PLA-54 is cancelled.
 - **30 questions a month in the prototype**, counted by the day each was asked; the real limit is the server's (PLA-52).
 
 ## 2026-10-11 · Cargar and its review (PLA-114)

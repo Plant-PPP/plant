@@ -56,14 +56,9 @@ function useRevealed(text: string, animate: boolean): string {
 function Answer({
   message,
   animate,
-  onFollowUp,
-  disabled,
 }: {
   message: AssistantMessage;
   animate: boolean;
-  onFollowUp: (question: string) => void;
-  // While an answer is on its way, or no questions are left this month.
-  disabled: boolean;
 }) {
   const text = useRevealed(message.text, animate);
   const done = text.length === message.text.length;
@@ -75,31 +70,16 @@ function Answer({
       </p>
       {done && message.chart && <AnswerChart chart={message.chart} />}
       {done && (
-        <>
-          <p className="text-muted-foreground text-xs">
-            {[
-              `Calculado el ${formatDate(message.asOf)}`,
-              message.rate &&
-                `${message.rate.label} ${formatAmount(message.rate.sell, "ars")}`,
-              message.sources.length > 0 && message.sources.join(", "),
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {message.followUps.map((question) => (
-              <button
-                key={question}
-                type="button"
-                disabled={disabled}
-                onClick={() => onFollowUp(question)}
-                className="hover:bg-muted rounded-full border px-3 py-1 text-xs disabled:pointer-events-none disabled:opacity-50"
-              >
-                {question}
-              </button>
-            ))}
-          </div>
-        </>
+        <p className="text-muted-foreground text-xs">
+          {[
+            `Calculado el ${formatDate(message.asOf)}`,
+            message.rate &&
+              `${message.rate.label} ${formatAmount(message.rate.sell, "ars")}`,
+            message.sources.length > 0 && message.sources.join(", "),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
       )}
     </div>
   );
@@ -151,9 +131,8 @@ export function AssistantPage({
     setActiveId(conversationId);
     setDraft("");
     setArrived(null);
-    // A clicked suggestion unmounts and a clicked follow-up goes disabled
-    // while waiting, so focus moves to the question field, or to the title
-    // when this question used the month's last one.
+    // A clicked suggestion unmounts, so focus moves to the question field, or
+    // to the title when this question used the month's last one.
     (left > 1 ? questionField : heading).current?.focus();
     setWaiting(true);
     void actions
@@ -324,8 +303,6 @@ export function AssistantPage({
                 key={message.id}
                 message={message}
                 animate={message.id === arrived}
-                onFollowUp={ask}
-                disabled={waiting || left === 0}
               />
             ),
           )}
