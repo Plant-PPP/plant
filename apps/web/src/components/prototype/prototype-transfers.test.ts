@@ -1,5 +1,5 @@
 import { type Denominator, referenceUnit } from "@plant/core";
-import { exactOf, over, plus, stored } from "@plant/shared";
+import { exactOf, over, plus, stored, times } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -97,8 +97,14 @@ describe("a transfer between portfolios", () => {
     expect(
       stored(plus(exactOf(left.money!.cost), exactOf(arrived.money!.cost))),
     ).toBe(before.money!.cost);
-    const share = (Number(before.money!.cost) * 2) / Number(before.quantity);
-    expect(Number(arrived.money!.cost)).toBeCloseTo(share, 4);
+    // The 2 moved are the oldest: 2 of the opening balance's 40, which has no
+    // charges, in pesos.
+    const opening = state.movements
+      .get(AAPL)!
+      .find((movement) => movement.kind === "opening_balance")!;
+    expect(arrived.money!.cost).toBe(
+      stored(times(exactOf(opening.price!), exactOf("2"))),
+    );
     expect(left.money!.realized).toBe(before.money!.realized);
     expect(arrived.money!.realized).toBe("0");
   });
@@ -139,18 +145,20 @@ describe("a transfer between portfolios", () => {
     expect(positionIn(manual, PRINCIPAL)).toEqual(positionIn(moved, PRINCIPAL));
   });
 
-  it("follows an earlier purchase in the portfolio it left", () => {
+  it("follows an earlier sale in the portfolio it left", () => {
+    // Selling 4 earlier leaves 1 of the opening balance for the transfer, so
+    // the units it moves come from two lots.
     const largo = appleIn(moved, LARGO)!.holding.id;
-    const bought = writeOperation(
+    const sold = writeOperation(
       moved,
-      purchase("10", "1", "2026-01-02"),
+      { ...purchase("4", "1", "2026-01-02"), kind: "sale" },
       options("e3000000-0000-4000-8000-000000000002"),
     );
-    expect(bought.result.ok).toBe(true);
-    expect(bought.state.revisions.get(largo)).toBe(
+    expect(sold.result.ok).toBe(true);
+    expect(sold.state.revisions.get(largo)).toBe(
       moved.revisions.get(largo)! + 1,
     );
-    expect(positionIn(bought.state, LARGO)!.money!.cost).not.toBe(
+    expect(positionIn(sold.state, LARGO)!.money!.cost).not.toBe(
       positionIn(moved, LARGO)!.money!.cost,
     );
   });

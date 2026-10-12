@@ -40,3 +40,12 @@ it("never lets the early parts add up to more than the charge", () => {
   const parts = splitCharges(charges, ["1", "1", "1", "1"]).flat();
   expect(parts.map((each) => each.amount)).toEqual(["0.00000002"]);
 });
+
+it("splits into no parts when there are none", () => {
+  const charges = [{ kind: "other" as const, label: null, amount: "5" }];
+  expect(splitCharges(charges, [])).toEqual([]);
+});
+
+it("gives every part no charges when there are none", () => {
+  expect(splitCharges([], ["1", "2"])).toEqual([[], []]);
+});

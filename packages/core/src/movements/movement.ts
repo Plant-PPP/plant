@@ -15,9 +15,9 @@ import { holdingDateSchema } from "../valuation/holding";
 // What can happen to an instrument holding. A holding starts with units
 // coming in: its opening balance, a purchase, an adjustment in or a transfer
 // in. An adjustment changes the quantity without trading it: units in at a
-// cost (0 unless given), or units out with their share of the cost and no
-// result. A transfer moves units between two portfolios of one account: they
-// leave with their share of the cost and arrive carrying it, with no result.
+// cost (0 unless given), or units out with the cost of the oldest units and
+// no result. A transfer moves units between two portfolios of one account:
+// the oldest leave with their cost and arrive carrying it, with no result.
 // A yield is units a holding earned or lost without money in or out (staking,
 // earn, trading): their value that day is the holding's return. It never
 // starts a holding.
@@ -40,7 +40,7 @@ export const isIncome = (kind: MovementKind): boolean =>
   INCOME_KINDS.includes(kind);
 
 // What an operation was charged, item by item as the broker lists it. Charges
-// never enter the average cost.
+// never enter the cost.
 export const CHARGE_KINDS = [
   "commission",
   "market_fee",

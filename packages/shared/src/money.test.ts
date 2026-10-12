@@ -11,9 +11,12 @@ import {
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
   roundedTo,
+  splitExact,
+  stored,
   times,
   toDecimal,
   toScaled,
+  ZERO,
 } from "./money";
 
 describe("moneySchema", () => {
@@ -207,5 +210,40 @@ describe("exact fractions", () => {
     expect(() => toDecimal(third, 9)).toThrow(RangeError);
     expect(() => roundedTo(third, -1)).toThrow(RangeError);
     expect(() => roundedTo(third, 1.5)).toThrow(RangeError);
+  });
+});
+
+describe("splitExact", () => {
+  const parts = (amount: string, weights: string[]) =>
+    splitExact(exactOf(amount), weights.map(exactOf)).map(stored);
+
+  it("cuts every part but the last and gives the last the rest", () => {
+    expect(parts("10", ["1", "1", "1"])).toEqual([
+      "3.33333333",
+      "3.33333333",
+      "3.33333334",
+    ]);
+    expect(parts("2.1", ["1", "1", "1"])).toEqual(["0.7", "0.7", "0.7"]);
+    // 2 × 1/3 = 0.666…: cut, not rounded up.
+    expect(parts("2", ["1", "2"])).toEqual(["0.66666666", "1.33333334"]);
+  });
+
+  it("splits by the weights given", () => {
+    expect(parts("40", ["1", "3"])).toEqual(["10", "30"]);
+    expect(parts("5", ["2"])).toEqual(["5"]);
+  });
+
+  it("adds up to the amount over many parts", () => {
+    const weights = Array.from({ length: 10_000 }, (_, i) =>
+      exactOf(`${(i % 7) + 1}.123`),
+    );
+    const split = splitExact(exactOf("1234.56789"), weights);
+    expect(split).toHaveLength(10_000);
+    expect(stored(plus(...split))).toBe("1234.56789");
+  });
+
+  it("refuses weights that add up to nothing", () => {
+    expect(() => splitExact(exactOf("1"), [])).toThrow(RangeError);
+    expect(() => splitExact(exactOf("1"), [ZERO, ZERO])).toThrow(RangeError);
   });
 });
