@@ -149,8 +149,8 @@ export function operationFields(
 }
 
 // The fields as another kind: a transfer takes its quantity out of `from`
-// into a portfolio still to choose, with no charges; any other kind keeps
-// the first part.
+// into a portfolio still to choose, with no charges; leaving a transfer keeps
+// its first part, and any other change keeps every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,

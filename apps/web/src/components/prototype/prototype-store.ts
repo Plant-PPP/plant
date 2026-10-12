@@ -468,9 +468,8 @@ export function salesOf(
 export const difference = (a: string, b: string): string =>
   stored(minus(exactOf(a), exactOf(b)));
 
-// A movement's line from its step and the position before it: its amount
-// (the cost its units added or took out, a sale's gross, or what an income
-// paid) and its charges.
+// A movement's line from its step and the position before it: its amount and
+// its charges.
 export function lineOf(
   movement: Movement,
   before: Position,
@@ -487,8 +486,8 @@ export function lineOf(
   };
 }
 
-// A movement's amount from its step and the position before it, as lineOf
-// shows it.
+// A movement's amount from its step and the position before it: the cost its
+// units added or took out, a sale's gross, or what an income paid.
 function amountOf(
   movement: Movement,
   before: Position,

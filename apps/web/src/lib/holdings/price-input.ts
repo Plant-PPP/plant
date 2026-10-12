@@ -3,6 +3,8 @@ import {
   type InstrumentType,
   type ManualPriceRefusal,
   exactUnitPrice,
+  isTrade,
+  type Movement,
   quotedPrice,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
@@ -67,3 +69,8 @@ export function formatQuotedPrice(
   }
   return `${formatPrice(quotedPrice(type, perUnit), unit)} c/100 VN`;
 }
+
+// The price a movement's row shows per unit: a trade's, but not a transfer's,
+// whose cost shows as its amount.
+export const shownPrice = (movement: Movement): string | null =>
+  isTrade(movement) && movement.kind !== "transfer" ? movement.price : null;

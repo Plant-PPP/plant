@@ -443,8 +443,8 @@ describe("the cost a transfer suggests", () => {
     ).state;
     const snapshot = structuredClone(moved);
     const steps = stepsOf(moved, AAPL, "ars");
-    suggested(moved, transfer("3"), true);
-    suggested(moved, transfer("1"));
+    expect(suggested(moved, transfer("3"), true)).not.toBeNull();
+    expect(suggested(moved, transfer("1"))).not.toBeNull();
     expect(moved).toEqual(snapshot);
     expect(stepsOf(moved, AAPL, "ars")).toBe(steps);
   });

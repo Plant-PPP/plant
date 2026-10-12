@@ -15,7 +15,7 @@ import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { lineLabel } from "@/lib/holdings/messages";
-import { formatQuotedPrice } from "@/lib/holdings/price-input";
+import { formatQuotedPrice, shownPrice } from "@/lib/holdings/price-input";
 import {
   type MonthClose,
   type MonthDetail,
@@ -178,11 +178,9 @@ export function MonthCloseDetail({
       size: 136,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement) &&
-        original.movement.kind !== "transfer" &&
-        !original.atWorth
+        shownPrice(original.movement) !== null && !original.atWorth
           ? formatQuotedPrice(
-              original.movement.price,
+              shownPrice(original.movement)!,
               original.movement.currency,
               original.instrumentType,
             )
