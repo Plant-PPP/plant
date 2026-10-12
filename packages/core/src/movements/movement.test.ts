@@ -90,6 +90,12 @@ describe("movementSchema", () => {
     expect(movementSchema.safeParse(movement).success).toBe(false);
   });
 
+  it("reads an entry order of 0", () => {
+    expect(
+      movementSchema.parse({ ...purchase, entry_order: 0 }).entry_order,
+    ).toBe(0);
+  });
+
   it("reads a dividend as an amount", () => {
     const { id, holding_id, operation_id, entry_order, date, currency, rates } =
       purchase;

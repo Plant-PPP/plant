@@ -732,6 +732,16 @@ describe("entry order", () => {
     expect(positionIn(moved).quantity).toBe("1");
   });
 
+  it("keeps the number of a purchase turned into an opening balance on another date", () => {
+    const before = run([
+      [btc("purchase", "1", D2), A],
+      [btc("purchase", "1", D3), B],
+    ]);
+    const moved = run([[btc("opening_balance", "1", D1), A, true]], before);
+    expect(entryOf(moved, A)).toBe(entryOf(before, A));
+    expect(moved.nextEntryOrder).toBe(before.nextEntryOrder);
+  });
+
   it("changes nothing when an edit is refused after creating a holding", () => {
     const before = run([
       [btc("purchase", "1", D1), A],
