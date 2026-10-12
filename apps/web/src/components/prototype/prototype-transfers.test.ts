@@ -12,6 +12,7 @@ import {
   type PrototypeState,
   stepsOf,
   suggestedTransferCost,
+  updateHolding,
   writeOperation,
 } from "./prototype-store";
 
@@ -183,6 +184,40 @@ describe("a transfer between portfolios", () => {
   });
 });
 
+describe("the tables a transfer reloads", () => {
+  const moved = written(transfer("2"));
+  const largo = appleIn(moved, LARGO)!.holding.id;
+
+  it("reloads the side left when the other moves to another portfolio", () => {
+    const edited = writeOperation(moved, transfer("2", { to: CORTO }), {
+      ...options(),
+      replacing: true,
+    }).state;
+    expect(edited.revisions.get(AAPL)).toBeGreaterThan(
+      moved.revisions.get(AAPL)!,
+    );
+  });
+
+  it("reloads the other side when a holding moves to another portfolio", () => {
+    const stored = appleIn(moved, PRINCIPAL)!;
+    const update = updateHolding(moved, AAPL, {
+      asset_class: "instrument",
+      amount: stored.holding.amount,
+      currency: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+      valued_on: null,
+      label: null,
+      portfolio_id: CORTO,
+    });
+    expect(update.result).toEqual({ ok: true, id: AAPL });
+    expect(update.state.revisions.get(largo)).toBe(
+      moved.revisions.get(largo)! + 1,
+    );
+  });
+});
+
 describe("a refused transfer", () => {
   it.each([
     ["oversold", transfer("100000")],
@@ -222,6 +257,19 @@ describe("a refused transfer", () => {
     expect(writeOperation(state, input, options())).toEqual({
       state,
       result: { ok: false, code },
+    });
+  });
+
+  it("refuses an archived account", () => {
+    const iol = state.accounts.find(({ id }) => id === IOL)!;
+    const archived = {
+      ...state,
+      accounts: state.accounts.filter(({ id }) => id !== IOL),
+      archivedAccounts: [iol],
+    };
+    expect(writeOperation(archived, transfer("2"), options())).toEqual({
+      state: archived,
+      result: { ok: false, code: "archived_account" },
     });
   });
 
@@ -282,6 +330,26 @@ describe("the cost a transfer suggests", () => {
     });
     expect(dollars).not.toBeNull();
     expect(Number(dollars)).toBeLessThan(Number(averageIn(state)));
+  });
+
+  it("has none for the side an edited transfer's units arrive in", () => {
+    const moved = written(transfer("2"));
+    const sold = writeOperation(
+      moved,
+      {
+        ...purchase("2", "1", TODAY),
+        kind: "sale",
+        parts: [{ portfolio_id: LARGO, quantity: "2" }],
+      },
+      options("e3000000-0000-4000-8000-000000000004"),
+    ).state;
+    expect(
+      suggestedTransferCost(sold, {
+        ...query,
+        portfolioId: LARGO,
+        operationId: TRANSFER,
+      }),
+    ).toBeNull();
   });
 
   it("has none where nothing is held", () => {

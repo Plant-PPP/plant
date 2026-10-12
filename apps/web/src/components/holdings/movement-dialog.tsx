@@ -4,9 +4,7 @@ import {
   CHARGE_KINDS,
   type ChargeKind,
   isIncome,
-  MOVEMENT_KINDS,
   type MovementKind,
-  quotedPrice,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 import { Plus, X } from "lucide-react";
@@ -36,9 +34,12 @@ import {
   CURRENCY_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
-import { amountInput } from "@/lib/format/amount";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
-import { formatQuotedPrice, priceBasisLabel } from "@/lib/holdings/price-input";
+import {
+  formatQuotedPrice,
+  priceBasisLabel,
+  quotedInput,
+} from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 import type {
@@ -51,6 +52,7 @@ import {
   type MovementFields,
   movementRefusal,
   refusedMovementField,
+  kindsOffered,
   toOperationInput,
   withKind,
 } from "./movement-fields";
@@ -112,13 +114,11 @@ export function MovementDialog({
   const basis = instrumentType ? priceBasisLabel(instrumentType) : "por unidad";
   const adjustment = fields.kind === "adjustment";
   const moving = fields.kind === "transfer";
-  const kinds =
-    mode === "edit" && initial.kind === "transfer"
-      ? (["transfer"] as const)
-      : MOVEMENT_KINDS.filter((each) => transfer || each !== "transfer");
+  const kinds = kindsOffered({
+    editing: mode === "edit" ? initial.kind : null,
+    transfers: transfer !== undefined,
+  });
   const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : null;
-  const shownCost = (cost: string) =>
-    amountInput(instrumentType ? quotedPrice(instrumentType, cost) : cost);
   const unused = portfolios.filter(
     (each) => !fields.parts.some((part) => part.portfolioId === each.id),
   );
@@ -231,7 +231,7 @@ export function MovementDialog({
       description={
         fixed
           ? `${fixed.instrument} en ${fixed.account}`
-          : "Una compra, una venta, un cobro, un ajuste o un traspaso de un instrumento."
+          : "Una compra, una venta, un cobro o un ajuste de un instrumento."
       }
       returnFocusTo={focus.returnFocusTo}
     >
@@ -332,7 +332,7 @@ export function MovementDialog({
                       ? fields.price
                       : suggested === null
                         ? ""
-                        : shownCost(suggested)
+                        : quotedInput(suggested, instrumentType)
                   }
                   onChange={(event) => {
                     setFields((current) => ({
@@ -407,7 +407,7 @@ export function MovementDialog({
                 </span>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={fieldId("parts")}>Hacia</Label>
+                <Label htmlFor={`${fieldId("parts")}-to`}>Hacia</Label>
                 <Select
                   value={fields.parts[1]?.portfolioId ?? ""}
                   onValueChange={pick("parts", (value) =>
@@ -415,9 +415,8 @@ export function MovementDialog({
                   )}
                 >
                   <SelectTrigger
-                    id={fieldId("parts")}
+                    id={`${fieldId("parts")}-to`}
                     {...control("parts")}
-                    autoFocus={firstField === "parts"}
                     className="w-full"
                   >
                     <SelectValue placeholder="Elegí una cartera" />
@@ -436,10 +435,11 @@ export function MovementDialog({
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`${fieldId("parts")}-quantity`}>Cantidad</Label>
+                <Label htmlFor={fieldId("parts")}>Cantidad</Label>
                 <Input
-                  id={`${fieldId("parts")}-quantity`}
+                  id={fieldId("parts")}
                   {...control("parts")}
+                  autoFocus={firstField === "parts"}
                   inputMode="decimal"
                   autoComplete="off"
                   value={fields.parts[0]?.size ?? ""}

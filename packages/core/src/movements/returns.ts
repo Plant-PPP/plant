@@ -50,7 +50,6 @@ export function cashFlowsOf(
     let amount: Exact;
     let kind: CashFlow["kind"] = "buy";
     if (movement.kind === "transfer") {
-      // Units moving between the account's portfolios: no money in or out.
       if (takesUnits(movement)) kind = "sell";
       amount = ZERO;
     } else if (movement.kind === "sale") {

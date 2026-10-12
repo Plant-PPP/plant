@@ -32,6 +32,13 @@ export const priceFields = (
   date: latest?.date ?? today,
 });
 
+// A unit's price as typed in a form: as the market quotes it, per 100
+// nominal for a bond, or per unit when the type is not known.
+export const quotedInput = (
+  perUnit: string,
+  type: InstrumentType | null | undefined,
+): string => amountInput(type ? quotedPrice(type, perUnit) : perUnit);
+
 // What the dialog sends: the price of one unit. A price the parser refuses
 // goes as null, for the schema to refuse.
 export function toPriceInput(

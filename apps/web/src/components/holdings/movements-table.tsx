@@ -149,9 +149,7 @@ export function MovementsTable({
       header: "Precio",
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) =>
-        isTrade(original.movement) &&
-        original.movement.kind !== "transfer" &&
-        original.movement.price !== null
+        isTrade(original.movement) && original.movement.kind !== "transfer"
           ? formatQuotedPrice(
               original.movement.price,
               original.movement.currency,

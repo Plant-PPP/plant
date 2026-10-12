@@ -159,6 +159,12 @@ export function initialState(
 
 // --- Reads -----------------------------------------------------------------
 
+// A portfolio, archived or not.
+const portfolioOf = (state: PrototypeState, id: string) =>
+  [...state.portfolios, ...state.archivedPortfolios].find(
+    (each) => each.id === id,
+  );
+
 function rowOfStored(
   state: PrototypeState,
   stored: StoredHolding,
@@ -167,9 +173,7 @@ function rowOfStored(
   const account = [...state.accounts, ...state.archivedAccounts].find(
     ({ id }) => id === stored.accountId,
   );
-  const portfolio = [...state.portfolios, ...state.archivedPortfolios].find(
-    ({ id }) => id === stored.portfolioId,
-  );
+  const portfolio = portfolioOf(state, stored.portfolioId);
   if (!account || !portfolio) return null;
   return {
     id: stored.holding.id,
@@ -277,15 +281,16 @@ export function stepsOf(
   return steps.get(holdingId) ?? NO_STEPS;
 }
 
-// The revisions with every holding in the groups of `holdingIds` moved on, so
-// the tables of the holdings a write reaches load again.
-function bumpGroups(
+// The revisions with every holding in a holding's group moved on, so the
+// tables of the holdings a write reaches load again.
+function bumpGroup(
   state: PrototypeState,
-  revisions: Map<string, number>,
-  holdingIds: readonly string[],
+  holdingId: string,
 ): Map<string, number> {
-  const reached = new Set(holdingIds.flatMap((id) => groupOf(state, id)));
-  for (const id of reached) revisions.set(id, (revisions.get(id) ?? 0) + 1);
+  const revisions = new Map(state.revisions);
+  for (const id of groupOf(state, holdingId)) {
+    revisions.set(id, (revisions.get(id) ?? 0) + 1);
+  }
   return revisions;
 }
 
@@ -307,7 +312,7 @@ export function positionsOf(
 // The cost per unit a transfer's units would carry out of a portfolio's
 // holding: its average cost just before the transfer, which goes last on its
 // day (an edit on its own day keeps its place), in the query's currency. The
-// transfer an edit replaces is left out of the holding it leaves.
+// side an edited transfer takes out is left out; its other side gives none.
 export function suggestedTransferCost(
   state: PrototypeState,
   {
@@ -328,6 +333,8 @@ export function suggestedTransferCost(
   const kept = (state.movements.get(holdingId) ?? []).find(
     (each) => each.operation_id === operationId,
   );
+  // Units leave from the side that takes them out.
+  if (kept && !takesUnits(kept)) return null;
   const rank =
     kept && kept.date === date ? kept.entry_order : Number.POSITIVE_INFINITY;
   const unit = lift(
@@ -484,10 +491,7 @@ export function operationOf(
       parts.push({
         movement,
         portfolioId: stored.portfolioId,
-        portfolioName:
-          [...state.portfolios, ...state.archivedPortfolios].find(
-            ({ id }) => id === stored.portfolioId,
-          )?.name ?? "",
+        portfolioName: portfolioOf(state, stored.portfolioId)?.name ?? "",
       });
     }
   }
@@ -781,14 +785,17 @@ export function updateHolding(
     ...(hasMovements && { amount: stored.holding.amount }),
     portfolio_id,
   });
+  const holdings = state.holdings.map((each) =>
+    each === stored ? { ...each, holding, portfolioId: portfolio_id } : each,
+  );
   return {
     state: {
       ...state,
-      holdings: state.holdings.map((each) =>
-        each === stored
-          ? { ...each, holding, portfolioId: portfolio_id }
-          : each,
-      ),
+      holdings,
+      // The holdings it shares operations with list its new portfolio.
+      ...(portfolio_id !== stored.portfolioId && {
+        revisions: bumpGroup(state, id),
+      }),
     },
     result: { ok: true, id },
   };
@@ -806,7 +813,7 @@ function withMovements(
   return {
     ...state,
     movements: new Map(state.movements).set(holdingId, movements),
-    revisions: bumpGroups(state, new Map(state.revisions), [holdingId]),
+    revisions: bumpGroup(state, holdingId),
     holdings: state.holdings.map((each) =>
       each.holding.id !== holdingId
         ? each
@@ -821,7 +828,7 @@ function withMovements(
   };
 }
 
-// Where a holding sits that the user archived, if it does: no holding may
+// The archived account or portfolio a holding sits in, if any: no holding may
 // stay open there.
 function archivedHome(
   state: PrototypeState,
@@ -879,7 +886,12 @@ export function writeOperation(
     ({ symbol }) => symbol === instrumentSymbol,
   );
   if (!account || !instrument) {
-    return refused(state, { ok: false, code: "not_found" });
+    return refused(state, {
+      ok: false,
+      code: state.archivedAccounts.some(({ id }) => id === accountId)
+        ? "archived_account"
+        : "not_found",
+    });
   }
   const was = replacing ? operationOf(state, operationId) : null;
   if (replacing && !was)
@@ -943,7 +955,6 @@ export function writeOperation(
         entry_order: entryOrder,
         rates,
       } as MovementDraft;
-      // A part that brings units in creates its portfolio's missing holding.
       if (!stored) {
         if (!startsHolding(draft as Movement)) {
           return refused(state, { ok: false, code: "not_found" });
@@ -1106,7 +1117,7 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
   movements.delete(id);
   // The holdings it replayed with load their tables again: an operation it
   // shared shows one part fewer.
-  const revisions = bumpGroups(state, new Map(state.revisions), [id]);
+  const revisions = bumpGroup(state, id);
   revisions.delete(id);
   return { ...state, holdings, movements, revisions };
 }

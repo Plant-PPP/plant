@@ -1,4 +1,4 @@
-import type { Movement } from "./movement";
+import { type Movement, takesUnits } from "./movement";
 
 // Below every entry order, which is never negative.
 const OPENING_RANK = -1;
@@ -39,9 +39,8 @@ export function compareInReplay(a: Movement, b: Movement): number {
   const kb = movementKey(b);
   if (ka.date !== kb.date) return ka.date < kb.date ? -1 : 1;
   if (ka.rank !== kb.rank) return ka.rank - kb.rank;
-  if (a.operation_id === b.operation_id) {
-    const leaving = (m: Movement) => "direction" in m && m.direction === "out";
-    if (leaving(a) !== leaving(b)) return leaving(a) ? -1 : 1;
+  if (a.operation_id === b.operation_id && takesUnits(a) !== takesUnits(b)) {
+    return takesUnits(a) ? -1 : 1;
   }
   return compareKeys(ka, kb);
 }

@@ -136,6 +136,16 @@ describe("compareInReplay", () => {
       "aaa",
     ]);
   });
+
+  it("carries the cost when the arriving side's id sorts first", () => {
+    const [out, arrive] = moved("5", "2026-03-02");
+    const steps = replayHoldings(
+      [...X, { ...arrive!, id: "aaa" }, { ...out!, id: "zzz" }],
+      "usd_mep",
+      "mep",
+    );
+    expect(money(steps, "y")).toMatchObject({ cost: "750" });
+  });
 });
 
 describe("transfer cash flows", () => {

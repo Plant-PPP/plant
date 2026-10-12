@@ -84,7 +84,6 @@ export {
 } from "./movements/movement";
 export { splitCharges } from "./movements/operation";
 export {
-  compareInReplay,
   compareKeys,
   compareMovements,
   type MovementCursor,

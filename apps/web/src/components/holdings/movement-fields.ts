@@ -6,8 +6,8 @@ import {
   takesUnits,
   type Movement,
   type MovementKind,
+  MOVEMENT_KINDS,
   exactUnitPrice,
-  quotedPrice,
 } from "@plant/core";
 import { type Currency, exactOf, plus, stored } from "@plant/shared";
 import type { z } from "zod";
@@ -16,6 +16,7 @@ import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
 import { firstRefused } from "@/components/portfolio-setup/refusal";
 import { amountInput, parseAmountInput } from "@/lib/format/amount";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
+import { quotedInput } from "@/lib/holdings/price-input";
 
 // One portfolio's part of an operation, as typed: its quantity, or an
 // income's amount.
@@ -127,7 +128,7 @@ export function operationFields(
     date: movement.date,
     price:
       isTrade(priced) && priced.price !== null
-        ? amountInput(type ? quotedPrice(type, priced.price) : priced.price)
+        ? quotedInput(priced.price, type)
         : "",
     currency: movement.currency,
     parts: ordered.map((part) => ({
@@ -180,6 +181,21 @@ export function withKind(
   return { ...fields, kind };
 }
 
+// The kinds an operation's dialog offers: a transfer only where the page
+// takes them, and an edit of a transfer stays one.
+export function kindsOffered({
+  editing,
+  transfers,
+}: {
+  editing: MovementKind | null;
+  transfers: boolean;
+}): readonly MovementKind[] {
+  if (editing === "transfer") return ["transfer"];
+  return MOVEMENT_KINDS.filter(
+    (each) => each !== "transfer" || (transfers && editing === null),
+  );
+}
+
 // An empty text is none.
 const optional = (text: string) => (text.trim() === "" ? null : text);
 
@@ -197,11 +213,12 @@ export function toOperationInput(
   };
   const income = isIncome(fields.kind);
   if (fields.kind === "transfer") {
-    // A changed cost that does not parse goes as typed, for the schema to
-    // refuse.
-    const cost = fields.costEdited
-      ? (perUnit(fields.price) ?? fields.price)
-      : null;
+    // A cost cleared carries the units' own; one that does not parse goes
+    // as typed, for the schema to refuse.
+    const cost =
+      fields.costEdited && fields.price.trim() !== ""
+        ? (perUnit(fields.price) ?? fields.price)
+        : null;
     const quantity = parseAmountInput(fields.parts[0]?.size ?? "");
     return {
       kind: fields.kind,
@@ -260,7 +277,7 @@ export const MOVEMENT_FIELD_MESSAGES: Record<MovementField, string> = {
   account: "Elegí una cuenta.",
   instrument: "Elegí un instrumento.",
   date: "Elegí una fecha.",
-  price: "Ingresá un precio de 0 o más.",
+  price: "Ingresá un precio o un costo de 0 o más.",
   currency: "Elegí una moneda.",
   parts: "Elegí cada cartera una vez, con una cantidad mayor a 0.",
   charges:
@@ -317,6 +334,5 @@ export function refusedMovementField(text: string): MovementField | null {
   if (text === MOVEMENT_MESSAGES.opening_balance) return "kind";
   if (text === MOVEMENT_MESSAGES.not_found) return "parts";
   if (text === MOVEMENT_MESSAGES.archived_portfolio) return "parts";
-  if (text === MOVEMENT_MESSAGES.archived_account) return "account";
   return null;
 }

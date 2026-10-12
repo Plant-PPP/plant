@@ -92,7 +92,7 @@ export const MOVEMENT_MESSAGES: Record<
   not_found: "Esa tenencia ya no está.",
   failed: FAILED,
   oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
-  opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
+  opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
   archived_portfolio: "Esa cartera está archivada: restaurala primero.",
@@ -112,7 +112,7 @@ export const PRICE_MESSAGES: Record<
 export const MOVEMENT_DELETE_MESSAGES: typeof MOVEMENT_MESSAGES = {
   ...MOVEMENT_MESSAGES,
   oversold: `No podés borrarlo: un movimiento posterior sacaría más unidades de las que tenías. ${SAME_DAY_ORDER}`,
-  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra o un ajuste de entrada. ${SAME_DAY_ORDER}`,
+  opening_balance: `No podés borrarlo: la tenencia tiene que empezar con un saldo inicial, una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
 };
 
 export const HOLDING_DELETE_MESSAGES: Record<

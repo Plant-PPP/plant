@@ -180,7 +180,6 @@ export function MonthCloseDetail({
       cell: ({ row: { original } }) =>
         isTrade(original.movement) &&
         original.movement.kind !== "transfer" &&
-        original.movement.price !== null &&
         !original.atWorth
           ? formatQuotedPrice(
               original.movement.price,

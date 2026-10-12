@@ -78,7 +78,7 @@ import {
 import {
   HOLDING_DELETE_MESSAGES,
   MOVEMENT_DELETE_MESSAGES,
-  movementLabel,
+  lineLabel,
   MOVEMENT_MESSAGES,
   PRICE_MESSAGES,
 } from "@/lib/holdings/messages";
@@ -482,8 +482,10 @@ export function AssetsSetup({
   }
 
   // A movement as its actions name it: "compra del 01/09/2026".
-  const movementName = (line: MovementLine) =>
-    `${movementLabel(line.movement).toLowerCase()} del ${formatDate(line.movement.date)}`;
+  const movementName = (line: MovementLine) => {
+    const label = lineLabel(line);
+    return `${label.charAt(0).toLowerCase()}${label.slice(1)} del ${formatDate(line.movement.date)}`;
+  };
 
   function confirmDeleteMovement(
     line: MovementLine,
@@ -494,9 +496,11 @@ export function AssetsSetup({
     setConfirm({
       title: `¿Borrar ${movementName(line)}?`,
       description:
-        parts > 1
-          ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
-          : "No se puede deshacer.",
+        line.movement.kind === "transfer"
+          ? "Es un traspaso: se borra en las dos carteras. No se puede deshacer."
+          : parts > 1
+            ? `Es parte de una operación repartida en ${parts} carteras: se borra en todas. No se puede deshacer.`
+            : "No se puede deshacer.",
       run: () =>
         card.rowAction(
           { kind: "update", row },

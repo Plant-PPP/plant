@@ -90,7 +90,7 @@ export function SalesTable({
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original } }) => {
         const [first] = original.movements;
-        return first && isTrade(first) && first.price !== null
+        return first?.kind === "sale"
           ? formatQuotedPrice(
               first.price,
               first.currency,

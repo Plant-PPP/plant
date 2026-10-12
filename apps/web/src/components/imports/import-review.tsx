@@ -1,6 +1,6 @@
 "use client";
 
-import { exactUnitPrice, type InstrumentType, quotedPrice } from "@plant/core";
+import { exactUnitPrice, type InstrumentType } from "@plant/core";
 import { exactOf, times, toDecimal } from "@plant/shared";
 import {
   ArrowLeft,
@@ -42,7 +42,7 @@ import {
   instrumentNames,
 } from "@/lib/holdings/holding-name";
 import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
-import { priceBasisLabel } from "@/lib/holdings/price-input";
+import { priceBasisLabel, quotedInput } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
@@ -77,10 +77,7 @@ const edited = (
 ): EditedRow => ({
   ...row,
   quantityText: amountInput(row.quantity),
-  priceText:
-    row.price === null
-      ? ""
-      : amountInput(type ? quotedPrice(type, row.price) : row.price),
+  priceText: row.price === null ? "" : quotedInput(row.price, type),
   added,
 });
 

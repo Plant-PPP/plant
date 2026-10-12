@@ -8,6 +8,7 @@ import {
   newMovementFields,
   operationFields,
   refusedMovementField,
+  kindsOffered,
   toOperationInput,
   withKind,
 } from "./movement-fields";
@@ -259,6 +260,28 @@ describe("a transfer", () => {
     });
   });
 
+  it("carries the cost again once a changed one is cleared", () => {
+    const fields = {
+      ...moving,
+      parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+      price: " ",
+      costEdited: true,
+    };
+    expect(
+      operationInputSchema.parse(toOperationInput(fields, "crypto")).parts[1],
+    ).toMatchObject({ price: null });
+  });
+
+  it("drops a changed cost when it stops being a transfer", () => {
+    expect(
+      withKind(
+        { ...moving, price: "61000", costEdited: true },
+        "purchase",
+        PRINCIPAL,
+      ),
+    ).toMatchObject({ price: "", costEdited: false });
+  });
+
   it("names a changed cost that does not parse as the price", () => {
     const parsed = operationInputSchema.safeParse(
       toOperationInput(
@@ -314,7 +337,25 @@ it("points an archived home's refusal at its field", () => {
   expect(refusedMovementField(MOVEMENT_MESSAGES.archived_portfolio)).toBe(
     "parts",
   );
-  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_account)).toBe(
-    "account",
-  );
+  expect(refusedMovementField(MOVEMENT_MESSAGES.archived_account)).toBeNull();
+});
+
+describe("the kinds offered", () => {
+  it("offers a transfer only on a new operation where the page takes them", () => {
+    expect(kindsOffered({ editing: null, transfers: true })).toContain(
+      "transfer",
+    );
+    expect(kindsOffered({ editing: null, transfers: false })).not.toContain(
+      "transfer",
+    );
+    expect(
+      kindsOffered({ editing: "purchase", transfers: true }),
+    ).not.toContain("transfer");
+  });
+
+  it("keeps an edited transfer one", () => {
+    expect(kindsOffered({ editing: "transfer", transfers: true })).toEqual([
+      "transfer",
+    ]);
+  });
 });
