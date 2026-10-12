@@ -11,6 +11,7 @@ import {
   kindsOffered,
   toOperationInput,
   withKind,
+  withShownPrice,
 } from "./movement-fields";
 
 const ACCOUNT = "a1000000-0000-4000-8000-000000000001";
@@ -223,7 +224,7 @@ describe("a transfer", () => {
   it("starts from its portfolio with the quantity typed, no charges and the cost it carries", () => {
     expect(moving).toMatchObject({
       kind: "transfer",
-      costEdited: false,
+      priceEdited: false,
       price: "",
       charges: [],
       parts: [
@@ -253,7 +254,7 @@ describe("a transfer", () => {
       { portfolio_id: LARGO, direction: "in", quantity: "0.5", price: null },
     ]);
     expect(
-      input({ ...fields, price: "61000", costEdited: true }).parts[1],
+      input({ ...fields, price: "61000", priceEdited: true }).parts[1],
     ).toMatchObject({ price: "61000" });
     expect(input({ ...fields, price: "61000" }).parts[1]).toMatchObject({
       price: null,
@@ -265,7 +266,7 @@ describe("a transfer", () => {
       ...moving,
       parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
       price: " ",
-      costEdited: true,
+      priceEdited: true,
     };
     expect(
       operationInputSchema.parse(toOperationInput(fields, "crypto")).parts[1],
@@ -290,11 +291,11 @@ describe("a transfer", () => {
   it("drops a changed cost when it stops being a transfer", () => {
     expect(
       withKind(
-        { ...moving, price: "61000", costEdited: true },
+        { ...moving, price: "61000", priceEdited: true },
         "purchase",
         PRINCIPAL,
       ),
-    ).toMatchObject({ price: "", costEdited: false });
+    ).toMatchObject({ price: "", priceEdited: false });
   });
 
   it.each(["1.234"])(
@@ -306,7 +307,7 @@ describe("a transfer", () => {
             ...moving,
             parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
             price,
-            costEdited: true,
+            priceEdited: true,
           },
           "crypto",
         ),
@@ -323,7 +324,7 @@ describe("a transfer", () => {
           ...moving,
           parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
           price: "x",
-          costEdited: true,
+          priceEdited: true,
         },
         "crypto",
       ),
@@ -345,7 +346,7 @@ describe("a transfer", () => {
     );
     expect(fields).toMatchObject({
       kind: "transfer",
-      costEdited: true,
+      priceEdited: true,
       price: "61000",
       parts: [
         { portfolioId: PRINCIPAL, size: "0,5" },
@@ -363,7 +364,7 @@ describe("a transfer", () => {
         ],
         { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
       ),
-    ).toMatchObject({ costEdited: false, price: "" });
+    ).toMatchObject({ priceEdited: false, price: "" });
   });
 });
 
@@ -377,21 +378,152 @@ it("points an archived home's refusal at its field", () => {
 });
 
 describe("the kinds offered", () => {
+  const ALL = new Set(["transfer", "yield"] as const);
+  const NONE = new Set<never>();
+
   it("offers a transfer only on a new operation where the page takes them", () => {
-    expect(kindsOffered({ editing: null, transfers: true })).toContain(
+    expect(kindsOffered({ editing: null, offers: ALL })).toContain("transfer");
+    expect(kindsOffered({ editing: null, offers: NONE })).not.toContain(
       "transfer",
     );
-    expect(kindsOffered({ editing: null, transfers: false })).not.toContain(
+    expect(kindsOffered({ editing: "purchase", offers: ALL })).not.toContain(
       "transfer",
     );
-    expect(
-      kindsOffered({ editing: "purchase", transfers: true }),
-    ).not.toContain("transfer");
+  });
+
+  it("offers a yield where the page takes them, new or edited", () => {
+    expect(kindsOffered({ editing: null, offers: ALL })).toContain("yield");
+    expect(kindsOffered({ editing: "sale", offers: ALL })).toContain("yield");
+    expect(kindsOffered({ editing: null, offers: NONE })).not.toContain(
+      "yield",
+    );
+    expect(kindsOffered({ editing: "yield", offers: NONE })).toContain("yield");
   });
 
   it("keeps an edited transfer one", () => {
-    expect(kindsOffered({ editing: "transfer", transfers: true })).toEqual([
+    expect(kindsOffered({ editing: "transfer", offers: ALL })).toEqual([
       "transfer",
     ]);
+  });
+});
+
+describe("a yield's fields", () => {
+  const earning = withKind(
+    {
+      ...newMovementFields(defaults),
+      price: "60000",
+      parts: [
+        { portfolioId: PRINCIPAL, size: "0,5" },
+        { portfolioId: LARGO, size: "1" },
+      ],
+      charges: [{ kind: "commission" as const, label: "", amount: "1" }],
+    },
+    "yield",
+    PRINCIPAL,
+  );
+  const input = (fields: typeof earning) =>
+    operationInputSchema.parse(toOperationInput(fields, "crypto"));
+
+  it("keeps one portfolio, with no charges and the day's quote for a price", () => {
+    expect(earning).toMatchObject({
+      kind: "yield",
+      price: "",
+      priceEdited: false,
+      balance: null,
+      charges: [],
+      parts: [{ portfolioId: PRINCIPAL, size: "0,5" }],
+    });
+  });
+
+  it("sends the units earned or lost at the value typed", () => {
+    const lost = { ...earning, direction: "out" as const, price: "61.000,5" };
+    expect(input(lost)).toEqual({
+      kind: "yield",
+      source_connection_id: ACCOUNT,
+      instrument_symbol: "BTC",
+      date: "2026-10-12",
+      currency: "USD",
+      price: "61000.5",
+      parts: [{ portfolio_id: PRINCIPAL, direction: "out", quantity: "0.5" }],
+      reference: null,
+      note: null,
+    });
+  });
+
+  it("sends the balance at the end of the day instead of the units", () => {
+    expect(input({ ...earning, price: "60000", balance: "2,5" }).parts).toEqual(
+      [{ portfolio_id: PRINCIPAL, balance: "2.5" }],
+    );
+  });
+
+  it.each([
+    ["no value", { price: "" }, "price"],
+    ["a balance that does not parse", { price: "1", balance: "x" }, "parts"],
+  ] as const)("refuses %s, naming its field", (_, change, field) => {
+    const parsed = operationInputSchema.safeParse(
+      toOperationInput({ ...earning, ...change }, "crypto"),
+    );
+    if (parsed.success) throw new Error("expected a refusal");
+    expect(movementRefusal(parsed.error).field).toBe(field);
+  });
+
+  it("reads a loss back as a loss, with its value as typed", () => {
+    const movement: Movement = {
+      id: "y1",
+      holding_id: "h1",
+      operation_id: "op",
+      entry_order: 1,
+      kind: "yield",
+      direction: "out",
+      date: "2026-03-02",
+      currency: "USD",
+      quantity: "0.5",
+      price: "61000",
+      charges: [],
+      reference: null,
+      note: null,
+      rates: {
+        mep: { sell: "1", date: "2026-03-02" },
+        ccl: { sell: "1", date: "2026-03-02" },
+        official: { sell: "1", date: "2026-03-02" },
+      },
+    };
+    const fields = operationFields([{ movement, portfolioId: PRINCIPAL }], {
+      accountId: ACCOUNT,
+      instrument: "BTC",
+      type: "crypto",
+    });
+    expect(fields).toMatchObject({
+      kind: "yield",
+      direction: "out",
+      price: "61000",
+      priceEdited: true,
+      balance: null,
+    });
+    expect(input(fields).parts).toEqual([
+      { portfolio_id: PRINCIPAL, direction: "out", quantity: "0.5" },
+    ]);
+  });
+
+  it("sends the day's quote it shows until the user types a value", () => {
+    expect(withShownPrice(earning, "61000.5", "crypto")).toMatchObject({
+      price: "61000,5",
+      priceEdited: true,
+    });
+    const typed = { ...earning, price: "1", priceEdited: true };
+    expect(withShownPrice(typed, "61000.5", "crypto")).toBe(typed);
+    expect(withShownPrice(earning, null, "crypto")).toBe(earning);
+    const moving = withKind(earning, "transfer", PRINCIPAL);
+    expect(withShownPrice(moving, "61000.5", "crypto")).toBe(moving);
+  });
+
+  it("leaves the balance and the value behind as another kind", () => {
+    expect(
+      withKind(
+        { ...earning, price: "1", priceEdited: true, balance: "3" },
+        "purchase",
+        PRINCIPAL,
+      ),
+    ).toMatchObject({ price: "", priceEdited: false, balance: null });
   });
 });

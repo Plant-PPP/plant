@@ -39,7 +39,8 @@ it.each([
     /En 2026 tu patrimonio/,
     "Resultado por mes de 2026",
   ],
-  ["¿Cuánto cobré de dividendos?", /cobraste/, "Cobros de 2026"],
+  ["¿Cuánto cobré de dividendos?", /sumaron/, "Rentas de 2026"],
+  ["¿Cuánto me dieron los rendimientos?", /sumaron/, "Rentas de 2026"],
   ["¿Cuánto debo?", /Debés/, "Lo que debés"],
   ["¿Cómo le fue a Apple?", /AAPL/, "AAPL: de dónde sale el resultado"],
 ])("answers %s from the data, with a chart", (question, text, chart) => {

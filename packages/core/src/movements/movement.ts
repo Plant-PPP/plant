@@ -14,6 +14,9 @@ import { holdingDateSchema } from "../valuation/holding";
 // cost (0 unless given), or units out with their share of the cost and no
 // result. A transfer moves units between two portfolios of one account: they
 // leave with their share of the cost and arrive carrying it, with no result.
+// A yield is units a holding earned or lost without money in or out (staking,
+// earn, trading): their value that day is the holding's return. It never
+// starts a holding.
 export const MOVEMENT_KINDS = [
   "opening_balance",
   "purchase",
@@ -22,6 +25,7 @@ export const MOVEMENT_KINDS = [
   "coupon",
   "adjustment",
   "transfer",
+  "yield",
 ] as const;
 export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 
@@ -102,6 +106,12 @@ const KIND_FIELDS = {
     price: nonNegativeDecimalSchema.nullable().default(null),
     charges: z.tuple([]).default([]),
   },
+  yield: {
+    ...moved,
+    // What each unit was worth that day.
+    price: nonNegativeDecimalSchema,
+    charges: z.tuple([]).default([]),
+  },
 } as const satisfies Record<MovementKind, z.ZodRawShape>;
 
 // One kind's shape, by the column names a movement is stored under. Callers
@@ -145,6 +155,7 @@ export const movementSchema = z.discriminatedUnion("kind", [
       (movement) => movement.direction === "in" || movement.price === null,
       { message: "Units going out carry their own cost", path: ["price"] },
     ),
+  movementBranch("yield").extend(stored).strict(),
 ]);
 export type Movement = z.output<typeof movementSchema>;
 // A movement that moves units.
@@ -153,8 +164,8 @@ export type Trade = Extract<Movement, { quantity: string }>;
 export const isTrade = (movement: Movement): movement is Trade =>
   "quantity" in movement;
 
-// Whether a movement takes units out: a sale, or an adjustment or transfer
-// out.
+// Whether a movement takes units out: a sale, or an adjustment, transfer or
+// yield out.
 export const takesUnits = (movement: Movement): boolean =>
   movement.kind === "sale" ||
   ("direction" in movement && movement.direction === "out");
@@ -163,6 +174,12 @@ export const takesUnits = (movement: Movement): boolean =>
 export const takesMovements = (holding: { asset_class: string }): boolean =>
   holding.asset_class === "instrument";
 
-// Whether a movement can be a holding's first: one that brings units in.
+export const isYield = (
+  movement: Movement,
+): movement is Extract<Movement, { kind: "yield" }> =>
+  movement.kind === "yield";
+
+// Whether a movement can be a holding's first: one that brings units in, other
+// than a yield, which only a holding that exists can earn.
 export const startsHolding = (movement: Movement): boolean =>
-  isTrade(movement) && !takesUnits(movement);
+  isTrade(movement) && !takesUnits(movement) && !isYield(movement);

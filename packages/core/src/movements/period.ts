@@ -21,11 +21,12 @@ const ONE: Exact = { n: 1n, d: 1n };
 // caller gives it:
 // - paidIn: purchases, opening balances and adjustments in, before charges;
 // - proceeds: sales before charges, and adjustments out;
-// - income: dividends and coupons before withholding;
+// - income: dividends and coupons before withholding, and what yields earned
+//   or lost;
 // - charges: commissions, fees, taxes and withholding;
 // - contributed: paidIn less proceeds, what the holder put in net;
 // - market: the change in value not explained by what was put in or taken
-//   out, from prices and the dollar alone;
+//   out or by what yields brought, from prices and the dollar alone;
 // - result: market plus income less charges;
 // - share: result over the money at work, each flow weighted by the part of
 //   the period it was in (the modified Dietz return), so putting money in
@@ -66,7 +67,7 @@ export function periodResult({
   const firstIn =
     start.n === 0n
       ? flows
-          .filter((flow) => flow.kind !== "income")
+          .filter((flow) => flow.kind === "buy" || flow.kind === "sell")
           .map((flow) => flow.date)
           .sort()[0]
       : undefined;
@@ -80,10 +81,11 @@ export function periodResult({
   let proceeds = ZERO;
   let income = ZERO;
   let charges = ZERO;
+  let yields = ZERO;
   // The money at work: the start value, plus each flow in for the part of
   // the period from the start of its day, less each flow out for the part
   // after the end of its day, since the money worked the day it left. An
-  // income is what the money made, not money put in or taken out.
+  // income or a yield is what the money made, not money put in or taken out.
   let atWork = start;
   for (const flow of flows) {
     const amount = exactOf(flow.amount);
@@ -93,6 +95,11 @@ export function periodResult({
     // charges, a sale or an income brought it plus them.
     if (flow.kind === "income") {
       income = plus(income, amount, paid);
+      continue;
+    }
+    if (flow.kind === "yield") {
+      income = plus(income, amount);
+      yields = plus(yields, amount);
       continue;
     }
     if (flow.kind === "buy") {
@@ -108,7 +115,7 @@ export function periodResult({
     atWork = minus(atWork, times(amount, weight));
   }
   const contributed = minus(paidIn, proceeds);
-  const market = minus(minus(end, start), contributed);
+  const market = minus(minus(minus(end, start), contributed), yields);
   const result = minus(plus(market, income), charges);
   return {
     startValue: stored(start),

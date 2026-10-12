@@ -128,6 +128,28 @@ const oneEachWay = (operation: {
   );
 };
 
+// A yield is one portfolio's: the units it earned or lost, or the balance
+// it held at the end of the day, which the store turns into the difference.
+const yieldParts = {
+  ...inAccount,
+  parts: z
+    .array(
+      z.union([
+        z
+          .object({
+            portfolio_id: id,
+            direction: z.enum(["in", "out"]),
+            quantity: positiveDecimalSchema,
+          })
+          .strict(),
+        z
+          .object({ portfolio_id: id, balance: nonNegativeDecimalSchema })
+          .strict(),
+      ]),
+    )
+    .length(1),
+};
+
 export const operationInputSchema = z.discriminatedUnion("kind", [
   movementBranch("opening_balance")
     .omit({ quantity: true })
@@ -170,4 +192,8 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
       path: ["parts"],
       when: fieldsPassed,
     }),
+  movementBranch("yield")
+    .omit({ quantity: true, direction: true, charges: true })
+    .extend(yieldParts)
+    .strict(),
 ]);

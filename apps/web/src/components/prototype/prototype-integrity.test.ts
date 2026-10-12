@@ -360,6 +360,44 @@ it("stays consistent through every kind of write", () => {
   apply("a transfer that stays", (s) =>
     writeOperation(s, transfer("0.05"), write()),
   );
+  const staking = (
+    part: { direction: "in" | "out"; quantity: string } | { balance: string },
+    date = "2026-09-27",
+  ) => ({
+    kind: "yield",
+    source_connection_id: account("Binance"),
+    instrument_symbol: "BTC",
+    date,
+    currency: "USD",
+    price: "60000",
+    reference: null,
+    note: null,
+    parts: [{ portfolio_id: btcFrom, ...part }],
+  });
+  const earned = newId();
+  apply("a yield", (s) =>
+    writeOperation(
+      s,
+      staking({ direction: "in", quantity: "0.001" }),
+      write(earned),
+    ),
+  );
+  apply("the yield edited to a balance", (s) => {
+    const held = s.holdings.find((each) => each.holding.id === idOf("BTC"))!
+      .holding.amount;
+    return writeOperation(s, staking({ balance: held }, "2026-09-28"), {
+      ...write(earned),
+      replacing: true,
+    });
+  });
+  apply("a loss", (s) =>
+    writeOperation(
+      s,
+      staking({ direction: "out", quantity: "0.002" }),
+      write(),
+    ),
+  );
+  apply("the yield deleted", (s) => deleteOperation(s, earned));
   apply("an instrument holding created with a quantity", (s) =>
     createHolding(
       s,

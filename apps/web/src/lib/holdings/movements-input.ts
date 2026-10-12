@@ -21,7 +21,7 @@ export type MovementScope =
 // A movement as a list shows it, its money in the page's unit (null when it
 // cannot be expressed in that unit): its amount (a purchase's cost, what a
 // sale brought before charges, what an income paid, the cost an adjustment
-// moved), and its charges.
+// moved, what a yield earned or lost), and its charges.
 export type MovementLine = {
   movement: Movement;
   amount: string | null;
@@ -86,7 +86,13 @@ export type MovementsInput = {
   // their cost were left to them; null when the transfer cannot be written. A
   // page that passes it offers transfers between portfolios.
   transferCost?: (query: TransferCostQuery) => string | null;
+  // An instrument's latest price on a date in its own currency, from the
+  // feeds or the user's manual prices; null when there is none. A yield's
+  // dialog suggests it as the value of each unit.
+  quoteOn?: (query: QuoteQuery) => string | null;
 };
+
+export type QuoteQuery = { symbol: string; currency: string; date: string };
 
 export type MovementResult =
   | { ok: true; id: string }
@@ -96,6 +102,8 @@ export type MovementResult =
         | "invalid"
         | "not_found"
         | "failed"
+        // A yield given as a balance the holding already held that day.
+        | "same_balance"
         | Extract<
             PortfolioSetupGuardHint,
             "portfolio_archived" | "source_connection_archived"

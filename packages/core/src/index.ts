@@ -67,6 +67,7 @@ export {
   chargeSchema,
   isIncome,
   isTrade,
+  isYield,
   MOVEMENT_KINDS,
   type Movement,
   movementBranch,

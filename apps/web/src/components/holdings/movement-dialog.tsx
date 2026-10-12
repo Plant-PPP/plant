@@ -9,7 +9,7 @@ import {
 import type { Currency } from "@plant/shared";
 import { Plus, X } from "lucide-react";
 import type * as React from "react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import {
   priceBasisLabel,
   quotedInput,
 } from "@/lib/holdings/price-input";
+import type { QuoteQuery } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 import type {
@@ -55,9 +56,11 @@ import {
   kindsOffered,
   toOperationInput,
   withKind,
+  withShownPrice,
 } from "./movement-fields";
 
 const DIRECTION_LABELS = { in: "Entran unidades", out: "Salen unidades" };
+const YIELD_LABELS = { in: "Ganancia", out: "Pérdida" };
 // The charges whose name the user writes: one that must say what it is, and a
 // tax that may say which.
 const NAMED_CHARGES: readonly ChargeKind[] = ["tax", "other"];
@@ -68,6 +71,8 @@ const NAMED_CHARGES: readonly ChargeKind[] = ["tax", "other"];
 // operation opened from a holding, or edited, keeps its account and
 // instrument. A page that passes `transfer` offers a new operation moving
 // units out of `from` into another portfolio; an edited transfer stays one.
+// One that passes `quoteOn` offers yields, valued at the day's quote unless
+// the user types another value.
 export function MovementDialog({
   mode,
   accounts,
@@ -75,6 +80,7 @@ export function MovementDialog({
   instruments,
   fixed,
   transfer,
+  quoteOn,
   initial,
   initialError,
   today,
@@ -93,6 +99,7 @@ export function MovementDialog({
     // The cost per unit the units would carry, as stored; null when none.
     suggestedCost: (fields: MovementFields) => string | null;
   };
+  quoteOn?: (query: QuoteQuery) => string | null;
   initial: MovementFields;
   initialError?: string;
   today: string;
@@ -114,17 +121,33 @@ export function MovementDialog({
   const basis = instrumentType ? priceBasisLabel(instrumentType) : "por unidad";
   const adjustment = fields.kind === "adjustment";
   const moving = fields.kind === "transfer";
+  const yielding = fields.kind === "yield";
   const kinds = kindsOffered({
     editing: mode === "edit" ? initial.kind : null,
-    transfers: transfer !== undefined,
+    offers: new Set([
+      ...(transfer ? (["transfer"] as const) : []),
+      ...(quoteOn ? (["yield"] as const) : []),
+    ]),
   });
   const destinationId = `${fieldId("parts")}-to`;
   const costHelpId = `${fieldId("price")}-help`;
+  const modeId = `${id}-mode`;
+  const balanceHelpId = `${fieldId("parts")}-help`;
   // A transfer with no portfolio to move to points its alert there.
   const noDestination = moving && !fields.parts[1]?.portfolioId;
   const controlId = (field: MovementField) =>
     field === "parts" && noDestination ? destinationId : fieldId(field);
-  const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : null;
+  const { instrument, currency, date } = fields;
+  const quote = useMemo(
+    () =>
+      yielding && quoteOn
+        ? quoteOn({ symbol: instrument, currency, date })
+        : null,
+    [yielding, quoteOn, instrument, currency, date],
+  );
+  const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : quote;
+  // A price shown as a suggestion until the user changes it.
+  const suggesting = moving || yielding;
   const unused = portfolios.filter(
     (each) => !fields.parts.some((part) => part.portfolioId === each.id),
   );
@@ -160,8 +183,9 @@ export function MovementDialog({
   });
 
   function submit() {
+    const sent = withShownPrice(fields, suggested, instrumentType);
     const parsed = operationInputSchema.safeParse(
-      toOperationInput(fields, instrumentType),
+      toOperationInput(sent, instrumentType),
     );
     if (!parsed.success) {
       const refused = movementRefusal(parsed.error);
@@ -171,7 +195,7 @@ export function MovementDialog({
       return;
     }
     setAlert(undefined);
-    if (!onSubmit(fields)) return;
+    if (!onSubmit(sent)) return;
     focus.markSaved();
     onClose();
   }
@@ -321,9 +345,11 @@ export function MovementDialog({
               ]),
               (value) => set("currency")(value),
             )}
-            {moving && (
+            {suggesting && (
               <div className="grid gap-2">
-                <Label htmlFor={fieldId("price")}>{`Costo ${basis}`}</Label>
+                <Label htmlFor={fieldId("price")}>
+                  {moving ? `Costo ${basis}` : `Valor ${basis}`}
+                </Label>
                 <Input
                   id={fieldId("price")}
                   {...control("price")}
@@ -332,7 +358,7 @@ export function MovementDialog({
                   inputMode="decimal"
                   autoComplete="off"
                   value={
-                    fields.costEdited
+                    fields.priceEdited
                       ? fields.price
                       : suggested === null
                         ? ""
@@ -342,7 +368,7 @@ export function MovementDialog({
                     setFields((current) => ({
                       ...current,
                       price: event.target.value,
-                      costEdited: true,
+                      priceEdited: true,
                     }));
                     settle("price");
                   }}
@@ -350,7 +376,7 @@ export function MovementDialog({
               </div>
             )}
             {!income &&
-              !moving &&
+              !suggesting &&
               !(adjustment && fields.direction === "out") &&
               textField(
                 "price",
@@ -359,14 +385,18 @@ export function MovementDialog({
               )}
           </div>
 
-          {moving && (
+          {suggesting && (
             <div
               id={costHelpId}
               className="-mt-2 grid gap-1 text-xs text-muted-foreground"
             >
               {suggested === null ? (
-                <p>Si lo dejás vacío, entran con el costo que tenían.</p>
-              ) : fields.costEdited ? (
+                <p>
+                  {moving
+                    ? "Si lo dejás vacío, entran con el costo que tenían."
+                    : "No hay precio para ese día: ingresá cuánto valía cada unidad."}
+                </p>
+              ) : fields.priceEdited ? (
                 <div>
                   <Button
                     type="button"
@@ -377,7 +407,7 @@ export function MovementDialog({
                       setFields((current) => ({
                         ...current,
                         price: "",
-                        costEdited: false,
+                        priceEdited: false,
                       }))
                     }
                   >
@@ -391,16 +421,103 @@ export function MovementDialog({
                   </Button>
                 </div>
               ) : (
-                <p>Sugerido: el costo que tenían.</p>
+                <p>
+                  {moving
+                    ? "Sugerido: el costo que tenían."
+                    : "Sugerido: el precio de ese día."}
+                </p>
               )}
               <p>
-                Si lo cambiás, entran con ese costo y la diferencia se ve en el
-                resultado de la tenencia.
+                {moving
+                  ? "Si lo cambiás, entran con ese costo y la diferencia se ve en el resultado de la tenencia."
+                  : "Lo que valían ese día cuenta como rendimiento, no como plata que pusiste o sacaste."}
               </p>
             </div>
           )}
 
-          {moving ? (
+          {yielding ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor={modeId}>Cargar</Label>
+                <Select
+                  value={fields.balance === null ? "change" : "balance"}
+                  onValueChange={choose((value) => {
+                    setFields((current) => ({
+                      ...current,
+                      balance: value === "balance" ? "" : null,
+                    }));
+                    settle("parts");
+                  })}
+                >
+                  <SelectTrigger id={modeId} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="change">Lo que ganó o perdió</SelectItem>
+                    <SelectItem value="balance">El saldo final</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {fields.balance === null ? (
+                select(
+                  "direction",
+                  "Resultado",
+                  fields.direction,
+                  (["in", "out"] as const).map((each) => [
+                    each,
+                    YIELD_LABELS[each],
+                  ]),
+                  (value) => set("direction")(value),
+                )
+              ) : (
+                <span aria-hidden />
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor={fieldId("parts")}>
+                  {fields.balance === null ? "Cantidad" : "Saldo final"}
+                </Label>
+                <Input
+                  id={fieldId("parts")}
+                  {...control("parts")}
+                  aria-describedby={
+                    invalid("parts")
+                      ? alertId
+                      : fields.balance === null
+                        ? undefined
+                        : balanceHelpId
+                  }
+                  autoFocus={firstField === "parts"}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={fields.balance ?? fields.parts[0]?.size ?? ""}
+                  onChange={(event) => {
+                    const typed = event.target.value;
+                    setFields((current) =>
+                      current.balance === null
+                        ? {
+                            ...current,
+                            parts: current.parts.map((part) => ({
+                              ...part,
+                              size: typed,
+                            })),
+                          }
+                        : { ...current, balance: typed },
+                    );
+                    settle("parts");
+                  }}
+                />
+              </div>
+              {fields.balance !== null && (
+                <p
+                  id={balanceHelpId}
+                  className="col-span-2 -mt-2 text-xs text-muted-foreground"
+                >
+                  Las unidades que tenías al terminar ese día: se carga la
+                  diferencia con lo que tenías como rendimiento.
+                </p>
+              )}
+            </div>
+          ) : moving ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_8rem]">
               <div className="grid gap-2">
                 <span className="text-sm font-medium">Desde</span>
@@ -545,7 +662,7 @@ export function MovementDialog({
             </fieldset>
           )}
 
-          {!moving && (
+          {!suggesting && (
             <fieldset className="grid gap-2">
               <legend className="mb-2 text-sm font-medium">
                 Gastos (opcional)

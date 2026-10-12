@@ -1,5 +1,11 @@
 import { admitMovement, admitMovements, isOrderRefusal } from "./admit";
-import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
+import {
+  adjustment,
+  income,
+  ratesOf,
+  trade,
+  yielded,
+} from "./fixtures.test-support";
 
 const TODAY = "2026-10-12";
 const opening = trade("opening_balance", "10", "100", { date: "2026-01-05" });
@@ -158,6 +164,26 @@ describe("admitMovements", () => {
     expect(admitMovements({ prior: null, after: [bought, sold] })).toEqual({
       ok: false,
       code: "opening_balance",
+    });
+  });
+
+  it("adds a yield's units to a holding and never starts one with it", () => {
+    const earned = yielded("in", "2", "110", { date: "2026-02-10" });
+    expect(admitMovements({ prior: null, after: [purchase, earned] })).toEqual({
+      ok: true,
+      quantity: "7",
+    });
+    expect(admitMovements({ prior: null, after: [earned] })).toEqual({
+      ok: false,
+      code: "opening_balance",
+    });
+  });
+
+  it("refuses a yield that loses more units than are held", () => {
+    const lost = yielded("out", "6", "110", { date: "2026-02-10" });
+    expect(admitMovements({ prior: null, after: [purchase, lost] })).toEqual({
+      ok: false,
+      code: "oversold",
     });
   });
 

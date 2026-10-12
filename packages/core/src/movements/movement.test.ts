@@ -186,3 +186,48 @@ describe("a transfer", () => {
     expect(startsHolding(into)).toBe(true);
   });
 });
+
+describe("a yield", () => {
+  const leg = {
+    id: "y1",
+    holding_id: "h1",
+    operation_id: "op",
+    entry_order: 1,
+    kind: "yield",
+    date: "2026-03-02",
+    currency: "USD",
+    quantity: "5",
+    price: "2",
+    rates: ratesOf("2026-03-02"),
+  };
+
+  it("reads units earned and lost, at their value that day", () => {
+    expect(movementSchema.parse({ ...leg, direction: "in" })).toMatchObject({
+      price: "2",
+      charges: [],
+    });
+    expect(movementSchema.parse({ ...leg, direction: "out" })).toMatchObject({
+      direction: "out",
+    });
+  });
+
+  it.each([
+    [
+      "charges",
+      { direction: "in", charges: [{ kind: "tax", label: null, amount: "1" }] },
+    ],
+    ["no value", { direction: "in", price: undefined }],
+    ["a null value", { direction: "in", price: null }],
+  ])("refuses %s", (_, change) => {
+    expect(movementSchema.safeParse({ ...leg, ...change }).success).toBe(false);
+  });
+
+  it("takes units out when lost and never starts a holding", () => {
+    const out = movementSchema.parse({ ...leg, direction: "out" });
+    const into = movementSchema.parse({ ...leg, direction: "in" });
+    expect(takesUnits(out)).toBe(true);
+    expect(takesUnits(into)).toBe(false);
+    expect(startsHolding(into)).toBe(false);
+    expect(isIncome(into.kind)).toBe(false);
+  });
+});

@@ -19,6 +19,7 @@ import {
   holdingsView,
   movementsPage,
   positionsOf,
+  priceOn,
   salesOf,
   suggestedTransferCost,
   yearsOf,
@@ -72,6 +73,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
     loadMovements: async (scope, inUnit, cursor) =>
       movementsPage(latest(), scope, inUnit, cursor),
     transferCost: (query) => suggestedTransferCost(latest(), query),
+    quoteOn: (query) => priceOn(latest(), query),
   };
 
   return (

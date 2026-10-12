@@ -17,6 +17,7 @@ import {
   Plus,
   SlidersHorizontal,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { type ComponentProps, type ReactNode, useId, useState } from "react";
 import Link from "next/link";
@@ -1056,7 +1057,7 @@ export function AssetsSetup({
                         : []),
                     ]}
                   />
-                  <div>
+                  <div className="flex flex-wrap gap-2">
                     <PendingButton
                       size="sm"
                       variant="outline"
@@ -1068,6 +1069,24 @@ export function AssetsSetup({
                       <Plus />
                       Agregar movimiento
                     </PendingButton>
+                    {movement.input.quoteOn &&
+                      movement.input.positions.has(row.id) && (
+                        <PendingButton
+                          size="sm"
+                          variant="ghost"
+                          pending={pending}
+                          onClick={() =>
+                            openMovementDialog({
+                              kind: "create",
+                              row,
+                              preset: "yield",
+                            })
+                          }
+                        >
+                          <TrendingUp />
+                          Cargar rendimiento
+                        </PendingButton>
+                      )}
                   </div>
                 </div>
               ))
@@ -1294,6 +1313,12 @@ export function AssetsSetup({
       {movement && movementDialog && (
         <MovementDialog
           transfer={transferOf(movementDialog, movement.input)}
+          quoteOn={
+            movementDialog.kind === "edit" ||
+            movementDialog.row?.holding.asset_class === "instrument"
+              ? movement.input.quoteOn
+              : undefined
+          }
           mode={movementDialog.kind}
           accounts={accounts}
           portfolios={portfolios}

@@ -6,12 +6,13 @@ import {
   type Denominator,
   EMPTY_POSITION,
   holdingSchema,
-  admitMovements,
+  isYield,
   type Movement,
   type QuoteSnapshot,
   periodResult,
   quotesNeeded,
   snapshotOn,
+  takesUnits,
   valueHoldings,
   valueLiabilities,
   withManualPrices,
@@ -48,8 +49,10 @@ import {
   difference,
   groupKey,
   lineOf,
+  moneyChange,
   operationOf,
   type PrototypeState,
+  quantityOn,
   stepsOf,
 } from "./prototype-store";
 
@@ -73,9 +76,18 @@ function ledgersOf(state: PrototypeState, unit: Denominator): Ledger[] {
         movements,
         quantities: steps.map((step) => step.position.quantity),
         flows: cashFlowsOf(movements, steps),
-        realized: steps.map((step) =>
-          step.sale === undefined ? "0" : (step.sale?.result ?? null),
-        ),
+        // What a sale made, and what the units a yield took out had gained.
+        realized: steps.map((step, index) => {
+          const movement = movements[index]!;
+          if (step.sale !== undefined) return step.sale?.result ?? null;
+          return isYield(movement) && takesUnits(movement)
+            ? moneyChange(
+                steps[index - 1]?.position ?? EMPTY_POSITION,
+                step,
+                "realized",
+              )
+            : "0";
+        }),
       },
     ];
   });
@@ -115,7 +127,8 @@ function holdingsAt(
 // values it on a day no feed or manual price covers: that day's purchases
 // and sales averaged by their units, so how they split across holdings or
 // which was recorded first does not matter; in the currency most of them
-// traded in. An opening balance's or an adjustment's price is a cost, not a
+// traded in. A yield's price is what a unit was worth that day, so it counts
+// too. An opening balance's or an adjustment's price is a cost, not a
 // trade's.
 function lastTradePrices(
   ledgers: readonly Ledger[],
@@ -132,7 +145,9 @@ function lastTradePrices(
     for (const movement of movements) {
       if (
         movement.date > date ||
-        (movement.kind !== "purchase" && movement.kind !== "sale") ||
+        (movement.kind !== "purchase" &&
+          movement.kind !== "sale" &&
+          movement.kind !== "yield") ||
         exactOf(movement.price).n === 0n
       ) {
         continue;
@@ -425,13 +440,12 @@ function movedBy(state: PrototypeState, close: MonthClose): string {
   for (const each of state.holdings) {
     if (each.holding.asset_class !== "instrument") continue;
     const at = groupKey(each);
-    const upTo = (state.movements.get(each.holding.id) ?? []).filter(
-      (movement) => movement.date <= close.to,
-    );
-    const admitted = admitMovements({ prior: null, after: upTo });
-    if (admitted.ok && exactOf(admitted.quantity).n !== 0n) {
-      held.set(at, plus(held.get(at) ?? ZERO, exactOf(admitted.quantity)));
+    const movements = state.movements.get(each.holding.id) ?? [];
+    const quantity = exactOf(quantityOn(movements, close.to));
+    if (quantity.n !== 0n) {
+      held.set(at, plus(held.get(at) ?? ZERO, quantity));
     }
+    const upTo = movements.filter((movement) => movement.date <= close.to);
     for (const movement of upTo) {
       if (movement.date <= close.from) continue;
       const key = JSON.stringify([

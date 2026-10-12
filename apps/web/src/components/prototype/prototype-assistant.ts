@@ -205,8 +205,8 @@ export function prototypeAnswer(
             title: `${instrument.symbol}: de dónde sale el resultado`,
             unit,
             bars: resultBars(returns.result, unit, [
-              { label: "Ventas", value: summary.realized ?? "0" },
-              { label: "Cobros", value: summary.income ?? "0" },
+              { label: "Realizado", value: summary.realized ?? "0" },
+              { label: "Rentas", value: summary.income ?? "0" },
               ...(held
                 ? [
                     {
@@ -265,14 +265,16 @@ export function prototypeAnswer(
   }
 
   if (
-    /dividend|cupon|cobr|\brentas?\b(?! (fija|variable))/.test(asked) &&
+    /dividend|cupon|cobr|\brendimientos\b|\brentas?\b(?! (fija|variable))/.test(
+      asked,
+    ) &&
     thisYear
   ) {
     return {
       ...base,
-      text: `En ${thisYear.year} cobraste ${formatAmount(thisYear.totals.income, unit)} de dividendos y cupones, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
+      text: `En ${thisYear.year} tus dividendos, cupones y rendimientos sumaron ${formatAmount(thisYear.totals.income, unit)}, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
       chart: {
-        title: `Cobros de ${thisYear.year}`,
+        title: `Rentas de ${thisYear.year}`,
         unit,
         bars: thisYear.months.map((month) => ({
           label: monthOf(month.period).slice(0, 3),

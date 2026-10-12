@@ -47,12 +47,17 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   coupon: "Cupón",
   adjustment: "Ajuste",
   transfer: "Traspaso",
+  yield: "Rendimiento",
 };
 
-const movementLabel = (movement: Movement): string =>
-  "direction" in movement
+const movementLabel = (movement: Movement): string => {
+  if (movement.kind === "yield") {
+    return movement.direction === "in" ? "Rendimiento" : "Rendimiento negativo";
+  }
+  return "direction" in movement
     ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`
     : MOVEMENT_KIND_LABELS[movement.kind];
+};
 
 // A movement as a list names it: a transfer by the portfolio on its other
 // side.
@@ -93,6 +98,8 @@ export const MOVEMENT_MESSAGES: Record<
   opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
   no_rate: "No hay cotización del dólar para esa fecha.",
+  same_balance:
+    "Es el saldo que tenía ese día: no hay rendimiento para cargar.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

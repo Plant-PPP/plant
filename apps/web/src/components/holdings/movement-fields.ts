@@ -26,12 +26,15 @@ export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
 // What the movement dialog holds, as typed. A transfer's first part is the
 // portfolio its units leave and its second the one they arrive in, both with
 // its quantity; its price is the cost the units arrive with, sent when the
-// user changed it (`costEdited`) and left it filled, else they carry the cost
-// they had.
+// user changed it (`priceEdited`) and left it filled, else they carry the cost
+// they had. A yield's price shows the day's quote until the user changes it,
+// and a yield given as the balance at the end of its day keeps it in
+// `balance` (null when it is given as units earned or lost).
 export type MovementFields = {
   kind: MovementKind;
   direction: "in" | "out";
-  costEdited: boolean;
+  priceEdited: boolean;
+  balance: string | null;
   accountId: string;
   instrument: string;
   date: string;
@@ -65,7 +68,8 @@ export function newMovementFields(
   return {
     kind: defaults.kind,
     direction: "in",
-    costEdited: false,
+    priceEdited: false,
+    balance: null,
     accountId: defaults.accountId,
     instrument: defaults.instrument,
     date: defaults.date,
@@ -122,8 +126,14 @@ export function operationFields(
   }
   return {
     kind: movement.kind,
-    direction: movement.kind === "adjustment" ? movement.direction : "in",
-    costEdited: priced.kind === "transfer" && priced.price !== null,
+    direction:
+      "direction" in movement && movement.kind !== "transfer"
+        ? movement.direction
+        : "in",
+    priceEdited:
+      priced.kind === "yield" ||
+      (priced.kind === "transfer" && priced.price !== null),
+    balance: null,
     accountId,
     instrument,
     date: movement.date,
@@ -149,20 +159,25 @@ export function operationFields(
 }
 
 // The fields as another kind: a transfer takes its quantity out of `from`
-// into a portfolio still to choose, with no charges; leaving a transfer keeps
-// its first part, and any other change keeps every part.
+// into a portfolio still to choose, with no charges; a yield keeps the first
+// part, with no charges and the day's quote for a price; leaving either keeps
+// the first part with no price, and any other change keeps every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,
   from: string,
 ): MovementFields {
+  const fresh = {
+    ...fields,
+    kind,
+    price: "",
+    priceEdited: false,
+    balance: null,
+  };
   if (kind === "transfer") {
     const size = fields.parts[0]?.size ?? "";
     return {
-      ...fields,
-      kind,
-      price: "",
-      costEdited: false,
+      ...fresh,
       charges: [],
       parts: [
         { portfolioId: from, size },
@@ -170,30 +185,45 @@ export function withKind(
       ],
     };
   }
-  if (fields.kind === "transfer") {
-    return {
-      ...fields,
-      kind,
-      price: "",
-      costEdited: false,
-      parts: fields.parts.slice(0, 1),
-    };
+  if (kind === "yield") {
+    return { ...fresh, charges: [], parts: fields.parts.slice(0, 1) };
+  }
+  if (fields.kind === "transfer" || fields.kind === "yield") {
+    return { ...fresh, parts: fields.parts.slice(0, 1) };
   }
   return { ...fields, kind };
 }
 
-// The kinds an operation's dialog offers: a transfer only on a new operation
-// where the page takes them, and an edited transfer stays one.
+// The fields as the dialog sends them: a yield whose value the user left
+// takes the day's quote it shows.
+export const withShownPrice = (
+  fields: MovementFields,
+  suggested: string | null,
+  type: InstrumentType | null,
+): MovementFields =>
+  fields.kind === "yield" && !fields.priceEdited && suggested !== null
+    ? { ...fields, price: quotedInput(suggested, type), priceEdited: true }
+    : fields;
+
+// The kinds only some pages and holdings take.
+const OFFERED_KINDS: readonly MovementKind[] = ["transfer", "yield"];
+
+// The kinds an operation's dialog offers: every kind but those `offers`
+// leaves out; a transfer only on a new operation, and an edited transfer
+// stays one.
 export function kindsOffered({
   editing,
-  transfers,
+  offers,
 }: {
   editing: MovementKind | null;
-  transfers: boolean;
+  offers: ReadonlySet<MovementKind>;
 }): readonly MovementKind[] {
   if (editing === "transfer") return ["transfer"];
   return MOVEMENT_KINDS.filter(
-    (each) => each !== "transfer" || (transfers && editing === null),
+    (each) =>
+      !OFFERED_KINDS.includes(each) ||
+      each === editing ||
+      (offers.has(each) && (each !== "transfer" || editing === null)),
   );
 }
 
@@ -215,9 +245,34 @@ export function toOperationInput(
     return exactUnitPrice(type, quoted) ?? typed;
   };
   const income = isIncome(fields.kind);
+  if (fields.kind === "yield") {
+    const portfolioId = fields.parts[0]?.portfolioId ?? "";
+    return {
+      kind: fields.kind,
+      source_connection_id: fields.accountId,
+      instrument_symbol: fields.instrument,
+      date: fields.date,
+      currency: fields.currency,
+      price: perUnit(fields.price),
+      parts: [
+        fields.balance === null
+          ? {
+              portfolio_id: portfolioId,
+              direction: fields.direction,
+              quantity: parseAmountInput(fields.parts[0]?.size ?? ""),
+            }
+          : {
+              portfolio_id: portfolioId,
+              balance: parseAmountInput(fields.balance),
+            },
+      ],
+      reference: optional(fields.reference),
+      note: optional(fields.note),
+    };
+  }
   if (fields.kind === "transfer") {
     const cost =
-      fields.costEdited && fields.price.trim() !== ""
+      fields.priceEdited && fields.price.trim() !== ""
         ? (perUnit(fields.price) ?? "")
         : null;
     const quantity = parseAmountInput(fields.parts[0]?.size ?? "");
@@ -335,5 +390,6 @@ export function refusedMovementField(text: string): MovementField | null {
   if (text === MOVEMENT_MESSAGES.opening_balance) return "kind";
   if (text === MOVEMENT_MESSAGES.not_found) return "parts";
   if (text === MOVEMENT_MESSAGES.portfolio_archived) return "parts";
+  if (text === MOVEMENT_MESSAGES.same_balance) return "parts";
   return null;
 }

@@ -26,7 +26,8 @@ export type InstrumentSummary = {
   cost: string | null;
   // What the units still held would gain or lose sold today.
   unrealized: GainLoss | null;
-  // What sales made, dividends and coupons paid, and every charge.
+  // What sales and yields realized, what dividends, coupons and yields paid,
+  // and every charge.
   realized: string | null;
   income: string | null;
   charges: string | null;

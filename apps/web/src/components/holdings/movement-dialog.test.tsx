@@ -86,7 +86,10 @@ it("shows where the units leave from, the cost they carry and no charges", () =>
 });
 
 it("keeps a changed cost and offers the suggestion back", () => {
-  const html = render({ ...moving, price: "61000", costEdited: true }, "60000");
+  const html = render(
+    { ...moving, price: "61000", priceEdited: true },
+    "60000",
+  );
   expect(html).toContain('value="61000"');
   expect(html).toContain("Usar el sugerido (US$ 60.000,00)");
   expect(html).not.toContain("Sugerido: el costo que tenían.");
@@ -134,5 +137,90 @@ describe("a refused transfer's focus", () => {
     );
     expect(ids).toHaveLength(1);
     expect(ids[0]).toMatch(/-parts$/);
+  });
+});
+
+describe("a yield", () => {
+  const earning = withKind(
+    newMovementFields({
+      kind: "purchase",
+      accountId: "a1",
+      instrument: "BTC",
+      currency: "USD",
+      date: TODAY,
+      portfolioId: "p1",
+    }),
+    "yield",
+    "p1",
+  );
+  const asked: unknown[] = [];
+  const renderYield = (initial: MovementFields, quote: string | null) =>
+    renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL, LARGO]}
+        instruments={INSTRUMENTS}
+        fixed={{ account: "IOL", instrument: "Bitcoin" }}
+        quoteOn={(query) => {
+          asked.push(query);
+          return quote;
+        }}
+        initial={initial}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+
+  it("suggests the day's quote as each unit's value, with no charges", () => {
+    const html = renderYield(earning, "61000");
+    expect(asked).toContainEqual({
+      symbol: "BTC",
+      currency: "USD",
+      date: TODAY,
+    });
+    expect(html).toContain("Valor por unidad");
+    expect(html).toContain('value="61000"');
+    expect(html).toContain("Sugerido: el precio de ese día.");
+    expect(html).toContain(">Cargar<");
+    expect(html).toContain(">Resultado<");
+    expect(html).toContain(">Cantidad<");
+    expect(html).not.toContain("Gastos");
+    expect(html).not.toContain("Repartir en otra cartera");
+  });
+
+  it("asks for the value when nothing quotes that day", () => {
+    expect(renderYield(earning, null)).toContain(
+      "No hay precio para ese día: ingresá cuánto valía cada unidad.",
+    );
+  });
+
+  it("takes the final balance instead of the units", () => {
+    const html = renderYield({ ...earning, balance: "3" }, "61000");
+    expect(html).toContain("Saldo final");
+    expect(html).toContain('value="3"');
+    expect(html).toContain("se carga la");
+    expect(html).not.toContain(">Resultado<");
+  });
+
+  it("labels every control it names", () => {
+    for (const html of [
+      renderYield(earning, "61000"),
+      renderYield({ ...earning, balance: "" }, null),
+    ]) {
+      const ids = new Set(
+        [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]),
+      );
+      for (const [, target] of html.matchAll(/ for="([^"]+)"/g)) {
+        expect(ids).toContain(target);
+      }
+      for (const [, described] of html.matchAll(
+        / aria-describedby="([^"]+)"/g,
+      )) {
+        expect(ids).toContain(described);
+      }
+    }
   });
 });
