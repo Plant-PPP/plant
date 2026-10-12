@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-// Radix's hidden native select reports "" when the value is set before its
-// option renders, as for a row just created here; no option is "".
+// Radix's hidden native select can report "" when its value is set before
+// that option renders; no option is "", so "" is ignored.
 export function choose(set: (value: string) => void) {
   return (value: string) => {
     if (value !== "") set(value);

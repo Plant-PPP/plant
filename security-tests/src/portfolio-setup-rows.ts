@@ -1,11 +1,8 @@
-import {
-  PORTFOLIO_SETUP_GUARD,
-  type PortfolioSetupGuardHint,
-} from "@plant/shared";
+import { PORTFOLIO_SETUP_GUARD } from "@plant/shared";
 import { type Insert, expectError, rest } from "./pentest-helpers";
 import type { TestUser } from "./pentest-users";
 
-type SetupTable = "portfolios" | "holders" | "source_connections" | "holdings";
+type SetupTable = "portfolios" | "source_connections" | "holdings";
 
 export async function createRow<T extends SetupTable>(
   user: TestUser,
@@ -66,40 +63,27 @@ export function hintOf(res: { body: unknown }): unknown {
 // show in one round, hence several.
 export const RACE_ROUNDS = 10;
 
-const RACE_HINTS = {
-  portfolios: { inUse: "portfolio_in_use", archived: "portfolio_archived" },
-  holders: { inUse: "holder_in_use", archived: "holder_archived" },
-} as const satisfies Partial<
-  Record<
-    SetupTable,
-    { inUse: PortfolioSetupGuardHint; archived: PortfolioSetupGuardHint }
-  >
->;
-
-// An archive and a new account pointing at the same row: exactly one must win,
-// the other refused with its hint. Each round archives the account it created,
-// then runs `afterRound`.
-export async function raceArchiveAgainstAccount(
+// Archiving a portfolio and creating an account that defaults to it: exactly
+// one must win, the other refused with its hint. Each round archives the
+// account it created, then runs `afterRound`.
+export async function raceArchivePortfolioAgainstAccount(
   user: TestUser,
   {
-    table,
     target,
     account,
     afterRound,
   }: {
-    table: keyof typeof RACE_HINTS;
-    target: (round: number) => Promise<string>;
+    target: () => Promise<string>;
     account: (id: string) => Insert<"source_connections">;
     afterRound: (id: string) => Promise<void>;
   },
 ): Promise<void> {
-  const { inUse, archived } = RACE_HINTS[table];
   for (let round = 0; round < RACE_ROUNDS; round++) {
-    const id = await target(round);
+    const id = await target();
     let accountId: string | undefined;
     try {
       const [archive, create] = await Promise.all([
-        rest(user, "PATCH", `${table}?id=eq.${id}`, {
+        rest(user, "PATCH", `portfolios?id=eq.${id}`, {
           body: { archived_at: new Date().toISOString() },
         }),
         rest(user, "POST", "source_connections", {
@@ -109,10 +93,20 @@ export async function raceArchiveAgainstAccount(
       ]);
       if (create.status === 201) {
         accountId = (create.body as { id: string }[])[0]!.id;
-        expectError(archive, 409, PORTFOLIO_SETUP_GUARD.sqlstate, inUse);
+        expectError(
+          archive,
+          409,
+          PORTFOLIO_SETUP_GUARD.sqlstate,
+          "portfolio_in_use",
+        );
       } else {
         expect(archive.status).toBe(204);
-        expectError(create, 409, PORTFOLIO_SETUP_GUARD.sqlstate, archived);
+        expectError(
+          create,
+          409,
+          PORTFOLIO_SETUP_GUARD.sqlstate,
+          "portfolio_archived",
+        );
       }
     } finally {
       // The account goes first: an active one keeps its row from archiving.

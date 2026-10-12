@@ -56,12 +56,12 @@ test("keysetFilter gives the rows after the cursor", () => {
 describe("keysetHref", () => {
   test("sets its own param and keeps the others", () => {
     const href = keysetHref(
-      { holders: "a,b", portfolios: "old", tags: ["x", "y"] },
+      { accounts: "a,b", portfolios: "old", tags: ["x", "y"] },
       "portfolios",
       { at: AT, id: ID },
     );
     const search = new URLSearchParams(href.slice(1));
-    expect(search.getAll("holders")).toEqual(["a,b"]);
+    expect(search.getAll("accounts")).toEqual(["a,b"]);
     expect(search.getAll("tags")).toEqual(["x", "y"]);
     expect(search.getAll("portfolios")).toEqual([`${AT},${ID}`]);
   });
@@ -75,8 +75,8 @@ describe("keysetHref", () => {
 
 test("firstPageHref drops its own param and keeps the others", () => {
   expect(
-    firstPageHref({ portfolios: `${AT},${ID}`, holders: "a" }, "portfolios"),
-  ).toBe("?holders=a");
+    firstPageHref({ portfolios: `${AT},${ID}`, accounts: "a" }, "portfolios"),
+  ).toBe("?accounts=a");
   expect(firstPageHref({ portfolios: `${AT},${ID}` }, "portfolios")).toBe("?");
 });
 

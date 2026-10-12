@@ -1,32 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
-import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
+import type { ListView, PortfolioRow } from "@/lib/portfolio-setup/read";
 import { listView } from "@/test/list-view";
 import { applyChange } from "./list-change";
-import { type NamedRowsCopy, NamedRowsCard } from "./named-rows-card";
-
-const dialog = { title: "t", description: "d" };
-
-const copy: NamedRowsCopy = {
-  title: "Carteras",
-  description: "Agrupá tus inversiones como quieras",
-  addLabel: "Nueva cartera",
-  emptyText: "No tenés carteras activas.",
-  archivedLabel: "Archivadas",
-  noMoreArchived: "No hay más carteras archivadas.",
-  firstPageLabel: "Ver las más recientes",
-  truncated: "Mostrando las más recientes.",
-  createDialog: dialog,
-  renameDialog: dialog,
-  restoreDialog: dialog,
-};
+import { PortfoliosCard } from "./portfolios-card";
 
 const unused = () => Promise.reject(new Error("not called"));
 
-function render(change: Partial<ListView<NamedRow>> = {}, pending = false) {
+function render(change: Partial<ListView<PortfolioRow>> = {}, pending = false) {
   return renderToStaticMarkup(
-    <NamedRowsCard
-      list="portfolios"
+    <PortfoliosCard
       pending={pending}
       run={() => true}
       view={listView({
@@ -36,14 +18,12 @@ function render(change: Partial<ListView<NamedRow>> = {}, pending = false) {
         ],
         ...change,
       })}
-      copy={copy}
       actions={{
         create: unused,
         rename: unused,
         archive: unused,
         restore: unused,
       }}
-      messages={WRITE_MESSAGES.portfolios}
       usedBy={() => []}
     />,
   );

@@ -57,7 +57,6 @@ const account = (
   id: `a1000000-0000-4000-8000-00000000000${n}`,
   institution,
   includeInTaxReport: true,
-  holder: null,
   portfolio: { ...portfolio, archived: false },
 });
 

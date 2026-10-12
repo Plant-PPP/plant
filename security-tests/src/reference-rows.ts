@@ -19,7 +19,6 @@ export type QuoteTable = Extract<ReferenceTable, "fx_rates" | "prices">;
 export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
-  holders: "id",
   holdings: "id",
   portfolios: "id",
   profiles: "user_id",

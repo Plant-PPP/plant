@@ -521,7 +521,6 @@ it("never reopens a holding inside an archived account, nor by an edit", () => {
     start,
     {
       institution: "Lemon",
-      holder: "self",
       includeInTaxReport: true,
       defaultPortfolioId: PRINCIPAL,
     },

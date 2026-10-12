@@ -1,5 +1,5 @@
 import {
-  inUseMessage,
+  portfolioInUseMessage,
   type WriteMessages,
 } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -31,8 +31,8 @@ export function rowAnswer(
     if (result.code === "duplicate" && action === "restore") {
       return { kind: "ask_name" };
     }
-    if (result.code === "portfolio_in_use" || result.code === "holder_in_use") {
-      return { kind: "alert", text: inUseMessage(result.code, usedBy) };
+    if (result.code === "portfolio_in_use") {
+      return { kind: "alert", text: portfolioInUseMessage(usedBy) };
     }
   }
   return dialogAnswer(result, messages);

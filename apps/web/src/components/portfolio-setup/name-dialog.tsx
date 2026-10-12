@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
+import { FormAlert } from "@/components/ui/form-alert";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
-import { NameField } from "./name-field";
 import { useSavedFocus } from "./saved-focus";
 
 // A dialog that asks for one name and hands it to `onSubmit` as it closes:
@@ -40,6 +42,8 @@ export function NameDialog({
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState(initialError);
+  const inputId = useId();
+  const alertId = useId();
 
   return (
     <AppDialog
@@ -64,13 +68,20 @@ export function NameDialog({
           onClose();
         }}
       >
-        <NameField
-          inputRef={input}
-          error={error}
-          defaultValue={initial}
-          required
-          autoFocus
-        />
+        <div className="grid gap-2">
+          <Label htmlFor={inputId}>Nombre</Label>
+          <Input
+            ref={input}
+            id={inputId}
+            autoComplete="off"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? alertId : undefined}
+            defaultValue={initial}
+            required
+            autoFocus
+          />
+          {error && <FormAlert id={alertId}>{error}</FormAlert>}
+        </div>
         <DialogFooter>
           <Button type="submit" size="sm">
             {submitLabel}

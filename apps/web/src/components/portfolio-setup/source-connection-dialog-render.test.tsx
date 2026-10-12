@@ -4,7 +4,6 @@ jest.mock("radix-ui", () =>
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
-import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
 import {
   type SourceConnectionFields,
   SourceConnectionDialog,
@@ -16,7 +15,6 @@ const PRINCIPAL = { id: "p1", name: "Principal" };
 function render(
   initialError?: string,
   change: Partial<SourceConnectionFields> = {},
-  holders: { id: string; name: string }[] = [],
 ) {
   return renderToStaticMarkup(
     <SourceConnectionDialog
@@ -29,7 +27,6 @@ function render(
         ...change,
       }}
       initialError={initialError}
-      holders={holders && { rows: holders, create: jest.fn() }}
       portfolios={[PRINCIPAL]}
       returnFocusTo={() => null}
       onClose={() => {}}
@@ -45,7 +42,7 @@ function control(html: string, label: string): string {
 }
 
 const MESSAGES = WRITE_MESSAGES.source_connections;
-const LABELS = ["Institución", "Titular", "Cartera por defecto"];
+const LABELS = ["Institución", "Cartera por defecto"];
 
 function marked(html: string, attribute: string): string[] {
   return LABELS.filter((label) => control(html, label).includes(attribute));
@@ -82,7 +79,7 @@ it("opens again with the refused fields and the alert", () => {
 });
 
 it("opens with no alert, starting on the institution, when nothing was refused", () => {
-  const html = render(undefined, { holder: "" });
+  const html = render(undefined, { defaultPortfolioId: "" });
   expect(html).not.toContain('role="alert"');
   expect(marked(html, 'aria-invalid="true"')).toEqual([]);
   expect(marked(html, "autofocus")).toEqual(["Institución"]);
@@ -90,7 +87,7 @@ it("opens with no alert, starting on the institution, when nothing was refused",
 });
 
 it("marks no field when the alert is about the save itself", () => {
-  const html = render(MESSAGES.failed, { holder: "" });
+  const html = render(MESSAGES.failed, { defaultPortfolioId: "" });
   expect(marked(html, 'aria-invalid="true"')).toEqual([]);
   expect(marked(html, "aria-describedby=")).toEqual([]);
   expect(marked(html, "autofocus")).toEqual(["Institución"]);
@@ -150,41 +147,32 @@ describe("the institution", () => {
   });
 });
 
-it("marks, describes and focuses the holder when it was archived", () => {
-  const html = render(MESSAGES.holder_archived, {
-    holder: "h-archived",
-    defaultPortfolioId: "p-archived",
-  });
-  expect(marked(html, 'aria-invalid="true"')).toEqual(["Titular"]);
-  expect(marked(html, `aria-describedby="${alertId(html)}"`)).toEqual([
-    "Titular",
-  ]);
-  expect(marked(html, "autofocus")).toEqual(["Titular"]);
-});
-
-it("marks the portfolio, not the holder, when the portfolio was archived", () => {
+it("marks, describes and focuses the portfolio when it was archived", () => {
   const html = render(MESSAGES.portfolio_archived, {
-    holder: "h-archived",
     defaultPortfolioId: "p-archived",
   });
   expect(marked(html, 'aria-invalid="true"')).toEqual(["Cartera por defecto"]);
+  expect(marked(html, `aria-describedby="${alertId(html)}"`)).toEqual([
+    "Cartera por defecto",
+  ]);
   expect(marked(html, "autofocus")).toEqual(["Cartera por defecto"]);
 });
 
-it("starts with an archived holder or portfolio unchosen", () => {
-  const html = render(undefined, {
-    holder: "h-archived",
-    defaultPortfolioId: "p-archived",
-  });
-  expect(html).toContain("Elegí un titular");
+it("starts with an archived portfolio unchosen", () => {
+  const html = render(undefined, { defaultPortfolioId: "p-archived" });
   expect(html).toContain("Elegí una cartera");
 });
 
-it("treats a holder the page offers as chosen", () => {
-  const html = render(undefined, { holder: "h1" }, [
-    { id: "h1", name: "Lucía" },
-  ]);
-  expect(html).not.toContain("Elegí un titular");
+it("treats a portfolio the page offers as chosen", () => {
+  const html = render(undefined, { defaultPortfolioId: "p1" });
+  expect(html).not.toContain("Elegí una cartera");
+});
+
+it("asks for the institution, the default portfolio and the report only", () => {
+  const html = render();
+  expect(
+    [...html.matchAll(/<label[^>]*>([^<]+)<\/label>/g)].map(([, text]) => text),
+  ).toEqual(["Institución", "Cartera por defecto", "Incluir en el reporte"]);
 });
 
 it("marks no field when the account changed elsewhere", () => {
@@ -194,45 +182,10 @@ it("marks no field when the account changed elsewhere", () => {
   expect(marked(html, "autofocus")).toEqual(["Institución"]);
 });
 
-describe("editing an account", () => {
-  const account: SourceConnectionRow = {
-    id: "c1",
-    institution: "IOL",
-    includeInTaxReport: true,
-    holder: { id: "h1", name: "Lucía", archived: false },
-    portfolio: { ...PRINCIPAL, archived: false },
-  };
-
-  function renderEdit(
-    row: SourceConnectionRow,
-    holders: { id: string; name: string }[],
-  ) {
-    return render(undefined, initialFields(row, [PRINCIPAL]), holders);
-  }
-
-  it("unchooses only the holder when the page no longer lists it", () => {
-    const html = renderEdit(account, []);
-    expect(html).toContain("Elegí un titular");
-    expect(html).not.toContain("Elegí una cartera");
-  });
-
-  it("keeps the user's own holder chosen with no holders listed", () => {
-    const html = renderEdit({ ...account, holder: null }, []);
-    expect(html).not.toContain("Elegí un titular");
-  });
-});
-
 it("keeps the messages that name a field apart from every other", () => {
-  const named = [
-    MESSAGES.invalid,
-    MESSAGES.holder_archived,
-    MESSAGES.portfolio_archived,
-  ];
+  const named = [MESSAGES.invalid, MESSAGES.portfolio_archived];
   const others = Object.entries(MESSAGES)
-    .filter(
-      ([code]) =>
-        !["invalid", "holder_archived", "portfolio_archived"].includes(code),
-    )
+    .filter(([code]) => !["invalid", "portfolio_archived"].includes(code))
     .map(([, text]) => text);
   expect(new Set(named).size).toBe(named.length);
   for (const text of named) expect(others).not.toContain(text);

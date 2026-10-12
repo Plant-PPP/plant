@@ -7,7 +7,7 @@ Branch `claude/project-thread-yfghow` (PLA-95). Required by the trigger "Change 
 - `public.portfolios`: the names a user gives to groups of holdings, and whether each one is archived. PLA-24's accounts and PLA-25's holdings will point at them, so a portfolio of another user must never be reachable.
 - The invariant that every user keeps at least one active portfolio, which the views of PLA-25 onwards rely on.
 
-Out of scope: holders and accounts (PLA-24) and holdings (PLA-25), which extend these guards.
+Out of scope: accounts (PLA-24) and holdings (PLA-25), which extend these guards.
 
 ## Trust boundary
 

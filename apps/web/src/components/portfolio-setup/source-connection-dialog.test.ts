@@ -1,14 +1,9 @@
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
-import {
-  SELF_HOLDER,
-  sourceConnectionInputSchema,
-} from "@/lib/portfolio-setup/schemas";
+import { sourceConnectionInputSchema } from "@/lib/portfolio-setup/schemas";
 import {
   accountRow,
-  holderChoices,
   initialFields,
-  missingChoice,
-  pruneAdded,
+  offeredPortfolio,
 } from "./source-connection-dialog";
 
 const PRINCIPAL = { id: "p1", name: "Principal" };
@@ -20,16 +15,14 @@ const row = (
   id: "c1",
   institution: "IOL",
   includeInTaxReport: false,
-  holder: { id: "h1", name: "Lucía", archived: false },
   portfolio: { id: "p2", name: "Largo plazo", archived: false },
   ...change,
 });
 
 describe("initialFields", () => {
-  it("starts a new account as the user's, in the oldest portfolio, in the report", () => {
+  it("starts a new account in the oldest portfolio, in the report", () => {
     expect(initialFields(null, [LARGO, PRINCIPAL])).toEqual({
       institution: "",
-      holder: SELF_HOLDER,
       includeInTaxReport: true,
       defaultPortfolioId: "p1",
     });
@@ -42,45 +35,27 @@ describe("initialFields", () => {
   it("starts from the account's values", () => {
     expect(initialFields(row(), [LARGO, PRINCIPAL])).toEqual({
       institution: "IOL",
-      holder: "h1",
       includeInTaxReport: false,
       defaultPortfolioId: "p2",
     });
-    expect(initialFields(row({ holder: null }), []).holder).toBe(SELF_HOLDER);
   });
 
-  it("keeps an archived holder and portfolio for the dialog to unchoose", () => {
+  it("keeps an archived portfolio for the dialog to unchoose", () => {
     const archived = row({
-      holder: { id: "h1", name: "Lucía", archived: true },
       portfolio: { id: "p3", name: "Vieja", archived: true },
     });
-    expect(initialFields(archived, [PRINCIPAL])).toMatchObject({
-      holder: "h1",
-      defaultPortfolioId: "p3",
-    });
+    expect(initialFields(archived, [PRINCIPAL]).defaultPortfolioId).toBe("p3");
   });
 });
 
-describe("missingChoice", () => {
-  const fields = initialFields(row(), []);
-
-  it("is nothing once both selects are chosen", () => {
-    expect(missingChoice(fields)).toBeUndefined();
+describe("offeredPortfolio", () => {
+  it("is the portfolio the page offers", () => {
+    expect(offeredPortfolio([PRINCIPAL, LARGO], "p2")).toBe(LARGO);
   });
 
-  it("names the holder, then the portfolio", () => {
-    expect(
-      missingChoice({ ...fields, holder: "", defaultPortfolioId: "" }),
-    ).toBe("holder");
-    expect(missingChoice({ ...fields, defaultPortfolioId: "" })).toBe(
-      "portfolio",
-    );
-  });
-
-  it("needs only the holder and the portfolio", () => {
-    expect(
-      missingChoice({ holder: SELF_HOLDER, defaultPortfolioId: "p1" }),
-    ).toBeUndefined();
+  it("is nothing for a portfolio the page no longer offers, or none chosen", () => {
+    expect(offeredPortfolio([PRINCIPAL], "p3")).toBeUndefined();
+    expect(offeredPortfolio([PRINCIPAL], "")).toBeUndefined();
   });
 });
 
@@ -88,7 +63,7 @@ describe("the dialog's values and the action's schema", () => {
   it("a new account's starting values pass the schema", () => {
     const portfolio = { id: "11111111-1111-4111-8111-111111111111", name: "P" };
     expect(
-      sourceConnectionInputSchema(60).safeParse({
+      sourceConnectionInputSchema.safeParse({
         ...initialFields(null, [portfolio]),
         institution: "IOL",
       }).success,
@@ -96,67 +71,23 @@ describe("the dialog's values and the action's schema", () => {
   });
 });
 
-describe("holderChoices", () => {
-  const LUCIA = { id: "h1", name: "Lucía" };
-  const JUAN = { id: "h2", name: "Juan" };
-
-  it("adds the holders created here after the page's, once", () => {
-    expect(holderChoices([LUCIA], [LUCIA, JUAN])).toEqual([LUCIA, JUAN]);
-    expect(holderChoices([], [])).toEqual([]);
-  });
-});
-
-describe("pruneAdded", () => {
-  const LUCIA = { id: "h1", name: "Lucía" };
-  const JUAN = { id: "h2", name: "Juan" };
-
-  it("keeps a holder created here until the page lists it", () => {
-    expect(pruneAdded([], [JUAN], [LUCIA])).toEqual([LUCIA]);
-    expect(pruneAdded([], [LUCIA], [LUCIA])).toEqual([]);
-  });
-
-  it("does not offer again a holder the page listed and then dropped", () => {
-    expect(pruneAdded([LUCIA], [], [LUCIA])).toEqual([]);
-  });
-});
-
 describe("accountRow", () => {
-  it("is the row its fields describe, with the chosen holder and portfolio", () => {
+  it("is the row its fields describe, with the chosen portfolio", () => {
     expect(
       accountRow(
         "c9",
         {
           institution: "  Banco   Uno ",
-          holder: "h1",
           includeInTaxReport: false,
           defaultPortfolioId: "p2",
         },
-        {
-          holder: { id: "h1", name: "Ana" },
-          portfolio: { id: "p2", name: "Largo plazo" },
-        },
+        { id: "p2", name: "Largo plazo" },
       ),
     ).toEqual({
       id: "c9",
       institution: "Banco Uno",
       includeInTaxReport: false,
-      holder: { id: "h1", name: "Ana", archived: false },
       portfolio: { id: "p2", name: "Largo plazo", archived: false },
     });
-  });
-
-  it("belongs to the user when no holder was chosen", () => {
-    expect(
-      accountRow(
-        "c9",
-        {
-          institution: "IOL",
-          holder: "self",
-          includeInTaxReport: true,
-          defaultPortfolioId: "p1",
-        },
-        { holder: null, portfolio: { id: "p1", name: "Principal" } },
-      ).holder,
-    ).toBeNull();
   });
 });

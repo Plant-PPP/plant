@@ -24,7 +24,7 @@ const ONE: Exact = { n: 1n, d: 1n };
 // - income: dividends and coupons before withholding, and what yields earned
 //   or lost;
 // - charges: commissions, fees, taxes and withholding;
-// - contributed: paidIn less proceeds, what the holder put in net;
+// - contributed: paidIn less proceeds, what the user put in net;
 // - market: the change in value not explained by what was put in or taken
 //   out or by what yields brought, from prices and the dollar alone;
 // - result: market plus income less charges;

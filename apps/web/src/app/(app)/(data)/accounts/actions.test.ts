@@ -17,15 +17,11 @@ jest.mock("@/lib/supabase/server", () => ({
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import {
-  archiveHolder,
   archivePortfolio,
   archiveSourceConnection,
-  createHolder,
   createPortfolio,
   createSourceConnection,
-  renameHolder,
   renamePortfolio,
-  restoreHolder,
   restorePortfolio,
   restoreSourceConnection,
   updateSourceConnection,
@@ -401,52 +397,30 @@ describe("restorePortfolio", () => {
   });
 });
 
-describe("holder actions", () => {
-  it("write the holders table under their own action names", async () => {
+describe("portfolio action names", () => {
+  it("log each portfolio write under its own action name", async () => {
     const calls = fakeClient(
       { ...ok(ID), status: 201 },
       ok(ID),
       ok(ID),
       ok(ID),
+      ok(ID),
     );
-    await createHolder({ name: " Lucía " });
-    await renameHolder(ID, { name: "Lucía P." });
-    await archiveHolder(ID);
-    await restoreHolder(ID, { name: "Lucía" });
+    await createPortfolio({ name: "Largo plazo" });
+    await renamePortfolio(ID, { name: "Corto plazo" });
+    await archivePortfolio(ID);
+    await restorePortfolio(ID);
+    await restorePortfolio(ID, { name: "Largo plazo" });
     expect(calls.filter(([method]) => method === "from")).toEqual(
-      Array(4).fill(["from", "holders"]),
+      Array(5).fill(["from", "portfolios"]),
     );
-    expect(calls).toContainEqual(["insert", { name: "Lucía" }]);
-    expect(calls).toContainEqual([
-      "update",
-      { name: "Lucía", archived_at: null },
-    ]);
     expect(lines.map((line) => line["plant.portfolio_setup.action"])).toEqual([
-      "create_holder",
-      "rename_holder",
-      "archive_holder",
-      "restore_rename_holder",
+      "create_portfolio",
+      "rename_portfolio",
+      "archive_portfolio",
+      "restore_portfolio",
+      "restore_rename_portfolio",
     ]);
-  });
-
-  it("take a longer name than portfolios", async () => {
-    fakeClient({ ...ok(ID), status: 201 });
-    await expect(createHolder({ name: "x".repeat(80) })).resolves.toEqual({
-      ok: true,
-      id: ID,
-    });
-    await expect(createHolder({ name: "x".repeat(81) })).resolves.toEqual({
-      ok: false,
-      code: "invalid",
-    });
-  });
-
-  it("map the holder in use guard", async () => {
-    fakeClient(refused(409, "PT409", "holder_in_use"));
-    await expect(archiveHolder(ID)).resolves.toEqual({
-      ok: false,
-      code: "holder_in_use",
-    });
   });
 });
 
@@ -454,30 +428,21 @@ describe("source connection actions", () => {
   const PORTFOLIO = "44444444-4444-4444-8444-444444444444";
   const fields = {
     institution: " Bull  Market ",
-    holder: OTHER,
     includeInTaxReport: false,
     defaultPortfolioId: PORTFOLIO,
   };
   const row = {
     institution: "Bull Market",
-    holder_id: OTHER,
     include_in_tax_report: false,
     default_portfolio_id: PORTFOLIO,
   };
 
-  it("create the row from the parsed fields, the user as a null holder", async () => {
-    const calls = fakeClient(
-      { ...ok(ID), status: 201 },
-      { ...ok(ID), status: 201 },
-    );
+  it("creates the row from the parsed fields only", async () => {
+    const calls = fakeClient({ ...ok(ID), status: 201 });
     await createSourceConnection({ ...fields, user_id: OTHER, id: OTHER });
-    await createSourceConnection({ ...fields, holder: "self" });
     expect(calls).toEqual([
       ["from", "source_connections"],
       ["insert", row],
-      ["select", "id"],
-      ["from", "source_connections"],
-      ["insert", { ...row, holder_id: null }],
       ["select", "id"],
     ]);
     expect(lines[0]).toMatchObject({
@@ -486,8 +451,7 @@ describe("source connection actions", () => {
   });
 
   it.each([
-    [{ ...fields, holder: undefined }],
-    [{ ...fields, holder: "" }],
+    [{ ...fields, institution: undefined }],
     [{ ...fields, defaultPortfolioId: undefined }],
     [{ ...fields, includeInTaxReport: "false" }],
   ])("refuse %p without a write", async (input) => {
@@ -553,16 +517,13 @@ describe("source connection actions", () => {
     ]);
   });
 
-  it.each(["portfolio_archived", "holder_archived"])(
-    "map the %s guard",
-    async (hint) => {
-      fakeClient(refused(409, "PT409", hint));
-      await expect(createSourceConnection(fields)).resolves.toEqual({
-        ok: false,
-        code: hint,
-      });
-    },
-  );
+  it("map the portfolio_archived guard", async () => {
+    fakeClient(refused(409, "PT409", "portfolio_archived"));
+    await expect(createSourceConnection(fields)).resolves.toEqual({
+      ok: false,
+      code: "portfolio_archived",
+    });
+  });
 
   it("treat another user's portfolio as a failure", async () => {
     fakeClient(refused(409, "23503"));

@@ -1,19 +1,19 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ListView, NamedRow } from "@/lib/portfolio-setup/read";
+import type { ListView, PortfolioRow } from "@/lib/portfolio-setup/read";
 import { listView } from "@/test/list-view";
 import { ActiveList, ArchivedList, SetupCard } from "./setup-card";
 
-const rows: NamedRow[] = [
+const rows: PortfolioRow[] = [
   { id: "a", name: "Principal" },
   { id: "b", name: "Largo plazo" },
 ];
 
-const columns: ColumnDef<NamedRow>[] = [
+const columns: ColumnDef<PortfolioRow>[] = [
   { id: "name", header: "Nombre", cell: ({ row }) => row.original.name },
 ];
 
-function active(view: ListView<NamedRow>) {
+function active(view: ListView<PortfolioRow>) {
   return renderToStaticMarkup(
     <ActiveList
       view={view}
@@ -25,7 +25,7 @@ function active(view: ListView<NamedRow>) {
   );
 }
 
-function archived(view: ListView<NamedRow>, pending = false) {
+function archived(view: ListView<PortfolioRow>, pending = false) {
   return renderToStaticMarkup(
     <ArchivedList
       view={view}
@@ -86,7 +86,7 @@ describe("ArchivedList", () => {
   });
 
   it("holds the archived pages' links while a write runs", () => {
-    const paged = listView<NamedRow>({
+    const paged = listView<PortfolioRow>({
       archived: rows,
       archivedFirstHref: "/accounts",
       archivedNextHref: "/accounts?portfolios=x",

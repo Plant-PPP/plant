@@ -2,7 +2,10 @@ import {
   ARCHIVED_ROW_LIMIT,
   PAGE_ROW_LIMIT,
 } from "@/lib/portfolio-setup/limits";
-import type { NamedRow, SourceConnectionRow } from "@/lib/portfolio-setup/read";
+import type {
+  PortfolioRow,
+  SourceConnectionRow,
+} from "@/lib/portfolio-setup/read";
 import { idSchema } from "@/lib/portfolio-setup/schemas";
 import { listView } from "@/test/list-view";
 import {
@@ -12,11 +15,11 @@ import {
   temporaryId,
 } from "./list-change";
 
-const principal: NamedRow = { id: "p1", name: "Principal" };
-const largo: NamedRow = { id: "p2", name: "Largo plazo" };
-const corto: NamedRow = { id: "p3", name: "Corto plazo" };
+const principal: PortfolioRow = { id: "p1", name: "Principal" };
+const largo: PortfolioRow = { id: "p2", name: "Largo plazo" };
+const corto: PortfolioRow = { id: "p3", name: "Corto plazo" };
 
-const rows = (count: number, prefix: string): NamedRow[] =>
+const rows = (count: number, prefix: string): PortfolioRow[] =>
   Array.from({ length: count }, (_, index) => ({
     id: `${prefix}${index}`,
     name: `${prefix}${index}`,
@@ -158,13 +161,11 @@ describe("applySetupChange", () => {
     id: "c1",
     institution: "IOL",
     includeInTaxReport: true,
-    holder: { id: "h1", name: "Ana", archived: false },
     portfolio: { ...largo, archived: false },
   };
   const lists: SetupLists = {
     sourceConnections: listView({ active: [account] }),
     portfolios: listView({ active: [principal, largo] }),
-    holders: listView({ active: [{ id: "h1", name: "Ana" }] }),
   };
 
   it("shows a portfolio's new name on the accounts that default to it", () => {
@@ -173,46 +174,6 @@ describe("applySetupChange", () => {
       change: { kind: "update", row: { id: "p2", name: "Retiro" } },
     });
     expect(next.sourceConnections.active[0]!.portfolio.name).toBe("Retiro");
-    expect(next.holders).toBe(lists.holders);
-  });
-
-  it("shows a holder's new name on their accounts", () => {
-    const next = applySetupChange(lists, {
-      list: "holders",
-      change: { kind: "update", row: { id: "h1", name: "Ana María" } },
-    });
-    expect(next.sourceConnections.active[0]!.holder?.name).toBe("Ana María");
-  });
-
-  it("shows a restored holder, active and with its name, on their archived accounts", () => {
-    const archivedAccount: SourceConnectionRow = {
-      ...account,
-      id: "c2",
-      holder: { id: "h2", name: "Beto", archived: true },
-    };
-    const next = applySetupChange(
-      {
-        ...lists,
-        sourceConnections: listView({
-          active: [account],
-          archived: [archivedAccount],
-        }),
-        holders: listView({ archived: [{ id: "h2", name: "Beto" }] }),
-      },
-      {
-        list: "holders",
-        change: { kind: "restore", row: { id: "h2", name: "Roberto" } },
-      },
-    );
-    expect(next.sourceConnections.archived[0]!.holder).toEqual({
-      id: "h2",
-      name: "Roberto",
-      archived: false,
-    });
-    expect(next.sourceConnections.active[0]).toBe(account);
-    expect(next.holders.active).toEqual([
-      { id: "h2", name: "Roberto", unsaved: true },
-    ]);
   });
 
   it("shows a restored portfolio, active and with its name, on its archived accounts", () => {
@@ -240,15 +201,14 @@ describe("applySetupChange", () => {
       name: "Corto",
       archived: false,
     });
-    expect(next.sourceConnections.archived[0]!.holder).toBe(account.holder);
     expect(next.sourceConnections.active[0]).toBe(account);
   });
 
   it("changes nothing when no list shows the row", () => {
     expect(
       applySetupChange(lists, {
-        list: "holders",
-        change: { kind: "update", row: { id: "h9", name: "Nadie" } },
+        list: "portfolios",
+        change: { kind: "update", row: { id: "p9", name: "Nadie" } },
       }),
     ).toBe(lists);
   });
@@ -259,7 +219,36 @@ describe("applySetupChange", () => {
       change: { kind: "update", row: { id: "p1", name: "Mía" } },
     });
     expect(next.sourceConnections).toBe(lists.sourceConnections);
-    expect(next.holders).toBe(lists.holders);
+  });
+
+  it("renames a portfolio on its accounts when the portfolios shown leave it out", () => {
+    const shown = { ...lists, portfolios: listView({ active: [principal] }) };
+    const next = applySetupChange(shown, {
+      list: "portfolios",
+      change: { kind: "update", row: { id: "p2", name: "Retiro" } },
+    });
+    expect(next.sourceConnections.active[0]!.portfolio.name).toBe("Retiro");
+    expect(next.portfolios).toBe(shown.portfolios);
+  });
+
+  it("keeps the archived accounts when a rename reaches only active ones", () => {
+    const archived: SourceConnectionRow = {
+      ...account,
+      id: "c2",
+      portfolio: { ...corto, archived: true },
+    };
+    const shown = {
+      ...lists,
+      sourceConnections: listView({ active: [account], archived: [archived] }),
+    };
+    const next = applySetupChange(shown, {
+      list: "portfolios",
+      change: { kind: "update", row: { id: "p2", name: "Retiro" } },
+    });
+    expect(next.sourceConnections.active[0]!.portfolio.name).toBe("Retiro");
+    expect(next.sourceConnections.archived).toBe(
+      shown.sourceConnections.archived,
+    );
   });
 
   it("leaves the accounts as they are when a portfolio is created or archived", () => {

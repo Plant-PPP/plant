@@ -13,20 +13,41 @@ export function migrations(): { file: string; sql: string }[] {
     .map((file) => ({ file, sql: readFileSync(join(DIR, file), "utf8") }));
 }
 
-// The body of each private function whose name matches `name`, as the latest
-// migration that creates or replaces it defines it.
-export function lastFunctionBodies(name: RegExp): Map<string, string> {
+// The body of each private function whose name matches `name`, as the
+// migrations, in order, last leave it: a later replace wins and a
+// `DROP FUNCTION private.<name>()` removes it. Each group name appears once,
+// since Node 22 rejects a repeated one. The gap before the body holds no `;`,
+// so a function quoted any other way never runs on into the next statement;
+// such a function throws, since a stale body would leave its readers checking
+// a body the function no longer has.
+export function functionBodies(
+  sqls: string[],
+  name: RegExp,
+): Map<string, string> {
   const pattern = new RegExp(
-    `CREATE (?:OR REPLACE )?FUNCTION private\\.(?<fn>${name.source})\\(\\)[\\s\\S]*?\\$\\$(?<body>[\\s\\S]*?)\\$\\$`,
-    "g",
+    `CREATE (?:OR REPLACE )?FUNCTION private\\.(?<created>${name.source})\\(\\)[^;]*?\\$\\$(?<body>[\\s\\S]*?)\\$\\$` +
+      `|DROP FUNCTION (?:IF EXISTS )?private\\.(?<dropped>${name.source})\\(\\)` +
+      `|CREATE (?:OR REPLACE )?FUNCTION private\\.(?<unread>${name.source})\\(\\)`,
+    "gi",
   );
   const bodies = new Map<string, string>();
-  for (const { sql } of migrations()) {
+  for (const sql of sqls) {
     for (const { groups } of sql.matchAll(pattern)) {
-      if (groups?.fn && groups.body) bodies.set(groups.fn, groups.body);
+      if (groups?.unread)
+        throw new Error(`no $$ body for private.${groups.unread}()`);
+      if (groups?.dropped) bodies.delete(groups.dropped);
+      else if (groups?.created && groups.body)
+        bodies.set(groups.created, groups.body);
     }
   }
   return bodies;
+}
+
+export function lastFunctionBodies(name: RegExp): Map<string, string> {
+  return functionBodies(
+    migrations().map(({ sql }) => sql),
+    name,
+  );
 }
 
 // A table's CREATE TABLE body followed by every later ALTER TABLE on it.

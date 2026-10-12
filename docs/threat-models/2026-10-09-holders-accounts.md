@@ -28,7 +28,7 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 - CHECK: holder names of 1 to 80 characters, institutions of 1 to 60, with no outer spaces; a unique index on `(user_id, lower(name))` among active holders.
 - Guards (`SECURITY INVOKER`, `search_path = ''`, not executable by the API roles), keyed on the row's `user_id`: archiving a portfolio or holder an active account uses, and an active account on an archived portfolio or holder, are refused with `PT409` and a hint. A row the guard cannot find is left to the foreign key, so the guard never tells another user's id from a random one.
 - The page: each cursor is parsed to one timestamp and one uuid before it reaches a filter.
-- Server actions: `getSessionClaims()`, zod on every argument (uuids, a required holder of `"self"` or a uuid, a boolean, normalized names), filters by the session's `user_id` and the id besides RLS, and one log line without names, institutions or PostgREST's text.
+- Server actions: `getSessionClaims()`, zod on every argument (uuids, a boolean, normalized names), filters by the session's `user_id` and the id besides RLS, and one log line without names, institutions or PostgREST's text.
 
 ## STRIDE
 
@@ -44,11 +44,15 @@ The browser talks to PostgREST with the user's JWT (role `authenticated`) or wit
 
 ## Controls as built
 
-- **pgTAP** (`supabase/tests/holders_accounts_isolation_test.sql`): the exact grants of both tables, the trigger definitions and order, the guards' settings, the CHECKs, unique index and foreign keys, the lock trigger on insert and update and the lock held after an insert, isolation between two users row by row, every guard and its hint, the last-portfolio check before the accounts check, the foreign key refusing another user's active and archived rows and a random id with no hint, the guards keying on the row's user past RLS, the policies refusing a move or takeover with the grants widened, and the cascade on account deletion. A guard reading `auth.uid()` turns six of them red.
-- **PostgREST** (`security-tests/src/{holders,source-connections}.pentest.test.ts`): the shared cross-user cases, PATCHes and archives of another user's rows that change nothing, an account pointing at another user's holder or portfolio (409, `23503`, no hint), `holder_in_use` and `portfolio_in_use` over HTTP, `holder_archived` on create, restore and re-point, `portfolio_archived` on create and re-point (its restore case is in pgTAP), the foreign key refusing another user's archived portfolio, `DELETE` and the server's columns refused.
-- **Server actions and page** (`actions.test.ts`, `read.test.ts`, `schemas.test.ts`, `write-result.test.ts`): the filters, the required holder, an edit that never writes `archived_at`, a restore that clears it, every hint's mapping, and the embedded rows' mapping.
+- **pgTAP** (`supabase/tests/accounts_isolation_test.sql`): the exact grants of `source_connections`, the trigger definitions and order, the guards' settings, the CHECKs and foreign keys, that `holders`, `holder_id` and the holder guard are gone, the lock trigger on insert and update and the lock held after an insert, isolation between two users row by row, every guard and its hint, the last-portfolio check before the accounts check, the foreign key refusing another user's active and archived rows and a random id with no hint, the guards keying on the row's user's portfolio and holdings past RLS, the policies refusing a move or takeover with the grants widened, and the cascade on account deletion. A guard reading `auth.uid()` turns those past-RLS cases red.
+- **PostgREST** (`security-tests/src/source-connections.pentest.test.ts`): the shared cross-user cases, PATCHes and archives of another user's rows that change nothing, an account pointing at another user's portfolio (409, `23503`, no hint), `portfolio_in_use` over HTTP, `portfolio_archived` on create, re-point and restore, the foreign key refusing another user's archived portfolio, `DELETE` and the server's columns refused.
+- **Server actions and page** (`actions.test.ts`, `read.test.ts`, `schemas.test.ts`, `write-result.test.ts`): the filters, an edit that never writes `archived_at`, a restore that clears it, every hint's mapping, and the embedded rows' mapping.
 
 ## Residual risk
 
 - **The in-use alert names only the accounts the page shows**, up to 300 active ones; past that the alert may list fewer than there are.
 - The portfolios model's residual risks hold here too.
+
+## Update 2026-10-12 (PLA-105)
+
+Holders are gone: `public.holders`, `source_connections.holder_id`, its foreign key and index, `private.guard_holder_write` and the hints `holder_in_use` and `holder_archived` are dropped. Every account is the user's own. What this model says about holders no longer applies; what it says about accounts holds, minus the holder column and checks: the remaining column grants, the composite foreign key to portfolios, RLS, the MFA gate, the lock, the stamp and the portfolio guards stay as they were. The pgTAP file pins that the table, the column and the guard are gone, and keeps a past-RLS case showing the account guard reads the row's user's portfolio, not the caller's.

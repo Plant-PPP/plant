@@ -5,10 +5,9 @@ import {
 } from "@/lib/portfolio-setup/limits";
 import type {
   ListView,
-  NamedRow,
+  PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
-import { type AccountLink, embeds } from "./accounts-using";
 
 // What the user just did to one list, shown before the server confirms it.
 export type ListChange<Row> =
@@ -20,13 +19,12 @@ export type ListChange<Row> =
 
 export type SetupLists = {
   sourceConnections: ListView<SourceConnectionRow>;
-  portfolios: ListView<NamedRow>;
-  holders: ListView<NamedRow>;
+  portfolios: ListView<PortfolioRow>;
 };
 
 export type SetupChange =
   | { list: "sourceConnections"; change: ListChange<SourceConnectionRow> }
-  | { list: "portfolios" | "holders"; change: ListChange<NamedRow> };
+  | { list: "portfolios"; change: ListChange<PortfolioRow> };
 
 let lastId = 0;
 
@@ -110,21 +108,24 @@ export function applyChange<Row extends DataTableRow>(
   }
 }
 
-// The accounts show their portfolio's and holder's names and whether each is
-// archived, so a rename or restore reaches them too: either leaves it active
-// with its new name.
+// The accounts show their portfolio's name and whether it is archived, so a
+// rename or restore reaches them too: either leaves it active with its new
+// name.
 function linkIn(
   view: ListView<SourceConnectionRow>,
-  key: AccountLink,
-  row: NamedRow,
+  row: PortfolioRow,
 ): ListView<SourceConnectionRow> {
   const relink = (rows: SourceConnectionRow[]) =>
-    rows.some((each) => embeds(each, key, row.id))
+    rows.some((each) => each.portfolio.id === row.id)
       ? rows.map((each) =>
-          embeds(each, key, row.id)
+          each.portfolio.id === row.id
             ? {
                 ...each,
-                [key]: { ...each[key]!, name: row.name, archived: false },
+                portfolio: {
+                  ...each.portfolio,
+                  name: row.name,
+                  archived: false,
+                },
               }
             : each,
         )
@@ -146,16 +147,13 @@ export function applySetupChange(
       ? lists
       : { ...lists, sourceConnections: view };
   }
-  const view = applyChange(lists[list], change);
+  const portfolios = applyChange(lists.portfolios, change);
   const sourceConnections =
     change.kind === "update" || change.kind === "restore"
-      ? linkIn(
-          lists.sourceConnections,
-          list === "portfolios" ? "portfolio" : "holder",
-          change.row,
-        )
+      ? linkIn(lists.sourceConnections, change.row)
       : lists.sourceConnections;
-  return view === lists[list] && sourceConnections === lists.sourceConnections
+  return portfolios === lists.portfolios &&
+    sourceConnections === lists.sourceConnections
     ? lists
-    : { ...lists, [list]: view, sourceConnections };
+    : { portfolios, sourceConnections };
 }

@@ -7,29 +7,26 @@ import { listView } from "@/test/list-view";
 import { applyChange } from "./list-change";
 import { SourceConnectionsCard } from "./source-connections-card";
 
-const own: SourceConnectionRow = {
+const first: SourceConnectionRow = {
   id: "c1",
   institution: "Banco Uno",
   includeInTaxReport: true,
-  holder: null,
   portfolio: { id: "p1", name: "Principal", archived: false },
 };
 
-const shared: SourceConnectionRow = {
+const second: SourceConnectionRow = {
   id: "c2",
   institution: "Broker Dos",
   includeInTaxReport: false,
-  holder: { id: "h1", name: "Ana", archived: false },
   portfolio: { id: "p2", name: "Largo plazo", archived: false },
 };
 
 function render(change: Partial<SourceConnectionsView> = {}, pending = false) {
   return renderToStaticMarkup(
     <SourceConnectionsCard
-      view={listView({ active: [own, shared], ...change })}
+      view={listView({ active: [first, second], ...change })}
       pending={pending}
       run={() => true}
-      holders={{ rows: [], create: jest.fn() }}
       portfolios={[]}
       actions={{
         create: jest.fn(),
@@ -47,14 +44,12 @@ it("names the accounts table", () => {
   expect(html).toMatch(/<caption[^>]*>Cuentas<\/caption>/);
 });
 
-it("calls the user's own holder Vos", () => {
-  expect(html).toContain('title="Banco Uno · Vos"');
-  expect(html).toContain('Banco Uno<span class="@2xl:hidden"> · Vos</span>');
-  expect(html).toMatch(/<span class="block truncate" title="Vos">Vos<\/span>/);
+it("names each account by its institution alone", () => {
+  expect(html).toContain('title="Banco Uno">Banco Uno</span>');
+  expect(html).toContain('title="Broker Dos">Broker Dos</span>');
 });
 
-it("shows the holder, portfolio and report status under the institution", () => {
-  expect(html).toContain('title="Broker Dos · Ana"');
+it("shows the portfolio and report status under the institution", () => {
   expect(html).toContain(
     'class="block truncate pl-6 text-xs text-muted-foreground @2xl:hidden" title="Principal · Incluida en el reporte"',
   );
@@ -65,15 +60,15 @@ it("heads the account column at every width", () => {
   expect(html).toMatch(/<th(?![^>]*hidden)[^>]*>Cuenta<\/th>/);
 });
 
-it("gives the holder, portfolio and report status their own wide columns", () => {
-  for (const header of ["Titular", "Cartera", "Reporte"]) {
+it("gives the portfolio and report status their own wide columns", () => {
+  for (const header of ["Cartera", "Reporte"]) {
     expect(html).toMatch(
       new RegExp(
         `<th[^>]*class="[^"]*hidden @2xl:table-cell[^"]*"[^>]*>${header}</th>`,
       ),
     );
   }
-  for (const text of ["Ana", "Largo plazo", "Incluida", "No incluida"]) {
+  for (const text of ["Largo plazo", "Incluida", "No incluida"]) {
     expect(html).toContain(`title="${text}">${text}</span>`);
   }
 });
@@ -84,16 +79,16 @@ it("names each row's buttons after its account", () => {
 });
 
 it("lists archived accounts in their own table with a restore button", () => {
-  const archived = render({ active: [], archived: [shared] });
+  const archived = render({ active: [], archived: [second] });
   expect(archived).toMatch(/<caption[^>]*>Cuentas archivadas<\/caption>/);
   expect(archived).toContain('aria-label="Restaurar Broker Dos"');
   expect(archived).toContain("Todavía no agregaste cuentas.");
 });
 
 it("fades an account the server has not confirmed yet", () => {
-  const { active } = applyChange(listView({ active: [shared] }), {
+  const { active } = applyChange(listView({ active: [second] }), {
     kind: "create",
-    row: own,
+    row: first,
   });
   const unsaved = render({ active });
   expect(unsaved).toMatch(
@@ -104,7 +99,7 @@ it("fades an account the server has not confirmed yet", () => {
 
 it("passes the page's pending to its archived list", () => {
   const paged = {
-    archived: [shared],
+    archived: [second],
     archivedFirstHref: "/accounts",
     archivedNextHref: "/accounts?accounts=x",
   };

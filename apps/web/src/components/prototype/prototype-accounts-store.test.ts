@@ -20,22 +20,22 @@ const state = initialState(buildFixtures(TODAY), TODAY);
 const NEW_ID = "e3000000-0000-4000-8000-000000000001";
 const PRINCIPAL = state.portfolios[0]!.id;
 
-it("keeps every account the user's own", () => {
-  expect(state.accounts.every((row) => row.holder === null)).toBe(true);
+it("creates an account from its parsed fields", () => {
   const created = createAccount(
     state,
     {
       institution: "Lemon",
-      holder: "self",
       includeInTaxReport: true,
       defaultPortfolioId: PRINCIPAL,
     },
     NEW_ID,
   );
   expect(created.result).toEqual({ ok: true, id: NEW_ID });
-  expect(created.state.accounts[0]).toMatchObject({
+  expect(created.state.accounts[0]).toEqual({
+    id: NEW_ID,
     institution: "Lemon",
-    holder: null,
+    includeInTaxReport: true,
+    portfolio: { ...state.portfolios[0]!, archived: false },
   });
 });
 
@@ -97,7 +97,6 @@ describe("deletesUploads", () => {
     state,
     {
       institution: "Lemon",
-      holder: "self",
       includeInTaxReport: true,
       defaultPortfolioId: PRINCIPAL,
     },

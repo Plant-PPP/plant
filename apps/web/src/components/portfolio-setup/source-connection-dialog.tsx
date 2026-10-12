@@ -1,6 +1,5 @@
 "use client";
 
-import { Plus } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -17,38 +16,31 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   CHOICE_MESSAGES,
-  SELF_HOLDER_LABEL,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
 import type {
-  HolderRow,
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
-import { SELF_HOLDER } from "@/lib/portfolio-setup/schemas";
 import {
   InstitutionField,
   chosenInstitution,
   institutionChoice,
   typedInstitution,
 } from "./institution-field";
-import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { NewHolderField } from "./new-holder-field";
 import { useFieldAlert } from "./field-alert";
 import { useSavedFocus } from "./saved-focus";
-import { PendingButton } from "@/components/ui/pending-button";
 
 export type SourceConnectionFields = {
   institution: string;
-  holder: string;
   includeInTaxReport: boolean;
   defaultPortfolioId: string;
 };
 
-// The dialog's starting values. An archived holder or portfolio is not among
-// the page's choices, so it starts unchosen (offeredChoices) and a restore
-// makes the user choose an active one.
+// The dialog's starting values. An archived portfolio is not among the page's
+// choices, so it starts unchosen (offeredPortfolio) and a restore makes the
+// user choose an active one.
 export function initialFields(
   row: SourceConnectionRow | null,
   portfolios: PortfolioRow[],
@@ -56,7 +48,6 @@ export function initialFields(
   if (!row) {
     return {
       institution: "",
-      holder: SELF_HOLDER,
       includeInTaxReport: true,
       // The oldest active portfolio listed, the first one the user had unless
       // they archived it.
@@ -65,13 +56,12 @@ export function initialFields(
   }
   return {
     institution: row.institution,
-    holder: row.holder?.id ?? SELF_HOLDER,
     includeInTaxReport: row.includeInTaxReport,
     defaultPortfolioId: row.portfolio.id,
   };
 }
 
-type AccountField = "institution" | "holder" | "portfolio";
+type AccountField = "institution" | "portfolio";
 
 const MESSAGES = WRITE_MESSAGES.source_connections;
 
@@ -79,105 +69,42 @@ const MESSAGES = WRITE_MESSAGES.source_connections;
 // write itself, such as a failed save.
 function refusedField(text: string): AccountField | null {
   if (text === MESSAGES.invalid) return "institution";
-  if (text === MESSAGES.holder_archived) return "holder";
   if (text === MESSAGES.portfolio_archived) return "portfolio";
   return null;
 }
-
-// The holder and portfolio an account's fields chose, as the page lists them.
-export type ChosenRows = { holder: HolderRow | null; portfolio: PortfolioRow };
 
 // The row the fields describe, as the page shows it until the server's
 // refresh: inverse to initialFields.
 export function accountRow(
   id: string,
   fields: SourceConnectionFields,
-  { holder, portfolio }: ChosenRows,
+  portfolio: PortfolioRow,
 ): SourceConnectionRow {
   return {
     id,
     institution: normalizeName(fields.institution),
     includeInTaxReport: fields.includeInTaxReport,
-    holder: holder && { ...holder, archived: false },
     portfolio: { ...portfolio, archived: false },
   };
 }
 
-// The holder or portfolio select the user left unchosen, or that
-// offeredChoices unchose because the page no longer lists the account's holder
-// or portfolio.
-export function missingChoice(
-  fields: Pick<SourceConnectionFields, "holder" | "defaultPortfolioId">,
-): "holder" | "portfolio" | undefined {
-  if (fields.holder === "") return "holder";
-  if (fields.defaultPortfolioId === "") return "portfolio";
-  return undefined;
-}
-
-// The holders to offer: the page's, then those created here that the page
-// does not list yet.
-export function holderChoices(
-  holders: HolderRow[],
-  added: HolderRow[],
-): HolderRow[] {
-  return [
-    ...holders,
-    ...added.filter((row) => !holders.some(({ id }) => id === row.id)),
-  ];
-}
-
-// The holders created here still to offer once the page's list changes from
-// `listed` to `holders`: one the page listed is the page's to offer, so one it
-// stops listing, archived elsewhere, is not offered again.
-export function pruneAdded(
-  listed: HolderRow[],
-  holders: HolderRow[],
-  added: HolderRow[],
-): HolderRow[] {
-  return added.filter(
-    ({ id }) =>
-      !listed.some((row) => row.id === id) &&
-      !holders.some((row) => row.id === id),
-  );
-}
-
-// The holder and portfolio the dialog can submit: a choice the page no longer
-// offers, archived from another tab, is unchosen.
-function offeredChoices(
-  holder: string,
-  portfolio: string,
-  holderOptions: HolderRow[],
+// The portfolio the dialog can submit: one the page no longer offers, archived
+// from another tab, is unchosen.
+export function offeredPortfolio(
   portfolios: PortfolioRow[],
-) {
-  return {
-    holder:
-      holder === SELF_HOLDER || holderOptions.some(({ id }) => id === holder)
-        ? holder
-        : "",
-    defaultPortfolioId: portfolios.some(({ id }) => id === portfolio)
-      ? portfolio
-      : "",
-  };
+  id: string,
+): PortfolioRow | undefined {
+  return portfolios.find((row) => row.id === id);
 }
-
-export type HolderChoices = {
-  rows: HolderRow[];
-  create: (input: unknown) => Promise<WriteResult>;
-};
-
-const NO_HOLDERS: HolderRow[] = [];
 
 // Creates, edits or restores an account, handing its fields to `onSubmit` as
-// it closes; a refused write opens it again with the fields and the alert. A
-// new holder can be added from the dialog without leaving it: its field has no
-// form of its own, so Enter there saves the holder and never the account.
+// it closes; a refused write opens it again with the fields and the alert.
 export function SourceConnectionDialog({
   title,
   description,
   submitLabel,
   initial,
   initialError,
-  holders,
   portfolios,
   returnFocusTo,
   savedRemovesOpener = false,
@@ -189,20 +116,19 @@ export function SourceConnectionDialog({
   submitLabel: string;
   initial: SourceConnectionFields;
   initialError?: string;
-  // The holders to choose from and how to add one; a page without holders
-  // asks for none, and every account is the user's own.
-  holders?: HolderChoices;
   portfolios: PortfolioRow[];
   // Where focus goes when the opener is gone (see useSavedFocus).
   returnFocusTo: () => HTMLElement | null;
   savedRemovesOpener?: boolean;
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
-  onSubmit: (fields: SourceConnectionFields, chosen: ChosenRows) => boolean;
+  onSubmit: (
+    fields: SourceConnectionFields,
+    portfolio: PortfolioRow,
+  ) => boolean;
 }) {
   const ids = {
     institution: useId(),
-    holder: useId(),
     portfolio: useId(),
     tax: useId(),
     alert: useId(),
@@ -210,105 +136,46 @@ export function SourceConnectionDialog({
   const [institutionPick, setInstitutionPick] = useState(() =>
     institutionChoice(initial.institution),
   );
-  const [holder, setHolder] = useState(initial.holder);
   const [portfolio, setPortfolio] = useState(initial.defaultPortfolioId);
   const [includeInTaxReport, setIncludeInTaxReport] = useState(
     initial.includeInTaxReport,
   );
-  // Holders created here, until the page's refresh lists them.
-  const [added, setAdded] = useState<HolderRow[]>([]);
-  const holderRows = holders?.rows ?? NO_HOLDERS;
-  const [listed, setListed] = useState(holderRows);
-  const [addingHolder, setAddingHolder] = useState(false);
-  // Each opening of the new holder's field gets a key; a save that lands
-  // after its field was closed only adds the holder, without choosing it.
-  const [holderFieldKey, setHolderFieldKey] = useState(0);
-  const openHolderField = useRef<number | null>(null);
   const { alert, setAlert, firstField, invalid, settle, pick } =
     useFieldAlert<AccountField>(initialError, refusedField, "institution");
-  // A new holder still saving holds the dialog and its submit: the holder it
-  // saves may be the one the account picks.
-  const [holderPending, setHolderPending] = useState(false);
   const institutionTrigger = useRef<HTMLButtonElement>(null);
   const otherInstitution = useRef<HTMLInputElement>(null);
-  const holderTrigger = useRef<HTMLButtonElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
 
-  if (listed !== holderRows) {
-    setListed(holderRows);
-    setAdded((rows) => pruneAdded(listed, holderRows, rows));
-  }
-
-  function showHolderField() {
-    const key = holderFieldKey + 1;
-    setHolderFieldKey(key);
-    openHolderField.current = key;
-    setAddingHolder(true);
-  }
-
-  function closeHolderField() {
-    openHolderField.current = null;
-    setAddingHolder(false);
-    holderTrigger.current?.focus();
-  }
-
-  function holderCreated(row: HolderRow, key: number) {
-    setAdded((rows) => [...rows, row]);
-    if (openHolderField.current !== key) return;
-    setHolder(row.id);
-    settle("holder");
-    closeHolderField();
-  }
-
-  const holderOptions = holderChoices(holderRows, added);
-  const offered = offeredChoices(holder, portfolio, holderOptions, portfolios);
-  // Without holders every account is the user's own.
-  const chosenHolder = holders ? offered.holder : SELF_HOLDER;
-  const chosenPortfolio = offered.defaultPortfolioId;
+  const offered = offeredPortfolio(portfolios, portfolio);
 
   function submit() {
-    if (holderPending) return;
-    const fields = {
-      institution: chosenInstitution(
-        institutionPick,
-        otherInstitution.current?.value ?? "",
-      ),
-      holder: chosenHolder,
-      includeInTaxReport,
-      defaultPortfolioId: chosenPortfolio,
-    };
+    const institution = chosenInstitution(
+      institutionPick,
+      otherInstitution.current?.value ?? "",
+    );
     if (institutionPick === "") {
       setAlert({ text: CHOICE_MESSAGES.institution, field: "institution" });
       institutionTrigger.current?.focus();
       return;
     }
-    if (normalizeName(fields.institution) === "") {
+    if (normalizeName(institution) === "") {
       setAlert({ text: MESSAGES.invalid, field: "institution" });
       otherInstitution.current?.focus();
       return;
     }
-    const missing = missingChoice(fields);
-    if (missing) {
-      setAlert({ text: CHOICE_MESSAGES[missing], field: missing });
-      (missing === "holder"
-        ? holderTrigger
-        : portfolioTrigger
-      ).current?.focus();
+    if (!offered) {
+      setAlert({ text: CHOICE_MESSAGES.portfolio, field: "portfolio" });
+      portfolioTrigger.current?.focus();
       return;
     }
-    // offeredChoices keeps only a listed portfolio; the user's own holder has
-    // no row.
-    const holderRow =
-      holderOptions.find(({ id }) => id === fields.holder) ?? null;
-    const portfolioRow = portfolios.find(
-      ({ id }) => id === fields.defaultPortfolioId,
-    );
-    if (!portfolioRow) return;
     setAlert(undefined);
-    if (!onSubmit(fields, { holder: holderRow, portfolio: portfolioRow })) {
-      return;
-    }
+    const fields = {
+      institution,
+      includeInTaxReport,
+      defaultPortfolioId: offered.id,
+    };
+    if (!onSubmit(fields, offered)) return;
     focus.markSaved();
     onClose();
   }
@@ -316,17 +183,9 @@ export function SourceConnectionDialog({
   return (
     <AppDialog
       onClose={onClose}
-      pending={holderPending}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
-      onEscapeKeyDown={(event) => {
-        // While the new holder's field is open, Escape closes it instead of
-        // the dialog.
-        if (!addingHolder) return;
-        event.preventDefault();
-        closeHolderField();
-      }}
     >
       <form
         className="grid gap-4"
@@ -352,64 +211,10 @@ export function SourceConnectionDialog({
             />
           </div>
 
-          {holders && (
-            <div className="grid gap-2">
-              <Label htmlFor={ids.holder}>Titular</Label>
-              <div className="flex gap-2">
-                <Select
-                  value={chosenHolder}
-                  onValueChange={pick("holder", setHolder)}
-                >
-                  <SelectTrigger
-                    ref={holderTrigger}
-                    id={ids.holder}
-                    className="min-w-0 flex-1"
-                    aria-invalid={invalid("holder")}
-                    aria-describedby={invalid("holder") && ids.alert}
-                    autoFocus={firstField === "holder"}
-                  >
-                    <SelectValue placeholder="Elegí un titular" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SELF_HOLDER}>
-                      {SELF_HOLDER_LABEL}
-                    </SelectItem>
-                    {holderOptions.map((row) => (
-                      <SelectItem key={row.id} value={row.id}>
-                        {row.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!addingHolder && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={showHolderField}
-                  >
-                    <Plus />
-                    Nuevo titular
-                  </Button>
-                )}
-              </div>
-              {addingHolder && (
-                <NewHolderField
-                  key={holderFieldKey}
-                  create={holders.create}
-                  onCreated={(row) => holderCreated(row, holderFieldKey)}
-                  onCancel={closeHolderField}
-                  onPendingChange={setHolderPending}
-                />
-              )}
-            </div>
-          )}
-
           <div className="grid gap-2">
             <Label htmlFor={ids.portfolio}>Cartera por defecto</Label>
             <Select
-              value={chosenPortfolio}
+              value={offered?.id ?? ""}
               onValueChange={pick("portfolio", setPortfolio)}
             >
               <SelectTrigger
@@ -447,14 +252,13 @@ export function SourceConnectionDialog({
           {alert && <FormAlert id={ids.alert}>{alert.text}</FormAlert>}
         </div>
         <DialogFooter>
-          <PendingButton
+          <Button
             type="submit"
             size="sm"
-            pending={holderPending}
             aria-describedby={alert ? ids.alert : undefined}
           >
             {submitLabel}
-          </PendingButton>
+          </Button>
         </DialogFooter>
       </form>
     </AppDialog>

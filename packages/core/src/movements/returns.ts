@@ -14,7 +14,7 @@ import {
 import { isIncome, isYield, type Movement, takesUnits } from "./movement";
 import type { LedgerStep } from "./replay";
 
-// Money between the holder and a holding on a date, in the view's unit:
+// Money between the user and a holding on a date, in the view's unit:
 // negative is paid in (a purchase or an adjustment in, at its cost, with its
 // charges), positive paid out (a sale less its charges, an adjustment out at
 // the cost it takes, an income less its withholding). Its kind says which,

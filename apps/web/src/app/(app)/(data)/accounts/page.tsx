@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import {
-  archiveHolder,
   archivePortfolio,
   archiveSourceConnection,
-  createHolder,
   createPortfolio,
   createSourceConnection,
-  renameHolder,
   renamePortfolio,
-  restoreHolder,
   restorePortfolio,
   restoreSourceConnection,
   updateSourceConnection,
@@ -19,7 +15,6 @@ import { isProductionDeployment } from "@/lib/deployment";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { navTitle } from "@/lib/navigation";
 import {
-  readHolders,
   readPortfolios,
   readSourceConnections,
 } from "@/lib/portfolio-setup/read";
@@ -50,10 +45,9 @@ export default async function AccountsPage({
     page: "/accounts" as const,
     params: await searchParams,
   };
-  const [sourceConnections, portfolios, holders] = await Promise.all([
+  const [sourceConnections, portfolios] = await Promise.all([
     readSourceConnections(client, context),
     readPortfolios(client, context),
-    readHolders(client, context),
   ]);
   return (
     <div>
@@ -61,15 +55,6 @@ export default async function AccountsPage({
       <AccountsSetup
         sourceConnections={sourceConnections}
         portfolios={portfolios}
-        holders={{
-          view: holders,
-          actions: {
-            create: createHolder,
-            rename: renameHolder,
-            archive: archiveHolder,
-            restore: restoreHolder,
-          },
-        }}
         actions={{
           sourceConnections: {
             create: createSourceConnection,

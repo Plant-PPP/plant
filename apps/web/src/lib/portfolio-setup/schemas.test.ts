@@ -1,40 +1,49 @@
+import { NAME_LIMITS } from "./limits";
 import { normalizeName } from "./normalize-name";
 import {
   idSchema,
-  nameInputSchema,
+  portfolioInputSchema,
   sourceConnectionInputSchema,
 } from "./schemas";
 
-const schema = nameInputSchema(40);
+const MAX = NAME_LIMITS.portfolios.name;
 
-describe("nameInputSchema", () => {
+describe("portfolioInputSchema", () => {
   test("trims the name", () => {
-    expect(schema.parse({ name: "  Largo plazo " })).toEqual({
+    expect(portfolioInputSchema.parse({ name: "  Largo plazo " })).toEqual({
       name: "Largo plazo",
     });
   });
 
   test.each(["", "   ", "　"])("refuses a blank name %j", (name) => {
-    expect(schema.safeParse({ name }).success).toBe(false);
+    expect(portfolioInputSchema.safeParse({ name }).success).toBe(false);
   });
 
   test("accepts a name at the limit and refuses one past it", () => {
-    expect(schema.safeParse({ name: "a".repeat(40) }).success).toBe(true);
-    expect(schema.safeParse({ name: "a".repeat(41) }).success).toBe(false);
+    expect(
+      portfolioInputSchema.safeParse({ name: "a".repeat(MAX) }).success,
+    ).toBe(true);
+    expect(
+      portfolioInputSchema.safeParse({ name: "a".repeat(MAX + 1) }).success,
+    ).toBe(false);
   });
 
   // char_length counts code points, so an emoji is one character.
   test("counts an emoji as one character", () => {
-    expect(schema.safeParse({ name: "🌱".repeat(40) }).success).toBe(true);
-    expect(schema.safeParse({ name: "🌱".repeat(41) }).success).toBe(false);
+    expect(
+      portfolioInputSchema.safeParse({ name: "🌱".repeat(MAX) }).success,
+    ).toBe(true);
+    expect(
+      portfolioInputSchema.safeParse({ name: "🌱".repeat(MAX + 1) }).success,
+    ).toBe(false);
   });
 
   test("normalizes to NFC and single spaces", () => {
-    expect(schema.parse({ name: "Jubilacio\u0301n  de\tlargo plazo" })).toEqual(
-      {
-        name: "Jubilación de largo plazo",
-      },
-    );
+    expect(
+      portfolioInputSchema.parse({ name: "Jubilacio\u0301n  de\tlargo plazo" }),
+    ).toEqual({
+      name: "Jubilación de largo plazo",
+    });
   });
 
   test.each([
@@ -59,7 +68,7 @@ describe("nameInputSchema", () => {
     "Principal\u{1D159}",
     "Principal\u{16FE4}",
   ])("refuses %j", (name) => {
-    expect(schema.safeParse({ name }).success).toBe(false);
+    expect(portfolioInputSchema.safeParse({ name }).success).toBe(false);
   });
 
   test.each([
@@ -70,37 +79,43 @@ describe("nameInputSchema", () => {
     "👍🏽 Largo plazo",
     "🇦🇷",
   ])("keeps the emoji %j", (name) => {
-    expect(schema.safeParse({ name }).success).toBe(true);
+    expect(portfolioInputSchema.safeParse({ name }).success).toBe(true);
   });
 
   test("drops the variation selector after an emoji shown as one", () => {
-    expect(schema.parse({ name: "Ahorro \u{1F44D}\ufe0f" })).toEqual({
+    expect(
+      portfolioInputSchema.parse({ name: "Ahorro \u{1F44D}\ufe0f" }),
+    ).toEqual({
       name: "Ahorro \u{1F44D}",
     });
-    expect(schema.parse({ name: "Ahorro \u{1F44D}\ufe0f\ufe0f" })).toEqual({
+    expect(
+      portfolioInputSchema.parse({ name: "Ahorro \u{1F44D}\ufe0f\ufe0f" }),
+    ).toEqual({
       name: "Ahorro \u{1F44D}",
     });
-    expect(schema.parse({ name: "Ahorro \u2764\ufe0f" })).toEqual({
-      name: "Ahorro \u2764\ufe0f",
-    });
+    expect(portfolioInputSchema.parse({ name: "Ahorro \u2764\ufe0f" })).toEqual(
+      {
+        name: "Ahorro \u2764\ufe0f",
+      },
+    );
   });
 
   test("refuses a huge name without scanning it", () => {
-    expect(schema.safeParse({ name: "a".repeat(1_000_000) }).success).toBe(
-      false,
-    );
-    expect(schema.safeParse({ name: `a${" ".repeat(300)}b` }).success).toBe(
-      true,
-    );
+    expect(
+      portfolioInputSchema.safeParse({ name: "a".repeat(1_000_000) }).success,
+    ).toBe(false);
+    expect(
+      portfolioInputSchema.safeParse({ name: `a${" ".repeat(300)}b` }).success,
+    ).toBe(true);
   });
 
   test("collapses spaces before counting the limit", () => {
     const name = `${"a".repeat(19)}  ${"a".repeat(20)}`;
-    expect(schema.safeParse({ name }).success).toBe(true);
+    expect(portfolioInputSchema.safeParse({ name }).success).toBe(true);
   });
 
   test("refuses a missing name", () => {
-    expect(schema.safeParse({}).success).toBe(false);
+    expect(portfolioInputSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -120,37 +135,47 @@ describe("idSchema", () => {
 });
 
 describe("sourceConnectionInputSchema", () => {
-  const account = sourceConnectionInputSchema(60);
   const PORTFOLIO = "22222222-2222-4222-8222-222222222222";
-  const HOLDER = "33333333-3333-4333-8333-333333333333";
   const valid = {
     institution: " Bull  Market ",
-    holder: "self",
     includeInTaxReport: true,
     defaultPortfolioId: PORTFOLIO,
   };
 
   test("normalizes the institution like a name", () => {
-    expect(account.parse(valid)).toEqual({
+    expect(sourceConnectionInputSchema.parse(valid)).toEqual({
       ...valid,
       institution: "Bull Market",
     });
   });
 
-  test("takes the user or a holder's id", () => {
-    expect(account.parse({ ...valid, holder: HOLDER }).holder).toBe(HOLDER);
+  test("accepts an institution at the limit", () => {
+    const institution = "a".repeat(NAME_LIMITS.source_connections.institution);
+    expect(
+      sourceConnectionInputSchema.parse({ ...valid, institution }).institution,
+    ).toBe(institution);
+  });
+
+  test("drops a field it does not know", () => {
+    expect(
+      sourceConnectionInputSchema.parse({ ...valid, holder: "self" }),
+    ).not.toHaveProperty("holder");
   });
 
   test.each([
-    ["no holder", { holder: undefined }],
-    ["an empty holder", { holder: "" }],
-    ["a holder that is not an id", { holder: "Lucía" }],
     ["no portfolio", { defaultPortfolioId: undefined }],
     ["a portfolio that is not an id", { defaultPortfolioId: "Principal" }],
     ["a text flag", { includeInTaxReport: "true" }],
-    ["an institution past the limit", { institution: "a".repeat(61) }],
+    [
+      "an institution past the limit",
+      {
+        institution: "a".repeat(NAME_LIMITS.source_connections.institution + 1),
+      },
+    ],
     ["a blank institution", { institution: " " }],
   ])("refuses %s", (_, change) => {
-    expect(account.safeParse({ ...valid, ...change }).success).toBe(false);
+    expect(
+      sourceConnectionInputSchema.safeParse({ ...valid, ...change }).success,
+    ).toBe(false);
   });
 });
