@@ -242,7 +242,8 @@ export function closesOf(
       complete: held.complete && owed.complete,
     };
   };
-  // What each of those moved at, which the month's detail shows.
+  // What each opening balance and adjustment out moved at, which the month's
+  // detail shows.
   const worths = new Map<string, string>();
   // Units that come in already held (an opening balance) or leave the
   // holdings without a trade (an adjustment out) move at what they were worth
