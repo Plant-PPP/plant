@@ -27,7 +27,7 @@ export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
 // portfolio its units leave and its second the one they arrive in, both with
 // its quantity; its price is the cost the units arrive with, sent when the
 // user changed it (`priceEdited`) and left it filled, else they carry the cost
-// they had. A yield's price shows the day's quote until the user changes it,
+// they had. A new yield's price shows the day's quote until the user changes it,
 // and a yield given as the balance at the end of its day keeps it in
 // `balance` (null when it is given as units earned or lost).
 export type MovementFields = {
@@ -158,14 +158,14 @@ export function operationFields(
   };
 }
 
-// The fields as another kind: a transfer takes its quantity out of `from`
-// into a portfolio still to choose, and a yield is `from`'s, both with no
-// charges or price; leaving either keeps the first part with no price, and
-// any other change keeps every part.
+// The fields as another kind: a transfer takes its quantity out of
+// `portfolio` into one still to choose, and a yield is `portfolio`'s, both
+// with no charges or price; leaving either keeps the first part with no
+// price, and any other change keeps every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,
-  from: string,
+  portfolio: string,
 ): MovementFields {
   const fresh = {
     ...fields,
@@ -180,14 +180,14 @@ export function withKind(
       ...fresh,
       charges: [],
       parts: [
-        { portfolioId: from, size },
+        { portfolioId: portfolio, size },
         { portfolioId: "", size },
       ],
     };
   }
   if (kind === "yield") {
     const size = fields.parts[0]?.size ?? "";
-    return { ...fresh, charges: [], parts: [{ portfolioId: from, size }] };
+    return { ...fresh, charges: [], parts: [{ portfolioId: portfolio, size }] };
   }
   if (fields.kind === "transfer" || fields.kind === "yield") {
     return { ...fresh, parts: fields.parts.slice(0, 1) };
@@ -195,16 +195,31 @@ export function withKind(
   return { ...fields, kind };
 }
 
+// The portfolio withKind gives a kind: a yield's holding, a transfer's source,
+// or else the first part's.
+export const portfolioFor = (
+  kind: MovementKind,
+  homes: { transfer?: string; yield?: string },
+  fields: MovementFields,
+): string =>
+  (kind === "yield" ? homes.yield : undefined) ??
+  homes.transfer ??
+  fields.parts[0]?.portfolioId ??
+  "";
+
 // The fields as the dialog sends them: a yield whose value the user left
-// takes the day's quote it shows, and keeps following the quote if the dialog
-// opens again with them.
+// takes the day's quote it shows (none without one), and keeps following the
+// quote if the dialog opens again with them.
 export const withShownPrice = (
   fields: MovementFields,
   suggested: string | null,
   type: InstrumentType | null,
 ): MovementFields =>
-  fields.kind === "yield" && !fields.priceEdited && suggested !== null
-    ? { ...fields, price: quotedInput(suggested, type) }
+  fields.kind === "yield" && !fields.priceEdited
+    ? {
+        ...fields,
+        price: suggested === null ? "" : quotedInput(suggested, type),
+      }
     : fields;
 
 // The kinds only some pages and holdings take.
@@ -344,8 +359,7 @@ export const MOVEMENT_FIELD_MESSAGES: Record<MovementField, string> = {
   note: "La nota puede tener hasta 200 caracteres.",
 };
 
-// A yield's one portfolio is the holding's: only its value, quantity or
-// balance can be wrong.
+// A yield's own words for its value and its one part.
 const YIELD_MESSAGES = {
   price: "Ingresá un valor de 0 o más.",
   quantity: "Ingresá una cantidad mayor a 0.",

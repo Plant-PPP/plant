@@ -257,6 +257,16 @@ describe("a yield", () => {
     ]);
   });
 
+  it("does not ask again for a value already entered", () => {
+    const html = renderYield(
+      { ...earning, price: "61000", priceEdited: true },
+      null,
+    );
+    expect(html).toContain('value="61000"');
+    expect(html).toContain("No hay precio para ese día.");
+    expect(html).not.toContain("ingresá el valor");
+  });
+
   it("takes the final balance instead of the units", () => {
     const html = renderYield({ ...earning, balance: "3" }, "61000");
     expect(html).toContain("Saldo final");

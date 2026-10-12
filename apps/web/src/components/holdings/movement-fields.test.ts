@@ -12,6 +12,7 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
+  portfolioFor,
   withKind,
   withShownPrice,
 } from "./movement-fields";
@@ -435,7 +436,7 @@ describe("a yield's fields", () => {
   const input = (fields: typeof earning) =>
     operationInputSchema.parse(toOperationInput(fields, "crypto"));
 
-  it("keeps one portfolio, with no charges and the day's quote for a price", () => {
+  it("keeps one portfolio, with no charges and no price until the dialog suggests one", () => {
     expect(earning).toMatchObject({
       kind: "yield",
       price: "",
@@ -521,7 +522,7 @@ describe("a yield's fields", () => {
     });
   });
 
-  it("is the portfolio it is moved to, whatever the part showed", () => {
+  it("is the holding's portfolio, whatever the part showed", () => {
     expect(
       withKind(
         {
@@ -592,9 +593,30 @@ describe("a yield's fields", () => {
     });
     const typed = { ...earning, price: "1", priceEdited: true };
     expect(withShownPrice(typed, "61000.5", "crypto")).toBe(typed);
-    expect(withShownPrice(earning, null, "crypto")).toBe(earning);
+    expect(withShownPrice(earning, null, "crypto")).toEqual(earning);
     const moving = withKind(earning, "transfer", PRINCIPAL);
     expect(withShownPrice(moving, "61000.5", "crypto")).toBe(moving);
+  });
+
+  it("sends no value it does not show once the day has no quote", () => {
+    const reopened = withShownPrice(earning, "61000.5", "crypto");
+    const sent = withShownPrice(reopened, null, "crypto");
+    expect(sent.price).toBe("");
+    expect(
+      operationInputSchema.safeParse(toOperationInput(sent, "crypto")).success,
+    ).toBe(false);
+  });
+
+  it("goes into the holding's portfolio, a transfer out of its source", () => {
+    const other = {
+      ...newMovementFields(defaults),
+      parts: [{ portfolioId: LARGO, size: "1" }],
+    };
+    const homes = { transfer: "t", yield: PRINCIPAL };
+    expect(portfolioFor("yield", homes, other)).toBe(PRINCIPAL);
+    expect(portfolioFor("transfer", homes, other)).toBe("t");
+    expect(portfolioFor("purchase", {}, other)).toBe(LARGO);
+    expect(portfolioFor("yield", {}, other)).toBe(LARGO);
   });
 
   it("leaves the balance and the value behind as another kind", () => {

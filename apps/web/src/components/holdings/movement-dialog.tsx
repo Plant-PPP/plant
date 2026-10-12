@@ -40,7 +40,7 @@ import {
   priceBasisLabel,
   quotedInput,
 } from "@/lib/holdings/price-input";
-import type { QuoteQuery } from "@/lib/holdings/movements-input";
+import type { MovementsInput } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 import type {
@@ -55,6 +55,7 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
+  portfolioFor,
   withKind,
   withShownPrice,
 } from "./movement-fields";
@@ -101,7 +102,7 @@ export function MovementDialog({
   };
   yields?: {
     portfolio: string;
-    quoteOn: (query: QuoteQuery) => string | null;
+    quoteOn: NonNullable<MovementsInput["quoteOn"]>;
   };
   initial: MovementFields;
   initialError?: string;
@@ -288,9 +289,11 @@ export function MovementDialog({
                   withKind(
                     current,
                     value,
-                    value === "yield" && yields
-                      ? yields.portfolio
-                      : (transfer?.from ?? current.parts[0]?.portfolioId ?? ""),
+                    portfolioFor(
+                      value,
+                      { transfer: transfer?.from, yield: yields?.portfolio },
+                      current,
+                    ),
                   ),
                 ),
             )}
@@ -401,7 +404,9 @@ export function MovementDialog({
                 <p>
                   {moving
                     ? "Si lo dejás vacío, entran con el costo que tenían."
-                    : `No hay precio para ese día: ingresá el valor ${basis}.`}
+                    : fields.priceEdited && fields.price.trim() !== ""
+                      ? "No hay precio para ese día."
+                      : `No hay precio para ese día: ingresá el valor ${basis}.`}
                 </p>
               ) : fields.priceEdited ? (
                 <div>

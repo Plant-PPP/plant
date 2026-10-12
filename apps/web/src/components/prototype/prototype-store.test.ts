@@ -822,3 +822,22 @@ describe("entry order", () => {
     expect(refused.state).toBe(before);
   });
 });
+
+it("names a part's missing portfolio before another part's oversell", () => {
+  const input = {
+    kind: "sale",
+    source_connection_id: IOL,
+    instrument_symbol: "AAPL",
+    date: "2026-10-01",
+    currency: "ARS",
+    price: "20000",
+    parts: [
+      { portfolio_id: PRINCIPAL, quantity: "100000" },
+      { portfolio_id: NEW_ID, quantity: "1" },
+    ],
+  };
+  expect(writeOperation(state, input, options())).toEqual({
+    state,
+    result: { ok: false, code: "not_found" },
+  });
+});

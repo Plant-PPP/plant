@@ -1,5 +1,5 @@
 import { quantityOn, type Trade } from "@plant/core";
-import { exactOf, minus, stored } from "@plant/shared";
+import { exactOf, minus, plus, stored } from "@plant/shared";
 
 import { lineLabel, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -121,7 +121,7 @@ describe("a yield", () => {
     const before = positionOf(state);
     const after = positionOf(earned);
     expect(after.quantity).toBe(
-      stored(minus(exactOf(before.quantity), exactOf("-2"))),
+      stored(plus(exactOf(before.quantity), exactOf("2"))),
     );
     for (const field of ["cost", "income"] as const) {
       expect(
@@ -160,7 +160,7 @@ describe("a yield", () => {
   });
 
   it("refuses losing more units than were held", () => {
-    const more = stored(minus(exactOf(heldOn(state)), exactOf("-1")));
+    const more = stored(plus(exactOf(heldOn(state)), exactOf("1")));
     expect(refusal(yielded({ direction: "out", quantity: more }))).toEqual({
       ok: false,
       code: "oversold",
@@ -256,7 +256,7 @@ describe("a yield", () => {
 describe("a yield given as the balance at the end of its day", () => {
   const held = heldOn(state);
   const plusUnits = (units: string) =>
-    stored(minus(exactOf(held), exactOf(`-${units}`)));
+    stored(plus(exactOf(held), exactOf(units)));
 
   it("records what came in above what was held", () => {
     const after = written(yielded({ balance: plusUnits("3") }));
@@ -300,7 +300,7 @@ describe("a yield given as the balance at the end of its day", () => {
 });
 
 describe("a balance and the day it is for", () => {
-  const purchase = (date: string, quantity: string, kind = "purchase") => ({
+  const trade = (date: string, quantity: string, kind = "purchase") => ({
     kind,
     source_connection_id: IOL,
     instrument_symbol: "AAPL",
@@ -313,10 +313,10 @@ describe("a balance and the day it is for", () => {
   it("counts what was held at the end of its own day, not today", () => {
     const sold = writeOperation(
       state,
-      purchase("2026-10-05", "1", "sale"),
+      trade("2026-10-05", "1", "sale"),
       options("e5000000-0000-4000-8000-00000000000a"),
     ).state;
-    const balance = stored(minus(exactOf(heldOn(sold)), exactOf("-3")));
+    const balance = stored(plus(exactOf(heldOn(sold)), exactOf("3")));
     const after = written(yielded({ balance }), sold);
     expect(
       movementsOf(after).find((each) => each.operation_id === YIELD),
@@ -327,7 +327,7 @@ describe("a balance and the day it is for", () => {
     const first = written(yielded({ direction: "in", quantity: "1" }));
     const bought = writeOperation(
       first,
-      purchase(DAY, "5"),
+      trade(DAY, "5"),
       options("e5000000-0000-4000-8000-000000000009"),
     ).state;
     // Fewer than the 5 bought after it: kept before the purchase, the loss
@@ -337,10 +337,10 @@ describe("a balance and the day it is for", () => {
   });
 
   it("ends the day at the balance when a purchase is edited into one", () => {
-    const first = written(purchase(DAY, "1"));
+    const first = written(trade(DAY, "1"));
     const bought = writeOperation(
       first,
-      purchase(DAY, "5"),
+      trade(DAY, "5"),
       options("e5000000-0000-4000-8000-00000000000b"),
     ).state;
     const after = written(yielded({ balance: "2" }), bought, true);
@@ -353,7 +353,7 @@ describe("a balance and the day it is for", () => {
   it("refuses a balance that leaves a later sale selling more than held", () => {
     const later = writeOperation(
       state,
-      purchase(
+      trade(
         "2026-10-05",
         stored(minus(exactOf(heldOn(state)), exactOf("1"))),
         "sale",

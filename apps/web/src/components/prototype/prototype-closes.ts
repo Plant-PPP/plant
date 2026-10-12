@@ -124,12 +124,11 @@ function holdingsAt(
 }
 
 // Each instrument's price on its latest trading day up to `date`, which
-// values it on a day no feed or manual price covers: that day's purchases
-// and sales averaged by their units, so how they split across holdings or
-// which was recorded first does not matter; in the currency most of them
-// traded in. A yield's price is what a unit was worth that day, so it counts
-// too. An opening balance's or an adjustment's price is a cost, not a
-// trade's.
+// values it on a day no feed or manual price covers: that day's purchases,
+// sales and yields averaged by their units, so how they split across holdings
+// or which was recorded first does not matter; in the currency most of them
+// traded in. An opening balance's or an adjustment's price is a cost, not
+// what a unit was worth.
 function lastTradePrices(
   ledgers: readonly Ledger[],
   date: string,

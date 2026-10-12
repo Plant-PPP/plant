@@ -60,6 +60,34 @@ it("marks the closed months a deleted operation changes", () => {
   expect(marked.recalculated.has("2026-10")).toBe(false);
 });
 
+it("marks no closed month before a write's own", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const after = writeOperation(
+    state,
+    {
+      kind: "purchase",
+      source_connection_id: iol.id,
+      instrument_symbol: "AAPL",
+      date: "2026-09-15",
+      currency: "ARS",
+      price: "30000",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, quantity: "1" }],
+    },
+    { operationId: "late", newId: () => crypto.randomUUID() },
+  );
+  expect(after.result.ok).toBe(true);
+  const marked = markRecalculated(state, after.state).recalculated;
+  expect(
+    [...marked.keys()].filter(
+      (period) => period < "2026-09" && !state.recalculated.has(period),
+    ),
+  ).toEqual([]);
+  expect(marked.get("2026-09")).toBe(TODAY);
+});
+
 it("marks nothing for a write that moves no month's movements", () => {
   const priced = setPrice(state, {
     symbol: "KO",

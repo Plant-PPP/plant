@@ -973,13 +973,16 @@ export function writeOperation(
       );
     }
   }
+  const portfolios = new Map<string, PortfolioRow>();
   for (const { portfolio_id: portfolioId } of given) {
-    if (!state.portfolios.some(({ id }) => id === portfolioId)) {
+    const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
+    if (!portfolio) {
       return refused(state, {
         ok: false,
         code: archivedCode(state, { portfolioId }) ?? "not_found",
       });
     }
+    portfolios.set(portfolioId, portfolio);
   }
   // A yield given as a balance is the difference from what its holding held
   // at the end of that day.
@@ -1023,7 +1026,7 @@ export function writeOperation(
     const touched = new Map(without);
     for (const [index, part] of parts.entries()) {
       const { portfolio_id: portfolioId, ...ownFields } = part;
-      const portfolio = state.portfolios.find(({ id }) => id === portfolioId)!;
+      const portfolio = portfolios.get(portfolioId)!;
       const stored = holdingIn(
         next,
         account.id,

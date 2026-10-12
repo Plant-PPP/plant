@@ -1,9 +1,10 @@
-import type {
-  Movement,
-  ChargeKind,
-  Denominator,
-  Holding,
-  MovementKind,
+import {
+  type ChargeKind,
+  type Denominator,
+  type Holding,
+  isYield,
+  type Movement,
+  type MovementKind,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
@@ -51,8 +52,10 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
 };
 
 const movementLabel = (movement: Movement): string => {
-  if (movement.kind === "yield") {
-    return movement.direction === "in" ? "Rendimiento" : "Rendimiento negativo";
+  if (isYield(movement)) {
+    return movement.direction === "in"
+      ? MOVEMENT_KIND_LABELS.yield
+      : `${MOVEMENT_KIND_LABELS.yield} negativo`;
   }
   return "direction" in movement
     ? `${MOVEMENT_KIND_LABELS[movement.kind]} (${movement.direction === "in" ? "entran" : "salen"})`
