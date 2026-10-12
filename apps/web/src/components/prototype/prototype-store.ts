@@ -689,8 +689,8 @@ export const refusedWrite = (
   code: Extract<WriteResult, { ok: false }>["code"],
 ): Write<WriteResult> => refused(state, { ok: false, code });
 
-// An instrument's price on a date in its own currency, from the feeds or else
-// the user's manual price; none when neither has one. prototype-closes'
+// An instrument's price on a date when quoted in `currency`, from the feeds or
+// else the user's manual price; none when neither has one in it. prototype-closes'
 // snapshotAt values a day on its own, in any unit and from trades when nothing
 // quotes it; the two become one if a suggestion ever takes that fallback.
 export function priceOn(

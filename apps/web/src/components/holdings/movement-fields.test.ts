@@ -42,6 +42,7 @@ it("sends one purchase split across portfolios, with its charges", () => {
       { kind: "other" as const, label: "Custodia", amount: "1" },
     ],
     reference: " BIN-1 ",
+    note: " Por la tarde ",
   };
   expect(
     operationInputSchema.parse(toOperationInput(fields, "crypto")),
@@ -62,7 +63,7 @@ it("sends one purchase split across portfolios, with its charges", () => {
       { kind: "other", label: "Custodia", amount: "1" },
     ],
     reference: "BIN-1",
-    note: null,
+    note: "Por la tarde",
   });
 });
 
