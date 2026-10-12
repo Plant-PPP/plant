@@ -10,7 +10,6 @@ import {
   type ManualPrice,
   manualPriceSchema,
   isIncome,
-  isTrade,
   isOrderRefusal,
   type MovementDraft,
   type SaleResult,
@@ -307,57 +306,76 @@ export function positionsOf(
   return positions;
 }
 
-// The transfer a suggestion writes, in a state it throws away.
+// The operation id a new transfer's suggestion writes under, in a state it
+// throws away.
 const SUGGESTED = "ffffffff-ffff-4fff-bfff-ffffffffffff";
 
 // The cost per unit a transfer's units carry when it is written with their
 // cost left to them, in its currency: the write itself, run and thrown away,
-// so the suggestion is what saving it carries. None when it cannot be written.
+// so the suggestion is what saving it carries. None when it cannot be written
+// or its cost has no value in that currency.
 export function suggestedTransferCost(
   state: PrototypeState,
   { input, operationId }: TransferCostQuery,
 ): string | null {
-  const parsed = operationInputSchema.safeParse(input);
+  // Whatever cost the user typed, the units carry their own.
+  const parsed = operationInputSchema.safeParse(
+    typeof input === "object" &&
+      input !== null &&
+      "parts" in input &&
+      Array.isArray(input.parts)
+      ? {
+          ...input,
+          parts: input.parts.map((part: unknown) =>
+            typeof part === "object" && part !== null && "price" in part
+              ? { ...part, price: null }
+              : part,
+          ),
+        }
+      : input,
+  );
   if (!parsed.success || parsed.data.kind !== "transfer") return null;
+  const operation = parsed.data;
   const id = operationId ?? SUGGESTED;
   let ids = 0;
-  const { state: written, result } = writeOperation(
-    state,
-    {
-      ...parsed.data,
-      parts: parsed.data.parts.map((part) => ({ ...part, price: null })),
-    },
-    {
-      operationId: id,
-      replacing: operationId !== null,
-      newId: () =>
-        `ffffffff-ffff-4fff-bfff-${String((ids += 1)).padStart(12, "0")}`,
-    },
-  );
+  const { state: written, result } = writeOperation(state, operation, {
+    operationId: id,
+    replacing: operationId !== null,
+    newId: () => `${id}-${(ids += 1)}`,
+  });
   if (!result.ok) return null;
+  const leaving = operation.parts.find((part) => part.direction === "out")!;
+  const holding = holdingIn(
+    written,
+    operation.source_connection_id,
+    operation.instrument_symbol,
+    leaving.portfolio_id,
+  )!.holding.id;
+  const own = written.movements.get(holding)!;
+  const index = own.findIndex((each) => each.operation_id === id);
   const unit = lift(
-    { amount: { n: 0n, d: 1n }, currency: parsed.data.currency },
+    { amount: { n: 0n, d: 1n }, currency: operation.currency },
     referenceUnit(state.referenceDollar),
     state.referenceDollar,
   ).denominator;
-  for (const [holdingId, own] of written.movements) {
-    const index = own.findIndex(
-      (each) => each.operation_id === id && takesUnits(each),
-    );
-    const movement = own[index];
-    if (!movement || !isTrade(movement)) continue;
-    const steps = stepsOf(written, holdingId, unit);
-    const before = index === 0 ? EMPTY_POSITION : steps[index - 1]!.position;
-    const after = steps[index]!.position;
-    if (!before.money || !after.money) return null;
-    return stored(
-      over(
-        exactOf(difference(before.money.cost, after.money.cost)),
-        exactOf(movement.quantity),
-      ),
-    );
-  }
-  return null;
+  // Replayed apart from stepsOf, so the state thrown away leaves its cache to
+  // the real one.
+  const steps = replayHoldings(
+    groupOf(written, holding).flatMap(
+      (each) => written.movements.get(each) ?? [],
+    ),
+    unit,
+    state.referenceDollar,
+  ).get(holding)!;
+  const { amount } = lineOf(
+    own[index]!,
+    index === 0 ? EMPTY_POSITION : steps[index - 1]!.position,
+    steps[index]!,
+    operationOf(written, id)!,
+  );
+  return amount === null
+    ? null
+    : stored(over(exactOf(amount), exactOf(leaving.quantity)));
 }
 
 // The years with any sale, newest first.

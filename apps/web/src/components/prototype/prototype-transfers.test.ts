@@ -411,9 +411,29 @@ describe("the cost a transfer suggests", () => {
     expect(suggested(state, transfer("100000"))).toBeNull();
   });
 
+  it("ignores the cost typed, even one that does not parse", () => {
+    expect(suggested(state, transfer("2", { price: "abc" }))).toBe(
+      suggested(state, transfer("2")),
+    );
+    expect(suggested(state, transfer("2", { price: "1" }))).toBe(
+      suggested(state, transfer("2")),
+    );
+  });
+
+  it("has none for an edit that cannot be written", () => {
+    const moved = written(transfer("2"));
+    expect(suggested(moved, transfer("100000"), true)).toBeNull();
+  });
+
   it("changes nothing", () => {
-    const before = state.movements;
+    const copy = new Map(state.movements);
     suggested(state, transfer("2"));
-    expect(state.movements).toBe(before);
+    expect(appleIn(state, LARGO)).toBeUndefined();
+    expect(state.movements).toEqual(copy);
+    expect(
+      [...state.movements.values()]
+        .flat()
+        .some((each) => each.operation_id.startsWith("ffffffff-")),
+    ).toBe(false);
   });
 });
