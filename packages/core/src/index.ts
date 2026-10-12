@@ -103,6 +103,7 @@ export {
 export {
   type Admission,
   admitMovement,
+  isOrderRefusal,
   admitMovements,
   type MovementDraft,
   type MovementRefusal,

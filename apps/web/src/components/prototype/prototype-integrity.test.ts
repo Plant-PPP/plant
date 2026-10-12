@@ -81,7 +81,10 @@ function integrity(state: PrototypeState): string[] {
       problems.push(`${id}: holds ${held}, its movements leave ${quantity}`);
     }
   }
-  const parts = new Map<string, { kind: string; date: string }[]>();
+  const parts = new Map<
+    string,
+    { kind: string; date: string; entryOrder: number }[]
+  >();
   for (const [holdingId, own] of state.movements) {
     if (!holdings.has(holdingId)) {
       problems.push(`${holdingId}: movements of no holding`);
@@ -92,8 +95,16 @@ function integrity(state: PrototypeState): string[] {
       }
       parts.set(movement.operation_id, [
         ...(parts.get(movement.operation_id) ?? []),
-        { kind: movement.kind, date: movement.date },
+        {
+          kind: movement.kind,
+          date: movement.date,
+          entryOrder: movement.entry_order,
+        },
       ]);
+      // Written as !(<) so a missing entry order fails too.
+      if (!(movement.entry_order < state.nextEntryOrder)) {
+        problems.push(`${movement.id}: an entry order not below the next`);
+      }
     }
   }
   for (const [operationId, each] of parts) {
@@ -103,6 +114,17 @@ function integrity(state: PrototypeState): string[] {
     if (each.some((part) => part.date !== each[0]!.date)) {
       problems.push(`${operationId}: parts on different dates`);
     }
+    if (each.some((part) => part.entryOrder !== each[0]!.entryOrder)) {
+      problems.push(`${operationId}: parts in different entry orders`);
+    }
+  }
+  const byEntryOrder = new Map<number, string>();
+  for (const [operationId, [first]] of parts) {
+    const other = byEntryOrder.get(first!.entryOrder);
+    if (other !== undefined) {
+      problems.push(`${operationId}: shares its entry order with ${other}`);
+    }
+    byEntryOrder.set(first!.entryOrder, operationId);
   }
   return problems;
 }
@@ -206,6 +228,57 @@ it("stays consistent through every kind of write", () => {
     ),
   );
   apply("the sale deleted", (s) => deleteOperation(s, sale));
+  apply("a sell-out", (s) =>
+    writeOperation(
+      s,
+      trade("sale", "AAPL", "IOL", "2026-09-22", [
+        {
+          portfolio_id: PRINCIPAL,
+          quantity: s.holdings.find(
+            (each) => each.holding.id === idOf("AAPL", PRINCIPAL),
+          )!.holding.amount,
+        },
+      ]),
+      write(),
+    ),
+  );
+  apply("a buy-back the same day", (s) =>
+    writeOperation(
+      s,
+      trade("purchase", "AAPL", "IOL", "2026-09-22", [
+        { portfolio_id: PRINCIPAL, quantity: "5" },
+      ]),
+      write(),
+    ),
+  );
+  const moved = newId();
+  apply("a purchase", (s) =>
+    writeOperation(
+      s,
+      trade("purchase", "AAPL", "IOL", "2026-09-23", [
+        { portfolio_id: PRINCIPAL, quantity: "2" },
+      ]),
+      write(moved),
+    ),
+  );
+  apply("a sale entered after it", (s) =>
+    writeOperation(
+      s,
+      trade("sale", "AAPL", "IOL", "2026-09-24", [
+        { portfolio_id: PRINCIPAL, quantity: "6" },
+      ]),
+      write(),
+    ),
+  );
+  apply("the purchase moved to the sale's day, keeping its place", (s) =>
+    writeOperation(
+      s,
+      trade("purchase", "AAPL", "IOL", "2026-09-24", [
+        { portfolio_id: PRINCIPAL, quantity: "2" },
+      ]),
+      { ...write(moved), replacing: true },
+    ),
+  );
   apply("the split deleted", (s) => deleteOperation(s, split));
   apply("an instrument holding created with a quantity", (s) =>
     createHolding(

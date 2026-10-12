@@ -1,4 +1,4 @@
-import { admitMovement, admitMovements } from "./admit";
+import { admitMovement, admitMovements, isOrderRefusal } from "./admit";
 import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 
 const TODAY = "2026-10-12";
@@ -143,10 +143,36 @@ describe("admitMovements", () => {
     });
   });
 
+  it("admits a sale of what was bought earlier the same day", () => {
+    const bought = trade("purchase", "10", "100", { date: "2026-03-02" });
+    const sold = trade("sale", "10", "101", { date: "2026-03-02" });
+    expect(admitMovements({ prior: null, after: [sold, bought] })).toEqual({
+      ok: true,
+      quantity: "0",
+    });
+  });
+
+  it("refuses a sale entered before that day's purchase with nothing held", () => {
+    const sold = trade("sale", "10", "101", { date: "2026-03-02" });
+    const bought = trade("purchase", "10", "100", { date: "2026-03-02" });
+    expect(admitMovements({ prior: null, after: [bought, sold] })).toEqual({
+      ok: false,
+      code: "opening_balance",
+    });
+  });
+
   it("admits an empty history", () => {
     expect(admitMovements({ prior: null, after: [] })).toEqual({
       ok: true,
       quantity: "0",
     });
   });
+});
+
+it("names the refusals that depend on the order within a day", () => {
+  expect(
+    ["oversold", "opening_balance", "future_date", "no_rate"].filter(
+      isOrderRefusal,
+    ),
+  ).toEqual(["oversold", "opening_balance"]);
 });

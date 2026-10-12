@@ -1,5 +1,6 @@
 import { compareDecimals } from "@plant/shared";
 import {
+  compareMovements,
   DENOMINATORS,
   type Denominator,
   positionOf,
@@ -49,6 +50,13 @@ it("sets each open instrument holding's amount to what its movements leave", () 
     }
   }
   expect(fixtures.closed).toHaveLength(1);
+});
+
+it("enters each holding's steps in the order they are listed", () => {
+  for (const row of fixtures.holdings) {
+    const own = fixtures.movements.filter((m) => m.holding_id === row.id);
+    expect([...own].sort(compareMovements)).toEqual(own);
+  }
 });
 
 it("gives one holding movements for more than one page", () => {

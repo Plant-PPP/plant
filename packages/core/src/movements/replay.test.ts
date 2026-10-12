@@ -1,5 +1,6 @@
 import { adjustment, income, ratesOf, trade } from "./fixtures.test-support";
 import type { Movement } from "./movement";
+import { compareMovements } from "./order";
 import {
   EMPTY_POSITION,
   PositionError,
@@ -138,6 +139,29 @@ describe("replay", () => {
       trade("sale", "15", "120", { date: "2026-02-02" }),
     ];
     expect(positionOf(replay(sameDay, "usd_mep", "mep")).quantity).toBe("0");
+  });
+
+  describe("a sell-out and a purchase on one day", () => {
+    const before = trade("purchase", "10", "10", { date: "2026-02-01" });
+    const replayed = (sameDay: Movement[]) =>
+      replay([...sameDay, before].sort(compareMovements), "usd_mep", "mep");
+
+    it("opens a new cost for a buy-back entered after the sale", () => {
+      const [, sold, bought] = replayed([
+        trade("purchase", "10", "20", { date: "2026-02-02", entry_order: 2 }),
+        trade("sale", "10", "15", { date: "2026-02-02", entry_order: 1 }),
+      ]);
+      expect(sold!.sale!.cost).toBe("100");
+      expect(bought!.position.money!.cost).toBe("200");
+    });
+
+    it("costs the sale on both purchases when the purchase was entered first", () => {
+      const steps = replayed([
+        trade("sale", "10", "15", { date: "2026-02-02", entry_order: 2 }),
+        trade("purchase", "10", "20", { date: "2026-02-02", entry_order: 1 }),
+      ]);
+      expect(steps[2]!.sale!.cost).toBe("150");
+    });
   });
 
   it("throws on a sale of more than is held", () => {

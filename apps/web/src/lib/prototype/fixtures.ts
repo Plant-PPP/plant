@@ -536,6 +536,15 @@ const EMPTY_COLUMNS = {
 let movementCount = 0;
 const movementId = () =>
   `d1000000-0000-4000-8000-${String((movementCount += 1)).padStart(12, "0")}`;
+// Each operation's entry order, in the order the steps are built, holding by
+// holding.
+const entryOrders = new Map<string, number>();
+const entryOrderOf = (operationId: string): number => {
+  if (!entryOrders.has(operationId)) {
+    entryOrders.set(operationId, entryOrders.size);
+  }
+  return entryOrders.get(operationId)!;
+};
 
 // A step as a movement, at its day's price and rates.
 function draft(
@@ -550,11 +559,13 @@ function draft(
     symbols: [],
   }).snapshot;
   const id = movementId();
+  const operationId =
+    (step.kind !== "dividend" && step.operation) || id.replace(/^d1/, "f1");
   const common = {
     id,
     holding_id: holding.id,
-    operation_id:
-      (step.kind !== "dividend" && step.operation) || id.replace(/^d1/, "f1"),
+    operation_id: operationId,
+    entry_order: entryOrderOf(operationId),
     date,
     note: null,
     rates: fx,
@@ -593,6 +604,7 @@ const typeOf = (symbol: string) =>
 
 export function buildFixtures(today: string): Fixtures {
   movementCount = 0;
+  entryOrders.clear();
   const quotes = quotesFor(today);
   const movements: Movement[] = [];
   const holdings: HoldingRow[] = [];

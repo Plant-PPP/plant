@@ -10,6 +10,7 @@ const purchase = {
   id: "m1",
   holding_id: "h1",
   operation_id: "o1",
+  entry_order: 1,
   kind: "purchase",
   date: "2026-03-02",
   currency: "USD",
@@ -67,6 +68,11 @@ describe("movementSchema", () => {
       { ...purchase, kind: "dividend", amount: "5" },
     ],
     ["a zero quantity", { ...purchase, quantity: "0" }],
+    ["a negative entry order", { ...purchase, entry_order: -1 }],
+    ["a fractional entry order", { ...purchase, entry_order: 1.5 }],
+    ["no entry order", { ...purchase, entry_order: undefined }],
+    ["a null entry order", { ...purchase, entry_order: null }],
+    ["an entry order as text", { ...purchase, entry_order: "1" }],
     [
       "a rate kind no unit uses",
       {
@@ -86,12 +92,20 @@ describe("movementSchema", () => {
     expect(movementSchema.safeParse(movement).success).toBe(false);
   });
 
+  it("reads an entry order of 0", () => {
+    expect(
+      movementSchema.parse({ ...purchase, entry_order: 0 }).entry_order,
+    ).toBe(0);
+  });
+
   it("reads a dividend as an amount", () => {
-    const { id, holding_id, operation_id, date, currency, rates } = purchase;
+    const { id, holding_id, operation_id, entry_order, date, currency, rates } =
+      purchase;
     const dividend = {
       id,
       holding_id,
       operation_id,
+      entry_order,
       date,
       currency,
       rates,

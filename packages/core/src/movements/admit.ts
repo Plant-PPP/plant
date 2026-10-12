@@ -12,6 +12,17 @@ import { compareMovements } from "./order";
 export type MovementRefusal =
   "oversold" | "opening_balance" | "future_date" | "no_rate";
 
+// The refusals that another place within the day can change.
+const ORDER_REFUSALS = [
+  "oversold",
+  "opening_balance",
+] as const satisfies readonly MovementRefusal[];
+
+export const isOrderRefusal = (
+  code: string,
+): code is (typeof ORDER_REFUSALS)[number] =>
+  (ORDER_REFUSALS as readonly string[]).includes(code);
+
 export type Admission =
   | { ok: true; quantity: string }
   | { ok: false; code: MovementRefusal; missing?: UnitFxKind[] };
