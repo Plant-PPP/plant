@@ -88,6 +88,33 @@ it("marks no closed month before a write's own", () => {
   expect(marked.get("2026-09")).toBe(TODAY);
 });
 
+it("marks only the month of a write that moves no units", () => {
+  const iol = state.accounts.find((each) => each.institution === "IOL")!;
+  const after = writeOperation(
+    state,
+    {
+      kind: "dividend",
+      source_connection_id: iol.id,
+      instrument_symbol: "AAPL",
+      date: "2026-08-31",
+      currency: "ARS",
+      charges: [],
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: iol.portfolio.id, amount: "100" }],
+    },
+    { operationId: "paid", newId: () => crypto.randomUUID() },
+  );
+  expect(after.result.ok).toBe(true);
+  const marked = markRecalculated(state, after.state).recalculated;
+  expect(marked.get("2026-08")).toBe(TODAY);
+  expect(
+    [...marked.keys()].filter(
+      (period) => period !== "2026-08" && !state.recalculated.has(period),
+    ),
+  ).toEqual([]);
+});
+
 it("marks nothing for a write that moves no month's movements", () => {
   const priced = setPrice(state, {
     symbol: "KO",

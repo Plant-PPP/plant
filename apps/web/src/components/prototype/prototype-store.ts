@@ -973,8 +973,14 @@ export function writeOperation(
       );
     }
   }
-  const portfolios = new Map<string, PortfolioRow>();
-  for (const { portfolio_id: portfolioId } of given) {
+  // Each part with its portfolio. A yield given as a balance is the
+  // difference from what its holding held at the end of that day.
+  const parts: {
+    portfolio: PortfolioRow;
+    part: Exclude<(typeof given)[number], { balance: string }>;
+  }[] = [];
+  for (const part of given) {
+    const portfolioId = part.portfolio_id;
     const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
     if (!portfolio) {
       return refused(state, {
@@ -982,14 +988,8 @@ export function writeOperation(
         code: archivedCode(state, { portfolioId }) ?? "not_found",
       });
     }
-    portfolios.set(portfolioId, portfolio);
-  }
-  // A yield given as a balance is the difference from what its holding held
-  // at the end of that day.
-  const parts: Exclude<(typeof given)[number], { balance: string }>[] = [];
-  for (const part of given) {
     if (!("balance" in part)) {
-      parts.push(part);
+      parts.push({ portfolio, part });
       continue;
     }
     const home = holdingIn(
@@ -1009,12 +1009,15 @@ export function writeOperation(
     const sign = compareExact(change, ZERO);
     if (sign === 0) return refused(state, { ok: false, code: "same_balance" });
     parts.push({
-      portfolio_id: part.portfolio_id,
-      direction: sign > 0 ? "in" : "out",
-      quantity: stored(sign > 0 ? change : negated(change)),
+      portfolio,
+      part: {
+        portfolio_id: portfolioId,
+        direction: sign > 0 ? "in" : "out",
+        quantity: stored(sign > 0 ? change : negated(change)),
+      },
     });
   }
-  const sizes = parts.map((part) =>
+  const sizes = parts.map(({ part }) =>
     "quantity" in part ? part.quantity : part.amount,
   );
   const charges = splitCharges(
@@ -1024,14 +1027,13 @@ export function writeOperation(
   const writeAt = (entryOrder: number): Write<MovementResult> => {
     let next = state;
     const touched = new Map(without);
-    for (const [index, part] of parts.entries()) {
+    for (const [index, { portfolio, part }] of parts.entries()) {
       const { portfolio_id: portfolioId, ...ownFields } = part;
-      const portfolio = portfolios.get(portfolioId)!;
       const stored = holdingIn(
         next,
         account.id,
         instrument.symbol,
-        portfolio.id,
+        portfolioId,
       );
       const holdingId = stored?.holding.id ?? newId();
       const draft = {

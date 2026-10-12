@@ -47,7 +47,7 @@ const moving = withKind(
     parts: [{ portfolioId: "p1", size: "0,5" }],
   },
   "transfer",
-  "p1",
+  { transfer: "p1" },
 );
 
 const render = (
@@ -152,7 +152,7 @@ describe("a yield", () => {
       portfolioId: "p1",
     }),
     "yield",
-    "p1",
+    { yield: "p1" },
   );
   const asked: unknown[] = [];
   const renderYield = (initial: MovementFields, quote: string | null) =>
@@ -197,7 +197,7 @@ describe("a yield", () => {
 
   it("asks for the value when nothing quotes that day", () => {
     expect(renderYield(earning, null)).toContain(
-      "No hay precio para ese día: ingresá el valor por unidad.",
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
     );
   });
 
@@ -221,7 +221,7 @@ describe("a yield", () => {
     );
     expect(html).toContain("Valor cada 100 VN");
     expect(html).toContain(
-      "No hay precio para ese día: ingresá el valor cada 100 VN.",
+      "No hay precio en esa moneda para ese día: ingresá el valor cada 100 VN.",
     );
   });
 
@@ -263,8 +263,36 @@ describe("a yield", () => {
       null,
     );
     expect(html).toContain('value="61000"');
-    expect(html).toContain("No hay precio para ese día.");
+    expect(html).toContain("No hay precio en esa moneda para ese día.");
     expect(html).not.toContain("ingresá el valor");
+  });
+
+  it("asks for the value once the quote it followed is gone", () => {
+    const html = renderYield(withShownPrice(earning, "61000", "crypto"), null);
+    expect(html).not.toContain('value="61000"');
+    expect(html).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("asks again for a value the user cleared", () => {
+    const html = renderYield(
+      { ...earning, price: " ", priceEdited: true },
+      null,
+    );
+    expect(html).toContain(
+      "No hay precio en esa moneda para ese día: ingresá el valor por unidad.",
+    );
+  });
+
+  it("keeps a cleared value empty and offers the quote back", () => {
+    const html = renderYield(
+      { ...earning, price: "", priceEdited: true },
+      "61000",
+    );
+    expect(html).toMatch(/<input[^>]*-price"[^>]*value=""/);
+    expect(html).toContain("Usar el sugerido (US$ 61.000,00)");
+    expect(html).not.toContain("Sugerido: el precio de ese día.");
   });
 
   it("takes the final balance instead of the units", () => {

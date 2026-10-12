@@ -158,15 +158,21 @@ export function operationFields(
   };
 }
 
-// The fields as another kind: a transfer takes its quantity out of
-// `portfolio` into one still to choose, and a yield is `portfolio`'s, both
-// with no charges or price; leaving either keeps the first part with no
-// price, and any other change keeps every part.
+// The fields as another kind: a transfer takes its quantity out of the
+// portfolio `homes` names for it into one still to choose, and a yield goes
+// into the one named for it, both with no charges or price (either takes the
+// first part's portfolio when `homes` names none); leaving either keeps the
+// first part with no price, and any other change keeps every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,
-  portfolio: string,
+  homes: Partial<Record<"transfer" | "yield", string>>,
 ): MovementFields {
+  const first = fields.parts[0];
+  const portfolio =
+    (kind === "transfer" || kind === "yield" ? homes[kind] : undefined) ??
+    first?.portfolioId ??
+    "";
   const fresh = {
     ...fields,
     kind,
@@ -195,31 +201,29 @@ export function withKind(
   return { ...fields, kind };
 }
 
-// The portfolio withKind gives a kind: a yield's holding, a transfer's source,
-// or else the first part's.
-export const portfolioFor = (
-  kind: MovementKind,
-  homes: { transfer?: string; yield?: string },
+// What a price shown as a suggestion holds: what the user typed, or else the
+// suggestion (empty without one).
+export const priceInField = (
   fields: MovementFields,
+  suggested: string | null,
+  type: InstrumentType | null,
 ): string =>
-  (kind === "yield" ? homes.yield : undefined) ??
-  homes.transfer ??
-  fields.parts[0]?.portfolioId ??
-  "";
+  fields.priceEdited
+    ? fields.price
+    : suggested === null
+      ? ""
+      : quotedInput(suggested, type);
 
-// The fields as the dialog sends them: a yield whose value the user left
-// takes the day's quote it shows (none without one), and keeps following the
-// quote if the dialog opens again with them.
+// The fields as the dialog sends them: a yield's price is the one its field
+// shows. Its value stays unedited, so a dialog opened again with these fields
+// follows the quote of the day it shows then.
 export const withShownPrice = (
   fields: MovementFields,
   suggested: string | null,
   type: InstrumentType | null,
 ): MovementFields =>
-  fields.kind === "yield" && !fields.priceEdited
-    ? {
-        ...fields,
-        price: suggested === null ? "" : quotedInput(suggested, type),
-      }
+  fields.kind === "yield"
+    ? { ...fields, price: priceInField(fields, suggested, type) }
     : fields;
 
 // The kinds only some pages and holdings take.

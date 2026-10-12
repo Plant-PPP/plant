@@ -86,8 +86,8 @@ export type MovementsInput = {
   // their cost were left to them; null when the transfer cannot be written. A
   // page that passes it offers transfers between portfolios.
   transferCost?: (query: TransferCostQuery) => string | null;
-  // An instrument's latest price on a date in its own currency, from the
-  // feeds or the user's manual prices; null when there is none. A yield's
+  // An instrument's latest price on a date in `currency`, from the feeds or
+  // the user's manual prices; null when there is none in it. A yield's
   // dialog suggests it as the value of each unit.
   quoteOn?: (query: QuoteQuery) => string | null;
 };

@@ -35,11 +35,7 @@ import {
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
-import {
-  formatQuotedPrice,
-  priceBasisLabel,
-  quotedInput,
-} from "@/lib/holdings/price-input";
+import { formatQuotedPrice, priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
@@ -55,7 +51,7 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
-  portfolioFor,
+  priceInField,
   withKind,
   withShownPrice,
 } from "./movement-fields";
@@ -286,15 +282,10 @@ export function MovementDialog({
               kinds.map((each) => [each, MOVEMENT_KIND_LABELS[each]]),
               (value: MovementKind) =>
                 setFields((current) =>
-                  withKind(
-                    current,
-                    value,
-                    portfolioFor(
-                      value,
-                      { transfer: transfer?.from, yield: yields?.portfolio },
-                      current,
-                    ),
-                  ),
+                  withKind(current, value, {
+                    transfer: transfer?.from,
+                    yield: yields?.portfolio,
+                  }),
                 ),
             )}
             {adjustment
@@ -367,13 +358,7 @@ export function MovementDialog({
                   autoFocus={firstField === "price"}
                   inputMode="decimal"
                   autoComplete="off"
-                  value={
-                    fields.priceEdited
-                      ? fields.price
-                      : suggested === null
-                        ? ""
-                        : quotedInput(suggested, instrumentType)
-                  }
+                  value={priceInField(fields, suggested, instrumentType)}
                   onChange={(event) => {
                     setFields((current) => ({
                       ...current,
@@ -405,8 +390,8 @@ export function MovementDialog({
                   {moving
                     ? "Si lo dejás vacío, entran con el costo que tenían."
                     : fields.priceEdited && fields.price.trim() !== ""
-                      ? "No hay precio para ese día."
-                      : `No hay precio para ese día: ingresá el valor ${basis}.`}
+                      ? "No hay precio en esa moneda para ese día."
+                      : `No hay precio en esa moneda para ese día: ingresá el valor ${basis}.`}
                 </p>
               ) : fields.priceEdited ? (
                 <div>
@@ -442,7 +427,7 @@ export function MovementDialog({
               <p>
                 {moving
                   ? "Si lo cambiás, entran con ese costo y la diferencia se ve en el resultado de la tenencia."
-                  : "Lo que valían ese día cuenta como rendimiento, no como plata que pusiste o sacaste."}
+                  : "Lo que valían las unidades ese día cuenta como rendimiento, no como plata que pusiste o sacaste."}
               </p>
             </div>
           )}
@@ -524,7 +509,7 @@ export function MovementDialog({
                   className="col-span-2 -mt-2 text-xs text-muted-foreground"
                 >
                   Las unidades que tenías al terminar ese día. La diferencia con
-                  lo que tenías se carga como rendimiento.
+                  lo que ya tenías se carga como rendimiento.
                 </p>
               )}
             </div>

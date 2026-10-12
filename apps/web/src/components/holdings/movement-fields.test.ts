@@ -12,7 +12,6 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
-  portfolioFor,
   withKind,
   withShownPrice,
 } from "./movement-fields";
@@ -225,7 +224,7 @@ describe("a transfer", () => {
       parts: [{ portfolioId: LARGO, size: "0,5" }],
     },
     "transfer",
-    PRINCIPAL,
+    { transfer: PRINCIPAL },
   );
 
   it("starts from its portfolio with the quantity typed, no charges and the cost it carries", () => {
@@ -239,7 +238,7 @@ describe("a transfer", () => {
         { portfolioId: "", size: "0,5" },
       ],
     });
-    expect(withKind(moving, "purchase", PRINCIPAL).parts).toEqual([
+    expect(withKind(moving, "purchase", {}).parts).toEqual([
       { portfolioId: PRINCIPAL, size: "0,5" },
     ]);
   });
@@ -289,7 +288,7 @@ describe("a transfer", () => {
         { portfolioId: LARGO, size: "2" },
       ],
     };
-    expect(withKind(split, "sale", PRINCIPAL)).toEqual({
+    expect(withKind(split, "sale", {})).toEqual({
       ...split,
       kind: "sale",
     });
@@ -300,7 +299,7 @@ describe("a transfer", () => {
       withKind(
         { ...moving, price: "61000", priceEdited: true },
         "purchase",
-        PRINCIPAL,
+        {},
       ),
     ).toMatchObject({ price: "", priceEdited: false });
   });
@@ -431,7 +430,7 @@ describe("a yield's fields", () => {
       charges: [{ kind: "commission" as const, label: "", amount: "1" }],
     },
     "yield",
-    PRINCIPAL,
+    { yield: PRINCIPAL },
   );
   const input = (fields: typeof earning) =>
     operationInputSchema.parse(toOperationInput(fields, "crypto"));
@@ -530,7 +529,7 @@ describe("a yield's fields", () => {
           parts: [{ portfolioId: LARGO, size: "5" }],
         },
         "yield",
-        PRINCIPAL,
+        { yield: PRINCIPAL },
       ).parts,
     ).toEqual([{ portfolioId: PRINCIPAL, size: "5" }]);
   });
@@ -592,9 +591,9 @@ describe("a yield's fields", () => {
       price: "61000,5",
     });
     const typed = { ...earning, price: "1", priceEdited: true };
-    expect(withShownPrice(typed, "61000.5", "crypto")).toBe(typed);
+    expect(withShownPrice(typed, "61000.5", "crypto")).toEqual(typed);
     expect(withShownPrice(earning, null, "crypto")).toEqual(earning);
-    const moving = withKind(earning, "transfer", PRINCIPAL);
+    const moving = withKind(earning, "transfer", { transfer: PRINCIPAL });
     expect(withShownPrice(moving, "61000.5", "crypto")).toBe(moving);
   });
 
@@ -607,16 +606,22 @@ describe("a yield's fields", () => {
     ).toBe(false);
   });
 
-  it("goes into the holding's portfolio, a transfer out of its source", () => {
+  it("goes into the portfolio named for its kind, else the first part's", () => {
     const other = {
       ...newMovementFields(defaults),
       parts: [{ portfolioId: LARGO, size: "1" }],
     };
     const homes = { transfer: "t", yield: PRINCIPAL };
-    expect(portfolioFor("yield", homes, other)).toBe(PRINCIPAL);
-    expect(portfolioFor("transfer", homes, other)).toBe("t");
-    expect(portfolioFor("purchase", {}, other)).toBe(LARGO);
-    expect(portfolioFor("yield", {}, other)).toBe(LARGO);
+    expect(withKind(other, "yield", homes).parts).toEqual([
+      { portfolioId: PRINCIPAL, size: "1" },
+    ]);
+    expect(withKind(other, "transfer", homes).parts[0]).toEqual({
+      portfolioId: "t",
+      size: "1",
+    });
+    expect(withKind(other, "yield", { transfer: "t" }).parts).toEqual([
+      { portfolioId: LARGO, size: "1" },
+    ]);
   });
 
   it("leaves the balance and the value behind as another kind", () => {
@@ -624,7 +629,7 @@ describe("a yield's fields", () => {
       withKind(
         { ...earning, price: "1", priceEdited: true, balance: "3" },
         "purchase",
-        PRINCIPAL,
+        {},
       ),
     ).toMatchObject({ price: "", priceEdited: false, balance: null });
   });

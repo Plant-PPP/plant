@@ -138,6 +138,9 @@ function integrity(state: PrototypeState): string[] {
     if (each.some((part) => part.entryOrder !== each[0]!.entryOrder)) {
       problems.push(`${operationId}: parts in different entry orders`);
     }
+    if (each[0]!.kind === "yield" && each.length !== 1) {
+      problems.push(`${operationId}: a yield in more than one holding`);
+    }
     if (each[0]!.kind !== "transfer") continue;
     const [out, arrived] = [...each].sort((a, b) =>
       a.direction === "out" ? -1 : b.direction === "out" ? 1 : 0,
@@ -390,6 +393,12 @@ it("stays consistent through every kind of write", () => {
       replacing: true,
     });
   });
+  // Held today is what the 28th ended with, the yield's own unit included.
+  expect(
+    state.movements
+      .get(idOf("BTC"))!
+      .find((each) => each.operation_id === earned),
+  ).toMatchObject({ kind: "yield", direction: "in", quantity: "0.001" });
   apply("a loss", (s) =>
     writeOperation(
       s,
