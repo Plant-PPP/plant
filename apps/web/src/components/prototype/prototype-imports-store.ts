@@ -57,7 +57,11 @@ export function addImport(
     createdOn: state.today,
   };
   return {
-    state: { ...state, imports: [item, ...state.imports] },
+    state: {
+      ...state,
+      imports: [item, ...state.imports],
+      uploadedOn: [...state.uploadedOn, state.today],
+    },
     result: { ok: true, id },
   };
 }
@@ -65,16 +69,15 @@ export function addImport(
 export const startReading = (state: PrototypeState, id: string) =>
   withImport(state, id, (item) => ({ ...item, status: "reading" }));
 
-// The account's open instrument holdings with what each holds, largest
-// first.
+// The account's open instrument holdings, largest first.
 function heldHoldings(state: PrototypeState, accountId: string) {
   return holdingsView(state)
-    .active.flatMap((row) =>
-      row.account.id === accountId && row.holding.asset_class === "instrument"
-        ? [{ row, quantity: row.holding.amount }]
-        : [],
+    .active.filter(
+      (row) =>
+        row.account.id === accountId &&
+        row.holding.asset_class === "instrument",
     )
-    .sort((a, b) => compareDecimals(b.quantity, a.quantity));
+    .sort((a, b) => compareDecimals(b.holding.amount, a.holding.amount));
 }
 
 // Each instrument the account holds, summed across its portfolios.
@@ -83,12 +86,14 @@ export function heldIn(
   accountId: string,
 ): Map<string, string> {
   const held = new Map<string, string>();
-  for (const { row, quantity } of heldHoldings(state, accountId)) {
+  for (const row of heldHoldings(state, accountId)) {
     if (row.holding.asset_class !== "instrument") continue;
     const symbol = row.holding.instrument_symbol;
     held.set(
       symbol,
-      stored(plus(exactOf(held.get(symbol) ?? "0"), exactOf(quantity))),
+      stored(
+        plus(exactOf(held.get(symbol) ?? "0"), exactOf(row.holding.amount)),
+      ),
     );
   }
   return held;
@@ -236,7 +241,7 @@ export function confirmImport(
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
     const holdings = heldHoldings(next, account.id).filter(
-      ({ row: each }) =>
+      (each) =>
         each.holding.asset_class === "instrument" &&
         each.holding.instrument_symbol === row.symbol,
     );
@@ -250,16 +255,17 @@ export function confirmImport(
       }
       parts = [
         {
-          portfolio_id: holdings[0]?.row.portfolio.id ?? account.portfolio.id,
+          portfolio_id: holdings[0]?.portfolio.id ?? account.portfolio.id,
           quantity: diff,
         },
       ];
     } else {
       let left = difference("0", diff);
       parts = [];
-      for (const { row: each, quantity } of holdings) {
+      for (const each of holdings) {
         if (compareDecimals(left, "0") <= 0) break;
-        const taken = compareDecimals(quantity, left) < 0 ? quantity : left;
+        const units = each.holding.amount;
+        const taken = compareDecimals(units, left) < 0 ? units : left;
         parts.push({ portfolio_id: each.portfolio.id, quantity: taken });
         left = difference(left, taken);
       }

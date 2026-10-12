@@ -91,6 +91,9 @@ export type PrototypeState = {
   liabilities: Liability[];
   // Newest first.
   imports: ImportItem[];
+  // The day of each upload, deleted accounts' included: the monthly limit
+  // counts them all.
+  uploadedOn: string[];
 };
 
 export type StoredHolding = {
@@ -132,6 +135,7 @@ export function initialState(
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
+    uploadedOn: [],
   };
 }
 
