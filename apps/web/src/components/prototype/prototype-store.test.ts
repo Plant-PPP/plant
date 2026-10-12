@@ -709,6 +709,50 @@ describe("entry order", () => {
     expect(relabelled.nextEntryOrder).toBe(before.nextEntryOrder);
   });
 
+  it("starts the fallback place afresh in every portfolio of a split edit", () => {
+    const split = (date: string) => ({
+      ...btc("purchase", "1", date),
+      parts: [
+        { portfolio_id: CORTO, quantity: "1" },
+        { portfolio_id: PRINCIPAL, quantity: "1" },
+      ],
+    });
+    const before = run([
+      [split(D2), P],
+      [
+        {
+          ...btc("sale", "1", D3),
+          parts: [{ portfolio_id: PRINCIPAL, quantity: "1" }],
+        },
+        S,
+      ],
+    ]);
+    const moved = run([[split(D3), P, true]], before);
+    expect(entryOf(moved, P)).toBe(entryOf(before, P));
+    expect(positionIn(moved).quantity).toBe("1");
+  });
+
+  it("changes nothing when an edit is refused after creating a holding", () => {
+    const before = run([
+      [btc("purchase", "1", D1), A],
+      [btc("purchase", "1", D2), P],
+      [btc("sale", "2", D2), S],
+    ]);
+    const refused = writeOperation(
+      before,
+      {
+        ...btc("purchase", "1", D3),
+        parts: [
+          { portfolio_id: PRINCIPAL, quantity: "1" },
+          { portfolio_id: CORTO, quantity: "1" },
+        ],
+      },
+      { ...options(P), replacing: true },
+    );
+    expect(refused.result).toEqual({ ok: false, code: "oversold" });
+    expect(refused.state).toBe(before);
+  });
+
   it("changes nothing when an edit is refused", () => {
     const before = run([
       [btc("purchase", "1", D2), P],
