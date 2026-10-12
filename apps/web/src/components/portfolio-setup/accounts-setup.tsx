@@ -45,7 +45,7 @@ export function AccountsSetup({
     sourceConnections: SourceConnectionActions;
     portfolios: NamedRowsActions;
   };
-  deletesUploads?: (accountId: string) => boolean;
+  deletesUploads?: readonly string[];
 }) {
   const { lists, pending, run } = useSetupActions({
     sourceConnections,

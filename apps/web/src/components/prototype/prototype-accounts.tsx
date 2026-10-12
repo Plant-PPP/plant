@@ -27,7 +27,9 @@ export function PrototypeAccounts() {
         sourceConnections: actions.sourceConnections,
         portfolios: actions.portfolios,
       }}
-      deletesUploads={(id) => deletesUploads(state, id)}
+      deletesUploads={[...state.accounts, ...state.archivedAccounts]
+        .map((row) => row.id)
+        .filter((id) => deletesUploads(state, id))}
     />
   );
 }

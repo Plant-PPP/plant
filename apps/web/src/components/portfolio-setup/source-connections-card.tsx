@@ -141,7 +141,8 @@ export function SourceConnectionsCard({
   holders?: HolderChoices;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
-  deletesUploads?: (accountId: string) => boolean;
+  // The accounts whose delete would go through and take their uploads.
+  deletesUploads?: readonly string[];
 }) {
   const columns = dataColumns(holders !== undefined);
   const card = useSetupCard({ run, pending });
@@ -291,7 +292,7 @@ export function SourceConnectionsCard({
         <ConfirmDialog
           title={`¿Borrar ${deleting.institution}?`}
           description={deleteAccountDescription(
-            deletesUploads?.(deleting.id) ?? false,
+            deletesUploads?.includes(deleting.id) ?? false,
           )}
           confirmLabel="Borrar"
           returnFocusTo={card.focusHeading}
