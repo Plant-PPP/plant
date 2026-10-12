@@ -1,7 +1,13 @@
 "use client";
 
 import { type QuoteSnapshot, withManualPrices } from "@plant/core";
-import { createContext, type ReactNode, useContext } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+} from "react";
 
 import type {
   HoldingActions,
@@ -9,6 +15,8 @@ import type {
   PriceActions,
 } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
+import type { ImportActions } from "@/components/imports/import-page";
+import type { ReviewActions } from "@/components/imports/import-review";
 import type { NamedRowsActions } from "@/components/portfolio-setup/named-rows-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -27,6 +35,7 @@ import {
 } from "./prototype-store";
 import * as accounts from "./prototype-accounts-store";
 import * as debts from "./prototype-debts-store";
+import * as imports from "./prototype-imports-store";
 import { markRecalculated } from "./prototype-closes";
 import { usePrototypeStore } from "./use-prototype-store";
 
@@ -46,6 +55,7 @@ type Prototype = {
     sourceConnections: SourceConnectionActions;
     portfolios: NamedRowsActions;
     debts: DebtActions;
+    imports: ImportActions & ReviewActions;
   };
 };
 
@@ -73,6 +83,22 @@ export function PrototypeProvider({
     latest,
     write: writeState,
   } = usePrototypeStore(() => initialState(buildFixtures(today), today));
+  // The simulated reading's timers, cleared when the pages go away.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
+  const later = (run: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      run();
+    }, ms);
+    timers.current.add(timer);
+  };
   // Every write marks the closed months it changed as recalculated.
   const write = <R,>(change: (state: PrototypeState) => Write<R>) =>
     writeState((before) => {
@@ -121,6 +147,38 @@ export function PrototypeProvider({
       restore: (id, input) =>
         write((s) => accounts.restoreAccount(s, id, input)),
       delete: (id) => write((s) => accounts.deleteAccount(s, id)),
+    },
+    imports: {
+      // Each file is queued, read a moment later and ready after that, as
+      // the real job's status would arrive.
+      upload: (files, accountId) => {
+        files.forEach((file, index) => {
+          const id = crypto.randomUUID();
+          void write((s) =>
+            imports.addImport(s, { id, fileName: file.name, accountId }),
+          );
+          later(
+            () =>
+              void write((s) => ({
+                state: imports.startReading(s, id),
+                result: null,
+              })),
+            700 + index * 500,
+          );
+          later(
+            () =>
+              void write((s) => ({
+                state: imports.finishReading(s, id),
+                result: null,
+              })),
+            2400 + index * 900,
+          );
+        });
+      },
+      confirm: (id, rows) =>
+        write((s) =>
+          imports.confirmImport(s, id, rows, () => crypto.randomUUID()),
+        ),
     },
     debts: {
       create: (input) =>

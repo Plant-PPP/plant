@@ -60,6 +60,7 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
+import type { ImportItem } from "@/lib/imports/review";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -88,6 +89,11 @@ export type PrototypeState = {
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
   liabilities: Liability[];
+  // Newest first.
+  imports: ImportItem[];
+  // The day of each upload, deleted accounts' included: the monthly limit
+  // counts them all.
+  uploadedOn: string[];
 };
 
 export type StoredHolding = {
@@ -128,6 +134,8 @@ export function initialState(
     manualPrices: fixtures.manualPrices,
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
+    imports: [],
+    uploadedOn: [],
   };
 }
 
@@ -697,7 +705,7 @@ const archivedHome = (state: PrototypeState, holdingId: string): boolean => {
 };
 
 // The open or closed holding of an instrument in an account and portfolio.
-const holdingIn = (
+export const holdingIn = (
   state: PrototypeState,
   accountId: string,
   symbol: string,

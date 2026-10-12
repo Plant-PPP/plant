@@ -292,6 +292,9 @@ export function deleteAccount(
       archivedAccounts: state.archivedAccounts.filter(
         (each) => each.id !== id.data,
       ),
+      // Its imports go with it, though they still count against the month's
+      // uploads.
+      imports: state.imports.filter((each) => each.accountId !== id.data),
     },
     id.data,
   );
