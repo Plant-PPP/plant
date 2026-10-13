@@ -4,6 +4,8 @@ const PORT = 3100;
 
 export default defineConfig({
   testDir: "e2e",
+  // The flows need local Supabase: playwright.flows.config.ts.
+  testIgnore: "flows/**",
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {

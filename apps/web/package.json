@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:flows": "playwright test -c playwright.flows.config.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.127",
