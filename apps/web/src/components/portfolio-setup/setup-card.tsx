@@ -243,7 +243,7 @@ export function ArchivedList<Row extends DataTableRow>({
   }, [view.archivedFirstHref, view.archivedNextHref]);
 
   // Paging while a write runs would render a page read before the write, so
-  // the links wait for it.
+  // the links wait for it, as for whatever else the caller counts as pending.
   function pageLink(href: string, text: string) {
     return (
       <Link

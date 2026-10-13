@@ -1,6 +1,9 @@
 jest.mock("next/navigation", () => ({ useRouter: () => ({}) }));
 
-import { searchParamValue, withParam } from "./assets-url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { searchParamValue, useAssetsUrl, withParam } from "./assets-url";
 
 describe("searchParamValue", () => {
   it("is the search as the URL reads it back", () => {
@@ -38,4 +41,14 @@ it("takes only the params the page reads", () => {
   withParam({}, "holdings", "x");
   // @ts-expect-error: "portfolios" is another list's cursor param.
   withParam({}, "portfolios", "x");
+});
+
+it("reports no page loading before any change", () => {
+  let pending: boolean | undefined;
+  function Probe() {
+    ({ pending } = useAssetsUrl({ tab: "accounts" }));
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  expect(pending).toBe(false);
 });
