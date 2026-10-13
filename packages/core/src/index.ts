@@ -134,7 +134,6 @@ export {
   unitPrice,
 } from "./instruments";
 export {
-  acceptsManualPrice,
   admitManualPrice,
   type ManualPrice,
   type ManualPriceRefusal,
@@ -142,6 +141,11 @@ export {
   type PriceSource,
   priceSource,
   withManualPrices,
+  MANUAL_RATE_KINDS,
+  type ManualRate,
+  type ManualRateKind,
+  manualRateSchema,
+  withManualRates,
 } from "./quotes/manual";
 export {
   type CashFlow,
