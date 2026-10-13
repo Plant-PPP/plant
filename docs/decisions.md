@@ -7,6 +7,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Resumen shows a new user the way to their net worth**: accept the terms, add an account, upload a statement or load a holding, and ask the assistant its first suggested question. Each step marks itself done from the data, and the card leaves once all are. Deleting the account in Ajustes shows it, as the prototype then holds a new user's data.
 - **Cargar asks for the terms before the first file**: what Plant does with the file (reads it, keeps it 30 days, ignores DNI, CUIT and CBU) and that it never trades or moves money, with a checkbox and "Aceptar y seguir". The acceptance records the terms' version (`CONSENT_VERSION`) and the day; a new version asks again. The real record goes in `consents`, and the copy waits for the lawyer's review (PLA-56).
 
+## 2026-10-13 · Where a statement's units go (PLA-41, PLA-100, prototype)
+
+- **The review lets each row that adds units choose where they go**: a new instrument picks its portfolio (the account's default to start with, as PLA-41 asks), and an instrument the user holds in another account can come from there as a "Traspaso desde …", so a change of broker keeps the units' cost and date and makes no result (PLA-100). A row that is a transfer needs no price.
+- **A transfer from the review is the same operation as one from the movement dialog**: out of the other account's holding of the instrument that holds the most, into this account's chosen portfolio, booked on the import's day with the import as its origin. One the other account cannot cover is refused like any transfer that oversells.
+- **Production's review asks neither**: the choices come with an optional `routing` the prototype passes; a statement replacing the account's holdings and the idempotent confirm wait for PLA-41's tables.
+
 ## 2026-10-13 · Correcting a quoted price or dollar rate by hand (PLA-122, prototype)
 
 - **Any price or dollar rate can be corrected by hand** (Tomas, 2026-10-13): an instrument's price from Activos ("Corregir" beside a quoted price), and the MEP, CCL and official dollar from Ajustes ("Dólar de hoy").
