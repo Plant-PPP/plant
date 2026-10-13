@@ -8,6 +8,7 @@ import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { deleteHolding } from "@/app/(app)/(data)/assets/actions";
 import {
   createOperation,
   deleteOperation,
@@ -137,7 +138,7 @@ export default async function InstrumentPage({
         update: updateOperation,
         delete: deleteOperation,
       }}
-      actions={{}}
+      actions={{ delete: deleteHolding }}
       accounts={ledger.accounts}
       portfolios={ledger.portfolios}
       instruments={ledger.instruments}

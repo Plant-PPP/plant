@@ -14,6 +14,7 @@ import { assistantSink } from "@/lib/assistant/assistant-sink";
 import { ANSWER_FAILED, CHAT_UNITS } from "@/lib/assistant/chat";
 import { textOf } from "@/lib/assistant/messages-view";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { boundedText } from "@/lib/bounded-body";
 import { isProductionDeployment } from "@/lib/deployment";
 import { serverLog } from "@/lib/log/server-log";
 import {
@@ -92,11 +93,9 @@ export async function POST(request: Request): Promise<Response> {
     fields["enduser.id"] = claims.sub;
     outcome = "bad_request";
     status = 400;
-    // A body the header says is too large is refused unread.
-    const declared = Number(request.headers.get("content-length") ?? 0);
-    const raw = declared <= BODY_LIMIT ? await request.text() : "";
+    const raw = (await boundedText(request, BODY_LIMIT)) ?? "";
     const parsed =
-      raw !== "" && raw.length <= BODY_LIMIT
+      raw !== ""
         ? body.safeParse(
             (() => {
               try {

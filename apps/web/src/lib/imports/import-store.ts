@@ -23,6 +23,12 @@ export class ImportStoreError extends Error {
   }
 }
 
+// The job moves an import only while it is being read.
+const BEING_READ: Database["public"]["Enums"]["import_status"][] = [
+  "queued",
+  "reading",
+];
+
 const loadedSchema = z.object({
   user_id: z.string(),
   status: z.enum(Constants.public.Enums.import_status),
@@ -86,7 +92,8 @@ export function createImportStore(client: Client): ImportStorePort {
           .from("imports")
           .update({ status: "reading" })
           .eq("id", importId)
-          .eq("user_id", userId),
+          .eq("user_id", userId)
+          .in("status", BEING_READ),
         204,
       );
     },
@@ -109,6 +116,17 @@ export function createImportStore(client: Client): ImportStorePort {
     },
 
     async saveDraft(importId, userId, draft) {
+      // A read retried after the import was confirmed or failed writes
+      // nothing.
+      const current = await client
+        .from("imports")
+        .select("id")
+        .eq("id", importId)
+        .eq("user_id", userId)
+        .in("status", BEING_READ)
+        .limit(1);
+      checked("draft", current, 200);
+      if ((current.data ?? []).length === 0) return;
       // A retried read replaces what an earlier attempt may have written.
       checked(
         "draft",
@@ -136,20 +154,22 @@ export function createImportStore(client: Client): ImportStorePort {
       const printed = (currency: "ARS" | "USD") =>
         (draft.totals.find((total) => total.currency === currency)?.amount ??
           null) as unknown as number | null;
-      checked(
-        "draft",
-        await client
-          .from("imports")
-          .update({
-            status: "ready",
-            document_date: draft.documentDate,
-            printed_total_ars: printed("ARS"),
-            printed_total_usd: printed("USD"),
-          })
-          .eq("id", importId)
-          .eq("user_id", userId),
-        204,
-      );
+      const marked = await client
+        .from("imports")
+        .update({
+          status: "ready",
+          document_date: draft.documentDate,
+          printed_total_ars: printed("ARS"),
+          printed_total_usd: printed("USD"),
+        })
+        .eq("id", importId)
+        .eq("user_id", userId)
+        .in("status", BEING_READ)
+        .select("id");
+      checked("draft", marked, 200);
+      if ((marked.data ?? []).length === 0) {
+        throw new ImportStoreError("draft", "not_being_read");
+      }
     },
 
     async failed(importId, userId, failure) {
@@ -159,7 +179,8 @@ export function createImportStore(client: Client): ImportStorePort {
           .from("imports")
           .update({ status: "failed", failure })
           .eq("id", importId)
-          .eq("user_id", userId),
+          .eq("user_id", userId)
+          .in("status", BEING_READ),
         204,
       );
     },

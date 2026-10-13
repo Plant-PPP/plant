@@ -3,7 +3,7 @@ import {
   SourceError,
   type SourceErrorCode,
 } from "@plant/sources";
-import type { Database, Logger } from "@plant/shared";
+import { Constants, type Database, type Logger } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
@@ -80,10 +80,35 @@ type RunContext = {
   event: { data: { importId: string; userId: string } };
 };
 
+const FAILURES: readonly string[] = Constants.public.Enums.import_failure;
+const isFailure = (value: unknown): value is SourceErrorCode =>
+  typeof value === "string" && FAILURES.includes(value);
+
 // Ends the import: a SourceError that a retry would not pass, or a retryable
-// one past its retries.
-const failureOf = (error: unknown): SourceErrorCode =>
-  error instanceof SourceError ? error.code : "extraction_failed";
+// one past its retries. The engine hands a step's error back rebuilt from
+// JSON, without its class, so the code is read from what survives: a
+// SourceError's code, a NonRetriableError's message (the code), or
+// SourceError's message, down the causes.
+export function failureOf(error: unknown): SourceErrorCode {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current !== "object") break;
+    const { code, message, cause } = current as {
+      code?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    if (isFailure(code)) return code;
+    if (isFailure(message)) return message;
+    const named =
+      typeof message === "string"
+        ? /^source failed: (\w+)$/.exec(message)?.[1]
+        : undefined;
+    if (isFailure(named)) return named;
+    current = cause;
+  }
+  return "extraction_failed";
+}
 
 // Reads one queued import's file into its draft. The event names the import
 // and its user; the job trusts neither: the import must be that user's,
@@ -148,8 +173,7 @@ export async function runImportDocument(
       }
     });
   } catch (error) {
-    const cause = error instanceof NonRetriableError ? error.cause : error;
-    const failure = failureOf(cause);
+    const failure = failureOf(error);
     await step.run("fail", () => deps.store.failed(importId, userId, failure));
     deps.log.warn("imports.read", {
       ...fields,

@@ -3,7 +3,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(8);
+SELECT plan(10);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -124,6 +124,21 @@ SELECT is(
   1,
   'and keeps its row and its import'
 );
+
+-- ── Deleting files gives no import back ─────────────────────────────────────
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
+SET LOCAL ROLE authenticated;
+
+DELETE FROM public.uploaded_documents d
+WHERE EXISTS (SELECT 1 FROM public.imports i WHERE i.document_id = d.id);
+
+SELECT is((SELECT count(*)::int FROM public.imports), 0,
+          'a user deletes every file they imported, and its import with it');
+SELECT is(pg_temp.start_one(), 'PT429', 'and still starts no import past the month''s 20');
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

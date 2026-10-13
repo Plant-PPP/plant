@@ -199,7 +199,8 @@ export async function runOperation(
     failure = error;
   }
   log(action, { ...fields, outcome: result.ok ? "ok" : result.code }, failure);
-  if (result.ok || result.code === "failed")
+  // Anything but a malformed request may mean the page is out of date.
+  if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
   return result;
 }
@@ -493,7 +494,8 @@ export async function deleteHoldingRow(
     { ...fields, outcome: result.ok ? "ok" : result.code },
     failure,
   );
-  if (result.ok || result.code === "failed")
+  // Anything but a malformed request may mean the page is out of date.
+  if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
   return result;
 }

@@ -42,6 +42,8 @@ export const ASSISTANT_MODEL = "claude-haiku-4-5" satisfies PricedModelId;
 const HISTORY_TURNS = 10;
 // The most steps a turn takes, the last of them answering without tools.
 const MAX_STEPS = 6;
+// Room for a long answer; bounds what one step can cost.
+const MAX_OUTPUT_TOKENS = 2_048;
 // A turn ends before the chat route's maxDuration would cut it.
 const TURN_MS = 50_000;
 
@@ -142,13 +144,6 @@ export async function runAssistantTurn({
 
   const existing = await store.conversation(userId, conversationId);
   const unit = existing?.unit ?? asked;
-  if (!existing) {
-    await store.startConversation(userId, {
-      id: conversationId,
-      title: titleOf(question),
-      unit,
-    });
-  }
   const userMessage: StoredMessage = {
     id: newId(),
     role: "user",
@@ -158,6 +153,15 @@ export async function runAssistantTurn({
 
   const save = async (answer: AssistantUIMessage) => {
     try {
+      // Started with its first saved turn, so a question that fails leaves
+      // no empty conversation.
+      if (!existing) {
+        await store.startConversation(userId, {
+          id: conversationId,
+          title: titleOf(question),
+          unit,
+        });
+      }
       await store.saveTurn(userId, {
         conversationId,
         messages: [userMessage, stored(answer)],
@@ -224,6 +228,7 @@ export async function runAssistantTurn({
     tools: assistantTools(data, logFields, () => {
       read.complete = false;
     }),
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: ({ stepNumber }) =>
       stepNumber >= MAX_STEPS - 1 ? { toolChoice: "none" } : {},

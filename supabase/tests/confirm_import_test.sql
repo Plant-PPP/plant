@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(12);
+SELECT plan(15);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -30,7 +30,7 @@ CREATE FUNCTION pg_temp.opening(symbol text, quantity text) RETURNS jsonb LANGUA
                  FROM public.holdings h WHERE h.instrument_symbol = symbol))
 $f$;
 
-GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION pg_temp.opening(text, text) TO authenticated;
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -164,6 +164,33 @@ SELECT is(
   'PT404',
   'a user enrolled in MFA confirms nothing before the second factor'
 );
+
+-- ── As the import job ───────────────────────────────────────────────────────
+RESET ROLE;
+SET LOCAL ROLE service_role;
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'ready'
+                      WHERE id = 'a9000000-0000-4000-8000-0000000000a1' $$),
+  '42501',
+  'the job never moves a confirmed import back to ready'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
+                      WHERE id = 'a9000000-0000-4000-8000-0000000000a1' $$),
+  '42501',
+  'nor to failed'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'reading'
+                      WHERE id = 'a9000000-0000-4000-8000-0000000000a3' $$),
+  NULL,
+  'and moves a queued import along'
+);
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

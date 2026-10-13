@@ -50,6 +50,7 @@ jest.mock("./read", () => ({
   readLedger: (...args: unknown[]) => readLedger(...args),
 }));
 
+import { revalidatePath } from "next/cache";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
 import { suggestedTransferCost, writeOperation } from "./ledger";
@@ -332,6 +333,7 @@ describe("a day's quote", () => {
 describe("deleting a holding", () => {
   const HOLDING = "a9000000-0000-4000-8000-0000000000a9";
   beforeEach(() => {
+    jest.mocked(revalidatePath).mockClear();
     transfersOf
       .mockReset()
       .mockReturnValue({ data: [], error: null, status: 200 });
@@ -372,6 +374,7 @@ describe("deleting a holding", () => {
       ok: false,
       code: "not_found",
     });
+    expect(revalidatePath).toHaveBeenCalledWith("/assets", "layout");
   });
 
   it("fails when the movements cannot be read", async () => {
@@ -390,5 +393,6 @@ describe("deleting a holding", () => {
   it("refuses an id that is not one", async () => {
     expect(await deleteHoldingRow("x")).toEqual({ ok: false, code: "invalid" });
     expect(transfersOf).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
