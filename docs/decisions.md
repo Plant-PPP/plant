@@ -2,6 +2,15 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · The import job (PLA-35)
+
+- **One reading, no consensus yet.** The job sends the file to `gemini-3.8-flash` once and checks each row against the draft's schema; a row that fails it is left out. Pre-analysis and consensus arrive with PLA-36 and PLA-37.
+- **The model reads PDFs and pictures; CSV and Excel fail as `unsupported`** until PLA-38 parses them in code.
+- **The event names the import and its user, and the job checks both** against the import before it reads the file: the import must be that user's, queued, with its file under that user's folder.
+- **The job runs only under `next dev`**, like the quotes job, until PLA-73 registers both on a deployment with the secret key there. On a deployment an upload stays queued.
+- **A draft is replaced, not appended,** when a retried reading saves it again.
+- **The job's store is a sink** (`lib/imports/import-sink.ts`): only the Inngest route imports it, like the quote sink.
+
 ## 2026-10-13 · Uploads (PLA-34)
 
 - **A file goes straight from the browser to Storage** through a signed upload URL, then the server reads it back to check it. It never passes through a server action, whose body Next caps.

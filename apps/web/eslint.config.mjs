@@ -10,6 +10,7 @@ import {
   asSelector,
   COST_SINK,
   fenceExcept,
+  IMPORT_SINK,
   LITERAL_IMPORTS_ONLY,
   MFA_CALLS,
   MFA_CALLS_BUT_LIST,
@@ -200,9 +201,17 @@ export default defineConfig([
     rules: webRules({ allow: [QUOTE_SINK], syntax: LIB_SYNTAX }),
   },
   {
+    files: ["src/lib/imports/import-sink.ts"],
+    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
+  },
+  {
+    files: ["src/lib/imports/import-sink.test.ts"],
+    rules: webRules({ allow: [IMPORT_SINK], syntax: LIB_SYNTAX }),
+  },
+  {
     files: ["src/app/api/inngest/route.ts"],
     rules: webRules({
-      allow: [COST_SINK, QUOTE_SINK],
+      allow: [COST_SINK, QUOTE_SINK, IMPORT_SINK],
       syntax: SERVICE_WRITER_SYNTAX,
     }),
   },

@@ -454,6 +454,12 @@ const SINKS = [
     file: "src/lib/quotes/quote-sink.ts",
     user: "src/app/api/inngest/route.ts",
   },
+  {
+    name: "importSink",
+    spec: "@/lib/imports/import-sink",
+    file: "src/lib/imports/import-sink.ts",
+    user: "src/app/api/inngest/route.ts",
+  },
 ];
 const sinkParts = ({ spec, file }) => ({
   dir: file.slice(0, file.lastIndexOf("/")),
@@ -547,12 +553,15 @@ flagged.push(
       [test, `module.exports = require("./${base}");`],
     ];
   }),
-  // Only the Inngest route may use the quote sink.
+  // Only the Inngest route may use the quote and import sinks.
   ...[
     "src/app/api/chat/route.ts",
     "src/app/api/x/route.ts",
     "src/app/(app)/page.tsx",
-  ].map((filePath) => [filePath, 'import "@/lib/quotes/quote-sink";']),
+  ].flatMap((filePath) => [
+    [filePath, 'import "@/lib/quotes/quote-sink";'],
+    [filePath, 'import "@/lib/imports/import-sink";'],
+  ]),
 );
 
 flagged.push(
@@ -750,6 +759,8 @@ const OVERRIDES = [
   ["src/lib/ai/ai-cost-sink.test.ts", []],
   ["src/lib/quotes/quote-sink.ts", []],
   ["src/lib/quotes/quote-sink.test.ts", []],
+  ["src/lib/imports/import-sink.ts", []],
+  ["src/lib/imports/import-sink.test.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/app/api/inngest/route.ts", []],
@@ -779,6 +790,7 @@ const PROBES = {
   ai: 'import { generateText } from "ai";',
   sink: 'import "@/lib/ai/ai-cost-sink";',
   quoteSink: 'import "@/lib/quotes/quote-sink";',
+  importSink: 'import "@/lib/imports/import-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   testing: 'import "@plant/shared/testing";',
   prototype: 'import "@/lib/prototype/fixtures";',
@@ -811,8 +823,18 @@ for (const [filePath, exempt] of OVERRIDES) {
       continue;
     }
     if (
+      probe === "importSink" &&
+      /import-sink\.test\.ts$|^src\/app\/api\/inngest\/route\.ts$/.test(
+        filePath,
+      )
+    ) {
+      continue;
+    }
+    if (
       probe === "service" &&
-      /service-role|ai-cost-sink\.ts|quote-sink\.ts/.test(filePath)
+      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts/.test(
+        filePath,
+      )
     ) {
       continue;
     }

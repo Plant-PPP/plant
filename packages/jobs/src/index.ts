@@ -1,10 +1,20 @@
 import type { ServeHandlerOptions } from "inngest";
 
 import { DEV_SERVER_MODE, inngest } from "./client";
+import {
+  type ImportJobDeps,
+  importDocument,
+} from "./functions/import-document";
 import { ping } from "./functions/ping";
 import { type QuoteJobDeps, refreshQuotes } from "./functions/refresh-quotes";
 
+export type {
+  ImportJobDeps,
+  ImportStorePort,
+  ImportToRead,
+} from "./functions/import-document";
 export type { QuoteJobDeps } from "./functions/refresh-quotes";
+export { inngestJobRunner, type JobRunner } from "./job-runner";
 
 const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
 
@@ -14,16 +24,22 @@ const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
 // Vercel integration are signed, so they keep working. `satisfies` makes a
 // misspelled option a type error instead of a silent default.
 //
-// refresh-quotes registers only in dev-server mode, and only then are its
-// dependencies built. Dev mode checks no signature, so its registered URL is
-// the loopback `next dev` binds, never the request's Host.
-export function createServeOptions(opts: { quotes?: () => QuoteJobDeps }) {
+// refresh-quotes and import-document register only in dev-server mode, and
+// only then are their dependencies built. Dev mode checks no signature, so its
+// registered URL is the loopback `next dev` binds, never the request's Host.
+export function createServeOptions(opts: {
+  quotes?: () => QuoteJobDeps;
+  imports?: () => ImportJobDeps;
+}) {
   return {
     client: inngest,
-    functions:
-      DEV_SERVER_MODE && opts.quotes
-        ? [ping, refreshQuotes(opts.quotes())]
-        : [ping],
+    functions: DEV_SERVER_MODE
+      ? [
+          ping,
+          ...(opts.quotes ? [refreshQuotes(opts.quotes())] : []),
+          ...(opts.imports ? [importDocument(opts.imports())] : []),
+        ]
+      : [ping],
     enableUnauthedSync: false,
     ...(DEV_SERVER_MODE ? { serveOrigin: DEV_SERVE_ORIGIN } : {}),
   } satisfies ServeHandlerOptions;

@@ -1,4 +1,5 @@
 import "server-only";
+import { inngestJobRunner } from "@plant/jobs";
 import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
@@ -66,7 +67,7 @@ const finishSchema = z
   .strict();
 
 type Line = {
-  step: "start" | "finish" | "terms";
+  step: "start" | "finish" | "terms" | "job";
   userId: string;
   requestId: string | undefined;
   started: number;
@@ -262,12 +263,28 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
       await bucket.remove([path]);
       throw started.error ?? new Error("import not started");
     }
+    const importId = started.data[0]!.id;
     log(line, "ok");
+    await startJob(
+      { ...line, step: "job", started: performance.now() },
+      importId,
+    );
     revalidatePath("/import");
-    return { ok: true, importId: started.data[0]!.id };
+    return { ok: true, importId };
   } catch (error) {
     log(line, "failed", error);
     return { ok: false, code: "failed" };
+  }
+}
+
+// Starts reading the import's file. A failure leaves the import queued and is
+// logged: the upload itself succeeded.
+async function startJob(line: Line, importId: string): Promise<void> {
+  try {
+    await inngestJobRunner().startImport({ importId, userId: line.userId });
+    log(line, "ok");
+  } catch (error) {
+    log(line, "failed", error);
   }
 }
 

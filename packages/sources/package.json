@@ -2,7 +2,7 @@
   "name": "@plant/sources",
   "version": "0.0.0",
   "private": true,
-  "description": "PortfolioSourcePort and its adapters; they arrive with the \"Carga con IA\" stage.",
+  "description": "What reading a file yields (the import draft) and how a source fails; broker and exchange APIs arrive as other adapters.",
   "type": "module",
   "sideEffects": false,
   "exports": {

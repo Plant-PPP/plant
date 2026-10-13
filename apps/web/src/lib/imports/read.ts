@@ -3,7 +3,7 @@ import { buenosAiresDate, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import type { ImportItem } from "@/lib/imports/review";
+import { IMPORT_FAILURE_MESSAGES, type ImportItem } from "@/lib/imports/review";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 type Client = SupabaseClient<Database>;
@@ -22,6 +22,10 @@ export class ImportsReadError extends Error {
 const rowSchema = z.object({
   id: z.string(),
   status: z.enum(["queued", "reading", "ready", "failed", "confirmed"]),
+  failure: z
+    .enum(["unsupported", "unreadable", "nothing_found", "extraction_failed"])
+    .nullable(),
+  document_date: z.string().nullable(),
   created_at: z.string(),
   document: z.object({
     file_name: z.string(),
@@ -40,7 +44,7 @@ export async function readImports(
     client
       .from("imports")
       .select(
-        "id, status, created_at, " +
+        "id, status, failure, document_date, created_at, " +
           "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, source_connection_id)",
       )
       .order("created_at", { ascending: false })
@@ -63,8 +67,8 @@ export async function readImports(
       fileName: row.document.file_name,
       accountId: row.document.source_connection_id,
       status: row.status,
-      error: null,
-      documentDate: null,
+      error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
+      documentDate: row.document_date,
       documentTotals: [],
       rows: [],
       createdOn: buenosAiresDate(new Date(row.created_at)),

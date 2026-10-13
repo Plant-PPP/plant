@@ -20,6 +20,7 @@ export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
   holdings: "id",
+  import_items: "id",
   imports: "id",
   liabilities: "id",
   manual_prices: "id",
