@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -38,6 +38,7 @@ export function ChatComposer({
   unitPicker,
   describedBy,
   textareaRef,
+  onStop,
 }: {
   // Null when the question was not taken (the draft stays); a rejected
   // promise puts the question back in the field.
@@ -49,6 +50,8 @@ export function ChatComposer({
   unitPicker: ReactNode;
   describedBy: string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
+  // Stops an answer that is streaming in; the send button turns into it.
+  onStop?: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const mac = useMac();
@@ -122,16 +125,29 @@ export function ChatComposer({
             orientation="vertical"
             className="bg-muted-foreground/20 hidden !h-4 md:block"
           />
-          <InputGroupButton
-            type="submit"
-            variant="default"
-            size="icon-sm"
-            className="size-7"
-            disabled={busy || disabled || draft.trim() === ""}
-          >
-            <ArrowUp className="size-4" />
-            <span className="sr-only">Enviar</span>
-          </InputGroupButton>
+          {busy && onStop ? (
+            <InputGroupButton
+              type="button"
+              variant="default"
+              size="icon-sm"
+              className="size-7"
+              onClick={onStop}
+            >
+              <Square className="size-3 fill-current" />
+              <span className="sr-only">Detener</span>
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              type="submit"
+              variant="default"
+              size="icon-sm"
+              className="size-7"
+              disabled={busy || disabled || draft.trim() === ""}
+            >
+              <ArrowUp className="size-4" />
+              <span className="sr-only">Enviar</span>
+            </InputGroupButton>
+          )}
         </InputGroupAddon>
       </InputGroup>
     </form>

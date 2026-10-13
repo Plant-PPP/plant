@@ -5,7 +5,21 @@ export type Database = {
   
   "public": {
           Tables: {
-            "ai_costs": {
+            "ai_conversations": {
+                  Row: {
+                    "created_at": string,"id": string,"questions": number,"title": string,"unit": Database["public"]['Enums']["chat_unit"],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id": string,"questions"?: number,"title": string,"unit": Database["public"]['Enums']["chat_unit"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"questions"?: number,"title"?: string,"unit"?: Database["public"]['Enums']["chat_unit"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_costs": {
                   Row: {
                     "amount_usd": number,"cache_read_tokens": number,"cache_write_tokens": number,"cost_type": Database["public"]['Enums']["ai_cost_type"],"created_at": string,"id": string,"input_tokens": number,"model_id": string,"output_tokens": number,"user_id": string
                   }
@@ -15,6 +29,40 @@ export type Database = {
                   }
                   Update: {
                     "amount_usd"?: number,"cache_read_tokens"?: number,"cache_write_tokens"?: number,"cost_type"?: Database["public"]['Enums']["ai_cost_type"],"created_at"?: string,"id"?: string,"input_tokens"?: number,"model_id"?: string,"output_tokens"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_messages": {
+                  Row: {
+                    "conversation_id": string,"created_at": string,"id": string,"metadata": Json | null,"parts": NonNullable<Json>,"role": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "conversation_id": string,"created_at"?: string,"id": string,"metadata"?: Json | null,"parts": NonNullable<Json>,"role": string,"user_id"?: string
+                  }
+                  Update: {
+                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"metadata"?: Json | null,"parts"?: NonNullable<Json>,"role"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_messages_user_id_conversation_id_fkey"
+      columns: ["user_id","conversation_id"]
+isOneToOne: false
+      referencedRelation: "ai_conversations"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"ai_questions": {
+                  Row: {
+                    "asked_at": string,"id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "asked_at"?: string,"id"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "asked_at"?: string,"id"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -363,7 +411,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction"|"import_column_mapping","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -479,7 +527,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction", "import_column_mapping"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

@@ -14,7 +14,8 @@ import {
 } from "@plant/sources";
 import { z } from "zod";
 
-import { type ModelFactory, structuredCall } from "./structured-call";
+import type { ModelFactory } from "./costed-model";
+import { structuredCall } from "./structured-call";
 
 // The model that reads statements, which it takes as they are, and maps a
 // spreadsheet's columns.

@@ -70,25 +70,68 @@ export type Conversation = {
   updatedOn: string;
 };
 
+// A conversation as the history lists it.
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  unit: ChatUnit;
+  updatedOn: string;
+  // How many questions it holds.
+  questions: number;
+};
+
+export const summaryOf = (conversation: Conversation): ConversationSummary => ({
+  id: conversation.id,
+  title: conversation.title,
+  unit: conversation.unit,
+  updatedOn: conversation.updatedOn,
+  questions: conversation.messages.filter(({ role }) => role === "user").length,
+});
+
+// What an answer says under it: the day it was calculated, the dollar of a
+// dollar unit, what it read, and whether a figure left something out.
+export type AnswerMetadata = {
+  asOf: string;
+  rate: AssistantMessage["rate"];
+  sources: string[];
+  complete: boolean;
+};
+
 // The most questions a month on the beta plan. A question counts once asked,
-// even if its conversation is deleted later.
+// even if its conversation is deleted later; the database refuses the next one
+// (private.check_assistant_quota).
 export const QUESTIONS_PER_MONTH = 30;
 
-export const SUGGESTED_QUESTIONS = [
+export const ANSWER_FAILED = "No pudimos responder. Probá de nuevo.";
+export const QUOTA_USED = "Ya usaste las consultas de este mes.";
+
+// Questions the real chat offers first: the ones its tools answer.
+export const LIVE_SUGGESTED_QUESTIONS = [
   "¿Cuánto vale mi patrimonio hoy?",
   "¿Cómo me fue este año?",
   "¿Cuánto cobré de dividendos?",
   "¿Cuánto debo?",
+  "¿Cómo evolucionó mi patrimonio?",
+];
+
+// The prototype also answers about one instrument and what comes in.
+export const SUGGESTED_QUESTIONS = [
+  ...LIVE_SUGGESTED_QUESTIONS.slice(0, 4),
   "¿Cómo le fue a Apple?",
   "¿Qué cobro este mes?",
-  "¿Cómo evolucionó mi patrimonio?",
+  ...LIVE_SUGGESTED_QUESTIONS.slice(4),
 ];
 
 export const NOT_ADVICE =
   "Plant explica tus datos; no es asesoramiento financiero.";
 
-export const titleOf = (question: string): string =>
-  question.length > 48 ? `${question.slice(0, 47).trimEnd()}…` : question;
+// Cut by characters, so an emoji is never split in half.
+export function titleOf(question: string): string {
+  const characters = Array.from(question.trim());
+  return characters.length > 48
+    ? `${characters.slice(0, 47).join("").trimEnd()}…`
+    : characters.join("");
+}
 
 // What the assistant says while it reads: the sources it consults, or the
 // user's data when it names none.

@@ -2,9 +2,14 @@ import {
   addDays,
   buenosAiresDate,
   buenosAiresHour,
+  buenosAiresMonthStart,
   daysBetween,
   startOfBuenosAiresDay,
 } from "./time";
+
+it("starts a month at midnight in Buenos Aires", () => {
+  expect(buenosAiresMonthStart("2026-10-13")).toBe("2026-10-01T00:00:00-03:00");
+});
 
 describe("buenosAiresDate", () => {
   it.each([

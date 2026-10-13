@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Conversation } from "@/lib/assistant/chat";
+import type { ConversationSummary } from "@/lib/assistant/chat";
 import { formatDate } from "@/lib/format/date";
 import { countOf } from "@/lib/format/text";
 
@@ -29,8 +29,8 @@ export function ChatHeader({
   onDelete,
   historyRef,
 }: {
-  conversations: readonly Conversation[];
-  active: Conversation | undefined;
+  conversations: readonly ConversationSummary[];
+  active: ConversationSummary | undefined;
   // Opens a conversation, or a new one with null.
   onOpen: (conversationId: string | null) => void;
   onDelete: () => void;
@@ -69,8 +69,7 @@ export function ChatHeader({
                 <span className="truncate text-xs">{conversation.title}</span>
                 <span className="text-muted-foreground text-xs">
                   {`${formatDate(conversation.updatedOn)} · ${countOf(
-                    conversation.messages.filter(({ role }) => role === "user")
-                      .length,
+                    conversation.questions,
                     "pregunta",
                     "preguntas",
                   )}`}

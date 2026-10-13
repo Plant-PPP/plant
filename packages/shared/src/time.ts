@@ -27,6 +27,12 @@ export function buenosAiresDate(instant: Date): string {
   return `${parts.year?.padStart(4, "0")}-${parts.month}-${parts.day}`;
 }
 
+// The instant a calendar month starts in Buenos Aires (UTC−3, no daylight
+// saving), for the month of a YYYY-MM-DD day; the monthly quotas count from
+// it, as their triggers do in SQL.
+export const buenosAiresMonthStart = (day: string): string =>
+  `${day.slice(0, 7)}-01T00:00:00-03:00`;
+
 export function buenosAiresHour(instant: Date): number {
   return Number(wallClockParts(instant).hour);
 }

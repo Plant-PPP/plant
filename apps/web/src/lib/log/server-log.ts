@@ -45,10 +45,9 @@ function cleanFields(fields: LogFields | undefined): Record<string, LogValue> {
 
 // An error's code when it has one (Auth's, Node's), else its class, so one
 // failure reads the same on every line.
-export function errorType(
-  error: { name?: unknown; code?: unknown } | null | undefined,
-): string | undefined {
-  const { code, name } = error ?? {};
+export function errorType(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const { code, name } = error as { name?: unknown; code?: unknown };
   if (typeof code === "string" && code) return code;
   return typeof name === "string" && name ? name : undefined;
 }

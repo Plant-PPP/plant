@@ -51,7 +51,8 @@ export type SourceConnectionsView = ListView<SourceConnectionRow>;
 export type ReadContext = {
   userId: string;
   requestId: string | undefined;
-  page: SetupPage;
+  // Where the read is for: a page, or the assistant's tools.
+  page: SetupPage | "/assistant";
   params: KeysetParams;
 };
 

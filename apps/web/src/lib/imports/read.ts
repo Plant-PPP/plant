@@ -1,6 +1,11 @@
 import "server-only";
 import { instrumentIndex, resolveSymbol, unitPrice } from "@plant/core";
-import { buenosAiresDate, Constants, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  buenosAiresMonthStart,
+  Constants,
+  type Database,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -43,7 +48,7 @@ export async function readImports(
   client: Client,
   today: string,
 ): Promise<{ items: ImportItem[]; used: number }> {
-  const monthStart = `${today.slice(0, 7)}-01T00:00:00-03:00`;
+  const monthStart = buenosAiresMonthStart(today);
   const [list, month] = await Promise.all([
     client
       .from("imports")
