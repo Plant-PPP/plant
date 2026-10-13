@@ -6,7 +6,12 @@ import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { ARCHIVED_ROW_LIMIT, PAGE_ROW_LIMIT } from "./limits";
 import { z } from "zod";
-import { readList, readPortfolios, readSourceConnections } from "./read";
+import {
+  readDeletable,
+  readList,
+  readPortfolios,
+  readSourceConnections,
+} from "./read";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
@@ -393,5 +398,83 @@ describe("a row the list cannot read", () => {
     expect(calls).toHaveLength(1);
     expect(view.archived).toEqual([]);
     expect(view.archivedNextHref).toBeNull();
+  });
+});
+
+describe("readDeletable", () => {
+  const P = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+  const A = (n: number) => `00000000-0000-4000-8000-0000000000a${n}`;
+  const one = [{ id: ID }];
+  const deletable = (client: SupabaseClient<Database>) =>
+    readDeletable(client, {
+      userId: USER,
+      requestId: REQUEST_ID,
+      page: "/accounts",
+      params: {},
+    });
+
+  it("offers only the rows nothing ever used, keeping the last active portfolio", async () => {
+    const { client, calls } = fakeClient(
+      ok([
+        { id: P(1), archived_at: null, holdings: [], source_connections: [] },
+        { id: P(2), archived_at: null, holdings: one, source_connections: [] },
+        { id: P(3), archived_at: AT, holdings: [], source_connections: one },
+        { id: P(4), archived_at: AT, holdings: [], source_connections: [] },
+      ]),
+      ok([
+        { id: A(1), holdings: [], uploaded_documents: [] },
+        { id: A(2), holdings: [], uploaded_documents: one },
+        { id: A(3), holdings: one, uploaded_documents: one },
+      ]),
+    );
+    await expect(deletable(client)).resolves.toEqual({
+      portfolios: [P(1), P(4)],
+      sourceConnections: [A(1), A(2)],
+      deletesUploads: [A(2)],
+    });
+    expect(calls).toEqual([
+      [
+        ["select", "id, archived_at, holdings(id), source_connections(id)"],
+        ["eq", "user_id", USER],
+        ["limit", 1, { referencedTable: "holdings" }],
+        ["limit", 1, { referencedTable: "source_connections" }],
+      ],
+      [
+        ["select", "id, holdings(id), uploaded_documents(id)"],
+        ["eq", "user_id", USER],
+        ["limit", 1, { referencedTable: "holdings" }],
+        ["limit", 1, { referencedTable: "uploaded_documents" }],
+      ],
+    ]);
+  });
+
+  it("keeps the only active portfolio even when unused", async () => {
+    const { client } = fakeClient(
+      ok([
+        { id: P(1), archived_at: null, holdings: [], source_connections: [] },
+        { id: P(2), archived_at: AT, holdings: [], source_connections: [] },
+      ]),
+      ok([]),
+    );
+    await expect(deletable(client)).resolves.toMatchObject({
+      portfolios: [P(2)],
+    });
+  });
+
+  it("logs a failed read by its code and throws", async () => {
+    const { client } = fakeClient(ok([]), {
+      data: null,
+      error: { code: "XX000", message: SENTINEL },
+      status: 500,
+    });
+    const error = await deletable(client).catch((caught: unknown) => caught);
+    expect(isLoggedError(error)).toBe(true);
+    expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines[0])).not.toContain(SENTINEL);
+    expect(lines[0]).toMatchObject({
+      level: "error",
+      "plant.portfolio_setup.list": "deletable",
+      "error.type": "XX000",
+    });
   });
 });

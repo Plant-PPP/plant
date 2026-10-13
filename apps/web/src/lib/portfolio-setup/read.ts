@@ -267,3 +267,76 @@ export function readSourceConnections(
     options,
   );
 }
+
+// Which of the user's portfolios and accounts a delete would go through for,
+// as the delete guards decide: no holding ever sat in either, no account
+// defaults to the portfolio, and the last active portfolio stays. Each
+// embedded list stops at one row, which is enough to tell. The accounts that
+// would take uploads with them get the confirmation that says so.
+export type Deletable = {
+  portfolios: string[];
+  sourceConnections: string[];
+  deletesUploads: string[];
+};
+
+type Embedded = { id: string }[] | null;
+
+const none = (rows: Embedded) => (rows ?? []).length === 0;
+
+export async function readDeletable(
+  client: SupabaseClient<Database>,
+  context: ReadContext,
+): Promise<Deletable> {
+  const { userId } = context;
+  const [portfolios, sourceConnections] = await Promise.all([
+    client
+      .from("portfolios")
+      .select("id, archived_at, holdings(id), source_connections(id)")
+      .eq("user_id", userId)
+      .limit(1, { referencedTable: "holdings" })
+      .limit(1, { referencedTable: "source_connections" }),
+    client
+      .from("source_connections")
+      .select("id, holdings(id), uploaded_documents(id)")
+      .eq("user_id", userId)
+      .limit(1, { referencedTable: "holdings" })
+      .limit(1, { referencedTable: "uploaded_documents" }),
+  ]);
+  const failure =
+    classifyPostgrestResult(portfolios, 200) ??
+    classifyPostgrestResult(sourceConnections, 200);
+  if (failure) {
+    serverLog.error(
+      EVENT,
+      {
+        ...contextFields(context),
+        "plant.portfolio_setup.list": "deletable",
+        "plant.outcome": "error",
+      },
+      new PortfolioSetupError(failure.code),
+    );
+    throw new LoggedError("portfolio_setup.read_failed");
+  }
+
+  const portfolioRows = portfolios.data ?? [];
+  const activeCount = portfolioRows.filter(
+    (row) => row.archived_at === null,
+  ).length;
+  const accountRows = (sourceConnections.data ?? []).filter((row) =>
+    none(row.holdings),
+  );
+  return {
+    portfolios: portfolioRows
+      .filter(
+        (row) =>
+          none(row.holdings) &&
+          none(row.source_connections) &&
+          (row.archived_at !== null || activeCount > 1),
+      )
+      .map((row) => row.id),
+    sourceConnections: accountRows.map((row) => row.id),
+    deletesUploads: accountRows
+      .filter((row) => !none(row.uploaded_documents))
+      .map((row) => row.id),
+  };
+}

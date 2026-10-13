@@ -53,6 +53,8 @@ export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
   "manual_rates",
   "movements",
   "operations",
+  "portfolios",
+  "source_connections",
   "tax_report_exclusions",
   "uploaded_documents",
 ]);

@@ -21,6 +21,8 @@ import {
   archiveSourceConnection,
   createPortfolio,
   createSourceConnection,
+  deletePortfolio,
+  deleteSourceConnection,
   renamePortfolio,
   restorePortfolio,
   restoreSourceConnection,
@@ -532,5 +534,198 @@ describe("source connection actions", () => {
       code: "failed",
     });
     expect(onlyLine()).toMatchObject({ "error.type": "23503" });
+  });
+});
+
+// Each query is awaited at the end of its chain, as postgrest-js builders are,
+// and answers with the next response; the client itself is not awaitable.
+function chainClient(
+  responses: { data: unknown; error: Response["error"]; status: number }[],
+  removed: { error: { name: string } | null } = { error: null },
+) {
+  const calls: unknown[][] = [];
+  const query = (table: string) => {
+    calls.push(["from", table]);
+    const builder: Record<string, unknown> = {};
+    for (const method of ["select", "delete", "eq", "is", "limit"]) {
+      builder[method] = (...args: unknown[]) => {
+        calls.push([method, ...args]);
+        return builder;
+      };
+    }
+    builder.then = (
+      resolve: (value: unknown) => unknown,
+      reject: (reason: unknown) => unknown,
+    ) => {
+      const response = responses.shift();
+      return response
+        ? Promise.resolve(response).then(resolve, reject)
+        : Promise.reject(new Error("no response left")).then(resolve, reject);
+    };
+    return builder;
+  };
+  createClient.mockResolvedValue({
+    from: query,
+    storage: {
+      from: (bucket: string) => ({
+        remove: async (paths: string[]) => {
+          calls.push(["remove", bucket, paths]);
+          return { data: paths.map((name) => ({ name })), ...removed };
+        },
+      }),
+    },
+  });
+  return calls;
+}
+
+const rows = (...data: unknown[]) => ({ data, error: null, status: 200 });
+const PATH = `${USER}/imports/${ID}/${OTHER}`;
+
+describe("deletePortfolio", () => {
+  it("deletes one row of the user by id", async () => {
+    const calls = chainClient([ok(ID)]);
+    await expect(deletePortfolio(ID)).resolves.toEqual({ ok: true, id: ID });
+    expect(calls).toEqual([
+      ["from", "portfolios"],
+      ["delete"],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["select", "id"],
+    ]);
+    expect(onlyLine()).toMatchObject({
+      "plant.outcome": "ok",
+      "plant.portfolio_setup.action": "delete_portfolio",
+    });
+  });
+
+  it.each([
+    "last_active_portfolio",
+    "portfolio_in_use",
+    "portfolio_has_holdings",
+  ] as const)("maps the %s guard", async (hint) => {
+    chainClient([refused(409, "PT409", hint)]);
+    await expect(deletePortfolio(ID)).resolves.toEqual({
+      ok: false,
+      code: hint,
+    });
+    expect(onlyLine()).toMatchObject({ "plant.outcome": hint });
+  });
+
+  it("is not_found when no row of the user matched", async () => {
+    chainClient([ok()]);
+    await expect(deletePortfolio(ID)).resolves.toEqual({
+      ok: false,
+      code: "not_found",
+    });
+  });
+
+  it("refuses an id that does not parse without a write", async () => {
+    await expect(deletePortfolio("1")).resolves.toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteSourceConnection", () => {
+  it("removes the uploads' files, then deletes the account", async () => {
+    const calls = chainClient([rows(), rows({ storage_path: PATH }), ok(ID)]);
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: true,
+      id: ID,
+    });
+    expect(calls).toEqual([
+      ["from", "holdings"],
+      ["select", "id"],
+      ["eq", "user_id", USER],
+      ["eq", "source_connection_id", ID],
+      ["limit", 1],
+      ["from", "uploaded_documents"],
+      ["select", "storage_path"],
+      ["eq", "user_id", USER],
+      ["eq", "source_connection_id", ID],
+      ["is", "file_deleted_at", null],
+      ["remove", "imports", [PATH]],
+      ["from", "source_connections"],
+      ["delete"],
+      ["eq", "user_id", USER],
+      ["eq", "id", ID],
+      ["select", "id"],
+    ]);
+    expect(onlyLine()).toMatchObject({
+      "plant.outcome": "ok",
+      "plant.portfolio_setup.action": "delete_source_connection",
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/import");
+  });
+
+  it("deletes an account without uploads without touching Storage", async () => {
+    const calls = chainClient([rows(), rows(), ok(ID)]);
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: true,
+      id: ID,
+    });
+    expect(calls.some(([call]) => call === "remove")).toBe(false);
+  });
+
+  it("refuses an account a holding sits in before any file goes", async () => {
+    const calls = chainClient([rows({ id: OTHER })]);
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: false,
+      code: "source_connection_has_holdings",
+    });
+    expect(calls.filter(([call]) => call === "from")).toEqual([
+      ["from", "holdings"],
+    ]);
+    expect(onlyLine()).toMatchObject({
+      "plant.outcome": "source_connection_has_holdings",
+    });
+    expect(revalidatePath).not.toHaveBeenCalledWith("/import");
+  });
+
+  it("keeps the account when a file cannot be removed", async () => {
+    const calls = chainClient([rows(), rows({ storage_path: PATH })], {
+      error: { name: "StorageApiError" },
+    });
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: false,
+      code: "failed",
+    });
+    expect(calls).not.toContainEqual(["from", "source_connections"]);
+    expect(onlyLine()).toMatchObject({
+      level: "error",
+      "error.type": "storage_remove",
+    });
+  });
+
+  it("fails without removing files when the uploads cannot be read", async () => {
+    const calls = chainClient([rows(), refused(500, "XX000")]);
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: false,
+      code: "failed",
+    });
+    expect(calls.some(([call]) => call === "remove")).toBe(false);
+    expect(onlyLine()).toMatchObject({ "error.type": "XX000" });
+  });
+
+  it("maps the guard when a holding arrived after the check", async () => {
+    chainClient([
+      rows(),
+      rows(),
+      refused(409, "PT409", "source_connection_has_holdings"),
+    ]);
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: false,
+      code: "source_connection_has_holdings",
+    });
+  });
+
+  it("is not_found for an id that is not one of the user's accounts", async () => {
+    chainClient([rows(), rows(), ok()]);
+    await expect(deleteSourceConnection(OTHER)).resolves.toEqual({
+      ok: false,
+      code: "not_found",
+    });
   });
 });

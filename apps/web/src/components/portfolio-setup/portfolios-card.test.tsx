@@ -84,3 +84,35 @@ it("passes the page's pending to its archived list", () => {
   };
   expect(render(paged, true)).toMatch(/<a [^>]*aria-disabled="true"/);
 });
+
+it("offers delete only on the rows a delete would go through for", () => {
+  const html = renderToStaticMarkup(
+    <PortfoliosCard
+      pending={false}
+      run={() => true}
+      view={listView({
+        active: [
+          { id: "p1", name: "Principal" },
+          { id: "p2", name: "Largo plazo" },
+        ],
+        archived: [
+          { id: "p3", name: "Vieja" },
+          { id: "p4", name: "Usada" },
+        ],
+      })}
+      actions={{
+        create: unused,
+        rename: unused,
+        archive: unused,
+        restore: unused,
+        delete: unused,
+      }}
+      usedBy={() => []}
+      deletable={["p2", "p3"]}
+    />,
+  );
+  expect(html).toContain('aria-label="Borrar Largo plazo"');
+  expect(html).toContain('aria-label="Borrar Vieja"');
+  expect(html).not.toContain('aria-label="Borrar Principal"');
+  expect(html).not.toContain('aria-label="Borrar Usada"');
+});

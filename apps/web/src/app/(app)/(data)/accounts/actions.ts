@@ -1,9 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { removeAccountUploads } from "@/lib/portfolio-setup/account-uploads";
 import {
   activeWrite,
   restoreWrite,
   runArchive,
+  runDelete,
   runInsert,
   runUpdate,
 } from "@/lib/portfolio-setup/run-write";
@@ -53,6 +56,11 @@ export async function renamePortfolio(
 
 export async function archivePortfolio(id: unknown): Promise<WriteResult> {
   return runArchive("portfolios", "archive_portfolio", id);
+}
+
+// Only a portfolio nothing ever used; the guard refuses the rest.
+export async function deletePortfolio(id: unknown): Promise<WriteResult> {
+  return runDelete("portfolios", "delete_portfolio", id);
 }
 
 const restorePortfolioRow = restoreWrite(
@@ -155,4 +163,19 @@ export async function restoreSourceConnection(
     id,
     restoreWrite("source_connections", sourceConnectionRow),
   );
+}
+
+// Only an account no holding ever sat in. Its uploads go with it, their files
+// first.
+export async function deleteSourceConnection(
+  id: unknown,
+): Promise<WriteResult> {
+  const result = await runDelete(
+    "source_connections",
+    "delete_source_connection",
+    id,
+    removeAccountUploads,
+  );
+  if (result.ok) revalidatePath("/import");
+  return result;
 }

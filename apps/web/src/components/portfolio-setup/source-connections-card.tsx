@@ -104,14 +104,17 @@ export function SourceConnectionsCard({
   run,
   portfolios,
   actions,
-  deletesUploads,
+  deletable = [],
+  deletesUploads = [],
 }: {
   view: SourceConnectionsView;
   pending: boolean;
   run: SetupRun;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
-  // The accounts whose delete would go through and take their uploads.
+  // The accounts whose delete would go through, the only ones that offer it.
+  deletable?: readonly string[];
+  // Those of them that would take their uploads along.
   deletesUploads?: readonly string[];
 }) {
   const card = useSetupCard({ run, pending });
@@ -124,6 +127,7 @@ export function SourceConnectionsCard({
     tooltip: "Borrar",
     label: (row: SourceConnectionRow) => `Borrar ${row.institution}`,
     onClick: (row: SourceConnectionRow) => !pending && setDeleting(row),
+    hidden: (row: SourceConnectionRow) => !deletable.includes(row.id),
   };
 
   function deleteRow(
@@ -259,7 +263,7 @@ export function SourceConnectionsCard({
         <ConfirmDialog
           title={`¿Borrar ${deleting.institution}?`}
           description={deleteAccountDescription(
-            deletesUploads?.includes(deleting.id) ?? false,
+            deletesUploads.includes(deleting.id),
           )}
           confirmLabel="Borrar"
           returnFocusTo={card.focusHeading}
