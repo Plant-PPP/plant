@@ -14,6 +14,11 @@ const portfolio = z
   .optional()
   .describe("El nombre o el id de una cartera del usuario; sin ella, todas.");
 
+const instrument = z
+  .string()
+  .max(60)
+  .describe("El símbolo (AAPL, AL30, BTC) o el nombre de un instrumento.");
+
 // The assistant's read-only tools over one user's data. A read that fails
 // answers read_failed, and the turn goes on.
 export function assistantTools(
@@ -87,6 +92,40 @@ export function assistantTools(
       execute: guarded("convertCurrency", (input) =>
         data.convertCurrency(input),
       ),
+    }),
+    getIncomeEvents: tool({
+      description:
+        "Lo que el usuario espera cobrar en los próximos 90 días: dividendos y cupones según lo que pagó cada instrumento antes, y los plazos fijos que vencen, por fecha y sumado por mes.",
+      inputSchema: z.object({}),
+      execute: guarded("getIncomeEvents", () => data.incomeEvents()),
+    }),
+    getLiabilities: tool({
+      description:
+        "Las deudas del usuario con su saldo, su cuota, sus cuotas restantes y su próximo vencimiento, y el total que debe.",
+      inputSchema: z.object({}),
+      execute: guarded("getLiabilities", () => data.liabilities()),
+    }),
+    listTransactions: tool({
+      description:
+        "Los últimos movimientos (compras, ventas, dividendos, cupones, traspasos, ajustes), del más nuevo al más viejo, de un instrumento o de todos. Los montos están en la moneda de cada movimiento.",
+      inputSchema: z.object({ instrument: instrument.optional() }),
+      execute: guarded("listTransactions", ({ instrument }) =>
+        data.transactions(instrument),
+      ),
+    }),
+    getAssetInfo: tool({
+      description:
+        "Un instrumento: qué es, su precio de hoy, cuánto tiene el usuario y en qué cuentas y carteras.",
+      inputSchema: z.object({ instrument }),
+      execute: guarded("getAssetInfo", ({ instrument }) =>
+        data.assetInfo(instrument),
+      ),
+    }),
+    getImportStatus: tool({
+      description:
+        "Los últimos archivos que el usuario subió en Cargar, en qué estado está cada uno y cuántas cargas usó este mes.",
+      inputSchema: z.object({}),
+      execute: guarded("getImportStatus", () => data.importStatus()),
     }),
   };
 }

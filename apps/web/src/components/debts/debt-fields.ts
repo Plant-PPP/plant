@@ -8,13 +8,7 @@ import {
   percentToFraction,
 } from "@/lib/format/amount";
 
-export const LIABILITY_KIND_LABELS: Record<LiabilityKind, string> = {
-  mortgage: "Hipotecario",
-  personal_loan: "Préstamo personal",
-  credit_card: "Tarjeta",
-  usd_debt: "Deuda en dólares",
-  crypto_loan: "Préstamo cripto",
-};
+export { LIABILITY_KIND_LABELS } from "@/lib/debts/labels";
 
 // What the debt dialog holds, as typed.
 export type DebtFields = {

@@ -8,10 +8,10 @@ import {
 } from "@plant/core";
 import { addDays, exactOf, stored } from "@plant/shared";
 
-import type { ChatUnit } from "@/lib/assistant/chat";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import type { Ledger } from "@/lib/ledger/ledger";
 
-import type { PrototypeState } from "./prototype-store";
+import type { ChatUnit } from "./chat";
 
 // How far ahead the calendar looks.
 export const CALENDAR_DAYS = 90;
@@ -29,7 +29,7 @@ export type IncomeEvent = {
 // before, across every account it is held in, and each placement that
 // matures, with its capital and interest.
 export function incomeCalendar(
-  state: PrototypeState,
+  state: Ledger,
   snapshot: QuoteSnapshot,
   unit: ChatUnit,
 ): IncomeEvent[] {

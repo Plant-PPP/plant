@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The assistant's other five tools (PLA-81)
+
+- **`getIncomeEvents`, `getLiabilities`, `listTransactions`, `getAssetInfo` and `getImportStatus` read what the first five read.** The ledger, the debts and the quotes come from the same read of the turn (`readCloses`, through the session's client), valued with the closes' snapshot of today, so a debt or a price agrees with `getPortfolioSummary`. `getImportStatus` reads Cargar's list (`readImports`). No tool takes a user: RLS keeps every read to the session's rows.
+- **The income calendar is the prototype's, now in `lib/assistant/income.ts`.** Dividends and coupons are projected from what each instrument paid before (core's `upcomingIncome`), and placements that mature in the next 90 days add their capital and interest. The chart PLA-83 asks for waits for the chart tool (PLA-53).
+- **Movements keep their own currency.** `listTransactions` answers each movement's price and amount as typed or imported, in its currency, rather than converting old trades at today's rate; the tool's description tells the model so.
+- **An instrument is named by its symbol or its catalog name.** A name the catalog does not have answers `unknown_instrument` with the symbols the user holds, as an unknown portfolio does.
+
 ## 2026-10-13 · Review fixes in the database (wave 1)
 
 - **The import quota counts imports started, not imports kept.** A user deletes their files, and each file's import goes with it, so counting live imports gave an import back per deleted file. `private.import_requests` keeps one row per import started (user and time only, no grant to any API role), backfilled from `imports`, and the quota trigger counts it for the calendar month in Buenos Aires, under the same per-user lock. The trigger both counts and records, so it is now `SECURITY DEFINER` (authenticated holds nothing on the private table) and joins the floor's definer list. Rows are never pruned; the quota bounds them at 20 a user a month.

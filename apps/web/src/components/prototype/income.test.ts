@@ -2,7 +2,7 @@ import { snapshotOn } from "@plant/core";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
-import { incomeCalendar } from "./prototype-income";
+import { incomeCalendar } from "@/lib/assistant/income";
 import { initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
