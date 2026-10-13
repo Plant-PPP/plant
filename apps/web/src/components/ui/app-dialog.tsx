@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 // A form's dialog, open while mounted: a caller mounts it to open it.
 function AppDialog({
@@ -16,6 +17,7 @@ function AppDialog({
   title,
   description,
   returnFocusTo,
+  className,
   children,
 }: {
   onClose: () => void;
@@ -24,6 +26,8 @@ function AppDialog({
   // Where focus goes on close, given the element that opened the dialog when
   // it is still on the page.
   returnFocusTo?: (opener: HTMLElement | null) => HTMLElement | null;
+  // Classes over the default width, for content wider than a form.
+  className?: string;
   children: React.ReactNode;
 }) {
   // Opened by state with no DialogTrigger, so Radix has no trigger to return
@@ -37,7 +41,10 @@ function AppDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         data-slot="app-dialog"
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"
+        className={cn(
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md",
+          className,
+        )}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           // A click does not focus a button in Safari or Firefox on macOS,

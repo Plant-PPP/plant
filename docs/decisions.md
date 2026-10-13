@@ -2,6 +2,17 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Charts and the income calendar in the chat (PLA-53, PLA-83, prototype)
+
+- **An answer carries up to three charts and one table**: `charts` (bars or a line) and `table`. The numbers in both come from the data, never from the text.
+- **Every chart says what its data is**: "Datos al <day> en <unit>". It has three actions: see it larger, save it as a CSV, and save it as a PNG drawn on a canvas. A chart that fails to draw says so in its place, and the rest of the answer stays.
+- **"¿Cómo evolucionó mi patrimonio?" draws a line** of the last 12 month ends from the closes.
+- **"¿Qué cobro este mes?" shows the next 90 days**: this month's sum, the window's, a table of each payment and a chart by month.
+  - The dividends and coupons are an estimate from what each instrument paid before: the next payment comes one typical gap (the median between payments) after the last, at the last payment per unit times the units held today. `upcomingIncome` in `packages/core` does it.
+  - An instrument that paid fewer than twice, or skipped two payments in a row, is expected to pay nothing.
+  - A placement that matures in the window counts with its capital and interest.
+  - The amounts are converted at today's rates, and the answer says it is an estimate.
+
 ## 2026-10-13 · The assistant beside every page (PLA-82, prototype)
 
 - **Every page but Asistente's own has a "Preguntale a Plant" button that opens the chat beside it**: a column about 400px wide that pushes the page aside on a wide screen, a sheet over it on a phone. The column holds one conversation; the list of them stays on Asistente's page.

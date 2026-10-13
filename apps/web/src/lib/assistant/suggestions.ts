@@ -12,6 +12,7 @@ const BY_SCREEN: readonly (readonly [string, readonly string[]])[] = [
       "¿Cómo está repartido mi patrimonio?",
       "¿Cómo me fue este año?",
       "¿Cuánto cobré de dividendos?",
+      "¿Qué cobro este mes?",
       "¿Cómo le fue a Apple?",
     ],
   ],

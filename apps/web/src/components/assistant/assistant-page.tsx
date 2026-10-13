@@ -15,6 +15,7 @@ import {
   CHAT_UNITS,
   type ChatUnit,
   type Conversation,
+  MAX_CHARTS,
   NOT_ADVICE,
   QUESTIONS_PER_MONTH,
   SUGGESTED_QUESTIONS,
@@ -23,7 +24,8 @@ import { consultingText } from "@/lib/assistant/suggestions";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import { cn } from "@/lib/utils";
 
-import { AnswerChart } from "./answer-chart";
+import { AnswerTable } from "./answer-table";
+import { ChartBoundary, ChartCard } from "./chart-card";
 
 export type AssistantActions = {
   // Asks in a conversation, a new one when its id is not listed yet; resolves
@@ -71,7 +73,13 @@ function Answer({
         <span className="sr-only">Plant: </span>
         {text}
       </p>
-      {done && message.chart && <AnswerChart chart={message.chart} />}
+      {done && message.table && <AnswerTable table={message.table} />}
+      {done &&
+        message.charts.slice(0, MAX_CHARTS).map((chart, index) => (
+          <ChartBoundary key={index}>
+            <ChartCard chart={chart} asOf={message.asOf} />
+          </ChartBoundary>
+        ))}
       {done && (
         <p className="text-muted-foreground text-xs">
           {[

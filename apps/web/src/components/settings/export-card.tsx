@@ -12,19 +12,7 @@ import {
 } from "@/components/ui/card";
 
 import type { ExportFile } from "@/lib/export/csv";
-
-// Hands the browser one file to save.
-function download({ name, csv }: ExportFile) {
-  // A byte order mark, so a spreadsheet reads the accents as UTF-8.
-  const url = URL.createObjectURL(
-    new Blob(["\uFEFF", csv()], { type: "text/csv;charset=utf-8" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+import { csvBlob, saveFile } from "@/lib/export/download";
 
 // Everything the user loaded, one CSV per kind of row.
 export function ExportCard({ files }: { files: readonly ExportFile[] }) {
@@ -44,7 +32,7 @@ export function ExportCard({ files }: { files: readonly ExportFile[] }) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => download(file)}
+            onClick={() => saveFile(file.name, csvBlob(file.csv()))}
           >
             <Download />
             {file.label}
