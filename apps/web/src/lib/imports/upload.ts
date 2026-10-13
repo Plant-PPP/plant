@@ -111,24 +111,24 @@ export function cleanFileName(name: string): string | null {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Where an import's file goes: under its owner's folder, then the import's.
+// Where an upload's file goes: under its owner's folder, then the upload's.
 export const uploadPath = (
   userId: string,
-  importId: string,
+  uploadId: string,
   objectId: string,
-): string => `${userId}/imports/${importId}/${objectId}`;
+): string => `${userId}/imports/${uploadId}/${objectId}`;
 
-// Why a path cannot be the file of `importId` for `userId`; null when it is.
+// Why a path cannot be the file of `uploadId` for `userId`; null when it is.
 export function uploadPathProblem(
   path: string,
-  { userId, importId }: { userId: string; importId: string },
-): "segments" | "owner" | "folder" | "import" | "object" | null {
+  { userId, uploadId }: { userId: string; uploadId: string },
+): "segments" | "owner" | "folder" | "upload" | "object" | null {
   const parts = path.split("/");
   if (parts.length !== 4) return "segments";
   const [owner, folder, id, object] = parts as [string, string, string, string];
   if (owner !== userId) return "owner";
   if (folder !== "imports") return "folder";
-  if (id !== importId || !UUID.test(id)) return "import";
+  if (id !== uploadId || !UUID.test(id)) return "upload";
   if (!UUID.test(object)) return "object";
   return null;
 }

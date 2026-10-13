@@ -5,8 +5,8 @@ const file = new File(["%PDF-1.7"], "Resumen.pdf", { type: "" });
 const actions = () => ({
   start: jest.fn().mockResolvedValue({
     ok: true,
-    importId: "i1",
-    path: "u1/imports/i1/o1",
+    uploadId: "up1",
+    path: "u1/imports/up1/o1",
     token: "t1",
     type: "application/pdf",
   }),
@@ -23,14 +23,14 @@ it("puts the file at the signed URL as the type its name says, then finishes", a
     accountId: "a1",
   });
   expect(put).toHaveBeenCalledWith(
-    "u1/imports/i1/o1",
+    "u1/imports/up1/o1",
     "t1",
     file,
     "application/pdf",
   );
   expect(each.finish).toHaveBeenCalledWith({
-    importId: "i1",
-    path: "u1/imports/i1/o1",
+    uploadId: "up1",
+    path: "u1/imports/up1/o1",
     fileName: "Resumen.pdf",
     accountId: "a1",
   });

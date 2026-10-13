@@ -55,7 +55,7 @@ export async function uploadOne(
   const { error } = await put(started.path, started.token, file, started.type);
   if (error) return "failed";
   const finished = await actions.finish({
-    importId: started.importId,
+    uploadId: started.uploadId,
     path: started.path,
     fileName: file.name,
     accountId,

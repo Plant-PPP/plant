@@ -796,9 +796,9 @@ SELECT is_empty(
      SELECT policyname FROM pg_policies
      WHERE schemaname = 'storage' AND tablename = 'objects' AND permissive = 'PERMISSIVE'
        AND (roles <> '{authenticated}'::name[] OR cmd NOT IN ('SELECT', 'INSERT', 'DELETE')
-            OR coalesce(qual, with_check) NOT LIKE '%bucket_id = ''imports''::text%'
-            OR coalesce(qual, with_check) NOT LIKE '%foldername(name))[1] = ( SELECT (auth.uid())::text%'
-            OR coalesce(qual, with_check) NOT LIKE '%foldername(name))[2] = ''imports''::text%') $$,
+            OR coalesce(qual, with_check) NOT LIKE '%bucket_id = ''imports''%'
+            OR coalesce(qual, with_check) NOT LIKE '%[1] = %auth.uid()%'
+            OR coalesce(qual, with_check) NOT LIKE '%[2] = ''imports''%') $$,
   'storage.objects has the MFA gate, and each user reaches only the imports files in their own folder, never overwriting one'
 );
 

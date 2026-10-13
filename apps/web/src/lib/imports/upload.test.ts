@@ -84,28 +84,28 @@ describe("cleanFileName", () => {
 
 describe("uploadPathProblem", () => {
   const userId = "a0000000-0000-4000-8000-00000000000a";
-  const importId = "a9000000-0000-4000-8000-0000000000a9";
+  const uploadId = "a9000000-0000-4000-8000-0000000000a9";
   const objectId = "a7000000-0000-4000-8000-0000000000a7";
 
   it("takes the path the upload was given", () => {
     expect(
-      uploadPathProblem(uploadPath(userId, importId, objectId), {
+      uploadPathProblem(uploadPath(userId, uploadId, objectId), {
         userId,
-        importId,
+        uploadId,
       }),
     ).toBeNull();
   });
 
   it.each([
-    [`${userId}/imports/${importId}`, "segments"],
+    [`${userId}/imports/${uploadId}`, "segments"],
     [
-      `b0000000-0000-4000-8000-00000000000b/imports/${importId}/${objectId}`,
+      `b0000000-0000-4000-8000-00000000000b/imports/${uploadId}/${objectId}`,
       "owner",
     ],
-    [`${userId}/other/${importId}/${objectId}`, "folder"],
-    [`${userId}/imports/${objectId}/${objectId}`, "import"],
-    [`${userId}/imports/${importId}/..`, "object"],
+    [`${userId}/other/${uploadId}/${objectId}`, "folder"],
+    [`${userId}/imports/${objectId}/${objectId}`, "upload"],
+    [`${userId}/imports/${uploadId}/..`, "object"],
   ])("refuses %s: %s", (path, problem) => {
-    expect(uploadPathProblem(path, { userId, importId })).toBe(problem);
+    expect(uploadPathProblem(path, { userId, uploadId })).toBe(problem);
   });
 });

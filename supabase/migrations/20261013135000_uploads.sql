@@ -1,6 +1,6 @@
 -- Uploads: the files a user sends to be read into an account, and the import
 -- each one starts. The file lives in the private `imports` bucket, at
--- {user_id}/imports/{import_id}/{object_id}; its original name is only a
+-- {user_id}/imports/{upload_id}/{object_id}; its original name is only a
 -- column. A file is kept 30 days.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
@@ -57,7 +57,7 @@ CREATE POLICY "Requires two-factor authentication" ON public.uploaded_documents
   WITH CHECK ((SELECT auth.jwt() ->> 'aal') = 'aal2' OR (SELECT auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb);
 
 -- Reading one file into its account. The user starts it, queued; the job
--- moves it along. Its id is the one in its file's path.
+-- moves it along.
 CREATE TABLE public.imports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE INDEX imports_user_id_created_idx ON public.imports (user_id, created_at 
 ALTER TABLE public.imports ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.imports FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE public.imports TO authenticated;
-GRANT INSERT (id, document_id) ON TABLE public.imports TO authenticated;
+GRANT INSERT (document_id) ON TABLE public.imports TO authenticated;
 
 CREATE POLICY imports_owner ON public.imports
   FOR ALL TO authenticated

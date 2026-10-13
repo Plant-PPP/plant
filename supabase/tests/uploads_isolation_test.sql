@@ -74,8 +74,8 @@ SELECT set_eq(
 
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.imports') $$,
-  ARRAY['(table):SELECT', 'id:INSERT', 'document_id:INSERT'],
-  'a user reads their imports and starts one, never its status'
+  ARRAY['(table):SELECT', 'document_id:INSERT'],
+  'a user reads their imports and starts one, never its id or status'
 );
 
 SELECT is_empty(
@@ -106,19 +106,19 @@ SET LOCAL ROLE authenticated;
 INSERT INTO storage.objects (bucket_id, name)
 VALUES ('imports',
         'a0000000-0000-4000-8000-00000000000a/imports/a9000000-0000-4000-8000-0000000000a9/a7000000-0000-4000-8000-0000000000a7');
-INSERT INTO public.uploaded_documents (id, source_connection_id, storage_path, file_name,
+INSERT INTO public.uploaded_documents (source_connection_id, storage_path, file_name,
                                        mime_type, size_bytes, sha256)
-VALUES ('a8000000-0000-4000-8000-0000000000a8', 'a5000000-0000-4000-8000-0000000000a5',
+VALUES ('a5000000-0000-4000-8000-0000000000a5',
         'a0000000-0000-4000-8000-00000000000a/imports/a9000000-0000-4000-8000-0000000000a9/a7000000-0000-4000-8000-0000000000a7',
         'Resumen septiembre.pdf', 'application/pdf', 2048, repeat('a', 64));
-INSERT INTO public.imports (id, document_id)
-VALUES ('a9000000-0000-4000-8000-0000000000a9', 'a8000000-0000-4000-8000-0000000000a8');
+INSERT INTO public.imports (document_id)
+SELECT id FROM public.uploaded_documents WHERE sha256 = repeat('a', 64);
 
 SELECT results_eq(
-  $$ SELECT i.id::text, i.status::text, d.file_name, i.user_id::text, d.user_id::text,
+  $$ SELECT i.status::text, d.file_name, i.user_id::text, d.user_id::text,
             d.delete_after - d.created_at
      FROM public.imports i JOIN public.uploaded_documents d ON d.id = i.document_id $$,
-  $$ VALUES ('a9000000-0000-4000-8000-0000000000a9', 'queued', 'Resumen septiembre.pdf',
+  $$ VALUES ('queued', 'Resumen septiembre.pdf',
              'a0000000-0000-4000-8000-00000000000a', 'a0000000-0000-4000-8000-00000000000a',
              interval '30 days') $$,
   'a user starts an import, queued under their own id, and reads only theirs'
@@ -213,7 +213,7 @@ SELECT is(
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.imports (document_id, status)
-                      VALUES ('a8000000-0000-4000-8000-0000000000a8', 'ready') $$),
+                      SELECT id, 'ready' FROM public.uploaded_documents $$),
   '42501',
   'a user never sets an import''s status'
 );
@@ -225,7 +225,7 @@ SELECT is(
 );
 
 SAVEPOINT before_delete;
-DELETE FROM public.uploaded_documents WHERE id = 'a8000000-0000-4000-8000-0000000000a8';
+DELETE FROM public.uploaded_documents WHERE sha256 = repeat('a', 64);
 SELECT is(
   (SELECT count(*)::int FROM public.imports),
   0,

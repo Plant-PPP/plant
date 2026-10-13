@@ -46,8 +46,8 @@ jest.mock("@/lib/supabase/server", () => ({
 
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const ACCOUNT = "a5000000-0000-4000-8000-0000000000a5";
-const IMPORT = "a9000000-0000-4000-8000-0000000000a9";
-const PATH = `${USER}/imports/${IMPORT}/a7000000-0000-4000-8000-0000000000a7`;
+const UPLOAD = "a9000000-0000-4000-8000-0000000000a9";
+const PATH = `${USER}/imports/${UPLOAD}/a7000000-0000-4000-8000-0000000000a7`;
 
 import { createHash } from "node:crypto";
 
@@ -84,6 +84,7 @@ beforeEach(() => {
   );
   answers.imports = jest.fn<Answer, [string]>(() => ({
     status: 201,
+    data: [{ id: "i1" }],
     error: null,
   }));
   storage.createSignedUploadUrl
@@ -105,7 +106,7 @@ const start = (input: Record<string, unknown> = {}) =>
 
 const finish = (input: Record<string, unknown> = {}) =>
   finishUpload({
-    importId: IMPORT,
+    uploadId: UPLOAD,
     path: PATH,
     fileName: "Resumen.pdf",
     accountId: ACCOUNT,
@@ -122,7 +123,7 @@ describe("startUpload", () => {
     });
     if (!result.ok) throw new Error("refused");
     expect(result.path).toMatch(
-      new RegExp(`^${USER}/imports/${result.importId}/[0-9a-f-]{36}$`),
+      new RegExp(`^${USER}/imports/${result.uploadId}/[0-9a-f-]{36}$`),
     );
     expect(storage.createSignedUploadUrl).toHaveBeenCalledWith(result.path);
     expect(lines.at(-1)).toMatchObject({
@@ -177,7 +178,7 @@ describe("finishUpload", () => {
   it("files the file with its hash, read back from Storage, and a queued import", async () => {
     expect(await finish({ fileName: "C:\\docs\\Resumen.pdf" })).toEqual({
       ok: true,
-      importId: IMPORT,
+      importId: "i1",
     });
     expect(writes).toEqual([
       {
@@ -195,16 +196,16 @@ describe("finishUpload", () => {
       {
         table: "imports",
         verb: "insert",
-        body: { id: IMPORT, document_id: "d1" },
+        body: { document_id: "d1" },
       },
     ]);
     expect(storage.remove).not.toHaveBeenCalled();
   });
 
   it.each([
-    `b0000000-0000-4000-8000-00000000000b/imports/${IMPORT}/a7000000-0000-4000-8000-0000000000a7`,
+    `b0000000-0000-4000-8000-00000000000b/imports/${UPLOAD}/a7000000-0000-4000-8000-0000000000a7`,
     `${USER}/imports/a9000000-0000-4000-8000-0000000000a1/a7000000-0000-4000-8000-0000000000a7`,
-  ])("refuses a path that is not the import's own: %s", async (path) => {
+  ])("refuses a path that is not the upload's own: %s", async (path) => {
     expect(await finish({ path })).toEqual({ ok: false, code: "invalid" });
     expect(storage.download).not.toHaveBeenCalled();
   });

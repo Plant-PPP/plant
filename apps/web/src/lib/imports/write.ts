@@ -36,7 +36,7 @@ export type UploadCode =
 export type StartResult =
   | {
       ok: true;
-      importId: string;
+      uploadId: string;
       path: string;
       token: string;
       // The type to send the file as: the one its name says, whatever the
@@ -58,7 +58,7 @@ const startSchema = z
 
 const finishSchema = z
   .object({
-    importId: z.uuid(),
+    uploadId: z.uuid(),
     path: z.string().max(200),
     fileName: z.string().min(1).max(1024),
     accountId: z.uuid(),
@@ -139,7 +139,7 @@ function admitted(
 
 // The first half of an upload: checks the file's name and size, the terms and
 // the account, and answers a signed URL to put the file at, under the user's
-// folder and a new import's id.
+// folder and a new upload's id.
 export async function startUpload(input: unknown): Promise<StartResult> {
   // Outside any try: its redirect to /login or /auth/mfa must propagate.
   const claims = await getSessionClaims();
@@ -171,14 +171,14 @@ export async function startUpload(input: unknown): Promise<StartResult> {
       log(line, "not_found");
       return { ok: false, code: "not_found" };
     }
-    const importId = crypto.randomUUID();
-    const path = uploadPath(claims.sub, importId, crypto.randomUUID());
+    const uploadId = crypto.randomUUID();
+    const path = uploadPath(claims.sub, uploadId, crypto.randomUUID());
     const { data, error } = await client.storage
       .from(UPLOAD_BUCKET)
       .createSignedUploadUrl(path);
     if (error || !data) throw error ?? new Error("no signed upload");
     log(line, "ok");
-    return { ok: true, importId, path, token: data.token, type: file.type };
+    return { ok: true, uploadId, path, token: data.token, type: file.type };
   } catch (error) {
     log(line, "failed", error);
     return { ok: false, code: "failed" };
@@ -206,13 +206,13 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     !parsed.success ||
     uploadPathProblem(parsed.data.path, {
       userId: claims.sub,
-      importId: parsed.data.importId,
+      uploadId: parsed.data.uploadId,
     }) !== null
   ) {
     log(line, "invalid");
     return { ok: false, code: "invalid" };
   }
-  const { importId, path, fileName, accountId } = parsed.data;
+  const { path, fileName, accountId } = parsed.data;
   const client: Client = await createClient();
   const bucket = client.storage.from(UPLOAD_BUCKET);
   const refuse = async (code: UploadCode): Promise<FinishResult> => {
@@ -253,8 +253,9 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     const documentId = document.data[0]!.id;
     const started = await client
       .from("imports")
-      .insert({ id: importId, document_id: documentId });
-    if (classifyPostgrestResult(started, 201)) {
+      .insert({ document_id: documentId })
+      .select("id");
+    if (classifyPostgrestResult(started, 201) || started.data?.length !== 1) {
       // Without its import the file would only stand in the way of the same
       // file again.
       await client.from("uploaded_documents").delete().eq("id", documentId);
@@ -263,7 +264,7 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     }
     log(line, "ok");
     revalidatePath("/import");
-    return { ok: true, importId };
+    return { ok: true, importId: started.data[0]!.id };
   } catch (error) {
     log(line, "failed", error);
     return { ok: false, code: "failed" };
