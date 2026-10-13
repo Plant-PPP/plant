@@ -9,6 +9,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -40,7 +41,9 @@ const PACKAGES = {
  * workspace's root.
  */
 function check(deps, field = "dependencies", files = {}) {
-  const root = mkdtempSync(join(tmpdir(), "boundaries-"));
+  // The script's root is the real path of its own file, so a path the test
+  // builds must start from the real path too: macOS's /var is a symlink.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "boundaries-")));
   try {
     mkdirSync(join(root, "scripts"));
     copyFileSync(SCRIPT, join(root, "scripts/check-package-boundaries.mjs"));
