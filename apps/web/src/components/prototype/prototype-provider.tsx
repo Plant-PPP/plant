@@ -25,6 +25,7 @@ import type {
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  allRows,
   createHolding,
   deleteHolding,
   deleteOperation,
@@ -32,8 +33,10 @@ import {
   freshState,
   initialState,
   pricedSnapshotOf,
+  renewPlacement,
   type PrototypeState,
   setInTaxReport,
+  setPlacement,
   setPreferences,
   setPrice,
   type Write,
@@ -261,10 +264,20 @@ export function PrototypeProvider({
     originOf: (id) =>
       state.holdings.find((each) => each.holding.id === id)?.origin,
     inTaxReport: (key) => !state.outOfTaxReport.has(key),
+    placementOf: (id) => state.placements.get(id) ?? "fixed_term",
+    renewalOf: (id) => {
+      const renewed = state.renewals.get(id);
+      return renewed === undefined
+        ? undefined
+        : allRows(state).find((row) => row.id === renewed);
+    },
     actions: {
       setInTaxReport: (key, on) => write((s) => setInTaxReport(s, key, on)),
-      update: (id, input, inTaxReport) =>
-        write((s) => updateHoldingDetails(s, id, input, inTaxReport)),
+      update: (id, input, choices) =>
+        write((s) => updateHoldingDetails(s, id, input, choices)),
+      setPlacement: (id, kind) => write((s) => setPlacement(s, id, kind)),
+      renew: (id, input) =>
+        write((s) => renewPlacement(s, id, input, crypto.randomUUID())),
     },
   };
   const priced = pricedSnapshotOf(state, snapshot);

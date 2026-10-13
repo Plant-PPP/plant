@@ -2,6 +2,8 @@
 
 import type { Currency } from "@plant/shared";
 import Link from "next/link";
+
+import type { PlacementKind } from "@/lib/holdings/placement";
 import type * as React from "react";
 import { useId, useState } from "react";
 
@@ -63,6 +65,7 @@ import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 import { ImportOrigin } from "./holding-cells";
 import { InstrumentPicker } from "./instrument-picker";
+import { PlacementFigures, PlacementKindSelect } from "./placement-fields";
 
 // What the amount is, by class.
 const AMOUNT_LABELS: Record<AssetClass, string> = {
@@ -92,6 +95,7 @@ export function HoldingDialog({
   mode,
   row,
   details,
+  placement,
   accounts,
   portfolios,
   instruments,
@@ -106,6 +110,14 @@ export function HoldingDialog({
   row?: HoldingRow;
   // The holding's origin and its asset's report choice as saved.
   details?: { origin: HoldingOrigin | undefined; inTaxReport: boolean };
+  // On a page that knows what a placement at a rate is: its kind as saved
+  // (a plazo fijo for a new one), today for its figures, and the placement
+  // it renewed.
+  placement?: {
+    kind: PlacementKind;
+    today: string;
+    renewed?: HoldingRow;
+  };
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
@@ -401,6 +413,26 @@ export function HoldingDialog({
             textField("startedOn", "startedOn", "Desde", { type: "date" })}
           {shown.has("matures_on") &&
             textField("maturesOn", "maturesOn", "Vence", { type: "date" })}
+          {fields.assetClass === "fixed_term" && placement && (
+            <PlacementKindSelect
+              id={`${id}-placement`}
+              value={fields.placement ?? placement.kind}
+              onChange={set("placement")}
+            />
+          )}
+          {mode === "edit" &&
+            placement &&
+            row?.holding.asset_class === "fixed_term" && (
+              <PlacementFigures
+                placement={row.holding}
+                today={placement.today}
+                renewed={
+                  placement.renewed?.holding.asset_class === "fixed_term"
+                    ? placement.renewed.holding
+                    : undefined
+                }
+              />
+            )}
           {shown.has("valued_on") &&
             textField("valuedOn", "valuedOn", "Valuado el", { type: "date" })}
           {shown.has("label") &&

@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Placements at a rate: kinds, figures and renewal (PLA-124, prototype)
+
+- **A plazo fijo, a "caución", a loan the user gave and any other placement at a rate are one class, `fixed_term`, valued as before** (simple interest, actual/365, credited in cents). What each is shows as its kind, chosen in the holding dialog ("Tipo de colocación"); a placement with no name goes by its kind ("Caución ARS"). The kind lives beside the holding, as the origin does, until the database holds it.
+- **The edit dialog shows what a placement pays**: the interest to today (or paid, once matured), the amount and interest at maturity, and the TNA beside the TEA, the effective rate of placing each term's interest again. Core computes them (`placementFigures`), and the valuation uses the same interest (`interestTo`), so the two cannot drift. The TEA is the one figure computed in floating point: a rate shown as a percentage, never an amount.
+- **Renewing a matured placement makes a new holding** (Tomas, 2026-10-13): its capital plus the interest, from the day it matured or later, on a new term and rate, with its kind and name. The matured one leaves the lists so the money counts once, and the renewal remembers it ("Renueva la del …"). A loan given pays at maturity only, and a caución's broker fees wait; neither has installments or charges yet.
+
 ## 2026-10-13 · Transfers between accounts (PLA-125, prototype)
 
 - **A "Traspaso" can go to another of the user's accounts.** Its arriving side names that account; the destination portfolio starts at the account's default one and can be changed, and a transfer within the account works as before. The units keep the cost they left with and make no result, as between portfolios. The operation belongs to the account the units leave: an edit keeps it, and the dialog asks "Hacia la cuenta" only when the user has more than one account.

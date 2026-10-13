@@ -2,20 +2,19 @@ import {
   type Database,
   type ExactMoney,
   compareDecimals,
-  daysBetween,
   currencySchema as currency,
   exactOf,
   fieldsPassed,
   nonNegativeDecimalSchema,
   plus,
   positiveDecimalSchema,
-  roundedTo,
   times,
 } from "@plant/shared";
 import { z } from "zod";
 import type { QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, type Value, express } from "./denominator";
 import type { Denominator } from "./denominators";
+import { interestTo } from "./placement";
 import { type Missing, priceOf } from "./snapshot";
 
 type HoldingRow = Database["public"]["Tables"]["holdings"]["Row"];
@@ -208,14 +207,9 @@ const VALUERS: { [C in AssetClass]: Valuer<C> } = {
       };
     }
     const matured = snapshot.date >= holding.matures_on;
-    const end = matured ? holding.matures_on : snapshot.date;
-    const interest = times(times(principal, exactOf(holding.annual_rate)), {
-      n: BigInt(daysBetween(holding.started_on, end)),
-      d: 365n,
-    });
     return {
       money: {
-        amount: plus(principal, roundedTo(interest, 2)),
+        amount: plus(principal, interestTo(holding, snapshot.date)),
         currency: holding.currency,
       },
       asOf: matured ? holding.matures_on : snapshot.date,
