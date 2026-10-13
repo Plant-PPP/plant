@@ -99,6 +99,33 @@ export function heldIn(
   return held;
 }
 
+// The user's other accounts holding each instrument, by symbol: where a
+// statement's units may come from as a transfer.
+export function heldElsewhere(
+  state: PrototypeState,
+  accountId: string,
+): Map<string, { id: string; institution: string }[]> {
+  const elsewhere = new Map<string, { id: string; institution: string }[]>();
+  for (const row of holdingsView(state).active) {
+    if (
+      row.account.id === accountId ||
+      row.holding.asset_class !== "instrument"
+    ) {
+      continue;
+    }
+    const symbol = row.holding.instrument_symbol;
+    const accounts = elsewhere.get(symbol) ?? [];
+    if (!accounts.some((each) => each.id === row.account.id)) {
+      accounts.push({
+        id: row.account.id,
+        institution: row.account.institution,
+      });
+    }
+    elsewhere.set(symbol, accounts);
+  }
+  return elsewhere;
+}
+
 // What the reading makes of a statement, standing in for the AI: the
 // account's holdings with one more, one fewer, one unchanged, one misread
 // with low confidence, and an instrument the account does not have yet. The
@@ -207,6 +234,8 @@ const reviewedRowSchema = z.union([
     symbol: z.string().min(1),
     quantity: positiveDecimalSchema,
     price: nonNegativeDecimalSchema.nullable(),
+    portfolioId: z.string().min(1).optional(),
+    transferFrom: z.string().min(1).optional(),
   }),
 ]);
 
@@ -253,20 +282,62 @@ export function confirmImport(
         each.holding.asset_class === "instrument" &&
         each.holding.instrument_symbol === row.symbol,
     );
-    // More units come in at the price read, to the portfolio holding the
-    // most, or the account's default for a new instrument; fewer go out of
-    // the largest holdings first.
+    // More units come in to the portfolio the review chose, else the one
+    // holding the most, or the account's default for a new instrument: from
+    // another account as a transfer, carrying their cost, or else at the
+    // price read. Fewer go out of the largest holdings first.
+    const destination =
+      row.portfolioId ?? holdings[0]?.portfolio.id ?? account.portfolio.id;
+    if (order > 0 && row.transferFrom !== undefined) {
+      const source = heldHoldings(next, row.transferFrom).find(
+        (each) =>
+          each.holding.asset_class === "instrument" &&
+          each.holding.instrument_symbol === row.symbol,
+      );
+      if (!source || row.transferFrom === account.id) {
+        return { state, result: { ok: false, code: "not_found" } };
+      }
+      const moved = writeOperation(
+        next,
+        {
+          kind: "transfer",
+          source_connection_id: row.transferFrom,
+          instrument_symbol: row.symbol,
+          date,
+          currency: instrument.currency,
+          parts: [
+            {
+              portfolio_id: source.portfolio.id,
+              direction: "out",
+              quantity: diff,
+            },
+            {
+              portfolio_id: destination,
+              source_connection_id: account.id,
+              direction: "in",
+              quantity: diff,
+              price: null,
+            },
+          ],
+          reference: null,
+          note: `Carga de ${item.fileName}`.slice(0, 200),
+        },
+        {
+          operationId: newId(),
+          newId,
+          origin: { kind: "import", fileName: item.fileName, date },
+        },
+      );
+      if (!moved.result.ok) return { state, result: moved.result };
+      next = moved.state;
+      continue;
+    }
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
       if (row.price === null || compareDecimals(row.price, "0") <= 0) {
         return { state, result: { ok: false, code: "invalid" } };
       }
-      parts = [
-        {
-          portfolio_id: holdings[0]?.portfolio.id ?? account.portfolio.id,
-          quantity: diff,
-        },
-      ];
+      parts = [{ portfolio_id: destination, quantity: diff }];
     } else {
       let left = difference("0", diff);
       parts = [];
