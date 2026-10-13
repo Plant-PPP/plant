@@ -7,7 +7,7 @@ import { ImportReview } from "@/components/imports/import-review";
 import { usedThisMonth } from "@/lib/format/text";
 
 import { usePrototype } from "./prototype-provider";
-import { heldIn } from "./prototype-imports-store";
+import { heldElsewhere, heldIn } from "./prototype-imports-store";
 
 const reviewHref = (id: string) => `/import/${id}`;
 
@@ -38,6 +38,13 @@ export function PrototypeImportReview({ id }: { id: string }) {
       institution={account?.institution ?? ""}
       instruments={state.instruments}
       held={heldIn(state, item.accountId)}
+      routing={
+        account && {
+          portfolios: state.portfolios,
+          defaultPortfolioId: account.portfolio.id,
+          elsewhere: heldElsewhere(state, item.accountId),
+        }
+      }
       backHref="/import"
       doneHref="/import"
       actions={actions.imports}

@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Where a statement's units go (PLA-41, PLA-100, prototype)
+
+- **The review lets each row that adds units choose where they go**: a new instrument picks its portfolio (the account's default to start with, as PLA-41 asks), and an instrument the user holds in another account can come from there as a "Traspaso desde …", so a change of broker keeps the units' cost and date and makes no result (PLA-100). A row that is a transfer needs no price.
+- **A transfer from the review is the same operation as one from the movement dialog**: out of the other account's holding of the instrument that holds the most, into this account's chosen portfolio, booked on the import's day with the import as its origin. One the other account cannot cover is refused like any transfer that oversells.
+- **Production's review asks neither**: the choices come with an optional `routing` the prototype passes; a statement replacing the account's holdings and the idempotent confirm wait for PLA-41's tables.
+
 ## 2026-10-13 · Placements at a rate: kinds, figures and renewal (PLA-124, prototype)
 
 - **A plazo fijo, a "caución", a loan the user gave and any other placement at a rate are one class, `fixed_term`, valued as before** (simple interest, actual/365, credited in cents). What each is shows as its kind, chosen in the holding dialog ("Tipo de colocación"); a placement with no name goes by its kind ("Caución ARS"). The kind lives beside the holding, as the origin does, until the database holds it.

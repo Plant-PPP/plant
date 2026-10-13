@@ -23,6 +23,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { countOf } from "@/lib/format/text";
 import {
   amountInput,
@@ -98,6 +105,7 @@ export function ImportReview({
   institution,
   instruments,
   held,
+  routing,
   backHref,
   doneHref,
   actions,
@@ -107,6 +115,17 @@ export function ImportReview({
   instruments: InstrumentRow[];
   // What the account holds of each instrument now.
   held: ReadonlyMap<string, string>;
+  // On a page that lets a row choose where its units go: the portfolios, the
+  // account's default one, and the user's other accounts holding each
+  // instrument, which the units may come from as a transfer.
+  routing?: {
+    portfolios: readonly { id: string; name: string }[];
+    defaultPortfolioId: string;
+    elsewhere: ReadonlyMap<
+      string,
+      readonly { id: string; institution: string }[]
+    >;
+  };
   backHref: string;
   doneHref: string;
   actions: ReviewActions;
@@ -138,11 +157,14 @@ export function ImportReview({
     );
     return effect.kind === "new" || effect.kind === "up";
   };
+  // Units that come from another account carry their cost, so need none.
+  const needsPrice = (row: EditedRow, quantity: string | null) =>
+    addsUnits(row, quantity) && row.transferFrom === undefined;
   const priceInvalid = ({ row, quantity, price }: (typeof parsed)[number]) =>
     !row.discarded &&
     (price === null
-      ? row.priceText.trim() !== "" || addsUnits(row, quantity)
-      : exactOf(price).n === 0n && addsUnits(row, quantity));
+      ? row.priceText.trim() !== "" || needsPrice(row, quantity)
+      : exactOf(price).n === 0n && needsPrice(row, quantity));
   // The instruments the rows kept already list: one row each.
   const listed = (except: string) =>
     new Set(
@@ -168,6 +190,8 @@ export function ImportReview({
     confidence: row.confidence,
     source: row.source,
     discarded: row.discarded,
+    ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
+    ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
   }));
   const totals = readTotals(finalRows);
   const matches = totalsMatch(totals, item.documentTotals);
@@ -433,6 +457,17 @@ export function ImportReview({
                   {row.discarded ? <RotateCcw /> : <X />}
                   {row.discarded ? "Recuperar" : "Descartar"}
                 </Button>
+                {routing &&
+                  !row.discarded &&
+                  (effect.kind === "new" || effect.kind === "up") && (
+                    <RowRouting
+                      index={index}
+                      row={row}
+                      isNew={effect.kind === "new"}
+                      routing={routing}
+                      onChange={(patch) => change(row.id, patch)}
+                    />
+                  )}
               </li>
             );
           })}
@@ -453,6 +488,94 @@ export function ImportReview({
           Confirmar carga
         </Button>
       </div>
+    </div>
+  );
+}
+
+const PURCHASE = "purchase";
+
+// Where a row's units go, on a page that lets it choose: the portfolio a new
+// instrument goes to, and whether the units come from another account, as a
+// transfer that keeps their cost.
+function RowRouting({
+  index,
+  row,
+  isNew,
+  routing,
+  onChange,
+}: {
+  index: number;
+  row: EditedRow;
+  isNew: boolean;
+  routing: NonNullable<Parameters<typeof ImportReview>[0]["routing"]>;
+  onChange: (patch: Partial<EditedRow>) => void;
+}) {
+  const sources = routing.elsewhere.get(row.symbol) ?? [];
+  if (!isNew && sources.length === 0) return null;
+  const portfolio = row.portfolioId ?? routing.defaultPortfolioId;
+  const origin = row.transferFrom ?? PURCHASE;
+  const originText = (value: string) =>
+    value === PURCHASE
+      ? "Compra o saldo propio"
+      : `Traspaso desde ${sources.find((each) => each.id === value)?.institution ?? ""}`;
+  return (
+    <div className="grid gap-3 text-xs sm:col-span-4 sm:grid-cols-2">
+      {isNew && (
+        <label className="grid gap-1">
+          <span className="text-muted-foreground">Cartera</span>
+          <Select
+            value={portfolio}
+            onValueChange={(value) => onChange({ portfolioId: value })}
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-full"
+              aria-label={`Cartera de la fila ${index + 1}`}
+            >
+              <SelectValue>
+                {routing.portfolios.find((each) => each.id === portfolio)?.name}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {routing.portfolios.map((each) => (
+                <SelectItem key={each.id} value={each.id}>
+                  {each.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      )}
+      {sources.length > 0 && (
+        <label className="grid gap-1">
+          <span className="text-muted-foreground">
+            {`Ya tenés ${row.symbol} en otra cuenta. ¿Es un traspaso?`}
+          </span>
+          <Select
+            value={origin}
+            onValueChange={(value) =>
+              onChange({
+                transferFrom: value === PURCHASE ? undefined : value,
+              })
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-full"
+              aria-label={`Origen de la fila ${index + 1}`}
+            >
+              <SelectValue>{originText(origin)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {[PURCHASE, ...sources.map((each) => each.id)].map((value) => (
+                <SelectItem key={value} value={value}>
+                  {originText(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      )}
     </div>
   );
 }

@@ -40,6 +40,11 @@ export type ImportRow = {
   confidence: Confidence;
   source: string;
   discarded: boolean;
+  // Where a row that adds units sends them, as the review chose: the
+  // portfolio a new instrument goes to, and the account they come from when
+  // they are a transfer, not a purchase.
+  portfolioId?: string;
+  transferFrom?: string;
 };
 
 export type ImportItem = {
