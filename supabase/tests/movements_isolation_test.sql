@@ -147,7 +147,10 @@ SELECT is_empty(
 SELECT ok(
   NOT has_function_privilege('anon', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
     AND NOT has_function_privilege('service_role', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
-    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE'),
+    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE')
+    AND NOT has_function_privilege('service_role', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE')
+    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE'),
   'only authenticated may call write_operation'
 );
 
