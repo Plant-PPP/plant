@@ -2,6 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Movements, manual prices and the report in the database (PLA-103, PLA-104, PLA-122)
+
+- **An operation is a row of its own, `operations`, and its movements point at it**: one movement per holding it touches (a purchase split across portfolios, a transfer's two sides). The floor wants every uuid `*_id` to be a foreign key, so `operation_id` references `operations`. `entry_order` lives on the operation, copied onto each movement with a generated `rank` (−1 for an opening balance), so a holding's history and a list's pages read in core's order from one index. No column comes from a sequence: a new operation takes one more than the user's highest entry order.
+- **`write_operation(p_operation_id, p_parts, p_expected)` is the first RPC.** supabase-js has no transaction, and an edit replaces an operation's movements across holdings, so the RPC writes them in one. A null id writes a new operation, empty parts delete one. It runs as the caller (`SECURITY INVOKER`, empty `search_path`): RLS and the column grants bound it, and the caller could write the same rows one statement at a time. The floor now lets `authenticated` execute exactly the listed RPCs, which must run as the caller, and `security-tests` has a map of function specs next to the tables'.
+- **Optimistic concurrency per instrument.** `p_expected` maps every holding of the operation's instruments to the `movements_revision` the page read. The RPC refuses with hint `stale` unless those are the user's holdings of them now, at those revisions, behind the portfolio setup lock. The app validates the operation with core (`admitMovements`) against what it read, so the database refuses only a race; it still refuses a history that goes below zero units (`negative_units`) as a guard.
+- **An instrument holding's amount is what its movements leave**, written by the RPC, and its revision is bumped. One sold out stays at 0 units with its history (the amount check now allows 0 for instruments only, added `NOT VALID` since it is looser); one whose last movement goes is deleted, so `authenticated` may now delete holdings (PLA-117 needs it too). A holding the RPC needs and does not find active in that account, portfolio and instrument is created.
+- **Movements are inserted and deleted, never updated**: an edit replaces them. `charges` and `rates` are JSON the app validates with core's schemas; the database checks only that they are a list of at most 10 and an object.
+- **Manual prices and dollar rates are one row a day each** (`manual_prices` by symbol, `manual_rates` by MEP, CCL or official), writable in their value only. The newest wins as the prototype's do.
+- **An asset left out of the report is a row in `tax_report_exclusions`**: an instrument by its symbol, or another holding by its id, exactly one of them.
+- **CEDEARs, bonds and FCI are instrument types**, and ten instruments are seeded (seven CEDEARs and three bonds) with no feed: the user prices them by hand. The FCI catalog arrives with the instrument normalization (PLA-39).
+- **Holdings created before this keep their amount with no movements.** Staging has no real users; the app half writes instrument holdings only through the RPC.
+
 ## 2026-10-13 · A statement as of its own day (PLA-119, prototype)
 
 - **A statement is weighed against what the account held at the end of its day, and its differences are booked on that day.** The review's "Sube de / Baja de" compares with that day too, so it says what will be booked. Units taken out come from the holdings that had them that day, largest first.

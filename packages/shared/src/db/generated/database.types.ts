@@ -49,14 +49,14 @@ export type Database = {
                   ]
                 },"holdings": {
                   Row: {
-                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
+                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"movements_revision": number,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Relationships: [
                     {
@@ -89,6 +89,80 @@ isOneToOne: false
                   }
                   Update: {
                     "currency"?: Database["public"]['Enums']["currency"],"name"?: string,"symbol"?: string,"type"?: Database["public"]['Enums']["instrument_type"]
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"manual_prices": {
+                  Row: {
+                    "created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"price": number,"price_date": string,"symbol": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"currency": Database["public"]['Enums']["currency"],"id"?: string,"price": number,"price_date": string,"symbol": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"id"?: string,"price"?: number,"price_date"?: string,"symbol"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "manual_prices_symbol_fkey"
+      columns: ["symbol"]
+isOneToOne: false
+      referencedRelation: "instruments"
+      referencedColumns: ["symbol"]
+    }
+                  ]
+                },"manual_rates": {
+                  Row: {
+                    "created_at": string,"id": string,"kind": Database["public"]['Enums']["manual_rate_kind"],"rate_date": string,"sell": number,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"kind": Database["public"]['Enums']["manual_rate_kind"],"rate_date": string,"sell": number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["manual_rate_kind"],"rate_date"?: string,"sell"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"movements": {
+                  Row: {
+                    "amount": number | null,"charges": Json,"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction": Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"note": string | null,"operation_id": string,"price": number | null,"quantity": number | null,"rank": number,"rates": Json,"reference": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"charges"?: Json,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id": string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates": Json,"reference"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"charges"?: Json,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order"?: number,"holding_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id"?: string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates"?: Json,"reference"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "movements_user_id_holding_id_fkey"
+      columns: ["user_id","holding_id"]
+isOneToOne: false
+      referencedRelation: "holdings"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "movements_user_id_operation_id_fkey"
+      columns: ["user_id","operation_id"]
+isOneToOne: false
+      referencedRelation: "operations"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"operations": {
+                  Row: {
+                    "created_at": string,"entry_order": number,"id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"entry_order": number,"id"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"entry_order"?: number,"id"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -155,16 +229,47 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"tax_report_exclusions": {
+                  Row: {
+                    "created_at": string,"holding_id": string | null,"id": string,"instrument_symbol": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"holding_id"?: string | null,"id"?: string,"instrument_symbol"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"holding_id"?: string | null,"id"?: string,"instrument_symbol"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tax_report_exclusions_instrument_symbol_fkey"
+      columns: ["instrument_symbol"]
+isOneToOne: false
+      referencedRelation: "instruments"
+      referencedColumns: ["symbol"]
+    },{
+      foreignKeyName: "tax_report_exclusions_user_id_holding_id_fkey"
+      columns: ["user_id","holding_id"]
+isOneToOne: true
+      referencedRelation: "holdings"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "write_operation": {
+                  Args: {
+                    "p_expected": Json,"p_operation_id": string,"p_parts": Json
+                  }
+                  Returns: string
+                }
           }
           Enums: {
-            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto"|"cedear"|"bond"|"fci","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -280,7 +385,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

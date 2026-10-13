@@ -129,7 +129,6 @@ export {
   INSTRUMENT_PRICING,
   INSTRUMENT_TYPES,
   type InstrumentType,
-  PENDING_INSTRUMENT_TYPES,
   quotedPrice,
   unitPrice,
 } from "./instruments";

@@ -8,15 +8,16 @@ import {
   rowsOf,
   users,
 } from "./pentest-helpers";
-import { OWNED_KEYS, type OwnedTable } from "./reference-rows";
+import { DELETE_GRANTED, OWNED_KEYS, type OwnedTable } from "./reference-rows";
 
 const { a, b } = users;
 
 // What another user can try on every owned table: read B's rows, read and
 // upsert over B's row by id where the table has one, write `rowForB`, delete
 // B's rows, embed auth users and read unfiltered. Both users need rows before
-// it runs. The DELETE case expects the table refused because no owned table
-// grants DELETE; under a grant RLS would answer 204 and leave B's rows alone.
+// it runs. The DELETE case expects the table refused unless it grants DELETE;
+// under the grant RLS answers 204 and leaves B's rows alone, which afterEach
+// checks.
 // The cases specific to the table, such as a PATCH of B's rows, go in `cases`,
 // which shares the check that B's rows never change.
 export function describeAnotherUserAccess<T extends OwnedTable>(
@@ -94,12 +95,19 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
       expectError(await rest(a, "POST", table, { body: rowForB }), 403);
     });
 
-    test("DELETE of B's rows is denied", async () => {
-      expectRelationDenied(
-        await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`),
-        table,
-      );
-    });
+    if (DELETE_GRANTED.has(table)) {
+      test("DELETE of B's rows deletes nothing", async () => {
+        const res = await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`);
+        expect(res.status).toBe(204);
+      });
+    } else {
+      test("DELETE of B's rows is denied", async () => {
+        expectRelationDenied(
+          await rest(a, "DELETE", `${table}?user_id=eq.${b.id}`),
+          table,
+        );
+      });
+    }
 
     test("embedding auth users is not possible", async () => {
       await expectNoAuthUsersEmbed(a, table);

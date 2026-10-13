@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(84);
+SELECT plan(86);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -90,14 +90,14 @@ INSERT INTO public.holdings (id, user_id, source_connection_id, portfolio_id, as
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.holdings') $$,
-  ARRAY['(table):SELECT',
+  ARRAY['(table):SELECT', '(table):DELETE',
         'source_connection_id:INSERT', 'portfolio_id:INSERT', 'asset_class:INSERT',
         'instrument_symbol:INSERT', 'amount:INSERT', 'currency:INSERT', 'annual_rate:INSERT',
         'started_on:INSERT', 'matures_on:INSERT', 'valued_on:INSERT', 'label:INSERT',
         'portfolio_id:UPDATE', 'amount:UPDATE', 'currency:UPDATE', 'annual_rate:UPDATE',
         'started_on:UPDATE', 'matures_on:UPDATE', 'valued_on:UPDATE', 'label:UPDATE',
-        'archived_at:UPDATE'],
-  'a user reads holdings and writes only their fields and the archive flag'
+        'archived_at:UPDATE', 'movements_revision:UPDATE'],
+  'a user reads and deletes holdings and writes only their fields, the archive flag and the movements revision'
 );
 
 SELECT set_eq(
@@ -249,7 +249,7 @@ SELECT results_eq(
 
 SELECT is(
   (SELECT count(*)::int FROM public.instruments),
-  5,
+  15,
   'a user reads every instrument'
 );
 
@@ -367,6 +367,13 @@ SELECT throws_ok(
      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'instrument', 'BTC', 'USD', '1') $$,
   '23514', NULL,
   'an instrument holding has no currency'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'USD', '0') $$,
+  '23514', NULL,
+  'only an instrument holding may hold nothing'
 );
 
 SELECT throws_ok(
@@ -721,10 +728,15 @@ SELECT is_empty(
   'a user cannot update another user''s holding'
 );
 
-SELECT throws_ok(
-  $$ DELETE FROM public.holdings WHERE id = 'a7000000-0000-4000-8000-0000000000a7' $$,
-  '42501', NULL,
-  'a holding is archived, never deleted'
+SELECT is_empty(
+  $$ DELETE FROM public.holdings WHERE id = 'b7000000-0000-4000-8000-0000000000b7' RETURNING id $$,
+  'a user cannot delete another user''s holding'
+);
+
+SELECT results_eq(
+  $$ DELETE FROM public.holdings WHERE id = 'a7000000-0000-4000-8000-0000000000a7' RETURNING id $$,
+  $$ VALUES ('a7000000-0000-4000-8000-0000000000a7'::uuid) $$,
+  'a user deletes their own holding'
 );
 
 RESET ROLE;

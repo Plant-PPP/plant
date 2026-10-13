@@ -26,9 +26,10 @@
 -- - The extensions schema holds only its extensions' members and the
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
--- - No extension is installed in either schema, neither anon nor
---   authenticated can execute any function in them, service_role none in
---   private, the only SECURITY DEFINER
+-- - No extension is installed in either schema, anon can execute no function
+--   in them, authenticated only the RPCs (write_operation), which run as the
+--   caller with an empty search_path, service_role none in private, the only
+--   SECURITY DEFINER
 --   functions are the signup, session and MFA factor triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
@@ -66,7 +67,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(43);
+SELECT plan(44);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -130,15 +131,26 @@ SELECT is_empty(
   'no extension is installed in public or private'
 );
 
--- has_function_privilege counts EXECUTE granted to PUBLIC.
+-- has_function_privilege counts EXECUTE granted to PUBLIC. An RPC is a new
+-- endpoint: the first one lists itself here and in security-tests'
+-- pentestFunctionSpecs.
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
-            OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+            OR (has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
-  'anon, authenticated and PUBLIC cannot execute any function in public or private, nor service_role in private'
+  'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'
+);
+
+-- As the caller, RLS and the grants bound what an RPC writes.
+SELECT ok(
+  (SELECT bool_and(NOT p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""'])
+   FROM pg_proc p
+   WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure])),
+  'the RPCs run as the caller with an empty search_path'
 );
 
 SELECT is_empty(
