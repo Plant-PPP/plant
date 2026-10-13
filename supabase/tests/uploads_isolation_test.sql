@@ -82,13 +82,13 @@ SELECT is_empty(
   $$ SELECT acl.grantee::regrole::text FROM pg_class c
      CROSS JOIN LATERAL aclexplode(c.relacl) acl
      WHERE c.oid IN ('public.uploaded_documents'::regclass, 'public.imports'::regclass)
-       AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0)
+       AND acl.grantee IN ('anon'::regrole, 0)
      UNION ALL
      SELECT acl.grantee::regrole::text FROM pg_attribute a
      CROSS JOIN LATERAL aclexplode(a.attacl) acl
      WHERE a.attrelid IN ('public.uploaded_documents'::regclass, 'public.imports'::regclass)
-       AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0) $$,
-  'anon, the service role and PUBLIC hold nothing on uploads'
+       AND acl.grantee IN ('anon'::regrole, 0) $$,
+  'anon and PUBLIC hold nothing on uploads; import_items_isolation_test.sql pins the service role''s'
 );
 
 SELECT results_eq(
