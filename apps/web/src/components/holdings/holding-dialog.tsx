@@ -23,6 +23,7 @@ import {
   choose,
   useFieldAlert,
 } from "@/components/portfolio-setup/field-alert";
+import { ReportSwitch } from "@/components/portfolio-setup/report-switch";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import {
   type HoldingOrigin,
@@ -56,7 +57,6 @@ import {
 import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 import { ImportOrigin } from "./holding-cells";
-import { ReportSwitch } from "./report-switch";
 import { InstrumentPicker } from "./instrument-picker";
 
 // What the amount is, by class.
@@ -413,10 +413,7 @@ export function HoldingDialog({
                 !accountIncluded && (
                   <>
                     La cuenta{" "}
-                    <Link
-                      href={`/accounts/${row.account.id}`}
-                      className="underline"
-                    >
+                    <Link href="/accounts" className="underline">
                       {row.account.institution}
                     </Link>{" "}
                     no se incluye en el reporte, así que esta tenencia tampoco.

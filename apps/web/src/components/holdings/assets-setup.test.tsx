@@ -792,3 +792,70 @@ describe("saving an edit", () => {
     );
   });
 });
+
+describe("saving an edit that leaves the report switch untouched", () => {
+  const gd30: HoldingRow = {
+    id: "h7",
+    holding: holdingSchema.parse({
+      id: "h7",
+      portfolio_id: PRINCIPAL.id,
+      asset_class: "instrument",
+      instrument_symbol: "GD30",
+      amount: "10",
+      currency: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+      valued_on: null,
+      label: null,
+    }),
+    account: { id: "a1", institution: "IOL" },
+    instrumentType: "bond",
+    portfolio: PRINCIPAL,
+  };
+  const save = async (holding: HoldingRow, saved: boolean) => {
+    const together = jest.fn(done);
+    const inTaxReport = jest.fn(() => saved);
+    const fields = initialFields(holding, {
+      accountId: "",
+      portfolioId: "",
+      today: "",
+    });
+    expect(fields.inTaxReport).toBeUndefined();
+    await saveHoldingEdit(
+      {
+        actions: ACTIONS,
+        details: {
+          originOf: () => ({ kind: "manual" }),
+          inTaxReport,
+          actions: { setInTaxReport: done, update: together },
+        },
+      },
+      holding,
+      fields,
+    );
+    return { together, inTaxReport };
+  };
+
+  it.each([true, false])(
+    "writes the asset's saved choice (%s) with the holding",
+    async (saved) => {
+      const { together } = await save(gd30, saved);
+      expect(together).toHaveBeenCalledWith("h7", expect.anything(), saved);
+    },
+  );
+
+  it("asks for an instrument's choice by its asset, not its holding", async () => {
+    const { inTaxReport } = await save(gd30, false);
+    expect(inTaxReport).toHaveBeenCalledWith("instrument:GD30");
+  });
+
+  it("asks for any other holding's choice by the holding", async () => {
+    const { together, inTaxReport } = await save(
+      row("h1", PRINCIPAL, "100"),
+      false,
+    );
+    expect(inTaxReport).toHaveBeenCalledWith("h1");
+    expect(together).toHaveBeenCalledWith("h1", expect.anything(), false);
+  });
+});

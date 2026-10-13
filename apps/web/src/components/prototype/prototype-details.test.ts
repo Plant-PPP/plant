@@ -1,9 +1,10 @@
-import { snapshotOn } from "@plant/core";
+import { type Holding, snapshotOn } from "@plant/core";
 
 import { readTotals, totalsMatch } from "@/lib/imports/review";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import { prototypeAnswer } from "./prototype-assistant";
+import { createAccount } from "./prototype-accounts-store";
 import { closesOf } from "./prototype-closes";
 import { addImport, finishReading } from "./prototype-imports-store";
 import {
@@ -17,14 +18,20 @@ import {
   writeOperation,
 } from "./prototype-store";
 
-import type { AssetKey } from "@/lib/holdings/assets-rows";
-
-// An asset key as the store writes it.
-const asset = (key: string) => key as AssetKey;
+import { assetKey } from "@/lib/holdings/assets-rows";
 
 const TODAY = "2026-10-12";
 const fixtures = buildFixtures(TODAY);
 const state = initialState(fixtures, TODAY);
+// An instrument's asset key as the store makes it, from a holding of it.
+const anInstrument = state.holdings
+  .map((each) => each.holding)
+  .find(
+    (holding): holding is Extract<Holding, { asset_class: "instrument" }> =>
+      holding.asset_class === "instrument",
+  )!;
+const instrumentKey = (symbol: string) =>
+  assetKey({ ...anInstrument, instrument_symbol: symbol });
 const accountOf = (institution: string) =>
   state.accounts.find((row) => row.institution === institution)!;
 const IOL = accountOf("IOL").id;
@@ -152,7 +159,7 @@ describe("the report choice when an operation takes the last holding", () => {
       newId,
     });
     expect(written.result.ok).toBe(true);
-    const out = setInTaxReport(written.state, asset("instrument:MSFT"), false);
+    const out = setInTaxReport(written.state, instrumentKey("MSFT"), false);
     expect(out.result.ok).toBe(true);
     return { operationId, state: out.state };
   };
@@ -162,9 +169,7 @@ describe("the report choice when an operation takes the last holding", () => {
     const deleted = deleteOperation(before, operationId);
     expect(deleted.result).toEqual({ ok: true, id: operationId });
     expect(holdingOf(deleted.state, "MSFT", PRINCIPAL)).toBeUndefined();
-    expect(deleted.state.outOfTaxReport.has(asset("instrument:MSFT"))).toBe(
-      false,
-    );
+    expect(deleted.state.outOfTaxReport.has(instrumentKey("MSFT"))).toBe(false);
   });
 
   it("keeps it when an edit moves the only holding to another portfolio", () => {
@@ -177,7 +182,7 @@ describe("the report choice when an operation takes the last holding", () => {
     expect(moved.result).toEqual({ ok: true, id: operationId });
     expect(holdingOf(moved.state, "MSFT", PRINCIPAL)).toBeUndefined();
     expect(holdingOf(moved.state, "MSFT", LARGO)).toBeDefined();
-    expect(moved.state.outOfTaxReport.has(asset("instrument:MSFT"))).toBe(true);
+    expect(moved.state.outOfTaxReport.has(instrumentKey("MSFT"))).toBe(true);
   });
   it("keeps an imported origin when an edit moves the only holding", () => {
     const operationId = newId();
@@ -214,17 +219,17 @@ describe("the reading's demo for every account", () => {
     state.instruments.find((each) => each.symbol === symbol)!.type;
 
   it.each(state.accounts.map((each) => [each.institution, each.id]))(
-    "suggests at %s only a type the account already holds",
+    "suggests at %s only a type the account already holds in that currency",
     (_, accountId) => {
       const item = readFor(accountId);
       const extra = item.rows.find((row) => row.id.endsWith("-new"));
       if (!extra) return;
+      const kindOf = (row: { symbol: string; currency: string }) =>
+        `${typeOf(row.symbol)}:${row.currency}`;
       const held = new Set(
-        item.rows
-          .filter((row) => row !== extra)
-          .map((row) => typeOf(row.symbol)),
+        item.rows.filter((row) => row !== extra).map(kindOf),
       );
-      expect(held).toContain(typeOf(extra.symbol));
+      expect(held).toContain(kindOf(extra));
     },
   );
 
@@ -295,4 +300,193 @@ describe("the assistant on what is priced by hand", () => {
       "Hoy tenés TX26 por un valor sin cotización",
     );
   });
+});
+
+describe("origin of a holding an edit creates", () => {
+  const imported = {
+    kind: "import" as const,
+    fileName: "iol.pdf",
+    date: TODAY,
+  };
+  const msftIn = (...parts: [string, string][]) => ({
+    ...msftPurchase(PRINCIPAL),
+    parts: parts.map(([portfolio_id, quantity]) => ({
+      portfolio_id,
+      quantity,
+    })),
+  });
+  const edit = (before: PrototypeState, operationId: string, input: unknown) =>
+    writeOperation(before, input, { operationId, replacing: true, newId });
+
+  it("gives a portfolio a split adds the origin of the holding that stays", () => {
+    const operationId = newId();
+    const written = writeOperation(state, msftIn([PRINCIPAL, "2"]), {
+      operationId,
+      newId,
+      origin: imported,
+    });
+    expect(written.result.ok).toBe(true);
+    const split = edit(
+      written.state,
+      operationId,
+      msftIn([PRINCIPAL, "1"], [LARGO, "1"]),
+    );
+    expect(split.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(split.state, "MSFT", PRINCIPAL)?.origin).toEqual(imported);
+    expect(holdingOf(split.state, "MSFT", LARGO)?.origin).toEqual(imported);
+  });
+
+  it("gives a holding an edit of a hand-typed operation creates no import origin, even out of an imported holding", () => {
+    const first = writeOperation(state, msftIn([PRINCIPAL, "2"]), {
+      operationId: newId(),
+      newId,
+      origin: imported,
+    });
+    const typedId = newId();
+    const typed = writeOperation(first.state, msftIn([PRINCIPAL, "1"]), {
+      operationId: typedId,
+      newId,
+    });
+    expect(typed.result.ok).toBe(true);
+    const moved = edit(typed.state, typedId, msftIn([LARGO, "1"]));
+    expect(moved.result).toEqual({ ok: true, id: typedId });
+    expect(holdingOf(moved.state, "MSFT", PRINCIPAL)?.origin).toEqual(imported);
+    expect(holdingOf(moved.state, "MSFT", LARGO)?.origin).toEqual({
+      kind: "manual",
+    });
+  });
+
+  it("takes the origin of the operation, whatever the holdings' order", () => {
+    const operationId = newId();
+    const written = writeOperation(
+      state,
+      msftIn([PRINCIPAL, "2"], [LARGO, "1"]),
+      { operationId, newId, origin: imported },
+    );
+    expect(written.result.ok).toBe(true);
+    const reordered: PrototypeState = {
+      ...written.state,
+      holdings: [...written.state.holdings].reverse(),
+    };
+    const input = msftIn([CORTO, "2"], [LARGO, "1"]);
+    for (const before of [written.state, reordered]) {
+      const moved = edit(before, operationId, input);
+      expect(moved.result).toEqual({ ok: true, id: operationId });
+      expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+    }
+  });
+
+  it("forgets where a deleted operation came from", () => {
+    const operationId = newId();
+    const written = writeOperation(state, msftIn([PRINCIPAL, "2"]), {
+      operationId,
+      newId,
+      origin: imported,
+    });
+    expect(written.state.operationOrigins.get(operationId)).toEqual(imported);
+    const deleted = deleteOperation(written.state, operationId);
+    expect(deleted.state.operationOrigins.has(operationId)).toBe(false);
+  });
+
+  it("gives every holding a new operation creates its `origin`, not another holding's", () => {
+    const tsla = holdingOf(state, "TSLA", CORTO)!;
+    const marked: PrototypeState = {
+      ...state,
+      holdings: state.holdings.map((each) =>
+        each === tsla ? { ...each, origin: imported } : each,
+      ),
+    };
+    const written = writeOperation(
+      marked,
+      msftIn([PRINCIPAL, "1"], [LARGO, "1"]),
+      { operationId: newId(), newId },
+    );
+    expect(written.result.ok).toBe(true);
+    for (const portfolioId of [PRINCIPAL, LARGO]) {
+      expect(holdingOf(written.state, "MSFT", portfolioId)?.origin).toEqual({
+        kind: "manual",
+      });
+    }
+    const fromImport = writeOperation(
+      marked,
+      msftIn([PRINCIPAL, "1"], [LARGO, "1"]),
+      { operationId: newId(), newId, origin: imported },
+    );
+    for (const portfolioId of [PRINCIPAL, LARGO]) {
+      expect(holdingOf(fromImport.state, "MSFT", portfolioId)?.origin).toEqual(
+        imported,
+      );
+    }
+  });
+});
+
+describe("the reading's misread row with few priced rows", () => {
+  const ACCOUNT = "a9100000-0000-4000-8000-000000000001";
+  // A new account holding 20 of each given ARS instrument.
+  const holding = (...symbols: string[]) => {
+    let next = createAccount(
+      state,
+      {
+        institution: "Banco de prueba",
+        includeInTaxReport: true,
+        defaultPortfolioId: PRINCIPAL,
+      },
+      ACCOUNT,
+    ).state;
+    for (const symbol of symbols) {
+      const written = writeOperation(
+        next,
+        {
+          ...msftPurchase(PRINCIPAL),
+          source_connection_id: ACCOUNT,
+          instrument_symbol: symbol,
+          price: "1000",
+          parts: [{ portfolio_id: PRINCIPAL, quantity: "20" }],
+        },
+        { operationId: newId(), newId },
+      );
+      expect(written.result.ok).toBe(true);
+      next = written.state;
+    }
+    return finishReading(
+      addImport(next, { id: "i7", fileName: "banco.pdf", accountId: ACCOUNT })
+        .state,
+      "i7",
+    ).imports[0]!;
+  };
+
+  it("misreads the one priced row when nothing is suggested", () => {
+    // FIMAAHO is priced by hand; TX26 has no price.
+    const item = holding("FIMAAHO", "TX26");
+    expect(item.status).toBe("ready");
+    expect(item.rows.some((row) => row.id.endsWith("-new"))).toBe(false);
+    const low = item.rows.filter((row) => row.confidence === "low");
+    expect(low.map((row) => row.symbol)).toEqual(["FIMAAHO"]);
+    expect(totalsMatch(readTotals(item.rows), item.documentTotals)).toBe(false);
+  });
+
+  it("never misreads the suggested row, even when it is the only one priced", () => {
+    // MSFT has no price; the suggested CEDEAR has one.
+    const item = holding("MSFT");
+    expect(item.status).toBe("ready");
+    const extra = item.rows.find((row) => row.id.endsWith("-new"));
+    expect(extra).toBeDefined();
+    expect(item.rows.filter((row) => row.price !== null)).toEqual([extra]);
+    expect(item.rows.some((row) => row.confidence === "low")).toBe(false);
+    expect(extra?.quantity).toBe("3");
+  });
+
+  it.each(state.accounts.map((each) => [each.institution, each.id]))(
+    "never misreads %s's suggested row",
+    (_, accountId) => {
+      const item = finishReading(
+        addImport(state, { id: "i6", fileName: "resumen.pdf", accountId })
+          .state,
+        "i6",
+      ).imports[0]!;
+      for (const row of item.rows.filter((each) => each.id.endsWith("-new"))) {
+        expect(row.confidence).not.toBe("low");
+      }
+    },
+  );
 });

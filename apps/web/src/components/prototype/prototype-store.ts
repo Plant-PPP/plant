@@ -113,6 +113,8 @@ export type PrototypeState = {
   manualPrices: readonly ManualPrice[];
   // The assets the user left out of the report, by `assetKey`.
   outOfTaxReport: ReadonlySet<AssetKey>;
+  // Where each operation came from, by id; one typed by hand has none.
+  operationOrigins: ReadonlyMap<string, HoldingOrigin>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -171,6 +173,7 @@ export function initialState(
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
     outOfTaxReport: new Set(),
+    operationOrigins: new Map(),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
@@ -955,9 +958,10 @@ export const holdingIn = (
 // Records an operation (`replacing` none) or an edit of one: each part becomes
 // a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
-// amount). Every touched holding is admitted again, or nothing changes. A
-// holding it creates comes from `origin`, or from the operation's own holding
-// when an edit moves it; one sold to zero and opened again keeps its own.
+// amount). Every touched holding is admitted again, or nothing changes. A new
+// operation comes from `origin`, and an edit keeps where its operation came
+// from; a holding it creates takes that origin, and one sold to zero and
+// opened again keeps its own.
 export function writeOperation(
   state: PrototypeState,
   input: unknown,
@@ -996,12 +1000,9 @@ export function writeOperation(
   if (replacing && !was)
     return refused(state, { ok: false, code: "not_found" });
   if (!replacing && was) return refused(state, { ok: false, code: "invalid" });
-  const createdFrom =
-    (was &&
-      state.holdings.find(
-        (each) => each.holding.id === was.parts[0]!.movement.holding_id,
-      )?.origin) ??
-    origin;
+  const createdFrom = was
+    ? (state.operationOrigins.get(operationId) ?? MANUAL)
+    : origin;
   // An edit keeps the operation's account and instrument, as its dialog does.
   if (
     was &&
@@ -1138,6 +1139,12 @@ export function writeOperation(
       state: {
         ...next,
         nextEntryOrder: Math.max(state.nextEntryOrder, entryOrder + 1),
+        ...(createdFrom.kind !== "manual" && {
+          operationOrigins: new Map(state.operationOrigins).set(
+            operationId,
+            createdFrom,
+          ),
+        }),
       },
       result: { ok: true, id: operationId },
     };
@@ -1344,7 +1351,15 @@ export function deleteOperation(
     next = withMovements(next, holdingId, kept, admitted.quantity);
   }
   if (!found) return refused(state, { ok: false, code: "not_found" });
-  return { state: next, result: { ok: true, id: operationId } };
+  if (!state.operationOrigins.has(operationId)) {
+    return { state: next, result: { ok: true, id: operationId } };
+  }
+  const operationOrigins = new Map(state.operationOrigins);
+  operationOrigins.delete(operationId);
+  return {
+    state: { ...next, operationOrigins },
+    result: { ok: true, id: operationId },
+  };
 }
 
 // The manual price an instrument had on a date.

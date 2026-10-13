@@ -149,14 +149,14 @@ export function finishReading(
       discarded: false,
     };
   });
-  // One the account could hold: a type and currency it already has.
-  const currencies = new Set(truth.map((row) => row.currency));
-  const types = new Set(symbols.map((symbol) => instrumentOf(symbol).type));
+  // One the account could hold: a type it already has in that currency.
+  const kindOf = (each: { type: string; currency: string }) =>
+    `${each.type}:${each.currency}`;
+  const kinds = new Set(symbols.map((symbol) => kindOf(instrumentOf(symbol))));
   const extra = state.instruments.find(
     (each) =>
       !held.has(each.symbol) &&
-      currencies.has(each.currency) &&
-      types.has(each.type) &&
+      kinds.has(kindOf(each)) &&
       priceOf(each.symbol) !== null,
   );
   if (extra) {
@@ -171,12 +171,15 @@ export function finishReading(
       discarded: false,
     });
   }
-  // The last priced row read with a digit missing, before the new one: a row
-  // with no price leaves the totals as printed.
-  const priced = truth.filter((row) => row.price !== null);
-  const misread = priced.at(-2) ?? priced[0] ?? truth[0]!;
+  // The last held row with a price read with a digit missing: a row with no
+  // price leaves the totals as printed, and none of them leaves the reading
+  // without a misread row.
+  const misread = truth
+    .slice(0, symbols.length)
+    .filter((row) => row.price !== null)
+    .at(-1);
   const rows = truth.map((row) =>
-    row.id === misread.id && compareDecimals(row.quantity, "10") >= 0
+    row.id === misread?.id && compareDecimals(row.quantity, "10") >= 0
       ? {
           ...row,
           quantity: stored({

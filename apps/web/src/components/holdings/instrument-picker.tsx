@@ -2,7 +2,7 @@
 
 import { ChevronDownIcon } from "lucide-react";
 import { Popover } from "radix-ui";
-import { type KeyboardEvent, useEffect, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 
 import { folded } from "@/lib/format/text";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
@@ -115,11 +115,7 @@ export function InstrumentPicker({
   const activeId =
     activeSymbol === undefined ? undefined : optionId(activeSymbol);
 
-  useEffect(() => {
-    if (open && activeId) {
-      document.getElementById(activeId)?.scrollIntoView({ block: "nearest" });
-    }
-  }, [open, activeId]);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   function openWith(next: boolean, search = "") {
     if (next) {
@@ -185,10 +181,19 @@ export function InstrumentPicker({
         <Popover.Content
           align="start"
           sideOffset={4}
+          // Radix would focus the search with its text selected, so the next
+          // key would replace a character typed on the trigger.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            const input = searchInput.current;
+            input?.focus();
+            input?.setSelectionRange(input.value.length, input.value.length);
+          }}
           aria-label="Elegir instrumento"
           className="z-50 grid w-(--radix-popover-trigger-width) gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         >
           <input
+            ref={searchInput}
             id={`${id}-search`}
             role="combobox"
             aria-expanded
@@ -225,6 +230,13 @@ export function InstrumentPicker({
                 role="option"
                 aria-selected={each.symbol === value}
                 data-active={index === active || undefined}
+                // The active option scrolls into view once it is in the page,
+                // which the portal mounts a render after it opens.
+                ref={
+                  index === active
+                    ? (option) => option?.scrollIntoView({ block: "nearest" })
+                    : undefined
+                }
                 // Keeps focus in the search while the click picks.
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseMove={() => setActive(index)}

@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-// An asset's "Incluir en el reporte", with the note that explains why its
-// account leaves it out anyway. aria-disabled keeps focus on it while a write
-// runs.
+// An account's or an asset's "Incluir en el reporte", with an optional note,
+// such as why an asset's account leaves it out anyway. aria-disabled keeps
+// focus on it while a write runs.
 export function ReportSwitch({
   id,
   checked,

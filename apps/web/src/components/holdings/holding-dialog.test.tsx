@@ -196,7 +196,7 @@ describe("with details", () => {
       accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
     });
     expect(html).toContain(
-      '<a class="underline" href="/accounts/a1">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
+      '<a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
     );
     expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
   });

@@ -138,3 +138,37 @@ describe("keys on the closed trigger", () => {
     expect(key("Tab")).toBeNull();
   });
 });
+
+describe("the closed picker and the keys that open it", () => {
+  const key = (k: string) =>
+    triggerKey({ key: k, altKey: false, ctrlKey: false, metaKey: false });
+
+  it("renders no list, no option and no status while closed", () => {
+    const html = render("GD30");
+    expect(html).not.toContain('role="listbox"');
+    expect(html).not.toContain('role="option"');
+    expect(html).not.toContain('role="status"');
+    expect(html).not.toContain("Sin resultados");
+    expect(/<button[^>]*>/.exec(html)![0]).toContain('aria-expanded="false"');
+  });
+
+  it("starts the search with an uppercase letter typed with Shift", () => {
+    expect(key("G")).toBe("G");
+  });
+
+  it.each(["ñ", "Ñ", "á", "é"])("starts the search with %s", (typed) => {
+    expect(key(typed)).toBe(typed);
+  });
+
+  it("leaves named keys to the button", () => {
+    expect(key("Escape")).toBeNull();
+    expect(key("Dead")).toBeNull();
+    expect(key("Backspace")).toBeNull();
+    expect(key("Shift")).toBeNull();
+  });
+
+  it("matches what a key on the trigger starts the search with", () => {
+    expect(matchesInstrument(GD30, key("G")!)).toBe(true);
+    expect(matchesInstrument(FCI, key("Á")!)).toBe(true);
+  });
+});

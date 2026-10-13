@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { dialogAnswer } from "@/components/portfolio-setup/answers";
 import type { ListChange } from "@/components/portfolio-setup/list-change";
 import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
+import { ReportSwitch } from "@/components/portfolio-setup/report-switch";
 import { useSetupCard } from "@/components/portfolio-setup/setup-card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
@@ -59,7 +60,6 @@ import {
 } from "./instrument-change";
 import { instrumentPreset, useMovementDialogs } from "./movement-dialogs";
 import { MovementsTable } from "./movements-table";
-import { ReportSwitch } from "./report-switch";
 import {
   AmountText,
   CALCULATING,
