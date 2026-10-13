@@ -16,6 +16,8 @@ import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
 import { readInstruments, readReferenceDollar } from "@/lib/holdings/read";
+import { pricedSnapshotOf } from "@/lib/ledger/ledger";
+import { readLedger } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
 import { contextFields } from "@/lib/portfolio-setup/read";
@@ -46,12 +48,16 @@ export default async function DebtsPage({
     params,
   };
   const today = buenosAiresDate(new Date());
-  const [debts, instruments, dollar] = await Promise.all([
+  const [debts, instruments, dollar, { ledger }] = await Promise.all([
     readLiabilities(client).catch((error: unknown) =>
       assetsViewFailure(context, "debts", error),
     ),
     readInstruments(client, context),
     readReferenceDollar(client, context),
+    // For the user's manual prices and rates, as every other page values.
+    readLedger(client, { today, referenceDollar: "mep" }).catch(
+      (error: unknown) => assetsViewFailure(context, "ledger", error),
+    ),
   ]);
   const quotes = await readSnapshot(
     createQuoteReader(client),
@@ -62,10 +68,14 @@ export default async function DebtsPage({
   const unit =
     parseAssetsParams(params, { portfolioIds: [], tabs: TABS, salesYears: [] })
       .unit ?? reference;
-  const valued = valueLiabilities(debts.active, quotes.snapshot, {
-    denominator: unit,
-    referenceDollar: dollar,
-  });
+  const valued = valueLiabilities(
+    debts.active,
+    pricedSnapshotOf(ledger, quotes.snapshot).snapshot,
+    {
+      denominator: unit,
+      referenceDollar: dollar,
+    },
+  );
 
   serverLog.info(DEBTS_VIEW_EVENT, {
     ...contextFields(context),

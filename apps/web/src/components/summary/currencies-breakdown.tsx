@@ -9,12 +9,15 @@ const CURRENCY_NAMES: Record<Currency, string> = {
   USD: "En dólares",
 };
 
-// What is held in each currency, valued in the page's unit, with its share.
+// What is held in each currency, valued in the page's unit, with its share
+// of the whole, marked when the currency or the whole leaves holdings out.
 export function CurrenciesBreakdown({
   currencies,
+  total,
   unit,
 }: {
   currencies: Partial<Record<Currency, Sum>>;
+  total: Sum;
   unit: Denominator;
 }) {
   const lines = (Object.keys(CURRENCY_NAMES) as Currency[]).flatMap(
@@ -33,7 +36,10 @@ export function CurrenciesBreakdown({
           <dt className="text-sm">
             {CURRENCY_NAMES[currency]}
             <span className="text-muted-foreground ml-2 text-xs tabular-nums">
-              <ShareText share={sum.share} complete={sum.complete} />
+              <ShareText
+                share={sum.share}
+                complete={sum.complete && total.complete}
+              />
             </span>
           </dt>
           <dd className="text-sm font-medium tabular-nums">

@@ -162,6 +162,7 @@ it.each([
   [{ code: "23503", hint: null }, "not_found"],
   [{ code: "PT409", hint: "portfolio_archived" }, "portfolio_archived"],
   [{ code: "PT409", hint: "stale" }, "failed"],
+  [{ code: "PT409", hint: "negative_units" }, "oversold"],
 ])("answers the database's %o as %s", async (error, code) => {
   rpc.mockResolvedValue({ data: null, error, status: 409 });
   expect(await runOperation("create_operation", null, PURCHASE)).toEqual({

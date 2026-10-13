@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(86);
+SELECT plan(92);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -143,11 +143,13 @@ SELECT results_eq(
   ARRAY[
     'O CREATE TRIGGER holdings_set_updated_at BEFORE UPDATE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.set_updated_at()',
     'O CREATE TRIGGER portfolio_setup_1_lock BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.lock_portfolio_setup()',
+    'O CREATE TRIGGER portfolio_setup_1_lock_reopen BEFORE UPDATE OF amount ON public.holdings FOR EACH ROW WHEN (((old.amount = (0)::numeric) AND (new.amount > (0)::numeric))) EXECUTE FUNCTION private.lock_portfolio_setup()',
     'O CREATE TRIGGER portfolio_setup_2_default BEFORE INSERT ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.default_holding_portfolio()',
     'O CREATE TRIGGER portfolio_setup_2_stamp BEFORE UPDATE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.stamp_archived_at()',
-    'O CREATE TRIGGER portfolio_setup_3_guard BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.guard_holding_write()'
+    'O CREATE TRIGGER portfolio_setup_3_guard BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.guard_holding_write()',
+    'O CREATE TRIGGER portfolio_setup_3_guard_reopen BEFORE UPDATE OF amount ON public.holdings FOR EACH ROW WHEN (((old.amount = (0)::numeric) AND (new.amount > (0)::numeric))) EXECUTE FUNCTION private.guard_holding_write()'
   ],
-  'holdings has the lock, default, stamp and guard triggers, all enabled'
+  'holdings has the lock, default, stamp and guard triggers, also on a sold-out holding getting units back, all enabled'
 );
 
 -- The label's bound, in the form limits.test.ts reads.
@@ -649,6 +651,52 @@ SELECT is(
   'PT409 portfolio_archived',
   'an account still cannot default to an archived portfolio'
 );
+
+-- A sold-out instrument holding keeps nothing active, and units cannot come
+-- back into it once its portfolio or account is archived.
+SAVEPOINT sold_out;
+INSERT INTO public.holdings (source_connection_id, portfolio_id, asset_class, instrument_symbol, amount)
+VALUES ('a9000000-0000-4000-8000-0000000000a9', 'a4000000-0000-4000-8000-0000000000a4',
+        'instrument', 'SOL', '1');
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.portfolios SET archived_at = now()
+                      WHERE id = 'a4000000-0000-4000-8000-0000000000a4' $$),
+  'PT409 portfolio_has_holdings',
+  'a portfolio holding units of an instrument stays active'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.source_connections SET archived_at = now()
+                      WHERE id = 'a9000000-0000-4000-8000-0000000000a9' $$),
+  'PT409 source_connection_has_holdings',
+  'an account holding units of an instrument stays active'
+);
+
+UPDATE public.holdings SET amount = '0' WHERE instrument_symbol = 'SOL';
+
+SELECT lives_ok(
+  $$ UPDATE public.portfolios SET archived_at = now() WHERE id = 'a4000000-0000-4000-8000-0000000000a4' $$,
+  'a portfolio whose only instrument holding is sold out can be archived'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.holdings SET amount = '1' WHERE instrument_symbol = 'SOL' $$),
+  'PT409 portfolio_archived',
+  'a sold-out holding gets no units back in an archived portfolio'
+);
+
+SELECT lives_ok(
+  $$ UPDATE public.source_connections SET archived_at = now() WHERE id = 'a9000000-0000-4000-8000-0000000000a9' $$,
+  'an account whose only instrument holding is sold out can be archived'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.holdings SET amount = '1' WHERE instrument_symbol = 'SOL' $$),
+  'PT409 source_connection_archived',
+  'a sold-out holding gets no units back in an archived account'
+);
+ROLLBACK TO SAVEPOINT sold_out;
 
 -- Only the archived account's or portfolio's own holdings keep it active.
 SELECT lives_ok(

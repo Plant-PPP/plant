@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ImportItem } from "@/lib/imports/review";
 
-import { ImportReview } from "./import-review";
+import { ImportReview, pickedInstrument } from "./import-review";
 
 const ITEM: ImportItem = {
   id: "r1",
@@ -72,6 +72,23 @@ it("asks where a new instrument goes, and whether it comes from another account"
   expect(html).toContain("Ya tenés AAPL en otra cuenta. ¿Es un traspaso?");
   expect(html).toContain("Compra o saldo propio");
   expect(html).not.toContain('aria-label="Cartera de la fila 2"');
+});
+
+it("clears a price printed in another currency when the row's instrument is picked", () => {
+  const instruments = [
+    { symbol: "AAPL", currency: "ARS" as const },
+    { symbol: "BTC", currency: "USD" as const },
+  ];
+  expect(pickedInstrument("USD", "AAPL", instruments)).toEqual({
+    symbol: "AAPL",
+    currency: "ARS",
+    value: null,
+    priceText: "",
+  });
+  expect(pickedInstrument("USD", "BTC", instruments)).toEqual({
+    symbol: "BTC",
+    currency: "USD",
+  });
 });
 
 it("asks neither on a page that does not route the rows", () => {

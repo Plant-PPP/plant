@@ -20,6 +20,10 @@ jest.mock("@/lib/debts/read", () => ({
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
 }));
+const manual = { manualPrices: [] as unknown[], manualRates: [] as unknown[] };
+jest.mock("@/lib/ledger/read", () => ({
+  readLedger: async () => ({ ledger: manual, truncated: false }),
+}));
 jest.mock("@/components/debts/debts-setup", () => ({
   DebtsSetup: () => null,
 }));
@@ -110,6 +114,16 @@ it("values in the unit ?unit names", async () => {
   const props = await render({ unit: "ars" });
   expect(props.unit).toBe("ars");
   expect(props.valued.total).toBe("160000");
+});
+
+it("values with the user's manual dollar rate, as Resumen does", async () => {
+  manual.manualRates = [{ kind: "mep", rate_date: "2026-10-12", sell: "1600" }];
+  try {
+    // 160000 pesos at the user's 1600 a dollar.
+    expect((await render()).valued.total).toBe("100");
+  } finally {
+    manual.manualRates = [];
+  }
 });
 
 it("hands the page only data and server actions", async () => {

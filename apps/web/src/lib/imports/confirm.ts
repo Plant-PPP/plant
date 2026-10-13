@@ -69,9 +69,11 @@ function holdingsOn(state: Ledger, accountId: string, date: string) {
     .sort((a, b) => compareDecimals(b.quantity, a.quantity));
 }
 
-// The instruments the account has a holding of whose history starts after a
-// day: a statement of that day cannot be weighed against it.
-export function opensAfter(
+// The instruments whose balance the account set after a day, with an opening
+// balance or an adjustment (a later statement's, or one typed by hand). A
+// statement of that day booked under it would move that balance too; later
+// trades are weighed as they are.
+export function balancedAfter(
   state: Ledger,
   accountId: string,
   date: string,
@@ -85,7 +87,13 @@ export function opensAfter(
       continue;
     }
     const own = state.movements.get(row.id) ?? [];
-    if (own.length > 0 && own.every((each) => each.date > date)) {
+    if (
+      own.some(
+        (each) =>
+          each.date > date &&
+          (each.kind === "opening_balance" || each.kind === "adjustment"),
+      )
+    ) {
       later.add(row.holding.instrument_symbol);
     }
   }
@@ -194,7 +202,7 @@ export function writeImport<S extends Ledger>(
   // later refuses the write, as it would refuse a movement typed by hand.
   const date = item.date;
   const held = heldOn(state, account.id, date);
-  const later = opensAfter(state, account.id, date);
+  const later = balancedAfter(state, account.id, date);
   if (kept.some((row) => later.has(row.symbol))) {
     return refuse({ ok: false, code: "opens_later" });
   }

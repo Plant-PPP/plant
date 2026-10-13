@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(42);
+SELECT plan(44);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -403,6 +403,26 @@ SELECT throws_ok(
   '23514', NULL,
   'an exclusion names something'
 );
+
+-- An account whose holding is sold out is archived, and a buy cannot reopen
+-- the holding there.
+SAVEPOINT sold_out;
+SELECT public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('sale', '3', '2026-03-02')), pg_temp.revisions('AAPL'));
+
+SELECT lives_ok(
+  $$ UPDATE public.source_connections SET archived_at = now()
+     WHERE id = 'a5000000-0000-4000-8000-0000000000a5' $$,
+  'an account whose only holding is sold out can be archived'
+);
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.write_operation(
+    NULL, jsonb_build_array(pg_temp.trade('purchase', '1', '2026-04-02')), pg_temp.revisions('AAPL')) $$),
+  'PT409 source_connection_archived',
+  'a buy cannot reopen a sold-out holding in an archived account'
+);
+ROLLBACK TO SAVEPOINT sold_out;
 
 RESET ROLE;
 

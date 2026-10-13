@@ -115,8 +115,8 @@ export type MovementResult =
         | "failed"
         // A yield given as a balance the holding already held that day.
         | "same_balance"
-        // A statement older than a holding of the same instrument the
-        // account already has.
+        // A statement older than a balance the account already set of the
+        // same instrument.
         | "opens_later"
         | Extract<
             PortfolioSetupGuardHint,

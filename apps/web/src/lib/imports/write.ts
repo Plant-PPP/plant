@@ -270,6 +270,33 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     if (!bytesMatch(file.type, bytes)) return await refuse("type");
     const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
 
+    // The same file whose reading failed is read again: the failed one goes,
+    // with its import and its file.
+    const earlier = await client
+      .from("uploaded_documents")
+      .select("id, storage_path, imports(status)")
+      .eq("user_id", claims.sub)
+      .eq("source_connection_id", accountId)
+      .eq("sha256", sha256)
+      .limit(1);
+    if (classifyPostgrestResult(earlier, 200)) {
+      throw earlier.error ?? new Error("earlier document not read");
+    }
+    const failed = earlier.data?.[0];
+    if (failed?.imports?.status === "failed") {
+      const removed = await client
+        .from("uploaded_documents")
+        .delete()
+        .eq("user_id", claims.sub)
+        .eq("id", failed.id);
+      if (classifyPostgrestResult(removed, 204)) {
+        throw removed.error ?? new Error("earlier document not removed");
+      }
+      if (failed.storage_path !== path) {
+        await bucket.remove([failed.storage_path]);
+      }
+    }
+
     const document = await client
       .from("uploaded_documents")
       .insert({
