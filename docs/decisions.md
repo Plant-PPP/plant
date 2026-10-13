@@ -2,12 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Export and deleting the account (PLA-58, PLA-84, prototype)
+
+- **Ajustes exports the user's data as one CSV per kind of row**: holdings, movements, debts and imports, each built when its button is pressed. Amounts are written as stored (a point before the decimals, no grouping) so any spreadsheet reads them back; the file starts with a byte order mark so accents read as UTF-8. A text field a spreadsheet would read as a formula starts with an apostrophe (`toCsv`); a signed number does not. The real export adds the stored files, the MFA step-up and the `audit_log` row, which the prototype has no counterpart for.
+- **Deleting the account asks first and leaves the prototype as a new user's**: one "Principal" portfolio, as the database gives a new user, and nothing else; the market data stays, and the user lands on Resumen. The real deletion is the Inngest job of PLA-84, with its step-up and audit row.
+
 ## 2026-10-13 · View preferences (PLA-109, prototype)
 
 - **Ajustes holds "Cómo ves tu plata"**: the reference dollar (MEP or CCL) and the unit Resumen, Activos, Deudas and the account, portfolio and instrument pages open in, the reference dollar's by default. A link's `?unit=` still wins, and choosing the page's home unit in its select drops the param, as choosing the reference unit did. Resumen opens in the reference dollar when the preferred unit is Bitcoin, which closes cannot be expressed in. The assistant keeps opening in the reference dollar, as it answers only in pesos, MEP and CCL.
 - **No preferred tab.** The issue asks for one only "if needed", and a preferred tab would make "no `?tab=`" mean two things to the tabs. It waits for someone to ask for it.
 - **`/settings` moved into the `(data)` route group** (route groups leave the URL as it was), so its prototype cards share the store with the data pages. A preference writes no close: it changes how the pages show the data, not the data, so the prototype's write skips marking months recalculated.
 - **The real preference** goes in `profiles`, beside `reference_dollar`, when the data turns real.
+
 ## 2026-10-13 · Resumen by portfolio, account and currency (PLA-30, prototype)
 
 - **Resumen picks a portfolio, or all of them.** With all, it shows the net worth, its months and closes as before, then the split by portfolio, account and currency. One portfolio shows only its assets today, split by kind, class, account and currency, and says why the net worth is not there: debts belong to no portfolio and closes are of the whole, so neither has a per-portfolio version. The choice is `?portfolio=`, as on Activos.

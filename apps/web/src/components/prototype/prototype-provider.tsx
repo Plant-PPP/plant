@@ -29,6 +29,7 @@ import {
   deleteHolding,
   deleteOperation,
   deletePrice,
+  freshState,
   initialState,
   pricedSnapshotOf,
   type PrototypeState,
@@ -67,6 +68,8 @@ type Prototype = {
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
+    // Leaves the store as a new user's.
+    deleteAccount: () => void;
   };
 };
 
@@ -127,6 +130,11 @@ export function PrototypeProvider({
     preferences: {
       set: (next) => writeState((s) => setPreferences(s, next)),
     },
+    deleteAccount: () =>
+      void writeState((s) => ({
+        state: freshState(s, crypto.randomUUID()),
+        result: null,
+      })),
     holdings: {
       create: (input) =>
         write((s) => createHolding(s, input, crypto.randomUUID())),

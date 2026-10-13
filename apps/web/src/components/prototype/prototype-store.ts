@@ -203,6 +203,30 @@ export function initialState(
   };
 }
 
+// What a user starts with after deleting the account and signing up again:
+// one "Principal" portfolio, as the database gives a new user, and nothing
+// else; the market data stays.
+export function freshState(
+  state: PrototypeState,
+  portfolioId: string,
+): PrototypeState {
+  return initialState(
+    {
+      referenceDollar: "mep",
+      accounts: [],
+      portfolios: [{ id: portfolioId, name: "Principal" }],
+      instruments: state.instruments,
+      holdings: [],
+      closed: [],
+      movements: [],
+      quotes: state.quotes,
+      manualPrices: [],
+      liabilities: [],
+    },
+    state.today,
+  );
+}
+
 // --- Reads -----------------------------------------------------------------
 
 // A portfolio, archived or not.
