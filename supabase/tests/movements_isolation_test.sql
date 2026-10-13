@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(44);
+SELECT plan(47);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -92,7 +92,7 @@ INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency) 
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.operations') $$,
-  ARRAY['(table):SELECT', '(table):DELETE', 'entry_order:INSERT'],
+  ARRAY['(table):SELECT', '(table):DELETE', 'entry_order:INSERT', 'entry_order:UPDATE'],
   'a user reads and deletes operations and writes only their entry order'
 );
 
@@ -403,6 +403,48 @@ SELECT throws_ok(
   '23514', NULL,
   'an exclusion names something'
 );
+
+-- An edit that moves a sale to a later day goes last there when the app
+-- admitted it so; keeping its place would sell before that day's purchase.
+SAVEPOINT edit_last;
+INSERT INTO ops VALUES ('ko_buy', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('purchase', '5', '2026-04-01') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+INSERT INTO ops VALUES ('ko_sale', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('sale', '5', '2026-04-01') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+INSERT INTO ops VALUES ('ko_later', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('purchase', '5', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.write_operation(
+    (SELECT id FROM ops WHERE name = 'ko_sale'),
+    jsonb_build_array(pg_temp.trade('sale', '10', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+    pg_temp.revisions('KO'), false) $$),
+  'PT409 negative_units',
+  'an edit that keeps its place on its new day sells before that day''s purchase'
+);
+
+SELECT lives_ok(
+  $$ SELECT public.write_operation(
+    (SELECT id FROM ops WHERE name = 'ko_sale'),
+    jsonb_build_array(pg_temp.trade('sale', '10', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+    pg_temp.revisions('KO'), true) $$,
+  'an edit that goes last on its new day sells after that day''s purchase'
+);
+
+SELECT results_eq(
+  $$ SELECT o.name, m.entry_order > (SELECT max(m2.entry_order) FROM public.movements m2
+                                      JOIN ops o2 ON o2.id = m2.operation_id
+                                      WHERE o2.name = 'ko_later'),
+            (SELECT h.amount::text FROM public.holdings h WHERE h.id = m.holding_id),
+            (SELECT op.entry_order = m.entry_order FROM public.operations op WHERE op.id = m.operation_id)
+     FROM public.movements m JOIN ops o ON o.id = m.operation_id WHERE o.name = 'ko_sale' $$,
+  $$ VALUES ('ko_sale', true, '0.00000000', true) $$,
+  'the edited sale takes the next entry order, with its operation, and the holding sells out'
+);
+ROLLBACK TO SAVEPOINT edit_last;
 
 -- An account whose holding is sold out is archived, and a buy cannot reopen
 -- the holding there.
