@@ -8,6 +8,18 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A transfer from the review is the same operation as one from the movement dialog**: out of the other account's holding of the instrument that holds the most, into this account's chosen portfolio, booked on the import's day with the import as its origin. One the other account cannot cover is refused like any transfer that oversells.
 - **Production's review asks neither**: the choices come with an optional `routing` the prototype passes; a statement replacing the account's holdings and the idempotent confirm wait for PLA-41's tables.
 
+## 2026-10-13 · Correcting a quoted price or dollar rate by hand (PLA-122, prototype)
+
+- **Any price or dollar rate can be corrected by hand** (Tomas, 2026-10-13): an instrument's price from Activos ("Corregir" beside a quoted price), and the MEP, CCL and official dollar from Ajustes ("Dólar de hoy").
+- **The newest wins, and the user's on a tie**: a value the user states beats the feeds' quote of its day, and every day after until the feeds bring a newer one; a quote the feeds carry over a weekend is older and loses. With no quote at all, the user's value lasts however old, as before. Core applies the rule (`withManualPrices`, `withManualRates`), so Activos, Resumen, the closes and the assistant read the same snapshot.
+- **A corrected value shows as such and can go back**: "Manual · date" on the price, "corregido a mano el …" on the rate, and "Volver a la cotización", which deletes the user's value. The prototype keeps the rates beside the prices; the database gets a manual rates table beside the manual prices one.
+
+## 2026-10-13 · A property's sheet (PLA-90, prototype)
+
+- **A property in Activos has a "Ficha"**: what it is (vivienda, alquilada, local, terreno, en pozo), its purchase price and date in their currency, its monthly rent and expenses each in its currency, how the rent is adjusted (ICL, IPC or fixed, every so many months, as information only), and how it was paid. A mortgage or installments name one of the user's debts; paid in cash, none.
+- **The sheet shows what it leaves each month, its yield and what it gained, in the page's unit**, as the fields read. Core computes them (`realEstateFigures`): the net rent is the rent less the expenses and the debt's installment (a UVA installment at today's UVA), the yield is the rent less the expenses over a year as a fraction of what the property is worth, and the appreciation is its worth less its purchase price, both at today's rates, with no inflation adjustment (PLA-67). A figure missing a quote shows "—".
+- **The sheet lives beside the holding in the prototype's store**, as the origin and a placement's kind do; the `real_estate_details` table comes with the data. Deleting the property drops its sheet; a debt deleted later leaves the sheet's net rent without an installment.
+
 ## 2026-10-13 · Placements at a rate: kinds, figures and renewal (PLA-124, prototype)
 
 - **A plazo fijo, a "caución", a loan the user gave and any other placement at a rate are one class, `fixed_term`, valued as before** (simple interest, actual/365, credited in cents). What each is shows as its kind, chosen in the holding dialog ("Tipo de colocación"); a placement with no name goes by its kind ("Caución ARS"). The kind lives beside the holding, as the origin does, until the database holds it.
@@ -135,7 +147,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A purchase or sale is one operation split across portfolios.** Each part is one holding's movement under the operation's id; its charges are items (commission, market fee, VAT, tax, other with a name) split by quantity, each part's share cut to 8 decimals and the last taking the rest, and they never enter the cost. (Within-day order: see PLA-116.) A holding starts with units coming in: an opening balance, a purchase, an adjustment in or a transfer in (PLA-118), never a yield (PLA-123). An adjustment changes the quantity without trading: units in at a cost (0 unless given), units out with the cost of the oldest lots and no result.
 - **Returns.** The table's G/P is unrealized, on the units held. An instrument's history adds its total result (sales, income and units held, less what was paid in) and its yearly money-weighted return (the IRR, solved by bisection in floating point, since it is a ratio), which is left out for flows under a year old.
 - **CEDEARs, bonds and FCI are instrument types before their migration** (`PENDING_INSTRUMENT_TYPES` in core); a test fails the day the enum holds them. A bond is quoted per 100 nominal and stored per unit: every input and display of its price goes through `quotedPrice`/`unitPrice`. The class filter, the bar and the Tipo column read the type; `assets.view` logs it as `plant.assets.class` (it was `plant.assets.asset_class`, with "instrument" for every instrument).
-- **Manual prices** apply only where the feeds have no price: the latest one on or before the day, however old.
+- **Manual prices** apply only where the feeds have no price: the latest one on or before the day, however old. Since PLA-122 they also correct a quoted price, on their day and after until the feeds bring a newer one.
 - **Holdings are deleted, not archived, in the prototype**; accounts and portfolios are archived or, when nothing uses them, deleted. Every delete asks first (`ConfirmDialog`).
 
 ## 2026-10-11 · English URL params (PLA-110)

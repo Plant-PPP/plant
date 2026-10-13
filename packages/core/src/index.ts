@@ -55,6 +55,11 @@ export {
   type OmittableColumn,
 } from "./valuation/holding";
 export {
+  type RealEstateFigures,
+  realEstateFigures,
+  type RealEstateTerms,
+} from "./real-estate/figures";
+export {
   interestTo,
   type Placement,
   type PlacementFigures,
@@ -129,7 +134,6 @@ export {
   unitPrice,
 } from "./instruments";
 export {
-  acceptsManualPrice,
   admitManualPrice,
   type ManualPrice,
   type ManualPriceRefusal,
@@ -137,6 +141,11 @@ export {
   type PriceSource,
   priceSource,
   withManualPrices,
+  MANUAL_RATE_KINDS,
+  type ManualRate,
+  type ManualRateKind,
+  manualRateSchema,
+  withManualRates,
 } from "./quotes/manual";
 export {
   type CashFlow,

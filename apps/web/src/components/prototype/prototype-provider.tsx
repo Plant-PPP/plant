@@ -1,6 +1,6 @@
 "use client";
 
-import type { QuoteSnapshot } from "@plant/core";
+import type { ManualRateKind, QuoteSnapshot } from "@plant/core";
 import {
   createContext,
   type ReactNode,
@@ -15,6 +15,8 @@ import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
 import type { Preferences } from "@/components/settings/preferences-card";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import type {
@@ -30,6 +32,7 @@ import {
   deleteHolding,
   deleteOperation,
   deletePrice,
+  deleteRate,
   freshState,
   initialState,
   pricedSnapshotOf,
@@ -38,7 +41,9 @@ import {
   setInTaxReport,
   setPlacement,
   setPreferences,
+  setRealEstateSheet,
   setPrice,
+  setRate,
   type Write,
   updateHolding,
   updateHoldingDetails,
@@ -60,6 +65,8 @@ type Prototype = {
   snapshot: QuoteSnapshot;
   manual: ReadonlyMap<string, { price: string; date: string }>;
   fed: (symbol: string) => boolean;
+  // The date of each dollar rate the user stated that the snapshot took.
+  manualRates: ReadonlyMap<ManualRateKind, string>;
   details: HoldingDetails;
   actions: {
     holdings: HoldingActions;
@@ -71,6 +78,16 @@ type Prototype = {
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
+    rates: {
+      set: (rate: {
+        kind: ManualRateKind;
+        sell: string;
+        date: string;
+      }) => Promise<{ ok: boolean }>;
+      revert: (kind: ManualRateKind, date: string) => Promise<{ ok: boolean }>;
+    };
+    // A property's sheet.
+    realEstate: (id: string, sheet: RealEstateSheet) => Promise<WriteResult>;
     // Leaves the store as a new user's.
     deleteAccount: () => void;
   };
@@ -133,6 +150,12 @@ export function PrototypeProvider({
     preferences: {
       set: (next) => writeState((s) => setPreferences(s, next)),
     },
+    rates: {
+      set: ({ kind, sell, date }) =>
+        write((s) => setRate(s, { kind, sell, rate_date: date })),
+      revert: (kind, date) => write((s) => deleteRate(s, kind, date)),
+    },
+    realEstate: (id, sheet) => write((s) => setRealEstateSheet(s, id, sheet)),
     deleteAccount: () =>
       void writeState((s) => ({
         state: freshState(s, crypto.randomUUID()),
@@ -296,6 +319,7 @@ export function PrototypeProvider({
           ]),
         ),
         fed,
+        manualRates: priced.rates,
         details,
         actions,
       }}
