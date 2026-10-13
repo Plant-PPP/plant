@@ -41,9 +41,9 @@ export const metadata: Metadata = { title: navTitle("/assets") };
 export const dynamic = "force-dynamic";
 
 // One instrument's history across every account and portfolio, in one unit
-// (the reference dollar unless ?unit= names another). A symbol the user holds
-// nothing of, open or closed, has no page. Outside production it shows
-// made-up data.
+// (the reference dollar unless ?unit= names another). A symbol outside the
+// catalog has no page; one the user holds nothing of shows its empty state.
+// Outside production it shows made-up data.
 export default async function InstrumentPage({
   params,
   searchParams,

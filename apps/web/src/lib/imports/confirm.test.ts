@@ -82,3 +82,21 @@ it("refuses an account the user does not have", () => {
     writeImport(emptyLedger(), { ...ITEM, accountId: "x" }, [], newId).result,
   ).toEqual({ ok: false, code: "not_found" });
 });
+
+it("refuses a statement older than a holding the account already has", () => {
+  const opened = writeImport(
+    emptyLedger(),
+    { ...ITEM, id: "later" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  ).state;
+  const written = writeImport(
+    opened,
+    { ...ITEM, date: "2026-09-01" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: false, code: "opens_later" });
+  expect(written.operations).toEqual([]);
+  expect(written.state).toBe(opened);
+});
