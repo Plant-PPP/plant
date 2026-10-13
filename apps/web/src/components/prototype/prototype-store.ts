@@ -55,6 +55,10 @@ import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
 import { type AssetKey, assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingOrigin } from "@/lib/holdings/holding-name";
+import {
+  type RealEstateSheet,
+  realEstateSheetSchema,
+} from "@/lib/real-estate/sheet";
 import type {
   MovementLine,
   OperationParts,
@@ -117,6 +121,8 @@ export type PrototypeState = {
   outOfTaxReport: ReadonlySet<AssetKey>;
   // Where each operation came from, by id; one typed by hand has none.
   operationOrigins: ReadonlyMap<string, HoldingOrigin>;
+  // Each property's sheet, by holding id.
+  realEstate: ReadonlyMap<string, RealEstateSheet>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -194,6 +200,7 @@ export function initialState(
     manualPrices: fixtures.manualPrices,
     outOfTaxReport: new Set(),
     operationOrigins: new Map(),
+    realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
@@ -1316,9 +1323,14 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
     !holdings.some((each) => assetKey(each.holding) === key)
       ? new Set([...state.outOfTaxReport].filter((each) => each !== key))
       : state.outOfTaxReport;
-  // A holding with no movements leaves the movements map the same object,
-  // so nothing that watches it sees a change.
-  if (!state.movements.has(id)) return { ...state, holdings, outOfTaxReport };
+  // A property's sheet goes with it. A holding with no movements leaves the
+  // movements map the same object, so nothing that watches it sees a change.
+  const realEstate = state.realEstate.has(id)
+    ? new Map([...state.realEstate].filter(([each]) => each !== id))
+    : state.realEstate;
+  if (!state.movements.has(id)) {
+    return { ...state, holdings, outOfTaxReport, realEstate };
+  }
   const movements = new Map(state.movements);
   movements.delete(id);
   // The holdings it replayed with load their tables again: an operation it
@@ -1344,6 +1356,33 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
     revisions,
     outOfTaxReport,
     operationOrigins,
+    realEstate,
+  };
+}
+
+// A property's sheet, whose debt, if any, is one of the user's.
+export function setRealEstateSheet(
+  state: PrototypeState,
+  id: string,
+  input: unknown,
+): Write<WriteResult> {
+  const parsed = realEstateSheetSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const stored = state.holdings.find((each) => each.holding.id === id);
+  const { liabilityId } = parsed.data;
+  if (
+    stored?.holding.asset_class !== "real_estate" ||
+    (liabilityId !== null &&
+      !state.liabilities.some((each) => each.id === liabilityId))
+  ) {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  return {
+    state: {
+      ...state,
+      realEstate: new Map(state.realEstate).set(id, parsed.data),
+    },
+    result: { ok: true, id },
   };
 }
 
