@@ -1,4 +1,11 @@
-import type { ChatMessage } from "./chat";
+import {
+  CHART_KINDS,
+  CHAT_UNITS,
+  type ChartPart,
+  type ChatMessage,
+  MAX_CHART_POINTS,
+  MAX_CHARTS,
+} from "./chat";
 
 // A chat message as stored or streamed: its parts and what the answer says
 // under it.
@@ -24,6 +31,33 @@ export const textOf = (parts: readonly unknown[]) =>
     )
     .join("");
 
+const isText = (value: unknown): value is string => typeof value === "string";
+
+// A chart as kept with an answer, or nothing when it is not one.
+const chartOf = (value: unknown): ChartPart[] => {
+  if (typeof value !== "object" || value === null) return [];
+  const chart = value as Record<string, unknown>;
+  const points = Array.isArray(chart.points) ? chart.points : [];
+  if (
+    !CHART_KINDS.includes(chart.kind as ChartPart["kind"]) ||
+    !CHAT_UNITS.includes(chart.unit as ChartPart["unit"]) ||
+    !isText(chart.title)
+  ) {
+    return [];
+  }
+  return [
+    {
+      kind: chart.kind as ChartPart["kind"],
+      unit: chart.unit as ChartPart["unit"],
+      title: chart.title,
+      points: points.slice(0, MAX_CHART_POINTS).flatMap((point) => {
+        const { label, value } = (point ?? {}) as Record<string, unknown>;
+        return isText(label) && isText(value) ? [{ label, value }] : [];
+      }),
+    },
+  ];
+};
+
 const metadataOf = (metadata: unknown) => {
   const value =
     typeof metadata === "object" && metadata !== null
@@ -41,12 +75,15 @@ const metadataOf = (metadata: unknown) => {
           (source): source is string => typeof source === "string",
         )
       : [],
+    charts: Array.isArray(value.charts)
+      ? value.charts.flatMap(chartOf).slice(0, MAX_CHARTS)
+      : [],
   };
 };
 
 // The chat's messages as the transcript shows them: a question's text, an
-// answer's text and what it read, the day and its dollar. An answer still
-// streaming has no day yet.
+// answer's text, its charts and what it read, the day and its dollar. An
+// answer still streaming has no day yet.
 export function toChatMessages(
   messages: readonly MessageLike[],
 ): ChatMessage[] {
@@ -56,13 +93,13 @@ export function toChatMessages(
       return [{ id: message.id, role: "user", text }];
     }
     if (message.role !== "assistant") return [];
-    const { asOf, rate, sources } = metadataOf(message.metadata);
+    const { asOf, rate, sources, charts } = metadataOf(message.metadata);
     return [
       {
         id: message.id,
         role: "assistant",
         text,
-        charts: [],
+        charts,
         table: null,
         sources,
         asOf: asOf ?? "",

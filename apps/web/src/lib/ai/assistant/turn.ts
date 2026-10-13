@@ -21,7 +21,9 @@ import { ADVICE_ANSWER, isAdvice } from "@/lib/assistant/advice";
 import {
   ANSWER_FAILED,
   type AnswerMetadata,
+  type ChartPart,
   type ChatUnit,
+  MAX_CHARTS,
   QUOTA_USED,
   titleOf,
 } from "@/lib/assistant/chat";
@@ -208,11 +210,12 @@ export async function runAssistantTurn({
   const history = await store.history(userId, conversationId, HISTORY_TURNS);
   const data = assistantData({ client, context, unit, today });
   // What the answer read, gathered from its tools' results.
-  const read: AnswerMetadata = {
+  const read: AnswerMetadata & { charts: ChartPart[] } = {
     asOf: today,
     rate: null,
     sources: [],
     complete: true,
+    charts: [],
   };
   let steps = 0;
   let toolCalls = 0;
@@ -249,6 +252,10 @@ export async function runAssistantTurn({
           read.rate = output.rate;
         }
         if (output.complete === false) read.complete = false;
+        // A chart drawn on the server, at most MAX_CHARTS an answer.
+        if ("chart" in output && read.charts.length < MAX_CHARTS) {
+          read.charts.push(output.chart as ChartPart);
+        }
       }
     },
   });
@@ -268,7 +275,9 @@ export async function runAssistantTurn({
       abortSignal: AbortSignal.timeout(TURN_MS),
       generateMessageId: newId,
       messageMetadata: ({ part }) =>
-        part.type === "finish" ? { ...read } : undefined,
+        part.type === "finish"
+          ? { ...read, charts: [...read.charts] }
+          : undefined,
       onFinish: async ({ responseMessage, outcome, finishReason }) => {
         const answer = responseMessage as AssistantUIMessage;
         if (
