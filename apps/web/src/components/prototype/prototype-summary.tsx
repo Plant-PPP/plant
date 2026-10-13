@@ -13,10 +13,12 @@ import {
   TABS,
   unitParam,
 } from "@/lib/holdings/assets-filter";
+import { currencyOf } from "@/lib/holdings/holding-name";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { closeUnit } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
+import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
 import { usePrototype } from "./prototype-provider";
 import { holdingsView, type PrototypeState } from "./prototype-store";
@@ -62,27 +64,44 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
   const { closeHref } = linksIn(unit, reference);
   const closes = closesOf(state, unit);
   const years = yearsOfCloses(closes);
-  // The year the table shows: ?year=, else the newest.
-  const { year } = parseAssetsParams(params, {
-    portfolioIds: [],
+  // The portfolio, ?portfolio= when it is one of the user's, and the year the
+  // table shows, ?year=, else the newest.
+  const { portfolios } = state;
+  const {
+    year,
+    filter: { portfolioId },
+  } = parseAssetsParams(params, {
+    portfolioIds: portfolios.map((each) => each.id),
     tabs: TABS,
     salesYears: years.map((each) => each.year),
   });
+  const portfolio = portfolios.find((each) => each.id === portfolioId) ?? null;
+  const rows = holdingsView(state).active.filter(
+    (row) => portfolio === null || row.portfolio.id === portfolio.id,
+  );
   return (
     <SummaryPage
       closes={closes}
       years={years}
       year={years.find((each) => each.year === year)}
+      rows={rows}
       valuation={holdingsValuation({
-        holdings: holdingsView(state).active,
+        holdings: rows,
         truncated: false,
         snapshot,
         unit,
         referenceDollar: state.referenceDollar,
+        currencyOf: (holding) =>
+          holding.asset_class === "instrument"
+            ? currencyOf(state.instruments, holding.instrument_symbol)
+            : holding.currency,
       })}
+      portfolios={portfolios}
+      portfolio={portfolio}
       unit={unit}
       referenceUnit={reference}
       params={params}
+      hrefs={PROTOTYPE_HREFS}
       closeHref={closeHref}
       yearHref={closeHref}
     />

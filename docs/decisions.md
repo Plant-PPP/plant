@@ -8,6 +8,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **No preferred tab.** The issue asks for one only "if needed", and a preferred tab would make "no `?tab=`" mean two things to the tabs. It waits for someone to ask for it.
 - **`/settings` moved into the `(data)` route group** (route groups leave the URL as it was), so its prototype cards share the store with the data pages. A preference writes no close: it changes how the pages show the data, not the data, so the prototype's write skips marking months recalculated.
 - **The real preference** goes in `profiles`, beside `reference_dollar`, when the data turns real.
+## 2026-10-13 · Resumen by portfolio, account and currency (PLA-30, prototype)
+
+- **Resumen picks a portfolio, or all of them.** With all, it shows the net worth, its months and closes as before, then the split by portfolio, account and currency. One portfolio shows only its assets today, split by kind, class, account and currency, and says why the net worth is not there: debts belong to no portfolio and closes are of the whole, so neither has a per-portfolio version. The choice is `?portfolio=`, as on Activos.
+- **The split by currency is what each holding is in**: an instrument's currency, or the holding's own. `holdingsValuation` sums it only for a caller that passes `currencyOf`, so production's Activos computes nothing new.
+- **Resumen still offers no BTC**, as its closes cannot be expressed in it (the PLA-112 decision). The daily evolution waits for the snapshots (PLA-27); the chart stays monthly.
+- **Every view valued in MEP dollars notes the BCRA's Com. A 8336**: whoever buys official dollars cannot operate MEP or CCL for 90 days, and the other way round. Resumen, Activos and Deudas show it under their unit; the copy needs Tomas's check against the rule in force before the beta.
 
 ## 2026-10-13 · Manual prices, instrument search, origin and the report per asset in the prototype (PLA-104)
 
