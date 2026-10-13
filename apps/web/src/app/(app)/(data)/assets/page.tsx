@@ -63,12 +63,8 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: navTitle("/assets") };
 
 // The pages a scope's name links to. The account and portfolio pages arrive
-// with PLA-106, so their links stay on Activos until then.
-const HREFS: ScopeHrefs = {
-  instrument: (symbol) => `/assets/${encodeURIComponent(symbol)}`,
-  account: () => "/accounts",
-  portfolio: () => "/accounts",
-};
+// with PLA-106, so their names are plain until then.
+const HREFS: ScopeHrefs = { instrument: "/assets/" };
 export const dynamic = "force-dynamic";
 
 // The user's holdings valued at today's quotes in one unit (the reference
@@ -240,7 +236,7 @@ export default async function AssetsPage({
               { price: priced.snapshot.prices[symbol]!.price, date },
             ]),
           ),
-          fed: (symbol) => quotes.snapshot.prices[symbol] !== undefined,
+          fed: new Set(Object.keys(quotes.snapshot.prices)),
           actions: { set: setManualPrice, delete: deleteManualPrice },
         }}
         hrefs={HREFS}

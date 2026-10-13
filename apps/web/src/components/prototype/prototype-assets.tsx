@@ -27,9 +27,9 @@ import {
 } from "./prototype-store";
 
 export const PROTOTYPE_HREFS: ScopeHrefs = {
-  instrument: (symbol) => `/assets/${encodeURIComponent(symbol)}`,
-  account: (id) => `/accounts/${id}`,
-  portfolio: (id) => `/portfolios/${id}`,
+  instrument: "/assets/",
+  account: "/accounts/",
+  portfolio: "/portfolios/",
 };
 
 // Activos over the prototype's store, with movements and the sales tab.
