@@ -419,10 +419,11 @@ describe("a month with a yield", () => {
     const after = written(
       yielded({ direction: "out", quantity: "2" }, { price }),
     );
-    const before = positionOf(state);
-    const gained =
-      2 * Number(price) -
-      (2 * Number(before.money!.cost)) / Number(before.quantity);
+    // The 2 taken are the oldest: 2 of the opening balance's 40, in pesos.
+    const opening = movementsOf(state).find(
+      (movement) => movement.kind === "opening_balance",
+    )!;
+    const gained = 2 * Number(price) - 2 * Number(opening.price);
     expect(change(after, "realized")).toBeCloseTo(gained, 1);
     expect(change(after, "income")).toBeCloseTo(-2 * Number(price), 2);
   });

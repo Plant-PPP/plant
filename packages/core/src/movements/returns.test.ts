@@ -38,10 +38,10 @@ it("counts an adjustment's units at the cost the replay gives them", () => {
     kind: "buy",
     charges: "1",
   });
-  // Out at the average cost of the two units held.
+  // Out at the cost of the oldest unit held, the one bought at 100.
   expect(flows[2]).toEqual({
     date: "2025-03-01",
-    amount: "90",
+    amount: "100",
     kind: "sell",
     charges: "0",
   });
