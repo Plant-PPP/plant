@@ -7,6 +7,7 @@ import {
   manualRateSchema,
   withManualRates,
   cashFlowsOf,
+  placementFigures,
   type QuoteSnapshot,
   admitMovement,
   admitMovements,
@@ -58,6 +59,15 @@ import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
 import { type AssetKey, assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingOrigin } from "@/lib/holdings/holding-name";
+import {
+  PLACEMENT_KINDS,
+  type PlacementKind,
+  renewalInputSchema,
+} from "@/lib/holdings/placement";
+import {
+  type RealEstateSheet,
+  realEstateSheetSchema,
+} from "@/lib/real-estate/sheet";
 import type {
   MovementLine,
   OperationParts,
@@ -123,6 +133,12 @@ export type PrototypeState = {
   outOfTaxReport: ReadonlySet<AssetKey>;
   // Where each operation came from, by id; one typed by hand has none.
   operationOrigins: ReadonlyMap<string, HoldingOrigin>;
+  // What each placement at a rate is, by holding id; a plazo fijo has none.
+  placements: ReadonlyMap<string, PlacementKind>;
+  // The placement each renewal renewed, by the renewal's holding id.
+  renewals: ReadonlyMap<string, string>;
+  // Each property's sheet, by holding id.
+  realEstate: ReadonlyMap<string, RealEstateSheet>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -201,6 +217,9 @@ export function initialState(
     manualRates: [],
     outOfTaxReport: new Set(),
     operationOrigins: new Map(),
+    placements: new Map(Object.entries(fixtures.placements ?? {})),
+    renewals: new Map(),
+    realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
@@ -1358,7 +1377,16 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
       : state.outOfTaxReport;
   // A holding with no movements leaves the movements map the same object,
   // so nothing that watches it sees a change.
-  if (!state.movements.has(id)) return { ...state, holdings, outOfTaxReport };
+  const placements = state.placements.has(id)
+    ? new Map([...state.placements].filter(([each]) => each !== id))
+    : state.placements;
+  // A property's sheet goes with it.
+  const realEstate = state.realEstate.has(id)
+    ? new Map([...state.realEstate].filter(([each]) => each !== id))
+    : state.realEstate;
+  if (!state.movements.has(id)) {
+    return { ...state, holdings, outOfTaxReport, placements, realEstate };
+  }
   const movements = new Map(state.movements);
   movements.delete(id);
   // The holdings it replayed with load their tables again: an operation it
@@ -1384,6 +1412,34 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
     revisions,
     outOfTaxReport,
     operationOrigins,
+    placements,
+    realEstate,
+  };
+}
+
+// A property's sheet, whose debt, if any, is one of the user's.
+export function setRealEstateSheet(
+  state: PrototypeState,
+  id: string,
+  input: unknown,
+): Write<WriteResult> {
+  const parsed = realEstateSheetSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const stored = state.holdings.find((each) => each.holding.id === id);
+  const { liabilityId } = parsed.data;
+  if (
+    stored?.holding.asset_class !== "real_estate" ||
+    (liabilityId !== null &&
+      !state.liabilities.some((each) => each.id === liabilityId))
+  ) {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  return {
+    state: {
+      ...state,
+      realEstate: new Map(state.realEstate).set(id, parsed.data),
+    },
+    result: { ok: true, id },
   };
 }
 
@@ -1411,7 +1467,10 @@ export function updateHoldingDetails(
   state: PrototypeState,
   id: string,
   input: unknown,
-  inTaxReport: boolean,
+  {
+    inTaxReport,
+    placement,
+  }: { inTaxReport: boolean; placement?: PlacementKind },
 ): Write<WriteResult> {
   const updated = updateHolding(state, id, input);
   if (!updated.result.ok) return updated;
@@ -1421,9 +1480,89 @@ export function updateHoldingDetails(
     assetKey(stored.holding),
     inTaxReport,
   );
-  return flagged.result.ok
-    ? { state: flagged.state, result: updated.result }
-    : refused(state, flagged.result);
+  if (!flagged.result.ok) return refused(state, flagged.result);
+  const placed =
+    placement === undefined
+      ? flagged
+      : setPlacement(flagged.state, id, placement);
+  return placed.result.ok
+    ? { state: placed.state, result: updated.result }
+    : refused(state, placed.result);
+}
+
+// What a placement at a rate is: a plazo fijo unless the user says otherwise.
+export function setPlacement(
+  state: PrototypeState,
+  id: string,
+  kind: PlacementKind,
+): Write<WriteResult> {
+  const stored = state.holdings.find((each) => each.holding.id === id);
+  if (
+    stored?.holding.asset_class !== "fixed_term" ||
+    !PLACEMENT_KINDS.includes(kind)
+  ) {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  const placements = new Map(state.placements);
+  if (kind === "fixed_term") placements.delete(id);
+  else placements.set(id, kind);
+  return { state: { ...state, placements }, result: { ok: true, id } };
+}
+
+// A placement that matured, placed again: a new holding in its account and
+// portfolio with its capital plus the interest, its kind and its name, on a
+// new term and rate. The matured one closes, out of the lists, so the money
+// counts once; the renewal remembers it.
+export function renewPlacement(
+  state: PrototypeState,
+  id: string,
+  input: unknown,
+  newId: string,
+): Write<WriteResult> {
+  const parsed = renewalInputSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const stored = state.holdings.find((each) => each.holding.id === id);
+  const old = stored?.holding;
+  if (!stored || stored.closed || old?.asset_class !== "fixed_term") {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  const term = parsed.data;
+  if (state.today < old.matures_on || term.started_on < old.matures_on) {
+    return refused(state, { ok: false, code: "invalid" });
+  }
+  const created = createHolding(
+    state,
+    {
+      source_connection_id: stored.accountId,
+      portfolio_id: stored.portfolioId,
+      asset_class: "fixed_term",
+      instrument_symbol: null,
+      valued_on: null,
+      currency: old.currency,
+      amount: placementFigures(old, state.today).maturityAmount,
+      annual_rate: term.annual_rate,
+      started_on: term.started_on,
+      matures_on: term.matures_on,
+      label: old.label,
+    },
+    newId,
+  );
+  if (!created.result.ok) return created;
+  const kind = state.placements.get(id);
+  return {
+    state: {
+      ...created.state,
+      holdings: created.state.holdings.map((each) =>
+        each.holding.id === id ? { ...each, closed: true } : each,
+      ),
+      placements:
+        kind === undefined
+          ? created.state.placements
+          : new Map(created.state.placements).set(newId, kind),
+      renewals: new Map(created.state.renewals).set(newId, id),
+    },
+    result: { ok: true, id: newId },
+  };
 }
 
 // Every part of an operation, each holding re-admitted without it: refused

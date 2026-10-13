@@ -1,5 +1,7 @@
 "use client";
 
+import { realEstateFigures } from "@plant/core";
+
 import {
   AssetsSetup,
   type ScopeHrefs,
@@ -11,6 +13,8 @@ import type { MovementsInput } from "@/lib/holdings/movements-input";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { KeysetParams } from "@/lib/supabase/keyset";
+
+import { sheetTerms } from "@/lib/real-estate/sheet";
 
 import { usePrototype } from "./prototype-provider";
 import { prototypeMovementsInput } from "./prototype-movements";
@@ -89,6 +93,24 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       movementActions={actions.movements}
       prices={{ manual, fed, actions: actions.prices }}
       details={details}
+      realEstate={{
+        sheetOf: (id) => state.realEstate.get(id),
+        liabilities: state.liabilities.map(({ id, label }) => ({ id, label })),
+        figures: (row, sheet, view) =>
+          row.holding.asset_class === "real_estate"
+            ? realEstateFigures(
+                sheetTerms(
+                  row.holding,
+                  sheet,
+                  state.liabilities.find(({ id }) => id === sheet.liabilityId),
+                ),
+                view,
+                snapshot,
+                state.referenceDollar,
+              )
+            : { netMonthly: null, rentalYield: null, appreciation: null },
+        save: actions.realEstate,
+      }}
       hrefs={PROTOTYPE_HREFS}
     />
   );

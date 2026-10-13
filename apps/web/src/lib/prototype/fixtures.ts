@@ -14,7 +14,9 @@ import {
 import { addDays, exactOf, times, toDecimal } from "@plant/shared";
 
 import { rowOf } from "@/components/holdings/holding-fields";
+import type { PlacementKind } from "@/lib/holdings/placement";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
 import type {
   PortfolioRow,
   SourceConnectionRow,
@@ -38,6 +40,10 @@ export type Fixtures = {
   quotes: StoredQuotes;
   manualPrices: ManualPrice[];
   liabilities: Liability[];
+  // What each placement at a rate is, by holding id, when not a plazo fijo.
+  placements?: Record<string, PlacementKind>;
+  // Each property's sheet, by holding id.
+  realEstate?: Record<string, RealEstateSheet>;
 };
 
 const HISTORY_DAYS = 730;
@@ -553,6 +559,32 @@ const OTHER_HOLDINGS: [id: string, columns: Record<string, unknown>, Placed][] =
     ],
   ];
 
+// Placements at a rate: a "caución" at IOL that matured three days ago, to
+// renew, and a plazo fijo at Cocos halfway through its term. Each with its
+// start and term in days, relative to today.
+const PLACEMENTS: [
+  id: string,
+  columns: { currency: string; amount: string; annual_rate: string },
+  term: { startsIn: number; days: number },
+  Placed,
+  kind: PlacementKind,
+][] = [
+  [
+    "c2000000-0000-4000-8000-000000000004",
+    { currency: "ARS", amount: "1500000", annual_rate: "0.32" },
+    { startsIn: -10, days: 7 },
+    at(ACCOUNTS.iol, PORTFOLIOS.corto),
+    "caucion",
+  ],
+  [
+    "c2000000-0000-4000-8000-000000000005",
+    { currency: "ARS", amount: "800000", annual_rate: "0.36" },
+    { startsIn: -15, days: 30 },
+    at(ACCOUNTS.cocos, PORTFOLIOS.corto),
+    "fixed_term",
+  ],
+];
+
 const EMPTY_COLUMNS = {
   instrument_symbol: null,
   currency: null,
@@ -685,6 +717,21 @@ export function buildFixtures(today: string): Fixtures {
       ),
     );
   }
+  for (const [id, columns, { startsIn, days }, placed] of PLACEMENTS) {
+    holdings.push(
+      rowOf(
+        id,
+        {
+          ...EMPTY_COLUMNS,
+          ...columns,
+          asset_class: "fixed_term",
+          started_on: addDays(today, startsIn),
+          matures_on: addDays(today, startsIn + days),
+        },
+        { ...placed, instrumentType: null },
+      ),
+    );
+  }
   return {
     referenceDollar: "mep",
     accounts: Object.values(ACCOUNTS),
@@ -696,5 +743,23 @@ export function buildFixtures(today: string): Fixtures {
     quotes,
     manualPrices: manualPricesFor(today),
     liabilities: liabilitiesFor(today),
+    placements: Object.fromEntries(
+      PLACEMENTS.flatMap(([id, , , , kind]) =>
+        kind === "fixed_term" ? [] : [[id, kind]],
+      ),
+    ),
+    // The flat in Palermo: bought in dollars, rented in pesos with the rent
+    // adjusted by ICL every year, and paid with the UVA mortgage.
+    realEstate: {
+      "c2000000-0000-4000-8000-000000000003": {
+        kind: "rented",
+        purchase: { amount: "82000", currency: "USD", date: "2021-03-15" },
+        monthlyRent: { amount: "650000", currency: "ARS" },
+        monthlyExpenses: { amount: "120000", currency: "ARS" },
+        adjustment: { index: "icl", everyMonths: 12 },
+        payment: "mortgage",
+        liabilityId: "e5000000-0000-4000-8000-000000000001",
+      },
+    },
   };
 }

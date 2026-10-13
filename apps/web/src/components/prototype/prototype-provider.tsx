@@ -15,6 +15,8 @@ import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
 import type { Preferences } from "@/components/settings/preferences-card";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import type {
@@ -25,6 +27,7 @@ import type {
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  allRows,
   createHolding,
   deleteHolding,
   deleteOperation,
@@ -33,9 +36,12 @@ import {
   freshState,
   initialState,
   pricedSnapshotOf,
+  renewPlacement,
   type PrototypeState,
   setInTaxReport,
+  setPlacement,
   setPreferences,
+  setRealEstateSheet,
   setPrice,
   setRate,
   type Write,
@@ -80,6 +86,8 @@ type Prototype = {
       }) => Promise<{ ok: boolean }>;
       revert: (kind: ManualRateKind, date: string) => Promise<{ ok: boolean }>;
     };
+    // A property's sheet.
+    realEstate: (id: string, sheet: RealEstateSheet) => Promise<WriteResult>;
     // Leaves the store as a new user's.
     deleteAccount: () => void;
   };
@@ -147,6 +155,7 @@ export function PrototypeProvider({
         write((s) => setRate(s, { kind, sell, rate_date: date })),
       revert: (kind, date) => write((s) => deleteRate(s, kind, date)),
     },
+    realEstate: (id, sheet) => write((s) => setRealEstateSheet(s, id, sheet)),
     deleteAccount: () =>
       void writeState((s) => ({
         state: freshState(s, crypto.randomUUID()),
@@ -278,10 +287,20 @@ export function PrototypeProvider({
     originOf: (id) =>
       state.holdings.find((each) => each.holding.id === id)?.origin,
     inTaxReport: (key) => !state.outOfTaxReport.has(key),
+    placementOf: (id) => state.placements.get(id) ?? "fixed_term",
+    renewalOf: (id) => {
+      const renewed = state.renewals.get(id);
+      return renewed === undefined
+        ? undefined
+        : allRows(state).find((row) => row.id === renewed);
+    },
     actions: {
       setInTaxReport: (key, on) => write((s) => setInTaxReport(s, key, on)),
-      update: (id, input, inTaxReport) =>
-        write((s) => updateHoldingDetails(s, id, input, inTaxReport)),
+      update: (id, input, choices) =>
+        write((s) => updateHoldingDetails(s, id, input, choices)),
+      setPlacement: (id, kind) => write((s) => setPlacement(s, id, kind)),
+      renew: (id, input) =>
+        write((s) => renewPlacement(s, id, input, crypto.randomUUID())),
     },
   };
   const priced = pricedSnapshotOf(state, snapshot);

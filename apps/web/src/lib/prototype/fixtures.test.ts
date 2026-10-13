@@ -31,10 +31,25 @@ it("uses uuids for every id", () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-it("holds instruments, cash and an apartment", () => {
+it("holds instruments, cash, placements at a rate and an apartment", () => {
   expect(
     new Set(fixtures.holdings.map((row) => row.holding.asset_class)),
-  ).toEqual(new Set(["instrument", "cash", "real_estate"]));
+  ).toEqual(new Set(["instrument", "cash", "fixed_term", "real_estate"]));
+});
+
+it("holds a caución that matured, to renew, and a plazo fijo still running", () => {
+  const placements = fixtures.holdings.flatMap(({ id, holding }) =>
+    holding.asset_class === "fixed_term" ? [{ id, holding }] : [],
+  );
+  expect(
+    placements.map(({ id, holding }) => [
+      fixtures.placements?.[id] ?? "fixed_term",
+      holding.matures_on < TODAY,
+    ]),
+  ).toEqual([
+    ["caucion", true],
+    ["fixed_term", false],
+  ]);
 });
 
 it("sets each open instrument holding's amount to what its movements leave", () => {
