@@ -17,6 +17,7 @@ import {
   rowOf,
   initialFields,
   refusal,
+  refusalLink,
   refusedField,
   toInsert,
   toUpdate,
@@ -201,4 +202,18 @@ it("points at the first refused field in the dialog's order", () => {
     toInsert({ ...SAMPLES.cash, accountId: "", currency: "", amount: "" }),
   );
   expect(refusal(parsed.error!).field).toBe("account");
+});
+
+it("points an archived account's or portfolio's alert to Cuentas, and no other", () => {
+  const messages = WRITE_MESSAGES.holdings;
+  for (const code of [
+    "source_connection_archived",
+    "portfolio_archived",
+  ] as const) {
+    expect(refusalLink(messages[code])).toEqual({
+      label: "Ir a Cuentas",
+      href: "/accounts",
+    });
+  }
+  expect(refusalLink(messages.duplicate)).toBeUndefined();
 });

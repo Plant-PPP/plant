@@ -6,7 +6,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
-import { deleteMessages, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import {
+  deleteMessages,
+  toAssets,
+  WRITE_MESSAGES,
+} from "@/lib/portfolio-setup/messages";
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { dialogAnswer, rowAnswer } from "./answers";
@@ -126,7 +130,11 @@ export function PortfoliosCard({
         action === "archive"
           ? actions.archive(row.id)
           : actions.restore(row.id),
-      (result) => rowAnswer(result, action, MESSAGES, usedBy(row.id)),
+      (result) =>
+        rowAnswer(result, action, MESSAGES, {
+          usedBy: usedBy(row.id),
+          links: { portfolio_has_holdings: toAssets(row.id) },
+        }),
       {
         done: `${action === "archive" ? "Archivaste" : "Restauraste"} ${row.name}`,
         rowId: row.id,

@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/data-table";
 import { PendingButton } from "@/components/ui/pending-button";
 import type { ListView } from "@/lib/portfolio-setup/read";
-import { type Answer, dialogAnswer, type MessagesFor } from "./answers";
+import type { NoticeLink } from "@/lib/portfolio-setup/messages";
+import {
+  type Answer,
+  dialogAnswer,
+  type LinksFor,
+  type MessagesFor,
+} from "./answers";
 import type { OptimisticRun, Result } from "./optimistic-writes";
 
 // What a section's writes call: its heading and the row and dialog actions
@@ -94,7 +100,7 @@ export function useSetupCard<C>({
     run(change, call, answerOf, (answer) => {
       if (answer.kind === "done") toast.success(done);
       if (answer.kind === "alert") {
-        toast.error(answer.text);
+        alertToast(answer.text, answer.link);
         refocus.current = { rowId, actionId };
       }
       if (answer.kind === "ask_name") askName?.();
@@ -108,16 +114,24 @@ export function useSetupCard<C>({
     change: C,
     call: () => Promise<R>,
     messages: MessagesFor<NoInfer<R>>,
-    { done, reopen }: { done: string; reopen: (error: string) => void },
+    {
+      done,
+      reopen,
+      links,
+    }: {
+      done: string;
+      reopen: (error: string) => void;
+      links?: LinksFor<R>;
+    },
   ): boolean {
     return run(
       change,
       call,
-      (result) => dialogAnswer(result, messages),
+      (result) => dialogAnswer(result, messages, links),
       (answer) => {
         if (answer.kind === "done") toast.success(done);
         else if (answer.kind === "alert") {
-          if (!mounted.current) toast.error(answer.text);
+          if (!mounted.current) alertToast(answer.text, answer.link);
           else {
             unshown.current = answer.text;
             reopen(answer.text);
@@ -208,6 +222,22 @@ export function ActiveList<Row extends DataTableRow>({
       )}
     </>
   );
+}
+
+// A refusal's toast, with a link to the page where the user can do what it
+// asks.
+export function alertToast(text: string, link?: NoticeLink) {
+  if (!link) {
+    toast.error(text);
+    return;
+  }
+  toast.error(text, {
+    action: (
+      <Link className="ml-auto text-sm font-medium underline" href={link.href}>
+        {link.label}
+      </Link>
+    ),
+  });
 }
 
 // The archived rows, one page at a time, in a group closed until opened or

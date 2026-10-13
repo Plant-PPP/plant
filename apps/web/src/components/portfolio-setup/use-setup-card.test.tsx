@@ -14,8 +14,9 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
+import { renderToStaticMarkup } from "react-dom/server";
 import { toast } from "sonner";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import { TO_ACCOUNTS, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { Answer } from "./answers";
 import type { SetupRun } from "./setup-actions";
@@ -179,5 +180,31 @@ describe("a refused row action", () => {
       .effects.filter((effect) => effect.everyCommit)
       .forEach((effect) => effect());
     expect(button.focus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a refusal with a link", () => {
+  it("toasts its text with a link to the page that resolves it", () => {
+    (toast.error as jest.Mock).mockClear();
+    mockRender.refs = [];
+    const runs: RunArgs[] = [];
+    const run: SetupRun = (...args) => {
+      runs.push(args as unknown as RunArgs);
+      return true;
+    };
+    const { card } = rendered(run, false);
+    card.rowAction(
+      { list: "portfolios", change: { kind: "archive", id: "a" } },
+      () => Promise.resolve(refused),
+      () => ({ kind: "alert", text: alert, link: TO_ACCOUNTS }),
+      { done: "Archivaste Principal", rowId: "a", actionId: "archive" },
+    );
+    const [, , answerOf, after] = runs[0]!;
+    after(answerOf(refused));
+    const [text, options] = (toast.error as jest.Mock).mock.calls[0]!;
+    expect(text).toBe(alert);
+    expect(renderToStaticMarkup(options.action)).toBe(
+      '<a class="ml-auto text-sm font-medium underline" href="/accounts">Ir a Cuentas</a>',
+    );
   });
 });

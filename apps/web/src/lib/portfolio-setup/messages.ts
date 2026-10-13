@@ -17,6 +17,29 @@ const GUARD_MESSAGES: Record<PortfolioSetupGuardHint, string> = {
   source_connection_archived: "Esa cuenta está archivada.",
 };
 
+// The page where the user can do what a refusal asks: restore an account or
+// portfolio in Cuentas, or archive what keeps one active in Activos.
+export type NoticeLink = { label: string; href: `/${string}` };
+
+export const TO_ACCOUNTS: NoticeLink = {
+  label: "Ir a Cuentas",
+  href: "/accounts",
+};
+
+// Activos, filtered by the portfolio when there is one.
+export const toAssets = (portfolioId?: string): NoticeLink => ({
+  label: "Ir a Activos",
+  href: portfolioId
+    ? `/assets?${new URLSearchParams({ portfolio: portfolioId })}`
+    : "/assets",
+});
+
+// A holding's write refused because its account or portfolio is archived.
+export const HOLDING_LINKS = {
+  source_connection_archived: TO_ACCOUNTS,
+  portfolio_archived: TO_ACCOUNTS,
+} as const satisfies Partial<Record<WriteResultCode, NoticeLink>>;
+
 export const invalidName = (max: number) =>
   `Usá entre 1 y ${max} letras, números o signos.`;
 
