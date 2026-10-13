@@ -16,6 +16,7 @@ import { addDays, exactOf, times, toDecimal } from "@plant/shared";
 import { rowOf } from "@/components/holdings/holding-fields";
 import type { PlacementKind } from "@/lib/holdings/placement";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
 import type {
   PortfolioRow,
   SourceConnectionRow,
@@ -41,6 +42,8 @@ export type Fixtures = {
   liabilities: Liability[];
   // What each placement at a rate is, by holding id, when not a plazo fijo.
   placements?: Record<string, PlacementKind>;
+  // Each property's sheet, by holding id.
+  realEstate?: Record<string, RealEstateSheet>;
 };
 
 const HISTORY_DAYS = 730;
@@ -745,5 +748,18 @@ export function buildFixtures(today: string): Fixtures {
         kind === "fixed_term" ? [] : [[id, kind]],
       ),
     ),
+    // The flat in Palermo: bought in dollars, rented in pesos with the rent
+    // adjusted by ICL every year, and paid with the UVA mortgage.
+    realEstate: {
+      "c2000000-0000-4000-8000-000000000003": {
+        kind: "rented",
+        purchase: { amount: "82000", currency: "USD", date: "2021-03-15" },
+        monthlyRent: { amount: "650000", currency: "ARS" },
+        monthlyExpenses: { amount: "120000", currency: "ARS" },
+        adjustment: { index: "icl", everyMonths: 12 },
+        payment: "mortgage",
+        liabilityId: "e5000000-0000-4000-8000-000000000001",
+      },
+    },
   };
 }

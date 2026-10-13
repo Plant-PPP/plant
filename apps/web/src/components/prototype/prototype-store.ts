@@ -61,6 +61,10 @@ import {
   type PlacementKind,
   renewalInputSchema,
 } from "@/lib/holdings/placement";
+import {
+  type RealEstateSheet,
+  realEstateSheetSchema,
+} from "@/lib/real-estate/sheet";
 import type {
   MovementLine,
   OperationParts,
@@ -127,6 +131,8 @@ export type PrototypeState = {
   placements: ReadonlyMap<string, PlacementKind>;
   // The placement each renewal renewed, by the renewal's holding id.
   renewals: ReadonlyMap<string, string>;
+  // Each property's sheet, by holding id.
+  realEstate: ReadonlyMap<string, RealEstateSheet>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -206,6 +212,7 @@ export function initialState(
     operationOrigins: new Map(),
     placements: new Map(Object.entries(fixtures.placements ?? {})),
     renewals: new Map(),
+    realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
@@ -1358,8 +1365,12 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
   const placements = state.placements.has(id)
     ? new Map([...state.placements].filter(([each]) => each !== id))
     : state.placements;
+  // A property's sheet goes with it.
+  const realEstate = state.realEstate.has(id)
+    ? new Map([...state.realEstate].filter(([each]) => each !== id))
+    : state.realEstate;
   if (!state.movements.has(id)) {
-    return { ...state, holdings, outOfTaxReport, placements };
+    return { ...state, holdings, outOfTaxReport, placements, realEstate };
   }
   const movements = new Map(state.movements);
   movements.delete(id);
@@ -1387,6 +1398,33 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
     outOfTaxReport,
     operationOrigins,
     placements,
+    realEstate,
+  };
+}
+
+// A property's sheet, whose debt, if any, is one of the user's.
+export function setRealEstateSheet(
+  state: PrototypeState,
+  id: string,
+  input: unknown,
+): Write<WriteResult> {
+  const parsed = realEstateSheetSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const stored = state.holdings.find((each) => each.holding.id === id);
+  const { liabilityId } = parsed.data;
+  if (
+    stored?.holding.asset_class !== "real_estate" ||
+    (liabilityId !== null &&
+      !state.liabilities.some((each) => each.id === liabilityId))
+  ) {
+    return refused(state, { ok: false, code: "not_found" });
+  }
+  return {
+    state: {
+      ...state,
+      realEstate: new Map(state.realEstate).set(id, parsed.data),
+    },
+    result: { ok: true, id },
   };
 }
 

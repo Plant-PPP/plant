@@ -1,12 +1,13 @@
 "use client";
 
-import { type Denominator } from "@plant/core";
+import type { Denominator, RealEstateFigures } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Archive,
   ArchiveRestore,
   ArrowLeftRight,
+  House,
   Pencil,
   RefreshCw,
 } from "lucide-react";
@@ -70,6 +71,7 @@ import {
   PLACEMENT_KIND_LABELS,
   type PlacementKind,
 } from "@/lib/holdings/placement";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
 import { PRICE_MESSAGES } from "@/lib/holdings/messages";
 import {
   averageOf,
@@ -116,6 +118,8 @@ import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
 import { MepNotice } from "./mep-notice";
+import { RealEstateDialog } from "./real-estate-dialog";
+import { type SheetFields, sheetFields } from "./real-estate-fields";
 import { RenewDialog } from "./renew-dialog";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
 import { PriceDialog } from "./price-dialog";
@@ -212,6 +216,20 @@ export type HoldingDetails = {
   };
 };
 
+// Each property's sheet, on a page that keeps them: the sheet as saved, the
+// debts a mortgage or installments can be, its figures in a unit, and its
+// write.
+export type RealEstateSheets = {
+  sheetOf: (holdingId: string) => RealEstateSheet | undefined;
+  liabilities: readonly { id: string; label: string }[];
+  figures: (
+    holding: HoldingRow,
+    sheet: RealEstateSheet,
+    unit: Denominator,
+  ) => RealEstateFigures;
+  save: (holdingId: string, sheet: RealEstateSheet) => Promise<WriteResult>;
+};
+
 // An edit's write: with `details`, the holding, its asset's report choice and
 // a placement's kind together; otherwise the holding alone, whose parsed
 // update takes neither.
@@ -267,6 +285,7 @@ export function AssetsSetup({
   movementActions,
   prices,
   details,
+  realEstate,
   hrefs,
 }: {
   holdings: HoldingsView;
@@ -282,6 +301,7 @@ export function AssetsSetup({
   actions: HoldingActions;
   prices?: ManualPrices;
   details?: HoldingDetails;
+  realEstate?: RealEstateSheets;
 } & MovementProps) {
   const {
     shown: view,
@@ -304,6 +324,11 @@ export function AssetsSetup({
   const tabsId = useId();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [priceDialog, setPriceDialog] = useState<PriceDialogState | null>(null);
+  const [sheet, setSheet] = useState<{
+    row: HoldingRow;
+    initial?: SheetFields;
+    initialError?: string;
+  } | null>(null);
   const [renewing, setRenewing] = useState<{
     row: HoldingRow;
     initialError?: string;
@@ -705,6 +730,24 @@ export function AssetsSetup({
               ? addAssetMovement(row)
               : openDialog({ kind: "edit", row: row.row }),
         },
+        ...(realEstate
+          ? [
+              {
+                id: "sheet",
+                icon: House,
+                tooltip: "Ficha",
+                hidden: (row: TenenciaRow) =>
+                  row.kind !== "holding" ||
+                  row.row.holding.asset_class !== "real_estate",
+                label: (row: TenenciaRow) =>
+                  `Ver la ficha de ${named(firstOf(row))}`,
+                onClick: (row: TenenciaRow) =>
+                  row.kind === "holding" &&
+                  !pending &&
+                  setSheet({ row: row.row }),
+              },
+            ]
+          : []),
         ...(details
           ? [
               {
@@ -1170,6 +1213,47 @@ export function AssetsSetup({
       )}
       {movement && dialogs.render(movement)}
       {confirmDialog}
+      {sheet &&
+        realEstate &&
+        sheet.row.holding.asset_class === "real_estate" && (
+          <RealEstateDialog
+            key={sheet.initialError ?? ""}
+            name={name(sheet.row)}
+            initial={
+              sheet.initial ??
+              sheetFields(realEstate.sheetOf(sheet.row.id), {
+                currency: sheet.row.holding.currency,
+                today,
+              })
+            }
+            initialError={sheet.initialError}
+            liabilities={realEstate.liabilities}
+            unit={unit}
+            figures={(next) => realEstate.figures(sheet.row, next, unit)}
+            returnFocusTo={card.focusHeading}
+            onClose={() => setSheet(null)}
+            onSubmit={(next) => {
+              const { row } = sheet;
+              return card.dialogAction(
+                null,
+                () => realEstate.save(row.id, next),
+                MESSAGES,
+                {
+                  done: `Guardaste la ficha de ${named(row)}`,
+                  reopen: (error) =>
+                    setSheet({
+                      row,
+                      initial: sheetFields(next, {
+                        currency: row.holding.currency ?? "ARS",
+                        today,
+                      }),
+                      initialError: error,
+                    }),
+                },
+              );
+            }}
+          />
+        )}
       {renewing &&
         details &&
         renewing.row.holding.asset_class === "fixed_term" && (

@@ -15,6 +15,8 @@ import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
 import type { Preferences } from "@/components/settings/preferences-card";
+import type { RealEstateSheet } from "@/lib/real-estate/sheet";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import type {
@@ -38,6 +40,7 @@ import {
   setInTaxReport,
   setPlacement,
   setPreferences,
+  setRealEstateSheet,
   setPrice,
   type Write,
   updateHolding,
@@ -71,6 +74,8 @@ type Prototype = {
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
+    // A property's sheet.
+    realEstate: (id: string, sheet: RealEstateSheet) => Promise<WriteResult>;
     // Leaves the store as a new user's.
     deleteAccount: () => void;
   };
@@ -133,6 +138,7 @@ export function PrototypeProvider({
     preferences: {
       set: (next) => writeState((s) => setPreferences(s, next)),
     },
+    realEstate: (id, sheet) => write((s) => setRealEstateSheet(s, id, sheet)),
     deleteAccount: () =>
       void writeState((s) => ({
         state: freshState(s, crypto.randomUUID()),

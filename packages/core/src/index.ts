@@ -55,6 +55,11 @@ export {
   type OmittableColumn,
 } from "./valuation/holding";
 export {
+  type RealEstateFigures,
+  realEstateFigures,
+  type RealEstateTerms,
+} from "./real-estate/figures";
+export {
   interestTo,
   type Placement,
   type PlacementFigures,

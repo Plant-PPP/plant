@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · A property's sheet (PLA-90, prototype)
+
+- **A property in Activos has a "Ficha"**: what it is (vivienda, alquilada, local, terreno, en pozo), its purchase price and date in their currency, its monthly rent and expenses each in its currency, how the rent is adjusted (ICL, IPC or fixed, every so many months, as information only), and how it was paid. A mortgage or installments name one of the user's debts; paid in cash, none.
+- **The sheet shows what it leaves each month, its yield and what it gained, in the page's unit**, as the fields read. Core computes them (`realEstateFigures`): the net rent is the rent less the expenses and the debt's installment (a UVA installment at today's UVA), the yield is the rent less the expenses over a year as a fraction of what the property is worth, and the appreciation is its worth less its purchase price, both at today's rates, with no inflation adjustment (PLA-67). A figure missing a quote shows "—".
+- **The sheet lives beside the holding in the prototype's store**, as the origin and a placement's kind do; the `real_estate_details` table comes with the data. Deleting the property drops its sheet; a debt deleted later leaves the sheet's net rent without an installment.
+
 ## 2026-10-13 · Placements at a rate: kinds, figures and renewal (PLA-124, prototype)
 
 - **A plazo fijo, a "caución", a loan the user gave and any other placement at a rate are one class, `fixed_term`, valued as before** (simple interest, actual/365, credited in cents). What each is shows as its kind, chosen in the holding dialog ("Tipo de colocación"); a placement with no name goes by its kind ("Caución ARS"). The kind lives beside the holding, as the origin does, until the database holds it.
