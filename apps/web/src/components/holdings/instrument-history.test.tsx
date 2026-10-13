@@ -299,6 +299,35 @@ describe("with details", () => {
     );
   });
 
+  it("names the one account when it holds two of the asset's holdings", () => {
+    const inIol = (id: string, portfolio: string): InstrumentHolding => {
+      const each = held(id, "IOL");
+      return {
+        ...each,
+        row: {
+          ...each.row,
+          account: { id: "a-iol", institution: "IOL" },
+          portfolio: { id: portfolio, name: portfolio },
+        },
+      };
+    };
+    const html = render(
+      [
+        inIol("e1", "Principal"),
+        inIol("e2", "Largo"),
+        held("e3", "Binance", true),
+      ],
+      {
+        details: details(true),
+        accounts: [outOfReport("a-iol", "IOL"), outOfReport("a-e3", "Binance")],
+      },
+    );
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("donde lo tenés no se incluyen");
+  });
+
   it("says the accounts holding it leave it out of the report", () => {
     const html = render([held("e1", "IOL"), held("e2", "Binance")], {
       details: details(true),

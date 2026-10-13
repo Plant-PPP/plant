@@ -769,3 +769,118 @@ describe("the reading's misread row and suggestion", () => {
     expect(item.rows.map((row) => row.symbol)).not.toContain("AL30");
   });
 });
+
+describe("an operation's origin when an edit or a delete empties a holding", () => {
+  const imported = {
+    kind: "import" as const,
+    fileName: "balanz.pdf",
+    date: TODAY,
+  };
+  const msftIn = (...parts: [string, string][]) => ({
+    ...msftPurchase(PRINCIPAL),
+    parts: parts.map(([portfolio_id, quantity]) => ({
+      portfolio_id,
+      quantity,
+    })),
+  });
+  const write = (
+    before: PrototypeState,
+    input: unknown,
+    origin?: typeof imported,
+  ) => {
+    const operationId = newId();
+    const written = writeOperation(before, input, {
+      operationId,
+      newId,
+      ...(origin && { origin }),
+    });
+    expect(written.result).toEqual({ ok: true, id: operationId });
+    return { operationId, after: written.state };
+  };
+  const edit = (before: PrototypeState, operationId: string, input: unknown) =>
+    writeOperation(before, input, { operationId, replacing: true, newId });
+
+  it("keeps an imported operation's origin when an edit empties its holding and creates another", () => {
+    const { operationId, after } = write(
+      state,
+      msftIn([PRINCIPAL, "2"]),
+      imported,
+    );
+    const moved = edit(after, operationId, msftIn([CORTO, "2"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", PRINCIPAL)).toBeUndefined();
+    expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+    expect(moved.state.operationOrigins.get(operationId)).toEqual(imported);
+    expect(after.operationOrigins.get(operationId)).toEqual(imported);
+    const deleted = deleteOperation(moved.state, operationId);
+    expect(deleted.result).toEqual({ ok: true, id: operationId });
+    expect(deleted.state.operationOrigins.has(operationId)).toBe(false);
+  });
+
+  it("leaves no origin for a hand-typed operation an edit moves the same way", () => {
+    const { operationId, after } = write(state, msftIn([PRINCIPAL, "2"]));
+    const moved = edit(after, operationId, msftIn([CORTO, "2"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", PRINCIPAL)).toBeUndefined();
+    expect(moved.state.operationOrigins.has(operationId)).toBe(false);
+    expect([...moved.state.operationOrigins]).toEqual([
+      ...after.operationOrigins,
+    ]);
+    expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual({
+      kind: "manual",
+    });
+  });
+
+  it("keeps a split imported operation's origin when an edit empties both its holdings into a third portfolio", () => {
+    const { operationId, after } = write(
+      state,
+      msftIn([PRINCIPAL, "2"], [LARGO, "1"]),
+      imported,
+    );
+    const moved = edit(after, operationId, msftIn([CORTO, "3"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", PRINCIPAL)).toBeUndefined();
+    expect(holdingOf(moved.state, "MSFT", LARGO)).toBeUndefined();
+    expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+    expect(moved.state.operationOrigins.get(operationId)).toEqual(imported);
+    expect(operationOf(moved.state, operationId)?.parts).toHaveLength(1);
+  });
+
+  it("keeps another imported operation's origin when an edit empties a holding", () => {
+    const other = write(state, msftIn([LARGO, "1"]), imported);
+    const { operationId, after } = write(
+      other.after,
+      msftIn([PRINCIPAL, "2"]),
+      imported,
+    );
+    const moved = edit(after, operationId, msftIn([LARGO, "2"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", PRINCIPAL)).toBeUndefined();
+    expect(moved.state.operationOrigins.get(operationId)).toEqual(imported);
+    expect(moved.state.operationOrigins.get(other.operationId)).toEqual(
+      imported,
+    );
+  });
+
+  it("drops only the origin of the operation a deleted holding held whole", () => {
+    const shared = write(state, msftIn([PRINCIPAL, "1"], [LARGO, "1"]), {
+      ...imported,
+      fileName: "compartida.pdf",
+    });
+    const only = write(shared.after, msftIn([PRINCIPAL, "2"]), imported);
+    const principal = holdingOf(only.after, "MSFT", PRINCIPAL)!.holding.id;
+    expect(only.after.movements.get(principal)).toHaveLength(2);
+    const removed = deleteHolding(only.after, principal);
+    expect(removed.result).toEqual({ ok: true, id: principal });
+    expect(removed.state.operationOrigins.has(only.operationId)).toBe(false);
+    expect(removed.state.operationOrigins.get(shared.operationId)).toEqual({
+      ...imported,
+      fileName: "compartida.pdf",
+    });
+    expect(operationOf(removed.state, only.operationId)).toBeNull();
+    expect(operationOf(removed.state, shared.operationId)?.parts).toHaveLength(
+      1,
+    );
+    expect(only.after.operationOrigins.has(only.operationId)).toBe(true);
+  });
+});
