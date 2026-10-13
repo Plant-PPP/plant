@@ -179,9 +179,12 @@ SELECT set_eq(
 
 SELECT results_eq(
   $$ SELECT symbol, type::text, currency::text FROM public.instruments ORDER BY symbol $$,
-  $$ VALUES ('BTC', 'crypto', 'USD'), ('ETH', 'crypto', 'USD'), ('SOL', 'crypto', 'USD'),
-            ('USDC', 'crypto', 'USD'), ('USDT', 'crypto', 'USD') $$,
-  'instruments are seeded with the crypto the quote feeds price, in USD'
+  $$ VALUES ('AAPL', 'cedear', 'ARS'), ('AL30', 'bond', 'ARS'), ('BTC', 'crypto', 'USD'),
+            ('ETH', 'crypto', 'USD'), ('GD30', 'bond', 'USD'), ('KO', 'cedear', 'ARS'),
+            ('MELI', 'cedear', 'ARS'), ('MSFT', 'cedear', 'ARS'), ('NVDA', 'cedear', 'ARS'),
+            ('SOL', 'crypto', 'USD'), ('SPY', 'cedear', 'ARS'), ('TSLA', 'cedear', 'ARS'),
+            ('TX26', 'bond', 'ARS'), ('USDC', 'crypto', 'USD'), ('USDT', 'crypto', 'USD') $$,
+  'instruments are seeded with the crypto the quote feeds price in USD, and the CEDEARs and bonds priced by hand'
 );
 
 -- ── The lock ────────────────────────────────────────────────────────────────
