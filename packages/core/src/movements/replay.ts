@@ -7,6 +7,7 @@ import {
   over,
   plus,
   roundedTo,
+  splitExact,
   stored,
   times,
   ZERO,
@@ -29,7 +30,8 @@ const kept = (x: Exact): Exact => roundedTo(x, DECIMAL_SCALE_DIGITS);
 // A holding's position in one unit after a movement. Money is in the view's
 // unit, each movement converted at its own date's rates; it is null when a
 // movement's money could not be expressed in that unit (a historic BTC price,
-// say). Cost is what the units still held were bought for; charges are kept
+// say). Cost is what the units still held were bought for: every outflow
+// takes the oldest units first, at their own cost (FIFO). Charges are kept
 // apart from it, income is what dividends and coupons paid and what yields
 // earned or lost, and realized is what sales made and what the units a yield
 // took out had gained since bought.
@@ -42,8 +44,8 @@ export type PositionMoney = {
 export type Position = { quantity: string; money: PositionMoney | null };
 
 // What one sale made, in the view's unit: gross is quantity times price, cost
-// the share of the average cost the units sold carried, and result is gross
-// less charges and cost.
+// what the oldest units sold were bought for, and result is gross less charges
+// and cost.
 export type SaleResult = {
   gross: string;
   charges: string;
@@ -73,13 +75,6 @@ export class PositionError extends Error {
 }
 
 type Money = { cost: Exact; charges: Exact; income: Exact; realized: Exact };
-
-const moneyOf = (money: PositionMoney): Money => ({
-  cost: exactOf(money.cost),
-  charges: exactOf(money.charges),
-  income: exactOf(money.income),
-  realized: exactOf(money.realized),
-});
 
 const moneyText = (money: Money): PositionMoney => ({
   cost: stored(money.cost),
@@ -114,26 +109,120 @@ function factorOf(
   return "missing" in one ? null : one.value.amount;
 }
 
-type Held = { quantity: Exact; money: Money | null };
+// What one acquisition left open: units bought together, in the order the
+// replay met them (`seq`), at their cost. The cost is null in a view where
+// the holding's cost is unknown; the lot is kept so every view sells the same
+// units.
+type Lot = { seq: number; quantity: Exact; cost: Exact | null };
 
-const heldOf = (position: Position): Held => ({
-  quantity: exactOf(position.quantity),
-  money: position.money && moneyOf(position.money),
+// A holding's state during one replay, changed in place. Its open lots are
+// `lots` from `head` on, oldest first; while money is known, every open lot's
+// cost is known.
+type Held = { quantity: Exact; money: Money | null; lots: Lot[]; head: number };
+
+const emptyHeld = (): Held => ({
+  quantity: ZERO,
+  money: { cost: ZERO, charges: ZERO, income: ZERO, realized: ZERO },
+  lots: [],
+  head: 0,
 });
 
-// One movement applied to what its holding held. `carried` holds the cost
-// each transfer's units left with, by operation, so the side they arrive in
-// can take it.
+// Takes `moved` units off the oldest open lots, splitting the last one taken
+// when it holds more. Their cost is null where the holding's is unknown.
+function take(held: Held, moved: Exact): { lots: Lot[]; cost: Exact | null } {
+  const known = held.money !== null;
+  const taken: Lot[] = [];
+  let left = moved;
+  let cost = ZERO;
+  while (left.n > 0n) {
+    const lot = held.lots[held.head];
+    if (!lot) throw new PositionError("oversold");
+    if (compareExact(lot.quantity, left) <= 0) {
+      taken.push(known ? lot : { ...lot, cost: null });
+      if (known) cost = plus(cost, lot.cost!);
+      left = minus(left, lot.quantity);
+      held.head += 1;
+    } else {
+      const rest = minus(lot.quantity, left);
+      const [outCost, restCost] = known
+        ? splitExact(lot.cost!, [left, rest])
+        : [null, null];
+      taken.push({ seq: lot.seq, quantity: left, cost: outCost ?? null });
+      held.lots[held.head] = {
+        seq: lot.seq,
+        quantity: rest,
+        cost: restCost ?? null,
+      };
+      if (outCost) cost = plus(cost, outCost);
+      left = ZERO;
+    }
+  }
+  return { lots: taken, cost: known ? cost : null };
+}
+
+// Adds lots to the open ones, keeping them oldest first; on an equal `seq`
+// (two parts of one lot together again) the one already held goes first.
+function receive(held: Held, arriving: readonly Lot[]): void {
+  const newest = held.head < held.lots.length ? held.lots.at(-1) : undefined;
+  if (!newest || arriving[0]!.seq > newest.seq) {
+    held.lots.push(...arriving);
+    return;
+  }
+  const open = held.lots.slice(held.head);
+  const merged: Lot[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < open.length || j < arriving.length) {
+    if (
+      j === arriving.length ||
+      (i < open.length && open[i]!.seq <= arriving[j]!.seq)
+    ) {
+      merged.push(open[i++]!);
+    } else {
+      merged.push(arriving[j++]!);
+    }
+  }
+  held.lots = merged;
+  held.head = 0;
+}
+
+// The lots a transfer's units arrive with: the ones they left with (or one
+// lot, when the side they left is not in this replay), at the cost the user
+// set when there is one, spread by quantity, so that cost is what the units
+// carry; at the cost they left with otherwise. Each transfer arrives once.
+function arrivingLots(
+  movement: Movement,
+  seq: number,
+  moved: Exact,
+  typed: Exact | null,
+  carried: Map<string, Lot[]>,
+): Lot[] {
+  const left = carried.get(movement.operation_id) ?? [
+    { seq, quantity: moved, cost: null },
+  ];
+  carried.delete(movement.operation_id);
+  if (typed === null) return left;
+  const costs = splitExact(
+    typed,
+    left.map((lot) => lot.quantity),
+  );
+  return left.map((lot, index) => ({ ...lot, cost: costs[index]! }));
+}
+
+// One movement applied to its holding, in place. `seq` orders the lots it
+// opens; `carried` holds the lots each transfer's units left with, by
+// operation, so the side they arrive in can take them.
 function stepOf(
   held: Held,
   movement: Movement,
+  seq: number,
   view: Denominator,
   referenceDollar: ReferenceDollar,
-  carried: Map<string, Exact | null>,
-): { held: Held; step: LedgerStep } {
-  let { quantity, money } = held;
-  const factor = money && factorOf(movement, view, referenceDollar);
-  if (!factor) money = null;
+  carried: Map<string, Lot[]>,
+): LedgerStep {
+  const factor = held.money && factorOf(movement, view, referenceDollar);
+  if (!factor) held.money = null;
+  const money = held.money;
   const inView = (amount: Exact) => times(amount, factor ?? ZERO);
   const charges = inView(chargesOf(movement));
   let sale: SaleResult | null | undefined;
@@ -141,17 +230,14 @@ function stepOf(
     const moved = exactOf(movement.quantity);
     const isSale = movement.kind === "sale";
     if (takesUnits(movement)) {
-      if (compareExact(moved, quantity) > 0) {
+      if (compareExact(moved, held.quantity) > 0) {
         throw new PositionError("oversold");
       }
-      if (money) {
-        const cost =
-          compareExact(moved, quantity) === 0
-            ? money.cost
-            : kept(over(times(money.cost, moved), quantity));
-        if (movement.kind === "transfer") {
-          carried.set(movement.operation_id, cost);
-        }
+      const { lots, cost } = take(held, moved);
+      if (movement.kind === "transfer") {
+        carried.set(movement.operation_id, lots);
+      }
+      if (money && cost) {
         // An adjustment or transfer out takes its cost and makes no result.
         // A yield out loses the units' value that day, and realizes what they
         // had gained over their cost.
@@ -172,7 +258,7 @@ function stepOf(
             result: stored(result),
           };
         }
-        money = {
+        held.money = {
           cost: kept(minus(money.cost, cost)),
           charges: kept(plus(money.charges, charges)),
           income: isYield(movement)
@@ -180,58 +266,71 @@ function stepOf(
             : money.income,
           realized: kept(plus(money.realized, result)),
         };
-      } else {
-        if (movement.kind === "transfer") {
-          carried.set(movement.operation_id, null);
-        }
-        if (isSale) sale = null;
+      } else if (isSale) {
+        sale = null;
       }
-      quantity = kept(minus(quantity, moved));
+      held.quantity = kept(minus(held.quantity, moved));
     } else {
+      const lots =
+        movement.kind === "transfer"
+          ? arrivingLots(
+              movement,
+              seq,
+              moved,
+              money && movement.price !== null
+                ? kept(times(inView(exactOf(movement.price)), moved))
+                : null,
+              carried,
+            )
+          : [
+              {
+                seq,
+                quantity: moved,
+                cost: money
+                  ? kept(times(inView(exactOf(movement.price)), moved))
+                  : null,
+              },
+            ];
       if (money) {
-        const cost =
-          movement.price === null
-            ? carried.get(movement.operation_id)
-            : times(inView(exactOf(movement.price)), moved);
-        money =
-          cost == null
-            ? null
-            : {
-                ...money,
-                cost: kept(plus(money.cost, cost)),
-                charges: kept(plus(money.charges, charges)),
-                // A yield's units came in as what they earned.
-                income: isYield(movement)
-                  ? kept(plus(money.income, cost))
-                  : money.income,
-              };
+        const costs = lots.flatMap((lot) => (lot.cost ? [lot.cost] : []));
+        if (costs.length < lots.length) {
+          held.money = null;
+        } else {
+          let cost = ZERO;
+          for (const each of costs) cost = plus(cost, each);
+          held.money = {
+            ...money,
+            cost: plus(money.cost, cost),
+            charges: kept(plus(money.charges, charges)),
+            // A yield's units came in as what they earned.
+            income: isYield(movement) ? plus(money.income, cost) : money.income,
+          };
+        }
       }
-      quantity = kept(plus(quantity, moved));
+      receive(held, lots);
+      held.quantity = kept(plus(held.quantity, moved));
     }
   } else if (money && isIncome(movement.kind)) {
-    money = {
+    held.money = {
       ...money,
       income: kept(plus(money.income, inView(exactOf(movement.amount)))),
       charges: kept(plus(money.charges, charges)),
     };
   }
   return {
-    held: { quantity, money },
-    step: {
-      id: movement.id,
-      position: {
-        quantity: stored(quantity),
-        money: money && moneyText(money),
-      },
-      ...(sale !== undefined && { sale }),
+    id: movement.id,
+    position: {
+      quantity: stored(held.quantity),
+      money: held.money && moneyText(held.money),
     },
+    ...(sale !== undefined && { sale }),
   };
 }
 
 // Each holding's steps, oldest first, for the movements of holdings that move
 // units between each other (one account's portfolios of one instrument). The
 // state is rounded to DECIMAL_SCALE_DIGITS between movements and exact within
-// one. A transfer's arriving side carries the cost its units left with, so a
+// one. A transfer's arriving side carries the lots its units left with, so a
 // holding's steps can only be replayed with the holdings it transfers with.
 export function replayHoldings(
   movements: readonly Movement[],
@@ -240,36 +339,34 @@ export function replayHoldings(
 ): Map<string, LedgerStep[]> {
   const steps = new Map<string, LedgerStep[]>();
   const held = new Map<string, Held>();
-  const carried = new Map<string, Exact | null>();
-  for (const movement of [...movements].sort(compareInReplay)) {
-    const before = held.get(movement.holding_id) ?? heldOf(EMPTY_POSITION);
-    const next = stepOf(before, movement, view, referenceDollar, carried);
-    held.set(movement.holding_id, next.held);
-    const own = steps.get(movement.holding_id);
-    if (own) own.push(next.step);
-    else steps.set(movement.holding_id, [next.step]);
+  const carried = new Map<string, Lot[]>();
+  for (const [seq, movement] of [...movements]
+    .sort(compareInReplay)
+    .entries()) {
+    let own = held.get(movement.holding_id);
+    if (!own) {
+      own = emptyHeld();
+      held.set(movement.holding_id, own);
+    }
+    const step = stepOf(own, movement, seq, view, referenceDollar, carried);
+    const list = steps.get(movement.holding_id);
+    if (list) list.push(step);
+    else steps.set(movement.holding_id, [step]);
   }
   return steps;
 }
 
-// One holding's steps, oldest first, from `from` (the position before the
-// first of them; empty when they start the holding), for movements given in
-// order. Replaying from any stored step gives the same steps as replaying
-// from the start, unless the holding receives a transfer, whose cost only
-// replayHoldings carries.
+// One holding's steps, oldest first, for movements given in order.
 export function replay(
   movements: readonly Movement[],
   view: Denominator,
   referenceDollar: ReferenceDollar,
-  { from = EMPTY_POSITION }: { from?: Position } = {},
 ): LedgerStep[] {
-  let held = heldOf(from);
-  const carried = new Map<string, Exact | null>();
-  return movements.map((movement) => {
-    const next = stepOf(held, movement, view, referenceDollar, carried);
-    held = next.held;
-    return next.step;
-  });
+  const held = emptyHeld();
+  const carried = new Map<string, Lot[]>();
+  return movements.map((movement, seq) =>
+    stepOf(held, movement, seq, view, referenceDollar, carried),
+  );
 }
 
 // The position after the last step.

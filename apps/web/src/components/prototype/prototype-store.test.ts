@@ -328,6 +328,25 @@ describe("reads", () => {
     expect(allYears.some((line) => line.row.id === TSLA)).toBe(true);
   });
 
+  it("costs a sale at the oldest units sold, as Ventas lists it", () => {
+    // SOL bought 20 then 10 and sold 12: all 12 from the first purchase, in
+    // dollars, its charges apart.
+    const sol = idOf("SOL");
+    const movements = state.movements.get(sol)!;
+    const first = movements.find((movement) => movement.kind === "purchase")!;
+    const sale = movements.find((movement) => movement.kind === "sale")!;
+    const line = salesOf(state, {
+      year: sale.date.slice(0, 4),
+      unit: "usd_mep",
+      filter: NO_FILTER,
+      names: NAMES,
+      limit: 100,
+    }).rows.find((row) => row.row.id === sol)!;
+    expect(line.sale!.cost).toBe(
+      stored(times(exactOf(first.price!), exactOf("12"))),
+    );
+  });
+
   it("filters the sales by the holdings' filters", () => {
     const year = yearsOf(state)[0]!;
     const crypto = salesOf(state, {

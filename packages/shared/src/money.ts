@@ -53,7 +53,7 @@ export function toScaled(decimal: string): bigint {
 
 const abs = (x: bigint) => (x < 0n ? -x : x);
 
-// The one rounding rule for money: half away from zero.
+// Money rounds half away from zero.
 export function divideRounded(n: bigint, d: bigint): bigint {
   if (d === 0n) throw new RangeError("Division by zero");
   const quotient = (abs(n) * 2n + abs(d)) / (abs(d) * 2n);
@@ -165,3 +165,21 @@ export const moneySchema = z.object({
 export type Money = z.infer<typeof moneySchema>;
 
 export type ExactMoney = { amount: Exact; currency: Currency };
+
+// `amount` apportioned by `weights` (which must sum to more than 0), the parts
+// adding up to it exactly: every part but the last is cut toward zero to
+// DECIMAL_SCALE_DIGITS decimals, so for an amount of 0 or more the early parts
+// never add up to more than it, and the last takes the rest.
+export function splitExact(amount: Exact, weights: readonly Exact[]): Exact[] {
+  let total = ZERO;
+  for (const weight of weights) total = plus(total, weight);
+  if (total.n <= 0n) throw new RangeError("Expected weights above 0");
+  let assigned = ZERO;
+  return weights.map((weight, index) => {
+    if (index === weights.length - 1) return minus(amount, assigned);
+    const exact = over(times(amount, weight), total);
+    const part = reduced((exact.n * DECIMAL_SCALE) / exact.d, DECIMAL_SCALE);
+    assigned = plus(assigned, part);
+    return part;
+  });
+}
