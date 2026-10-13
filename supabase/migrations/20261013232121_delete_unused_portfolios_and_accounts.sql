@@ -1,6 +1,6 @@
--- A portfolio or an account that was never used can be deleted (PLA-99);
--- archiving stays the rule for the rest. Never used: no holding, archived or
--- sold out included, ever sat in it, and for a portfolio no account, archived
+-- A portfolio or an account not in use can be deleted (PLA-99); archiving
+-- stays the rule for the rest. Not in use: no holding, archived or sold out
+-- included, sits in it, and for a portfolio no account, archived
 -- included, defaults to it. The last active portfolio stays. An account's
 -- uploads, their imports and drafts go with it through their foreign keys;
 -- private.import_requests keeps counting them against the month's quota.

@@ -570,7 +570,7 @@ function chainClient(
       from: (bucket: string) => ({
         remove: async (paths: string[]) => {
           calls.push(["remove", bucket, paths]);
-          return { data: [], ...removed };
+          return { data: paths.map((name) => ({ name })), ...removed };
         },
       }),
     },

@@ -53,8 +53,11 @@ export async function removeAccountUploads({
   }
   const paths = (documents.data ?? []).map((row) => row.storage_path);
   if (paths.length === 0) return null;
-  const { error } = await client.storage.from(UPLOAD_BUCKET).remove(paths);
-  if (error) {
+  const { data, error } = await client.storage
+    .from(UPLOAD_BUCKET)
+    .remove(paths);
+  // Storage answers the files it removed; one it refused is left out.
+  if (error || (data ?? []).length < paths.length) {
     return {
       refused: "failed",
       error: new PortfolioSetupError("storage_remove"),
