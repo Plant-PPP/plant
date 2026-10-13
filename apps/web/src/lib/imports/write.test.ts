@@ -311,6 +311,24 @@ describe("finishUpload", () => {
     expect(storage.remove).toHaveBeenCalledWith([EARLIER]);
   });
 
+  it("starts again the import of the same file still queued", async () => {
+    answers.uploaded_documents = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [
+        {
+          id: "d0",
+          storage_path: "earlier",
+          imports: { id: "i0", status: "queued" },
+        },
+      ],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: true, importId: "i0" });
+    expect(writes).toEqual([]);
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(startImport).toHaveBeenCalledWith({ importId: "i0", userId: USER });
+  });
+
   it("keeps a file whose reading did not fail", async () => {
     answers.uploaded_documents = jest.fn((verb) =>
       verb === "select"

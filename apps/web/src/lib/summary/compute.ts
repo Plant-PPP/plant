@@ -71,6 +71,35 @@ type HoldingLedger = {
 };
 
 // Each instrument holding's movements with what each left and paid, in `unit`.
+// A day's quotes as the closes value them: the stored ones of that day with
+// the user's own prices and rates over them, and an instrument nothing quotes
+// at its last trade price up to that day.
+function pricedAt(
+  state: ClosesState,
+  ledgers: readonly Pick<HoldingLedger, "row" | "movements">[],
+  date: string,
+  need: ReturnType<typeof closesNeed>,
+): QuoteSnapshot {
+  const quoted = pricedSnapshotOf(
+    state,
+    snapshotOn(state.quotes, date, need).snapshot,
+  ).snapshot;
+  return {
+    ...quoted,
+    prices: { ...lastTradePrices(ledgers, date), ...quoted.prices },
+  };
+}
+
+// Today's quotes as the closes value them, for what Resumen shows split
+// today, so it adds up to the last close.
+export function pricedToday(state: ClosesState): QuoteSnapshot {
+  const ledgers = allRows(state).map((row) => ({
+    row,
+    movements: state.movements.get(row.id) ?? [],
+  }));
+  return pricedAt(state, ledgers, state.today, closesNeed(state));
+}
+
 function ledgersOf(state: ClosesState, unit: Denominator): HoldingLedger[] {
   return allRows(state).flatMap((row) => {
     const movements = state.movements.get(row.id);
@@ -132,7 +161,7 @@ function holdingsAt(
 // traded in. An opening balance's or an adjustment's price is a cost, not
 // what a unit was worth.
 function lastTradePrices(
-  ledgers: readonly HoldingLedger[],
+  ledgers: readonly Pick<HoldingLedger, "row" | "movements">[],
   date: string,
 ): QuoteSnapshot["prices"] {
   type Day = {
@@ -263,16 +292,8 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
   const ledgers = ledgersOf(state, unit);
   const first = firstDay(ledgers, state.today);
   const need = closesNeed(state);
-  const snapshotAt = (date: string): QuoteSnapshot => {
-    const quoted = pricedSnapshotOf(
-      state,
-      snapshotOn(state.quotes, date, need).snapshot,
-    ).snapshot;
-    return {
-      ...quoted,
-      prices: { ...lastTradePrices(ledgers, date), ...quoted.prices },
-    };
-  };
+  const snapshotAt = (date: string): QuoteSnapshot =>
+    pricedAt(state, ledgers, date, need);
   const valued = (holdings: HoldingRow[], date: string) => {
     const snapshot = snapshotAt(date);
     const total = holdingsValuation({

@@ -106,6 +106,29 @@ it("refuses a statement older than a later statement of the instrument", () => {
   expect(written.state).toBe(latest);
 });
 
+it("writes nothing for an older statement that changes nothing", () => {
+  const first = writeImport(
+    emptyLedger(),
+    { ...ITEM, id: "first", date: "2026-09-14" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  ).state;
+  const latest = writeImport(
+    first,
+    { ...ITEM, id: "latest", date: "2026-09-20" },
+    [row("AAPL", "8", "18000")],
+    newId,
+  ).state;
+  const written = writeImport(
+    latest,
+    { ...ITEM, date: "2026-09-17" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: ITEM.id });
+  expect(written.operations).toEqual([]);
+});
+
 it("refuses a statement older than a holding the account already has", () => {
   const opened = writeImport(
     emptyLedger(),

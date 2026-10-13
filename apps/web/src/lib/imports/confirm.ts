@@ -203,9 +203,6 @@ export function writeImport<S extends Ledger>(
   const date = item.date;
   const held = heldOn(state, account.id, date);
   const later = balancedAfter(state, account.id, date);
-  if (kept.some((row) => later.has(row.symbol))) {
-    return refuse({ ok: false, code: "opens_later" });
-  }
   for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,
@@ -214,6 +211,8 @@ export function writeImport<S extends Ledger>(
     const diff = difference(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
+    if (later.has(row.symbol))
+      return refuse({ ok: false, code: "opens_later" });
     // The holdings of the instrument with units on that day, largest first.
     const holdings = holdingsOn(next, account.id, date)
       .filter((each) => each.symbol === row.symbol)

@@ -15,6 +15,7 @@ import {
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { percentOf } from "@/lib/format/amount";
 import { HOLDING_CLASS_GROUP_LABELS } from "@/lib/holdings/classes";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import { readReferenceDollar } from "@/lib/holdings/read";
@@ -26,7 +27,7 @@ import { type ClosesRead, readCloses } from "@/lib/summary/read";
 import { pricedToday, summaryValuation } from "@/lib/summary/valuation";
 
 import type { AnswerMetadata, ChatUnit } from "./chat";
-import { netWorthOf, rateOf, SOURCES } from "./figures";
+import { rateOf, SOURCES, worthOfAssets } from "./figures";
 
 // The most holdings one answer lists.
 const HOLDINGS_LISTED = 30;
@@ -130,22 +131,23 @@ export function assistantData({
           note: "Las deudas y el patrimonio neto son del total, no de una cartera.",
         };
       }
-      const closes = closesOf(read.state, unit);
-      const last = closes.at(-1);
+      // The assets of the same valuation listHoldings and allocation answer
+      // from, so the tools add up.
+      const { valuation } = summaryValuation(read, { unit, portfolioId: null });
       const owed = valueLiabilities(read.state.liabilities, snapshot, {
         denominator: unit,
         referenceDollar: read.state.referenceDollar,
       });
-      const worth = netWorthOf(last?.figures.endValue ?? "0", owed.total);
       return {
         ...metaOf(
           read,
           snapshot,
           [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
-          (last?.endComplete ?? true) && owed.complete,
+          valuation.kinds.total.complete && owed.complete,
         ),
         unit,
-        ...worth,
+        ...worthOfAssets(valuation.kinds.total.value, owed.total),
+        missingPrices: valuation.kinds.total.missing,
         debtCount: read.state.liabilities.length,
       };
     },
@@ -255,7 +257,11 @@ export function assistantData({
               result: year.totals.result,
               contributed: year.totals.contributed,
               income: year.totals.income,
-              share: year.totals.share,
+              // A percent, as every other tool's share.
+              share:
+                year.totals.share === null
+                  ? null
+                  : percentOf(year.totals.share),
               complete: year.complete,
             }
           : null,
