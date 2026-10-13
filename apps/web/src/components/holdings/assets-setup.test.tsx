@@ -110,6 +110,7 @@ const VALUATION: HoldingsValuation = {
   kinds: KINDS,
   classes: { cash: TOTAL },
   instruments: {},
+  currencies: {},
 };
 
 const ACCOUNT = {
@@ -282,6 +283,7 @@ it("says a total with no quoted holding has none, never 0", () => {
       kinds: { ...KINDS, cash: missing, total: missing },
       classes: { cash: missing },
       instruments: {},
+      currencies: {},
     },
   });
   expect(unquoted).not.toContain("$ 0,00");
