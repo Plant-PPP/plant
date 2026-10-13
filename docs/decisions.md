@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The jobs on a deployment (PLA-73)
+
+- **`PLANT_RUN_JOBS=1` registers the quotes, import and file-deletion jobs on a deployment.** Without the stored dollar rates of a day no movement can be written (`no_rate`), and only `refresh-quotes` stores them, so a deployment needs the job. One environment runs them, since plant-staging is also production's database until the beta: the variable is set only there, with `SUPABASE_SERVICE_ROLE_KEY` beside it, never in Preview or Development. Without it a deployment registers only `ping`, as before, and builds no dependency. On a deployment the jobs register at the signed sync's URL, never the dev loopback origin. Turning it on also needs the Inngest integration's Vercel Protection Bypass secret, auto-archive off for that environment, and the replay row of the Inngest threat model reviewed.
+
 ## 2026-10-13 · Review fixes in the database (wave 1)
 
 - **The import quota counts imports started, not imports kept.** A user deletes their files, and each file's import goes with it, so counting live imports gave an import back per deleted file. `private.import_requests` keeps one row per import started (user and time only, no grant to any API role), backfilled from `imports`, and the quota trigger counts it for the calendar month in Buenos Aires, under the same per-user lock. The trigger both counts and records, so it is now `SECURITY DEFINER` (authenticated holds nothing on the private table) and joins the floor's definer list. Rows are never pruned; the quota bounds them at 20 a user a month.
