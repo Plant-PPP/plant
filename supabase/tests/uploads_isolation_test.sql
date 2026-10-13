@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(21);
+SELECT plan(22);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -67,9 +67,9 @@ VALUES ('imports',
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.uploaded_documents') $$,
-  ARRAY['(table):SELECT', 'source_connection_id:INSERT', 'storage_path:INSERT',
+  ARRAY['(table):SELECT', '(table):DELETE', 'source_connection_id:INSERT', 'storage_path:INSERT',
         'file_name:INSERT', 'mime_type:INSERT', 'size_bytes:INSERT', 'sha256:INSERT'],
-  'a user reads their files and adds one, never its owner, id or deletion date'
+  'a user reads, deletes and adds their files, never a file''s owner, id or deletion date'
 );
 
 SELECT set_eq(
@@ -152,6 +152,7 @@ SELECT is(
 );
 
 DELETE FROM storage.objects WHERE name LIKE 'b0000000-0000-4000-8000-00000000000b/%';
+DELETE FROM public.uploaded_documents WHERE user_id = 'b0000000-0000-4000-8000-00000000000b';
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.uploaded_documents (source_connection_id, storage_path,
@@ -222,6 +223,15 @@ SELECT is(
   '42501',
   'nor moves it along'
 );
+
+SAVEPOINT before_delete;
+DELETE FROM public.uploaded_documents WHERE id = 'a8000000-0000-4000-8000-0000000000a8';
+SELECT is(
+  (SELECT count(*)::int FROM public.imports),
+  0,
+  'deleting a file deletes its import'
+);
+ROLLBACK TO SAVEPOINT before_delete;
 
 -- ── Signed in as Beto ───────────────────────────────────────────────────────
 SELECT set_config('request.jwt.claims',

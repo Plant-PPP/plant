@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Uploads (PLA-34)
+
+- **A file goes straight from the browser to Storage** through a signed upload URL, then the server reads it back to check it. It never passes through a server action, whose body Next caps.
+- **The file's type is the one its name says, checked against its first bytes**, not what the browser reports: the browser sends it as that type, and the bucket also refuses any other.
+- **A document is deleted, not archived.** Deleting it deletes its import; the server does it when an import fails to start, so a file never blocks the same file again.
+- **The terms are accepted on Cargar** as three consents (terms, privacy and AI providers) of `CONSENT_VERSION`; an upload waits for them.
+- **Cargar shows the month's uploads against `IMPORTS_PER_MONTH` but does not enforce it yet.** The quota arrives with PLA-42.
+
 ## 2026-10-13 · The real Resumen and closes (PLA-30)
 
 - **Closes are computed by the code the prototype runs**, moved to `lib/summary/compute.ts` over the ledger plus the debts. The real Resumen and a close's page read the whole ledger, every open holding and the debts, and compute every month from the first movement's to today on each request.

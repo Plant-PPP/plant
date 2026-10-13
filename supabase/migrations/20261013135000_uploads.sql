@@ -10,6 +10,7 @@ CREATE TYPE public.import_status AS ENUM ('queued', 'reading', 'ready', 'failed'
 
 -- One uploaded file. Its type, size and hash are read back from Storage by the
 -- server after the upload; the same file twice in one account is refused.
+-- Deleting it deletes its import.
 CREATE TABLE public.uploaded_documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -41,7 +42,7 @@ COMMENT ON COLUMN public.uploaded_documents.delete_after IS
 
 ALTER TABLE public.uploaded_documents ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.uploaded_documents FROM PUBLIC, anon, authenticated, service_role;
-GRANT SELECT ON TABLE public.uploaded_documents TO authenticated;
+GRANT SELECT, DELETE ON TABLE public.uploaded_documents TO authenticated;
 GRANT INSERT (source_connection_id, storage_path, file_name, mime_type, size_bytes, sha256)
   ON TABLE public.uploaded_documents TO authenticated;
 

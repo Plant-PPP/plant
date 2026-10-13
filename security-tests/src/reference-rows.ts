@@ -45,6 +45,7 @@ export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
   "movements",
   "operations",
   "tax_report_exclusions",
+  "uploaded_documents",
 ]);
 
 type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
