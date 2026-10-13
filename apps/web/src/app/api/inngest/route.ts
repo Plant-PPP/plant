@@ -16,8 +16,9 @@ import { serverLog } from "@/lib/log/server-log";
 import { getJson } from "@/lib/quotes/get-json";
 import { quoteSink } from "@/lib/quotes/quote-sink";
 
-// The quotes, import and file deletion jobs run only under `next dev` until PLA-73 registers
-// them on a deployment: plant-staging is also production's database.
+// The quotes, import and file deletion jobs run under `next dev`, and on a
+// deployment only where PLANT_RUN_JOBS is "1": plant-staging is also
+// production's database, so one environment runs them.
 export const { GET, POST, PUT } = serve(
   createServeOptions({
     quotes: () => ({
