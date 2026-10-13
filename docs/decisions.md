@@ -2,12 +2,19 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Placements at a rate: kinds, figures and renewal (PLA-124, prototype)
+
+- **A plazo fijo, a "caución", a loan the user gave and any other placement at a rate are one class, `fixed_term`, valued as before** (simple interest, actual/365, credited in cents). What each is shows as its kind, chosen in the holding dialog ("Tipo de colocación"); a placement with no name goes by its kind ("Caución ARS"). The kind lives beside the holding, as the origin does, until the database holds it.
+- **The edit dialog shows what a placement pays**: the interest to today (or paid, once matured), the amount and interest at maturity, and the TNA beside the TEA, the effective rate of placing each term's interest again. Core computes them (`placementFigures`), and the valuation uses the same interest (`interestTo`), so the two cannot drift. The TEA is the one figure computed in floating point: a rate shown as a percentage, never an amount.
+- **Renewing a matured placement makes a new holding** (Tomas, 2026-10-13): its capital plus the interest, from the day it matured or later, on a new term and rate, with its kind and name. The matured one leaves the lists so the money counts once, and the renewal remembers it ("Renueva la del …"). A loan given pays at maturity only, and a caución's broker fees wait; neither has installments or charges yet.
+
 ## 2026-10-13 · View preferences (PLA-109, prototype)
 
 - **Ajustes holds "Cómo ves tu plata"**: the reference dollar (MEP or CCL) and the unit Resumen, Activos, Deudas and the account, portfolio and instrument pages open in, the reference dollar's by default. A link's `?unit=` still wins, and choosing the page's home unit in its select drops the param, as choosing the reference unit did. Resumen opens in the reference dollar when the preferred unit is Bitcoin, which closes cannot be expressed in. The assistant keeps opening in the reference dollar, as it answers only in pesos, MEP and CCL.
 - **No preferred tab.** The issue asks for one only "if needed", and a preferred tab would make "no `?tab=`" mean two things to the tabs. It waits for someone to ask for it.
 - **`/settings` moved into the `(data)` route group** (route groups leave the URL as it was), so its prototype cards share the store with the data pages. A preference writes no close: it changes how the pages show the data, not the data, so the prototype's write skips marking months recalculated.
 - **The real preference** goes in `profiles`, beside `reference_dollar`, when the data turns real.
+
 ## 2026-10-13 · Resumen by portfolio, account and currency (PLA-30, prototype)
 
 - **Resumen picks a portfolio, or all of them.** With all, it shows the net worth, its months and closes as before, then the split by portfolio, account and currency. One portfolio shows only its assets today, split by kind, class, account and currency, and says why the net worth is not there: debts belong to no portfolio and closes are of the whole, so neither has a per-portfolio version. The choice is `?portfolio=`, as on Activos.

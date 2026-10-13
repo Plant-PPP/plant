@@ -776,7 +776,14 @@ describe("saving an edit", () => {
         details: {
           originOf: () => ({ kind: "manual" }),
           inTaxReport: () => true,
-          actions: { setInTaxReport: done, update: together },
+          placementOf: () => "fixed_term",
+          renewalOf: () => undefined,
+          actions: {
+            setInTaxReport: done,
+            update: together,
+            setPlacement: done,
+            renew: done,
+          },
         },
       },
       holding,
@@ -786,12 +793,12 @@ describe("saving an edit", () => {
     expect(together).toHaveBeenCalledWith(
       "h1",
       expect.objectContaining({ amount: "200" }),
-      false,
+      { inTaxReport: false },
     );
     expect(together).toHaveBeenCalledWith(
       "h1",
       expect.not.objectContaining({ inTaxReport: expect.anything() }),
-      false,
+      { inTaxReport: false },
     );
   });
 });
@@ -831,7 +838,14 @@ describe("saving an edit that leaves the report switch untouched", () => {
         details: {
           originOf: () => ({ kind: "manual" }),
           inTaxReport,
-          actions: { setInTaxReport: done, update: together },
+          placementOf: () => "fixed_term",
+          renewalOf: () => undefined,
+          actions: {
+            setInTaxReport: done,
+            update: together,
+            setPlacement: done,
+            renew: done,
+          },
         },
       },
       holding,
@@ -844,7 +858,9 @@ describe("saving an edit that leaves the report switch untouched", () => {
     "writes the asset's saved choice (%s) with the holding",
     async (saved) => {
       const { together } = await save(gd30, saved);
-      expect(together).toHaveBeenCalledWith("h7", expect.anything(), saved);
+      expect(together).toHaveBeenCalledWith("h7", expect.anything(), {
+        inTaxReport: saved,
+      });
     },
   );
 
@@ -860,6 +876,8 @@ describe("saving an edit that leaves the report switch untouched", () => {
       false,
     );
     expect(inTaxReport).toHaveBeenCalledWith("h1");
-    expect(together).toHaveBeenCalledWith("h1", expect.anything(), false);
+    expect(together).toHaveBeenCalledWith("h1", expect.anything(), {
+      inTaxReport: false,
+    });
   });
 });

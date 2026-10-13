@@ -55,6 +55,12 @@ export {
   type OmittableColumn,
 } from "./valuation/holding";
 export {
+  interestTo,
+  type Placement,
+  type PlacementFigures,
+  placementFigures,
+} from "./valuation/placement";
+export {
   type HoldingsValue,
   quotesNeeded,
   valueHoldings,

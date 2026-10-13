@@ -239,7 +239,14 @@ describe("with details", () => {
     originOf: origin,
     inTaxReport: (key) =>
       key === assetKey(row("e1", "IOL").holding) && inTaxReport,
-    actions: { setInTaxReport: done, update: done },
+    placementOf: () => "fixed_term",
+    renewalOf: () => undefined,
+    actions: {
+      setInTaxReport: done,
+      update: done,
+      setPlacement: done,
+      renew: done,
+    },
   });
 
   it("has no report switch and no origin without them", () => {
