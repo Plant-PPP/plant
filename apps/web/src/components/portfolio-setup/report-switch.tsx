@@ -46,6 +46,12 @@ export function ReportSwitch({
   );
 }
 
+// What the note leaves out, and the pronoun that agrees with it.
+const SUBJECTS = {
+  holding: { noun: "esta tenencia", pronoun: "la" },
+  asset: { noun: "este activo", pronoun: "lo" },
+} as const;
+
 // Why an asset's account choice leaves it out of the report anyway, linked to
 // Cuentas, where each account's own switch is: the one account by name, or
 // every account still holding it.
@@ -54,16 +60,16 @@ export function ExcludedAccountsNote({
   subject,
 }: {
   institutions: readonly string[];
-  // What is left out, as the sentence ends: "esta tenencia", "este activo".
-  subject: string;
+  subject: "holding" | "asset";
 }) {
+  const { noun, pronoun } = SUBJECTS[subject];
   return institutions.length === 1 ? (
     <>
       La cuenta{" "}
       <Link href="/accounts" className="underline">
         {institutions[0]}
       </Link>{" "}
-      no se incluye en el reporte, así que {subject} tampoco.
+      no se incluye en el reporte, así que {noun} tampoco.
     </>
   ) : (
     <>
@@ -71,7 +77,8 @@ export function ExcludedAccountsNote({
       <Link href="/accounts" className="underline">
         cuentas
       </Link>{" "}
-      donde lo tenés no se incluyen en el reporte, así que {subject} tampoco.
+      donde {pronoun} tenés no se incluyen en el reporte, así que {noun}{" "}
+      tampoco.
     </>
   );
 }

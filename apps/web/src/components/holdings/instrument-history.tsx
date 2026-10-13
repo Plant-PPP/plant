@@ -365,7 +365,7 @@ export function InstrumentHistory({
                           ]),
                         ).values(),
                       ]}
-                      subject="este activo"
+                      subject="asset"
                     />
                   )
                 }

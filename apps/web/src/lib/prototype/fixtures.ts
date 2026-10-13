@@ -84,6 +84,10 @@ const INSTRUMENTS: InstrumentRow[] = [
   { symbol: "TX26", name: "Boncer 2026", currency: "ARS", type: "bond" },
 ];
 
+// What every price and movement of a symbol is in.
+const currencyOf = (symbol: string) =>
+  INSTRUMENTS.find((row) => row.symbol === symbol)!.currency;
+
 // The dollars in cents, `day` days into the history: they climb over the two
 // years with a small weekly wobble. CEDEARs follow the CCL.
 const mepCents = (day: number) => 90_000 + day * 45 + (day % 5) * 150;
@@ -172,8 +176,8 @@ function priceCents(symbol: string, daysAgo: number): number {
   // A triangle wave from -500 to 500.
   const phase = (daysAgo % model.period) * 2000;
   const wave = Math.abs(phase / model.period - 1000) - 500;
-  const usd = (trend * (1000 + (model.amplitude * wave) / 500)) / 1000;
-  const cents = model.cedear ? (usd * cclCents(day)) / 100 : usd;
+  const base = (trend * (1000 + (model.amplitude * wave) / 500)) / 1000;
+  const cents = model.cedear ? (base * cclCents(day)) / 100 : base;
   return Math.max(1, Math.round(cents));
 }
 
@@ -202,7 +206,7 @@ function quotesFor(today: string): StoredQuotes {
         symbol,
         price_date: date,
         price: priceOn(symbol, daysAgo),
-        currency: MODELS[symbol]!.cedear ? "ARS" : "USD",
+        currency: currencyOf(symbol),
       });
     }
   }
@@ -223,7 +227,7 @@ const manualPricesFor = (today: string): ManualPrice[] =>
       symbol,
       price_date: addDays(today, -daysAgo),
       price: priceOn(symbol, daysAgo),
-      currency: INSTRUMENTS.find((row) => row.symbol === symbol)!.currency,
+      currency: currencyOf(symbol),
     })),
   );
 
@@ -317,7 +321,6 @@ const monthly = (
 type InstrumentHolding = {
   id: string;
   symbol: string;
-  currency: "ARS" | "USD";
   placed: Placed;
   steps: Step[];
 };
@@ -328,7 +331,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000001",
     symbol: "BTC",
-    currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
     steps: [
       open(700, "0.25"),
@@ -339,7 +341,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000002",
     symbol: "ETH",
-    currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.principal),
     steps: [
       open(650, "1.5"),
@@ -359,7 +360,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000003",
     symbol: "ETH",
-    currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.largo),
     steps: [
       {
@@ -374,14 +374,12 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000004",
     symbol: "SOL",
-    currency: "USD",
     placed: at(ACCOUNTS.binance, PORTFOLIOS.corto),
     steps: [buy(300, "20"), buy(200, "10"), sell(60, "12")],
   },
   {
     id: "c1000000-0000-4000-8000-000000000005",
     symbol: "AAPL",
-    currency: "ARS",
     placed: at(ACCOUNTS.iol, PORTFOLIOS.principal),
     steps: [
       open(700, "40"),
@@ -397,7 +395,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000006",
     symbol: "KO",
-    currency: "ARS",
     placed: at(ACCOUNTS.cocos, PORTFOLIOS.largo),
     steps: [
       open(500, "60"),
@@ -412,21 +409,18 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000007",
     symbol: "MELI",
-    currency: "ARS",
     placed: at(ACCOUNTS.iol, PORTFOLIOS.principal),
     steps: [buy(540, "15"), buy(380, "10"), buy(95, "8")],
   },
   {
     id: "c1000000-0000-4000-8000-000000000008",
     symbol: "NVDA",
-    currency: "ARS",
     placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [...monthly(360, 30, 12, "10"), sell(45, "30", "BAL-30418")],
   },
   {
     id: "c1000000-0000-4000-8000-000000000009",
     symbol: "SPY",
-    currency: "ARS",
     placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [
       ...monthly(715, 30, 24, "6"),
@@ -444,7 +438,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000010",
     symbol: "TSLA",
-    currency: "ARS",
     placed: at(ACCOUNTS.cocos, PORTFOLIOS.corto),
     steps: [buy(420, "25"), buy(350, "15"), sell(100, "40", "COC-90215")],
   },
@@ -453,14 +446,12 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000011",
     symbol: "GD30",
-    currency: "USD",
     placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [open(400, "5000"), buy(400, "3000"), buy(150, "2000")],
   },
   {
     id: "c1000000-0000-4000-8000-000000000012",
     symbol: "FIMAAHO",
-    currency: "ARS",
     placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [open(360, "20000"), buy(360, "5000"), buy(90, "10000")],
   },
@@ -468,7 +459,6 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
   {
     id: "c1000000-0000-4000-8000-000000000013",
     symbol: "TX26",
-    currency: "ARS",
     placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
     steps: [open(330, "10000"), buy(330, "5000")],
   },
@@ -628,7 +618,7 @@ function draft(
   return {
     ...common,
     kind: step.kind,
-    currency: holding.currency,
+    currency: currencyOf(holding.symbol),
     quantity: step.quantity,
     price: decimal(priceCentsNow),
     charges:

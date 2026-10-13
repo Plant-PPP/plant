@@ -200,4 +200,23 @@ describe("with details", () => {
     );
     expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
   });
+
+  it("puts the account's whole note, by name, in the switch's note", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+      accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
+    });
+    expect(html).toMatch(
+      /<p id="[^"]*-tax-note"[^>]*>La cuenta <a class="underline" href="\/accounts">IOL<\/a> no se incluye en el reporte, así que esta tenencia tampoco\.<\/p>/,
+    );
+    expect(html).not.toContain("donde lo tenés");
+  });
+
+  it("adds no note while the holding's account is in the report", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+    });
+    expect(html).not.toContain("no se incluye en el reporte");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
 });

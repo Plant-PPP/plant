@@ -250,6 +250,9 @@ export function InstrumentPicker({
                           option.scrollIntoView({
                             block: followActive.current,
                           });
+                          // To the top once per opening: a later render keeps
+                          // it in view without pulling it back up.
+                          followActive.current = "nearest";
                         }
                       }
                     : undefined

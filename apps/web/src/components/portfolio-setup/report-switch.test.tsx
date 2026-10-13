@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { Switch } from "@/components/ui/switch";
 
-import { ReportSwitch } from "./report-switch";
+import { ExcludedAccountsNote, ReportSwitch } from "./report-switch";
 
 const render = (props: Partial<Parameters<typeof ReportSwitch>[0]> = {}) =>
   renderToStaticMarkup(
@@ -77,3 +77,50 @@ it.each([
     expect(onCheckedChange.mock.calls).toEqual(calls);
   },
 );
+
+describe("the excluded-accounts note", () => {
+  const note = (
+    institutions: readonly string[],
+    subject: "holding" | "asset",
+  ) =>
+    renderToStaticMarkup(
+      <ExcludedAccountsNote institutions={institutions} subject={subject} />,
+    );
+
+  it("names the one account, linked to the accounts, and ends on the subject", () => {
+    expect(note(["IOL"], "holding")).toBe(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
+    );
+  });
+
+  it("links the accounts, unnamed, when there are two", () => {
+    const html = note(["IOL", "Binance"], "asset");
+    expect(html).toBe(
+      'Las <a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("IOL");
+    expect(html).not.toContain("Binance");
+  });
+
+  it("agrees the pronoun with what is left out", () => {
+    expect(note(["IOL", "Binance"], "holding")).toContain(
+      "donde la tenés no se incluyen en el reporte, así que esta tenencia tampoco.",
+    );
+  });
+
+  it("counts accounts, not names: two accounts of one institution read plural", () => {
+    expect(note(["IOL", "IOL"], "asset")).toContain(
+      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen',
+    );
+  });
+
+  it("describes the report switch it is the note of", () => {
+    const html = render({
+      note: <ExcludedAccountsNote institutions={["IOL"]} subject="holding" />,
+    });
+    expect(switchTag(html)).toContain('aria-describedby="f-tax-note"');
+    expect(html).toContain(
+      '<p id="f-tax-note" class="text-xs text-muted-foreground">La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.</p>',
+    );
+  });
+});

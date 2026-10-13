@@ -1,6 +1,12 @@
 import { holdingSchema, type Position } from "@plant/core";
 
-import { byHolding, byInstrument, holdingsOf, rowFigures } from "./assets-rows";
+import {
+  assetKey,
+  byHolding,
+  byInstrument,
+  holdingsOf,
+  rowFigures,
+} from "./assets-rows";
 import type { HoldingRow } from "./read";
 import type { HoldingsValuation, Sum } from "./valuation-view";
 
@@ -102,6 +108,27 @@ describe("byInstrument", () => {
       ["holding", "e1"],
       ["holding", "e2"],
     ]);
+  });
+});
+
+describe("assetKey", () => {
+  it("keys an instrument by its symbol across accounts and portfolios", () => {
+    const one = assetKey(eth("e1", "1", IOL, PRINCIPAL).holding);
+    expect(one).toBe("instrument:ETH");
+    expect(assetKey(eth("e2", "0.5", BINANCE, LARGO).holding)).toBe(one);
+    expect(one).not.toBe("e1");
+  });
+
+  it("keys any other holding by its own id", () => {
+    expect(assetKey(cash("c1").holding)).toBe("c1");
+    expect(assetKey(cash("c2").holding)).not.toBe(assetKey(cash("c1").holding));
+  });
+
+  it("is the id byInstrument gives each row", () => {
+    const rows = [eth("e1", "1"), cash("c1")];
+    expect(byInstrument(rows).map((row) => row.id)).toEqual(
+      rows.map((row) => assetKey(row.holding)),
+    );
   });
 });
 

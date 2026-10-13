@@ -328,6 +328,29 @@ describe("with details", () => {
     expect(html).not.toContain("donde lo tenés no se incluyen");
   });
 
+  it("says the accounts leave it out when two accounts share an institution", () => {
+    const html = render([held("e1", "IOL"), held("e2", "IOL")], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "IOL")],
+    });
+    expect(html).toContain(
+      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("La cuenta <a");
+  });
+
+  it("says nothing of the accounts while one holding it is in the report", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance")], {
+      details: details(true),
+      accounts: [
+        outOfReport("a-e1", "IOL"),
+        { ...outOfReport("a-e2", "Binance"), includeInTaxReport: true },
+      ],
+    });
+    expect(html).not.toContain("en el reporte, así que");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
+
   it("says the accounts holding it leave it out of the report", () => {
     const html = render([held("e1", "IOL"), held("e2", "Binance")], {
       details: details(true),

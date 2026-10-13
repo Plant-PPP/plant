@@ -415,7 +415,7 @@ export function HoldingDialog({
                 !accountIncluded && (
                   <ExcludedAccountsNote
                     institutions={[row.account.institution]}
-                    subject="esta tenencia"
+                    subject="holding"
                   />
                 )
               }
