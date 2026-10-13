@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  Deletable,
   PortfoliosView,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
@@ -19,7 +20,7 @@ export function AccountsSetup({
   sourceConnections,
   portfolios,
   actions,
-  deletesUploads,
+  deletable,
 }: {
   sourceConnections: SourceConnectionsView;
   portfolios: PortfoliosView;
@@ -27,7 +28,8 @@ export function AccountsSetup({
     sourceConnections: SourceConnectionActions;
     portfolios: PortfolioActions;
   };
-  deletesUploads?: readonly string[];
+  // The rows a delete would go through for, when the page deletes.
+  deletable?: Deletable;
 }) {
   const { lists, pending, run } = useSetupActions({
     sourceConnections,
@@ -47,7 +49,8 @@ export function AccountsSetup({
         run={run}
         portfolios={lists.portfolios.active}
         actions={actions.sourceConnections}
-        deletesUploads={deletesUploads}
+        deletable={deletable?.sourceConnections}
+        deletesUploads={deletable?.deletesUploads}
       />
       <PortfoliosCard
         view={lists.portfolios}
@@ -55,6 +58,7 @@ export function AccountsSetup({
         run={run}
         usedBy={usedBy}
         actions={actions.portfolios}
+        deletable={deletable?.portfolios}
       />
     </div>
   );

@@ -19,18 +19,23 @@ import {
 import { currentRequestId } from "@/lib/request-id-server";
 
 type PortfolioSetupAction =
-  | `${"create" | "rename" | "archive" | "restore" | "restore_rename"}_portfolio`
-  | `${"create" | "update" | "archive" | "restore"}_${"source_connection" | "holding"}`;
+  | `${"create" | "rename" | "archive" | "restore" | "restore_rename" | "delete"}_portfolio`
+  | `${"create" | "update" | "archive" | "restore"}_${"source_connection" | "holding"}`
+  | "delete_source_connection";
 
 type Client = SupabaseClient<Database>;
 type Tables = Database["public"]["Tables"];
 
 // A write with `.select("id")`, so the rows it touched come back.
-type WriteResponse = PromiseLike<{
+type WriteAnswer = {
   data: { id: string }[] | null;
   error: PostgrestError | null;
   status: number;
-}>;
+};
+type WriteResponse = PromiseLike<WriteAnswer>;
+
+// What a step before the write answers when the write must not run.
+export type Refusal = { refused: WriteResultCode; error?: PortfolioSetupError };
 
 export type UpdateArgs<I> = {
   client: Client;
@@ -83,8 +88,32 @@ function log(
   }
 }
 
-// An insert must answer 201 with its row; an update must answer 200 with
-// exactly one row, and none means the id is not one of the user's. Every
+function outcomeOf(
+  response: WriteAnswer,
+  isInsert: boolean,
+): { result: WriteResult; error?: PortfolioSetupError } {
+  const failure = classifyPostgrestResult(response, isInsert ? 201 : 200);
+  const rows = response.data ?? [];
+  if (failure) {
+    const code = toWriteResult(failure, response.error?.hint);
+    return {
+      result: { ok: false, code },
+      error:
+        code === "failed" ? new PortfolioSetupError(failure.code) : undefined,
+    };
+  }
+  if (rows.length === 1) return { result: { ok: true, id: rows[0]!.id } };
+  if (rows.length === 0 && !isInsert) {
+    return { result: { ok: false, code: "not_found" } };
+  }
+  return {
+    result: { ok: false, code: "failed" },
+    error: new PortfolioSetupError(`rows_${rows.length}`),
+  };
+}
+
+// An insert must answer 201 with its row; an update or a delete must answer
+// 200 with exactly one row, and none means the id is not one of the user's. Every
 // outcome but invalid input revalidates the page, so a write that failed after
 // committing shows before the user retries.
 async function run<I>(
@@ -95,7 +124,7 @@ async function run<I>(
     userId: string;
     input: I;
     id: string | undefined;
-  }) => WriteResponse,
+  }) => PromiseLike<WriteAnswer | Refusal>,
 ): Promise<WriteResult> {
   // Outside any try: its redirect to /login or /auth/mfa must propagate.
   const claims = await getSessionClaims();
@@ -119,19 +148,11 @@ async function run<I>(
       input: parsed.data,
       id: filterId,
     });
-    const failure = classifyPostgrestResult(response, isInsert ? 201 : 200);
-    const rows = response.data ?? [];
-    if (failure) {
-      const code = toWriteResult(failure, response.error?.hint);
-      result = { ok: false, code };
-      if (code === "failed") error = new PortfolioSetupError(failure.code);
-    } else if (rows.length === 1) {
-      result = { ok: true, id: rows[0]!.id };
-    } else if (rows.length === 0 && !isInsert) {
-      result = { ok: false, code: "not_found" };
+    if ("refused" in response) {
+      result = { ok: false, code: response.refused };
+      error = response.error;
     } else {
-      result = { ok: false, code: "failed" };
-      error = new PortfolioSetupError(`rows_${rows.length}`);
+      ({ result, error } = outcomeOf(response, isInsert));
     }
   }
 
@@ -161,7 +182,7 @@ export function runInsert<I>(
 export function runUpdate<I>(
   spec: Spec<I>,
   id: unknown,
-  write: (args: UpdateArgs<I>) => WriteResponse,
+  write: (args: UpdateArgs<I>) => PromiseLike<WriteAnswer | Refusal>,
 ): Promise<WriteResult> {
   return run(spec, { id }, ({ id: parsedId, ...rest }) =>
     write({ ...rest, id: parsedId! }),
@@ -179,6 +200,33 @@ export function runArchive(
     { table, action, schema: noInput, input: {} },
     id,
     activeWrite(table, () => ({ archived_at: new Date().toISOString() })),
+  );
+}
+
+// Deletes one row of the user, active or archived; the table's delete guard
+// refuses one in use. `before` runs first and may refuse instead.
+export function runDelete(
+  table: SetupTable,
+  action: PortfolioSetupAction,
+  id: unknown,
+  before?: (
+    args: Omit<UpdateArgs<unknown>, "input">,
+  ) => Promise<Refusal | null>,
+): Promise<WriteResult> {
+  return runUpdate(
+    { table, action, schema: noInput, input: {} },
+    id,
+    async ({ client, userId, id }) => {
+      const refusal = await before?.({ client, userId, id });
+      if (refusal) return refusal;
+      const from: SetupTable = table;
+      return client
+        .from(from)
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", id)
+        .select("id");
+    },
   );
 }
 

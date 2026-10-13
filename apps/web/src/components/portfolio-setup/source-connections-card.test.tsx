@@ -105,3 +105,28 @@ it("passes the page's pending to its archived list", () => {
   };
   expect(render(paged, true)).toMatch(/<a [^>]*aria-disabled="true"/);
 });
+
+it("offers delete only on the accounts a delete would go through for", () => {
+  const markup = renderToStaticMarkup(
+    <SourceConnectionsCard
+      view={listView({
+        active: [first, second],
+        archived: [{ ...first, id: "c3", institution: "Vieja" }],
+      })}
+      pending={false}
+      run={() => true}
+      portfolios={[]}
+      actions={{
+        create: jest.fn(),
+        update: jest.fn(),
+        archive: jest.fn(),
+        restore: jest.fn(),
+        delete: jest.fn(),
+      }}
+      deletable={["c2", "c3"]}
+    />,
+  );
+  expect(markup).toContain('aria-label="Borrar Broker Dos"');
+  expect(markup).toContain('aria-label="Borrar Vieja"');
+  expect(markup).not.toContain('aria-label="Borrar Banco Uno"');
+});

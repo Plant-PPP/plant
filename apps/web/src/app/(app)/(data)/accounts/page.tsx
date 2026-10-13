@@ -4,6 +4,8 @@ import {
   archiveSourceConnection,
   createPortfolio,
   createSourceConnection,
+  deletePortfolio,
+  deleteSourceConnection,
   renamePortfolio,
   restorePortfolio,
   restoreSourceConnection,
@@ -15,6 +17,7 @@ import { isProductionDeployment } from "@/lib/deployment";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { navTitle } from "@/lib/navigation";
 import {
+  readDeletable,
   readPortfolios,
   readSourceConnections,
 } from "@/lib/portfolio-setup/read";
@@ -45,9 +48,10 @@ export default async function AccountsPage({
     page: "/accounts" as const,
     params: await searchParams,
   };
-  const [sourceConnections, portfolios] = await Promise.all([
+  const [sourceConnections, portfolios, deletable] = await Promise.all([
     readSourceConnections(client, context),
     readPortfolios(client, context),
+    readDeletable(client, context),
   ]);
   return (
     <div>
@@ -61,14 +65,17 @@ export default async function AccountsPage({
             update: updateSourceConnection,
             archive: archiveSourceConnection,
             restore: restoreSourceConnection,
+            delete: deleteSourceConnection,
           },
           portfolios: {
             create: createPortfolio,
             rename: renamePortfolio,
             archive: archivePortfolio,
             restore: restorePortfolio,
+            delete: deletePortfolio,
           },
         }}
+        deletable={deletable}
       />
     </div>
   );

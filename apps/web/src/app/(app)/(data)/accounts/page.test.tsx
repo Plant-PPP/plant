@@ -12,6 +12,7 @@ jest.mock("@/lib/request-id-server", () => ({
 jest.mock("@/lib/portfolio-setup/read", () => ({
   readSourceConnections: () => read("accounts"),
   readPortfolios: () => read("portfolios"),
+  readDeletable: () => read("deletable"),
 }));
 jest.mock("./actions", () =>
   Object.fromEntries(
@@ -20,6 +21,8 @@ jest.mock("./actions", () =>
       "archiveSourceConnection",
       "createPortfolio",
       "createSourceConnection",
+      "deletePortfolio",
+      "deleteSourceConnection",
       "renamePortfolio",
       "restorePortfolio",
       "restoreSourceConnection",
@@ -62,18 +65,21 @@ it("wires every write to its server action in production", async () => {
   expect(setup.type).toBe(AccountsSetup);
   expect(setup.props.sourceConnections).toEqual({ list: "accounts" });
   expect(setup.props.portfolios).toEqual({ list: "portfolios" });
+  expect(setup.props.deletable).toEqual({ list: "deletable" });
   expect(setup.props.actions).toEqual({
     sourceConnections: {
       create: actions.createSourceConnection,
       update: actions.updateSourceConnection,
       archive: actions.archiveSourceConnection,
       restore: actions.restoreSourceConnection,
+      delete: actions.deleteSourceConnection,
     },
     portfolios: {
       create: actions.createPortfolio,
       rename: actions.renamePortfolio,
       archive: actions.archivePortfolio,
       restore: actions.restorePortfolio,
+      delete: actions.deletePortfolio,
     },
   });
 });
