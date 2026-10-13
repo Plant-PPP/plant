@@ -14,4 +14,4 @@ You need Node 22 or newer, pnpm and Docker. Everything else (structure, commands
 
 ## Branches
 
-Your own branch → PR to `staging` → automatic deploy to staging. Production will ship through the _Promote to production_ workflow (PLA-13), which tags the commit `production-latest`.
+Your own branch → PR to `staging` → automatic deploy to staging. Production ships only through the _Promote to production_ workflow (`.github/workflows/promote-to-production.yml`), which tags the commit `production-latest`.
