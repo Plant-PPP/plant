@@ -71,13 +71,22 @@ export function lineLabel({
   movement,
   operation,
 }: Pick<MovementLine, "movement" | "operation">): string {
+  const own = operation.parts.find(
+    (part) => part.movement.holding_id === movement.holding_id,
+  );
   const other = operation.parts.find(
     (part) => part.movement.holding_id !== movement.holding_id,
   );
   if (movement.kind !== "transfer" || !other) return movementLabel(movement);
+  // The other side by its portfolio, and by its account too when it is
+  // another one.
+  const where =
+    own && own.accountId !== other.accountId
+      ? `${other.institution} · ${other.portfolioName}`
+      : other.portfolioName;
   return movement.direction === "out"
-    ? `Traspaso a ${other.portfolioName}`
-    : `Traspaso desde ${other.portfolioName}`;
+    ? `Traspaso a ${where}`
+    : `Traspaso desde ${where}`;
 }
 
 // A movement as its actions name it, with what it moved so two of one kind on

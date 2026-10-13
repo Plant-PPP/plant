@@ -382,3 +382,53 @@ describe("an operation with no account or instrument fixed", () => {
     }
   });
 });
+
+describe("a transfer with more than one account", () => {
+  const BINANCE: SourceConnectionRow = {
+    id: "a2",
+    institution: "Binance",
+    includeInTaxReport: true,
+    portfolio: LARGO,
+  };
+  const renderAcross = (initial: MovementFields) =>
+    renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT, BINANCE]}
+        portfolios={[PRINCIPAL, LARGO]}
+        instruments={INSTRUMENTS}
+        fixed={{ account: "IOL", instrument: "Bitcoin" }}
+        transfer={{ from: "p1", suggestedCost: () => null }}
+        initial={initial}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+
+  it("asks for the account the units go to, the same one first", () => {
+    const html = renderAcross(moving);
+    expect(html).toContain("Hacia la cuenta");
+    expect(html).toContain("Hacia la cartera");
+    expect(html).toContain("IOL (la misma)");
+    expect(html).toContain(">Desde<");
+  });
+
+  it("names another account by where its units land", () => {
+    const html = renderAcross({
+      ...moving,
+      parts: [
+        moving.parts[0]!,
+        { portfolioId: "p2", size: "0,5", accountId: "a2" },
+      ],
+    });
+    expect(html).toContain("Binance · Largo plazo");
+  });
+});
+
+it("keeps one destination select with a single account", () => {
+  const html = render(moving, "60000");
+  expect(html).not.toContain("Hacia la cuenta");
+  expect(html).toContain("Hacia");
+});
