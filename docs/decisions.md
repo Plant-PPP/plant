@@ -20,6 +20,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action that the real chat fills from its tool calls; without it, "Consultando tus datos…".
 - **Production is unchanged**: the panel is mounted by the prototype's root, and `suggestions`, `compact` and `consults` are optional.
 
+## 2026-10-13 · A statement as of its own day (PLA-119, prototype)
+
+- **A statement is weighed against what the account held at the end of its day, and its differences are booked on that day.** The review's "Sube de / Baja de" compares with that day too, so it says what will be booked. Units taken out come from the holdings that had them that day, largest first.
+- **What the day's write would break, it refuses, as a movement typed by hand would**: a later sale left short ("oversold"), a portfolio archived since, a holding that opens after that day. The review shows the refusal and the user corrects the row.
+- **The prototype's reading takes the statement's date from the file's name** (`resumen-2026-09-30.pdf`), when it is a real day no later than today; any other file is as of today. A real reading prints the date (PLA-42).
+
 ## 2026-10-13 · First use (PLA-85, prototype)
 
 - **Resumen shows a new user the way to their net worth**: accept the terms, add an account, upload a statement or load a holding, and ask the assistant its first suggested question. Each step marks itself done from the data, and the card leaves once all are. Deleting the account in Ajustes shows it, as the prototype then holds a new user's data.
@@ -144,7 +150,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-11 · Cargar and its review (PLA-114)
 
 - **Nothing read goes into an account before the user confirms it.** Each upload is queued, read and then ready to review, or refused with a reason the user can act on; the review shows each row with how sure the reading is and where it was read, what it changes in the account (new, up, down, unchanged) and the totals read against the ones the document prints, per currency (no claim of a match when the document prints none).
-- **Confirming leaves the account as the reviewed rows say, all or nothing,** weighed against what it holds today and booked today; a statement's own date needs the holdings on that day, which waits for readings that carry one (PLA-42). An instrument the account lacks starts with an opening balance in the account's default portfolio, or an adjustment in where that portfolio held it before; more units come in as an adjustment at the price read, to the portfolio holding the most; fewer go out of the largest holdings first. A row that adds units needs its price. What the document does not list stays as it is.
+- **Confirming leaves the account as the reviewed rows say, all or nothing,** weighed against what it held at the end of the statement's day and booked on that day (PLA-119; before, today). An instrument the account lacks starts with an opening balance in the account's default portfolio, or an adjustment in where that portfolio held it before; more units come in as an adjustment at the price read, to the portfolio holding the most; fewer go out of the largest holdings first. A row that adds units needs its price. What the document does not list stays as it is.
 - **Limits in the prototype:** 10 uploads a month, counted in the browser, a deleted account's uploads included; the real limit is the server's (PLA-42).
 - The prototype reads no file: it uses the name only, and a made-up statement stands in for the reading.
 - **An import's review (`/import/[id]`) has no real version yet** and calls `notFound()` in production.
