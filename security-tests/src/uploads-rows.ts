@@ -18,7 +18,7 @@ export const documentOf = (
 });
 
 // Writes `body` to `table` as `user` and returns the new row's id.
-async function inserted<T extends "uploaded_documents" | "imports">(
+export async function inserted<T extends "uploaded_documents" | "imports">(
   user: TestUser,
   table: T,
   body: Insert<T>,

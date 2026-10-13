@@ -2,6 +2,16 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Cargar follows imports live (PLA-40)
+
+- **Realtime's postgres_changes on `imports`, not Broadcast.** One table at beta scale, and RLS decides what each subscriber gets as it does for PostgREST. Once concurrent subscribers or published tables grow past the beta, a trigger broadcasts on a private `imports:<user>` topic under `realtime.messages` policies instead.
+- **A change is a signal**: the page reads its imports again on the server, so `readImports` stays the one place a row becomes what Cargar shows. `imports.view` therefore counts server renders, live re-reads included, and a re-read's failure shows the error page like any render.
+- **Cargar listens only while an import is queued or being read**, and reads again each time the channel subscribes, to catch what changed while it was not listening. An open channel reads the session on every heartbeat, so auth-js refreshes a token near its expiry from the browser; listening only while an import is in flight keeps that rare.
+- **Cargar sets the session's token on Realtime before joining**: a channel joins with the token Realtime holds at that moment and keeps that join's claims for postgres_changes, so one joined first listens as anon.
+- **Only inserts and updates are published.** Realtime checks no policy on a delete and would send its id to every subscriber.
+- **No polling when the channel cannot subscribe**: realtime-js rejoins after an error; a channel the server closes, as at a token's expiry, waits for the next re-read of the page. Until browser error reporting (PLA-88) the app records no failure; a join the server refuses shows in Supabase's Realtime logs, a timeout or a socket that never connects nowhere.
+- **The hosted project keeps Realtime's "Allow public access" on** (postgres_changes joins a public channel), its publication owned by `postgres`, and its publication's operations untouched in the dashboard.
+
 ## 2026-10-13 · The import quota and deleting uploaded files (PLA-42, PLA-43)
 
 - **20 imports a calendar month in Buenos Aires** for every user while everyone is on the beta plan. The database enforces it with a trigger on `imports`; the upload action checks it first so a user over it does not send the file.

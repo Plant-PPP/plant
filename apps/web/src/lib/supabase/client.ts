@@ -8,8 +8,9 @@ export function createClient() {
     // proxy.ts refreshes the session before it nears expiry. A refresh here
     // that hits a rate limit after the access token expired deletes the
     // cookies, which would sign the user out. auth-js still refreshes a token
-    // it reads as near expiry (a clock ahead of the server's), and that edge
-    // stays.
+    // it reads as near expiry (a clock ahead of the server's), and an open
+    // Realtime channel reads the session on every heartbeat, so while one is
+    // open a token near expiry is refreshed here.
     auth: { autoRefreshToken: false },
   });
 }

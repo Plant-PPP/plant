@@ -40,6 +40,19 @@ export async function archiveRow(
   expect(res.status).toBe(204);
 }
 
+// Archives every active account of the user's. An active account keeps its
+// default portfolio from being archived, which portfolios.pentest.test.ts
+// tries; the global setup and other specs leave accounts behind.
+export async function archiveAccounts(user: TestUser): Promise<void> {
+  const res = await rest(
+    user,
+    "PATCH",
+    `source_connections?user_id=eq.${user.id}&archived_at=is.null`,
+    { body: { archived_at: new Date().toISOString() } },
+  );
+  expect(res.status).toBe(204);
+}
+
 // The portfolio signup created.
 export async function principalOf(user: TestUser): Promise<string> {
   const res = await rest(

@@ -2,7 +2,7 @@
   "name": "@plant/security-tests",
   "version": "0.0.0",
   "private": true,
-  "description": "Pentest specs against the local Supabase stack: Auth's password and redirect rules, the MFA access token hook, and anon, another user and the owner on every public table and view, and on the reference tables every user's read and the service role's refused writes.",
+  "description": "Pentest specs against the local Supabase stack: Auth's password and redirect rules, the MFA access token hook, and anon, another user and the owner on every public table and view, and on the reference tables every user's read and the service role's refused writes; and over Realtime's socket, that another user's imports never reach a subscriber.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@plant/shared": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
