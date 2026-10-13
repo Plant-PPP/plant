@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Reviewing and confirming an import (PLA-41, PLA-80)
+
+- **The review runs the prototype's code.** `writeImport` (`lib/imports/confirm.ts`) turns the reviewed rows into one operation per instrument that changes, against what the account held at the document's date; the prototype and the server both call it.
+- **One RPC confirms it all.** `confirm_import` marks the import confirmed and writes every operation through `write_operation` in one transaction; one refused operation refuses the import. The operations touch different instruments, so each one's expected revisions are those read before the first.
+- **A user moves an import only from ready to confirmed**, with a column grant on `status` and a trigger; the job moves it along every other step.
+- **An instrument the reading names but Plant does not know** reaches the review with no symbol and what the document called it, for the user to choose. A bond's printed price is per 100 nominal and is read as per unit.
+- **The review's edits stay in the browser** until the user confirms.
+
 ## 2026-10-13 · The import job (PLA-35)
 
 - **One reading, no consensus yet.** The job sends the file to `gemini-3.8-flash` once and checks each row against the draft's schema; a row that fails it is left out. Pre-analysis and consensus arrive with PLA-36 and PLA-37.

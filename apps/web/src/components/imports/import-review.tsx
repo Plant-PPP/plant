@@ -63,7 +63,8 @@ export type ReviewActions = {
 };
 
 // A row as the user edits it: the quantity and price as typed, and whether
-// the user added it, so they choose its instrument.
+// they choose its instrument: one they added, or one the reading named that
+// Plant does not know.
 type EditedRow = ImportRow & {
   quantityText: string;
   priceText: string;
@@ -135,7 +136,9 @@ export function ImportReview({
   const names = instrumentNames(instruments);
   const types = new Map(instruments.map((each) => [each.symbol, each.type]));
   const [rows, setRows] = useState(() =>
-    item.rows.map((row) => edited(row, types.get(row.symbol))),
+    item.rows.map((row) =>
+      edited(row, types.get(row.symbol), row.symbol === ""),
+    ),
   );
   const [alert, setAlert] = useState<string>();
   const [pending, startTransition] = useTransition();

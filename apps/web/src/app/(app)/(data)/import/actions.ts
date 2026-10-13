@@ -1,5 +1,7 @@
 "use server";
 
+import type { MovementResult } from "@/lib/holdings/movements-input";
+import { confirmImportRows as confirmRows } from "@/lib/imports/confirm-write";
 import {
   acceptTerms as accept,
   type FinishResult,
@@ -21,4 +23,11 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
 
 export async function acceptTerms(): Promise<{ ok: boolean }> {
   return accept();
+}
+
+export async function confirmImport(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult> {
+  return confirmRows(importId, rows);
 }

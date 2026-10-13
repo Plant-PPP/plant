@@ -1,6 +1,6 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { readImports } from "./read";
+import { readImportForReview, readImports } from "./read";
 
 const filters: unknown[][] = [];
 const clientOf = (list: unknown, count: number | null) => ({
@@ -99,4 +99,119 @@ it("throws when the count is missing", async () => {
   await expect(
     readImports(clientOf([], null) as never, "2026-10-13"),
   ).rejects.toThrow("imports read failed");
+});
+
+describe("readImportForReview", () => {
+  const INSTRUMENTS = [
+    {
+      symbol: "AAPL",
+      name: "Apple",
+      currency: "ARS" as const,
+      type: "cedear" as const,
+    },
+    {
+      symbol: "GD30",
+      name: "Global 2030",
+      currency: "USD" as const,
+      type: "bond" as const,
+    },
+  ];
+  const clientWith = (found: unknown[], items: unknown[]) => ({
+    from: (table: string) => {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        limit: () => builder,
+        order: () => builder,
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve({
+            status: 200,
+            error: null,
+            data: table === "imports" ? found : items,
+          }),
+      };
+      return builder;
+    },
+  });
+  const IMPORT = {
+    id: "i1",
+    status: "ready",
+    failure: null,
+    document_date: "2026-09-30",
+    created_at: "2026-10-12T15:00:00+00:00",
+    document: { file_name: "resumen.pdf", source_connection_id: "a1" },
+  };
+  const item = (patch: Record<string, unknown>) => ({
+    id: "r1",
+    symbol: "AAPL",
+    quantity: "5",
+    price: "18000",
+    currency: "ARS",
+    confidence: "high",
+    source_page: 1,
+    ...patch,
+  });
+
+  it("reads the draft as the review edits it", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({}),
+          item({
+            id: "r2",
+            symbol: "gd30",
+            price: "75500",
+            currency: "USD",
+            source_page: 2,
+          }),
+          item({
+            id: "r3",
+            symbol: "ALUAR",
+            price: null,
+            confidence: "low",
+            source_page: null,
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read).toMatchObject({
+      id: "i1",
+      accountId: "a1",
+      documentDate: "2026-09-30",
+      status: "ready",
+    });
+    expect(read!.rows).toEqual([
+      {
+        id: "r1",
+        symbol: "AAPL",
+        quantity: "5",
+        price: "18000",
+        currency: "ARS",
+        confidence: "high",
+        source: "Página 1",
+        discarded: false,
+      },
+      // A bond's printed price is per 100 nominal.
+      expect.objectContaining({
+        symbol: "GD30",
+        price: "755",
+        source: "Página 2",
+      }),
+      // One Plant does not know is left for the user to choose.
+      expect.objectContaining({
+        symbol: "",
+        price: null,
+        source: 'Leído como "ALUAR"',
+      }),
+    ]);
+  });
+
+  it("finds no import that is not the user's", async () => {
+    expect(
+      await readImportForReview(clientWith([], []) as never, "i1", INSTRUMENTS),
+    ).toBeNull();
+  });
 });

@@ -9,8 +9,13 @@ jest.mock("@/components/prototype/prototype-scope", () => ({
 jest.mock("@/components/prototype/prototype-imports", () => ({
   PrototypeImportReview: () => null,
 }));
+jest.mock("@/app/(app)/(data)/import/review-view", () => ({
+  ImportReviewView: () => null,
+}));
 
 import type * as React from "react";
+
+import { ImportReviewView } from "@/app/(app)/(data)/import/review-view";
 
 import AccountPage from "../../accounts/[id]/page";
 import InstrumentPage from "../../assets/[symbol]/page";
@@ -28,12 +33,13 @@ const props = (key: string, value: string) => ({
   searchParams: Promise.resolve({}),
 });
 
-// An import's review has no production version yet.
-it("is not found in production for an import's review", async () => {
+it("reviews the user's import in production", async () => {
   process.env.VERCEL_ENV = "production";
-  await expect(
-    ImportReviewPage({ params: Promise.resolve({ id: "i1" }) }),
-  ).rejects.toThrow("NEXT_NOT_FOUND");
+  const page = (await ImportReviewPage({
+    params: Promise.resolve({ id: "i1" }),
+  })) as React.ReactElement<{ id: string }>;
+  expect(page.type).toBe(ImportReviewView);
+  expect(page.props.id).toBe("i1");
 });
 
 it.each([
