@@ -21,7 +21,7 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
 import { usePrototype } from "./prototype-provider";
-import { holdingsView } from "./prototype-store";
+import { holdingsView, type PrototypeState } from "./prototype-store";
 
 // The unit closes are shown in: ?unit= when closes have it, else the
 // user's reference unit.
@@ -34,6 +34,10 @@ const closeUnitOf = (params: KeysetParams, reference: Denominator) =>
     }).unit,
     reference,
   );
+
+// The unit Resumen and closes open in: the user's, when closes have it.
+const summaryHome = (state: PrototypeState) =>
+  closeUnit(state.preferredUnit, referenceUnit(state.referenceDollar));
 
 // Resumen and a close's page, in the unit the user is looking at; Resumen
 // back on the close's year unless it is the newest, which it shows anyway.
@@ -55,7 +59,7 @@ const linksIn = (unit: Denominator, reference: Denominator) => {
 // Resumen over the prototype's store.
 export function PrototypeSummary({ params }: { params: KeysetParams }) {
   const { state, snapshot } = usePrototype();
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = summaryHome(state);
   const unit = closeUnitOf(params, reference);
   const { closeHref } = linksIn(unit, reference);
   const closes = closesOf(state, unit);
@@ -113,7 +117,7 @@ export function PrototypeClose({
   params: KeysetParams;
 }) {
   const { state } = usePrototype();
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = summaryHome(state);
   const unit = closeUnitOf(params, reference);
   const { closeHref, summaryHref } = linksIn(unit, reference);
   const years = yearsOfCloses(closesOf(state, unit));

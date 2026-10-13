@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { disableTotp } from "@/app/(app)/settings/actions";
+import { disableTotp } from "@/app/(app)/(data)/settings/actions";
 import { CONFIRM_DISABLE_PATH } from "@/components/settings/two-factor-status";
 import { CodeInput } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
