@@ -25,7 +25,7 @@ export function matchesInstrument(
 }
 
 // What a key in the search does: move the active option (wrapping), pick it,
-// close the list, or nothing beyond keeping the key from the form ("stay");
+// close the list, or nothing ("stay"), each with the key's default prevented;
 // null for a key the search types as text.
 export type SearchKey =
   | { kind: "move"; active: number }
@@ -45,7 +45,6 @@ export function searchKey(
       const step = key === "ArrowDown" ? 1 : -1;
       return { kind: "move", active: (active + step + count) % count };
     }
-    // Inside a form, Enter would submit it.
     case "Enter":
       return active < count
         ? { kind: "choose", index: active }

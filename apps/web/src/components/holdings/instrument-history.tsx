@@ -27,7 +27,7 @@ import {
   formatFraction,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
-import { assetKey } from "@/lib/holdings/assets-rows";
+import { assetKey, distinct } from "@/lib/holdings/assets-rows";
 import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import {
   holdingInSentence,
@@ -357,14 +357,9 @@ export function InstrumentHistory({
                 note={
                   accountsExcluded && (
                     <ExcludedAccountsNote
-                      institutions={[
-                        ...new Map(
-                          held.map((each) => [
-                            each.row.account.id,
-                            each.row.account.institution,
-                          ]),
-                        ).values(),
-                      ]}
+                      institutions={distinct(
+                        held.map((each) => each.row.account),
+                      ).map((each) => each.institution)}
                       subject="asset"
                     />
                   )

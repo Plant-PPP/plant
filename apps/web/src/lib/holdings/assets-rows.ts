@@ -120,7 +120,10 @@ export function rowFigures<R extends HoldingRow>(
   };
 }
 
-const distinct = <T extends { id: string }>(items: readonly T[]): T[] => {
+// Each item once, by id, in the order first seen.
+export const distinct = <T extends { id: string }>(
+  items: readonly T[],
+): T[] => {
   const seen = new Set<string>();
   return items.filter((item) =>
     seen.has(item.id) ? false : (seen.add(item.id), true),
