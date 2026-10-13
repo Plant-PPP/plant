@@ -15,6 +15,7 @@ const CHART: {
   ],
 };
 let mockChart = CHART;
+let mockDrawn = 0;
 jest.mock("@/lib/assistant/tools-data", () => ({
   ...jest.requireActual("@/lib/assistant/tools-data"),
   assistantData: () => ({
@@ -24,7 +25,7 @@ jest.mock("@/lib/assistant/tools-data", () => ({
       rate: null,
       complete: true,
       unit: "usd_mep",
-      chart: mockChart,
+      chart: { ...mockChart, title: `${mockChart.title} ${(mockDrawn += 1)}` },
     }),
   }),
 }));
@@ -134,7 +135,7 @@ async function answer(calls = 1) {
 
 it("keeps the chart a tool drew with the answer", async () => {
   expect((await answer())?.metadata).toMatchObject({
-    charts: [CHART],
+    charts: [{ ...CHART, title: expect.stringContaining(CHART.title) }],
     sources: ["Cierres"],
   });
 });
@@ -154,7 +155,7 @@ it("keeps only the charts that fit what a message's metadata may take", async ()
     expect(metadata.charts.length).toBeLessThan(3);
     expect(
       new TextEncoder().encode(JSON.stringify(metadata)).length,
-    ).toBeLessThanOrEqual(3500);
+    ).toBeLessThanOrEqual(3300);
   } finally {
     mockChart = CHART;
   }
