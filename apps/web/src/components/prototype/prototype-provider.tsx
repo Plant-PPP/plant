@@ -14,6 +14,7 @@ import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
+import type { Preferences } from "@/components/settings/preferences-card";
 import type { PortfolioActions } from "@/components/portfolio-setup/portfolios-card";
 import type { SourceConnectionActions } from "@/components/portfolio-setup/source-connections-card";
 import type {
@@ -28,10 +29,12 @@ import {
   deleteHolding,
   deleteOperation,
   deletePrice,
+  freshState,
   initialState,
   pricedSnapshotOf,
   type PrototypeState,
   setInTaxReport,
+  setPreferences,
   setPrice,
   type Write,
   updateHolding,
@@ -64,6 +67,9 @@ type Prototype = {
     debts: DebtActions;
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
+    preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
+    // Leaves the store as a new user's.
+    deleteAccount: () => void;
   };
 };
 
@@ -119,6 +125,16 @@ export function PrototypeProvider({
           };
     });
   const actions: Prototype["actions"] = {
+    // A preference changes how the pages show the data, not the data, so no
+    // close is marked recalculated.
+    preferences: {
+      set: (next) => writeState((s) => setPreferences(s, next)),
+    },
+    deleteAccount: () =>
+      void writeState((s) => ({
+        state: freshState(s, crypto.randomUUID()),
+        result: null,
+      })),
     holdings: {
       create: (input) =>
         write((s) => createHolding(s, input, crypto.randomUUID())),

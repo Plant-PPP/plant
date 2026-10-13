@@ -1,7 +1,5 @@
 "use client";
 
-import { referenceUnit } from "@plant/core";
-
 import {
   AssetsSetup,
   type ScopeHrefs,
@@ -16,7 +14,13 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { usePrototype } from "./prototype-provider";
 import { prototypeMovementsInput } from "./prototype-movements";
-import { holdingsView, positionsOf, salesOf, yearsOf } from "./prototype-store";
+import {
+  holdingsView,
+  homeUnit,
+  positionsOf,
+  salesOf,
+  yearsOf,
+} from "./prototype-store";
 
 export const PROTOTYPE_HREFS: ScopeHrefs = {
   instrument: (symbol) => `/assets/${encodeURIComponent(symbol)}`,
@@ -44,7 +48,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
     salesYears: years,
     names,
   });
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = homeUnit(state);
   const unit = chosenUnit ?? reference;
   const valuation = holdingsValuation({
     holdings: shown,
