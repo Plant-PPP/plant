@@ -2,6 +2,8 @@
 
 import type { Database } from "@plant/shared";
 
+import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
+
 import {
   type HoldingInsert,
   type HoldingUpdate,
@@ -17,6 +19,7 @@ import {
 } from "@/lib/portfolio-setup/run-write";
 import { noInput } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+import { deleteHoldingRow } from "@/lib/ledger/write";
 import type { DecimalWrite } from "@/lib/supabase/decimal-columns";
 
 // The arguments come from the browser and are parsed before any write. Updates
@@ -99,4 +102,8 @@ export async function restoreHolding(id: unknown): Promise<WriteResult> {
     id,
     restoreWrite("holdings"),
   );
+}
+
+export async function deleteHolding(id: unknown): Promise<HoldingDeleteResult> {
+  return deleteHoldingRow(id);
 }

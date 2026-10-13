@@ -106,6 +106,26 @@ it("labels every control it names and describes the cost by its help", () => {
   expect(ids).toContain(`${cost[1]}-help`);
 });
 
+it("shows no cost until the server's suggestion arrives", () => {
+  const html = renderToStaticMarkup(
+    <MovementDialog
+      mode="create"
+      accounts={[ACCOUNT]}
+      portfolios={[PRINCIPAL, LARGO]}
+      instruments={INSTRUMENTS}
+      fixed={{ account: "IOL", instrument: "Bitcoin" }}
+      transfer={{ from: "p1", suggestedCost: async () => "60000" }}
+      initial={moving}
+      today={TODAY}
+      returnFocusTo={() => null}
+      onClose={() => {}}
+      onSubmit={() => true}
+    />,
+  );
+  expect(html).not.toContain('value="60000"');
+  expect(html).toContain("Si lo dejás vacío, entran con el costo que tenían.");
+});
+
 it("says a cost left empty carries the one the units had when none is suggested", () => {
   expect(render(moving, null)).toContain(
     "Si lo dejás vacío, entran con el costo que tenían.",

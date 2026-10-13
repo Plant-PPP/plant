@@ -7,9 +7,9 @@ import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { usePrototype } from "./prototype-provider";
 import { prototypeMovementsInput } from "./prototype-movements";
 import {
@@ -71,7 +71,7 @@ export function PrototypeScope({
       unit={unit}
       referenceUnit={reference}
       params={params}
-      hrefs={PROTOTYPE_HREFS}
+      hrefs={SCOPE_HREFS}
       backHref="/assets"
       revision={rows.map((row) => state.revisions.get(row.id) ?? 0).join(".")}
       loadMovements={prototypeMovementsInput(latest).loadMovements}

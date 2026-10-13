@@ -8,8 +8,10 @@ import type { PriceResult } from "@/lib/holdings/price-input";
 import {
   deleteManualPrice as deletePrice,
   loadMovementsPage,
+  quoteOnDate,
   runOperation,
   setManualPrice as setPrice,
+  suggestTransferCost,
 } from "@/lib/ledger/write";
 
 // The arguments come from the browser; lib/ledger/write parses each one and
@@ -38,6 +40,14 @@ export async function loadMovements(
   cursor: unknown,
 ): Promise<MovementsPage> {
   return loadMovementsPage(scope, unit, cursor);
+}
+
+export async function transferCost(query: unknown): Promise<string | null> {
+  return suggestTransferCost(query);
+}
+
+export async function quoteOn(query: unknown): Promise<string | null> {
+  return quoteOnDate(query);
 }
 
 export async function setManualPrice(input: unknown): Promise<PriceResult> {

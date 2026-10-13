@@ -9,7 +9,7 @@ import {
 import type { Currency } from "@plant/shared";
 import { Plus, X } from "lucide-react";
 import type * as React from "react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,11 @@ import {
 } from "@/lib/holdings/messages";
 import { holdingPlace } from "@/lib/holdings/holding-name";
 import { formatQuotedPrice, priceBasisLabel } from "@/lib/holdings/price-input";
-import type { MovementsInput } from "@/lib/holdings/movements-input";
+import type {
+  MovementsInput,
+  QuoteQuery,
+  Suggestion,
+} from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { operationInputSchema } from "@/lib/holdings/schemas";
 import type {
@@ -96,7 +100,7 @@ export function MovementDialog({
   transfer?: {
     from: string;
     // The cost per unit the units would carry, as stored; null when none.
-    suggestedCost: (fields: MovementFields) => string | null;
+    suggestedCost: (fields: MovementFields) => Suggestion;
   };
   yields?: {
     portfolio: string;
@@ -155,22 +159,18 @@ export function MovementDialog({
   const controlId = (field: MovementField) =>
     field === "parts" && noDestination ? destinationId : fieldId(field);
   const { instrument, currency, date } = fields;
-  const quote = useMemo(
-    () =>
-      yielding && yields
-        ? yields.quoteOn({ symbol: instrument, currency, date })
-        : null,
-    [yielding, yields, instrument, currency, date],
+  const quoteKey =
+    yielding && yields
+      ? JSON.stringify({ symbol: instrument, currency, date })
+      : null;
+  const quote = useSuggestion(quoteKey, (key) =>
+    yields!.quoteOn(JSON.parse(key) as QuoteQuery),
   );
   // The cost a transfer's units carry replays the holdings: worked out again
   // only when a field it reads changes, not on each key in the note.
-  const costKey = moving ? transferCostKey(fields) : null;
-  const carried = useMemo(
-    () =>
-      costKey !== null && transfer
-        ? transfer.suggestedCost(JSON.parse(costKey) as MovementFields)
-        : null,
-    [costKey, transfer],
+  const costKey = moving && transfer ? transferCostKey(fields) : null;
+  const carried = useSuggestion(costKey, (key) =>
+    transfer!.suggestedCost(JSON.parse(key) as MovementFields),
   );
   const suggested = moving ? carried : quote;
   // A price shown as a suggestion until the user changes it.
@@ -890,4 +890,31 @@ function RemoveButton({
       <X className="size-3.5" />
     </Button>
   );
+}
+
+// A suggestion asked again only when what it reads changes. One the server
+// works out shows nothing until the answer to the latest question arrives.
+function useSuggestion(
+  key: string | null,
+  ask: (key: string) => Suggestion,
+): string | null {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- asked by key
+  const asked = useMemo(() => (key === null ? null : ask(key)), [key]);
+  const [answer, setAnswer] = useState<{
+    to: Promise<string | null>;
+    value: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!(asked instanceof Promise)) return;
+    let current = true;
+    asked.then(
+      (value) => current && setAnswer({ to: asked, value }),
+      () => current && setAnswer({ to: asked, value: null }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [asked]);
+  if (!(asked instanceof Promise)) return asked;
+  return answer?.to === asked ? answer.value : null;
 }

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import {
   archiveHolding,
   createHolding,
+  deleteHolding,
   restoreHolding,
   updateHolding,
 } from "@/app/(app)/(data)/assets/actions";
@@ -13,13 +14,12 @@ import {
   deleteManualPrice,
   deleteOperation,
   loadMovements,
+  quoteOn,
   setManualPrice,
+  transferCost,
   updateOperation,
 } from "@/app/(app)/(data)/assets/movement-actions";
-import {
-  AssetsSetup,
-  type ScopeHrefs,
-} from "@/components/holdings/assets-setup";
+import { AssetsSetup } from "@/components/holdings/assets-setup";
 import { PrototypeAssets } from "@/components/prototype/prototype-assets";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { isProductionDeployment } from "@/lib/deployment";
@@ -30,6 +30,7 @@ import {
   assetsViewFailure,
 } from "@/lib/holdings/assets-view";
 import { instrumentNames } from "@/lib/holdings/holding-name";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import {
   readHoldings,
   readInstruments,
@@ -60,9 +61,6 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: navTitle("/assets") };
 
-// The pages a scope's name links to. The account and portfolio pages arrive
-// with PLA-106, so their names are plain until then.
-const HREFS: ScopeHrefs = { instrument: "/assets/" };
 export const dynamic = "force-dynamic";
 
 // The user's holdings valued at today's quotes in one unit (the reference
@@ -206,6 +204,7 @@ export default async function AssetsPage({
           create: createHolding,
           update: updateHolding,
           archiving: { archive: archiveHolding, restore: restoreHolding },
+          delete: deleteHolding,
         }}
         movements={{
           positions: positionsOf(ledger, unit),
@@ -219,6 +218,8 @@ export default async function AssetsPage({
           }),
           years,
           loadMovements,
+          transferCost,
+          quoteOn,
         }}
         movementActions={{
           create: createOperation,
@@ -235,7 +236,7 @@ export default async function AssetsPage({
           fed: new Set(Object.keys(quotes.snapshot.prices)),
           actions: { set: setManualPrice, delete: deleteManualPrice },
         }}
-        hrefs={HREFS}
+        hrefs={SCOPE_HREFS}
       />
     </div>
   );

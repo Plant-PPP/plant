@@ -12,6 +12,8 @@ import {
   createOperation,
   deleteOperation,
   loadMovements,
+  quoteOn,
+  transferCost,
   updateOperation,
 } from "@/app/(app)/(data)/assets/movement-actions";
 import { InstrumentHistory } from "@/components/holdings/instrument-history";
@@ -127,6 +129,8 @@ export default async function InstrumentPage({
         positions: positionsOf(ledger, unit),
         revisions: ledger.revisions,
         loadMovements,
+        transferCost,
+        quoteOn,
       }}
       movementActions={{
         create: createOperation,

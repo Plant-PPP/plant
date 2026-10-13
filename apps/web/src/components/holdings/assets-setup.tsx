@@ -89,6 +89,7 @@ import {
   rowFigures,
 } from "@/lib/holdings/assets-rows";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
+import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import type {
   HoldingRow,
   HoldingsView,
@@ -176,23 +177,6 @@ function heldAmount({ holding }: HoldingRow): string {
   return holding.asset_class === "instrument"
     ? `${formatQuantity(holding.amount)} ${holding.instrument_symbol}`
     : formatAmount(holding.amount, holding.currency);
-}
-
-// The pages an instrument, account or portfolio opens: the path its symbol
-// or id is appended to. One left out is named plainly.
-export type ScopeHrefs = Partial<
-  Record<"instrument" | "account" | "portfolio", string>
->;
-
-// The page each of a kind opens, if the page links that kind.
-export function scopeLink(
-  hrefs: ScopeHrefs | undefined,
-  kind: keyof ScopeHrefs,
-): ((id: string) => string) | undefined {
-  const base = hrefs?.[kind];
-  return base === undefined
-    ? undefined
-    : (id) => `${base}${encodeURIComponent(id)}`;
 }
 
 // The manual price the valuation took for each symbol, per unit in the
