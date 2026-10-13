@@ -343,7 +343,8 @@ isOneToOne: false
           Functions: {
             "confirm_import":
 { Args: { "p_import_id": string,"p_operations": Json }; Returns: string
-                           },"write_operation":
+                           },
+"write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
                            }
           }
