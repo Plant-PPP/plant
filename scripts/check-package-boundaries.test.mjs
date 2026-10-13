@@ -240,11 +240,11 @@ for (const [key, spec] of [
   test(`${key}: ${spec} in @plant/sources fails`, () => {
     const r = check({ "@plant/sources": [[key, spec]] });
     assert.equal(r.status, 1);
-    assert.match(
-      r.output,
-      new RegExp(
-        `${key} \\(.*\\) is not a version, an alias or a workspace package`,
+    assert.ok(
+      r.output.includes(
+        `${key} (${spec}) is not a version, an alias or a workspace package`,
       ),
+      r.output,
     );
   });
 }
