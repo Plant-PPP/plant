@@ -248,6 +248,11 @@ describe("with details", () => {
     expect(html).not.toContain("Importada");
   });
 
+  it("offers no report switch once the user holds none of it", () => {
+    const html = render([], { details: details(false) });
+    expect(html).not.toContain("Incluir en el reporte");
+  });
+
   it("shows the asset's report switch with its choice", () => {
     const html = render([held("e1", "IOL")], { details: details(false) });
     expect(html).toContain("Incluir en el reporte</label>");

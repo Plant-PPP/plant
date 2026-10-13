@@ -212,6 +212,25 @@ describe("with details", () => {
     expect(html).not.toContain("donde lo tenés");
   });
 
+  it("offers no report switch and no origin on a create", () => {
+    const html = render("create", CASH, undefined, {
+      details: {
+        origin: { kind: "import", fileName: "resumen.pdf", date: "2026-10-01" },
+        inTaxReport: false,
+      },
+    });
+    expect(html).not.toContain("Origen");
+    expect(html).not.toContain("Incluir en el reporte");
+  });
+
+  it("shows the report switch but no origin for a holding with none", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: undefined, inTaxReport: true },
+    });
+    expect(html).not.toContain("Origen");
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="true"/);
+  });
+
   it("adds no note while the holding's account is in the report", () => {
     const html = render("edit", CASH, undefined, {
       details: { origin: { kind: "manual" }, inTaxReport: true },

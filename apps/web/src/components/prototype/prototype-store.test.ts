@@ -1060,4 +1060,51 @@ describe("origin and the report", () => {
     expect(refused.result.ok).toBe(false);
     expect(refused.state).toBe(state);
   });
+
+  it("refuses the edit of a holding there is not, leaving the choices alone", () => {
+    const out = setInTaxReport(state, holdingKey(CASH), false).state;
+    const cash = allRows(out).find((row) => row.id === CASH)!;
+    const fields = initialFields(cash, {
+      accountId: "",
+      portfolioId: "",
+      today: TODAY,
+    });
+    const refused = updateHoldingDetails(
+      out,
+      NEW_ID,
+      toUpdate(fields, cash.portfolio.id),
+      true,
+    );
+    expect(refused.result).toEqual({ ok: false, code: "not_found" });
+    expect(refused.state).toBe(out);
+  });
+
+  it("puts an asset back in the report with the edit that turns it on", () => {
+    const out = setInTaxReport(state, holdingKey(CASH), false).state;
+    const cash = allRows(out).find((row) => row.id === CASH)!;
+    const fields = initialFields(cash, {
+      accountId: "",
+      portfolioId: "",
+      today: TODAY,
+    });
+    const saved = updateHoldingDetails(
+      out,
+      CASH,
+      toUpdate(fields, cash.portfolio.id),
+      true,
+    );
+    expect(saved.result).toEqual({ ok: true, id: CASH });
+    expect(saved.state.outOfTaxReport.has(holdingKey(CASH))).toBe(false);
+  });
+
+  it("keeps the other assets' choices when one is put back", () => {
+    const out = setInTaxReport(
+      setInTaxReport(state, holdingKey(CASH), false).state,
+      instrumentKey("AAPL"),
+      false,
+    ).state;
+    const back = setInTaxReport(out, holdingKey(CASH), true);
+    expect(back.state.outOfTaxReport).toEqual(new Set([instrumentKey("AAPL")]));
+    expect(out.outOfTaxReport.has(holdingKey(CASH))).toBe(true);
+  });
 });
