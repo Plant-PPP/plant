@@ -15,6 +15,7 @@ import {
 } from "@/lib/holdings/assets-filter";
 import { currencyOf } from "@/lib/holdings/holding-name";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
+import { onboardingSteps } from "@/lib/onboarding/steps";
 import { closeUnit } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
@@ -102,6 +103,12 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
       referenceUnit={reference}
       params={params}
       hrefs={PROTOTYPE_HREFS}
+      onboarding={onboardingSteps({
+        consentVersion: state.consent?.version ?? null,
+        accounts: state.accounts.length,
+        holdings: state.holdings.length,
+        questions: state.askedOn.length,
+      })}
       closeHref={closeHref}
       yearHref={closeHref}
     />

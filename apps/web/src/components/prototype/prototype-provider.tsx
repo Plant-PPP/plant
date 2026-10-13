@@ -24,9 +24,11 @@ import type {
   MovementActions,
   PriceActions,
 } from "@/lib/holdings/write-actions";
+import { CONSENT_VERSION } from "@/lib/onboarding/steps";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
+  acceptConsent,
   allRows,
   createHolding,
   deleteHolding,
@@ -88,6 +90,8 @@ type Prototype = {
     };
     // A property's sheet.
     realEstate: (id: string, sheet: RealEstateSheet) => Promise<WriteResult>;
+    // Accepts the terms in force.
+    acceptConsent: () => void;
     // Leaves the store as a new user's.
     deleteAccount: () => void;
   };
@@ -156,6 +160,8 @@ export function PrototypeProvider({
       revert: (kind, date) => write((s) => deleteRate(s, kind, date)),
     },
     realEstate: (id, sheet) => write((s) => setRealEstateSheet(s, id, sheet)),
+    acceptConsent: () =>
+      void writeState((s) => acceptConsent(s, CONSENT_VERSION)),
     deleteAccount: () =>
       void writeState((s) => ({
         state: freshState(s, crypto.randomUUID()),
