@@ -151,7 +151,6 @@ SELECT is(
   'a user never changes a file once uploaded'
 );
 
-DELETE FROM storage.objects WHERE name LIKE 'b0000000-0000-4000-8000-00000000000b/%';
 DELETE FROM public.uploaded_documents WHERE user_id = 'b0000000-0000-4000-8000-00000000000b';
 
 SELECT is(
@@ -243,7 +242,7 @@ SELECT results_eq(
             (SELECT count(*)::int FROM public.uploaded_documents),
             (SELECT count(*)::int FROM storage.objects WHERE bucket_id = 'imports') $$,
   $$ VALUES (1, 1, 1) $$,
-  'another user''s delete leaves a file as it was, and each user sees only theirs'
+  'another user''s delete leaves a file row as it was, and each user sees only theirs'
 );
 
 -- ── Enrolled in MFA but signed in at aal1 ───────────────────────────────────
