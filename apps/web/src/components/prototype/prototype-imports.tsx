@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { ImportPage } from "@/components/imports/import-page";
 import { ImportReview } from "@/components/imports/import-review";
 import { usedThisMonth } from "@/lib/format/text";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
 

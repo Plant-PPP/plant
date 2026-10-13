@@ -7,7 +7,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
-import { onboardingSteps } from "@/lib/onboarding/steps";
 
 import { SummaryPage } from "./summary-page";
 
@@ -57,7 +56,6 @@ const ROWS = [
 const render = (
   portfolio: { id: string; name: string } | null,
   unit: "ars" | "usd_mep" = "ars",
-  onboarding?: Parameters<typeof SummaryPage>[0]["onboarding"],
 ) => {
   const rows = ROWS.filter(
     (row) => portfolio === null || row.portfolio.id === portfolio.id,
@@ -81,7 +79,6 @@ const render = (
       unit={unit}
       referenceUnit="usd_mep"
       params={{}}
-      onboarding={onboarding}
       closesQuery=""
     />,
   );
@@ -125,21 +122,4 @@ describe("one portfolio", () => {
 it("notes the BCRA's restriction only where the page is in MEP dollars", () => {
   expect(render(null, "usd_mep")).toContain("Com. A 8336");
   expect(render(null, "ars")).not.toContain("Com. A 8336");
-});
-
-it("shows a new user's steps while one is left, and not once all are done", () => {
-  const steps = onboardingSteps({
-    consentVersion: null,
-    accounts: 0,
-    holdings: 0,
-    questions: 0,
-  });
-  expect(render(null, "ars", steps)).toContain("Empecemos");
-  expect(
-    render(
-      null,
-      "ars",
-      steps.map((step) => ({ ...step, done: true })),
-    ),
-  ).not.toContain("Empecemos");
 });

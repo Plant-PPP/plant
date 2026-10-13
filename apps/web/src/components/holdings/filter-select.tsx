@@ -12,6 +12,7 @@ import {
 import { choose } from "@/components/portfolio-setup/field-alert";
 import { unitParam } from "@/lib/holdings/assets-filter";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
+import { cn } from "@/lib/utils";
 
 // A select that narrows what a page shows, its label read by screen readers
 // (and shown inside it with `shownLabel`); it waits while a write runs.
@@ -23,6 +24,7 @@ export function FilterSelect({
   pending,
   options,
   onChange,
+  triggerClassName,
 }: {
   id: string;
   label: string;
@@ -32,6 +34,7 @@ export function FilterSelect({
   pending: boolean;
   options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
+  triggerClassName?: string;
 }) {
   return (
     <>
@@ -42,7 +45,7 @@ export function FilterSelect({
         <SelectTrigger
           id={id}
           size="sm"
-          className="w-[calc(50%-0.25rem)] sm:w-auto"
+          className={cn("w-[calc(50%-0.25rem)] sm:w-auto", triggerClassName)}
         >
           {shownLabel && (
             <span

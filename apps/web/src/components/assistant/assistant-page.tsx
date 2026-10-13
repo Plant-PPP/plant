@@ -1,111 +1,33 @@
 "use client";
 
-import { ArrowUp, LoaderCircle, MessageSquarePlus, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { FilterSelect } from "@/components/holdings/filter-select";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatAmount } from "@/lib/format/amount";
-import { formatDate } from "@/lib/format/date";
-import { leftThisMonth } from "@/lib/format/text";
 import {
-  type AssistantMessage,
+  type AssistantActions,
   CHAT_UNITS,
   type ChatUnit,
   type Conversation,
-  MAX_CHARTS,
-  NOT_ADVICE,
+  consultingText,
   QUESTIONS_PER_MONTH,
   SUGGESTED_QUESTIONS,
 } from "@/lib/assistant/chat";
-import { consultingText } from "@/lib/assistant/suggestions";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
-import { cn } from "@/lib/utils";
 
-import { AnswerTable } from "./answer-table";
-import { ChartBoundary, ChartCard } from "./chart-card";
+import { ChatComposer } from "./chat-composer";
+import { ChatHeader } from "./chat-header";
+import { ChatTranscript } from "./chat-transcript";
 
-export type AssistantActions = {
-  // Asks in a conversation, a new one when its id is not listed yet; resolves
-  // with the answer's id once it is in.
-  ask: (
-    conversationId: string,
-    question: string,
-    unit: ChatUnit,
-  ) => Promise<string>;
-  delete: (conversationId: string) => void;
-  // The sources a question will read, named while it waits.
-  consults?: (question: string, unit: ChatUnit) => readonly string[];
-};
-
-const WORDS_PER_TICK = 3;
-const TICK_MS = 40;
-
-// An answer's text appearing a few words at a time, as a stream would.
-function useRevealed(text: string, animate: boolean): string {
-  const words = text.split(" ");
-  const [shown, setShown] = useState(animate ? 0 : words.length);
-  useEffect(() => {
-    if (shown >= words.length) return;
-    const timer = setTimeout(
-      () => setShown((count) => count + WORDS_PER_TICK),
-      TICK_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [shown, words.length]);
-  return words.slice(0, shown).join(" ");
-}
-
-function Answer({
-  message,
-  animate,
-}: {
-  message: AssistantMessage;
-  animate: boolean;
-}) {
-  const text = useRevealed(message.text, animate);
-  const done = text.length === message.text.length;
-  return (
-    <div className="grid max-w-2xl gap-3">
-      <p className="text-sm leading-relaxed">
-        <span className="sr-only">Plant: </span>
-        {text}
-      </p>
-      {done && message.table && <AnswerTable table={message.table} />}
-      {done &&
-        message.charts.slice(0, MAX_CHARTS).map((chart, index) => (
-          <ChartBoundary key={index}>
-            <ChartCard chart={chart} asOf={message.asOf} />
-          </ChartBoundary>
-        ))}
-      {done && (
-        <p className="text-muted-foreground text-xs">
-          {[
-            `Calculado el ${formatDate(message.asOf)}`,
-            message.rate &&
-              `${message.rate.label} ${formatAmount(message.rate.sell, "ars")}`,
-            message.sources.length > 0 && message.sources.join(", "),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// The assistant: a conversation about the user's own data, in one unit, with
-// the questions it can start from and the conversations before. `compact`
-// fits it in a side panel: one conversation, under a second-level title.
+// The assistant as a page: a conversation about the user's own data, in one
+// unit, with the conversations before in the bar above it. It asks through
+// the prototype's actions and waits for each answer whole.
 export function AssistantPage({
   conversations,
   used,
   defaultUnit,
   actions,
-  suggestions = SUGGESTED_QUESTIONS,
-  compact = false,
 }: {
   conversations: Conversation[];
   // The unit a new conversation starts in: the user's reference dollar.
@@ -113,55 +35,74 @@ export function AssistantPage({
   // The questions asked this month.
   used: number;
   actions: AssistantActions;
-  // The questions offered before the first one.
-  suggestions?: readonly string[];
-  compact?: boolean;
 }) {
   const id = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fresh, setFresh] = useState(() => crypto.randomUUID());
   const [unit, setUnit] = useState<ChatUnit>(defaultUnit);
-  const [draft, setDraft] = useState("");
   // What is being consulted while a question waits, or null.
   const [waiting, setWaiting] = useState<string | null>(null);
-  // The answer that just arrived, which streams in and is announced once;
+  // The answer that just arrived, which reveals itself and is announced once;
   // opening another conversation lets it go.
   const [arrived, setArrived] = useState<string | null>(null);
-  const questionField = useRef<HTMLTextAreaElement>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const end = useRef<HTMLDivElement>(null);
   const [deleting, setDeleting] = useState<Conversation | null>(null);
-  const Title = compact ? "h2" : "h1";
-  const newButton = useRef<HTMLButtonElement>(null);
+  const questionField = useRef<HTMLTextAreaElement>(null);
+  const history = useRef<HTMLButtonElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
 
   const conversation = conversations.find((each) => each.id === activeId);
   const messages = conversation?.messages ?? [];
   const lastAnswer = messages.find((message) => message.id === arrived);
   const left = Math.max(0, QUESTIONS_PER_MONTH - used);
+  const disclaimerId = `${id}-disclaimer`;
 
+  // A conversation follows its last message while the user reads at its end,
+  // as an answer reveals itself and its charts come in; an empty one stays at
+  // its top.
+  const following = useRef(true);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [conversations, waiting]);
+    const region = scroller.current;
+    if (!region) return;
+    following.current = messages.length > 0 || waiting !== null;
+    region.scrollTop = following.current ? region.scrollHeight : 0;
+  }, [conversation, messages.length, waiting]);
+  useEffect(() => {
+    const region = scroller.current;
+    const content = region?.firstElementChild;
+    if (!region || !content) return;
+    const onScroll = () => {
+      following.current =
+        region.scrollHeight - region.scrollTop - region.clientHeight < 48;
+    };
+    const observer = new ResizeObserver(() => {
+      if (following.current) region.scrollTop = region.scrollHeight;
+    });
+    region.addEventListener("scroll", onScroll, { passive: true });
+    observer.observe(content);
+    return () => {
+      region.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, []);
 
-  function ask(question: string) {
+  function ask(question: string): Promise<unknown> | null {
     const text = question.trim();
-    if (!text || waiting !== null || left === 0) return;
+    if (!text || waiting !== null || left === 0) return null;
     const conversationId = conversation?.id ?? fresh;
     setActiveId(conversationId);
-    setDraft("");
     setArrived(null);
     // A clicked suggestion unmounts, so focus moves to the question field, or
-    // to the title when this question used the month's last one.
-    (left > 1 ? questionField : heading).current?.focus();
+    // to the history when this question used the month's last one.
+    (left > 1 ? questionField : history).current?.focus();
     const asked = conversation?.unit ?? unit;
     setWaiting(consultingText(actions.consults?.(text, asked) ?? []));
-    void actions
+    return actions
       .ask(conversationId, text, asked)
       .then(
         (answerId) => setArrived(answerId),
-        () => {
-          setDraft(text);
+        (error: unknown) => {
           toast.error("No pudimos responder. Probá de nuevo.");
+          throw error;
         },
       )
       .finally(() => setWaiting(null));
@@ -170,113 +111,60 @@ export function AssistantPage({
   function open(conversationId: string | null) {
     setActiveId(conversationId);
     setArrived(null);
-  }
-
-  function startNew() {
-    open(null);
-    setFresh(crypto.randomUUID());
+    if (conversationId === null) setFresh(crypto.randomUUID());
   }
 
   return (
-    <div
-      className={cn(
-        "grid gap-4",
-        compact
-          ? "h-full"
-          : "min-h-[calc(100svh-8rem)] md:grid-cols-[14rem_minmax(0,1fr)]",
-      )}
-    >
-      <aside
-        className={cn("hidden flex-col gap-2", !compact && "md:flex")}
-        aria-label="Conversaciones"
-      >
-        <Button
-          ref={newButton}
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={startNew}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <h1 className="sr-only">{conversation?.title ?? "Asistente"}</h1>
+      <ChatHeader
+        conversations={conversations}
+        active={conversation}
+        historyRef={history}
+        onOpen={open}
+        onDelete={() => conversation && setDeleting(conversation)}
+      />
+      <p role="status" className="sr-only">
+        {waiting !== null
+          ? waiting
+          : lastAnswer?.role === "assistant"
+            ? lastAnswer.text
+            : ""}
+      </p>
+      {/* Positioned, so a long conversation scrolls here instead of growing
+          the page past the window. */}
+      <div className="relative min-h-[12rem] flex-1">
+        <div
+          ref={scroller}
+          tabIndex={0}
+          role="region"
+          aria-label="Conversación"
+          className="absolute inset-0 overflow-y-auto pt-4 outline-none"
         >
-          <MessageSquarePlus />
-          Nueva conversación
-        </Button>
-        <ul className="grid gap-1">
-          {conversations.map((each) => (
-            <li key={each.id} className="group flex items-center gap-1">
-              <button
-                type="button"
-                aria-current={each.id === activeId || undefined}
-                onClick={() => open(each.id)}
-                className={cn(
-                  "min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm",
-                  each.id === activeId
-                    ? "bg-muted font-medium"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {each.title}
-              </button>
-              <button
-                type="button"
-                aria-label={`Borrar ${each.title}`}
-                onClick={() => setDeleting(each)}
-                className="text-muted-foreground hover:text-foreground rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-        {deleting && (
-          <ConfirmDialog
-            title="¿Borrar esta conversación?"
-            description={`«${deleting.title}» se borra y no se puede recuperar. Las consultas que hiciste siguen contando para este mes.`}
-            confirmLabel="Borrar"
-            returnFocusTo={() => newButton.current}
-            onClose={() => setDeleting(null)}
-            onConfirm={() => {
-              if (deleting.id === activeId) startNew();
-              actions.delete(deleting.id);
-              toast.success("Borraste la conversación");
-            }}
+          <ChatTranscript
+            messages={messages}
+            arrivedId={arrived}
+            waiting={waiting}
+            suggestions={SUGGESTED_QUESTIONS}
+            questionsLeft={left}
+            disclaimerId={disclaimerId}
+            onAsk={(question) => void ask(question)?.catch(() => {})}
           />
-        )}
-      </aside>
-
-      <section
-        className="flex min-w-0 flex-col gap-4"
-        aria-labelledby={`${id}-title`}
-      >
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <Title
-              id={`${id}-title`}
-              ref={heading}
-              tabIndex={-1}
-              className={cn(
-                "font-semibold outline-none",
-                compact ? "text-base" : "text-xl",
-              )}
-            >
-              {conversation?.title ?? "Asistente"}
-            </Title>
-            <p className="text-muted-foreground text-xs">
-              {`${leftThisMonth(left, QUESTIONS_PER_MONTH, "consultas")} · ${NOT_ADVICE}`}
-            </p>
-          </div>
-          <div className="flex items-end gap-2">
-            {conversation && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn(!compact && "md:hidden")}
-                onClick={startNew}
-              >
-                <MessageSquarePlus />
-                Nueva
-              </Button>
-            )}
+        </div>
+      </div>
+      <div className="flex-none pt-2">
+        <ChatComposer
+          onSend={ask}
+          disabled={left === 0}
+          busy={waiting !== null}
+          placeholder={
+            left === 0
+              ? "Ya usaste las consultas de este mes"
+              : "Preguntá sobre tus datos"
+          }
+          describedBy={disclaimerId}
+          textareaRef={questionField}
+          unitPicker={
             <FilterSelect
               id={`${id}-unit`}
               label="Responder en"
@@ -286,107 +174,25 @@ export function AssistantPage({
                 (each) => [each, UNIT_LABELS[each]] as const,
               )}
               onChange={(value) => setUnit(value as ChatUnit)}
+              triggerClassName="h-7 w-auto border-0 text-xs shadow-none"
             />
-          </div>
-        </div>
-
-        <p role="status" className="sr-only">
-          {waiting !== null
-            ? waiting
-            : lastAnswer?.role === "assistant"
-              ? lastAnswer.text
-              : ""}
-        </p>
-        <div className="flex flex-1 flex-col gap-6">
-          {messages.length === 0 && waiting === null && (
-            <div className="grid flex-1 place-content-center gap-4 py-10 text-center">
-              <p className="text-muted-foreground text-sm">
-                Preguntale a Plant sobre tu patrimonio, tus inversiones o tus
-                deudas.
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {suggestions.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    disabled={left === 0}
-                    onClick={() => ask(question)}
-                    className="hover:bg-muted rounded-full border px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {messages.map((message) =>
-            message.role === "user" ? (
-              <p
-                key={message.id}
-                className="bg-muted max-w-[85%] self-end rounded-2xl px-4 py-2 text-sm"
-              >
-                <span className="sr-only">Vos: </span>
-                {message.text}
-              </p>
-            ) : (
-              <Answer
-                key={message.id}
-                message={message}
-                animate={message.id === arrived}
-              />
-            ),
-          )}
-          {waiting !== null && (
-            <p className="text-muted-foreground flex items-center gap-2 text-sm">
-              <LoaderCircle aria-hidden className="size-4 animate-spin" />
-              {waiting}
-            </p>
-          )}
-          <div ref={end} />
-        </div>
-
-        <form
-          className="bg-background sticky bottom-0 flex items-end gap-2 rounded-xl border p-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            ask(draft);
+          }
+        />
+      </div>
+      {deleting && (
+        <ConfirmDialog
+          title="¿Borrar esta conversación?"
+          description={`«${deleting.title}» se borra y no se puede recuperar. Las consultas que hiciste siguen contando para este mes.`}
+          confirmLabel="Borrar"
+          returnFocusTo={() => history.current}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => {
+            if (deleting.id === activeId) open(null);
+            actions.delete(deleting.id);
+            toast.success("Borraste la conversación");
           }}
-        >
-          <label htmlFor={`${id}-question`} className="sr-only">
-            Tu pregunta
-          </label>
-          <textarea
-            id={`${id}-question`}
-            ref={questionField}
-            value={draft}
-            rows={1}
-            maxLength={500}
-            placeholder={
-              left === 0
-                ? "Ya usaste las consultas de este mes"
-                : "Preguntá sobre tus datos"
-            }
-            disabled={left === 0}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                ask(draft);
-              }
-            }}
-            className="placeholder:text-muted-foreground max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Enviar"
-            disabled={waiting !== null || draft.trim() === "" || left === 0}
-            className="size-9"
-          >
-            <ArrowUp />
-          </Button>
-        </form>
-      </section>
+        />
+      )}
     </div>
   );
 }
