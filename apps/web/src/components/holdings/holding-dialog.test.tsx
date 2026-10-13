@@ -239,3 +239,30 @@ describe("with details", () => {
     expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
   });
 });
+
+describe("the instrument picker on a create", () => {
+  const trigger = (html: string) =>
+    /<button[^>]*id="([^"]*-instrument)"[^>]*>/.exec(html)!;
+
+  it("is the control its label names, by the label and the chosen instrument", () => {
+    const html = render("create", { instrument: "BTC" });
+    const [tag, id] = trigger(html);
+    expect(html).toContain(`id="${id}-label" for="${id}"`);
+    expect(tag).toContain(`aria-labelledby="${id}-label ${id}-value"`);
+    expect(html).toContain(
+      `<span id="${id}-value" class="truncate">BTC · Bitcoin</span>`,
+    );
+  });
+
+  it("takes a refused duplicate's alert and focus on its trigger", () => {
+    const html = render(
+      "create",
+      { instrument: "BTC", amount: "1" },
+      WRITE_MESSAGES.holdings.duplicate,
+    );
+    const [tag] = trigger(html);
+    expect(tag).toContain('aria-invalid="true"');
+    expect(tag).toMatch(/aria-describedby="[^"]*-alert"/);
+    expect(tag).toMatch(/autofocus/i);
+  });
+});
