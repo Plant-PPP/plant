@@ -217,6 +217,41 @@ it("lets a retryable failure reach the step, which retries it", async () => {
   expect(thrown[0]).toBeInstanceOf(SourceError);
 });
 
+// The engine hands a failed step back rebuilt from JSON: a plain Error with
+// the original's name and message, its class and code gone.
+const rebuilt = (error: unknown) => {
+  const { name, message } = error as Error;
+  return Object.assign(new Error(message), { name });
+};
+
+it.each([
+  ["a NonRetriableError", new SourceError("unsupported", false), "unsupported"],
+  ["a retried SourceError", new SourceError("unreadable", true), "unreadable"],
+  ["anything else", new Error("boom"), "extraction_failed"],
+])(
+  "keeps the failure's code when the engine rebuilds %s",
+  async (_, error, failure) => {
+    const { deps, store } = setUp({
+      extract: jest.fn().mockRejectedValue(error),
+    });
+    await runImportDocument(deps, {
+      step: {
+        run: async (id, fn) => {
+          try {
+            return await fn();
+          } catch (thrown) {
+            throw rebuilt(thrown);
+          }
+        },
+      },
+      runId: "r1",
+      attempt: 0,
+      event: { data: { importId: IMPORT, userId: USER } },
+    });
+    expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
+  },
+);
+
 describe("an import whose run died past its retries", () => {
   it("is marked failed when it is still being read", async () => {
     const { deps, store, lines } = setUp();

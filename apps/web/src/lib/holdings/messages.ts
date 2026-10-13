@@ -129,6 +129,8 @@ export const MOVEMENT_MESSAGES: Record<
   no_rate: "No hay cotización del dólar para esa fecha.",
   same_balance:
     "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
+  opens_later:
+    "El resumen es anterior a una tenencia que ya cargaste en esta cuenta. Descartá esa fila, o borrá la tenencia y confirmá de nuevo.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

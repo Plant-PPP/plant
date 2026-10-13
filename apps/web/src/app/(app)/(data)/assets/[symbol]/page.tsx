@@ -8,6 +8,7 @@ import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { deleteHolding } from "@/app/(app)/(data)/assets/actions";
 import {
   createOperation,
   deleteOperation,
@@ -40,9 +41,9 @@ export const metadata: Metadata = { title: navTitle("/assets") };
 export const dynamic = "force-dynamic";
 
 // One instrument's history across every account and portfolio, in one unit
-// (the reference dollar unless ?unit= names another). A symbol the user holds
-// nothing of, open or closed, has no page. Outside production it shows
-// made-up data.
+// (the reference dollar unless ?unit= names another). A symbol outside the
+// catalog has no page; one the user holds nothing of shows its empty state.
+// Outside production it shows made-up data.
 export default async function InstrumentPage({
   params,
   searchParams,
@@ -78,7 +79,8 @@ export default async function InstrumentPage({
       holding.asset_class === "instrument" &&
       holding.instrument_symbol === symbol,
   );
-  if (held.length === 0) notFound();
+  // With no holding left, as after deleting the last one here, the page
+  // shows its empty state.
   const quotes = await readSnapshot(
     createQuoteReader(client),
     today,
@@ -137,7 +139,7 @@ export default async function InstrumentPage({
         update: updateOperation,
         delete: deleteOperation,
       }}
-      actions={{}}
+      actions={{ delete: deleteHolding }}
       accounts={ledger.accounts}
       portfolios={ledger.portfolios}
       instruments={ledger.instruments}

@@ -169,6 +169,10 @@ it("takes a bond's price as quoted, per 100 nominal, and sends it per unit", () 
     parts: [{ portfolioId: PRINCIPAL, size: "1000" }],
   };
   expect(toOperationInput(bond, "bond")).toMatchObject({ price: "0.855" });
+  // Per unit it would need more decimals than a price keeps.
+  expect(
+    toOperationInput({ ...bond, price: "98.1234567" }, "bond"),
+  ).toMatchObject({ price: null });
   const rates = {
     mep: { sell: "1", date: "2026-03-02" },
     ccl: { sell: "1", date: "2026-03-02" },

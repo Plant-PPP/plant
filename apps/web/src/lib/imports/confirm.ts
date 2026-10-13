@@ -69,6 +69,29 @@ function holdingsOn(state: Ledger, accountId: string, date: string) {
     .sort((a, b) => compareDecimals(b.quantity, a.quantity));
 }
 
+// The instruments the account has a holding of whose history starts after a
+// day: a statement of that day cannot be weighed against it.
+export function opensAfter(
+  state: Ledger,
+  accountId: string,
+  date: string,
+): Set<string> {
+  const later = new Set<string>();
+  for (const row of allRows(state)) {
+    if (
+      row.account.id !== accountId ||
+      row.holding.asset_class !== "instrument"
+    ) {
+      continue;
+    }
+    const own = state.movements.get(row.id) ?? [];
+    if (own.length > 0 && own.every((each) => each.date > date)) {
+      later.add(row.holding.instrument_symbol);
+    }
+  }
+  return later;
+}
+
 // Each instrument the account holds, summed across its portfolios.
 export function heldIn(state: Ledger, accountId: string): Map<string, string> {
   const held = new Map<string, string>();
@@ -171,6 +194,10 @@ export function writeImport<S extends Ledger>(
   // later refuses the write, as it would refuse a movement typed by hand.
   const date = item.date;
   const held = heldOn(state, account.id, date);
+  const later = opensAfter(state, account.id, date);
+  if (kept.some((row) => later.has(row.symbol))) {
+    return refuse({ ok: false, code: "opens_later" });
+  }
   for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,

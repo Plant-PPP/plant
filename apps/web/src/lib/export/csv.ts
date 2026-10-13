@@ -15,8 +15,8 @@ export function toCsv(
     .join("\r\n");
 }
 
-const FORMULA = /^[=+@\t\r]|^-(?![\d.])/;
-const NUMBER = /^-?\d+(\.\d+)?$/;
+const FORMULA = /^[=+\-@\t\r]/;
+const NUMBER = /^-?(\d+(\.\d+)?|\.\d+)$/;
 
 function csvField(value: string): string {
   const safe = FORMULA.test(value) && !NUMBER.test(value) ? `'${value}` : value;

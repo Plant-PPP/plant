@@ -89,7 +89,7 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
 }
 
 const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
-const AMBIGUOUS_DOT = /^[1-9]\d{0,2}\.\d{3}$/;
+const AMBIGUOUS = /^-?[1-9]\d{0,2}[.,]\d{3}$/;
 // The currency marks a number may start with; CURRENCY_TOKENS names the same
 // ones and more, for a whole cell.
 const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars)/i;
@@ -105,6 +105,10 @@ const decimalOrNull = (text: string): string | null =>
 // not positive. apps/web's parseAmountInput reads the same es-AR text but
 // refuses a lone "1.234", which a keypad types meaning one and a fraction; a
 // sheet means a thousand. They become one parser if both read it alike.
+// A text cell's number without its spaces or currency mark.
+const numberText = (cell: string) =>
+  cell.replace(/\s/g, "").replace(CURRENCY_PREFIX, "");
+
 export function parseSheetDecimal(cell: SheetCell): string | null {
   if (typeof cell === "number") {
     if (!Number.isFinite(cell) || Math.abs(cell) >= 1e21) return null;
@@ -113,7 +117,7 @@ export function parseSheetDecimal(cell: SheetCell): string | null {
       .replace(/\.?0+$/, "");
     return decimalOrNull(fixed === "-0" ? "0" : fixed);
   }
-  const text = cell.replace(/\s/g, "").replace(CURRENCY_PREFIX, "");
+  const text = numberText(cell);
   if (text.includes(",")) {
     const [whole = "", fraction, extra] = text.split(",");
     if (extra !== undefined) return null;
@@ -225,9 +229,10 @@ export function sheetToDraft(
     return positiveDecimalSchema.safeParse(parsed).success ? parsed : null;
   };
   // "1.500" is a thousand and a half in es-AR and one and a half with a dot
-  // keypad: read as the first, but for the user to check.
+  // keypad, and "1,500" the other way round: read as es-AR, but for the user
+  // to check.
   const ambiguous = (cell: SheetCell) =>
-    typeof cell === "string" && AMBIGUOUS_DOT.test(cell.trim());
+    typeof cell === "string" && AMBIGUOUS.test(numberText(cell));
 
   const rows: DraftRow[] = [];
   let documentDate: string | null = null;

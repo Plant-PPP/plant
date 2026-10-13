@@ -14,6 +14,11 @@ jest.mock("@/lib/auth/session-claims", () => ({
 jest.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
+const createInstrumentHolding = jest.fn();
+jest.mock("@/lib/ledger/write", () => ({
+  createInstrumentHolding: (input: unknown) => createInstrumentHolding(input),
+  deleteHoldingRow: jest.fn(),
+}));
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { without } from "@/test/without";
@@ -146,19 +151,19 @@ describe("createHolding", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
-  it("maps the same instrument twice in a portfolio to duplicate", async () => {
-    fakeClient(refused(409, "23505"));
-    await expect(
-      createHolding({
-        ...CASH,
-        asset_class: "instrument",
-        instrument_symbol: "BTC",
-        currency: null,
-        source_connection_id: ACCOUNT,
-        portfolio_id: PORTFOLIO,
-      }),
-    ).resolves.toEqual({ ok: false, code: "duplicate" });
-    expect(onlyLine()).toMatchObject({ "plant.outcome": "duplicate" });
+  it("opens an instrument through the ledger, not with its amount", async () => {
+    createInstrumentHolding.mockResolvedValue({ ok: true, id: ID });
+    const input = {
+      ...CASH,
+      asset_class: "instrument",
+      instrument_symbol: "BTC",
+      currency: null,
+      source_connection_id: ACCOUNT,
+      portfolio_id: PORTFOLIO,
+    };
+    await expect(createHolding(input)).resolves.toEqual({ ok: true, id: ID });
+    expect(createInstrumentHolding).toHaveBeenCalledWith(input);
+    expect(createClient).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -199,6 +204,19 @@ describe("updateHolding", () => {
     expect(onlyLine()).toMatchObject({
       "plant.portfolio_setup.action": "update_holding",
     });
+  });
+
+  it("never writes an instrument's units, which its movements leave", async () => {
+    const calls = fakeClient(ok());
+    await updateHolding(ID, {
+      ...edit,
+      asset_class: "instrument",
+      currency: null,
+    });
+    expect(calls[1]).toEqual([
+      "update",
+      expect.not.objectContaining({ amount: expect.anything() }),
+    ]);
   });
 
   it("moves a holding to another portfolio", async () => {

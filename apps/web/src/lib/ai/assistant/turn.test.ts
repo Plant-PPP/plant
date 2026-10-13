@@ -1,5 +1,7 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
+import { MockLanguageModelV3 } from "ai/test";
+
 import type { AssistantStore, StoredMessage } from "@/lib/assistant/store";
 
 import { runAssistantTurn, type TurnReport } from "./turn";
@@ -104,4 +106,33 @@ it("keeps an existing conversation's unit", async () => {
   store.conversation = jest.fn(async () => ({ unit: "ars" as const }));
   await (await turn(store, "¿Qué compro?")).text();
   expect(started).toEqual([]);
+});
+
+it("starts no conversation when the answer fails", async () => {
+  const { store, started, saved } = storeWith();
+  const response = await runAssistantTurn({
+    client: {} as never,
+    store,
+    record: async () => {},
+    model: () =>
+      new MockLanguageModelV3({
+        doStream: async () => {
+          throw new Error("provider down");
+        },
+      }),
+    context: {
+      userId: USER,
+      requestId: undefined,
+      page: "/assistant",
+      params: {},
+    },
+    conversationId: CONVERSATION,
+    question: "¿Cuánto debo?",
+    unit: "usd_mep",
+    today: "2026-10-13",
+    report: () => {},
+  });
+  await response.text();
+  expect(started).toEqual([]);
+  expect(saved).toEqual([]);
 });

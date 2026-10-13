@@ -296,6 +296,29 @@ describe("sheetToDraft", () => {
     });
   });
 
+  it("marks a comma that also reads as thousands for the user to check", () => {
+    const { rows } = sheetToDraft(
+      { ...sheet, rows: [["AAPL", "1,500", "", "ARS", ""]] },
+      mapping,
+      "2026-10-13",
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ quantity: "1.500", confidence: "low" }),
+    ]);
+  });
+
+  it.each(["US$ 1,500", "$ 1.500"])(
+    "checks %j as it reads it, after its currency mark",
+    (price) => {
+      const { rows } = sheetToDraft(
+        { ...sheet, rows: [["AAPL", "10", price, "ARS", ""]] },
+        mapping,
+        "2026-10-13",
+      );
+      expect(rows).toEqual([expect.objectContaining({ confidence: "low" })]);
+    },
+  );
+
   it("falls back to the default currency", () => {
     const { rows } = sheetToDraft(
       sheet,

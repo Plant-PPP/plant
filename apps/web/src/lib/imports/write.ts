@@ -253,6 +253,11 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     return { ok: false, code };
   };
   try {
+    // The terms or the account may have changed since the upload started.
+    if (!(await termsAccepted(client))) return await refuse("terms");
+    if (!(await accountOpen(client, accountId))) {
+      return await refuse("not_found");
+    }
     const { data: blob, error } = await bucket.download(path);
     if (error || !blob) {
       log(line, "not_found");

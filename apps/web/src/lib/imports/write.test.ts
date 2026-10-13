@@ -244,6 +244,28 @@ describe("finishUpload", () => {
     expect(storage.download).not.toHaveBeenCalled();
   });
 
+  it("removes the file when the terms were withdrawn since the start", async () => {
+    answers.consents = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: false, code: "terms" });
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(writes).toEqual([]);
+  });
+
+  it("removes the file when its account was closed since the start", async () => {
+    answers.source_connections = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: false, code: "not_found" });
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(writes).toEqual([]);
+  });
+
   it("answers not found when nothing was uploaded", async () => {
     storage.download.mockResolvedValue({ data: null, error: new Error("404") });
     expect(await finish()).toEqual({ ok: false, code: "not_found" });
