@@ -250,6 +250,11 @@ export function kindsOffered({
 // An empty text is none.
 const optional = (text: string) => (text.trim() === "" ? null : text);
 
+// The fields as a transfer's suggested cost reads them, as a key that
+// changes only when the cost can: the note and the reference are left out.
+export const transferCostKey = (fields: MovementFields): string =>
+  JSON.stringify({ ...fields, note: "", reference: "" });
+
 // What the dialog sends: the kind's fields, each part, each charge, the price
 // typed as the market quotes it sent per unit. A value the parsers refuse goes
 // as null, for the schema to name its field; a transfer's cost the parsers
