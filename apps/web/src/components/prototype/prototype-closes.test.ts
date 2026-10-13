@@ -1,13 +1,9 @@
 import { addDays } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
+import { closesOf, monthDetail, yearsOfCloses } from "@/lib/summary/compute";
 
-import {
-  closesOf,
-  markRecalculated,
-  monthDetail,
-  yearsOfCloses,
-} from "./prototype-closes";
+import { markRecalculated } from "./prototype-closes";
 import {
   deleteHolding,
   deleteOperation,

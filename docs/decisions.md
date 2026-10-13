@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · The real Resumen and closes (PLA-30)
+
+- **Closes are computed by the code the prototype runs**, moved to `lib/summary/compute.ts` over the ledger plus the debts. The real Resumen and a close's page read the whole ledger, every open holding and the debts, and compute every month from the first movement's to today on each request.
+- **A day's quotes are the stored ones of the week up to it**, read only for the days a close values at (`closeDates`: each month's start and end, and each day units came in already held or left without a trade) through `readQuotesOn`, which shares a read between nearby days. A day no feed or manual price covers takes the instrument's last trade price, as in the prototype.
+- **A holding with no movements counts at today's amount on every past day, and a debt at today's balance**, as in the prototype, until they have a history.
+- **No closed month is marked recalculated in production.** Nothing keeps a close's figures to compare a write against; the figures are recomputed on every read, so a close always reflects its movements.
+- **The real Resumen shows no onboarding card yet.** Two of its four steps read the terms accepted and the questions asked, which arrive with "Carga con IA" and "Asistente".
+
 ## 2026-10-13 · Debts in the database (PLA-77, PLA-31)
 
 - **A debt is a row of `liabilities`, with core's fields as its columns**: kind, label, lender, currency, `uva`, instrument, balance, installment, rate, installments left and two dates. Core's unit rule is the `liabilities_unit` CHECK: a crypto loan is owed in its instrument and no currency, a debt in dollars in dollars, and only a peso debt in UVA.

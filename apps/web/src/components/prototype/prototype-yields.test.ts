@@ -4,7 +4,9 @@ import { exactOf, minus, plus, stored } from "@plant/shared";
 import { lineLabel, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
-import { closesOf, markRecalculated } from "./prototype-closes";
+import { closesOf } from "@/lib/summary/compute";
+
+import { markRecalculated } from "./prototype-closes";
 import {
   deleteOperation,
   holdingIn,

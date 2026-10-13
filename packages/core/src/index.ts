@@ -31,6 +31,7 @@ export { upcomingIncome, type UpcomingIncome } from "./income/upcoming";
 export { quoteFeeds } from "./quotes/factory";
 export {
   QUOTE_CARRY_DAYS,
+  readQuotesOn,
   readSnapshot,
   type SnapshotRead,
   snapshotOn,

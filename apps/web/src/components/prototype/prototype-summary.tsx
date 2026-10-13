@@ -8,19 +8,15 @@ import {
   YearCloseDetail,
 } from "@/components/summary/close-detail";
 import { SummaryPage } from "@/components/summary/summary-page";
-import {
-  parseAssetsParams,
-  TABS,
-  unitParam,
-} from "@/lib/holdings/assets-filter";
+import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { currencyOf } from "@/lib/holdings/holding-name";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { onboardingSteps } from "@/lib/onboarding/steps";
-import { closeUnit } from "@/lib/summary/closes";
+import { backYear, closesQuery, closeUnit } from "@/lib/summary/closes";
 import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
+import { closesOf, monthDetail, yearsOfCloses } from "@/lib/summary/compute";
 import { usePrototype } from "./prototype-provider";
 import { holdingsView, type PrototypeState } from "./prototype-store";
 
@@ -40,29 +36,11 @@ const closeUnitOf = (params: KeysetParams, reference: Denominator) =>
 const summaryHome = (state: PrototypeState) =>
   closeUnit(state.preferredUnit, referenceUnit(state.referenceDollar));
 
-// Resumen and a close's page, in the unit the user is looking at; Resumen
-// back on the close's year unless it is the newest, which it shows anyway.
-const linksIn = (unit: Denominator, reference: Denominator) => {
-  const query = (year: string | null) => {
-    const search = new URLSearchParams();
-    const param = unitParam(unit, reference);
-    if (param !== null) search.set("unit", param);
-    if (year !== null) search.set("year", year);
-    const text = search.toString();
-    return text === "" ? "" : `?${text}`;
-  };
-  return {
-    closeHref: (period: string) => `/closes/${period}${query(null)}`,
-    summaryHref: (year: string | null) => `/${query(year)}`,
-  };
-};
-
 // Resumen over the prototype's store.
 export function PrototypeSummary({ params }: { params: KeysetParams }) {
   const { state, snapshot } = usePrototype();
   const reference = summaryHome(state);
   const unit = closeUnitOf(params, reference);
-  const { closeHref } = linksIn(unit, reference);
   const closes = closesOf(state, unit);
   const years = yearsOfCloses(closes);
   // The portfolio, ?portfolio= when it is one of the user's, and the year the
@@ -109,8 +87,7 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
         holdings: state.holdings.length,
         questions: state.askedOn.length,
       })}
-      closeHref={closeHref}
-      yearHref={closeHref}
+      closesQuery={closesQuery(unit, reference)}
     />
   );
 }
@@ -126,11 +103,8 @@ export function PrototypeClose({
   const { state } = usePrototype();
   const reference = summaryHome(state);
   const unit = closeUnitOf(params, reference);
-  const { closeHref, summaryHref } = linksIn(unit, reference);
   const years = yearsOfCloses(closesOf(state, unit));
-  const backHref = summaryHref(
-    period.slice(0, 4) === years[0]?.year ? null : period.slice(0, 4),
-  );
+  const backHref = `/${closesQuery(unit, reference, backYear(period, years))}`;
   if (/^\d{4}$/.test(period)) {
     const year = years.find((each) => each.year === period);
     if (!year) notFound();
@@ -139,7 +113,7 @@ export function PrototypeClose({
         year={year}
         unit={unit}
         backHref={backHref}
-        closeHref={closeHref}
+        closesQuery={closesQuery(unit, reference)}
       />
     );
   }

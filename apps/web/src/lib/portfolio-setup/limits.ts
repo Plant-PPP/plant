@@ -10,7 +10,10 @@ export const NAME_LIMITS = {
 
 export type SetupTable = keyof typeof NAME_LIMITS;
 
-export type SetupPage = Extract<RouteHref, "/accounts" | "/assets" | "/debts">;
+export type SetupPage = Extract<
+  RouteHref,
+  "/" | "/accounts" | "/assets" | "/debts"
+>;
 
 // The page that lists each table's rows, revalidated after a write.
 export const PAGE_BY_TABLE: Record<SetupTable, SetupPage> = {

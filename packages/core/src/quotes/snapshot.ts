@@ -1,4 +1,4 @@
-import { addDays, positiveDecimalSchema } from "@plant/shared";
+import { addDays, daysBetween, positiveDecimalSchema } from "@plant/shared";
 import type {
   QuoteRange,
   QuoteReaderPort,
@@ -84,4 +84,46 @@ export async function readSnapshot(
 ): Promise<SnapshotRead> {
   const range = rangeOf(date, need);
   return snapshotFromRows(range, await reader.read(range));
+}
+
+// The longest range one read of readQuotesOn covers, so a read of every
+// dollar kind stays far under the store's row cap, and how many of its reads
+// run at once.
+export const QUOTES_ON_SPAN_DAYS = 31;
+export const QUOTES_ON_CONCURRENCY = 6;
+
+// Every stored row the snapshot of each of `dates` reads, in as few reads as
+// the dates allow: days whose ranges overlap share one read, up to
+// QUOTES_ON_SPAN_DAYS. snapshotOn picks each day's snapshot from the result.
+export async function readQuotesOn(
+  reader: QuoteReaderPort,
+  dates: readonly string[],
+  need: QuoteNeed,
+): Promise<StoredQuotes> {
+  const ranges: QuoteRange[] = [];
+  for (const date of [...new Set(dates)].sort()) {
+    const range = rangeOf(date, need);
+    const last = ranges.at(-1);
+    if (
+      last &&
+      range.from <= last.to &&
+      daysBetween(last.from, date) < QUOTES_ON_SPAN_DAYS
+    ) {
+      last.to = date;
+    } else ranges.push(range);
+  }
+  const reads: StoredQuotes[] = [];
+  for (let start = 0; start < ranges.length; start += QUOTES_ON_CONCURRENCY) {
+    reads.push(
+      ...(await Promise.all(
+        ranges
+          .slice(start, start + QUOTES_ON_CONCURRENCY)
+          .map((range) => reader.read(range)),
+      )),
+    );
+  }
+  return {
+    fxRates: reads.flatMap((read) => read.fxRates),
+    prices: reads.flatMap((read) => read.prices),
+  };
 }

@@ -82,8 +82,7 @@ const render = (
       referenceUnit="usd_mep"
       params={{}}
       onboarding={onboarding}
-      closeHref={(period) => `/closes/${period}`}
-      yearHref={(year) => `/closes/${year}`}
+      closesQuery=""
     />,
   );
 };
