@@ -368,10 +368,12 @@ export function assistantData({
           snapshot,
           [SOURCES.movements, SOURCES.holdings, SOURCES.quotes],
           events.every((event) => event.value !== null) &&
-            !read.ledgerTruncated,
+            !read.ledgerTruncated &&
+            !read.holdings.activeTruncated,
         ),
         unit,
         days: CALENDAR_DAYS,
+        note: "Los dividendos y cupones se estiman con los pagos anteriores de cada tenencia; los plazos fijos son exactos.",
         total: events.length,
         shown: Math.min(events.length, EVENTS_LISTED),
         events: events.slice(0, EVENTS_LISTED).map((event) => ({
@@ -404,7 +406,7 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.debts, SOURCES.quotes],
-          owed.complete,
+          owed.complete && !read.debtsTruncated,
         ),
         unit,
         total: owed.total,
@@ -416,7 +418,9 @@ export function assistantData({
           uva: debt.uva,
           value,
           installment: debt.installment,
-          installmentCurrency: debt.uva ? "UVA" : debt.currency,
+          installmentCurrency: debt.uva
+            ? "UVA"
+            : (debt.currency ?? debt.instrument_symbol),
           installmentsLeft: debt.installments_left,
           nextDueOn: debt.next_due_on,
           maturesOn: debt.matures_on,
@@ -507,7 +511,7 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.holdings, SOURCES.quotes],
-          sums.every((each) => each !== null),
+          sums.every((each) => each !== null) && !read.holdings.activeTruncated,
         ),
         unit,
         symbol,
@@ -542,6 +546,8 @@ export function assistantData({
         asOf: today,
         rate: null,
         complete: true,
+        total: items.length,
+        shown: Math.min(items.length, IMPORTS_LISTED),
         usedThisMonth: used,
         monthlyLimit: IMPORTS_PER_MONTH,
         imports: items.slice(0, IMPORTS_LISTED).map((item) => ({

@@ -222,6 +222,37 @@ it("tells what the user holds of an instrument and where", async () => {
   expect(info.holdings.length).toBeGreaterThan(0);
 });
 
+it("names a crypto loan's installment in what was borrowed", async () => {
+  mockReadCloses.mockResolvedValueOnce({
+    ...read,
+    state: {
+      ...read.state,
+      liabilities: [
+        {
+          id: "loan",
+          kind: "crypto_loan",
+          label: "Préstamo BTC",
+          lender: null,
+          currency: null,
+          uva: false,
+          instrument_symbol: "BTC",
+          balance: "0.5",
+          installment: "0.01",
+          annual_rate: null,
+          installments_left: 50,
+          next_due_on: null,
+          matures_on: null,
+        },
+      ],
+    },
+  });
+  const debts = await data().liabilities();
+  expect(debts.debts[0]).toMatchObject({
+    installment: "0.01",
+    installmentCurrency: "BTC",
+  });
+});
+
 it("quotes a bond per 100 nominal, as the pages show it", async () => {
   const held = read.holdings.active.find(
     (each) =>
