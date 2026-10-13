@@ -4,6 +4,11 @@ import { headers } from "next/headers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { NONCE_HEADER } from "@/lib/csp";
+import {
+  REQUEST_ID_HEADER,
+  REQUEST_ID_META,
+  requestIdFrom,
+} from "@/lib/request-id";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import "./globals.css";
@@ -29,7 +34,9 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   // Reading the request also keeps every page dynamic, which a nonce needs.
-  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+  const request = await headers();
+  const nonce = request.get(NONCE_HEADER) ?? undefined;
+  const requestId = requestIdFrom(request.get(REQUEST_ID_HEADER));
   return (
     // The font variables go on <html>: Tailwind's preflight sets font-family
     // there from --font-sans, which reads them.
@@ -39,6 +46,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="antialiased">
+        {requestId && <meta name={REQUEST_ID_META} content={requestId} />}
         <ThemeProvider nonce={nonce}>
           {children}
           <Toaster />

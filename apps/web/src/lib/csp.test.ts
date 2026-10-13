@@ -1,4 +1,4 @@
-import { buildCsp, createNonce } from "./csp";
+import { buildCsp, createNonce, reportingEndpoints } from "./csp";
 
 function directive(csp: string, name: string): string[] {
   const found = csp.split("; ").find((d) => d.startsWith(`${name} `));
@@ -56,6 +56,13 @@ it("sets only these directives", () => {
       "style-src",
     ].sort(),
   );
+});
+
+it("sends violations to the report path, by both mechanisms", () => {
+  const csp = buildCsp({ ...base, dev: false, reportPath: "/api/reports?x" });
+  expect(directive(csp, "report-uri")).toEqual(["/api/reports?x"]);
+  expect(directive(csp, "report-to")).toEqual(["csp"]);
+  expect(reportingEndpoints("/api/reports?x")).toBe('csp="/api/reports?x"');
 });
 
 it("lets the browser reach the given origins", () => {

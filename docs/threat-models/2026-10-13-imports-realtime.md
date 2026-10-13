@@ -45,4 +45,4 @@ Branch `feat/pla-40-live-upload-status` (PLA-40). The PR template requires it fo
 
 - **A subscriber without a grant learns when any user's import changes**: anon and aal1 channels get a 401 event, with no record, for every insert or update on the table. Only the timing leaks; no publication setting removes it short of not publishing.
 - **The publication can drift on the hosted project**: its operations can be toggled in the dashboard, which pgTAP does not see. They are never changed there.
-- **The app records no failure to subscribe** until browser error reporting (PLA-88): a join the server refuses shows in Supabase's Realtime logs, a timeout or a socket that never connects nowhere. realtime-js keeps rejoining and each rejoin catches up.
+- **A failure to subscribe is reported by the browser** (PLA-88): each `CHANNEL_ERROR` or `TIMED_OUT` is a `browser.error` line of kind `realtime`. realtime-js keeps rejoining and each rejoin catches up.
