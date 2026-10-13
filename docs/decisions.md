@@ -2,10 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
-## 2026-10-13 · Transfers, yields and the account and portfolio pages (PLA-103, PLA-106)
+## 2026-10-13 · Transfers, yields, deleting holdings and the account and portfolio pages (PLA-103, PLA-106, PLA-117)
 
 - **A suggested price may come from the server.** `transferCost` and `quoteOn` return a price or a promise of one, and the movement dialog asks again only when a field the suggestion reads changes. Until the answer to the latest question arrives it suggests nothing, as when there is none: a transfer's cost left empty still carries what the units had, and a yield asks for its value.
 - **The server answers a transfer's cost by running the write and throwing it away**, on the whole ledger and the stored rates of its date, as the prototype does in the browser. A day's quote reads only the feed's prices and the user's manual prices of that instrument in the week up to the day; it answers nothing for a day still to come.
+- **Deleting a holding is a plain delete (PLA-117)**: its movements go with it through the foreign key, and an operation it shared keeps its other parts, as in the prototype. One with a transfer is refused after reading its movements; a transfer written between that read and the delete leaves its other side alone, a race only the user's own two tabs can run.
 - **The real account and portfolio pages (PLA-106)** read the holdings list and the ledger: the list gives the open holdings of every class, and the ledger the instrument holdings sold out, their positions and their movements. An archived account or portfolio, or an id the user does not have, has no page. Every name on Activos and on these pages links to its page.
 
 ## 2026-10-13 · The real Activos and instrument pages over the database (PLA-103, PLA-104)

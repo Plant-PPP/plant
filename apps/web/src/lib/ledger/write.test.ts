@@ -12,13 +12,17 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 }));
 const rpc = jest.fn();
 const manualPrices = jest.fn();
+const transfersOf = jest.fn();
+const deleted = jest.fn();
 const filters: unknown[][] = [];
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc,
-    from: () => {
+    from: (table: string) => {
       const builder = {
         select: () => builder,
+        delete: () => builder,
+        limit: () => builder,
         eq: (...args: unknown[]) => (filters.push(["eq", ...args]), builder),
         gte: (...args: unknown[]) => (filters.push(["gte", ...args]), builder),
         lte: (...args: unknown[]) => (filters.push(["lte", ...args]), builder),
@@ -27,7 +31,14 @@ jest.mock("@/lib/supabase/server", () => ({
           error: null,
           status: 200,
         }),
-        then: (resolve: (value: unknown) => unknown) => resolve(manualPrices()),
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve(
+            table === "movements"
+              ? transfersOf()
+              : table === "holdings"
+                ? deleted()
+                : manualPrices(),
+          ),
       };
       return builder;
     },
@@ -49,7 +60,12 @@ import {
   PORTFOLIO,
   PURCHASE,
 } from "./ledger-fixture.test-support";
-import { quoteOnDate, runOperation, suggestTransferCost } from "./write";
+import {
+  deleteHoldingRow,
+  quoteOnDate,
+  runOperation,
+  suggestTransferCost,
+} from "./write";
 
 const OPERATION = "0f000000-0000-4000-8000-00000000000f";
 
@@ -310,5 +326,69 @@ describe("a day's quote", () => {
     });
     expect(await quoteOnDate(QUERY)).toBeNull();
     expect(lines.at(-1)).toMatchObject({ "plant.outcome": "failed" });
+  });
+});
+
+describe("deleting a holding", () => {
+  const HOLDING = "a9000000-0000-4000-8000-0000000000a9";
+  beforeEach(() => {
+    transfersOf
+      .mockReset()
+      .mockReturnValue({ data: [], error: null, status: 200 });
+    deleted
+      .mockReset()
+      .mockReturnValue({ data: [{ id: HOLDING }], error: null, status: 200 });
+  });
+
+  it("deletes it with its movements", async () => {
+    expect(await deleteHoldingRow(HOLDING)).toEqual({ ok: true, id: HOLDING });
+    expect(filters).toEqual([
+      ["eq", "holding_id", HOLDING],
+      ["eq", "kind", "transfer"],
+      ["eq", "id", HOLDING],
+    ]);
+    expect(lines.at(-1)).toMatchObject({
+      "plant.ledger.action": "delete_holding",
+      "plant.outcome": "ok",
+    });
+  });
+
+  it("refuses one with a transfer, without deleting", async () => {
+    transfersOf.mockReturnValue({
+      data: [{ id: "m" }],
+      error: null,
+      status: 200,
+    });
+    expect(await deleteHoldingRow(HOLDING)).toEqual({
+      ok: false,
+      code: "holding_has_transfers",
+    });
+    expect(deleted).not.toHaveBeenCalled();
+  });
+
+  it("is not found when nothing was deleted", async () => {
+    deleted.mockReturnValue({ data: [], error: null, status: 200 });
+    expect(await deleteHoldingRow(HOLDING)).toEqual({
+      ok: false,
+      code: "not_found",
+    });
+  });
+
+  it("fails when the movements cannot be read", async () => {
+    transfersOf.mockReturnValue({
+      data: null,
+      error: { code: "42501", message: "denied" },
+      status: 403,
+    });
+    expect(await deleteHoldingRow(HOLDING)).toEqual({
+      ok: false,
+      code: "failed",
+    });
+    expect(deleted).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id that is not one", async () => {
+    expect(await deleteHoldingRow("x")).toEqual({ ok: false, code: "invalid" });
+    expect(transfersOf).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import {
   archiveHolding,
   createHolding,
+  deleteHolding,
   restoreHolding,
   updateHolding,
 } from "@/app/(app)/(data)/assets/actions";
@@ -203,6 +204,7 @@ export default async function AssetsPage({
           create: createHolding,
           update: updateHolding,
           archiving: { archive: archiveHolding, restore: restoreHolding },
+          delete: deleteHolding,
         }}
         movements={{
           positions: positionsOf(ledger, unit),

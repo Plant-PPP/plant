@@ -20,6 +20,7 @@ import type {
   MovementScope,
   MovementsPage,
 } from "@/lib/holdings/movements-input";
+import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { serverLog } from "@/lib/log/server-log";
 import { createQuoteReader } from "@/lib/quotes/quote-reader";
@@ -47,6 +48,7 @@ export type LedgerAction =
   | "load_movements"
   | "suggest_transfer_cost"
   | "quote_on"
+  | "delete_holding"
   | "set_manual_price"
   | "delete_manual_price";
 
@@ -430,4 +432,61 @@ export async function deleteManualPrice(
   return outcome === "ok"
     ? { ok: true }
     : { ok: false, code: outcome === "failed" ? "failed" : "invalid" };
+}
+
+// A holding and, through the foreign key, every movement it has; an operation
+// it shared keeps its other portfolios' parts. One with a transfer is refused,
+// since the transfer's other side would be left alone.
+export async function deleteHoldingRow(
+  id: unknown,
+): Promise<HoldingDeleteResult> {
+  const claims = await getSessionClaims();
+  const fields = {
+    requestId: await currentRequestId(),
+    userId: claims.sub,
+    started: performance.now(),
+  };
+  const parsed = z.uuid().safeParse(id);
+  if (!parsed.success) {
+    log("delete_holding", { ...fields, outcome: "invalid" });
+    return { ok: false, code: "invalid" };
+  }
+  const client: Client = await createClient();
+  const transfers = await client
+    .from("movements")
+    .select("id")
+    .eq("holding_id", parsed.data)
+    .eq("kind", "transfer")
+    .limit(1);
+  let result: HoldingDeleteResult;
+  let failure: unknown;
+  if (classifyPostgrestResult(transfers, 200) || !transfers.data) {
+    result = { ok: false, code: "failed" };
+    failure = transfers.error;
+  } else if (transfers.data.length > 0) {
+    result = { ok: false, code: "holding_has_transfers" };
+  } else {
+    const response = await client
+      .from("holdings")
+      .delete()
+      .eq("id", parsed.data)
+      .select("id");
+    if (classifyPostgrestResult(response, 200)) {
+      result = { ok: false, code: "failed" };
+      failure = response.error;
+    } else {
+      result =
+        (response.data ?? []).length === 1
+          ? { ok: true, id: parsed.data }
+          : { ok: false, code: "not_found" };
+    }
+  }
+  log(
+    "delete_holding",
+    { ...fields, outcome: result.ok ? "ok" : result.code },
+    failure,
+  );
+  if (result.ok || result.code === "failed")
+    revalidatePath("/assets", "layout");
+  return result;
 }
