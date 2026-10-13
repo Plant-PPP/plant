@@ -1,6 +1,7 @@
 import "server-only";
 import { QuoteStoreError } from "@plant/core";
 
+import { LedgerReadError } from "@/lib/ledger/read";
 import { LoggedError } from "@/lib/log/logged-error";
 import { serverLog } from "@/lib/log/server-log";
 import { contextFields, type ReadContext } from "@/lib/portfolio-setup/read";
@@ -8,7 +9,8 @@ import { contextFields, type ReadContext } from "@/lib/portfolio-setup/read";
 export const ASSETS_VIEW_EVENT = "assets.view";
 
 // What the assets page was reading when it failed.
-export type AssetsRead = "instruments" | "profile" | "snapshot" | "valuation";
+export type AssetsRead =
+  "instruments" | "profile" | "snapshot" | "valuation" | "ledger";
 
 // Logs one failure of the assets page and throws it as already logged, so the
 // (app) error page shows a retry.
@@ -25,6 +27,8 @@ export function assetsViewFailure(
       "plant.outcome": "error",
       "plant.quotes.store_code":
         error instanceof QuoteStoreError ? error.storeCode : undefined,
+      "plant.ledger.step":
+        error instanceof LedgerReadError ? error.step : undefined,
     },
     error,
   );

@@ -7,7 +7,7 @@ import type * as React from "react";
 import { useId } from "react";
 
 import { AccountsBreakdown } from "@/components/holdings/accounts-breakdown";
-import type { ScopeHrefs } from "@/components/holdings/assets-setup";
+import { type ScopeHrefs, scopeLink } from "@/components/holdings/assets-setup";
 import { AssetsSummary } from "@/components/holdings/assets-summary";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { FilterSelect, UnitSelect } from "@/components/holdings/filter-select";
@@ -149,7 +149,7 @@ export function SummaryPage({
               whole={valuation.kinds}
               unit={unit}
               pending={false}
-              href={hrefs?.account}
+              href={scopeLink(hrefs, "account")}
             />
           </Split>
           <Split id={`${id}-currencies`} title="Por moneda">
@@ -230,7 +230,7 @@ export function SummaryPage({
             total={valuation.kinds.total}
             unit={unit}
             pending={false}
-            href={hrefs?.portfolio}
+            href={scopeLink(hrefs, "portfolio")}
           />
         </Split>
         <Split id={`${id}-accounts`} title="Por cuenta">
@@ -240,7 +240,7 @@ export function SummaryPage({
             whole={valuation.kinds}
             unit={unit}
             pending={false}
-            href={hrefs?.account}
+            href={scopeLink(hrefs, "account")}
           />
         </Split>
         <Split id={`${id}-currencies`} title="Por moneda">

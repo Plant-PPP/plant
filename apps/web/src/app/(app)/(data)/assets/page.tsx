@@ -8,11 +8,22 @@ import {
   restoreHolding,
   updateHolding,
 } from "@/app/(app)/(data)/assets/actions";
-import { AssetsSetup } from "@/components/holdings/assets-setup";
+import {
+  createOperation,
+  deleteManualPrice,
+  deleteOperation,
+  loadMovements,
+  setManualPrice,
+  updateOperation,
+} from "@/app/(app)/(data)/assets/movement-actions";
+import {
+  AssetsSetup,
+  type ScopeHrefs,
+} from "@/components/holdings/assets-setup";
 import { PrototypeAssets } from "@/components/prototype/prototype-assets";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { isProductionDeployment } from "@/lib/deployment";
-import { TABS } from "@/lib/holdings/assets-filter";
+import { SALES_TABS } from "@/lib/holdings/assets-filter";
 import { assetsSelection } from "@/lib/holdings/assets-selection";
 import {
   ASSETS_VIEW_EVENT,
@@ -28,7 +39,15 @@ import {
   type HoldingsValuation,
   holdingsValuation,
 } from "@/lib/holdings/valuation-view";
+import {
+  positionsOf,
+  pricedSnapshotOf,
+  salesOf,
+  yearsOf,
+} from "@/lib/ledger/ledger";
+import { readLedger } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
+import { SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import { navTitle } from "@/lib/navigation";
 import {
   contextFields,
@@ -40,6 +59,10 @@ import { currentRequestId } from "@/lib/request-id-server";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: navTitle("/assets") };
+
+// The pages a scope's name links to. The account and portfolio pages arrive
+// with PLA-106, so their names are plain until then.
+const HREFS: ScopeHrefs = { instrument: "/assets/" };
 export const dynamic = "force-dynamic";
 
 // The user's holdings valued at today's quotes in one unit (the reference
@@ -69,28 +92,43 @@ export default async function AssetsPage({
     params: await searchParams,
   };
   const today = buenosAiresDate(new Date());
-  const [{ holdings, quotes }, accounts, portfolios, instruments, dollar] =
-    await Promise.all([
-      readHoldings(client, context).then(async (holdings) => ({
-        holdings,
-        quotes: await readSnapshot(
-          createQuoteReader(client),
-          today,
-          quotesNeeded(holdings.active.map((row) => row.holding)),
-        ).catch((error: unknown) =>
-          assetsViewFailure(context, "snapshot", error),
-        ),
-      })),
-      readSourceConnections(client, context, { archived: false }),
-      readPortfolios(client, context, { archived: false }),
-      readInstruments(client, context),
-      readReferenceDollar(client, context),
-    ]);
+  const [
+    { holdings, quotes },
+    accounts,
+    portfolios,
+    instruments,
+    dollar,
+    { ledger: read, truncated: ledgerTruncated },
+  ] = await Promise.all([
+    readHoldings(client, context).then(async (holdings) => ({
+      holdings,
+      quotes: await readSnapshot(
+        createQuoteReader(client),
+        today,
+        quotesNeeded(holdings.active.map((row) => row.holding)),
+      ).catch((error: unknown) =>
+        assetsViewFailure(context, "snapshot", error),
+      ),
+    })),
+    readSourceConnections(client, context, { archived: false }),
+    readPortfolios(client, context, { archived: false }),
+    readInstruments(client, context),
+    readReferenceDollar(client, context),
+    // Its reference dollar is the profile's, set below.
+    readLedger(client, { today, referenceDollar: "mep" }).catch(
+      (error: unknown) => assetsViewFailure(context, "ledger", error),
+    ),
+  ]);
+  const ledger = { ...read, referenceDollar: dollar };
+  // Today's quotes with the user's manual prices and dollar rates.
+  const priced = pricedSnapshotOf(ledger, quotes.snapshot);
+  const years = yearsOf(ledger);
 
   const names = instrumentNames(instruments.rows);
   const {
     unit: chosenUnit,
     tab,
+    year,
     filter,
     invalid,
     shown,
@@ -98,8 +136,8 @@ export default async function AssetsPage({
     params: context.params,
     rows: holdings.active,
     portfolioIds: portfolios.active.map(({ id }) => id),
-    tabs: TABS,
-    salesYears: [],
+    tabs: SALES_TABS,
+    salesYears: years,
     names,
   });
   const reference = referenceUnit(dollar);
@@ -114,7 +152,7 @@ export default async function AssetsPage({
     valuation = holdingsValuation({
       holdings: shown,
       truncated: holdings.activeTruncated,
-      snapshot: quotes.snapshot,
+      snapshot: priced.snapshot,
       unit,
       referenceDollar: dollar,
     });
@@ -142,6 +180,11 @@ export default async function AssetsPage({
     "plant.assets.invalid_search": invalid.search,
     "plant.assets.invalid_tab": invalid.tab,
     "plant.quotes.dropped_count": quotes.invalidCount,
+    "plant.ledger.truncated": ledgerTruncated,
+    "plant.ledger.movement_count": [...ledger.movements.values()].reduce(
+      (sum, own) => sum + own.length,
+      0,
+    ),
   });
 
   return (
@@ -158,12 +201,41 @@ export default async function AssetsPage({
         portfolios={portfolios.active}
         instruments={instruments.rows}
         today={today}
-        tabs={TABS}
+        tabs={SALES_TABS}
         actions={{
           create: createHolding,
           update: updateHolding,
           archiving: { archive: archiveHolding, restore: restoreHolding },
         }}
+        movements={{
+          positions: positionsOf(ledger, unit),
+          revisions: ledger.revisions,
+          sales: salesOf(ledger, {
+            year,
+            unit,
+            filter,
+            names,
+            limit: SALES_LIMIT,
+          }),
+          years,
+          loadMovements,
+        }}
+        movementActions={{
+          create: createOperation,
+          update: updateOperation,
+          delete: deleteOperation,
+        }}
+        prices={{
+          manual: new Map(
+            [...priced.manual].map(([symbol, date]) => [
+              symbol,
+              { price: priced.snapshot.prices[symbol]!.price, date },
+            ]),
+          ),
+          fed: new Set(Object.keys(quotes.snapshot.prices)),
+          actions: { set: setManualPrice, delete: deleteManualPrice },
+        }}
+        hrefs={HREFS}
       />
     </div>
   );

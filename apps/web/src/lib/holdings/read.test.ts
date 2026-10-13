@@ -47,6 +47,7 @@ function fakeClient(...responses: Response[]) {
         "order",
         "limit",
         "single",
+        "filter",
       ]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
@@ -136,6 +137,10 @@ describe("readHoldings", () => {
       "portfolios!holdings_user_id_portfolio_id_fkey(id, name)",
     );
     expect(calls[0]).toContainEqual(["eq", "user_id", USER]);
+    // A holding sold out holds nothing, active or archived.
+    for (const list of calls) {
+      expect(list).toContainEqual(["filter", "amount", "gt", "0"]);
+    }
     expect(view.active).toEqual([
       {
         id: "h1",

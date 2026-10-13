@@ -20,7 +20,7 @@ import type { HoldingRow } from "@/lib/holdings/read";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import type { ScopeHrefs } from "./assets-setup";
+import { type ScopeHrefs, scopeLink } from "./assets-setup";
 import { AssetsSummary } from "./assets-summary";
 import { useAssetsUrl } from "./assets-url";
 import { UnitSelect } from "./filter-select";
@@ -97,7 +97,10 @@ export function ScopePage({
             text={holdingName(row.holding, names)}
             href={
               row.holding.asset_class === "instrument"
-                ? hrefs.instrument(row.holding.instrument_symbol)
+                ? (scopeLink(
+                    hrefs,
+                    "instrument",
+                  )?.(row.holding.instrument_symbol) ?? null)
                 : null
             }
           />
