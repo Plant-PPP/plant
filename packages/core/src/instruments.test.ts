@@ -1,20 +1,4 @@
-import { Constants } from "@plant/shared";
-
-import {
-  INSTRUMENT_TYPES,
-  PENDING_INSTRUMENT_TYPES,
-  exactUnitPrice,
-  quotedPrice,
-  unitPrice,
-} from "./instruments";
-
-it("keeps the pending types apart from the database's", () => {
-  const stored: readonly string[] = Constants.public.Enums.instrument_type;
-  for (const type of PENDING_INSTRUMENT_TYPES) {
-    expect(stored).not.toContain(type);
-  }
-  expect(new Set(INSTRUMENT_TYPES).size).toBe(INSTRUMENT_TYPES.length);
-});
+import { exactUnitPrice, quotedPrice, unitPrice } from "./instruments";
 
 it("prices a bond per 100 nominal and anything else per unit", () => {
   expect(unitPrice("bond", "85")).toBe("0.85");

@@ -7,15 +7,7 @@ import {
   times,
 } from "@plant/shared";
 
-// The instrument types the instrument_type enum does not hold yet. The test
-// that keeps both lists apart fails the day a migration adds them, which is
-// when they leave this list.
-export const PENDING_INSTRUMENT_TYPES = ["cedear", "bond", "fci"] as const;
-
-export const INSTRUMENT_TYPES = [
-  ...Constants.public.Enums.instrument_type,
-  ...PENDING_INSTRUMENT_TYPES,
-] as const;
+export const INSTRUMENT_TYPES = Constants.public.Enums.instrument_type;
 export type InstrumentType = (typeof INSTRUMENT_TYPES)[number];
 
 // How a type's price is quoted: per unit, or per 100 nominal for a bond.

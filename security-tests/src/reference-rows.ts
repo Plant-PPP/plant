@@ -20,12 +20,28 @@ export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
   holdings: "id",
+  manual_prices: "id",
+  manual_rates: "id",
+  movements: "id",
+  operations: "id",
   portfolios: "id",
   profiles: "user_id",
   source_connections: "id",
+  tax_report_exclusions: "id",
 } as const satisfies {
   [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? "id" : "user_id";
 };
+
+// The owned tables authenticated may DELETE from, each table's isolation test
+// in supabase/tests pins the grant.
+export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
+  "holdings",
+  "manual_prices",
+  "manual_rates",
+  "movements",
+  "operations",
+  "tax_report_exclusions",
+]);
 
 type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
 
