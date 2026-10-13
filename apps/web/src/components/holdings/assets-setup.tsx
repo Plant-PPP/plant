@@ -571,9 +571,8 @@ export function AssetsSetup({
         const symbol = symbolOf(row);
         const manualDate = symbol && prices?.manual.get(symbol)?.date;
         const opensPrice =
-          prices && symbol !== null && !prices.fed(symbol)
-            ? () => setPriceDialog({ symbol })
-            : null;
+          prices && symbol !== null ? () => setPriceDialog({ symbol }) : null;
+        const fed = symbol !== null && prices?.fed(symbol);
         const figure =
           item.price !== null ? (
             formatQuotedPrice(item.price, unit, first.instrumentType)
@@ -597,14 +596,18 @@ export function AssetsSetup({
               className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
               aria-label={
                 manualDate
-                  ? `Precio manual del ${formatDate(manualDate)} de ${symbol}. Cargar otro`
-                  : `Cargar precio de ${symbol}`
+                  ? `Precio corregido a mano el ${formatDate(manualDate)} de ${symbol}. Cambiarlo`
+                  : fed
+                    ? `Corregir el precio de ${symbol}`
+                    : `Cargar precio de ${symbol}`
               }
               onClick={opensPrice}
             >
               {manualDate
                 ? `Manual · ${formatDate(manualDate)}`
-                : "Cargar precio"}
+                : fed
+                  ? "Corregir"
+                  : "Cargar precio"}
             </button>
           </span>
         );
@@ -1360,6 +1363,7 @@ function PriceDialogFor({
       }
       initialError={state.initialError}
       today={today}
+      overrides={prices.fed(state.symbol)}
       returnFocusTo={returnFocusTo}
       onClose={onClose}
       onSubmit={(fields) => onSubmit(fields, instrument)}
