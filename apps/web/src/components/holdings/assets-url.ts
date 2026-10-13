@@ -10,6 +10,9 @@ export type AssetsUrl = {
   // The params as the user last chose them, ahead of the page that loads them.
   params: KeysetParams;
   set: (key: AssetsParam, value: string | null) => void;
+  // Whether the page for a change is still loading: a link the server built
+  // still carries the params before it.
+  pending: boolean;
 };
 
 // The assets page's URL, owned in one place: each change applies to the params
@@ -17,7 +20,7 @@ export type AssetsUrl = {
 // way round) keeps both.
 export function useAssetsUrl(params: KeysetParams): AssetsUrl {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const [shown, apply] = useOptimistic(
     params,
     (current, [key, value]: [AssetsParam, string | null]) =>
@@ -28,7 +31,7 @@ export function useAssetsUrl(params: KeysetParams): AssetsUrl {
       apply([key, value]);
       router.replace(paramHref(shown, key, value), { scroll: false });
     });
-  return { params: shown, set };
+  return { params: shown, set, pending };
 }
 
 export function withParam(

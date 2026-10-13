@@ -965,7 +965,9 @@ export function AssetsSetup({
             label="Archivadas"
             emptyText="No hay más tenencias archivadas."
             firstPageLabel="Ver las más recientes"
-            pending={pending}
+            // Its links are built with the params of the page on screen, so
+            // they also wait for a filter, tab or unit that is loading.
+            pending={pending || url.pending}
             columns={archivedColumns}
           />
         )}
