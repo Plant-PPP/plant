@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
+import { ScopeView } from "@/app/(app)/(data)/accounts/scope-view";
 import { PrototypeScope } from "@/components/prototype/prototype-scope";
 import { isProductionDeployment } from "@/lib/deployment";
 import { navTitle } from "@/lib/navigation";
 
 export const metadata: Metadata = { title: navTitle("/accounts") };
+export const dynamic = "force-dynamic";
 
-// One portfolio's holdings and movements. Movements exist only in the made-up
-// data so far, so production has no such page yet.
+// One portfolio's holdings and movements. Outside production it shows made-up
+// data.
 export default async function PortfolioPage({
   params,
   searchParams,
@@ -16,9 +17,10 @@ export default async function PortfolioPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (isProductionDeployment()) notFound();
   const { id } = await params;
-  return (
-    <PrototypeScope kind="portfolio" id={id} params={await searchParams} />
-  );
+  const query = await searchParams;
+  if (!isProductionDeployment()) {
+    return <PrototypeScope kind="portfolio" id={id} params={query} />;
+  }
+  return <ScopeView kind="portfolio" id={id} params={query} />;
 }

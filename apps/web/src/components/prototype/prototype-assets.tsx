@@ -2,14 +2,12 @@
 
 import { realEstateFigures } from "@plant/core";
 
-import {
-  AssetsSetup,
-  type ScopeHrefs,
-} from "@/components/holdings/assets-setup";
+import { AssetsSetup } from "@/components/holdings/assets-setup";
 import { SALES_TABS } from "@/lib/holdings/assets-filter";
 import { assetsSelection } from "@/lib/holdings/assets-selection";
 import { instrumentNames } from "@/lib/holdings/holding-name";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import type { KeysetParams } from "@/lib/supabase/keyset";
@@ -25,12 +23,6 @@ import {
   salesOf,
   yearsOf,
 } from "./prototype-store";
-
-export const PROTOTYPE_HREFS: ScopeHrefs = {
-  instrument: "/assets/",
-  account: "/accounts/",
-  portfolio: "/portfolios/",
-};
 
 // Activos over the prototype's store, with movements and the sales tab.
 export function PrototypeAssets({ params }: { params: KeysetParams }) {
@@ -111,7 +103,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
             : { netMonthly: null, rentalYield: null, appreciation: null },
         save: actions.realEstate,
       }}
-      hrefs={PROTOTYPE_HREFS}
+      hrefs={SCOPE_HREFS}
     />
   );
 }
