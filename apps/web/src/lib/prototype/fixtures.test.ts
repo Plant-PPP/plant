@@ -87,3 +87,17 @@ it("reads today's rates and prices through the quote reader", async () => {
   expect(snapshot.prices.BTC?.date).toBe(TODAY);
   expect(snapshot.prices.KO).toBeUndefined();
 });
+
+it("states each manual price in its instrument's currency", () => {
+  const symbols = new Set(fixtures.manualPrices.map((row) => row.symbol));
+  expect(symbols).toEqual(new Set(["KO", "GD30", "FIMAAHO"]));
+  for (const row of fixtures.manualPrices) {
+    const instrument = fixtures.instruments.find(
+      (each) => each.symbol === row.symbol,
+    );
+    expect(row.currency).toBe(instrument?.currency);
+  }
+  expect(
+    fixtures.manualPrices.find((row) => row.symbol === "GD30")?.currency,
+  ).toBe("USD");
+});

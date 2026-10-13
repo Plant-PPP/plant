@@ -179,7 +179,36 @@ it("adjusts an instrument the portfolio sold out of back in", () => {
     holdingsView(confirmed.state).active.find(
       (row) => row.id === sold.holding.id,
     )?.holding.amount,
-  ).toBe("2");
+  ).toBe("2"); // Opened again by the import, it keeps where it first came from.
+  expect(
+    confirmed.state.holdings.find((each) => each.holding.id === sold.holding.id)
+      ?.origin,
+  ).toEqual({ kind: "manual" });
+});
+
+it("records a holding an import opens as imported, with its file and day", () => {
+  const after = read("resumen.pdf");
+  const rows = after.imports[0]!.rows.map((row) =>
+    row.confidence === "low"
+      ? { ...row, quantity: String(Number(row.quantity) * 10) }
+      : row,
+  );
+  const added = rows.find((row) => row.id.endsWith("-new"))!;
+  const confirmed = confirmImport(after, "i1", rows, newId);
+  expect(confirmed.result).toEqual({ ok: true, id: "i1" });
+  const originOf = (symbol: string) =>
+    confirmed.state.holdings.find(
+      (each) =>
+        each.accountId === IOL &&
+        each.holding.asset_class === "instrument" &&
+        each.holding.instrument_symbol === symbol,
+    )?.origin;
+  expect(originOf(added.symbol)).toEqual({
+    kind: "import",
+    fileName: "resumen.pdf",
+    date: TODAY,
+  });
+  expect(originOf("AAPL")).toEqual({ kind: "manual" });
 });
 
 it("refuses a kept row with no units, changing nothing", () => {

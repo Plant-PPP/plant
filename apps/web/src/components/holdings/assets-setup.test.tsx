@@ -19,7 +19,8 @@ import {
 
 import type { HoldingActions } from "@/lib/holdings/write-actions";
 
-import { AssetsSetup } from "./assets-setup";
+import { AssetsSetup, saveHoldingEdit } from "./assets-setup";
+import { initialFields } from "./holding-fields";
 
 const done = async () => ({ ok: true as const, id: "x" });
 const ACTIONS: HoldingActions = {
@@ -740,5 +741,54 @@ describe("with movements", () => {
     expect(html).toContain("Comisiones e impuestos");
     expect(html).toContain("+US$ 14.996,00");
     expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Ventas /);
+  });
+});
+
+describe("saving an edit", () => {
+  const holding = row("h1", PRINCIPAL, "100");
+  const fields = {
+    ...initialFields(holding, { accountId: "", portfolioId: "", today: "" }),
+    amount: "200",
+  };
+
+  it("writes the holding alone on a page without details", async () => {
+    const update = jest.fn(done);
+    await saveHoldingEdit({ actions: { ...ACTIONS, update } }, holding, fields);
+    expect(update).toHaveBeenCalledWith(
+      "h1",
+      expect.not.objectContaining({ inTaxReport: expect.anything() }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      "h1",
+      expect.objectContaining({ amount: "200" }),
+    );
+  });
+
+  it("writes the holding and the report choice together with details", async () => {
+    const update = jest.fn(done);
+    const together = jest.fn(done);
+    await saveHoldingEdit(
+      {
+        actions: { ...ACTIONS, update },
+        details: {
+          originOf: () => ({ kind: "manual" }),
+          inTaxReport: () => true,
+          actions: { setInTaxReport: done, update: together },
+        },
+      },
+      holding,
+      { ...fields, inTaxReport: false },
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(together).toHaveBeenCalledWith(
+      "h1",
+      expect.objectContaining({ amount: "200" }),
+      false,
+    );
+    expect(together).toHaveBeenCalledWith(
+      "h1",
+      expect.not.objectContaining({ inTaxReport: expect.anything() }),
+      false,
+    );
   });
 });

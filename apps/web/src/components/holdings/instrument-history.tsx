@@ -4,13 +4,16 @@ import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowLeftRight } from "lucide-react";
 import Link from "next/link";
-
 import { useId } from "react";
+import { toast } from "sonner";
 
+import { dialogAnswer } from "@/components/portfolio-setup/answers";
 import type { ListChange } from "@/components/portfolio-setup/list-change";
 import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
 import { useSetupCard } from "@/components/portfolio-setup/setup-card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   DataTable,
   TruncatedText,
@@ -22,6 +25,7 @@ import {
   formatFraction,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { assetKey } from "@/lib/holdings/assets-rows";
 import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import {
   holdingInSentence,
@@ -35,19 +39,22 @@ import type {
 import type { MovementsInput } from "@/lib/holdings/movements-input";
 import { formatQuotedPrice } from "@/lib/holdings/price-input";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
+import { accountInTaxReport } from "@/lib/holdings/tax-report";
 import type {
   HoldingActions,
   MovementActions,
 } from "@/lib/holdings/write-actions";
+import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
+import type { HoldingDetails } from "./assets-setup";
 import { useAssetsUrl } from "./assets-url";
 import { UnitSelect } from "./filter-select";
-import { AccountCell, TickerChip } from "./holding-cells";
+import { AccountCell, ImportOrigin, TickerChip } from "./holding-cells";
 import {
   applyInstrumentChange,
   type ShownInstrumentHolding,
@@ -65,6 +72,20 @@ import {
 } from "./sum-text";
 
 type Row = ShownInstrumentHolding & { id: string };
+
+// The page's holdings and whether the asset counts in the report (null on a
+// page without that choice), each shown before its write is saved.
+type PageState = {
+  holdings: readonly ShownInstrumentHolding[];
+  inTaxReport: boolean | null;
+};
+type PageChange =
+  ListChange<HoldingRow> | null | { kind: "in_tax_report"; on: boolean };
+
+const applyPageChange = (state: PageState, change: PageChange): PageState =>
+  change?.kind === "in_tax_report"
+    ? { ...state, inTaxReport: change.on }
+    : { ...state, holdings: applyInstrumentChange(state.holdings, change) };
 
 const money = (value: string | null | undefined, unit: Denominator) => (
   <AmountText amount={value} unit={unit} />
@@ -86,6 +107,7 @@ export function InstrumentHistory({
   movements,
   movementActions,
   actions,
+  details,
   accounts,
   portfolios,
   instruments,
@@ -107,6 +129,8 @@ export function InstrumentHistory({
   movementActions: MovementActions;
   // A page that deletes holdings, each with its movements.
   actions: Pick<HoldingActions, "delete">;
+  // Each holding's origin and the asset's report choice.
+  details?: HoldingDetails;
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
@@ -114,10 +138,19 @@ export function InstrumentHistory({
 }) {
   const url = useAssetsUrl(params);
   const unitId = useId();
-  const { shown, pending, run } = useOptimisticWrites<
-    readonly ShownInstrumentHolding[],
-    ListChange<HoldingRow> | null
-  >(holdings, applyInstrumentChange);
+  const key = holdings[0] && assetKey(holdings[0].row.holding);
+  const {
+    shown: page,
+    pending,
+    run,
+  } = useOptimisticWrites<PageState, PageChange>(
+    {
+      holdings,
+      inTaxReport: details && key ? details.inTaxReport(key) : null,
+    },
+    applyPageChange,
+  );
+  const shown = page.holdings;
   const { heading, focusHeading, rowAction, dialogAction } = useSetupCard({
     run,
     pending,
@@ -143,24 +176,55 @@ export function InstrumentHistory({
   const revision = holdings
     .map((each) => movements.revisions.get(each.row.id) ?? 0)
     .join(".");
+  const taxId = `${unitId}-tax`;
+  const taxNoteId = `${unitId}-tax-note`;
+  const accountsExcluded = shown.every(
+    (each) => !accountInTaxReport(accounts, each.row.account.id),
+  );
+
+  // The switch keeps focus; the answer is a toast, and a refusal puts it back.
+  function setInTaxReport(on: boolean) {
+    if (!details || !key) return;
+    run(
+      { kind: "in_tax_report", on },
+      () => details.actions.setInTaxReport(key, on),
+      (result) => dialogAnswer(result, WRITE_MESSAGES.holdings),
+      (answer) => {
+        if (answer.kind === "done") {
+          toast.success(
+            on ? "Lo incluiste en el reporte" : "Lo sacaste del reporte",
+          );
+        } else if (answer.kind === "alert") toast.error(answer.text);
+      },
+    );
+  }
 
   const columns: ColumnDef<Row>[] = [
     {
       id: "account",
       header: "Cuenta",
-      cell: ({ row: { original } }) => (
-        <>
-          <AccountCell institution={original.row.account.institution} />
-          <TruncatedText
-            className="text-xs text-muted-foreground @2xl:hidden"
-            text={`${
-              original.closed
-                ? "Vendida"
-                : `${formatQuantity(original.position.quantity)} ${instrument.symbol}`
-            } · ${original.row.portfolio.name}`}
-          />
-        </>
-      ),
+      cell: ({ row: { original } }) => {
+        const origin = details?.originOf(original.row.id);
+        return (
+          <>
+            <AccountCell institution={original.row.account.institution} />
+            <TruncatedText
+              className="text-xs text-muted-foreground @2xl:hidden"
+              text={`${
+                original.closed
+                  ? "Vendida"
+                  : `${formatQuantity(original.position.quantity)} ${instrument.symbol}`
+              } · ${original.row.portfolio.name}`}
+            />
+            {origin?.kind === "import" && (
+              <ImportOrigin
+                origin={origin}
+                className="block truncate text-xs text-muted-foreground underline"
+              />
+            )}
+          </>
+        );
+      },
     },
     {
       id: "portfolio",
@@ -279,6 +343,28 @@ export function InstrumentHistory({
         </p>
       ) : (
         <>
+          {page.inTaxReport !== null && (
+            <div className="grid gap-1">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id={taxId}
+                  checked={page.inTaxReport}
+                  aria-disabled={pending || undefined}
+                  aria-describedby={accountsExcluded ? taxNoteId : undefined}
+                  onCheckedChange={(on) => {
+                    if (!pending) setInTaxReport(on);
+                  }}
+                />
+                <Label htmlFor={taxId}>Incluir en el reporte</Label>
+              </div>
+              {accountsExcluded && (
+                <p id={taxNoteId} className="text-xs text-muted-foreground">
+                  Las cuentas donde lo tenés no se incluyen en el reporte, así
+                  que este activo tampoco.
+                </p>
+              )}
+            </div>
+          )}
           <div
             className={`grid gap-3 ${pending ? "opacity-60" : ""}`}
             aria-busy={pending || undefined}

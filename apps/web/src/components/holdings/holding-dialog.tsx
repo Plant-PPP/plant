@@ -9,6 +9,7 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,7 +24,12 @@ import {
   useFieldAlert,
 } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
-import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import {
+  type HoldingOrigin,
+  holdingName,
+  instrumentNames,
+  originText,
+} from "@/lib/holdings/holding-name";
 import { classOf, HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { ASSET_CLASSES, ASSET_CLASS_LABELS } from "@/lib/holdings/messages";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
@@ -31,6 +37,7 @@ import {
   holdingInsertSchema,
   holdingUpdateSchema,
 } from "@/lib/holdings/schemas";
+import { accountInTaxReport } from "@/lib/holdings/tax-report";
 import type {
   PortfolioRow,
   SourceConnectionRow,
@@ -47,7 +54,9 @@ import {
   toUpdate,
 } from "./holding-fields";
 import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
-import { instrumentLabel } from "@/lib/holdings/holding-name";
+
+import { ImportOrigin } from "./holding-cells";
+import { InstrumentPicker } from "./instrument-picker";
 
 // What the amount is, by class.
 const AMOUNT_LABELS: Record<AssetClass, string> = {
@@ -71,10 +80,12 @@ const accountOf = (row: SourceConnectionRow): HoldingRow["account"] => ({
 // Creates or edits a holding, handing its fields to `onSubmit` as it closes;
 // a refused write opens it again with the fields and the alert. An edit keeps
 // the class, the account and the instrument; it can move the holding to
-// another portfolio.
+// another portfolio. With `details`, an edit shows where the holding came from
+// and whether its asset counts in the report.
 export function HoldingDialog({
   mode,
   row,
+  details,
   accounts,
   portfolios,
   instruments,
@@ -87,6 +98,7 @@ export function HoldingDialog({
 }: {
   mode: "create" | "edit";
   row?: HoldingRow;
+  details?: { origin: HoldingOrigin | undefined };
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
@@ -102,6 +114,9 @@ export function HoldingDialog({
   const id = useId();
   const fieldId = (field: DialogField | "assetClass") => `${id}-${field}`;
   const alertId = `${id}-alert`;
+  const taxId = `${id}-tax`;
+  const taxNoteId = `${id}-tax-note`;
+  const accountIncluded = !row || accountInTaxReport(accounts, row.account.id);
   const [fields, setFields] = useState(initial);
   // The portfolio follows the account's until the user picks one.
   const [portfolioPicked, setPortfolioPicked] = useState(
@@ -185,7 +200,7 @@ export function HoldingDialog({
 
   const textField = (
     field: DialogField,
-    key: keyof HoldingFields,
+    key: Exclude<keyof HoldingFields, "inTaxReport">,
     label: string,
     props: React.ComponentProps<typeof Input> = {},
   ) => (
@@ -280,6 +295,21 @@ export function HoldingDialog({
                     </dd>
                   </>
                 )}
+                {details?.origin && (
+                  <>
+                    <dt className="text-muted-foreground">Origen</dt>
+                    <dd>
+                      {details.origin.kind === "import" ? (
+                        <ImportOrigin
+                          origin={details.origin}
+                          className="underline"
+                        />
+                      ) : (
+                        originText(details.origin)
+                      )}
+                    </dd>
+                  </>
+                )}
               </dl>
             )
           )}
@@ -308,22 +338,20 @@ export function HoldingDialog({
 
           {mode === "create" && shown.has("instrument_symbol") && (
             <div className="grid gap-2">
-              <Label htmlFor={fieldId("instrument")}>Instrumento</Label>
-              <Select
-                value={fields.instrument}
-                onValueChange={pick("instrument", set("instrument"))}
+              <Label
+                id={`${fieldId("instrument")}-label`}
+                htmlFor={fieldId("instrument")}
               >
-                <SelectTrigger {...control("instrument")} className="w-full">
-                  <SelectValue placeholder="Elegí un instrumento" />
-                </SelectTrigger>
-                <SelectContent>
-                  {instruments.map((each) => (
-                    <SelectItem key={each.symbol} value={each.symbol}>
-                      {instrumentLabel(each.symbol, each.name)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                Instrumento
+              </Label>
+              <InstrumentPicker
+                {...control("instrument")}
+                labelId={`${fieldId("instrument")}-label`}
+                instruments={instruments}
+                value={fields.instrument}
+                onChange={pick("instrument", set("instrument"))}
+                placeholder="Elegí un instrumento"
+              />
             </div>
           )}
 
@@ -374,6 +402,25 @@ export function HoldingDialog({
                 : "Nombre",
               { autoComplete: "off" },
             )}
+
+          {mode === "edit" && details && row && (
+            <div className="grid gap-1">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor={taxId}>Incluir en el reporte</Label>
+                <Switch
+                  id={taxId}
+                  checked={fields.inTaxReport ?? true}
+                  onCheckedChange={set("inTaxReport")}
+                  aria-describedby={accountIncluded ? undefined : taxNoteId}
+                />
+              </div>
+              {!accountIncluded && (
+                <p id={taxNoteId} className="text-xs text-muted-foreground">
+                  {`La cuenta ${row.account.institution} no se incluye en el reporte, así que esta tenencia tampoco.`}
+                </p>
+              )}
+            </div>
+          )}
 
           {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
         </div>

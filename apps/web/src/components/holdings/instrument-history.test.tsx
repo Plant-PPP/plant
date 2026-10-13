@@ -17,6 +17,9 @@ import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import type { MovementLine } from "@/lib/holdings/movements-input";
 import type { HoldingRow } from "@/lib/holdings/read";
 
+import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
+
+import type { HoldingDetails } from "./assets-setup";
 import { InstrumentHistory } from "./instrument-history";
 import { instrumentPreset } from "./movement-dialogs";
 
@@ -60,7 +63,13 @@ const held = (
 
 const done = async () => ({ ok: true as const, id: "x" });
 
-function render(holdings: InstrumentHolding[]) {
+function render(
+  holdings: InstrumentHolding[],
+  extra: {
+    details?: HoldingDetails;
+    accounts?: SourceConnectionRow[];
+  } = {},
+) {
   return renderToStaticMarkup(
     <InstrumentHistory
       instrument={ETH}
@@ -85,7 +94,8 @@ function render(holdings: InstrumentHolding[]) {
       }}
       movementActions={{ create: done, update: done, delete: done }}
       actions={{ delete: async () => ({ ok: true, id: "x" }) }}
-      accounts={[]}
+      details={extra.details}
+      accounts={extra.accounts ?? []}
       portfolios={[]}
       instruments={[ETH]}
       today="2026-10-12"
@@ -217,5 +227,59 @@ describe("with movements loaded", () => {
   it("puts only the type under the date of a line whose holding is gone", () => {
     const html = render([held("e1", "IOL")]);
     expect(html).toMatch(/01\/09\/2026<span[^>]*@2xl:hidden[^>]*>Venta</);
+  });
+});
+
+describe("with details", () => {
+  const details = (
+    inTaxReport: boolean,
+    origin: HoldingDetails["originOf"] = () => ({ kind: "manual" }),
+  ): HoldingDetails => ({
+    originOf: origin,
+    inTaxReport: (key) => key === "instrument:ETH" && inTaxReport,
+    actions: { setInTaxReport: done, update: done },
+  });
+
+  it("has no report switch and no origin without them", () => {
+    const html = render([held("e1", "IOL")]);
+    expect(html).not.toContain("Incluir en el reporte");
+    expect(html).not.toContain("Importada");
+  });
+
+  it("shows the asset's report switch with its choice", () => {
+    const html = render([held("e1", "IOL")], { details: details(false) });
+    expect(html).toContain("Incluir en el reporte</label>");
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="false"/);
+    expect(html).not.toContain("no se incluyen en el reporte");
+  });
+
+  it("links an imported holding to the imports, and says nothing of a typed one", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance")], {
+      details: details(true, (id) =>
+        id === "e1"
+          ? { kind: "import", fileName: "iol.pdf", date: "2026-10-01" }
+          : { kind: "manual" },
+      ),
+    });
+    expect(html).toContain(">Importada de iol.pdf el 01/10/2026</a>");
+    expect(html.match(/Importada de/g)).toHaveLength(2);
+    expect(html).not.toContain("Cargada a mano");
+  });
+
+  it("says the accounts holding it leave it out of the report", () => {
+    const html = render([held("e1", "IOL")], {
+      details: details(true),
+      accounts: [
+        {
+          id: "a-e1",
+          institution: "IOL",
+          includeInTaxReport: false,
+          portfolio: { id: "p1", name: "Principal", archived: false },
+        },
+      ],
+    });
+    expect(html).toContain(
+      "Las cuentas donde lo tenés no se incluyen en el reporte, así que este activo tampoco.",
+    );
   });
 });

@@ -149,11 +149,14 @@ export function finishReading(
       discarded: false,
     };
   });
+  // One the account could hold: a type and currency it already has.
   const currencies = new Set(truth.map((row) => row.currency));
+  const types = new Set(symbols.map((symbol) => instrumentOf(symbol).type));
   const extra = state.instruments.find(
     (each) =>
       !held.has(each.symbol) &&
       currencies.has(each.currency) &&
+      types.has(each.type) &&
       priceOf(each.symbol) !== null,
   );
   if (extra) {
@@ -291,7 +294,11 @@ export function confirmImport(
         reference: null,
         note: `Carga de ${item.fileName}`.slice(0, 200),
       },
-      { operationId: newId(), newId },
+      {
+        operationId: newId(),
+        newId,
+        origin: { kind: "import", fileName: item.fileName, date },
+      },
     );
     if (!written.result.ok) return { state, result: written.result };
     next = written.state;

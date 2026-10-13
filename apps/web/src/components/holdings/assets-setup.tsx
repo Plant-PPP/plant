@@ -55,6 +55,7 @@ import {
   currencyOf,
   holdingInSentence,
   holdingName,
+  type HoldingOrigin,
   holdingPlace,
   instrumentNames,
 } from "@/lib/holdings/holding-name";
@@ -65,6 +66,7 @@ import {
   overExactSum,
 } from "@/lib/holdings/cost-totals";
 import {
+  assetKey,
   type AssetsRow,
   byHolding,
   byInstrument,
@@ -174,6 +176,36 @@ export type ManualPrices = {
   actions: PriceActions;
 };
 
+// Where each holding came from and which assets count in the report, keyed by
+// `assetKey`. A page with them shows each holding's origin and lets the user
+// leave an asset out; its edit then writes the holding and the choice
+// together, both or neither.
+export type HoldingDetails = {
+  originOf: (holdingId: string) => HoldingOrigin | undefined;
+  inTaxReport: (assetKey: string) => boolean;
+  actions: {
+    setInTaxReport: (assetKey: string, on: boolean) => Promise<WriteResult>;
+    update: (
+      id: string,
+      input: unknown,
+      inTaxReport: boolean,
+    ) => Promise<WriteResult>;
+  };
+};
+
+// An edit's write: with `details`, the holding and its asset's report choice
+// together; otherwise the holding alone, whose parsed update takes no flag.
+export const saveHoldingEdit = (
+  { actions, details }: { actions: HoldingActions; details?: HoldingDetails },
+  row: HoldingRow,
+  fields: HoldingFields,
+): Promise<WriteResult> => {
+  const input = toUpdate(fields, row.portfolio.id);
+  return details
+    ? details.actions.update(row.id, input, fields.inTaxReport ?? true)
+    : actions.update(row.id, input);
+};
+
 // A page offers the sales tab exactly when it passes movements. Where it
 // keeps movements, Tenencias shows an instrument as one row across its
 // holdings and links it to the instrument's page, which holds each holding's
@@ -210,6 +242,7 @@ export function AssetsSetup({
   movements,
   movementActions,
   prices,
+  details,
   hrefs,
 }: {
   holdings: HoldingsView;
@@ -224,6 +257,7 @@ export function AssetsSetup({
   today: string;
   actions: HoldingActions;
   prices?: ManualPrices;
+  details?: HoldingDetails;
 } & MovementProps) {
   const {
     shown: view,
@@ -1009,9 +1043,18 @@ export function AssetsSetup({
           row={dialog.row}
           {...dialogBase}
           initial={
-            dialog.initial ??
-            initialFields(dialog.row, { accountId: "", portfolioId: "", today })
+            dialog.initial ?? {
+              ...initialFields(dialog.row, {
+                accountId: "",
+                portfolioId: "",
+                today,
+              }),
+              ...(details && {
+                inTaxReport: details.inTaxReport(assetKey(dialog.row.holding)),
+              }),
+            }
           }
+          details={details && { origin: details.originOf(dialog.row.id) }}
           initialError={dialog.initialError}
           onSubmit={(fields, chosen) => {
             const row = holdingRow(dialog.row.id, fields, chosen);
@@ -1019,11 +1062,7 @@ export function AssetsSetup({
               dialog,
               fields,
               { kind: "update", row },
-              () =>
-                actions.update(
-                  dialog.row.id,
-                  toUpdate(fields, dialog.row.portfolio.id),
-                ),
+              () => saveHoldingEdit({ actions, details }, dialog.row, fields),
               "Guardaste",
               row,
             );

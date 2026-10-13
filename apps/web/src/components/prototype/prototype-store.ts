@@ -53,6 +53,8 @@ import {
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
+import { assetKey } from "@/lib/holdings/assets-rows";
+import type { HoldingOrigin } from "@/lib/holdings/holding-name";
 import type {
   MovementLine,
   OperationParts,
@@ -109,6 +111,8 @@ export type PrototypeState = {
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
+  // The assets the user left out of the report, by `assetKey`.
+  outOfTaxReport: ReadonlySet<string>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -129,7 +133,10 @@ export type StoredHolding = {
   accountId: string;
   portfolioId: string;
   closed: boolean;
+  origin: HoldingOrigin;
 };
+
+const MANUAL: HoldingOrigin = { kind: "manual" };
 
 export function initialState(
   fixtures: Fixtures,
@@ -155,6 +162,7 @@ export function initialState(
       accountId: row.account.id,
       portfolioId: row.portfolio.id,
       closed: fixtures.closed.includes(row.id),
+      origin: MANUAL,
     })),
     movements,
     nextEntryOrder:
@@ -162,6 +170,7 @@ export function initialState(
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
+    outOfTaxReport: new Set(),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
     imports: [],
@@ -685,6 +694,14 @@ export function movementsPage(
   };
 }
 
+// Today's quotes with the user's manual prices, as every page and the
+// assistant value them.
+export const pricedSnapshotOf = (
+  state: PrototypeState,
+  snapshot: QuoteSnapshot,
+): ReturnType<typeof withManualPrices> =>
+  withManualPrices(snapshot, state.manualPrices);
+
 // --- Writes ----------------------------------------------------------------
 
 export type Write<R> = { state: PrototypeState; result: R };
@@ -748,6 +765,7 @@ export function createHolding(
             accountId: account.id,
             portfolioId: portfolio.id,
             closed: false,
+            origin: MANUAL,
           },
           ...state.holdings,
         ],
@@ -794,6 +812,7 @@ export function createHolding(
             accountId: account.id,
             portfolioId: portfolio.id,
             closed: false,
+            origin: MANUAL,
           },
           ...state.holdings,
         ],
@@ -936,7 +955,9 @@ export const holdingIn = (
 // Records an operation (`replacing` none) or an edit of one: each part becomes
 // a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
-// amount). Every touched holding is admitted again, or nothing changes.
+// amount). Every touched holding is admitted again, or nothing changes. A
+// holding it creates comes from `origin`; one sold to zero and opened again
+// keeps its own.
 export function writeOperation(
   state: PrototypeState,
   input: unknown,
@@ -944,7 +965,13 @@ export function writeOperation(
     operationId,
     replacing = false,
     newId,
-  }: { operationId: string; replacing?: boolean; newId: () => string },
+    origin = MANUAL,
+  }: {
+    operationId: string;
+    replacing?: boolean;
+    newId: () => string;
+    origin?: HoldingOrigin;
+  },
 ): Write<MovementResult> {
   const parsed = operationInputSchema.safeParse(input);
   if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
@@ -1066,6 +1093,7 @@ export function writeOperation(
         next = createdHolding(next, account, instrument, portfolio, {
           id: holdingId,
           quantity: sizes[index]!,
+          origin,
         });
       }
       const own = touched.get(holdingId) ?? [
@@ -1138,7 +1166,11 @@ function createdHolding(
   account: SourceConnectionRow,
   instrument: InstrumentRow,
   portfolio: PortfolioRow,
-  { id, quantity }: { id: string; quantity: string },
+  {
+    id,
+    quantity,
+    origin,
+  }: { id: string; quantity: string; origin: HoldingOrigin },
 ): PrototypeState {
   const { holding } = rowOf(
     id,
@@ -1167,6 +1199,7 @@ function createdHolding(
         accountId: account.id,
         portfolioId: portfolio.id,
         closed: false,
+        origin,
       },
       ...state.holdings,
     ],
@@ -1216,17 +1249,65 @@ export function deleteHolding(
 }
 
 function removeHolding(state: PrototypeState, id: string): PrototypeState {
-  const holdings = state.holdings.filter((each) => each.holding.id !== id);
+  const removed = state.holdings.find((each) => each.holding.id === id);
+  const holdings = state.holdings.filter((each) => each !== removed);
+  // The asset's report choice goes with its last holding.
+  const key = removed && assetKey(removed.holding);
+  const outOfTaxReport =
+    key !== undefined &&
+    state.outOfTaxReport.has(key) &&
+    !holdings.some((each) => assetKey(each.holding) === key)
+      ? new Set([...state.outOfTaxReport].filter((each) => each !== key))
+      : state.outOfTaxReport;
   // A holding with no movements leaves the movements map the same object,
   // so nothing that watches it sees a change.
-  if (!state.movements.has(id)) return { ...state, holdings };
+  if (!state.movements.has(id)) return { ...state, holdings, outOfTaxReport };
   const movements = new Map(state.movements);
   movements.delete(id);
   // The holdings it replayed with load their tables again: an operation it
   // shared shows one part fewer.
   const revisions = bumpGroup(state, id);
   revisions.delete(id);
-  return { ...state, holdings, movements, revisions };
+  return { ...state, holdings, movements, revisions, outOfTaxReport };
+}
+
+// Whether an asset counts in the report. Any of its holdings, open or closed,
+// makes it one the user has.
+export function setInTaxReport(
+  state: PrototypeState,
+  key: string,
+  on: boolean,
+): Write<WriteResult> {
+  if (!state.holdings.some((each) => assetKey(each.holding) === key)) {
+    return refusedWrite(state, "not_found");
+  }
+  if (state.outOfTaxReport.has(key) !== on) {
+    return { state, result: { ok: true, id: key } };
+  }
+  const outOfTaxReport = new Set(state.outOfTaxReport);
+  if (on) outOfTaxReport.delete(key);
+  else outOfTaxReport.add(key);
+  return { state: { ...state, outOfTaxReport }, result: { ok: true, id: key } };
+}
+
+// A holding's edit and its asset's report choice, both or neither.
+export function updateHoldingDetails(
+  state: PrototypeState,
+  id: string,
+  input: unknown,
+  inTaxReport: boolean,
+): Write<WriteResult> {
+  const updated = updateHolding(state, id, input);
+  if (!updated.result.ok) return updated;
+  const stored = updated.state.holdings.find((each) => each.holding.id === id)!;
+  const flagged = setInTaxReport(
+    updated.state,
+    assetKey(stored.holding),
+    inTaxReport,
+  );
+  return flagged.result.ok
+    ? { state: flagged.state, result: updated.result }
+    : refused(state, flagged.result);
 }
 
 // Every part of an operation, each holding re-admitted without it: refused

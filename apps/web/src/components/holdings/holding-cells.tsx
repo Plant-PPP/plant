@@ -3,6 +3,24 @@ import Link from "next/link";
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { TruncatedText } from "@/components/ui/data-table";
 import { countOf } from "@/lib/format/text";
+import { type HoldingOrigin, originText } from "@/lib/holdings/holding-name";
+
+// An imported holding's origin, linked to the imports list: a confirmed
+// import's own review no longer opens.
+export function ImportOrigin({
+  origin,
+  className,
+}: {
+  origin: Extract<HoldingOrigin, { kind: "import" }>;
+  className?: string;
+}) {
+  const text = originText(origin);
+  return (
+    <Link href="/import" title={text} className={className}>
+      {text}
+    </Link>
+  );
+}
 
 // The ticker beside an asset's name.
 export function TickerChip({ ticker }: { ticker: string }) {

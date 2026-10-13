@@ -1,7 +1,19 @@
 import type { Holding } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
+import { formatDate } from "@/lib/format/date";
+
 import { ASSET_CLASS_LABELS } from "./messages";
+
+// Where a holding came from: typed by the user, or a confirmed import's file.
+export type HoldingOrigin =
+  { kind: "manual" } | { kind: "import"; fileName: string; date: string };
+
+// A holding's origin as its detail reads it.
+export const originText = (origin: HoldingOrigin): string =>
+  origin.kind === "manual"
+    ? "Cargada a mano"
+    : `Importada de ${origin.fileName} el ${formatDate(origin.date)}`;
 
 // Each instrument's name by its symbol.
 export function instrumentNames(

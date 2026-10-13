@@ -21,7 +21,8 @@ import type {
 } from "@/lib/portfolio-setup/read";
 
 // The prototype's made-up data, sized like most users' net worth: a dozen
-// holdings across CEDEARs and crypto, some cash and one apartment, with two
+// holdings across CEDEARs, bonds, an FCI and crypto, some cash and one
+// apartment, with two
 // years of purchases, sales and dividends, the dollar rates and prices of every
 // day, and the manual prices of what the feeds do not price. Built from
 // `today`, so the same day gives the same data.
@@ -79,6 +80,9 @@ const INSTRUMENTS: InstrumentRow[] = [
   { symbol: "SPY", name: "SPDR S&P 500", currency: "ARS", type: "cedear" },
   { symbol: "TSLA", name: "Tesla", currency: "ARS", type: "cedear" },
   { symbol: "AL30", name: "Bonar 2030", currency: "ARS", type: "bond" },
+  { symbol: "GD30", name: "Global 2030", currency: "USD", type: "bond" },
+  { symbol: "FIMAAHO", name: "FCI Ahorro Pesos", currency: "ARS", type: "fci" },
+  { symbol: "TX26", name: "Boncer 2026", currency: "ARS", type: "bond" },
 ];
 
 // The dollars in cents, `day` days into the history: they climb over the two
@@ -89,67 +93,72 @@ const officialCents = (day: number) => mepCents(day) - 15_000 - day * 3;
 // The UVA climbs every day, with inflation.
 const uvaCents = (day: number) => 120_000 + day * 55;
 
-// How a symbol's dollar price moves: today's, what share of it it was two
-// years back (in percent), and a wave of `amplitude` per mille every
-// `period` days on top.
+// How a symbol's price per unit moves, in its currency's cents: today's, what
+// share of it it was two years back (in percent), and a wave of `amplitude`
+// per mille every `period` days on top.
 type PriceModel = {
-  usdCents: number;
+  cents: number;
   startPercent: number;
   amplitude: number;
   period: number;
-  // A CEDEAR's price is its dollar price at the CCL, in pesos.
+  // A CEDEAR's `cents` are US cents, and its price is that dollar price at
+  // the CCL, in pesos.
   cedear?: true;
 };
 
 const MODELS: Record<string, PriceModel> = {
-  BTC: { usdCents: 6_512_345, startPercent: 45, amplitude: 120, period: 97 },
-  ETH: { usdCents: 251_020, startPercent: 70, amplitude: 150, period: 71 },
-  SOL: { usdCents: 15_230, startPercent: 60, amplitude: 200, period: 53 },
+  BTC: { cents: 6_512_345, startPercent: 45, amplitude: 120, period: 97 },
+  ETH: { cents: 251_020, startPercent: 70, amplitude: 150, period: 71 },
+  SOL: { cents: 15_230, startPercent: 60, amplitude: 200, period: 53 },
   AAPL: {
-    usdCents: 1_480,
+    cents: 1_480,
     startPercent: 80,
     amplitude: 60,
     period: 89,
     cedear: true,
   },
   KO: {
-    usdCents: 520,
+    cents: 520,
     startPercent: 92,
     amplitude: 40,
     period: 120,
     cedear: true,
   },
   MELI: {
-    usdCents: 2_050,
+    cents: 2_050,
     startPercent: 70,
     amplitude: 90,
     period: 61,
     cedear: true,
   },
   NVDA: {
-    usdCents: 910,
+    cents: 910,
     startPercent: 40,
     amplitude: 110,
     period: 67,
     cedear: true,
   },
   SPY: {
-    usdCents: 3_100,
+    cents: 3_100,
     startPercent: 78,
     amplitude: 40,
     period: 101,
     cedear: true,
   },
   TSLA: {
-    usdCents: 1_800,
+    cents: 1_800,
     startPercent: 60,
     amplitude: 150,
     period: 59,
     cedear: true,
   },
+  GD30: { cents: 60, startPercent: 80, amplitude: 30, period: 45 },
+  FIMAAHO: { cents: 4_500, startPercent: 45, amplitude: 2, period: 30 },
+  TX26: { cents: 1_150, startPercent: 50, amplitude: 20, period: 40 },
 };
 
-// The feeds price every symbol above but KO, which takes manual prices.
+// The feeds price every symbol above but KO, GD30 and FIMAAHO, which take
+// manual prices, and TX26, which has none.
 const FED = ["BTC", "ETH", "SOL", "AAPL", "MELI", "NVDA", "SPY", "TSLA"];
 
 // A symbol's price in cents `daysAgo` days back, in its currency.
@@ -158,7 +167,7 @@ function priceCents(symbol: string, daysAgo: number): number {
   if (!model) throw new RangeError(`No price model for ${symbol}`);
   const day = HISTORY_DAYS - daysAgo;
   const trend =
-    (model.usdCents *
+    (model.cents *
       (model.startPercent * HISTORY_DAYS + (100 - model.startPercent) * day)) /
     (100 * HISTORY_DAYS);
   // A triangle wave from -500 to 500.
@@ -201,14 +210,23 @@ function quotesFor(today: string): StoredQuotes {
   return { fxRates, prices };
 }
 
-// KO's prices as the user stated them, the latest twelve days back.
+// The prices the user stated for what the feeds do not price, each in its
+// instrument's currency, the latest a few days back.
+const MANUAL_PRICE_DAYS: Record<string, number[]> = {
+  KO: [75, 40, 12],
+  GD30: [60, 20, 5],
+  FIMAAHO: [30, 3],
+};
+
 const manualPricesFor = (today: string): ManualPrice[] =>
-  [75, 40, 12].map((daysAgo) => ({
-    symbol: "KO",
-    price_date: addDays(today, -daysAgo),
-    price: priceOn("KO", daysAgo),
-    currency: "ARS",
-  }));
+  Object.entries(MANUAL_PRICE_DAYS).flatMap(([symbol, days]) =>
+    days.map((daysAgo) => ({
+      symbol,
+      price_date: addDays(today, -daysAgo),
+      price: priceOn(symbol, daysAgo),
+      currency: INSTRUMENTS.find((row) => row.symbol === symbol)!.currency,
+    })),
+  );
 
 type Placed = Pick<HoldingRow, "account" | "portfolio">;
 const at = (account: SourceConnectionRow, portfolio: PortfolioRow): Placed => ({
@@ -430,6 +448,30 @@ const INSTRUMENT_HOLDINGS: InstrumentHolding[] = [
     currency: "ARS",
     placed: at(ACCOUNTS.cocos, PORTFOLIOS.corto),
     steps: [buy(420, "25"), buy(350, "15"), sell(100, "40", "COC-90215")],
+  },
+  // Priced by hand, each bought on the day it opened, so every month since
+  // has a trade price.
+  {
+    id: "c1000000-0000-4000-8000-000000000011",
+    symbol: "GD30",
+    currency: "USD",
+    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
+    steps: [open(400, "5000"), buy(400, "3000"), buy(150, "2000")],
+  },
+  {
+    id: "c1000000-0000-4000-8000-000000000012",
+    symbol: "FIMAAHO",
+    currency: "ARS",
+    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
+    steps: [open(360, "20000"), buy(360, "5000"), buy(90, "10000")],
+  },
+  // With no price at all: it shows "Sin cotización".
+  {
+    id: "c1000000-0000-4000-8000-000000000013",
+    symbol: "TX26",
+    currency: "ARS",
+    placed: at(ACCOUNTS.balanz, PORTFOLIOS.largo),
+    steps: [open(330, "10000"), buy(330, "5000")],
   },
 ];
 
