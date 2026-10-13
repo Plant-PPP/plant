@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Charts in the real chat (PLA-53, PLA-83)
+
+- **`renderChart` draws one of five charts from the tools' own figures**: net worth at each close (a line), the assets split by kind, the largest holdings, what the user expects to collect by month, and what they owe (bars). The model picks the kind, and a portfolio for the split and the holdings. The server builds the points with the same functions the other tools answer from, so a chart's numbers are never the model's. The model gets the points to comment on.
+- **The answer keeps its charts in its metadata**, at most three, each with at most 12 points and labels cut to 30 characters (by code point, so a cut never splits one). An empty chart, or one the answer already has, is left out, and so are the last charts while the metadata, weighed with every source a turn can add, would pass 3300 bytes of JSON: jsonb runs up to about a sixth over the text for a chart's small objects, and the column keeps 4096 bytes. The transcript draws them with the prototype's chart cards (larger view, CSV and PNG), once the answer has finished, like its day and dollar. A conversation reopened shows them again.
+- **No Vega-Lite yet (PLA-29).** The prototype's bars and line already take the app's chart colors in light and dark and need no `eval` under the CSP, and Resumen draws its own chart. Vega-Lite waits until a chart needs more than bars and a line.
+
 ## 2026-10-14 · The assistant's other five tools (PLA-81)
 
 - **`getIncomeEvents`, `getLiabilities`, `listTransactions`, `getAssetInfo` and `getImportStatus` read what the first five read.** The ledger, the debts and the quotes come from the same read of the turn (`readCloses`, through the session's client), valued with the closes' snapshot of today, so a debt or a price agrees with `getPortfolioSummary`. `getImportStatus` reads Cargar's list (`readImports`). No tool takes a user: RLS keeps every read to the session's rows.

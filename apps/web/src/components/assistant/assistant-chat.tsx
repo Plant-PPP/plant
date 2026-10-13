@@ -32,7 +32,8 @@ function refusalOf(error: Error): string {
   return message !== "" && message.length <= 120 ? message : ANSWER_FAILED;
 }
 
-const asUIMessage = (message: ChatMessage): AssistantUIMessage =>
+// A stored message back as the chat holds it, its charts kept.
+export const asUIMessage = (message: ChatMessage): AssistantUIMessage =>
   message.role === "user"
     ? {
         id: message.id,
@@ -48,6 +49,7 @@ const asUIMessage = (message: ChatMessage): AssistantUIMessage =>
           rate: message.rate,
           sources: message.sources,
           complete: true,
+          charts: message.charts,
         },
       };
 

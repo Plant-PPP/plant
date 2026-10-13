@@ -29,8 +29,9 @@ export const barsOf = (
   points: ChartPart["points"],
 ): ChartPart => ({ kind: "bars", title, unit, points });
 
-// The most charts one answer shows.
+// The most charts one answer shows, and the most points each draws.
 export const MAX_CHARTS = 3;
+export const MAX_CHART_POINTS = 12;
 
 // A table an answer carries: a row per item, its day, what it is and its
 // value in the conversation's unit.
@@ -95,6 +96,8 @@ export type AnswerMetadata = {
   rate: AssistantMessage["rate"];
   sources: string[];
   complete: boolean;
+  // The charts its tools drew, kept with the answer.
+  charts?: ChartPart[];
 };
 
 // The most questions a month on the beta plan. A question counts once asked,

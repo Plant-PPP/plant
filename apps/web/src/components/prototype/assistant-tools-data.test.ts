@@ -45,7 +45,7 @@ jest.mock("@/lib/holdings/read", () => ({
 }));
 
 import { incomeCalendar } from "@/lib/assistant/income";
-import { assistantData } from "@/lib/assistant/tools-data";
+import { assistantData, CHART_TOPICS } from "@/lib/assistant/tools-data";
 import { pricedToday } from "@/lib/summary/compute";
 import { summaryValuation } from "@/lib/summary/valuation";
 
@@ -299,4 +299,26 @@ it("reads everything through the session's client", async () => {
     expect.anything(),
   );
   expect(mockReadImports).toHaveBeenCalledWith(SESSION, TODAY);
+});
+
+it("draws net worth as the history gives it, and caps every chart", async () => {
+  const tools = data();
+  const history = await tools.netWorthHistory();
+  const drawn = await tools.chart("net_worth");
+  if (!("chart" in drawn)) throw new Error();
+  expect(drawn.chart.kind).toBe("line");
+  expect(drawn.chart.points.map((point) => point.value)).toEqual(
+    history.months.slice(0, 12).map((month) => month.endValue),
+  );
+  for (const kind of CHART_TOPICS) {
+    const each = await tools.chart(kind);
+    if (!("chart" in each)) throw new Error(kind);
+    expect(each.chart.points.length).toBeLessThanOrEqual(12);
+    expect(each.chart.points.every((point) => point.label.length <= 30)).toBe(
+      true,
+    );
+  }
+  expect(await tools.chart("holdings", "nope")).toMatchObject({
+    error: "unknown_portfolio",
+  });
 });

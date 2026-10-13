@@ -21,10 +21,13 @@ import { ADVICE_ANSWER, isAdvice } from "@/lib/assistant/advice";
 import {
   ANSWER_FAILED,
   type AnswerMetadata,
+  type ChartPart,
   type ChatUnit,
+  MAX_CHARTS,
   QUOTA_USED,
   titleOf,
 } from "@/lib/assistant/chat";
+import { SOURCES } from "@/lib/assistant/figures";
 import { textOf } from "@/lib/assistant/messages-view";
 import type { AssistantStore, StoredMessage } from "@/lib/assistant/store";
 import { assistantData } from "@/lib/assistant/tools-data";
@@ -91,6 +94,28 @@ const forModel = (message: StoredMessage): AssistantUIMessage => {
     ],
   };
 };
+
+// The most an answer's metadata takes as JSON. Its column keeps 4096 bytes of
+// jsonb (ai_messages.metadata), which runs up to about a sixth over the JSON
+// text for a chart's many small objects.
+const METADATA_BYTES = 3300;
+const bytesOf = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).length;
+
+// An answer's metadata as kept, its last charts left out until it fits,
+// weighed as it would be with every source a turn can add.
+function fitted(metadata: AnswerMetadata & { charts: ChartPart[] }) {
+  const charts = [...metadata.charts];
+  const worst = (kept: ChartPart[]) =>
+    bytesOf({
+      ...metadata,
+      sources: Object.values(SOURCES),
+      complete: false,
+      charts: kept,
+    });
+  while (charts.length > 0 && worst(charts) > METADATA_BYTES) charts.pop();
+  return { ...metadata, charts };
+}
 
 const stored = (message: AssistantUIMessage): StoredMessage => ({
   id: message.id,
@@ -208,11 +233,12 @@ export async function runAssistantTurn({
   const history = await store.history(userId, conversationId, HISTORY_TURNS);
   const data = assistantData({ client, context, unit, today });
   // What the answer read, gathered from its tools' results.
-  const read: AnswerMetadata = {
+  const read: AnswerMetadata & { charts: ChartPart[] } = {
     asOf: today,
     rate: null,
     sources: [],
     complete: true,
+    charts: [],
   };
   let steps = 0;
   let toolCalls = 0;
@@ -249,6 +275,22 @@ export async function runAssistantTurn({
           read.rate = output.rate;
         }
         if (output.complete === false) read.complete = false;
+        // A chart drawn on the server, at most MAX_CHARTS an answer, and
+        // only while the answer's metadata stays within what a message keeps.
+        // An empty chart, or one the answer already has, is left out.
+        if ("chart" in output && read.charts.length < MAX_CHARTS) {
+          const chart = output.chart as ChartPart;
+          const drawn = JSON.stringify(chart);
+          if (
+            chart.points.length > 0 &&
+            !read.charts.some((each) => JSON.stringify(each) === drawn)
+          ) {
+            read.charts = fitted({
+              ...read,
+              charts: [...read.charts, chart],
+            }).charts;
+          }
+        }
       }
     },
   });
@@ -268,7 +310,7 @@ export async function runAssistantTurn({
       abortSignal: AbortSignal.timeout(TURN_MS),
       generateMessageId: newId,
       messageMetadata: ({ part }) =>
-        part.type === "finish" ? { ...read } : undefined,
+        part.type === "finish" ? fitted(read) : undefined,
       onFinish: async ({ responseMessage, outcome, finishReason }) => {
         const answer = responseMessage as AssistantUIMessage;
         if (

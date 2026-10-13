@@ -37,7 +37,12 @@ import { closesOf, yearsOfCloses } from "@/lib/summary/compute";
 import { type ClosesRead, readCloses } from "@/lib/summary/read";
 import { pricedToday, summaryValuation } from "@/lib/summary/valuation";
 
-import type { AnswerMetadata, ChatUnit } from "./chat";
+import {
+  type AnswerMetadata,
+  barsOf,
+  type ChatUnit,
+  MAX_CHART_POINTS,
+} from "./chat";
 import { rateOf, SOURCES, worthOfAssets } from "./figures";
 import { CALENDAR_DAYS, incomeCalendar } from "./income";
 
@@ -146,7 +151,7 @@ export function assistantData({
       )
       .sort((a, b) => compareDecimals(b.value, a.value));
 
-  return {
+  const tools = {
     // Net worth today as Resumen shows it: assets, debts and what is left;
     // with a portfolio, that portfolio's assets only, as debts and closes
     // are of the whole.
@@ -560,7 +565,121 @@ export function assistantData({
       };
     },
   };
+
+  // A chart of one of the tools' figures, drawn on the server: its numbers
+  // are the tool's, never the model's. The model gets the chart's points to
+  // comment on; the answer keeps the chart.
+  async function chart(kind: ChartTopic, portfolio?: string) {
+    const drawn = await chartOf(kind, portfolio);
+    if ("error" in drawn) return drawn;
+    const { meta, chart } = drawn;
+    return {
+      ...meta,
+      unit,
+      chart: {
+        ...chart,
+        title: Array.from(chart.title).slice(0, 60).join(""),
+        points: chart.points
+          .slice(0, MAX_CHART_POINTS)
+          // By code point, so a cut never splits a character in two.
+          .map((point) => ({
+            ...point,
+            label: Array.from(point.label).slice(0, 30).join(""),
+          })),
+      },
+    };
+  }
+
+  async function chartOf(kind: ChartTopic, portfolio?: string) {
+    const meta = <M extends Meta>(result: M): Meta => ({
+      sources: result.sources,
+      asOf: result.asOf,
+      rate: result.rate,
+      complete: result.complete,
+      truncated: result.truncated,
+    });
+    if (kind === "net_worth") {
+      const history = await tools.netWorthHistory();
+      return {
+        meta: meta(history),
+        chart: {
+          kind: "line" as const,
+          title: "Patrimonio neto al cierre de cada mes",
+          unit,
+          points: history.months.map((month) => ({
+            label: month.month,
+            value: month.endValue,
+          })),
+        },
+      };
+    }
+    if (kind === "allocation") {
+      const split = await tools.allocation(portfolio);
+      if ("error" in split) return split;
+      return {
+        meta: meta(split),
+        chart: barsOf(
+          "Cómo están repartidos tus activos",
+          unit,
+          split.byKind.map((each) => ({ label: each.kind, value: each.value })),
+        ),
+      };
+    }
+    if (kind === "holdings") {
+      const listed = await tools.listHoldings(portfolio);
+      if ("error" in listed) return listed;
+      return {
+        meta: meta(listed),
+        chart: barsOf(
+          "Tus tenencias más grandes",
+          unit,
+          listed.holdings.flatMap((each) =>
+            each.value === null
+              ? []
+              : [{ label: each.name, value: each.value }],
+          ),
+        ),
+      };
+    }
+    if (kind === "income") {
+      const income = await tools.incomeEvents();
+      return {
+        meta: meta(income),
+        chart: barsOf(
+          "Lo que esperás cobrar por mes",
+          unit,
+          income.byMonth.map((month) => ({
+            label: month.month,
+            value: month.value,
+          })),
+        ),
+      };
+    }
+    const owed = await tools.liabilities();
+    return {
+      meta: meta(owed),
+      chart: barsOf(
+        "Lo que debés",
+        unit,
+        owed.debts.flatMap((each) =>
+          each.value === null ? [] : [{ label: each.name, value: each.value }],
+        ),
+      ),
+    };
+  }
+
+  return { ...tools, chart };
 }
+
+// What a chart can show, each from one of the tools.
+export const CHART_TOPICS = [
+  "net_worth",
+  "allocation",
+  "holdings",
+  "income",
+  "debts",
+] as const;
+export type ChartTopic = (typeof CHART_TOPICS)[number];
 
 // A unit's price as the market quotes it and the app shows it: a bond's per
 // 100 nominal.

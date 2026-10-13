@@ -3,7 +3,11 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { CHAT_UNITS } from "@/lib/assistant/chat";
-import type { AssistantData, ToolFailure } from "@/lib/assistant/tools-data";
+import {
+  type AssistantData,
+  CHART_TOPICS,
+  type ToolFailure,
+} from "@/lib/assistant/tools-data";
 import type { LogFields } from "@plant/shared";
 
 import { errorType, serverLog } from "@/lib/log/server-log";
@@ -120,6 +124,19 @@ export function assistantTools(
       inputSchema: z.object({ instrument }),
       execute: guarded("getAssetInfo", ({ instrument }) =>
         data.assetInfo(instrument),
+      ),
+    }),
+    renderChart: tool({
+      description:
+        "Muestra un gráfico armado con los datos del usuario: net_worth (patrimonio neto al cierre de cada mes), allocation (cómo están repartidos los activos), holdings (las tenencias más grandes), income (lo que espera cobrar por mes) o debts (lo que debe). Devuelve los puntos del gráfico para comentarlo; el gráfico se muestra debajo de la respuesta.",
+      inputSchema: z.object({
+        kind: z.enum(CHART_TOPICS),
+        portfolio: portfolio.describe(
+          "Solo para allocation y holdings: el nombre o el id de una cartera; sin ella, todas.",
+        ),
+      }),
+      execute: guarded("renderChart", ({ kind, portfolio }) =>
+        data.chart(kind, portfolio),
       ),
     }),
     getImportStatus: tool({

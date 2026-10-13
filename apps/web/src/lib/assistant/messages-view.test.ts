@@ -47,3 +47,32 @@ it("leaves an answer still streaming without a day, and drops other roles", () =
   ]);
   expect(answer).toMatchObject({ asOf: "", rate: null, sources: [] });
 });
+
+it("shows the charts kept with an answer, leaving out what is not one", () => {
+  const chart = {
+    kind: "bars",
+    title: "Lo que debés",
+    unit: "ars",
+    points: [
+      { label: "Hipoteca", value: "100" },
+      { label: 3, value: "1" },
+    ],
+  };
+  const [answer] = toChatMessages([
+    {
+      id: "a",
+      role: "assistant",
+      parts: [{ type: "text", text: "Debés $ 100." }],
+      metadata: {
+        asOf: "2026-10-13",
+        rate: null,
+        sources: [],
+        complete: true,
+        charts: [chart, { kind: "pie", title: "x", unit: "ars", points: [] }],
+      },
+    },
+  ]);
+  expect(answer).toMatchObject({
+    charts: [{ ...chart, points: [{ label: "Hipoteca", value: "100" }] }],
+  });
+});
