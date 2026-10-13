@@ -67,7 +67,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(44);
+SELECT plan(45);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -777,6 +777,30 @@ ROLLBACK TO SAVEPOINT canaries;
 
 SELECT is((SELECT last_value FROM canary_misses), 0::bigint,
           'every canaried assert catches its canaries');
+
+-- Storage: one RESTRICTIVE policy on storage.objects, the MFA gate, and every
+-- permissive one lets authenticated read, add or remove a file of the imports
+-- bucket under their own folder; none lets a file be overwritten.
+SELECT is_empty(
+  $$ SELECT 'restrictive policies: ' || count(*) FROM pg_policies
+     WHERE schemaname = 'storage' AND tablename = 'objects' AND permissive = 'RESTRICTIVE'
+     HAVING count(*) <> 1
+     UNION ALL
+     SELECT policyname FROM pg_policies
+     WHERE schemaname = 'storage' AND tablename = 'objects' AND permissive = 'RESTRICTIVE'
+       AND (policyname <> 'Requires two-factor authentication'
+            OR roles <> '{authenticated}'::name[] OR cmd <> 'ALL'
+            OR qual IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))'
+            OR with_check IS DISTINCT FROM '((( SELECT (auth.jwt() ->> ''aal''::text)) = ''aal2''::text) OR (( SELECT (auth.jwt() -> ''mfa_enrolled''::text)) = ''false''::jsonb))')
+     UNION ALL
+     SELECT policyname FROM pg_policies
+     WHERE schemaname = 'storage' AND tablename = 'objects' AND permissive = 'PERMISSIVE'
+       AND (roles <> '{authenticated}'::name[] OR cmd NOT IN ('SELECT', 'INSERT', 'DELETE')
+            OR coalesce(qual, with_check) NOT LIKE '%bucket_id = ''imports''::text%'
+            OR coalesce(qual, with_check) NOT LIKE '%foldername(name))[1] = ( SELECT (auth.uid())::text%'
+            OR coalesce(qual, with_check) NOT LIKE '%foldername(name))[2] = ''imports''::text%') $$,
+  'storage.objects has the MFA gate, and each user reaches only the imports files in their own folder, never overwriting one'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

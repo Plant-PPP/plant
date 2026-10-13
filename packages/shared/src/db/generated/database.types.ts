@@ -79,6 +79,26 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"imports": {
+                  Row: {
+                    "created_at": string,"document_id": string,"id": string,"status": Database["public"]['Enums']["import_status"],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"document_id": string,"id"?: string,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"document_id"?: string,"id"?: string,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "imports_user_id_document_id_fkey"
+      columns: ["user_id","document_id"]
+isOneToOne: true
+      referencedRelation: "uploaded_documents"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"instruments": {
                   Row: {
                     "currency": Database["public"]['Enums']["currency"],"name": string,"symbol": string,"type": Database["public"]['Enums']["instrument_type"]
@@ -275,6 +295,26 @@ isOneToOne: true
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"uploaded_documents": {
+                  Row: {
+                    "created_at": string,"delete_after": string,"file_name": string,"id": string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"delete_after"?: string,"file_name": string,"id"?: string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"delete_after"?: string,"file_name"?: string,"id"?: string,"mime_type"?: string,"sha256"?: string,"size_bytes"?: number,"source_connection_id"?: string,"storage_path"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "uploaded_documents_user_id_source_connection_id_fkey"
+      columns: ["user_id","source_connection_id"]
+isOneToOne: false
+      referencedRelation: "source_connections"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -286,7 +326,7 @@ isOneToOne: true
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -402,7 +442,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

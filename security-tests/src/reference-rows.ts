@@ -20,6 +20,7 @@ export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
   holdings: "id",
+  imports: "id",
   liabilities: "id",
   manual_prices: "id",
   manual_rates: "id",
@@ -29,6 +30,7 @@ export const OWNED_KEYS = {
   profiles: "user_id",
   source_connections: "id",
   tax_report_exclusions: "id",
+  uploaded_documents: "id",
 } as const satisfies {
   [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? "id" : "user_id";
 };
