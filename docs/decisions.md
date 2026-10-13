@@ -2,6 +2,15 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Debts in the database (PLA-77, PLA-31)
+
+- **A debt is a row of `liabilities`, with core's fields as its columns**: kind, label, lender, currency, `uva`, instrument, balance, installment, rate, installments left and two dates. Core's unit rule is the `liabilities_unit` CHECK: a crypto loan is owed in its instrument and no currency, a debt in dollars in dollars, and only a peso debt in UVA.
+- **A debt is deleted, never archived.** Nothing points at it yet; the property sheet's link to the debt that paid for it arrives with the sheet's table.
+- **Debts belong to no account or portfolio**, as in the prototype.
+- **The Deudas page values each debt at today's stored quotes**, the UVA's included when a debt is in UVA (`liabilityQuotesNeeded`).
+- **Debts write through their own server actions** (`lib/debts/write.ts`), not portfolio setup's runner: they take no portfolio setup lock or guard, and the runner's table list is pinned to those tables' checks.
+- **Log keys say `liability`, not `debt`**: the log scrubber masks any key with a `debt` segment, as it does amounts.
+
 ## 2026-10-13 · Movements, manual prices and the report in the database (PLA-103, PLA-104, PLA-122)
 
 - **An operation is a row of its own, `operations`, and its movements point at it**: one movement per holding it touches (a purchase split across portfolios, a transfer's two sides). The floor wants every uuid `*_id` to be a foreign key, so `operation_id` references `operations`. `entry_order` lives on the operation, copied onto each movement with a generated `rank` (−1 for an opening balance), so a holding's history and a list's pages read in core's order from one index. No column comes from a sequence: a new operation takes one more than the user's highest entry order.
