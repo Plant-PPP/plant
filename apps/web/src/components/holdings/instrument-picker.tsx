@@ -219,9 +219,15 @@ export function InstrumentPicker({
             onKeyDown={onSearchKeyDown}
             className="h-8 w-full rounded-sm border-b bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
           />
+          {/* Always in the accessibility tree, so "Sin resultados" is announced
+              when the list empties, not only when it mounts. */}
           <p
             role="status"
-            className="px-2 text-sm text-muted-foreground empty:hidden"
+            className={
+              shown.length === 0
+                ? "px-2 text-sm text-muted-foreground"
+                : "sr-only"
+            }
           >
             {shown.length === 0 ? "Sin resultados" : ""}
           </p>
