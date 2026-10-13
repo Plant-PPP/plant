@@ -65,11 +65,17 @@ beforeEach(() => {
   termsAccepted.mockResolvedValue(true);
 });
 
-type Props = { accounts: unknown[]; used: number; termsAccepted: boolean };
+type Props = {
+  userId: string;
+  accounts: unknown[];
+  used: number;
+  termsAccepted: boolean;
+};
 
 it("lists the user's open accounts, imports and whether they took the terms", async () => {
   const page = (await ImportPage()) as React.ReactElement<Props>;
   expect(page.props).toMatchObject({
+    userId: "u1",
     accounts: [ACCOUNT],
     used: 2,
     termsAccepted: true,

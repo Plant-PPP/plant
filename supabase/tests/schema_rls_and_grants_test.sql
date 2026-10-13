@@ -20,6 +20,10 @@
 --   Storage bucket or private Realtime channel adds the same predicate and its
 --   assert here, and a sensitive check written in SQL joins the truth table in
 --   mfa_gate_test.sql.
+-- - Realtime publishes exactly public.imports, and only its inserts and
+--   updates: Realtime checks no policy on a delete, so a published delete
+--   would reach every subscriber. imports keeps the default replica identity,
+--   so an update carries no old row.
 -- - Views granted to authenticated, or writable by service_role, run as the
 --   caller, and materialized views and foreign tables grant them nothing.
 -- - No table in public or private inherits or is inherited, besides partitions.
@@ -67,7 +71,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(46);
+SELECT plan(49);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -817,6 +821,24 @@ SELECT is_empty(
             OR coalesce(qual, with_check) NOT LIKE '%[1] = %auth.uid()%'
             OR coalesce(qual, with_check) NOT LIKE '%[2] = ''imports''%') $$,
   'storage.objects has the MFA gate, and each user reaches only the imports files in their own folder, never overwriting one'
+);
+
+SELECT set_eq(
+  $$ SELECT schemaname::text, tablename::text FROM pg_publication_tables
+     WHERE pubname = 'supabase_realtime' $$,
+  $$ VALUES ('public', 'imports') $$,
+  'Realtime publishes exactly public.imports'
+);
+
+SELECT ok(
+  (SELECT pubinsert AND pubupdate AND NOT pubdelete AND NOT pubtruncate AND NOT puballtables
+   FROM pg_publication WHERE pubname = 'supabase_realtime'),
+  'Realtime publishes inserts and updates only, never a delete or a truncate'
+);
+
+SELECT ok(
+  (SELECT relreplident = 'd' FROM pg_class WHERE oid = 'public.imports'::regclass),
+  'imports keeps the default replica identity, so an update carries no old row'
 );
 
 SELECT * FROM finish();

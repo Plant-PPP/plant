@@ -64,6 +64,7 @@ export default async function ImportPage() {
 
   return (
     <UploadImports
+      userId={claims.sub}
       accounts={accounts.active}
       archivedAccounts={accounts.archived}
       imports={items}

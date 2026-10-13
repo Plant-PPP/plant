@@ -245,15 +245,16 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:scripts
 
-      # Postgres with every migration applied, plus Auth, PostgREST and the
-      # gateway the pentest specs call; nothing below uses the other services.
+      # Postgres with every migration applied, plus Auth, PostgREST, Realtime
+      # and the gateway the pentest specs call; nothing below uses the other
+      # services.
       # stdout is the status block with the local keys, so it is dropped. It
       # runs even when the migration checks failed, so one push reports
       # whether they apply.
-      - name: Start Supabase (database, Auth, PostgREST)
+      - name: Start Supabase (database, Auth, PostgREST, Realtime)
         id: db
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /dev/null
+        run: pnpm exec supabase start -x storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /dev/null
 
       - name: Check Supabase types are up to date
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
@@ -272,7 +273,7 @@ jobs:
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm exec supabase test db --local
 
-      - name: Pentest specs against PostgREST (security-tests/)
+      - name: Pentest specs against PostgREST and Realtime (security-tests/)
         if: ${{ !cancelled() && steps.db.outcome == 'success' }}
         run: pnpm test:security
 

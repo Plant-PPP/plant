@@ -23,6 +23,7 @@ import {
   IMPORT_STATUS_LABELS,
   type ImportItem,
   IMPORTS_PER_MONTH,
+  isBusy,
 } from "@/lib/imports/review";
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ export type ImportActions = {
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
 function StatusBadge({ item }: { item: ImportItem }) {
-  const busy = item.status === "queued" || item.status === "reading";
+  const busy = isBusy(item.status);
   return (
     <span
       className={cn(
