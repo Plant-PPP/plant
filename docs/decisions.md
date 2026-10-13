@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · An edit moved to another day goes last there (PLA-137)
+
+- **`write_operation` takes whether an edit goes last.** The app admits an edit that moves an operation to another day as the last of that day, as if entered again, and the database kept the operation's old place, so a valid edit could read as a sale before that day's purchase and be refused every time. A four-argument form takes `p_last`: when the app admitted the edit last, the operation and its movements take the next entry order. The three-argument form calls it with `false`, so `confirm_import` and new operations write as before. `authenticated` gets `UPDATE (entry_order)` on `operations`, since the function runs as the caller; a user can only reorder their own operations, which the stale and unit checks still bound.
+
 ## 2026-10-14 · Deleting a portfolio or an account never used (PLA-99)
 
 - **Archiving stays the rule; a row never used can be deleted.** A portfolio is unused when no account, archived included, defaults to it and no holding, archived or sold out included, sits in it; an account, when no holding sits in it. A holding deleted with its last movement no longer counts, so an account whose holdings were all deleted can go, its uploads with it. The last active portfolio stays. `authenticated` gets `DELETE` on `portfolios` and `source_connections`; the owner policies were already `FOR ALL`, so they and the MFA gate scope it.

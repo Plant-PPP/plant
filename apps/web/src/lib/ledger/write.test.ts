@@ -139,6 +139,29 @@ it("expects the revision of every holding of the instrument when rewriting", asy
     Object.fromEntries(holdingIds.map((id) => [id, 3])),
   );
   expect(args.p_parts).toHaveLength(1);
+  // The same day: it keeps its place.
+  expect(args.p_last).toBe(false);
+});
+
+it("tells the database an edit moved to another day goes last there", async () => {
+  const written = writeOperation(emptyLedger(), PURCHASE, {
+    operationId: OPERATION,
+    newId: () => crypto.randomUUID(),
+  }).state;
+  readLedger.mockResolvedValue({
+    ledger: written,
+    truncated: false,
+    symbolOf: new Map(
+      written.holdings.map((each) => [each.holding.id, "AAPL"]),
+    ),
+  });
+  rpc.mockResolvedValue({ data: OPERATION, error: null, status: 200 });
+  const result = await runOperation("update_operation", OPERATION, {
+    ...PURCHASE,
+    date: "2026-09-16",
+  });
+  expect(result).toEqual({ ok: true, id: OPERATION });
+  expect(rpc.mock.calls[0]![1].p_last).toBe(true);
 });
 
 it("deletes an operation with no parts", async () => {
