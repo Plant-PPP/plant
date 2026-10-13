@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · E2E of the main flows (PLA-61)
+
+- **A second Playwright config, `playwright.flows.config.ts`, against local Supabase.** The CSP specs keep their own config and a build pointed at a dead port, so they stay fast and need no stack; the flows need real sign-in. `NEXT_PUBLIC_*` is baked in at build time, so each config makes its own production build (port 3100 and 3101). The flows config reads the URL and anon key from `supabase status` unless the environment already has them.
+- **One CI job.** `e2e` runs the CSP specs, then `supabase start` without Realtime, Storage, Studio, the edge runtime, logs or the pooler, then the flows. A separate job would repeat checkout, install and Chromium to save a couple of minutes it does not need. The flows write their report and traces under `flows/`, so a CSP failure keeps its own.
+- **A fresh user per spec.** Each spec signs in with a new `@e2e.test` address through `/login`, reading the code from Mailpit's API, so specs share nothing and run in parallel. Local Auth keeps its own hourly limit on sign-in mails, so running the suite many times within an hour can hit it; wait or restart the stack. The users are left in the local database.
+- **The data flows run over the prototype.** A non-production build serves the data pages over the browser-held prototype, so adding a holding, the upload, the reading, the review and confirming, the assistant's answer and chart, the CSV export and deleting the account need no model key and touch no table. They check the pages and their wiring, not the server actions or RLS, which the unit tests, pgTAP and the pentest specs cover. Deleting the account in the prototype empties the store and lands on Resumen; deleting the Auth user arrives with the real flow.
+
 ## 2026-10-13 · What the browser reports (PLA-88)
 
 - **One endpoint, `/api/reports`, outside the proxy and without a session**, takes CSP violations (`report-to csp` and `report-uri`, from `Reporting-Endpoints`) and the app's own reports of failures only the browser sees. Each becomes a `browser.csp` or `browser.error` warn line.
@@ -23,8 +30,9 @@ Decisions that are not in the plan, or that detail it. Newest first.
   - the split by kind, currency and account;
   - the last 12 closes and this year's result;
   - converting between pesos, MEP and CCL.
-  
+
   Every result says its sources, its day, its dollar and whether a figure left something out. A portfolio narrows the assets only: debts and closes are of the whole. The unit is the conversation's, not the model's choice; PLA-48's oficial and Bitcoin units are left out, as the chat answers in pesos, MEP and CCL.
+
 - **A question about what to buy or sell gets the fixed answer without a model** (`isAdvice`, shared with the prototype). The prompt says the same, for a question the check misses. The prompt's keyword skills and the evals wait for PLA-55.
 - **Conversations are kept per user** (`ai_conversations`, `ai_messages`), and only the chat route writes them (`assistant-sink.ts`), so a stored conversation is what the server streamed. The model reads the last 10 turns again, text only, the questions as untrusted text. The title is the first question cut short, with no model call.
 - **30 questions a month, counted in `ai_questions` before the model runs**, under a lock (`check_assistant_quota`). A question counts once asked, even if its answer fails or its conversation is deleted.
