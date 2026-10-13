@@ -30,9 +30,13 @@ jobs:
   detect-changes:
     name: Detect changes since the last promotion
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
     outputs:
       staging_sha: ${{ steps.changes.outputs.staging_sha }}
+      rollback: ${{ steps.changes.outputs.rollback }}
     steps:
       # A dispatch runs the workflow file of the branch it names, so one from
       # any other branch could run an edited copy of this file.
@@ -60,11 +64,8 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
-      # Compares against `production-latest`, the last promotion whose smoke
-      # test passed, so a promotion ships every commit since then, not only the
-      # newest one.
-      - name: Determine changes since the last promotion
-        id: changes
+      - name: On staging
+        id: sha
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
@@ -72,32 +73,102 @@ jobs:
             echo "::error::$sha is not on staging."
             exit 1
           fi
-          echo "staging_sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "### Promoting \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Run outcomes come from the Actions API, as in ci.yml, because
+      # deployment records can be written by anyone with write access. The
+      # run's own conclusion is not enough: a deploy-migrations job cancelled by
+      # its concurrency group, or waiting for approval, leaves it cancelled or
+      # pending with every check green.
+      - name: CI passed on staging for this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ok=""
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=staging&event=push&head_sha=$SHA&per_page=20" --jq '.workflow_runs[].id')"
+          for id in $runs; do
+            green="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '[.jobs[] | select((.name == "ci" or .name == "database" or .name == "e2e") and .conclusion == "success")] | length')"
+            if [ "$green" = "3" ]; then
+              ok="$id"
+              break
+            fi
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::No successful ci.yml push run on staging for $SHA with ci, database and e2e green. Promote a commit whose staging run passed."
+            exit 1
+          fi
+          echo "- CI: run $ok passed (ci, database, e2e)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Migrations are append-only, so a SHA at or before the last successful
+      # deploy, or with the same supabase/migrations/ as it, has every migration
+      # applied to plant-staging.
+      - name: Migrations applied to plant-staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          last=""
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=staging&event=push&per_page=100" --jq '.workflow_runs[] | "\(.id) \(.head_sha)"')"
+          while read -r id head; do
+            [ -n "$id" ] || continue
+            deploy="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "Deploy migrations to plant-staging") | .conclusion' </dev/null)"
+            if [ "$deploy" = "success" ]; then
+              last="$head"
+              break
+            fi
+          done <<<"$runs"
+          if [ -z "$last" ]; then
+            echo "::error::No successful 'Deploy migrations to plant-staging' in the last 100 staging push runs, so the database state is unknown."
+            exit 1
+          fi
+          if git merge-base --is-ancestor "$SHA" "$last" || git diff --quiet "$last" "$SHA" -- supabase/migrations/; then
+            echo "- Migrations: all applied (last deploy at \`$last\`)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::supabase/migrations/ at $SHA differs from the last successful deploy ($last): its migrations are not applied to plant-staging yet."
+            exit 1
+          fi
+
+      # Compares against `production-latest`, the last promotion whose smoke
+      # test passed, so a promotion ships every commit since then, not only the
+      # newest one.
+      - name: Determine changes since the last promotion
+        id: changes
+        env:
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          echo "staging_sha=$SHA" >> "$GITHUB_OUTPUT"
+          rollback=false
           {
-            echo "### Promoting \`$sha\`"
             if ! git rev-parse -q --verify 'refs/tags/production-latest' >/dev/null; then
               echo "First promotion: no \`production-latest\` tag yet."
-              exit 0
-            fi
-            base="$(git rev-parse 'production-latest^{commit}')"
-            if [ "$base" = "$sha" ]; then
-              echo "Production already runs this commit; it is built and deployed again."
-              exit 0
-            fi
-            if git merge-base --is-ancestor "$sha" "$base"; then
-              echo "**Rollback** from \`$base\`: reverts the code of every commit after \`$sha\`. Migrations are never rolled back."
             else
-              echo "Ships every commit between \`$base\` and \`$sha\`."
-            fi
-            echo '```'
-            git diff --name-only "$base" "$sha"
-            echo '```'
-            if git diff --quiet "$base" "$sha" -- supabase/migrations/; then
-              echo "- Migrations: none"
-            else
-              echo "- Migrations: yes"
+              base="$(git rev-parse 'production-latest^{commit}')"
+              if [ "$base" = "$SHA" ]; then
+                echo "Production already runs this commit; it is built and deployed again."
+              else
+                if git merge-base --is-ancestor "$SHA" "$base"; then
+                  rollback=true
+                  echo "**Rollback** from \`$base\`: reverts the code of every commit after \`$SHA\`. Migrations are never rolled back."
+                else
+                  echo "Ships every commit between \`$base\` and \`$SHA\`."
+                fi
+                echo '```'
+                git diff --name-only "$base" "$SHA"
+                echo '```'
+                if git diff --quiet "$base" "$SHA" -- supabase/migrations/; then
+                  echo "- Migrations since the last promotion: none"
+                else
+                  echo "- Migrations since the last promotion: yes"
+                fi
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "rollback=$rollback" >> "$GITHUB_OUTPUT"
 
   # The one human gate for the run. `production-gate` holds the required
   # reviewer and no secrets; `production` holds the secrets and no reviewers,
@@ -129,7 +200,15 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          ROLLBACK: ${{ needs.detect-changes.outputs.rollback }}
         run: |
+          # The database already holds every migration up to production-latest,
+          # and those of an older SHA are a subset of them.
+          if [ "$ROLLBACK" = "true" ]; then
+            echo "::notice::Rollback: the database keeps its schema, nothing to apply."
+            echo "apply=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -z "$SUPABASE_PROJECT_REF" ]; then
             echo "::notice::No SUPABASE_PROJECT_REF in the production environment: production uses the staging database, nothing to apply."
             echo "apply=false" >> "$GITHUB_OUTPUT"

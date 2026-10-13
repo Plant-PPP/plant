@@ -120,6 +120,52 @@ jobs:
       name: production
 """}, "job `deploy` enters `production`"),
 
+    # GitHub matches environment names case-insensitively.
+    ("uppercase_production", VIOLATION, {W: "jobs:" + APPROVE + """
+  deploy:
+    needs: [detect]
+    environment: Production
+"""}, "job `deploy` enters `production` without `approve`"),
+
+    ("uppercase_gate_and_quotes", OK, {W: """
+jobs:
+  approve:
+    environment: "Production-Gate"
+  deploy:
+    needs: [approve]
+    environment: PRODUCTION
+"""}, ""),
+
+    ("if_always", VIOLATION, {W: "jobs:" + APPROVE + """
+  deploy:
+    needs: [approve]
+    if: ${{ always() }}
+    environment: production
+"""}, "job `deploy` enters `production` with a status function"),
+
+    ("if_failure", VIOLATION, {W: "jobs:" + APPROVE + """
+  deploy:
+    needs: [approve]
+    if: failure()
+    environment: production
+"""}, "job `deploy` enters `production` with a status function"),
+
+    ("if_not_cancelled_multiline", VIOLATION, {W: "jobs:" + APPROVE + """
+  deploy:
+    needs: [approve]
+    if: >-
+      github.ref == 'refs/heads/staging' &&
+      ! cancelled()
+    environment: production
+"""}, "job `deploy` enters `production` with a status function"),
+
+    ("if_plain_condition", OK, {W: "jobs:" + APPROVE + """
+  deploy:
+    needs: [approve]
+    if: needs.approve.result == 'success'
+    environment: production
+"""}, ""),
+
     # A step's `environment` text inside a run block is not a job key.
     ("run_block_mentions_production", BROKEN_MATCHER, {W: """
 jobs:

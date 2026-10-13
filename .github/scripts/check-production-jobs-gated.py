@@ -20,13 +20,17 @@ BLOCK = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")  # a job: 2-space key, no value
 KEY = re.compile(r"^    ([A-Za-z0-9_-]+):\s*(.*)$")  # a job-level key
 WORD = re.compile(r"[A-Za-z0-9_-]+")
 ENV_NAME = re.compile(r"^\s+name:\s*(.*)$", re.MULTILINE)
+# A status function lets a job run when `approve` failed or was rejected.
+STATUS_BYPASS = re.compile(r"\balways\s*\(\s*\)|\bfailure\s*\(\s*\)|!\s*cancelled\s*\(\s*\)")
 
 
 def environment(keys: dict[str, str]) -> str:
-    """The job's environment name: the scalar, or the mapping's `name:`."""
+    """The job's environment name, lowercased as GitHub matches it: the scalar,
+    or the mapping's `name:`."""
     value = keys.get("environment", "")
     m = ENV_NAME.search(value)
-    return m.group(1).strip() if m else value.strip()
+    name = m.group(1) if m else value
+    return name.strip().strip("\"'").lower()
 
 
 def jobs(text: str):
@@ -80,6 +84,8 @@ def main() -> int:
         for n in enters:
             if "approve" not in WORD.findall(found[n].get("needs", "")):
                 violations.append(f"{path}: job `{n}` enters `production` without `approve` in its needs")
+            if STATUS_BYPASS.search(found[n].get("if", "")):
+                violations.append(f"{path}: job `{n}` enters `production` with a status function in its `if:`")
 
     if gated == 0 and not violations:
         print("error: no job with `environment: production` found — the matcher is broken", file=sys.stderr)
@@ -88,7 +94,11 @@ def main() -> int:
         print("jobs entering `production` outside the approval gate:\n", file=sys.stderr)
         for v in violations:
             print(f"  {v}", file=sys.stderr)
-        print("\nAdd `approve` to the job's `needs` (see promote-to-production.yml).", file=sys.stderr)
+        print(
+            "\nAdd `approve` to the job's `needs` and drop always(), failure() and !cancelled()\n"
+            "from its `if:` (see promote-to-production.yml).",
+            file=sys.stderr,
+        )
         return 1
     print(f"ok: all {gated} production-environment jobs need `approve`")
     return 0
