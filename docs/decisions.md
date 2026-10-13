@@ -2,6 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Asistente as a page like the reference chat (PLA-136)
+
+- **The assistant is its own page, laid out as the reference app's chat**, which Tomas chose on 2026-10-13. There is no button or panel on other pages.
+  - **Bar:** the history is a select on the left (a new conversation first, then each one with its day and number of questions), the open conversation's title is centered, and deleting it is on the right.
+  - **Empty chat:** the mark and the suggested questions stacked full width.
+  - **Turns:** the user's question is a bubble and the answer has none, in a 768px column.
+  - **Composer:** the field over a toolbar with the unit the answer comes in, ⌘K (Ctrl+K) to focus it, and send.
+  - **Last line:** the month's questions left and the not-advice notice end the transcript, on the empty chat too.
+  - **Scrolling:** only the conversation scrolls; the bar and the field stay put.
+- **Resumen has no onboarding card.** The terms card on Cargar stays as it is.
+- **`AssistantActions` is the prototype's contract**: a question is answered whole and the page reveals it. The header, transcript and composer take plain props, so the real chat (PLA-47) drives them from its own stream and pages the history.
+
 ## 2026-10-13 · What a reading checks, the names it knows and spreadsheets (PLA-80, PLA-79, PLA-39, PLA-38)
 
 - **A reading keeps each row's printed value and the document's printed totals**, one per currency (`import_items.value`, `imports.printed_total_ars` and `printed_total_usd`). The review sums each kept row's printed value, else quantity × price, against them; when the totals are in other currencies than the rows (one peso total over peso and dollar rows, or a dollar total over dollar lines left for the user to price), there is nothing to compare.
@@ -61,7 +73,6 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A day's quotes are the stored ones of the week up to it**, read only for the days a close values at (`closeDates`: each month's start and end, and each day units came in already held or left without a trade) through `readQuotesOn`, which shares a read between nearby days. A day no feed or manual price covers takes the instrument's last trade price, as in the prototype.
 - **A holding with no movements counts at today's amount on every past day, and a debt at today's balance**, as in the prototype, until they have a history.
 - **No closed month is marked recalculated in production.** Nothing keeps a close's figures to compare a write against; the figures are recomputed on every read, so a close always reflects its movements.
-- **The real Resumen shows no onboarding card yet.** Two of its four steps read the terms accepted and the questions asked, which arrive with "Carga con IA" and "Asistente".
 
 ## 2026-10-13 · Debts in the database (PLA-77, PLA-31)
 
@@ -112,10 +123,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-13 · The assistant beside every page (PLA-82, prototype)
 
-- **Every page but Asistente's own has a "Preguntale a Plant" button that opens the chat beside it**: a column about 400px wide that pushes the page aside on a wide screen, a sheet over it on a phone. The column holds one conversation; the list of them stays on Asistente's page.
-- **The questions offered first are about the page it was opened from**: Activos asks how the net worth is spread, how the year went, dividends and an instrument; Deudas what is owed and the largest debt; Cierres the year and the month. Other pages get the general ones. Every suggested question has an answer from the data.
-- **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action that the real chat fills from its tool calls; without it, "Consultando tus datos…".
-- **Production is unchanged**: the panel is mounted by the prototype's root, and `suggestions`, `compact` and `consults` are optional.
+- **Superseded by PLA-136**: the assistant is its own page only, with no button or panel on other pages and no per-page questions.
+- **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action; without it, "Consultando tus datos…".
 
 ## 2026-10-13 · A statement as of its own day (PLA-119, prototype)
 
@@ -125,7 +134,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-13 · First use (PLA-85, prototype)
 
-- **Resumen shows a new user the way to their net worth**: accept the terms, add an account, upload a statement or load a holding, and ask the assistant its first suggested question. Each step marks itself done from the data, and the card leaves once all are. Deleting the account in Ajustes shows it, as the prototype then holds a new user's data.
+- **Superseded by PLA-136**: Resumen has no onboarding card.
 - **Cargar asks for the terms before the first file**: what Plant does with the file (reads it, keeps it 30 days, ignores DNI, CUIT and CBU) and that it never trades or moves money, with a checkbox and "Aceptar y seguir". The acceptance records the terms' version (`CONSENT_VERSION`) and the day; a new version asks again. The real record goes in `consents`, and the copy waits for the lawyer's review (PLA-56).
 
 ## 2026-10-13 · Where a statement's units go (PLA-41, PLA-100, prototype)
@@ -504,7 +513,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-07 · App layout, themes and brand (PLA-20)
 
-- **The shell, not the features around it.** The user menu arrives with login (PLA-17), the assistant's side panel with the assistant (PLA-47), forms in a Sheet with the first form (PLA-24), and a settings group in the sidebar with the first settings page.
+- **The shell, not the features around it.** The user menu arrives with login (PLA-17), the chat with the assistant (PLA-47), forms in a Sheet with the first form (PLA-24), and a settings group in the sidebar with the first settings page.
 - **English routes, Spanish labels.** `/`, `/assets`, `/debts`, `/import` and `/assistant`; the sidebar, breadcrumb and page titles show Resumen, Activos, Deudas, Cargar and Asistente, from `lib/navigation.ts`.
 - **The `(app)` group has no auth guard yet.** Login (PLA-17) adds it to that layout.
 - **Chart colors are the brand range, the same in light and dark.** `--chart-1`…`--chart-8` replace shadcn's five; the grays are `--chart-gray-1`…`--chart-gray-8`.

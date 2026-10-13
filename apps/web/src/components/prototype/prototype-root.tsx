@@ -2,7 +2,6 @@ import { quotesNeeded, readSnapshot } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { ReactNode } from "react";
 
-import { PrototypeAssistantPanel } from "@/components/prototype/prototype-assistant-panel";
 import { PrototypeProvider } from "@/components/prototype/prototype-provider";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 import { createFixtureQuoteReader } from "@/lib/prototype/quote-reader";
@@ -27,7 +26,7 @@ export async function PrototypeRoot({ children }: { children: ReactNode }) {
     },
   );
   return (
-    <div className="grid gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <p
         role="note"
         className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"
@@ -35,7 +34,7 @@ export async function PrototypeRoot({ children }: { children: ReactNode }) {
         Datos de prueba. Lo que cambies se pierde al recargar.
       </p>
       <PrototypeProvider today={today} snapshot={snapshot}>
-        <PrototypeAssistantPanel>{children}</PrototypeAssistantPanel>
+        {children}
       </PrototypeProvider>
     </div>
   );

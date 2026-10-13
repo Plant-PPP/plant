@@ -1,5 +1,5 @@
 import { buildFixtures } from "@/lib/prototype/fixtures";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 
 import { acceptConsent, freshState, initialState } from "./prototype-store";
 

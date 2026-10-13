@@ -62,7 +62,7 @@ const PATH = `${USER}/imports/${UPLOAD}/a7000000-0000-4000-8000-0000000000a7`;
 import { createHash } from "node:crypto";
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 
 import { IMPORTS_PER_MONTH } from "./review";
 import { acceptTerms, finishUpload, startUpload } from "./write";

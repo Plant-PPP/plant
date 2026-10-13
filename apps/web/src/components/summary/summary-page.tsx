@@ -23,13 +23,11 @@ import {
   monthName,
   type YearClose,
 } from "@/lib/summary/closes";
-import type { OnboardingStep } from "@/lib/onboarding/steps";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 import { cn } from "@/lib/utils";
 
 import { ClosesTable } from "./closes-table";
 import { CurrenciesBreakdown } from "./currencies-breakdown";
-import { OnboardingCard } from "./onboarding-card";
 import { CloseStatus, ResultText } from "./figures";
 import { NetWorthChart } from "./net-worth-chart";
 
@@ -69,7 +67,6 @@ export function SummaryPage({
   params,
   hrefs,
   closesQuery,
-  onboarding,
 }: {
   // Every month, oldest first, the last one in progress.
   closes: MonthClose[];
@@ -90,8 +87,6 @@ export function SummaryPage({
   hrefs?: Pick<ScopeHrefs, "account" | "portfolio">;
   // The query a close's page keeps, from closesQuery.
   closesQuery: string;
-  // A new user's steps to their net worth, while one is left.
-  onboarding?: readonly OnboardingStep[];
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
@@ -135,9 +130,6 @@ export function SummaryPage({
         </div>
       </div>
       <MepNotice unit={unit} />
-      {onboarding?.some((step) => !step.done) && (
-        <OnboardingCard steps={onboarding} />
-      )}
 
       {portfolio ? (
         <>

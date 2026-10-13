@@ -1,5 +1,7 @@
 import type { Denominator } from "@plant/core";
 
+import { countOf } from "@/lib/format/text";
+
 // The units the assistant answers in.
 export const CHAT_UNITS = [
   "ars",
@@ -87,3 +89,25 @@ export const NOT_ADVICE =
 
 export const titleOf = (question: string): string =>
   question.length > 48 ? `${question.slice(0, 47).trimEnd()}…` : question;
+
+// What the assistant says while it reads: the sources it consults, or the
+// user's data when it names none.
+export function consultingText(sources: readonly string[]): string {
+  if (sources.length === 0) return "Consultando tus datos…";
+  return `Consultando ${countOf(sources.length, "fuente", "fuentes")}: ${sources.join(", ")}…`;
+}
+
+// The prototype's chat: a question is answered whole, and the page waits for
+// it.
+export type AssistantActions = {
+  // Asks in a conversation, a new one when its id is not listed yet; resolves
+  // with the answer's id once it is in.
+  ask: (
+    conversationId: string,
+    question: string,
+    unit: ChatUnit,
+  ) => Promise<string>;
+  delete: (conversationId: string) => void;
+  // The sources a question will read, named while it waits.
+  consults?: (question: string, unit: ChatUnit) => readonly string[];
+};

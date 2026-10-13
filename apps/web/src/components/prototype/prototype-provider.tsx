@@ -9,7 +9,7 @@ import {
   useRef,
 } from "react";
 
-import type { AssistantActions } from "@/components/assistant/assistant-page";
+import type { AssistantActions } from "@/lib/assistant/chat";
 import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
@@ -24,7 +24,7 @@ import type {
   MovementActions,
   PriceActions,
 } from "@/lib/holdings/write-actions";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {

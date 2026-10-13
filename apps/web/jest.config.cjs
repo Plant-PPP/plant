@@ -4,7 +4,7 @@ module.exports = {
   roots: ["<rootDir>/src"],
   testRegex: ".*\\.test\\.tsx?$",
   moduleNameMapper: {
-    "\\.png$": "<rootDir>/src/test/static-image.ts",
+    "\\.(png|svg)$": "<rootDir>/src/test/static-image.ts",
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   transform: {

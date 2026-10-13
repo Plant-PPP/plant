@@ -8,7 +8,7 @@ import {
 } from "@plant/core";
 
 import { type AssetKey, assetKey } from "@/lib/holdings/assets-rows";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 import {
   PLACEMENT_KINDS,
   type PlacementKind,

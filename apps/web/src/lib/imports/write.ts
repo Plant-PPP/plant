@@ -18,7 +18,7 @@ import {
 } from "@/lib/imports/upload";
 import { IMPORTS_PER_MONTH } from "@/lib/imports/review";
 import { serverLog } from "@/lib/log/server-log";
-import { CONSENT_VERSION } from "@/lib/onboarding/steps";
+import { CONSENT_VERSION } from "@/lib/consent";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
