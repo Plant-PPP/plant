@@ -30,7 +30,7 @@
 --   in them, authenticated only the RPCs (write_operation, confirm_import), which run as the
 --   caller with an empty search_path, service_role none in private, the only
 --   SECURITY DEFINER
---   functions are the signup, session and MFA factor triggers, and no trigger on public,
+--   functions are the signup, session, MFA factor and file deletion triggers, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
@@ -67,7 +67,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(45);
+SELECT plan(46);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -221,8 +221,8 @@ SELECT set_eq(
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND p.prosecdef $$,
   ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
-        'private.record_mfa_factor_event()'],
-  'the signup, session and MFA factor triggers are the only SECURITY DEFINER functions'
+        'private.record_mfa_factor_event()', 'private.record_file_deletion()'],
+  'the signup, session, MFA factor and file deletion triggers are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
@@ -269,6 +269,20 @@ SELECT ok(
   'the MFA factor trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires on delete or update and is its function''s only trigger'
 );
 
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.record_file_deletion()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER uploaded_documents_record_file_deletion AFTER UPDATE OF file_deleted_at ON public.uploaded_documents FOR EACH ROW EXECUTE FUNCTION private.record_file_deletion()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'public.uploaded_documents'::regclass
+           AND t.tgname = 'uploaded_documents_record_file_deletion')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.record_file_deletion()'::regprocedure) = 1,
+  'the file deletion trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires on file_deleted_at and is its function''s only trigger'
+);
+
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
 -- any schema runs as its owner, past RLS, on every write that fires it.
 SELECT is_empty(
@@ -281,8 +295,9 @@ SELECT is_empty(
        AND (t.tgfoid, t.tgrelid) NOT IN (
              ('private.create_profile_for_new_user()'::regprocedure, 'auth.users'::regclass),
              ('private.record_session_event()'::regprocedure, 'auth.sessions'::regclass),
-             ('private.record_mfa_factor_event()'::regprocedure, 'auth.mfa_factors'::regclass)) $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session and MFA factor triggers'
+             ('private.record_mfa_factor_event()'::regprocedure, 'auth.mfa_factors'::regclass),
+             ('private.record_file_deletion()'::regprocedure, 'public.uploaded_documents'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session, MFA factor and file deletion triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.

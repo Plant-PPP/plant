@@ -317,14 +317,14 @@ isOneToOne: true
                   ]
                 },"uploaded_documents": {
                   Row: {
-                    "created_at": string,"delete_after": string,"file_name": string,"id": string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id": string
+                    "created_at": string,"delete_after": string,"file_deleted_at": string | null,"file_name": string,"id": string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"delete_after"?: string,"file_name": string,"id"?: string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id"?: string
+                    "created_at"?: string,"delete_after"?: string,"file_deleted_at"?: string | null,"file_name": string,"id"?: string,"mime_type": string,"sha256": string,"size_bytes": number,"source_connection_id": string,"storage_path": string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"delete_after"?: string,"file_name"?: string,"id"?: string,"mime_type"?: string,"sha256"?: string,"size_bytes"?: number,"source_connection_id"?: string,"storage_path"?: string,"user_id"?: string
+                    "created_at"?: string,"delete_after"?: string,"file_deleted_at"?: string | null,"file_name"?: string,"id"?: string,"mime_type"?: string,"sha256"?: string,"size_bytes"?: number,"source_connection_id"?: string,"storage_path"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

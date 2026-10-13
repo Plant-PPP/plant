@@ -1,6 +1,6 @@
 import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
-import type { Database } from "@plant/shared";
+import { buenosAiresDate, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -16,6 +16,7 @@ import {
   type UploadType,
   uploadTypeOf,
 } from "@/lib/imports/upload";
+import { IMPORTS_PER_MONTH } from "@/lib/imports/review";
 import { serverLog } from "@/lib/log/server-log";
 import { CONSENT_VERSION } from "@/lib/onboarding/steps";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -30,9 +31,17 @@ const EVENT = "imports.upload";
 // Why an upload was refused: input that does not parse, a type Cargar does
 // not take or bytes that are not of the type the name says, a file too big
 // or empty, terms not accepted, an account the user does not have open, the
-// same file already uploaded to that account, or a failure.
+// same file already uploaded to that account, the month's imports used up, or
+// a failure.
 export type UploadCode =
-  "invalid" | "type" | "size" | "terms" | "not_found" | "duplicate" | "failed";
+  | "invalid"
+  | "type"
+  | "size"
+  | "terms"
+  | "not_found"
+  | "duplicate"
+  | "quota"
+  | "failed";
 
 export type StartResult =
   | {
@@ -121,6 +130,20 @@ async function accountOpen(client: Client, id: string): Promise<boolean> {
   return result.data.length === 1;
 }
 
+// Whether the user has imports left this month. The database checks it again
+// when the import is filed.
+async function quotaLeft(client: Client): Promise<boolean> {
+  const today = buenosAiresDate(new Date());
+  const result = await client
+    .from("imports")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", `${today.slice(0, 7)}-01T00:00:00-03:00`);
+  if (classifyPostgrestResult(result, 200) || result.count === null) {
+    throw new Error("imports count failed");
+  }
+  return result.count < IMPORTS_PER_MONTH;
+}
+
 // The size and type a file's name and size say, before any byte is sent.
 function admitted(
   fileName: string,
@@ -171,6 +194,10 @@ export async function startUpload(input: unknown): Promise<StartResult> {
     if (!(await accountOpen(client, accountId))) {
       log(line, "not_found");
       return { ok: false, code: "not_found" };
+    }
+    if (!(await quotaLeft(client))) {
+      log(line, "quota");
+      return { ok: false, code: "quota" };
     }
     const uploadId = crypto.randomUUID();
     const path = uploadPath(claims.sub, uploadId, crypto.randomUUID());
@@ -256,10 +283,12 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
       .from("imports")
       .insert({ document_id: documentId })
       .select("id");
-    if (classifyPostgrestResult(started, 201) || started.data?.length !== 1) {
+    const notStarted = classifyPostgrestResult(started, 201);
+    if (notStarted || started.data?.length !== 1) {
       // Without its import the file would only stand in the way of the same
       // file again.
       await client.from("uploaded_documents").delete().eq("id", documentId);
+      if (notStarted?.code === "PT429") return await refuse("quota");
       await bucket.remove([path]);
       throw started.error ?? new Error("import not started");
     }
