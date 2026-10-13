@@ -129,14 +129,14 @@ isOneToOne: false
                   ]
                 },"movements": {
                   Row: {
-                    "amount": number | null,"charges": Json,"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction": Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"note": string | null,"operation_id": string,"price": number | null,"quantity": number | null,"rank": number,"rates": Json,"reference": string | null,"user_id": string
+                    "amount": number | null,"charges": NonNullable<Json>,"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction": Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id": string,"kind": Database["public"]['Enums']["movement_kind"],"note": string | null,"operation_id": string,"price": number | null,"quantity": number | null,"rank": number,"rates": NonNullable<Json>,"reference": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount"?: number | null,"charges"?: Json,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id": string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates": Json,"reference"?: string | null,"user_id"?: string
+                    "amount"?: number | null,"charges"?: NonNullable<Json>,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date": string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order": number,"holding_id": string,"id"?: string,"kind": Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id": string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates": NonNullable<Json>,"reference"?: string | null,"user_id"?: string
                   }
                   Update: {
-                    "amount"?: number | null,"charges"?: Json,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order"?: number,"holding_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id"?: string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates"?: Json,"reference"?: string | null,"user_id"?: string
+                    "amount"?: number | null,"charges"?: NonNullable<Json>,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"entry_order"?: number,"holding_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"],"note"?: string | null,"operation_id"?: string,"price"?: number | null,"quantity"?: number | null,"rank"?: never,"rates"?: NonNullable<Json>,"reference"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -261,12 +261,9 @@ isOneToOne: true
             [_ in never]: never
           }
           Functions: {
-            "write_operation": {
-                  Args: {
-                    "p_expected": Json,"p_operation_id": string,"p_parts": Json
-                  }
-                  Returns: string
-                }
+            "write_operation":
+{ Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
+                           }
           }
           Enums: {
             "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto"|"cedear"|"bond"|"fci","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
