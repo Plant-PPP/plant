@@ -57,20 +57,29 @@ const inAccount = {
   source_connection_id: id,
   instrument_symbol: z.string().min(1),
 };
+// One part per holding: a portfolio appears once in each account, which a
+// part names when it is not the operation's (a transfer's arriving side).
 const onePerPortfolio = (
-  operation: { parts: readonly { portfolio_id: string }[] },
+  operation: {
+    source_connection_id: string;
+    parts: readonly { portfolio_id: string; source_connection_id?: string }[];
+  },
   context: z.RefinementCtx,
 ) => {
   const seen = new Set<string>();
   operation.parts.forEach((each, index) => {
-    if (seen.has(each.portfolio_id)) {
+    const key = JSON.stringify([
+      each.source_connection_id ?? operation.source_connection_id,
+      each.portfolio_id,
+    ]);
+    if (seen.has(key)) {
       context.addIssue({
         code: "custom",
         message: "A portfolio appears once",
         path: ["parts", index, "portfolio_id"],
       });
     }
-    seen.add(each.portfolio_id);
+    seen.add(key);
   });
 };
 const parts = <S extends z.ZodRawShape>(shape: S) =>
@@ -88,7 +97,8 @@ const incomeParts = {
   parts: parts({ amount: positiveDecimalSchema }),
 };
 // A transfer moves its quantity out of one portfolio's holding and into
-// another's. The side units arrive in may name their cost per unit; without
+// another's, in the same account or, when the arriving side names one,
+// another. The side units arrive in may name their cost per unit; without
 // one they carry the cost they left with.
 const transferParts = {
   ...inAccount,
@@ -106,6 +116,7 @@ const transferParts = {
         z
           .object({
             portfolio_id: id,
+            source_connection_id: id.optional(),
             direction: z.literal("in"),
             quantity: positiveDecimalSchema,
             price: nonNegativeDecimalSchema.nullable().default(null),

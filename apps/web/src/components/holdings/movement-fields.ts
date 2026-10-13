@@ -20,7 +20,13 @@ import { quotedInput } from "@/lib/holdings/price-input";
 
 // One portfolio's part of an operation, as typed: its quantity, or an
 // income's amount.
-export type PartFields = { portfolioId: string; size: string };
+// A part's portfolio and size; a transfer's arriving side names its account
+// when it is not the operation's.
+export type PartFields = {
+  portfolioId: string;
+  size: string;
+  accountId?: string;
+};
 export type ChargeFields = { kind: ChargeKind; label: string; amount: string };
 
 // What the movement dialog holds, as typed. A transfer's first part is the
@@ -91,7 +97,11 @@ export function newMovementFields(
 // portfolio of each part's holding and each charge added back up across
 // the parts.
 export function operationFields(
-  parts: readonly { movement: Movement; portfolioId: string }[],
+  parts: readonly {
+    movement: Movement;
+    portfolioId: string;
+    accountId?: string;
+  }[],
   {
     accountId,
     instrument,
@@ -147,6 +157,8 @@ export function operationFields(
       size: amountInput(
         isTrade(part.movement) ? part.movement.quantity : part.movement.amount,
       ),
+      ...(part.accountId !== undefined &&
+        part.accountId !== accountId && { accountId: part.accountId }),
     })),
     charges: [...charges.values()].map(({ kind, label, amounts }) => ({
       kind,
@@ -311,6 +323,10 @@ export function toOperationInput(
           ? { portfolio_id: part.portfolioId, direction: "out", quantity }
           : {
               portfolio_id: part.portfolioId,
+              ...(part.accountId !== undefined &&
+                part.accountId !== fields.accountId && {
+                  source_connection_id: part.accountId,
+                }),
               direction: "in",
               quantity,
               price: cost,

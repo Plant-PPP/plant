@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Transfers between accounts (PLA-125, prototype)
+
+- **A "Traspaso" can go to another of the user's accounts.** Its arriving side names that account; the destination portfolio starts at the account's default one and can be changed, and a transfer within the account works as before. The units keep the cost they left with and make no result, as between portfolios. The operation belongs to the account the units leave: an edit keeps it, and the dialog asks "Hacia la cuenta" only when the user has more than one account.
+- **Every holding of an instrument, across accounts and portfolios, replays together**, so the lots a transfer carries keep their dates and costs in the other account. A portfolio appears once per account in an operation, so the same portfolio in two accounts is two holdings.
+- **Each line names the other side by account and portfolio when the accounts differ** ("Traspaso a Cocos · Principal"), and by portfolio as before when they do not.
+- **A withdrawal or network fee taken in units is an "Ajuste" out in the account the units reach**: the transfer itself moves one quantity, and the units lost show as what they are, with no new kind of movement. A fee charged in money waits for transfers to take charges.
+
 ## 2026-10-13 · Export and deleting the account (PLA-58, PLA-84, prototype)
 
 - **Ajustes exports the user's data as one CSV per kind of row**: holdings, movements, debts and imports, each built when its button is pressed. Amounts are written as stored (a point before the decimals, no grouping) so any spreadsheet reads them back; the file starts with a byte order mark so accents read as UTF-8. A text field a spreadsheet would read as a formula starts with an apostrophe (`toCsv`); a signed number does not. The real export adds the stored files, the MFA step-up and the `audit_log` row, which the prototype has no counterpart for.
@@ -71,7 +78,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A value the app computes or fetches (a cost, a price, a market value) shows as a suggestion the user can change.** Left as suggested it follows the data; changed, it is the user's.
 - **A "Traspaso" moves units of an instrument from one portfolio's holding to another portfolio's holding of it in the same account**: one operation with a side out and a side in, of one quantity, with no charges. It is no money in or out (a flow of 0 in closes and returns) and makes no result.
 - **The units arriving carry the cost the units leaving took**, worked out when the holdings are replayed, so an edit to the first portfolio's earlier history reaches the second, in every unit. The dialog shows that cost per unit as "Sugerido", worked out by running the write and throwing it away, so it is what saving carries; a cost the user types instead is fixed, and the difference shows as unrealized until those units are sold, then in that sale's result.
-- **One account's holdings of an instrument replay together**, in date and entry order, a transfer's side out before its side in, and a write reloads all of them. A holding's history is not resumed from a stored step, since a transfer's cost comes from another holding.
+- **One account's holdings of an instrument replay together** (every account's since PLA-125), in date and entry order, a transfer's side out before its side in, and a write reloads all of them. A holding's history is not resumed from a stored step, since a transfer's cost comes from another holding.
 - **A holding with a transfer cannot be deleted** ("Tiene traspasos con otra cartera…"); the transfer is deleted first, from its movements, with both sides. An edit to the first portfolio still reaches a second one that is closed or archived. A write to an archived account or portfolio, or one that would leave units open in one, is refused with the restore message the holding dialog uses. When movements persist (PLA-103), the holding-to-movements cascade becomes a guard for transfer sides and `holding_has_transfers` joins the setup guard's hints.
 
 ## 2026-10-12 · Entry order within a day (PLA-116)
