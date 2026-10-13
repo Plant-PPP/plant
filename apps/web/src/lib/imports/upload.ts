@@ -105,7 +105,6 @@ export const bytesMatch = (type: UploadType, bytes: Uint8Array): boolean =>
 // 255 characters.
 export function cleanFileName(name: string): string | null {
   const base = name.split(/[/\\]/).at(-1) ?? "";
-  // eslint-disable-next-line no-control-regex
   const clean = base.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   return clean === "" ? null : [...clean].slice(0, 255).join("");
 }

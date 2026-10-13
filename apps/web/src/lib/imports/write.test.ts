@@ -72,7 +72,7 @@ beforeEach(() => {
           error: null,
         },
   );
-  answers.source_connections = jest.fn((_verb: string): Answer => ({
+  answers.source_connections = jest.fn<Answer, [string]>(() => ({
     status: 200,
     data: [{ id: ACCOUNT }],
     error: null,
@@ -82,7 +82,7 @@ beforeEach(() => {
       ? { status: 201, data: [{ id: "d1" }], error: null }
       : { status: 204, error: null },
   );
-  answers.imports = jest.fn((_verb: string): Answer => ({
+  answers.imports = jest.fn<Answer, [string]>(() => ({
     status: 201,
     error: null,
   }));
