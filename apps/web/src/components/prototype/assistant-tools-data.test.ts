@@ -15,19 +15,47 @@ const read: ClosesRead = {
 };
 
 jest.mock("server-only", () => ({}), { virtual: true });
-const mockReadCloses = jest.fn(async () => read);
+const mockReadCloses = jest.fn<Promise<ClosesRead>, unknown[]>(
+  async () => read,
+);
 jest.mock("@/lib/summary/read", () => ({
-  readCloses: () => mockReadCloses(),
+  readCloses: (...args: unknown[]) => mockReadCloses(...args),
+}));
+const mockReadImports = jest.fn<Promise<unknown>, unknown[]>(async () => ({
+  items: [
+    {
+      id: "i1",
+      fileName: "Resumen IOL septiembre.pdf",
+      accountId: "a1",
+      status: "failed" as const,
+      error: "No pudimos leer el archivo.",
+      documentDate: null,
+      documentTotals: [],
+      rows: [],
+      createdOn: "2026-10-10",
+    },
+  ],
+  used: 3,
+}));
+jest.mock("@/lib/imports/read", () => ({
+  readImports: (...args: unknown[]) => mockReadImports(...args),
 }));
 jest.mock("@/lib/holdings/read", () => ({
   readReferenceDollar: async () => "mep",
 }));
 
+import { incomeCalendar } from "@/lib/assistant/income";
 import { assistantData } from "@/lib/assistant/tools-data";
+import { pricedToday } from "@/lib/summary/compute";
+import { summaryValuation } from "@/lib/summary/valuation";
+
+// The session's client: every read goes through it, so RLS keeps it to the
+// user's rows.
+const SESSION = { session: "u1" } as never;
 
 const data = () =>
   assistantData({
-    client: {} as never,
+    client: SESSION,
     context: {
       userId: "u1",
       requestId: undefined,
@@ -38,7 +66,10 @@ const data = () =>
     today: TODAY,
   });
 
-beforeEach(() => mockReadCloses.mockClear());
+beforeEach(() => {
+  mockReadCloses.mockClear();
+  mockReadImports.mockClear();
+});
 
 it("gives the net worth Resumen shows, with assets and debts adding up to it", async () => {
   const summary = await data().portfolioSummary();
@@ -130,4 +161,142 @@ it("converts between pesos and dollars at today's rate", async () => {
   });
   if (!("converted" in converted)) throw new Error();
   expect(Number(converted.converted)).toBeCloseTo(1000 * sell, 0);
+});
+
+it("lists what the user will collect, summed by month as the events add up", async () => {
+  const income = await data().incomeEvents();
+  const events = incomeCalendar(read.state, pricedToday(read.state), "usd_mep");
+  expect(income.events.map((event) => event.date)).toEqual(
+    events.map((event) => event.date),
+  );
+  const months = income.byMonth.reduce(
+    (sum, month) => sum + Number(month.value),
+    0,
+  );
+  const listed = income.events.reduce(
+    (sum, event) => sum + Number(event.value ?? 0),
+    0,
+  );
+  expect(months).toBeCloseTo(listed, 2);
+});
+
+it("gives the debts with their total, as the summary owes", async () => {
+  const tools = data();
+  const debts = await tools.liabilities();
+  const summary = await tools.portfolioSummary();
+  if (!("debts" in summary)) throw new Error();
+  expect(debts.total).toBe(summary.debts);
+  expect(debts.count).toBe(read.state.liabilities.length);
+  expect(debts.debts[0]?.kind).toMatch(/^[A-ZÁÉÍÓÚ]/);
+});
+
+it("lists one instrument's movements newest first, or says it does not know it", async () => {
+  const tools = data();
+  const all = await tools.transactions();
+  if (!("movements" in all)) throw new Error();
+  const symbol = read.holdings.active.find(
+    (row) => row.holding.asset_class === "instrument",
+  )!.holding;
+  if (symbol.asset_class !== "instrument") throw new Error();
+  const one = await tools.transactions(symbol.instrument_symbol);
+  if (!("movements" in one)) throw new Error();
+  expect(one.total).toBeGreaterThan(0);
+  expect(one.total).toBeLessThanOrEqual(all.total);
+  const dates = one.movements.map((movement) => movement.date);
+  expect(dates).toEqual([...dates].sort().reverse());
+  expect(await tools.transactions("NOPE")).toMatchObject({
+    error: "unknown_instrument",
+  });
+});
+
+it("tells what the user holds of an instrument and where", async () => {
+  const row = read.holdings.active.find(
+    (each) => each.holding.asset_class === "instrument",
+  )!;
+  if (row.holding.asset_class !== "instrument") throw new Error();
+  const info = await data().assetInfo(
+    row.holding.instrument_symbol.toLowerCase(),
+  );
+  if (!("holdings" in info)) throw new Error();
+  expect(info.symbol).toBe(row.holding.instrument_symbol);
+  expect(info.holdings.length).toBeGreaterThan(0);
+});
+
+it("names a crypto loan's installment in what was borrowed", async () => {
+  mockReadCloses.mockResolvedValueOnce({
+    ...read,
+    state: {
+      ...read.state,
+      liabilities: [
+        {
+          id: "loan",
+          kind: "crypto_loan",
+          label: "Préstamo BTC",
+          lender: null,
+          currency: null,
+          uva: false,
+          instrument_symbol: "BTC",
+          balance: "0.5",
+          installment: "0.01",
+          annual_rate: null,
+          installments_left: 50,
+          next_due_on: null,
+          matures_on: null,
+        },
+      ],
+    },
+  });
+  const debts = await data().liabilities();
+  expect(debts.debts[0]).toMatchObject({
+    installment: "0.01",
+    installmentCurrency: "BTC",
+  });
+});
+
+it("quotes a bond per 100 nominal, as the pages show it", async () => {
+  const held = read.holdings.active.find(
+    (each) =>
+      each.holding.asset_class === "instrument" &&
+      read.state.instruments.find(
+        (instrument) => instrument.symbol === each.holding.instrument_symbol,
+      )?.type === "bond",
+  );
+  if (held?.holding.asset_class !== "instrument") throw new Error();
+  const tools = data();
+  const info = await tools.assetInfo(held.holding.instrument_symbol);
+  if (!("priceBasis" in info)) throw new Error();
+  expect(info.priceBasis).toBe("cada 100 VN");
+  const { valuation } = summaryValuation(read, {
+    unit: "usd_mep",
+    portfolioId: null,
+  });
+  const perUnit = valuation.values[held.id]?.price;
+  if (!perUnit || !info.price) throw new Error();
+  expect(Number(info.price)).toBeCloseTo(100 * Number(perUnit), 6);
+  const moves = await tools.transactions(held.holding.instrument_symbol);
+  if (!("movements" in moves)) throw new Error();
+  expect(
+    moves.movements.every((each) => each.priceBasis === "cada 100 VN"),
+  ).toBe(true);
+});
+
+it("gives the latest imports and the month's count", async () => {
+  const status = await data().importStatus();
+  expect(status).toMatchObject({
+    usedThisMonth: 3,
+    monthlyLimit: 20,
+    imports: [{ status: "Con error", uploadedOn: "2026-10-10" }],
+  });
+});
+
+it("reads everything through the session's client", async () => {
+  const tools = data();
+  await tools.liabilities();
+  await tools.importStatus();
+  expect(mockReadCloses).toHaveBeenCalledWith(
+    SESSION,
+    expect.anything(),
+    expect.anything(),
+  );
+  expect(mockReadImports).toHaveBeenCalledWith(SESSION, TODAY);
 });

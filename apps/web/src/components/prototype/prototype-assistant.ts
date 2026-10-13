@@ -33,7 +33,7 @@ import {
   CALENDAR_DAYS,
   type IncomeEvent,
   incomeCalendar,
-} from "./prototype-income";
+} from "@/lib/assistant/income";
 import {
   holdingsView,
   instrumentHoldings,

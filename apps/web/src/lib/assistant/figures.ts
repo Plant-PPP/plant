@@ -42,4 +42,5 @@ export const SOURCES = {
   quotes: "Cotizaciones",
   closes: "Cierres",
   movements: "Movimientos",
+  imports: "Cargas",
 } as const;

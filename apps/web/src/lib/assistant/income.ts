@@ -6,12 +6,19 @@ import {
   type QuoteSnapshot,
   upcomingIncome,
 } from "@plant/core";
-import { addDays, exactOf, stored } from "@plant/shared";
+import {
+  addDays,
+  type Exact,
+  exactOf,
+  plus,
+  stored,
+  ZERO,
+} from "@plant/shared";
 
-import type { ChatUnit } from "@/lib/assistant/chat";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import type { Ledger } from "@/lib/ledger/ledger";
 
-import type { PrototypeState } from "./prototype-store";
+import type { ChatUnit } from "./chat";
 
 // How far ahead the calendar looks.
 export const CALENDAR_DAYS = 90;
@@ -29,7 +36,7 @@ export type IncomeEvent = {
 // before, across every account it is held in, and each placement that
 // matures, with its capital and interest.
 export function incomeCalendar(
-  state: PrototypeState,
+  state: Ledger,
   snapshot: QuoteSnapshot,
   unit: ChatUnit,
 ): IncomeEvent[] {
@@ -46,27 +53,39 @@ export function incomeCalendar(
     return "missing" in shown ? null : stored(shown.value.amount);
   };
   const open = state.holdings.filter((each) => !each.closed);
-  const bySymbol = new Map<string, Movement[]>();
+  // Each holding is projected from its own payments, as every account pays
+  // on its own day, then one instrument's payments on a day are summed.
+  const paid = new Map<
+    string,
+    { date: string; kind: IncomeEvent["kind"]; symbol: string } & Pick<
+      Movement,
+      "currency"
+    > & { amount: Exact }
+  >();
   for (const { holding } of open) {
     if (holding.asset_class !== "instrument") continue;
     const symbol = holding.instrument_symbol;
-    bySymbol.set(symbol, [
-      ...(bySymbol.get(symbol) ?? []),
-      ...(state.movements.get(holding.id) ?? []),
-    ]);
-  }
-  const events: IncomeEvent[] = [];
-  for (const [symbol, movements] of bySymbol) {
-    const sorted = [...movements].sort(compareMovements);
+    const sorted = [...(state.movements.get(holding.id) ?? [])].sort(
+      compareMovements,
+    );
     for (const each of upcomingIncome(sorted, state.today, CALENDAR_DAYS)) {
-      events.push({
+      const key = `${symbol}|${each.date}|${each.kind}|${each.currency}`;
+      const kept = paid.get(key);
+      paid.set(key, {
         date: each.date,
         kind: each.kind,
-        name: names.get(symbol) ?? symbol,
-        value: inUnit(each.amount, each.currency),
+        symbol,
+        currency: each.currency,
+        amount: plus(kept?.amount ?? ZERO, exactOf(each.amount)),
       });
     }
   }
+  const events: IncomeEvent[] = [...paid.values()].map((each) => ({
+    date: each.date,
+    kind: each.kind,
+    name: names.get(each.symbol) ?? each.symbol,
+    value: inUnit(stored(each.amount), each.currency),
+  }));
   for (const { holding } of open) {
     if (holding.asset_class !== "fixed_term") continue;
     if (holding.matures_on <= state.today || holding.matures_on > until) {

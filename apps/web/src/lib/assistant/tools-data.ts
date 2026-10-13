@@ -1,7 +1,9 @@
 import "server-only";
 import {
   DENOMINATORS,
+  type InstrumentType,
   type QuoteSnapshot,
+  quotedPrice,
   rate,
   valueLiabilities,
 } from "@plant/core";
@@ -10,16 +12,25 @@ import {
   type Database,
   exactOf,
   neutralizePromptText,
+  plus,
+  stored,
   times,
   toDecimal,
+  ZERO,
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { LIABILITY_KIND_LABELS } from "@/lib/debts/labels";
 import { percentOf } from "@/lib/format/amount";
 import { HOLDING_CLASS_GROUP_LABELS } from "@/lib/holdings/classes";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
+import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
+import { priceBasisLabel } from "@/lib/holdings/price-input";
 import { readReferenceDollar } from "@/lib/holdings/read";
 import type { Sum } from "@/lib/holdings/valuation-view";
+import { readImports } from "@/lib/imports/read";
+import { IMPORT_STATUS_LABELS, IMPORTS_PER_MONTH } from "@/lib/imports/review";
+import { allRows } from "@/lib/ledger/ledger";
 import type { ReadContext } from "@/lib/portfolio-setup/read";
 import { monthOf } from "@/lib/summary/closes";
 import { closesOf, yearsOfCloses } from "@/lib/summary/compute";
@@ -28,9 +39,15 @@ import { pricedToday, summaryValuation } from "@/lib/summary/valuation";
 
 import type { AnswerMetadata, ChatUnit } from "./chat";
 import { rateOf, SOURCES, worthOfAssets } from "./figures";
+import { CALENDAR_DAYS, incomeCalendar } from "./income";
 
 // The most holdings one answer lists.
 const HOLDINGS_LISTED = 30;
+// The most movements, debts and imports one answer lists.
+const MOVEMENTS_LISTED = 30;
+const DEBTS_LISTED = 30;
+const EVENTS_LISTED = 30;
+const IMPORTS_LISTED = 10;
 
 // What every result says about itself, as an answer does, and which reads
 // were cut short.
@@ -38,7 +55,9 @@ type Meta = AnswerMetadata & {
   truncated: { holdings: boolean; debts: boolean; ledger: boolean };
 };
 
-export type ToolFailure = { error: "read_failed" | "unknown_portfolio" };
+export type ToolFailure = {
+  error: "read_failed" | "unknown_portfolio" | "unknown_instrument";
+};
 
 // A name the user or a document wrote, before it reaches a model.
 const named = (text: string) => neutralizePromptText(text).slice(0, 80);
@@ -89,6 +108,31 @@ export function assistantData({
       (each) => each.id === wanted || each.name.toLowerCase() === key,
     );
   };
+
+  // An instrument named by the model: its symbol or its name, in the
+  // catalog; null when none matches.
+  const symbolOf = (read: ClosesRead, wanted: string) => {
+    const key = wanted.trim().toLowerCase();
+    return (
+      read.state.instruments.find(
+        (each) =>
+          each.symbol.toLowerCase() === key || each.name.toLowerCase() === key,
+      )?.symbol ?? null
+    );
+  };
+
+  const unknownInstrument = (read: ClosesRead) => ({
+    error: "unknown_instrument" as const,
+    held: [
+      ...new Set(
+        read.holdings.active.flatMap((row) =>
+          row.holding.asset_class === "instrument"
+            ? [row.holding.instrument_symbol]
+            : [],
+        ),
+      ),
+    ],
+  });
 
   const unknownPortfolio = (read: ClosesRead) => ({
     error: "unknown_portfolio" as const,
@@ -299,7 +343,239 @@ export function assistantData({
         ),
       };
     },
+
+    // What the user is expected to collect in the next CALENDAR_DAYS days:
+    // dividends and coupons from what each instrument paid before, and the
+    // placements that mature, by date and summed by month.
+    async incomeEvents() {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const events = incomeCalendar(read.state, snapshot, unit);
+      const byMonth = new Map<string, string>();
+      for (const event of events) {
+        if (event.value === null) continue;
+        const month = event.date.slice(0, 7);
+        byMonth.set(
+          month,
+          stored(
+            plus(exactOf(byMonth.get(month) ?? "0"), exactOf(event.value)),
+          ),
+        );
+      }
+      return {
+        ...metaOf(
+          read,
+          snapshot,
+          [SOURCES.movements, SOURCES.holdings, SOURCES.quotes],
+          events.every((event) => event.value !== null) &&
+            !read.ledgerTruncated &&
+            !read.holdings.activeTruncated,
+        ),
+        unit,
+        days: CALENDAR_DAYS,
+        note: "Los dividendos y cupones se estiman con los pagos anteriores de cada tenencia; los plazos fijos son exactos.",
+        total: events.length,
+        shown: Math.min(events.length, EVENTS_LISTED),
+        events: events.slice(0, EVENTS_LISTED).map((event) => ({
+          date: event.date,
+          kind: INCOME_KINDS[event.kind],
+          name: named(event.name),
+          value: event.value,
+        })),
+        byMonth: [...byMonth].map(([month, value]) => ({
+          month: `${monthOf(month)} ${month.slice(0, 4)}`,
+          value,
+        })),
+      };
+    },
+
+    // The user's debts, each with its balance in the unit, and their total.
+    async liabilities() {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const owed = valueLiabilities(read.state.liabilities, snapshot, {
+        denominator: unit,
+        referenceDollar: read.state.referenceDollar,
+      });
+      const values = new Map(owed.items.map((item) => [item.id, item.value]));
+      const debts = read.state.liabilities
+        .map((debt) => ({ debt, value: values.get(debt.id) ?? null }))
+        .sort((a, b) => compareDecimals(b.value ?? "0", a.value ?? "0"));
+      return {
+        ...metaOf(
+          read,
+          snapshot,
+          [SOURCES.debts, SOURCES.quotes],
+          owed.complete && !read.debtsTruncated,
+        ),
+        unit,
+        total: owed.total,
+        count: debts.length,
+        debts: debts.slice(0, DEBTS_LISTED).map(({ debt, value }) => ({
+          name: named(debt.label),
+          kind: LIABILITY_KIND_LABELS[debt.kind],
+          lender: debt.lender === null ? null : named(debt.lender),
+          uva: debt.uva,
+          value,
+          installment: debt.installment,
+          installmentCurrency: debt.uva
+            ? "UVA"
+            : (debt.currency ?? debt.instrument_symbol),
+          installmentsLeft: debt.installments_left,
+          nextDueOn: debt.next_due_on,
+          maturesOn: debt.matures_on,
+        })),
+      };
+    },
+
+    // The latest movements, newest first, of one instrument or of all, each
+    // with its account and portfolio. Amounts are in the movement's own
+    // currency, as the user typed or imported them.
+    async transactions(instrument?: string) {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const symbol = instrument && symbolOf(read, instrument);
+      if (symbol === null) return unknownInstrument(read);
+      const names = instrumentNames(read.state.instruments);
+      const types = new Map(
+        read.state.instruments.map((each) => [each.symbol, each.type]),
+      );
+      const listed = allRows(read.state)
+        .filter(
+          (row) =>
+            row.holding.asset_class === "instrument" &&
+            (symbol === undefined || row.holding.instrument_symbol === symbol),
+        )
+        .flatMap((row) =>
+          (read.state.movements.get(row.id) ?? []).map((movement) => ({
+            row,
+            movement,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            b.movement.date.localeCompare(a.movement.date) ||
+            b.movement.entry_order - a.movement.entry_order,
+        );
+      return {
+        ...metaOf(read, snapshot, [SOURCES.movements], !read.ledgerTruncated),
+        total: listed.length,
+        shown: Math.min(listed.length, MOVEMENTS_LISTED),
+        movements: listed
+          .slice(0, MOVEMENTS_LISTED)
+          .map(({ row, movement }) => ({
+            date: movement.date,
+            kind: MOVEMENT_KIND_LABELS[movement.kind],
+            direction: "direction" in movement ? movement.direction : null,
+            instrument: named(holdingName(row.holding, names)),
+            account: named(row.account.institution),
+            portfolio: named(row.portfolio.name),
+            currency: movement.currency,
+            quantity: "quantity" in movement ? movement.quantity : null,
+            ...asQuoted(
+              "price" in movement ? movement.price : null,
+              row.holding.asset_class === "instrument"
+                ? types.get(row.holding.instrument_symbol)
+                : undefined,
+            ),
+            amount: "amount" in movement ? movement.amount : null,
+          })),
+      };
+    },
+
+    // One instrument: what it is, today's price in the unit, and how much the
+    // user holds of it, where.
+    async assetInfo(instrument: string) {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const symbol = symbolOf(read, instrument);
+      if (symbol === null) return unknownInstrument(read);
+      const found = read.state.instruments.find(
+        (each) => each.symbol === symbol,
+      )!;
+      const { rows, valuation } = summaryValuation(read, {
+        unit,
+        portfolioId: null,
+      });
+      const held = rows.filter(
+        (row) =>
+          row.holding.asset_class === "instrument" &&
+          row.holding.instrument_symbol === symbol,
+      );
+      const price = held
+        .map((row) => valuation.values[row.id]?.price ?? null)
+        .find((each) => each !== null);
+      const sums = held.map((row) => valuation.values[row.id]?.value ?? null);
+      return {
+        ...metaOf(
+          read,
+          snapshot,
+          [SOURCES.holdings, SOURCES.quotes],
+          sums.every((each) => each !== null) && !read.holdings.activeTruncated,
+        ),
+        unit,
+        symbol,
+        name: named(found.name),
+        type: found.type,
+        // What the market quotes it in; price and value are in the unit.
+        quotedIn: found.currency,
+        ...asQuoted(price ?? null, found.type),
+        quantity: stored(
+          held.reduce(
+            (sum, row) => plus(sum, exactOf(row.holding.amount)),
+            ZERO,
+          ),
+        ),
+        value: sums.every((each) => each !== null)
+          ? stored(sums.reduce((sum, each) => plus(sum, exactOf(each!)), ZERO))
+          : null,
+        holdings: held.map((row) => ({
+          account: named(row.account.institution),
+          portfolio: named(row.portfolio.name),
+          quantity: row.holding.amount,
+          value: valuation.values[row.id]?.value ?? null,
+        })),
+      };
+    },
+
+    // The user's latest imports and how many they started this month.
+    async importStatus() {
+      const { items, used } = await readImports(client, today);
+      return {
+        sources: [SOURCES.imports],
+        asOf: today,
+        rate: null,
+        complete: true,
+        total: items.length,
+        shown: Math.min(items.length, IMPORTS_LISTED),
+        usedThisMonth: used,
+        monthlyLimit: IMPORTS_PER_MONTH,
+        imports: items.slice(0, IMPORTS_LISTED).map((item) => ({
+          file: named(item.fileName),
+          status: IMPORT_STATUS_LABELS[item.status],
+          problem: item.error,
+          documentDate: item.documentDate,
+          uploadedOn: item.createdOn,
+        })),
+      };
+    },
   };
 }
+
+// A unit's price as the market quotes it and the app shows it: a bond's per
+// 100 nominal.
+const asQuoted = (
+  perUnit: string | null,
+  type: InstrumentType | undefined,
+) => ({
+  price: perUnit === null || !type ? perUnit : quotedPrice(type, perUnit),
+  priceBasis: type ? priceBasisLabel(type) : "por unidad",
+});
+
+const INCOME_KINDS = {
+  dividend: "Dividendo",
+  coupon: "Cupón",
+  maturity: "Vencimiento de plazo fijo",
+} as const;
 
 export type AssistantData = ReturnType<typeof assistantData>;

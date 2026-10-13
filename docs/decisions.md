@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The assistant's other five tools (PLA-81)
+
+- **`getIncomeEvents`, `getLiabilities`, `listTransactions`, `getAssetInfo` and `getImportStatus` read what the first five read.** The ledger, the debts and the quotes come from the same read of the turn (`readCloses`, through the session's client), valued with the closes' snapshot of today, so a debt or a price agrees with `getPortfolioSummary`. `getImportStatus` reads Cargar's list (`readImports`). No tool takes a user: RLS keeps every read to the session's rows.
+- **The income calendar is the prototype's, now in `lib/assistant/income.ts`.** Each holding's dividends and coupons are projected from what that holding paid before (core's `upcomingIncome`), since each account pays on its own day, and one instrument's payments on a day are summed. Placements that mature in the next 90 days add their capital and interest. The chart PLA-83 asks for waits for the chart tool (PLA-53).
+- **Movements keep their own currency, and prices their quote.** `listTransactions` answers each movement's price and amount as typed or imported, in its currency, rather than converting old trades at today's rate. A price goes as the market quotes it, a bond's per 100 nominal, with its basis, as every page shows it. The prompt tells the model which fields carry their own currency.
+- **An instrument is named by its symbol or its catalog name.** A name the catalog does not have answers `unknown_instrument` with the symbols the user holds, as an unknown portfolio does.
+
 ## 2026-10-14 · The jobs on a deployment (PLA-73)
 
 - **`PLANT_RUN_JOBS=1` registers the quotes, import and file-deletion jobs on a deployment.** Without the stored dollar rates of a day no movement can be written (`no_rate`), and only `refresh-quotes` stores them, so a deployment needs the job. One environment runs them, since plant-staging is also production's database until the beta: the variable is set only there, with `SUPABASE_SERVICE_ROLE_KEY` beside it, never in Preview or Development. Without it a deployment registers only `ping`, as before, and builds no dependency. On a deployment the jobs register at the signed sync's URL, never the dev loopback origin. Turning it on also needs the Inngest integration's Vercel Protection Bypass secret, auto-archive off for that environment, and the replay row of the Inngest threat model reviewed.
