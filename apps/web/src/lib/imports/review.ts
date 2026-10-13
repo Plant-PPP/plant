@@ -21,6 +21,9 @@ export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   confirmed: "Confirmada",
 };
 
+export const isBusy = (status: ImportStatus): boolean =>
+  status === "queued" || status === "reading";
+
 // Why an import failed, in the user's words, by `imports.failure`.
 export const IMPORT_FAILURE_MESSAGES = {
   unsupported: "No leemos este tipo de archivo.",

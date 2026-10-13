@@ -4,7 +4,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-13 · What a reading checks, the names it knows and spreadsheets (PLA-80, PLA-79, PLA-39, PLA-38)
 
-- **A reading keeps each row's printed value and the document's printed totals**, one per currency (`import_items.value`, `imports.printed_total_ars` and `printed_total_usd`). The review sums each kept row's printed value, else quantity × price, against them; when the document prints no total in a currency the rows are in (one peso total over peso and dollar rows), there is nothing to compare.
+- **A reading keeps each row's printed value and the document's printed totals**, one per currency (`import_items.value`, `imports.printed_total_ars` and `printed_total_usd`). The review sums each kept row's printed value, else quantity × price, against them; when the totals are in other currencies than the rows (one peso total over peso and dollar rows, or a dollar total over dollar lines left for the user to price), there is nothing to compare.
 - **The checks run on the review, over the rows as they stand**, with core's `validateHoldings`: a value that is not quantity × price within the printed price's precision, an instrument listed twice, and a statement dated after today or before 1990. They are not stored per field: the job cannot know an instrument's type (service_role reads nothing of `instruments`), so not a bond's price per 100 nor that AL30 and AL30D are one, and a stored problem would outlive the user's correction. Movements and a second model's disagreement wait for PLA-36 and PLA-37.
 - **The review lists what the account holds and the statement omits**; it stays as it is when confirmed.
 - **An instrument is named by its symbol, its symbol on BYMA (`.BA`), a dollar line of a bond or CEDEAR (`D` for MEP, `C` for cable) or an alias** (`instruments.aliases`, matched without case, accents or punctuation; migrations seed them). A dollar line leaves its price for the user, so a dollar price is never written as a peso one. There are no FCI in the catalog yet: a fund in a statement is chosen or discarded by hand.
@@ -12,6 +12,16 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The model maps a spreadsheet's columns once per user, account institution and set of headers** (`column_mappings`, cost type `import_column_mapping`), and the mapping is kept only once it reads rows, so a wrong one is not reused. The headers are matched exactly as written: another case or spelling is another format, mapped and kept on its own. Renaming an account's institution maps its formats again. `imports.read` says which reader ran and whether the mapping was kept already (`plant.import.reader`, `plant.import.mapping`).
 - **Both model calls go through one costed call** (`lib/ai/structured-call.ts`): the cost row, the house error mapping (`unreadable`, or `extraction_failed` retryable when the provider may answer later) and gen_ai spans without the document, the prompt or the answer.
 - **An import whose run dies past its retries is marked failed** by the job's failure handler, so it never stays "reading".
+
+## 2026-10-13 · Cargar follows imports live (PLA-40)
+
+- **Realtime's postgres_changes on `imports`, not Broadcast.** One table at beta scale, and RLS decides what each subscriber gets as it does for PostgREST. Once concurrent subscribers or published tables grow past the beta, a trigger broadcasts on a private `imports:<user>` topic under `realtime.messages` policies instead.
+- **A change is a signal**: the page reads its imports again on the server, so `readImports` stays the one place a row becomes what Cargar shows. `imports.view` therefore counts server renders, live re-reads included, and a re-read's failure shows the error page like any render.
+- **Cargar listens only while an import is queued or being read**, and reads again each time the channel subscribes, to catch what changed while it was not listening. An open channel reads the session on every heartbeat, so auth-js refreshes a token near its expiry from the browser; listening only while an import is in flight keeps that rare.
+- **Cargar sets the session's token on Realtime before joining**: a channel joins with the token Realtime holds at that moment and keeps that join's claims for postgres_changes, so one joined first listens as anon.
+- **Only inserts and updates are published.** Realtime checks no policy on a delete and would send its id to every subscriber.
+- **No polling when the channel cannot subscribe**: realtime-js rejoins after an error; a channel the server closes, as at a token's expiry, waits for the next re-read of the page. Until browser error reporting (PLA-88) the app records no failure; a join the server refuses shows in Supabase's Realtime logs, a timeout or a socket that never connects nowhere.
+- **The hosted project keeps Realtime's "Allow public access" on** (postgres_changes joins a public channel), its publication owned by `postgres`, and its publication's operations untouched in the dashboard.
 
 ## 2026-10-13 · The import quota and deleting uploaded files (PLA-42, PLA-43)
 
