@@ -12,6 +12,7 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
+  transferCostKey,
   withKind,
   withShownPrice,
 } from "./movement-fields";
@@ -645,5 +646,49 @@ describe("a yield's fields", () => {
         {},
       ),
     ).toMatchObject({ price: "", priceEdited: false, balance: null });
+  });
+});
+
+describe("the key of a transfer's suggested cost", () => {
+  const fields = withKind(
+    {
+      ...newMovementFields({
+        kind: "purchase",
+        accountId: "a1",
+        instrument: "BTC",
+        currency: "USD",
+        date: "2026-10-10",
+        portfolioId: "p1",
+      }),
+      parts: [{ portfolioId: "p1", size: "0,5" }],
+    },
+    "transfer",
+    { transfer: "p1" },
+  );
+  const key = transferCostKey(fields);
+
+  it("stays the same while the note or the reference is typed", () => {
+    expect(transferCostKey({ ...fields, note: "Para largo plazo" })).toBe(key);
+    expect(transferCostKey({ ...fields, reference: "OP-12" })).toBe(key);
+  });
+
+  it("changes with the quantity, the date and where the units go", () => {
+    const [from, to] = fields.parts;
+    expect(
+      transferCostKey({ ...fields, parts: [{ ...from!, size: "1" }, to!] }),
+    ).not.toBe(key);
+    expect(transferCostKey({ ...fields, date: "2026-10-09" })).not.toBe(key);
+    expect(
+      transferCostKey({
+        ...fields,
+        parts: [from!, { ...to!, portfolioId: "p3" }],
+      }),
+    ).not.toBe(key);
+  });
+
+  it("hands the cost the fields as they are, with no note or reference", () => {
+    expect(
+      JSON.parse(transferCostKey({ ...fields, note: "x", reference: "y" })),
+    ).toEqual({ ...fields, note: "", reference: "" });
   });
 });

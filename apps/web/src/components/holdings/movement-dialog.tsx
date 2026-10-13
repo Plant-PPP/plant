@@ -50,6 +50,7 @@ import {
   refusedMovementField,
   kindsOffered,
   toOperationInput,
+  transferCostKey,
   priceInField,
   withKind,
   withShownPrice,
@@ -145,7 +146,17 @@ export function MovementDialog({
         : null,
     [yielding, yields, instrument, currency, date],
   );
-  const suggested = moving ? (transfer?.suggestedCost(fields) ?? null) : quote;
+  // The cost a transfer's units carry replays the holdings: worked out again
+  // only when a field it reads changes, not on each key in the note.
+  const costKey = moving ? transferCostKey(fields) : null;
+  const carried = useMemo(
+    () =>
+      costKey !== null && transfer
+        ? transfer.suggestedCost(JSON.parse(costKey) as MovementFields)
+        : null,
+    [costKey, transfer],
+  );
+  const suggested = moving ? carried : quote;
   // A price shown as a suggestion until the user changes it.
   const suggesting = moving || yielding;
   const unused = portfolios.filter(
