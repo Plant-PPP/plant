@@ -21,11 +21,27 @@ function fakeClient(responses: Record<string, Response>) {
   const calls: Record<string, unknown[][]> = {};
   const client = {
     from: (table: string) => {
-      const own: unknown[][] = [];
+      const own: unknown[][] = calls[table] ?? [];
       calls[table] = own;
+      let range: [number, number] | undefined;
       const builder: Record<string, unknown> = {
-        then: (resolve: (value: Response) => unknown) =>
-          resolve(responses[table]!),
+        // A paged read answers its page, as PostgREST does.
+        then: (resolve: (value: Response) => unknown) => {
+          const response = responses[table]!;
+          return resolve(
+            range && Array.isArray(response.data)
+              ? {
+                  ...response,
+                  data: response.data.slice(range[0], range[1] + 1),
+                }
+              : response,
+          );
+        },
+        range: (from: number, to: number) => {
+          own.push(["range", from, to]);
+          range = [from, to];
+          return builder;
+        },
       };
       for (const method of ["select", "eq", "order", "limit"]) {
         builder[method] = (...args: unknown[]) => {
@@ -158,7 +174,23 @@ it("builds the ledger from the user's rows", async () => {
   // Amounts as text, in core's order.
   expect(String(calls.movements![0]![1])).toContain("quantity:quantity::text");
   expect(calls.movements).toContainEqual(["order", "rank"]);
-  expect(calls.movements).toContainEqual(["limit", LEDGER_MOVEMENT_LIMIT + 1]);
+  expect(calls.movements).toContainEqual(["range", 0, 999]);
+});
+
+it("reads every page past PostgREST's cap on rows", async () => {
+  const rows = Array.from({ length: 2_500 }, (_, n) => ({
+    ...MOVEMENT_ROW,
+    id: `m${n}`,
+  }));
+  const { client, calls } = fakeClient(responses(rows));
+  const { ledger, truncated } = await readLedger(client, OPTIONS);
+  expect(truncated).toBe(false);
+  expect(ledger.movements.get("h1")).toHaveLength(2_500);
+  expect(calls.movements!.filter(([method]) => method === "range")).toEqual([
+    ["range", 0, 999],
+    ["range", 1000, 1999],
+    ["range", 2000, 2999],
+  ]);
 });
 
 it("says when the movements were cut", async () => {

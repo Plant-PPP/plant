@@ -1,5 +1,5 @@
 import { DENOMINATORS, type QuoteSnapshot } from "@plant/core";
-import { exactOf, plus, stored } from "@plant/shared";
+import { exactOf, minus, plus, stored } from "@plant/shared";
 
 import type { AssistantMessage, ChatUnit } from "./chat";
 
@@ -22,6 +22,15 @@ export function netWorthOf(endValue: string, owed: string) {
   return {
     netWorth: endValue,
     assets: stored(plus(exactOf(endValue), exactOf(owed))),
+    debts: owed,
+  };
+}
+
+// Net worth as what is held, valued as Activos values it, less what is owed.
+export function worthOfAssets(assets: string, owed: string) {
+  return {
+    netWorth: stored(minus(exactOf(assets), exactOf(owed))),
+    assets,
     debts: owed,
   };
 }

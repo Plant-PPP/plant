@@ -147,6 +147,7 @@ export function SummaryPage({
           <Split id={`${id}-currencies`} title="Por moneda">
             <CurrenciesBreakdown
               currencies={valuation.currencies}
+              total={valuation.kinds.total}
               unit={unit}
             />
           </Split>
@@ -236,7 +237,11 @@ export function SummaryPage({
           />
         </Split>
         <Split id={`${id}-currencies`} title="Por moneda">
-          <CurrenciesBreakdown currencies={valuation.currencies} unit={unit} />
+          <CurrenciesBreakdown
+            currencies={valuation.currencies}
+            total={valuation.kinds.total}
+            unit={unit}
+          />
         </Split>
 
         <section className="grid gap-3" aria-labelledby={`${id}-closes`}>

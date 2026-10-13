@@ -104,6 +104,21 @@ const CHANGE_TEXT = {
   discarded: "Descartada",
 } as const;
 
+// What picking a row's instrument changes: a price or value printed in
+// another currency no longer describes the row, so the user types the price.
+export function pickedInstrument(
+  printed: ImportRow["currency"],
+  symbol: string,
+  instruments: readonly Pick<InstrumentRow, "symbol" | "currency">[],
+) {
+  const currency = currencyOf(instruments, symbol);
+  return {
+    symbol,
+    currency,
+    ...(currency !== printed && { value: null, priceText: "" }),
+  };
+}
+
 // What the reading made of a document, to correct, discard or add to before
 // it goes into the account: each row with how sure the reading is and where
 // it was read, what it changes in the account, and the totals read against
@@ -424,16 +439,12 @@ export function ImportReview({
                         (each) => !listed(row.id).has(each.symbol),
                       )}
                       value={row.symbol}
-                      onChange={(symbol) => {
-                        const currency = currencyOf(instruments, symbol);
-                        // A value printed in another currency no longer
-                        // describes the row.
-                        change(row.id, {
-                          symbol,
-                          currency,
-                          ...(currency !== row.currency && { value: null }),
-                        });
-                      }}
+                      onChange={(symbol) =>
+                        change(
+                          row.id,
+                          pickedInstrument(row.currency, symbol, instruments),
+                        )
+                      }
                       placeholder="Elegí un activo"
                     />
                   ) : (

@@ -1,21 +1,15 @@
-import { type Denominator, snapshotOn } from "@plant/core";
+import type { Denominator } from "@plant/core";
 
 import { currencyOf } from "@/lib/holdings/holding-name";
 import {
   type HoldingsValuation,
   holdingsValuation,
 } from "@/lib/holdings/valuation-view";
-import { pricedSnapshotOf } from "@/lib/ledger/ledger";
-import { closesNeed } from "@/lib/summary/compute";
+import { pricedToday as pricedTodayOf } from "@/lib/summary/compute";
 import type { ClosesRead } from "@/lib/summary/read";
 
-// Today's quotes for Resumen: the stored ones of the closes' last day, with
-// the user's own prices and rates over them.
-export const pricedToday = ({ state }: ClosesRead) =>
-  pricedSnapshotOf(
-    state,
-    snapshotOn(state.quotes, state.today, closesNeed(state)).snapshot,
-  ).snapshot;
+// Today's quotes for Resumen, as the closes value their last day.
+export const pricedToday = ({ state }: ClosesRead) => pricedTodayOf(state);
 
 // What Resumen shows split today: the holdings of one portfolio, or of all
 // with null, valued in a unit. Throws when the valuation fails.

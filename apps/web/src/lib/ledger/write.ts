@@ -129,6 +129,9 @@ export function rpcFailure(error: {
   hint?: string | null;
 }): Extract<MovementResult, { ok: false }>["code"] {
   if (error.code === "PT404" || error.code === "23503") return "not_found";
+  // The database keeps an edited operation's place in its day, which the app
+  // may have admitted last: retrying gets the same answer.
+  if (error.hint === "negative_units") return "oversold";
   if (
     error.hint === "portfolio_archived" ||
     error.hint === "source_connection_archived"

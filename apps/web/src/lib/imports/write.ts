@@ -270,6 +270,56 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     if (!bytesMatch(file.type, bytes)) return await refuse("type");
     const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
 
+    // The same file uploaded before: one that cannot be read any more (its
+    // reading failed, its import never started or its file expired) goes,
+    // with its import and its file, and this one is read; one still queued,
+    // whose job may never have started, is started again (the job's event id
+    // keeps it to one run) and this upload goes.
+    const earlier = await client
+      .from("uploaded_documents")
+      .select("id, storage_path, file_deleted_at, imports(id, status)")
+      .eq("user_id", claims.sub)
+      .eq("source_connection_id", accountId)
+      .eq("sha256", sha256)
+      .limit(1);
+    if (classifyPostgrestResult(earlier, 200)) {
+      throw earlier.error ?? new Error("earlier document not read");
+    }
+    const failed = earlier.data?.[0];
+    const unreadable =
+      failed !== undefined &&
+      (failed.imports === null ||
+        failed.imports.status === "failed" ||
+        (failed.imports.status === "queued" &&
+          failed.file_deleted_at !== null));
+    const queued =
+      !unreadable && failed?.imports?.status === "queued"
+        ? failed.imports
+        : null;
+    if (queued) {
+      if (failed?.storage_path !== path) await bucket.remove([path]);
+      log(line, "ok");
+      await startJob(
+        { ...line, step: "job", started: performance.now() },
+        queued.id,
+      );
+      revalidatePath("/import");
+      return { ok: true, importId: queued.id };
+    }
+    if (failed && unreadable) {
+      const removed = await client
+        .from("uploaded_documents")
+        .delete()
+        .eq("user_id", claims.sub)
+        .eq("id", failed.id);
+      if (classifyPostgrestResult(removed, 204)) {
+        throw removed.error ?? new Error("earlier document not removed");
+      }
+      if (failed.storage_path !== path) {
+        await bucket.remove([failed.storage_path]);
+      }
+    }
+
     const document = await client
       .from("uploaded_documents")
       .insert({

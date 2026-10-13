@@ -96,10 +96,25 @@ it("splits the assets by kind, currency and account", async () => {
   expect(split.byAccount.length).toBeGreaterThan(0);
 });
 
+it("values the assets the same in every tool", async () => {
+  const tools = data();
+  const summary = await tools.portfolioSummary();
+  const split = await tools.allocation();
+  if (!("assets" in summary) || !("total" in split)) throw new Error();
+  expect(summary.assets).toBe(split.total);
+});
+
 it("gives the last 12 closes and this year's result", async () => {
   const history = await data().netWorthHistory();
   expect(history.months.length).toBeLessThanOrEqual(12);
   expect(history.thisYear?.year).toBe("2026");
+  // A percent to one decimal, as every other tool's share.
+  expect(history.thisYear?.share ?? "0").toMatch(/^-?\d+(\.\d)?$/);
+  // Each month complete as the closes table marks it.
+  const closes = closesOf(read.state, "usd_mep").slice(-12);
+  expect(history.months.map((month) => month.complete)).toEqual(
+    closes.map((month) => month.complete),
+  );
 });
 
 it("converts between pesos and dollars at today's rate", async () => {

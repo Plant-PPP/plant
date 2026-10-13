@@ -18,6 +18,7 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import { MAX_ROWS } from "@/lib/quotes/quote-reader";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 import { type Ledger, MANUAL, type StoredHolding } from "./ledger";
@@ -44,6 +45,26 @@ export class LedgerReadError extends Error {
     readonly code: string,
   ) {
     super(`ledger read failed at ${step}: ${code}`);
+  }
+}
+
+// Every row of a read, page by page: PostgREST answers at most MAX_ROWS rows
+// a request and cuts the rest without saying so. Past `limit` rows the read
+// stops and says it was cut.
+async function allRows<T>(
+  step: LedgerStep,
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: unknown; status: number }>,
+  limit: number,
+): Promise<{ rows: T[]; cut: boolean }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += MAX_ROWS) {
+    const data = checked(step, await page(from, from + MAX_ROWS - 1));
+    rows.push(...data);
+    if (rows.length > limit) return { rows: rows.slice(0, limit), cut: true };
+    if (data.length < MAX_ROWS) return { rows, cut: false };
   }
 }
 
@@ -172,31 +193,60 @@ export async function readLedger(
       .from("portfolios")
       .select("id, name, archived_at")
       .order("created_at"),
-    client
-      .from("holdings")
-      .select(
-        "id, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
-          "amount:amount::text, currency, annual_rate, started_on, matures_on, valued_on, " +
-          "label, movements_revision, archived_at",
-      )
-      .eq("asset_class", "instrument")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false }),
-    client
-      .from("movements")
-      .select(MOVEMENT_COLUMNS)
-      .order("date")
-      .order("rank")
-      .order("id")
-      .limit(LEDGER_MOVEMENT_LIMIT + 1),
+    allRows(
+      "holdings",
+      (from, to) =>
+        client
+          .from("holdings")
+          .select(
+            "id, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
+              "amount:amount::text, currency, annual_rate, started_on, matures_on, valued_on, " +
+              "label, movements_revision, archived_at",
+          )
+          .eq("asset_class", "instrument")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
+    allRows(
+      "movements",
+      (from, to) =>
+        client
+          .from("movements")
+          .select(MOVEMENT_COLUMNS)
+          .order("date")
+          .order("rank")
+          .order("id")
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
     client
       .from("instruments")
       .select("symbol, name, currency, type, aliases")
       .order("symbol"),
-    client
-      .from("manual_prices")
-      .select("symbol, price_date, price:price::text, currency"),
-    client.from("manual_rates").select("kind, rate_date, sell:sell::text"),
+    allRows(
+      "manual_prices",
+      (from, to) =>
+        client
+          .from("manual_prices")
+          .select("symbol, price_date, price:price::text, currency")
+          .order("symbol")
+          .order("price_date")
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
+    allRows(
+      "manual_rates",
+      (from, to) =>
+        client
+          .from("manual_rates")
+          .select("kind, rate_date, sell:sell::text")
+          .order("kind")
+          .order("rate_date")
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
   ]);
 
   const accounts = z
@@ -211,14 +261,14 @@ export async function readLedger(
       }),
     )
     .parse(checked("portfolios", portfoliosResult));
-  const holdingRows = checked("holdings", holdingsResult) as unknown as Record<
+  const holdingRows = holdingsResult.rows as unknown as Record<
     string,
     unknown
   >[];
-  const movementRows = checked(
-    "movements",
-    movementsResult,
-  ) as unknown as Record<string, unknown>[];
+  const movementRows = movementsResult.rows as unknown as Record<
+    string,
+    unknown
+  >[];
   const instruments: InstrumentRow[] = z
     .array(
       z.object({
@@ -230,18 +280,18 @@ export async function readLedger(
       }),
     )
     .parse(checked("instruments", instrumentsResult));
-  const manualPrices = checked(
-    "manual_prices",
-    pricesResult,
-  ) as unknown as ManualPrice[];
-  const manualRates = checked(
-    "manual_rates",
-    ratesResult,
-  ) as unknown as ManualRate[];
+  const manualPrices = pricesResult.rows as unknown as ManualPrice[];
+  const manualRates = ratesResult.rows as unknown as ManualRate[];
 
-  const truncated = movementRows.length > LEDGER_MOVEMENT_LIMIT;
+  // A ledger read in part would admit writes against a history the database
+  // does not have.
+  const truncated =
+    holdingsResult.cut ||
+    movementsResult.cut ||
+    pricesResult.cut ||
+    ratesResult.cut;
   const movements = new Map<string, Movement[]>();
-  for (const row of movementRows.slice(0, LEDGER_MOVEMENT_LIMIT)) {
+  for (const row of movementRows) {
     const movement = movementOfRow(row);
     const own = movements.get(movement.holding_id) ?? [];
     own.push(movement);
