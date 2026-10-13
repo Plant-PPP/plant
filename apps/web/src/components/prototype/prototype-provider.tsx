@@ -239,6 +239,14 @@ export function PrototypeProvider({
           state: assistant.deleteConversation(s, conversationId),
           result: null,
         })),
+      // The sources the answer will name, as the model's tool calls would.
+      consults: (question, unit) =>
+        assistant.prototypeAnswer(
+          latest.current,
+          question,
+          unit,
+          pricedSnapshotOf(latest.current, snapshot).snapshot,
+        ).sources,
     },
     imports: {
       // Each file is queued, read a moment later and ready after that, as

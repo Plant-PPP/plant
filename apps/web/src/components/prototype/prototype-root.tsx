@@ -2,6 +2,7 @@ import { quotesNeeded, readSnapshot } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { ReactNode } from "react";
 
+import { PrototypeAssistantPanel } from "@/components/prototype/prototype-assistant-panel";
 import { PrototypeProvider } from "@/components/prototype/prototype-provider";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 import { createFixtureQuoteReader } from "@/lib/prototype/quote-reader";
@@ -34,7 +35,7 @@ export async function PrototypeRoot({ children }: { children: ReactNode }) {
         Datos de prueba. Lo que cambies se pierde al recargar.
       </p>
       <PrototypeProvider today={today} snapshot={snapshot}>
-        {children}
+        <PrototypeAssistantPanel>{children}</PrototypeAssistantPanel>
       </PrototypeProvider>
     </div>
   );

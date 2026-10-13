@@ -1,6 +1,7 @@
 import { snapshotOn } from "@plant/core";
 
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
+import { suggestionsFor } from "@/lib/assistant/suggestions";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -24,7 +25,7 @@ it("never says what to buy or sell", () => {
   for (const question of ["¿Qué compro?", "¿Me conviene vender BTC?"]) {
     const answer = ask(question);
     expect(answer.text).toMatch(/no recomienda/);
-    expect(answer.chart).toBeNull();
+    expect(answer.charts).toEqual([]);
   }
 });
 
@@ -45,7 +46,7 @@ it.each([
 ])("answers %s from the data, with a chart", (question, text, chart) => {
   const answer = ask(question);
   expect(answer.text).toMatch(text);
-  expect(answer.chart?.title).toBe(chart);
+  expect(answer.charts[0]?.title).toBe(chart);
   expect(answer.rate?.label).toBe("MEP");
   expect(answer.sources.length).toBeGreaterThan(0);
 });
@@ -113,7 +114,7 @@ it("answers about debts with none loaded", () => {
     snapshot,
   );
   expect(answer.text).toBe("No tenés deudas cargadas en Plant.");
-  expect(answer.chart).toBeNull();
+  expect(answer.charts).toEqual([]);
 });
 
 it("draws an instrument's result as bars that add up to it", () => {
@@ -125,7 +126,7 @@ it("draws an instrument's result as bars that add up to it", () => {
   );
   const result = instrumentSummary(holdings, flows, TODAY, value).returns!
     .result;
-  const bars = ask("¿Cómo le fue a Apple?").chart!.bars;
+  const bars = ask("¿Cómo le fue a Apple?").charts[0]!.points;
   expect(bars.reduce((sum, bar) => sum + Number(bar.value), 0)).toBeCloseTo(
     Number(result),
     6,
@@ -168,5 +169,41 @@ it("answers how the portfolio did when asked what it yielded", () => {
 it("reads rendimientos as the year's result, not as income", () => {
   const answer = ask("¿Cómo vinieron mis rendimientos este año?");
   expect(answer.text).toMatch(/En 2026 tu patrimonio/);
-  expect(answer.chart?.title).toBe("Resultado por mes de 2026");
+  expect(answer.charts[0]?.title).toBe("Resultado por mes de 2026");
+});
+
+it("answers every question a screen suggests from the data", () => {
+  for (const path of ["/", "/assets", "/debts", "/closes"]) {
+    for (const question of suggestionsFor(path)) {
+      expect(ask(question).sources).not.toEqual([]);
+    }
+  }
+});
+
+it("answers what comes in with a table of each payment and a chart by month that add up", () => {
+  const answer = ask("¿Qué cobro este mes?");
+  const rows = answer.table!.rows;
+  expect(rows.map(({ label }) => label)).toEqual([
+    "Vencimiento · Plazo fijo ARS",
+    "Dividendo · Apple",
+    "Dividendo · Coca-Cola",
+    "Dividendo · SPDR S&P 500",
+  ]);
+  expect(answer.charts[0]?.title).toBe("Cobros por mes");
+  const total = (values: readonly (string | null)[]) =>
+    values.reduce((sum, value) => sum + Number(value), 0);
+  expect(total(answer.charts[0]!.points.map(({ value }) => value))).toBeCloseTo(
+    total(rows.map(({ value }) => value)),
+    6,
+  );
+  expect(answer.text).toMatch(/^Este mes esperás cobrar .* en 1 pago\./);
+  expect(ask("¿Cuánto cobré de dividendos?").table).toBeNull();
+});
+
+it("draws how the net worth moved as a line of month ends", () => {
+  const answer = ask("¿Cómo evolucionó mi patrimonio?");
+  const line = answer.charts[0]!;
+  expect(line.kind).toBe("line");
+  expect(line.points).toHaveLength(12);
+  expect(answer.text).toMatch(/^Tu patrimonio pasó de /);
 });
