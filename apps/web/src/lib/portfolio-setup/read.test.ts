@@ -364,7 +364,7 @@ describe("a row the list cannot read", () => {
       CONTEXT,
     ).catch(() => undefined);
     expect(lines[0]).toMatchObject({ "plant.outcome": "invalid_row" });
-    expect(lines[0]).not.toHaveProperty("plant.portfolio_setup.columns");
+    expect(lines[0]).not.toHaveProperty(["plant.portfolio_setup.columns"]);
   });
 
   it("ignores the archived cursor of a list read without archived rows", async () => {
