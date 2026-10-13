@@ -46,18 +46,35 @@ it("loads an import with its owner, status and file", async () => {
       },
     ],
   }));
-  expect(await store.load(IMPORT)).toEqual({
+  expect(await store.load(IMPORT, USER)).toEqual({
     userId: USER,
     status: "queued",
     path: "p",
     mimeType: "application/pdf",
   });
   expect(calls[0]!.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
+  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
 });
 
 it("loads nothing for an import that does not exist", async () => {
   const { store } = storeWith(() => ({ status: 200, body: [] }));
-  expect(await store.load(IMPORT)).toBeNull();
+  expect(await store.load(IMPORT, USER)).toBeNull();
+});
+
+it("reads the institution of the import's account, as that import's user", async () => {
+  const { store, calls } = storeWith(() => ({
+    status: 200,
+    body: [{ document: { account: { institution: "IOL" } } }],
+  }));
+  expect(await store.institution(IMPORT, USER)).toBe("IOL");
+  expect(calls[0]!.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
+  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+});
+
+it("refuses an import with no account to read the institution of", async () => {
+  const { store } = storeWith(() => ({ status: 200, body: [] }));
+  const error = await store.institution(IMPORT, USER).catch((e: unknown) => e);
+  expect(error).toMatchObject({ step: "institution", code: "no_data" });
 });
 
 it("replaces the draft, then marks the import ready at the document's date", async () => {
@@ -71,11 +88,13 @@ it("replaces the draft, then marks the import ready at the document's date", asy
         symbol: "AAPL",
         quantity: "5",
         price: null,
+        value: "90000",
         currency: "ARS",
         confidence: "low",
         page: 2,
       },
     ],
+    totals: [{ currency: "USD", amount: "120.5" }],
   });
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "DELETE /rest/v1/import_items",
@@ -83,6 +102,8 @@ it("replaces the draft, then marks the import ready at the document's date", asy
     "PATCH /rest/v1/imports",
   ]);
   expect(calls[0]!.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
+  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  expect(calls[2]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
   expect(calls[1]!.body).toEqual([
     {
       user_id: USER,
@@ -91,6 +112,7 @@ it("replaces the draft, then marks the import ready at the document's date", asy
       symbol: "AAPL",
       quantity: "5",
       price: null,
+      value: "90000",
       currency: "ARS",
       confidence: "low",
       source_page: 2,
@@ -99,12 +121,15 @@ it("replaces the draft, then marks the import ready at the document's date", asy
   expect(calls[2]!.body).toEqual({
     status: "ready",
     document_date: "2026-09-30",
+    printed_total_ars: null,
+    printed_total_usd: "120.5",
   });
 });
 
 it("marks an import failed with its reason", async () => {
   const { store, calls } = storeWith(() => ({ status: 204 }));
-  await store.failed(IMPORT, "nothing_found");
+  await store.failed(IMPORT, USER, "nothing_found");
+  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
   expect(calls[0]!.body).toEqual({
     status: "failed",
     failure: "nothing_found",
@@ -116,7 +141,7 @@ it("throws a store error with only the step and code", async () => {
     status: 500,
     body: { code: "XX000", message: "row details" },
   }));
-  const error = await store.reading(IMPORT).catch((e: unknown) => e);
+  const error = await store.reading(IMPORT, USER).catch((e: unknown) => e);
   expect(error).toBeInstanceOf(ImportStoreError);
   expect(error).toMatchObject({ step: "reading", code: "XX000" });
   expect(String(error)).not.toContain("row details");

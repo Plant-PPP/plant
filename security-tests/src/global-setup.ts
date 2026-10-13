@@ -11,6 +11,7 @@ import {
   prepareMfaCases,
   runEnv,
   seedAiCost,
+  seedColumnMapping,
   seedImportItem,
   seedQuotes,
 } from "./pentest-users";
@@ -50,6 +51,8 @@ export default async function globalSetup(): Promise<void> {
     const b = await createUser(stack, track);
     await seedAiCost(stack, a.id);
     await seedAiCost(stack, b.id);
+    await seedColumnMapping(stack, a.id);
+    await seedColumnMapping(stack, b.id);
     await seedImportItem(stack, a);
     await seedImportItem(stack, b);
     process.env[runEnv.quotes] = JSON.stringify(await seedQuotes(stack));

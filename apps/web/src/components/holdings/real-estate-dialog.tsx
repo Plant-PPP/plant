@@ -1,7 +1,7 @@
 "use client";
 
 import type { Denominator, RealEstateFigures } from "@plant/core";
-import type { Currency } from "@plant/shared";
+import { Constants, type Currency } from "@plant/shared";
 import { useId, useState } from "react";
 
 import {
@@ -40,7 +40,7 @@ import {
   toSheet,
 } from "./real-estate-fields";
 
-const CURRENCIES: readonly Currency[] = ["ARS", "USD"];
+const CURRENCIES: readonly Currency[] = Constants.public.Enums.currency;
 const NO_INDEX = "none";
 
 const fieldOf = (text: string): SheetField | null =>

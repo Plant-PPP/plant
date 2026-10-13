@@ -1,5 +1,5 @@
 import "server-only";
-import { buenosAiresDate, type Database } from "@plant/shared";
+import { buenosAiresDate, Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -31,7 +31,7 @@ const REVIEW_ROW_LIMIT = 500;
 
 const importSchema = z.object({
   id: z.string(),
-  status: z.enum(["queued", "reading", "ready", "failed", "confirmed"]),
+  status: z.enum(Constants.public.Enums.import_status),
   document_date: z.string().nullable(),
   document: z.object({
     source_connection_id: z.string(),

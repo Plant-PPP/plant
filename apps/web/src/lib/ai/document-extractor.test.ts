@@ -44,6 +44,8 @@ const extract = (model: MockLanguageModelV3, mimeType = "application/pdf") =>
     bytes: BYTES,
     mimeType,
     userId: USER,
+    importId: "i1",
+    institution: "IOL",
   });
 
 it("reads the holdings and costs the call to the user", async () => {
@@ -55,6 +57,7 @@ it("reads the holdings and costs the call to the user", async () => {
           symbol: "AAPL",
           quantity: "5",
           price: "18000.5",
+          value: "90002.5",
           currency: "ARS",
           confidence: "high",
           page: 1,
@@ -63,6 +66,7 @@ it("reads the holdings and costs the call to the user", async () => {
           symbol: "GD30",
           quantity: "1.000,5",
           price: null,
+          value: null,
           currency: "USD",
           confidence: "low",
           page: 0,
@@ -71,20 +75,28 @@ it("reads the holdings and costs the call to the user", async () => {
           symbol: "BTC",
           quantity: "0.05",
           price: "",
+          value: "",
           currency: "USD",
           confidence: "medium",
           page: null,
         },
       ],
+      totals: [
+        { currency: "ARS", amount: " 90002.50 " },
+        { currency: "USD", amount: "abc" },
+      ],
     }),
   );
-  expect(await extract(model)).toEqual({
+  const { draft, read } = await extract(model);
+  expect(read).toEqual({ reader: "document", mapping: "none" });
+  expect(draft).toEqual({
     documentDate: "2026-09-30",
     rows: [
       {
         symbol: "AAPL",
         quantity: "5",
         price: "18000.5",
+        value: "90002.5",
         currency: "ARS",
         confidence: "high",
         page: 1,
@@ -94,11 +106,14 @@ it("reads the holdings and costs the call to the user", async () => {
         symbol: "BTC",
         quantity: "0.05",
         price: null,
+        value: null,
         currency: "USD",
         confidence: "medium",
         page: null,
       },
     ],
+    // Totals that are not all decimals are left out.
+    totals: [],
   });
   expect(record).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -117,17 +132,31 @@ it("reads the holdings and costs the call to the user", async () => {
 });
 
 it("drops a date that is not one", async () => {
-  const draft = await extract(
-    answering(JSON.stringify({ documentDate: "30/09/2026", rows: [] })),
+  const { draft } = await extract(
+    answering(
+      JSON.stringify({ documentDate: "30/09/2026", rows: [], totals: [] }),
+    ),
   );
   expect(draft.documentDate).toBeNull();
 });
 
-it("refuses a spreadsheet without calling the model", async () => {
-  const model = answering("{}");
-  const error = await extract(model, "text/csv").catch((e: unknown) => e);
-  expect(error).toMatchObject({ code: "unsupported", retryable: false });
-  expect(model.doGenerateCalls).toHaveLength(0);
+it("keeps the totals the statement prints, one per currency", async () => {
+  const { draft } = await extract(
+    answering(
+      JSON.stringify({
+        documentDate: null,
+        rows: [],
+        totals: [
+          { currency: "ARS", amount: "1500.25" },
+          { currency: "USD", amount: "120" },
+        ],
+      }),
+    ),
+  );
+  expect(draft.totals).toEqual([
+    { currency: "ARS", amount: "1500.25" },
+    { currency: "USD", amount: "120" },
+  ]);
 });
 
 it("calls an answer that is not the draft unreadable", async () => {

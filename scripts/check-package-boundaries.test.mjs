@@ -224,6 +224,31 @@ for (const spec of [
   });
 }
 
+const SHEETJS = "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz";
+
+test("SheetJS's pinned tarball as xlsx passes", () => {
+  const r = check({ "@plant/sources": [["xlsx", SHEETJS]] });
+  assert.equal(r.status, 0, r.output);
+});
+
+for (const [key, spec] of [
+  ["sheets", SHEETJS],
+  ["xlsx", "https://cdn.example.com/xlsx-0.20.3/xlsx-0.20.3.tgz"],
+  ["xlsx", "https://registry.npmjs.org/xlsx/-/xlsx-0.18.5.tgz"],
+  ["xlsx", "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"],
+]) {
+  test(`${key}: ${spec} in @plant/sources fails`, () => {
+    const r = check({ "@plant/sources": [[key, spec]] });
+    assert.equal(r.status, 1);
+    assert.match(
+      r.output,
+      new RegExp(
+        `${key} \\(.*\\) is not a version, an alias or a workspace package`,
+      ),
+    );
+  });
+}
+
 test("an alias is checked when another field declares the same key", () => {
   const r = check({
     "@plant/core": [

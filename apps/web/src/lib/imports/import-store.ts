@@ -1,6 +1,6 @@
 import "server-only";
 import type { ImportStorePort, ImportToRead } from "@plant/jobs";
-import type { Database } from "@plant/shared";
+import { Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -15,7 +15,8 @@ type Client = SupabaseClient<Database>;
 export class ImportStoreError extends Error {
   override readonly name = "ImportStoreError";
   constructor(
-    readonly step: "load" | "download" | "reading" | "draft" | "failed",
+    readonly step:
+      "load" | "download" | "reading" | "institution" | "draft" | "failed",
     readonly code: string,
   ) {
     super(`import store ${step} failed: ${code}`);
@@ -24,8 +25,12 @@ export class ImportStoreError extends Error {
 
 const loadedSchema = z.object({
   user_id: z.string(),
-  status: z.enum(["queued", "reading", "ready", "failed", "confirmed"]),
+  status: z.enum(Constants.public.Enums.import_status),
   document: z.object({ storage_path: z.string(), mime_type: z.string() }),
+});
+
+const institutionSchema = z.object({
+  document: z.object({ account: z.object({ institution: z.string() }) }),
 });
 
 function checked(
@@ -38,11 +43,11 @@ function checked(
 }
 
 // The job's store over a service-role client: it bypasses RLS and Storage's
-// policies, so every call filters by the import's id, and the job checks the
-// import is its event's user's before it reads the file.
+// policies, so every call filters by the import's id and by its user, and the
+// job checks the import is its event's user's before it reads the file.
 export function createImportStore(client: Client): ImportStorePort {
   return {
-    async load(importId): Promise<ImportToRead | null> {
+    async load(importId, userId): Promise<ImportToRead | null> {
       const result = await client
         .from("imports")
         .select(
@@ -50,6 +55,7 @@ export function createImportStore(client: Client): ImportStorePort {
             "document:uploaded_documents!imports_user_id_document_id_fkey(storage_path, mime_type)",
         )
         .eq("id", importId)
+        .eq("user_id", userId)
         .limit(1);
       checked("load", result, 200);
       const [row] = (result.data ?? []) as unknown[];
@@ -73,22 +79,44 @@ export function createImportStore(client: Client): ImportStorePort {
       return new Uint8Array(await data.arrayBuffer());
     },
 
-    async reading(importId) {
+    async reading(importId, userId) {
       checked(
         "reading",
         await client
           .from("imports")
           .update({ status: "reading" })
-          .eq("id", importId),
+          .eq("id", importId)
+          .eq("user_id", userId),
         204,
       );
+    },
+
+    async institution(importId, userId) {
+      const result = await client
+        .from("imports")
+        .select(
+          "document:uploaded_documents!imports_user_id_document_id_fkey(" +
+            "account:source_connections!uploaded_documents_user_id_source_connection_id_fkey(institution))",
+        )
+        .eq("id", importId)
+        .eq("user_id", userId)
+        .limit(1);
+      checked("institution", result, 200);
+      const [row] = (result.data ?? []) as unknown[];
+      const parsed = institutionSchema.safeParse(row);
+      if (!parsed.success) throw new ImportStoreError("institution", "no_data");
+      return parsed.data.document.account.institution;
     },
 
     async saveDraft(importId, userId, draft) {
       // A retried read replaces what an earlier attempt may have written.
       checked(
         "draft",
-        await client.from("import_items").delete().eq("import_id", importId),
+        await client
+          .from("import_items")
+          .delete()
+          .eq("import_id", importId)
+          .eq("user_id", userId),
         204,
       );
       // Amounts stay decimal strings; the cast is only for the generated types.
@@ -99,28 +127,39 @@ export function createImportStore(client: Client): ImportStorePort {
         symbol: row.symbol,
         quantity: row.quantity as unknown as number,
         price: row.price as unknown as number | null,
+        value: row.value as unknown as number | null,
         currency: row.currency,
         confidence: row.confidence,
         source_page: row.page,
       }));
       checked("draft", await client.from("import_items").insert(rows), 201);
+      const printed = (currency: "ARS" | "USD") =>
+        (draft.totals.find((total) => total.currency === currency)?.amount ??
+          null) as unknown as number | null;
       checked(
         "draft",
         await client
           .from("imports")
-          .update({ status: "ready", document_date: draft.documentDate })
-          .eq("id", importId),
+          .update({
+            status: "ready",
+            document_date: draft.documentDate,
+            printed_total_ars: printed("ARS"),
+            printed_total_usd: printed("USD"),
+          })
+          .eq("id", importId)
+          .eq("user_id", userId),
         204,
       );
     },
 
-    async failed(importId, failure) {
+    async failed(importId, userId, failure) {
       checked(
         "failed",
         await client
           .from("imports")
           .update({ status: "failed", failure })
-          .eq("id", importId),
+          .eq("id", importId)
+          .eq("user_id", userId),
         204,
       );
     },

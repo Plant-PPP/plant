@@ -144,6 +144,12 @@ function installedName(dir, spec) {
     : null;
 }
 
+// Tarballs accepted under one dependency key each. SheetJS publishes current
+// versions only on its CDN; the xlsx package on npm is stale.
+const PINNED_TARBALLS = {
+  xlsx: /^https:\/\/cdn\.sheetjs\.com\/xlsx-\d+\.\d+\.\d+\/xlsx-\d+\.\d+\.\d+\.tgz$/,
+};
+
 const violations = [];
 for (const dir of manifests) {
   const {
@@ -163,7 +169,10 @@ for (const dir of manifests) {
   ]
     .flatMap((field) => Object.entries(field))
     .flatMap(([key, spec]) => {
-      const target = installedName(dir, spec);
+      const target =
+        Object.hasOwn(PINNED_TARBALLS, key) && PINNED_TARBALLS[key].test(spec)
+          ? undefined
+          : installedName(dir, spec);
       if (target === null) {
         violations.push(
           `${name}: ${key} (${spec}) is not a version, an alias or a workspace package`,

@@ -19,6 +19,7 @@ export type {
 } from "./functions/delete-expired-files";
 export type {
   ImportJobDeps,
+  ImportRead,
   ImportStorePort,
   ImportToRead,
 } from "./functions/import-document";

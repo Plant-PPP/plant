@@ -9,7 +9,12 @@ import {
   type ReferenceDollar,
   UNIT_FX_KINDS,
 } from "@plant/core";
-import { addDays, buenosAiresDate, type Database } from "@plant/shared";
+import {
+  addDays,
+  buenosAiresDate,
+  Constants,
+  type Database,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -291,7 +296,7 @@ export async function suggestTransferCost(
 const quoteQuerySchema = z
   .object({
     symbol: z.string().regex(/^[A-Z0-9]{1,15}$/),
-    currency: z.enum(["ARS", "USD"]),
+    currency: z.enum(Constants.public.Enums.currency),
     date: z.iso.date(),
   })
   .strict();

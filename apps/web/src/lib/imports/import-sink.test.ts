@@ -5,18 +5,36 @@ jest.mock("@/lib/supabase/service-role", () => ({
 
 import { FileDeletionStoreError } from "./file-deletion-store";
 import { ImportStoreError } from "./import-store";
-import { fileDeletionSink, importSink } from "./import-sink";
+import { ColumnMappingsError } from "./column-mappings-store";
+import {
+  columnMappingsSink,
+  fileDeletionSink,
+  importSink,
+} from "./import-sink";
 
 it("rejects every call when there is no secret key", async () => {
   const sink = importSink();
   for (const call of [
-    () => sink.load("i1"),
+    () => sink.load("i1", "u1"),
     () => sink.download("p"),
-    () => sink.reading("i1"),
-    () => sink.failed("i1", "unreadable"),
+    () => sink.reading("i1", "u1"),
+    () => sink.institution("i1", "u1"),
+    () => sink.failed("i1", "u1", "unreadable"),
   ]) {
     const error = await call().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ImportStoreError);
+    expect(error).toMatchObject({ code: "unconfigured" });
+  }
+});
+
+it("rejects every column mapping call when there is no secret key", async () => {
+  const sink = columnMappingsSink();
+  for (const call of [
+    () => sink.get("u1", "IOL", ["Especie"]),
+    () => sink.save("u1", "IOL", ["Especie"], {}),
+  ]) {
+    const error = await call().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ColumnMappingsError);
     expect(error).toMatchObject({ code: "unconfigured" });
   }
 });

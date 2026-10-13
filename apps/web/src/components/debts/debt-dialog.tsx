@@ -1,6 +1,7 @@
 "use client";
 
 import { LIABILITY_KINDS, liabilityInputSchema } from "@plant/core";
+import { Constants } from "@plant/shared";
 import { useId, useState } from "react";
 
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
@@ -175,7 +176,7 @@ export function DebtDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["ARS", "USD"] as const).map((each) => (
+                  {Constants.public.Enums.currency.map((each) => (
                     <SelectItem key={each} value={each}>
                       {CURRENCY_LABELS[each]}
                     </SelectItem>

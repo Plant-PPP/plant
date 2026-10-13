@@ -1,6 +1,7 @@
 import {
   Constants,
   currencySchema,
+  nonNegativeDecimalSchema,
   positiveDecimalSchema,
 } from "@plant/shared";
 import { z } from "zod";
@@ -14,24 +15,41 @@ export const importConfidenceSchema = z.enum(
 export const DRAFT_ROW_LIMIT = 500;
 
 // One holding as the document lists it: the instrument as it names it, how
-// many, the price per unit it prints in its currency, and the page it is on.
+// many, the price per unit and the holding's value it prints in its currency,
+// and the page it is on.
 export const draftRowSchema = z
   .object({
     symbol: z.string().trim().min(1).max(30),
     quantity: positiveDecimalSchema,
     price: positiveDecimalSchema.nullable(),
+    value: positiveDecimalSchema.nullable(),
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),
   })
   .strict();
 
-// What a file yields: the date its holdings are at, when it prints one, and
-// its rows.
+// What a file yields: the date its holdings are at, when it prints one, its
+// rows, and the holdings totals it prints, at most one per currency.
 export const importDraftSchema = z
   .object({
     documentDate: z.iso.date().nullable(),
     rows: z.array(draftRowSchema).max(DRAFT_ROW_LIMIT),
+    totals: z
+      .array(
+        z
+          .object({
+            currency: currencySchema,
+            amount: nonNegativeDecimalSchema,
+          })
+          .strict(),
+      )
+      .max(Constants.public.Enums.currency.length)
+      .refine(
+        (totals) =>
+          new Set(totals.map((total) => total.currency)).size === totals.length,
+        "One total per currency",
+      ),
   })
   .strict();
 

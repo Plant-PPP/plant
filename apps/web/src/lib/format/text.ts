@@ -1,10 +1,9 @@
+import { withoutAccents } from "@plant/shared";
+
 // Text as a search compares it: case and accents ignored, so "credito" finds
 // "Crédito".
 export const folded = (text: string): string =>
-  text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
+  withoutAccents(text).toLowerCase();
 
 // A label inside a sentence: its first letter in lower case ("Dólar MEP" →
 // "dólar MEP").
