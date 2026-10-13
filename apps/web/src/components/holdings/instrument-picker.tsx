@@ -75,6 +75,12 @@ export function triggerKey(event: {
   return typed ? event.key : null;
 }
 
+// What names the picker: the id of a visible label, or the name itself where
+// the field shows none.
+type PickerName =
+  | { labelId: string; "aria-label"?: never }
+  | { "aria-label": string; labelId?: never };
+
 // An instrument choice that searches by symbol or name. The trigger takes the
 // field's id, so its <Label htmlFor> and a refused submit's focus reach it;
 // its name is the label and the chosen instrument. What is typed only
@@ -82,6 +88,7 @@ export function triggerKey(event: {
 export function InstrumentPicker({
   id,
   labelId,
+  "aria-label": ariaLabel,
   instruments,
   value,
   onChange,
@@ -89,9 +96,8 @@ export function InstrumentPicker({
   autoFocus,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
-}: {
+}: PickerName & {
   id: string;
-  labelId: string;
   instruments: readonly PickerInstrument[];
   value: string;
   onChange: (symbol: string) => void;
@@ -108,6 +114,7 @@ export function InstrumentPicker({
     : [];
   const chosen = instruments.find((each) => each.symbol === value);
   const valueId = `${id}-value`;
+  const nameId = labelId ?? `${id}-label`;
   const listId = `${id}-list`;
   const optionId = (symbol: string) => `${id}-${symbol}`;
   const activeSymbol = shown[active]?.symbol;
@@ -169,13 +176,18 @@ export function InstrumentPicker({
         autoFocus={autoFocus}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
-        aria-labelledby={`${labelId} ${valueId}`}
+        aria-labelledby={`${nameId} ${valueId}`}
         onKeyDown={onTriggerKeyDown}
         className={cn(
           "border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]",
           !chosen && "text-muted-foreground",
         )}
       >
+        {labelId === undefined && (
+          <span id={nameId} className="sr-only">
+            {ariaLabel}
+          </span>
+        )}
         <span id={valueId} className="truncate">
           {chosen ? instrumentLabel(chosen.symbol, chosen.name) : placeholder}
         </span>

@@ -87,6 +87,40 @@ it("renders a trigger with the placeholder for an empty list", () => {
   expect(html).not.toContain('role="listbox"');
 });
 
+describe("a picker named without a visible label", () => {
+  const named = (value: string) =>
+    renderToStaticMarkup(
+      <InstrumentPicker
+        id="row-1"
+        aria-label="Activo de la fila 1"
+        instruments={[GD30, FCI]}
+        value={value}
+        onChange={() => {}}
+        placeholder="Elegí un activo"
+      />,
+    );
+
+  it("names the trigger by its own hidden name and the chosen instrument", () => {
+    const html = named("GD30");
+    expect(/<button[^>]*>/.exec(html)![0]).toContain(
+      'aria-labelledby="row-1-label row-1-value"',
+    );
+    expect(html).toContain(
+      '<span id="row-1-label" class="sr-only">Activo de la fila 1</span><span id="row-1-value" class="truncate">GD30 · Global 2030</span>',
+    );
+  });
+
+  it("names the placeholder after the row while nothing is chosen", () => {
+    expect(named("")).toContain(
+      '<span id="row-1-label" class="sr-only">Activo de la fila 1</span><span id="row-1-value" class="truncate">Elegí un activo</span>',
+    );
+  });
+
+  it("renders no hidden name when a visible label names it", () => {
+    expect(render("GD30")).not.toContain("sr-only");
+  });
+});
+
 describe("keys in the search", () => {
   it("moves the active option down and up, wrapping at the ends", () => {
     expect(searchKey("ArrowDown", 0, 3)).toEqual({ kind: "move", active: 1 });

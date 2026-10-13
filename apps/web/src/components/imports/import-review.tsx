@@ -12,9 +12,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { InstrumentPicker } from "@/components/holdings/instrument-picker";
 import {
   holdingsCountText,
   MissingFigure,
@@ -22,13 +23,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { countOf } from "@/lib/format/text";
 import {
   amountInput,
@@ -118,6 +112,7 @@ export function ImportReview({
   actions: ReviewActions;
 }) {
   const router = useRouter();
+  const pickerId = useId();
   const names = instrumentNames(instruments);
   const types = new Map(instruments.map((each) => [each.symbol, each.type]));
   const [rows, setRows] = useState(() =>
@@ -360,32 +355,21 @@ export function ImportReview({
               >
                 <div className="grid min-w-0 gap-1">
                   {row.added ? (
-                    <Select
+                    <InstrumentPicker
+                      id={`${pickerId}-${row.id}`}
+                      aria-label={`Activo de la fila ${index + 1}`}
+                      instruments={instruments.filter(
+                        (each) => !listed(row.id).has(each.symbol),
+                      )}
                       value={row.symbol}
-                      onValueChange={(symbol) => {
-                        if (!symbol) return;
+                      onChange={(symbol) =>
                         change(row.id, {
                           symbol,
                           currency: currencyOf(instruments, symbol),
-                        });
-                      }}
-                    >
-                      <SelectTrigger
-                        className="w-full"
-                        aria-label={`Activo de la fila ${index + 1}`}
-                      >
-                        <SelectValue placeholder="Elegí un activo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {instruments
-                          .filter((each) => !listed(row.id).has(each.symbol))
-                          .map((each) => (
-                            <SelectItem key={each.symbol} value={each.symbol}>
-                              {instrumentLabel(each.symbol, each.name)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                        })
+                      }
+                      placeholder="Elegí un activo"
+                    />
                   ) : (
                     <span className="truncate font-medium">
                       {instrumentLabel(row.symbol, names.get(row.symbol))}
