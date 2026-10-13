@@ -30,6 +30,7 @@ import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import {
   type HoldingOrigin,
   holdingName,
+  holdingPlace,
   instrumentNames,
   originText,
 } from "@/lib/holdings/holding-name";
@@ -276,7 +277,10 @@ export function HoldingDialog({
                   <SelectContent>
                     {accounts.map((each) => (
                       <SelectItem key={each.id} value={each.id}>
-                        {`${each.institution} · ${each.portfolio.name}`}
+                        {holdingPlace({
+                          account: each,
+                          portfolio: each.portfolio,
+                        })}
                       </SelectItem>
                     ))}
                   </SelectContent>
