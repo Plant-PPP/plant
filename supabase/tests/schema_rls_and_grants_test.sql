@@ -27,7 +27,7 @@
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
---   in them, authenticated only the RPCs (write_operation), which run as the
+--   in them, authenticated only the RPCs (write_operation, confirm_import), which run as the
 --   caller with an empty search_path, service_role none in private, the only
 --   SECURITY DEFINER
 --   functions are the signup, session and MFA factor triggers, and no trigger on public,
@@ -139,7 +139,8 @@ SELECT is_empty(
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
             OR (has_function_privilege('authenticated', p.oid, 'EXECUTE')
-                AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure]))
+                AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
   'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'
@@ -149,7 +150,8 @@ SELECT is_empty(
 SELECT ok(
   (SELECT bool_and(NOT p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""'])
    FROM pg_proc p
-   WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure])),
+   WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure])),
   'the RPCs run as the caller with an empty search_path'
 );
 

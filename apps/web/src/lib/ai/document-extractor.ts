@@ -56,7 +56,9 @@ const answerSchema = z.object({
         price: z
           .string()
           .nullable()
-          .describe("Price per unit as a plain decimal with a dot, or null."),
+          .describe(
+            "Price as printed (a bond's per 100 nominal), as a plain decimal with a dot, or null.",
+          ),
         currency: z.enum(["ARS", "USD"]),
         confidence: z.enum(["high", "medium", "low"]),
         page: z.number().int().nullable().describe("1-based page, or null."),

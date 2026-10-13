@@ -1,12 +1,8 @@
+import { heldElsewhere, heldIn } from "@/lib/imports/confirm";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 import type { ImportRow } from "@/lib/imports/review";
 
-import {
-  addImport,
-  confirmImport,
-  heldElsewhere,
-  heldIn,
-} from "./prototype-imports-store";
+import { addImport, confirmImport } from "./prototype-imports-store";
 import {
   holdingIn,
   initialState,

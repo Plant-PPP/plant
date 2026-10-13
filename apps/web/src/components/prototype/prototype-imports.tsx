@@ -7,8 +7,9 @@ import { ImportReview } from "@/components/imports/import-review";
 import { usedThisMonth } from "@/lib/format/text";
 import { CONSENT_VERSION } from "@/lib/onboarding/steps";
 
+import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
+
 import { usePrototype } from "./prototype-provider";
-import { heldElsewhere, heldOn } from "./prototype-imports-store";
 
 const reviewHref = (id: string) => `/import/${id}`;
 

@@ -74,8 +74,8 @@ SELECT set_eq(
 
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.imports') $$,
-  ARRAY['(table):SELECT', 'document_id:INSERT'],
-  'a user reads their imports and starts one, never its id or status'
+  ARRAY['(table):SELECT', 'document_id:INSERT', 'status:UPDATE'],
+  'a user reads their imports, starts one and moves its status only as confirm_import_test.sql pins'
 );
 
 SELECT is_empty(

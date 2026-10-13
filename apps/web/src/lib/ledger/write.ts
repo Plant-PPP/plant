@@ -90,7 +90,9 @@ async function referenceDollarOf(client: Client): Promise<ReferenceDollar> {
 // The stored dollar rates a movement dated `date` takes.
 const dateOf = z.object({ date: z.iso.date() });
 
-async function ledgerFor(client: Client, input: unknown) {
+// The ledger with the stored dollar rates of the date an operation dated
+// `input.date` takes, when it has one.
+export async function ledgerFor(client: Client, input: unknown) {
   const today = buenosAiresDate(new Date());
   const date = dateOf.safeParse(input);
   const quotes =
@@ -112,7 +114,7 @@ async function ledgerFor(client: Client, input: unknown) {
 // What write_operation's refusal means to the dialog. A stale read or a
 // history below zero only follows a race, since the app admitted the
 // operation against what it read: the user tries again.
-function rpcFailure(error: {
+export function rpcFailure(error: {
   code?: string;
   hint?: string | null;
 }): Extract<MovementResult, { ok: false }>["code"] {

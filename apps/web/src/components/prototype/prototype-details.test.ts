@@ -1,3 +1,4 @@
+import { heldIn } from "@/lib/imports/confirm";
 import { type Holding, snapshotOn } from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 
@@ -11,7 +12,6 @@ import {
   addImport,
   confirmImport,
   finishReading,
-  heldIn,
 } from "./prototype-imports-store";
 import {
   createHolding,
