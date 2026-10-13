@@ -34,6 +34,7 @@ import {
   CURRENCY_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
+import { holdingPlace } from "@/lib/holdings/holding-name";
 import { formatQuotedPrice, priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
@@ -131,6 +132,21 @@ export function MovementDialog({
     ]),
   });
   const destinationId = `${fieldId("parts")}-to`;
+  const destinationAccountId = `${fieldId("parts")}-to-account`;
+  // A transfer may go to another of the user's accounts.
+  const acrossAccounts = moving && accounts.length > 1;
+  const origin = accounts.find((each) => each.id === fields.accountId);
+  const toAccountId = fields.parts[1]?.accountId ?? fields.accountId;
+  const toAccount = accounts.find((each) => each.id === toAccountId);
+  // An account the units can go to: the one they leave, or another by where
+  // its units would land by default.
+  const accountName = (account: SourceConnectionRow) =>
+    account.id === fields.accountId
+      ? `${account.institution} (la misma)`
+      : holdingPlace({ account, portfolio: account.portfolio });
+  const fromPortfolio =
+    portfolios.find((each) => each.id === fields.parts[0]?.portfolioId)?.name ??
+    "";
   const priceHelpId = `${fieldId("price")}-help`;
   const modeId = `${id}-mode`;
   const balanceHelpId = `${fieldId("parts")}-help`;
@@ -531,17 +547,64 @@ export function MovementDialog({
               )}
             </div>
           ) : moving ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_8rem]">
+            <div
+              className={
+                acrossAccounts
+                  ? "grid grid-cols-2 gap-3"
+                  : "grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_8rem]"
+              }
+            >
               <div className="grid gap-2">
                 <span className="text-sm font-medium">Desde</span>
                 <span className="flex h-9 min-w-0 items-center truncate text-sm">
-                  {portfolios.find(
-                    (each) => each.id === fields.parts[0]?.portfolioId,
-                  )?.name ?? ""}
+                  {acrossAccounts && origin
+                    ? holdingPlace({
+                        account: origin,
+                        portfolio: { name: fromPortfolio },
+                      })
+                    : fromPortfolio}
                 </span>
               </div>
+              {acrossAccounts && (
+                <div className="grid gap-2">
+                  <Label htmlFor={destinationAccountId}>Hacia la cuenta</Label>
+                  <Select
+                    value={toAccountId}
+                    onValueChange={pick("parts", (value) =>
+                      setPart(
+                        1,
+                        value === fields.accountId
+                          ? { accountId: undefined, portfolioId: "" }
+                          : {
+                              accountId: value,
+                              portfolioId:
+                                accounts.find((each) => each.id === value)
+                                  ?.portfolio.id ?? "",
+                            },
+                      ),
+                    )}
+                  >
+                    <SelectTrigger id={destinationAccountId} className="w-full">
+                      {/* The chosen account's name, so the server render
+                          shows it too. */}
+                      <SelectValue>
+                        {toAccount && accountName(toAccount)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((each) => (
+                        <SelectItem key={each.id} value={each.id}>
+                          {accountName(each)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-2">
-                <Label htmlFor={destinationId}>Hacia</Label>
+                <Label htmlFor={destinationId}>
+                  {acrossAccounts ? "Hacia la cartera" : "Hacia"}
+                </Label>
                 <Select
                   value={fields.parts[1]?.portfolioId ?? ""}
                   onValueChange={pick("parts", (value) =>
@@ -559,7 +622,9 @@ export function MovementDialog({
                   <SelectContent>
                     {portfolios
                       .filter(
-                        (each) => each.id !== fields.parts[0]?.portfolioId,
+                        (each) =>
+                          toAccountId !== fields.accountId ||
+                          each.id !== fields.parts[0]?.portfolioId,
                       )
                       .map((each) => (
                         <SelectItem key={each.id} value={each.id}>
@@ -569,7 +634,13 @@ export function MovementDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2 grid gap-2 sm:col-span-1">
+              <div
+                className={
+                  acrossAccounts
+                    ? "grid gap-2"
+                    : "col-span-2 grid gap-2 sm:col-span-1"
+                }
+              >
                 <Label htmlFor={fieldId("parts")}>Cantidad</Label>
                 <Input
                   id={fieldId("parts")}

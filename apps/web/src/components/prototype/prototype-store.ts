@@ -215,7 +215,35 @@ export function initialState(
   };
 }
 
+// What a user starts with after deleting the account and signing up again:
+// one "Principal" portfolio, as the database gives a new user, and nothing
+// else; the market data stays.
+export function freshState(
+  state: PrototypeState,
+  portfolioId: string,
+): PrototypeState {
+  return initialState(
+    {
+      referenceDollar: "mep",
+      accounts: [],
+      portfolios: [{ id: portfolioId, name: "Principal" }],
+      instruments: state.instruments,
+      holdings: [],
+      closed: [],
+      movements: [],
+      quotes: state.quotes,
+      manualPrices: [],
+      liabilities: [],
+    },
+    state.today,
+  );
+}
+
 // --- Reads -----------------------------------------------------------------
+
+// An account, archived or not.
+const accountOf = (state: PrototypeState, id: string) =>
+  [...state.accounts, ...state.archivedAccounts].find((each) => each.id === id);
 
 // A portfolio, archived or not.
 const portfolioOf = (state: PrototypeState, id: string) =>
@@ -267,12 +295,12 @@ export function holdingsView(state: PrototypeState): HoldingsView {
   };
 }
 
-// The holdings whose movements replay together: one account's holdings of an
-// instrument, which transfers move units between. Any other holding is a
-// group of its own.
+// The holdings whose movements replay together: every holding of an
+// instrument, across accounts and portfolios, which transfers move units
+// between. Any other holding is a group of its own.
 export const groupKey = (stored: StoredHolding): string =>
   stored.holding.asset_class === "instrument"
-    ? JSON.stringify([stored.accountId, stored.holding.instrument_symbol])
+    ? JSON.stringify([stored.holding.instrument_symbol])
     : JSON.stringify([stored.holding.id]);
 
 const groupIndex = new WeakMap<
@@ -585,9 +613,12 @@ export function operationOf(
   for (const stored of state.holdings) {
     for (const movement of state.movements.get(stored.holding.id) ?? []) {
       if (movement.operation_id !== operationId) continue;
-      placed ??= stored;
+      // A transfer's account is the one its units leave.
+      if (!placed || takesUnits(movement)) placed = stored;
       parts.push({
         movement,
+        accountId: stored.accountId,
+        institution: accountOf(state, stored.accountId)?.institution ?? "",
         portfolioId: stored.portfolioId,
         portfolioName: portfolioOf(state, stored.portfolioId)?.name ?? "",
       });
@@ -1058,13 +1089,27 @@ export function writeOperation(
   }
   // Each part with its portfolio. A yield given as a balance is the
   // difference from what its holding held at the end of that day.
+  // A transfer's arriving side may name another account.
   const parts: {
+    account: SourceConnectionRow;
     portfolio: PortfolioRow;
     part: Exclude<(typeof given)[number], { balance: string }>;
   }[] = [];
-  for (const part of given) {
+  for (const each of given) {
+    // The arriving side's account, apart from the movement's own fields.
+    const { source_connection_id: arriving, ...part } = each as typeof each & {
+      source_connection_id?: string;
+    };
     const portfolioId = part.portfolio_id;
     const portfolio = state.portfolios.find(({ id }) => id === portfolioId);
+    const partAccountId = arriving ?? accountId;
+    const partAccount = state.accounts.find(({ id }) => id === partAccountId);
+    if (!partAccount) {
+      return refused(state, {
+        ok: false,
+        code: archivedCode(state, { accountId: partAccountId }) ?? "not_found",
+      });
+    }
     if (!portfolio) {
       return refused(state, {
         ok: false,
@@ -1072,7 +1117,7 @@ export function writeOperation(
       });
     }
     if (!("balance" in part)) {
-      parts.push({ portfolio, part });
+      parts.push({ account: partAccount, portfolio, part });
       continue;
     }
     const home = holdingIn(state, accountId, instrumentSymbol, portfolioId)
@@ -1088,6 +1133,7 @@ export function writeOperation(
     const sign = compareExact(change, ZERO);
     if (sign === 0) return refused(state, { ok: false, code: "same_balance" });
     parts.push({
+      account,
       portfolio,
       part: {
         portfolio_id: portfolioId,
@@ -1106,11 +1152,14 @@ export function writeOperation(
   const writeAt = (entryOrder: number): Write<MovementResult> => {
     let next = state;
     const touched = new Map(without);
-    for (const [index, { portfolio, part }] of parts.entries()) {
+    for (const [
+      index,
+      { account: partAccount, portfolio, part },
+    ] of parts.entries()) {
       const { portfolio_id: portfolioId, ...ownFields } = part;
       const stored = holdingIn(
         next,
-        account.id,
+        partAccount.id,
         instrument.symbol,
         portfolioId,
       );
@@ -1129,7 +1178,7 @@ export function writeOperation(
         if (!startsHolding(draft as Movement)) {
           return refused(state, { ok: false, code: "not_found" });
         }
-        next = createdHolding(next, account, instrument, portfolio, {
+        next = createdHolding(next, partAccount, instrument, portfolio, {
           id: holdingId,
           quantity: sizes[index]!,
           origin: createdFrom,

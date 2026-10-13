@@ -30,11 +30,18 @@ export type MovementLine = {
 };
 
 // An operation's account and instrument, and every part of it: one movement
-// per portfolio, with the portfolio's name.
+// per portfolio, with its account and the names of both. A transfer between
+// accounts has one part in each; its account is the one the units leave.
 export type OperationParts = {
   accountId: string;
   instrument: string;
-  parts: { movement: Movement; portfolioId: string; portfolioName: string }[];
+  parts: {
+    movement: Movement;
+    accountId: string;
+    institution: string;
+    portfolioId: string;
+    portfolioName: string;
+  }[];
 };
 
 // A transfer as its dialog would send it, and the operation an edit replaces.

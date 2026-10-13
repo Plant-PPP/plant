@@ -46,8 +46,20 @@ describe("a transfer's line", () => {
     accountId: "a1",
     instrument: "BTC",
     parts: [
-      { movement: out, portfolioId: "p1", portfolioName: "Principal" },
-      { movement: arrived, portfolioId: "p2", portfolioName: "Largo plazo" },
+      {
+        movement: out,
+        accountId: "a1",
+        institution: "IOL",
+        portfolioId: "p1",
+        portfolioName: "Principal",
+      },
+      {
+        movement: arrived,
+        accountId: "a1",
+        institution: "IOL",
+        portfolioId: "p2",
+        portfolioName: "Largo plazo",
+      },
     ],
   };
 
@@ -57,6 +69,22 @@ describe("a transfer's line", () => {
     );
     expect(lineLabel({ movement: arrived, operation })).toBe(
       "Traspaso desde Principal",
+    );
+  });
+
+  it("names the other account too when the units change account", () => {
+    const across = {
+      ...operation,
+      parts: [
+        operation.parts[0]!,
+        { ...operation.parts[1]!, accountId: "a2", institution: "Binance" },
+      ],
+    };
+    expect(lineLabel({ movement: out, operation: across })).toBe(
+      "Traspaso a Binance · Largo plazo",
+    );
+    expect(lineLabel({ movement: arrived, operation: across })).toBe(
+      "Traspaso desde IOL · Principal",
     );
   });
 
@@ -70,6 +98,8 @@ describe("a transfer's line", () => {
           parts: [
             {
               movement: purchase,
+              accountId: "a1",
+              institution: "IOL",
               portfolioId: "p1",
               portfolioName: "Principal",
             },
@@ -109,7 +139,13 @@ describe("a movement's name in its actions", () => {
         accountId: "a1",
         instrument: "BTC",
         parts: [
-          { movement: full, portfolioId: "p1", portfolioName: "Principal" },
+          {
+            movement: full,
+            accountId: "a1",
+            institution: "IOL",
+            portfolioId: "p1",
+            portfolioName: "Principal",
+          },
         ],
       },
     });
