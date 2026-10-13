@@ -290,6 +290,9 @@ it.each([
   ["/api/inngest", false],
   ["/api/inngest/fn", false],
   ["/api/inngest-admin", true],
+  ["/api/reports", false],
+  ["/api/reports/x", false],
+  ["/api/reports-x", true],
   ["/brand/logotipo-mail.png", false],
   ["/login", true],
   ["/auth/callback", true],
@@ -375,6 +378,10 @@ describe("the CSP and request id", () => {
     expect(nonceOf(csp)).toBeDefined();
     expect(forwarded(res, CSP_HEADER)).toBe(csp);
     expect(forwarded(res, NONCE_HEADER)).toBe(nonceOf(csp));
+    // Violations are reported with the page's request id.
+    const reportPath = `/api/reports?request=${res.headers.get(REQUEST_ID_HEADER)}`;
+    expect(csp).toContain(`report-uri ${reportPath}`);
+    expect(res.headers.get("reporting-endpoints")).toBe(`csp="${reportPath}"`);
     expect(res.headers.get(REQUEST_ID_HEADER)).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );

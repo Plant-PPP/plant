@@ -10,11 +10,64 @@ jest.mock("react", () => ({
   },
 }));
 
-import { attempt, useAuthRequest } from "./use-auth-request";
+const mockReport = jest.fn();
+jest.mock("@/lib/reports/client", () => ({
+  reportClientError: (report: unknown) => mockReport(report),
+}));
+
+import { attempt, reportAuthOutage, useAuthRequest } from "./use-auth-request";
 
 beforeEach(() => {
   mockState.length = 0;
   mockEffects.length = 0;
+  mockReport.mockClear();
+});
+
+describe("reporting Auth outages", () => {
+  it.each([
+    [{ name: "AuthApiError", code: "unexpected_failure", status: 500 }, true],
+    [{ name: "AuthRetryableFetchError", status: 0 }, true],
+    [{ name: "AuthUnknownError" }, true],
+    [{ name: "TypeError" }, false],
+    [{ name: "AuthApiError", code: "otp_expired", status: 403 }, false],
+    [
+      { name: "AuthApiError", code: "over_request_rate_limit", status: 429 },
+      false,
+    ],
+    [{ name: "AuthSessionMissingError", status: 400 }, false],
+    [{ code: "totp_already_on" }, false],
+    [{ code: "others_failed" }, false],
+  ])("reports %o: %p", async (failure, reported) => {
+    await attempt(async () => failure);
+    expect(mockReport).toHaveBeenCalledTimes(reported ? 1 : 0);
+  });
+
+  it("reports a thrown outage with its status and type only", async () => {
+    await attempt(async () => {
+      throw Object.assign(new Error("secret code 123456"), {
+        name: "AuthApiError",
+        code: "unexpected_failure",
+        status: 503,
+      });
+    });
+    expect(mockReport).toHaveBeenCalledWith({
+      kind: "auth",
+      type: "unexpected_failure",
+      status: 503,
+    });
+  });
+
+  it("reports a settings outage under its own kind", () => {
+    reportAuthOutage(
+      { name: "AuthRetryableFetchError", status: 0 },
+      "settings",
+    );
+    expect(mockReport).toHaveBeenCalledWith({
+      kind: "settings",
+      type: "AuthRetryableFetchError",
+      status: 0,
+    });
+  });
 });
 
 it("starts with the error it was given", () => {
