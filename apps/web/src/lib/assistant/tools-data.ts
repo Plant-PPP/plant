@@ -243,13 +243,17 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.closes, SOURCES.quotes],
-          closes.slice(-12).every((month) => month.endComplete),
+          // A month's result needs its start, its end and its flows priced,
+          // as the closes table marks it.
+          closes.slice(-12).every((month) => month.complete) &&
+            (year?.complete ?? true),
         ),
         unit,
         months: closes.slice(-12).map((month) => ({
           month: `${monthOf(month.period)} ${month.period.slice(0, 4)}`,
           endValue: month.figures.endValue,
           result: month.figures.result,
+          complete: month.complete,
         })),
         thisYear: year
           ? {

@@ -110,6 +110,11 @@ it("gives the last 12 closes and this year's result", async () => {
   expect(history.thisYear?.year).toBe("2026");
   // A percent to one decimal, as every other tool's share.
   expect(history.thisYear?.share ?? "0").toMatch(/^-?\d+(\.\d)?$/);
+  // Each month complete as the closes table marks it.
+  const closes = closesOf(read.state, "usd_mep").slice(-12);
+  expect(history.months.map((month) => month.complete)).toEqual(
+    closes.map((month) => month.complete),
+  );
 });
 
 it("converts between pesos and dollars at today's rate", async () => {
