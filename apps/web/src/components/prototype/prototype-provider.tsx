@@ -66,7 +66,7 @@ type Prototype = {
   // manual price they took.
   snapshot: QuoteSnapshot;
   manual: ReadonlyMap<string, { price: string; date: string }>;
-  fed: (symbol: string) => boolean;
+  fed: ReadonlySet<string>;
   // The date of each dollar rate the user stated that the snapshot took.
   manualRates: ReadonlyMap<ManualRateKind, string>;
   details: HoldingDetails;
@@ -319,7 +319,7 @@ export function PrototypeProvider({
   };
   const priced = pricedSnapshotOf(state, snapshot);
   // Whether the feeds priced a symbol today, before any manual price.
-  const fed = (symbol: string) => snapshot.prices[symbol] !== undefined;
+  const fed = new Set(Object.keys(snapshot.prices));
   return (
     <PrototypeContext
       value={{

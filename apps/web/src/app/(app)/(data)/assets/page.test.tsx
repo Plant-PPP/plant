@@ -48,6 +48,10 @@ import { emptyLedger } from "@/lib/ledger/ledger-fixture.test-support";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 
+import * as holdingActions from "@/app/(app)/(data)/assets/actions";
+import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
+import { nonActionFunctions } from "@/test/client-props";
+
 import AssetsPage from "./page";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -171,6 +175,13 @@ const VIEW_KEYS = [
   "plant.quotes.dropped_count",
   "plant.request_id",
 ];
+
+it("hands the page only data and server actions", async () => {
+  const props = await render();
+  expect(nonActionFunctions(props, [movementActions, holdingActions])).toEqual(
+    [],
+  );
+});
 
 it("shows made-up data outside production, reading nothing", async () => {
   process.env.VERCEL_ENV = "preview";

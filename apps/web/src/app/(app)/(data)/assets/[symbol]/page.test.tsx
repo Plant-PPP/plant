@@ -35,6 +35,9 @@ import {
   PURCHASE,
 } from "@/lib/ledger/ledger-fixture.test-support";
 
+import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
+import { nonActionFunctions } from "@/test/client-props";
+
 import InstrumentPage from "./page";
 
 const saved = process.env.VERCEL_ENV;
@@ -77,6 +80,11 @@ it("shows the history of an instrument the user holds, in the reference dollar",
   expect(page.props.holdings).toHaveLength(2);
   expect(page.props.unit).toBe("usd_ccl");
   expect((await render("aapl", { unit: "ars" })).props.unit).toBe("ars");
+});
+
+it("hands the history only data and server actions", async () => {
+  const page = await render("aapl");
+  expect(nonActionFunctions(page.props, [movementActions])).toEqual([]);
 });
 
 it("has no page for an instrument the user holds nothing of, or that does not exist", async () => {

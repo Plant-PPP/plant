@@ -178,11 +178,22 @@ function heldAmount({ holding }: HoldingRow): string {
     : formatAmount(holding.amount, holding.currency);
 }
 
-export type ScopeHrefs = {
-  instrument: (symbol: string) => string;
-  account: (id: string) => string;
-  portfolio: (id: string) => string;
-};
+// The pages an instrument, account or portfolio opens: the path its symbol
+// or id is appended to. One left out is named plainly.
+export type ScopeHrefs = Partial<
+  Record<"instrument" | "account" | "portfolio", string>
+>;
+
+// The page each of a kind opens, if the page links that kind.
+export function scopeLink(
+  hrefs: ScopeHrefs | undefined,
+  kind: keyof ScopeHrefs,
+): ((id: string) => string) | undefined {
+  const base = hrefs?.[kind];
+  return base === undefined
+    ? undefined
+    : (id) => `${base}${encodeURIComponent(id)}`;
+}
 
 // The manual price the valuation took for each symbol, per unit in the
 // instrument's currency, with its date; a page without them offers no
@@ -190,7 +201,7 @@ export type ScopeHrefs = {
 export type ManualPrices = {
   manual: ReadonlyMap<string, { price: string; date: string }>;
   // Whether the feeds price a symbol, which then takes no manual price.
-  fed: (symbol: string) => boolean;
+  fed: ReadonlySet<string>;
   actions: PriceActions;
 };
 
@@ -480,7 +491,11 @@ export function AssetsSetup({
           <>
             <NameLink
               text={assetName(first)}
-              href={hrefs && symbol !== null ? hrefs.instrument(symbol) : null}
+              href={
+                symbol !== null
+                  ? (scopeLink(hrefs, "instrument")?.(symbol) ?? null)
+                  : null
+              }
             />
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground @2xl:hidden">
               <TruncatedText
@@ -572,7 +587,7 @@ export function AssetsSetup({
         const manualDate = symbol && prices?.manual.get(symbol)?.date;
         const opensPrice =
           prices && symbol !== null ? () => setPriceDialog({ symbol }) : null;
-        const fed = symbol !== null && prices?.fed(symbol);
+        const fed = symbol !== null && prices?.fed.has(symbol);
         const figure =
           item.price !== null ? (
             formatQuotedPrice(item.price, unit, first.instrumentType)
@@ -950,7 +965,7 @@ export function AssetsSetup({
             whole={valuation.kinds}
             unit={unit}
             pending={pending}
-            href={hrefs?.account}
+            href={scopeLink(hrefs, "account")}
           />
         ) : tab === "portfolios" ? (
           <PortfoliosBreakdown
@@ -959,7 +974,7 @@ export function AssetsSetup({
             total={valuation.kinds.total}
             unit={unit}
             pending={pending}
-            href={hrefs?.portfolio}
+            href={scopeLink(hrefs, "portfolio")}
           />
         ) : (
           <DataTable<TenenciaRow>
@@ -1363,7 +1378,7 @@ function PriceDialogFor({
       }
       initialError={state.initialError}
       today={today}
-      overrides={prices.fed(state.symbol)}
+      overrides={prices.fed.has(state.symbol)}
       returnFocusTo={returnFocusTo}
       onClose={onClose}
       onSubmit={(fields) => onSubmit(fields, instrument)}
