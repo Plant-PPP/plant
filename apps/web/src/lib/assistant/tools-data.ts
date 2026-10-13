@@ -1,7 +1,9 @@
 import "server-only";
 import {
   DENOMINATORS,
+  type InstrumentType,
   type QuoteSnapshot,
+  quotedPrice,
   rate,
   valueLiabilities,
 } from "@plant/core";
@@ -23,6 +25,7 @@ import { percentOf } from "@/lib/format/amount";
 import { HOLDING_CLASS_GROUP_LABELS } from "@/lib/holdings/classes";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
+import { priceBasisLabel } from "@/lib/holdings/price-input";
 import { readReferenceDollar } from "@/lib/holdings/read";
 import type { Sum } from "@/lib/holdings/valuation-view";
 import { readImports } from "@/lib/imports/read";
@@ -43,6 +46,7 @@ const HOLDINGS_LISTED = 30;
 // The most movements, debts and imports one answer lists.
 const MOVEMENTS_LISTED = 30;
 const DEBTS_LISTED = 30;
+const EVENTS_LISTED = 30;
 const IMPORTS_LISTED = 10;
 
 // What every result says about itself, as an answer does, and which reads
@@ -363,11 +367,14 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.movements, SOURCES.holdings, SOURCES.quotes],
-          events.every((event) => event.value !== null),
+          events.every((event) => event.value !== null) &&
+            !read.ledgerTruncated,
         ),
         unit,
         days: CALENDAR_DAYS,
-        events: events.map((event) => ({
+        total: events.length,
+        shown: Math.min(events.length, EVENTS_LISTED),
+        events: events.slice(0, EVENTS_LISTED).map((event) => ({
           date: event.date,
           kind: INCOME_KINDS[event.kind],
           name: named(event.name),
@@ -426,6 +433,9 @@ export function assistantData({
       const symbol = instrument && symbolOf(read, instrument);
       if (symbol === null) return unknownInstrument(read);
       const names = instrumentNames(read.state.instruments);
+      const types = new Map(
+        read.state.instruments.map((each) => [each.symbol, each.type]),
+      );
       const listed = allRows(read.state)
         .filter(
           (row) =>
@@ -458,7 +468,12 @@ export function assistantData({
             portfolio: named(row.portfolio.name),
             currency: movement.currency,
             quantity: "quantity" in movement ? movement.quantity : null,
-            price: "price" in movement ? movement.price : null,
+            ...asQuoted(
+              "price" in movement ? movement.price : null,
+              row.holding.asset_class === "instrument"
+                ? types.get(row.holding.instrument_symbol)
+                : undefined,
+            ),
             amount: "amount" in movement ? movement.amount : null,
           })),
       };
@@ -498,8 +513,9 @@ export function assistantData({
         symbol,
         name: named(found.name),
         type: found.type,
-        currency: found.currency,
-        price: price ?? null,
+        // What the market quotes it in; price and value are in the unit.
+        quotedIn: found.currency,
+        ...asQuoted(price ?? null, found.type),
         quantity: stored(
           held.reduce(
             (sum, row) => plus(sum, exactOf(row.holding.amount)),
@@ -539,6 +555,16 @@ export function assistantData({
     },
   };
 }
+
+// A unit's price as the market quotes it and the app shows it: a bond's per
+// 100 nominal.
+const asQuoted = (
+  perUnit: string | null,
+  type: InstrumentType | undefined,
+) => ({
+  price: perUnit === null || !type ? perUnit : quotedPrice(type, perUnit),
+  priceBasis: type ? priceBasisLabel(type) : "por unidad",
+});
 
 const INCOME_KINDS = {
   dividend: "Dividendo",

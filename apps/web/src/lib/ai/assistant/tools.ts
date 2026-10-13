@@ -16,6 +16,7 @@ const portfolio = z
 
 const instrument = z
   .string()
+  .min(1)
   .max(60)
   .describe("El símbolo (AAPL, AL30, BTC) o el nombre de un instrumento.");
 

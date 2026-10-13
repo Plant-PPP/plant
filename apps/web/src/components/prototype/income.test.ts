@@ -40,3 +40,33 @@ it("expects nothing once the holdings are closed", () => {
   };
   expect(incomeCalendar(closed, snapshot, "usd_mep")).toEqual([]);
 });
+
+it("sums what two accounts holding an instrument pay on the same day", () => {
+  const apple = state.holdings.find(
+    ({ holding }) =>
+      holding.asset_class === "instrument" &&
+      holding.instrument_symbol === "AAPL",
+  )!;
+  const twin = { ...apple, holding: { ...apple.holding, id: "twin" } };
+  const both = {
+    ...state,
+    holdings: [...state.holdings, twin],
+    movements: new Map([
+      ...state.movements,
+      [
+        "twin",
+        (state.movements.get(apple.holding.id) ?? []).map((each) => ({
+          ...each,
+          id: `twin-${each.id}`,
+          holding_id: "twin",
+        })),
+      ],
+    ]),
+  };
+  const once = calendar.filter(({ name }) => name === "Apple");
+  const twice = incomeCalendar(both, snapshot, "usd_mep").filter(
+    ({ name }) => name === "Apple",
+  );
+  expect(twice.map(({ date }) => date)).toEqual(once.map(({ date }) => date));
+  expect(Number(twice[0]!.value)).toBeCloseTo(2 * Number(once[0]!.value), 2);
+});

@@ -47,6 +47,7 @@ jest.mock("@/lib/holdings/read", () => ({
 import { incomeCalendar } from "@/lib/assistant/income";
 import { assistantData } from "@/lib/assistant/tools-data";
 import { pricedToday } from "@/lib/summary/compute";
+import { summaryValuation } from "@/lib/summary/valuation";
 
 // The session's client: every read goes through it, so RLS keeps it to the
 // user's rows.
@@ -219,6 +220,33 @@ it("tells what the user holds of an instrument and where", async () => {
   if (!("holdings" in info)) throw new Error();
   expect(info.symbol).toBe(row.holding.instrument_symbol);
   expect(info.holdings.length).toBeGreaterThan(0);
+});
+
+it("quotes a bond per 100 nominal, as the pages show it", async () => {
+  const held = read.holdings.active.find(
+    (each) =>
+      each.holding.asset_class === "instrument" &&
+      read.state.instruments.find(
+        (instrument) => instrument.symbol === each.holding.instrument_symbol,
+      )?.type === "bond",
+  );
+  if (held?.holding.asset_class !== "instrument") throw new Error();
+  const tools = data();
+  const info = await tools.assetInfo(held.holding.instrument_symbol);
+  if (!("priceBasis" in info)) throw new Error();
+  expect(info.priceBasis).toBe("cada 100 VN");
+  const { valuation } = summaryValuation(read, {
+    unit: "usd_mep",
+    portfolioId: null,
+  });
+  const perUnit = valuation.values[held.id]?.price;
+  if (!perUnit || !info.price) throw new Error();
+  expect(Number(info.price)).toBeCloseTo(100 * Number(perUnit), 6);
+  const moves = await tools.transactions(held.holding.instrument_symbol);
+  if (!("movements" in moves)) throw new Error();
+  expect(
+    moves.movements.every((each) => each.priceBasis === "cada 100 VN"),
+  ).toBe(true);
 });
 
 it("gives the latest imports and the month's count", async () => {

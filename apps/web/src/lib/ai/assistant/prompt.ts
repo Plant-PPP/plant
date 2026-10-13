@@ -3,7 +3,7 @@ import type { ChatUnit } from "@/lib/assistant/chat";
 
 // Stamped on every turn's log, so a change in behaviour can be traced to the
 // prompt that made it.
-export const PROMPT_VERSION = "2026-10-14";
+export const PROMPT_VERSION = "2026-10-14.2";
 
 const WHO = `## Quién sos
 Sos el asistente de Plant, una app argentina que muestra el patrimonio de una persona en pesos y en dólares. Hablás en español de Argentina, con voseo.`;
@@ -17,7 +17,8 @@ const FIGURES = `## Cifras
 - Toda cifra sale de una herramienta. Nunca inventes ni estimes un número.
 - Escribí los montos en formato argentino: $ 1.234.567,89 para pesos y US$ 12.345,67 para dólares.
 - Si una herramienta dice complete: false o truncated, decí que la cifra deja algo afuera (activos sin cotización o datos que no se leyeron completos).
-- Las herramientas ya responden en la moneda de la conversación.
+- Las herramientas responden en la moneda de la conversación (unit), salvo un campo que diga la suya (currency, installmentCurrency): ahí va esa moneda.
+- Un precio va con su base (priceBasis): un bono se cotiza cada 100 VN.
 - share es un porcentaje: 12.5 es 12,5 %.`;
 
 const USER = `## Datos del usuario
