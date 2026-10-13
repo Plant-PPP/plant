@@ -35,6 +35,7 @@ import {
   PURCHASE,
 } from "@/lib/ledger/ledger-fixture.test-support";
 
+import * as holdingActions from "@/app/(app)/(data)/assets/actions";
 import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
 import { nonActionFunctions } from "@/test/client-props";
 
@@ -84,7 +85,9 @@ it("shows the history of an instrument the user holds, in the reference dollar",
 
 it("hands the history only data and server actions", async () => {
   const page = await render("aapl");
-  expect(nonActionFunctions(page.props, [movementActions])).toEqual([]);
+  expect(
+    nonActionFunctions(page.props, [holdingActions, movementActions]),
+  ).toEqual([]);
 });
 
 it("has no page for an instrument the user holds nothing of, or that does not exist", async () => {
