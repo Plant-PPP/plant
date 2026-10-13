@@ -34,7 +34,7 @@ How Plant's screens look and behave. The theme (Salvia brand, tokens in `apps/we
 - **Summary tiles** open a screen whose figures are the point: a row of tiles (`bg-muted/60`, an 11px label, the value semibold, a muted note such as its share), and below them a distribution bar in the chart colors with its legend.
 - **Tabs** switch between tables of the same data: a segmented control (`bg-muted`, the chosen tab on `bg-background` with `shadow-xs`) with each tab's row count, kept in the URL (`?tab=`); the chosen tab shows at once and the page loads behind it.
 - An account shows its institution's icon beside its name (`InstitutionIcon`).
-- **A row can open under itself** (`DataTable`'s `expandable` and `renderExpanded`, through `expandColumn`'s chevron), as a holding opens its movements; the panel spans the columns the table shows at its width.
+- **A row whose detail has its own page links to it** instead of opening under itself: where movements are kept, Tenencias shows an instrument once and its name opens the instrument's page, where each holding and movement is listed and acted on.
 - A name that has its own page is a link (`NameLink`): an instrument opens its history, an account or a portfolio its page.
 - A filter is a compact `FilterSelect` (a hidden label, the choice in the trigger), kept in the URL like the tabs when it narrows a page's data. The unit a page values in is `UnitSelect`, over every denominator unless the page names its own (closes: pesos and dollars). The assistant's unit belongs to its conversation, not the URL, so it is a plain `FilterSelect`.
 - Outside production the data pages carry a dashed note, "Datos de prueba. Lo que cambies se pierde al recargar."

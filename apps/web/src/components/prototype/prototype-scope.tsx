@@ -12,12 +12,8 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { usePrototype } from "./prototype-provider";
-import {
-  allRows,
-  holdingsView,
-  movementsPage,
-  positionsOf,
-} from "./prototype-store";
+import { prototypeMovementsInput } from "./prototype-movements";
+import { allRows, holdingsView, positionsOf } from "./prototype-store";
 
 // An account's or portfolio's page over the prototype's store.
 export function PrototypeScope({
@@ -74,9 +70,7 @@ export function PrototypeScope({
       hrefs={PROTOTYPE_HREFS}
       backHref="/assets"
       revision={rows.map((row) => state.revisions.get(row.id) ?? 0).join(".")}
-      loadMovements={async (scope, inUnit, cursor) =>
-        movementsPage(latest(), scope, inUnit, cursor)
-      }
+      loadMovements={prototypeMovementsInput(latest).loadMovements}
     />
   );
 }

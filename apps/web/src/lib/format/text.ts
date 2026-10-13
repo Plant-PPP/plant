@@ -19,3 +19,7 @@ export const usedThisMonth = (days: readonly string[], today: string) =>
 // What is left of a monthly allowance: "Te queda 1 de 10 cargas este mes".
 export const leftThisMonth = (left: number, total: number, noun: string) =>
   `${left === 1 ? "Te queda" : "Te quedan"} ${left} de ${total} ${noun} este mes`;
+
+// A count with its noun in number: "1 cuenta", "2 cuentas".
+export const countOf = (count: number, one: string, many: string): string =>
+  `${count} ${count === 1 ? one : many}`;

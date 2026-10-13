@@ -68,8 +68,9 @@ export type SalesSlice = {
   };
 };
 
-// What a page with movements passes the holdings screen, in its unit: each
-// holding's position, a number that changes whenever a holding's movements do
+// What a page with movements passes the holdings screen, in its unit: the
+// position of each holding that has movements (a holding missing from
+// `positions` has none), a number that changes whenever a holding's movements do
 // (lists key on it), the sales of the chosen year, the years with sales
 // (newest first), and the pages of movements of a scope.
 export type MovementsInput = {
