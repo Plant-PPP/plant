@@ -6,7 +6,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./spreadsheet": "./src/file-upload/spreadsheet.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,7 +16,8 @@
   },
   "dependencies": {
     "@plant/shared": "workspace:*",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/jest": "catalog:",

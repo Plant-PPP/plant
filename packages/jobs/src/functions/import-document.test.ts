@@ -3,6 +3,7 @@ import type { LogFields } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
 import {
+  failAbandonedImport,
   type ImportJobDeps,
   type ImportSteps,
   runImportDocument,
@@ -20,12 +21,15 @@ const DRAFT: ImportDraft = {
       symbol: "AAPL",
       quantity: "5",
       price: "18000",
+      value: "90000",
       currency: "ARS",
       confidence: "high",
       page: 1,
     },
   ],
+  totals: [{ currency: "ARS", amount: "90000" }],
 };
+const READ = { reader: "document", mapping: "none" } as const;
 
 type Line = { level: string; event: string; fields: LogFields };
 
@@ -42,12 +46,13 @@ function setUp(overrides: Partial<ImportJobDeps> = {}) {
     }),
     download: jest.fn().mockResolvedValue(BYTES),
     reading: jest.fn().mockResolvedValue(undefined),
+    institution: jest.fn().mockResolvedValue("IOL"),
     saveDraft: jest.fn().mockResolvedValue(undefined),
     failed: jest.fn().mockResolvedValue(undefined),
   };
   const deps: ImportJobDeps = {
     store,
-    extract: jest.fn().mockResolvedValue(DRAFT),
+    extract: jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
     log: { info: log("info"), warn: log("warn"), error: log("error") },
     ...overrides,
   };
@@ -74,12 +79,16 @@ it("reads the file into a draft and marks the import ready", async () => {
   const { store, deps, lines, ran, run } = setUp();
   expect(await run()).toEqual({ outcome: "ready", rows: 1 });
   expect(ran).toEqual(["prepare", "read"]);
-  expect(store.reading).toHaveBeenCalledWith(IMPORT);
+  expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
+  expect(store.institution).toHaveBeenCalledWith(IMPORT, USER);
+  expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.download).toHaveBeenCalledWith(PATH);
   expect(deps.extract).toHaveBeenCalledWith({
+    importId: IMPORT,
     bytes: BYTES,
     mimeType: "application/pdf",
     userId: USER,
+    institution: "IOL",
   });
   expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT);
   expect(lines).toEqual([
@@ -89,11 +98,14 @@ it("reads the file into a draft and marks the import ready", async () => {
       fields: expect.objectContaining({
         "plant.outcome": "ok",
         "plant.import.row_count": 1,
+        "plant.import.reader": "document",
+        "plant.import.mapping": "none",
         "plant.import.id": IMPORT,
       }),
     },
   ]);
   expect(JSON.stringify(lines)).not.toContain("AAPL");
+  expect(JSON.stringify(lines)).not.toContain("IOL");
 });
 
 it.each([
@@ -142,16 +154,19 @@ it.each([
     extract: jest.fn().mockRejectedValue(error),
   });
   expect(await run()).toEqual({ outcome: "failed" });
-  expect(store.failed).toHaveBeenCalledWith(IMPORT, failure);
+  expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
   expect(store.saveDraft).not.toHaveBeenCalled();
 });
 
 it("fails an import whose file lists nothing", async () => {
   const { store, run } = setUp({
-    extract: jest.fn().mockResolvedValue({ documentDate: null, rows: [] }),
+    extract: jest.fn().mockResolvedValue({
+      draft: { documentDate: null, rows: [], totals: [] },
+      read: READ,
+    }),
   });
   expect(await run()).toEqual({ outcome: "failed" });
-  expect(store.failed).toHaveBeenCalledWith(IMPORT, "nothing_found");
+  expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "nothing_found");
 });
 
 it("does not retry a failure a retry would not pass", async () => {
@@ -200,4 +215,41 @@ it("lets a retryable failure reach the step, which retries it", async () => {
     event: { data: { importId: IMPORT, userId: USER } },
   });
   expect(thrown[0]).toBeInstanceOf(SourceError);
+});
+
+describe("an import whose run died past its retries", () => {
+  it("is marked failed when it is still being read", async () => {
+    const { deps, store, lines } = setUp();
+    store.load.mockResolvedValue({
+      userId: USER,
+      status: "reading",
+      path: PATH,
+      mimeType: "application/pdf",
+    });
+    await failAbandonedImport(deps, { importId: IMPORT, userId: USER });
+    expect(store.failed).toHaveBeenCalledWith(
+      IMPORT,
+      USER,
+      "extraction_failed",
+    );
+    expect(lines[0]!.fields["error.type"]).toBe("function_failed");
+  });
+
+  it.each([
+    ["one already read", { userId: USER, status: "ready" }],
+    ["another user's", { userId: "b0", status: "reading" }],
+  ])("leaves %s alone", async (_, found) => {
+    const { deps, store } = setUp();
+    store.load.mockResolvedValue({ ...found, path: PATH, mimeType: "x" });
+    await failAbandonedImport(deps, { importId: IMPORT, userId: USER });
+    expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
+    expect(store.failed).not.toHaveBeenCalled();
+  });
+
+  it("ignores an event without an import", async () => {
+    const { deps, store, lines } = setUp();
+    await failAbandonedImport(deps, {});
+    expect(store.load).not.toHaveBeenCalled();
+    expect(lines[0]!.fields["plant.import.skip_reason"]).toBe("no_import");
+  });
 });

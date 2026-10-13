@@ -4,7 +4,7 @@ Branch `feat/pla-40-live-upload-status` (PLA-40). The PR template requires it fo
 
 ## Scope and assets
 
-- **What it protects:** each user's `imports` rows (id, document, status, failure, dates), now sent over Realtime.
+- **What it protects:** each user's `imports` rows (id, document, status, failure, dates and the totals the document prints), now sent over Realtime.
 - **Left out:** the files and their drafts, which are not published; the review (PLA-80).
 
 ## Trust boundary

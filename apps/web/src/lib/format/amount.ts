@@ -119,7 +119,8 @@ const AMBIGUOUS = /^[1-9]\d{0,2}\.\d{3}$/;
 // What a user typed as an amount, as a decimal string, or null: es-AR
 // (1.234.567,89) or plain (1234567.89). Dots group thousands only beside a
 // decimal comma or when there are several; a lone dot before three digits is
-// refused (1.234 reads two ways).
+// refused (1.234 reads two ways). A spreadsheet's cells read 1.234 as a
+// thousand (@plant/sources/spreadsheet's parseSheetDecimal).
 export function parseAmountInput(text: string): string | null {
   const typed = text.trim().replace(/\s/g, "");
   if (typed === "") return null;

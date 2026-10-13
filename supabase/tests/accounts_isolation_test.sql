@@ -98,15 +98,19 @@ SELECT set_eq(
   'a user reads accounts and writes only their fields and the archive flag'
 );
 
-SELECT is_empty(
-  $$ SELECT acl.grantee::regrole::text FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
+-- The import job reads an account's institution (import_items_isolation_test.sql).
+SELECT set_eq(
+  $$ SELECT acl.grantee::regrole::text || ':(table):' || acl.privilege_type
+     FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) acl
      WHERE c.oid = 'public.source_connections'::regclass
        AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0)
      UNION ALL
-     SELECT acl.grantee::regrole::text FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     SELECT acl.grantee::regrole::text || ':' || a.attname || ':' || acl.privilege_type
+     FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
      WHERE a.attrelid = 'public.source_connections'::regclass AND NOT a.attisdropped
        AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0) $$,
-  'anon, the service role and PUBLIC hold nothing on the table or its columns'
+  ARRAY['service_role:id:SELECT', 'service_role:user_id:SELECT', 'service_role:institution:SELECT'],
+  'anon and PUBLIC hold nothing on the table or its columns, the service role only reads an account''s institution'
 );
 
 -- ── Shape ───────────────────────────────────────────────────────────────────

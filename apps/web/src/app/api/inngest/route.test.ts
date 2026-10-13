@@ -64,7 +64,9 @@ it("rejects an unsigned sync outside development", async () => {
 it("registers the quotes, import and file deletion jobs under next dev", async () => {
   jest.spyOn(console, "warn").mockImplementation(() => {});
   const route = loadRoute({ NODE_ENV: "development" });
-  expect(await functionCount(route)).toBe(4);
+  // Ping, the three jobs, and the import job's failure handler, which Inngest
+  // registers as a function of its own.
+  expect(await functionCount(route)).toBe(5);
 });
 
 it("registers only ping outside development", async () => {

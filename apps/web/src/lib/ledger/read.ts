@@ -9,7 +9,7 @@ import {
   type ReferenceDollar,
   type StoredQuotes,
 } from "@plant/core";
-import type { Database } from "@plant/shared";
+import { Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -191,7 +191,7 @@ export async function readLedger(
       .limit(LEDGER_MOVEMENT_LIMIT + 1),
     client
       .from("instruments")
-      .select("symbol, name, currency, type")
+      .select("symbol, name, currency, type, aliases")
       .order("symbol"),
     client
       .from("manual_prices")
@@ -224,8 +224,9 @@ export async function readLedger(
       z.object({
         symbol: z.string(),
         name: z.string(),
-        currency: z.enum(["ARS", "USD"]),
+        currency: z.enum(Constants.public.Enums.currency),
         type: z.enum(INSTRUMENT_TYPES),
+        aliases: z.array(z.string()).default([]),
       }),
     )
     .parse(checked("instruments", instrumentsResult));

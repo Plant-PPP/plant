@@ -90,7 +90,7 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
   expect(
     read.items.map(({ error, documentDate }) => [error, documentDate]),
   ).toEqual([
-    ["Por ahora leemos PDF e imágenes; CSV y Excel llegan pronto.", null],
+    ["No leemos este tipo de archivo.", null],
     [null, "2026-09-30"],
   ]);
 });
@@ -139,6 +139,8 @@ describe("readImportForReview", () => {
     failure: null,
     document_date: "2026-09-30",
     created_at: "2026-10-12T15:00:00+00:00",
+    printed_total_ars: "90000.00",
+    printed_total_usd: null,
     document: { file_name: "resumen.pdf", source_connection_id: "a1" },
   };
   const item = (patch: Record<string, unknown>) => ({
@@ -146,6 +148,7 @@ describe("readImportForReview", () => {
     symbol: "AAPL",
     quantity: "5",
     price: "18000",
+    value: null,
     currency: "ARS",
     confidence: "high",
     source_page: 1,
@@ -182,6 +185,8 @@ describe("readImportForReview", () => {
       accountId: "a1",
       documentDate: "2026-09-30",
       status: "ready",
+      // Only the totals the document prints.
+      documentTotals: [{ currency: "ARS", amount: "90000.00" }],
     });
     expect(read!.rows).toEqual([
       {
@@ -189,6 +194,7 @@ describe("readImportForReview", () => {
         symbol: "AAPL",
         quantity: "5",
         price: "18000",
+        value: null,
         currency: "ARS",
         confidence: "high",
         source: "Página 1",
@@ -205,6 +211,50 @@ describe("readImportForReview", () => {
         symbol: "",
         price: null,
         source: 'Leído como "ALUAR"',
+      }),
+    ]);
+  });
+
+  it("names an instrument by its aliases and its dollar lines", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({ symbol: "Apple Inc.", value: "90000" }),
+          // A dollar line of a peso bond: its dollar price waits for the user.
+          item({
+            id: "r2",
+            symbol: "AL30D",
+            price: "65.50",
+            value: "6550",
+            currency: "USD",
+          }),
+        ],
+      ) as never,
+      "i1",
+      [
+        { ...INSTRUMENTS[0]!, aliases: ["APPLE INC"] },
+        {
+          symbol: "AL30",
+          name: "Bonar 2030",
+          currency: "ARS" as const,
+          type: "bond" as const,
+        },
+      ],
+    );
+    expect(read!.rows).toEqual([
+      expect.objectContaining({
+        symbol: "AAPL",
+        price: "18000",
+        value: "90000",
+        source: 'Página 1 · Leído como "Apple Inc."',
+      }),
+      expect.objectContaining({
+        symbol: "AL30",
+        price: null,
+        value: null,
+        currency: "ARS",
+        source: 'Página 1 · Leído como "AL30D"',
       }),
     ]);
   });

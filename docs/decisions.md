@@ -2,6 +2,17 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · What a reading checks, the names it knows and spreadsheets (PLA-80, PLA-79, PLA-39, PLA-38)
+
+- **A reading keeps each row's printed value and the document's printed totals**, one per currency (`import_items.value`, `imports.printed_total_ars` and `printed_total_usd`). The review sums each kept row's printed value, else quantity × price, against them; when the totals are in other currencies than the rows (one peso total over peso and dollar rows, or a dollar total over dollar lines left for the user to price), there is nothing to compare.
+- **The checks run on the review, over the rows as they stand**, with core's `validateHoldings`: a value that is not quantity × price within the printed price's precision, an instrument listed twice, and a statement dated after today or before 1990. They are not stored per field: the job cannot know an instrument's type (service_role reads nothing of `instruments`), so not a bond's price per 100 nor that AL30 and AL30D are one, and a stored problem would outlive the user's correction. Movements and a second model's disagreement wait for PLA-36 and PLA-37.
+- **The review lists what the account holds and the statement omits**; it stays as it is when confirmed.
+- **An instrument is named by its symbol, its symbol on BYMA (`.BA`), a dollar line of a bond or CEDEAR (`D` for MEP, `C` for cable) or an alias** (`instruments.aliases`, matched without case, accents or punctuation; migrations seed them). A dollar line leaves its price for the user, so a dollar price is never written as a peso one. There are no FCI in the catalog yet: a fund in a statement is chosen or discarded by hand.
+- **CSV and Excel are read in code with SheetJS**, from the tarball SheetJS publishes on its CDN (npm's `xlsx` is stale); `check:boundaries` accepts that one pinned tarball under `xlsx` and nothing else, and `pnpm audit` does not see it. The first sheet, its first 520 rows and 50 columns; a CSV is read as UTF-8 text.
+- **The model maps a spreadsheet's columns once per user, account institution and set of headers** (`column_mappings`, cost type `import_column_mapping`), and the mapping is kept only once it reads rows, so a wrong one is not reused. The headers are matched exactly as written: another case or spelling is another format, mapped and kept on its own. Renaming an account's institution maps its formats again. `imports.read` says which reader ran and whether the mapping was kept already (`plant.import.reader`, `plant.import.mapping`).
+- **Both model calls go through one costed call** (`lib/ai/structured-call.ts`): the cost row, the house error mapping (`unreadable`, or `extraction_failed` retryable when the provider may answer later) and gen_ai spans without the document, the prompt or the answer.
+- **An import whose run dies past its retries is marked failed** by the job's failure handler, so it never stays "reading".
+
 ## 2026-10-13 · Cargar follows imports live (PLA-40)
 
 - **Realtime's postgres_changes on `imports`, not Broadcast.** One table at beta scale, and RLS decides what each subscriber gets as it does for PostgREST. Once concurrent subscribers or published tables grow past the beta, a trigger broadcasts on a private `imports:<user>` topic under `realtime.messages` policies instead.
@@ -121,7 +132,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **The review lets each row that adds units choose where they go**: a new instrument picks its portfolio (the account's default to start with, as PLA-41 asks), and an instrument the user holds in another account can come from there as a "Traspaso desde …", so a change of broker keeps the units' cost and date and makes no result (PLA-100). A row that is a transfer needs no price.
 - **A transfer from the review is the same operation as one from the movement dialog**: out of the other account's holding of the instrument that holds the most, into this account's chosen portfolio, booked on the import's day with the import as its origin. One the other account cannot cover is refused like any transfer that oversells.
-- **Production's review asks neither**: the choices come with an optional `routing` the prototype passes; a statement replacing the account's holdings and the idempotent confirm wait for PLA-41's tables.
+- **Both reviews ask them**: the choices come with the optional `routing` the prototype and production's review both pass; a statement replacing the account's holdings and the idempotent confirm wait for PLA-41's tables.
 
 ## 2026-10-13 · Correcting a quoted price or dollar rate by hand (PLA-122, prototype)
 

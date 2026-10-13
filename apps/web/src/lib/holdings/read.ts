@@ -37,6 +37,8 @@ export type InstrumentRow = {
   name: string;
   currency: Currency;
   type: InstrumentType;
+  // Other names a document gives it; the prototype's catalog has none.
+  aliases?: readonly string[];
 };
 
 const embeds = z.object({
@@ -104,7 +106,7 @@ export async function readInstruments(
 ): Promise<{ rows: InstrumentRow[]; truncated: boolean }> {
   const result = await client
     .from("instruments")
-    .select("symbol, name, currency, type")
+    .select("symbol, name, currency, type, aliases")
     .order("symbol")
     .limit(INSTRUMENT_LIMIT + 1);
   const failure = classifyPostgrestResult(result, 200);

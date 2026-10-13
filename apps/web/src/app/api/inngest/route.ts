@@ -3,8 +3,15 @@ import { createServeOptions } from "@plant/jobs";
 import { serve } from "inngest/next";
 
 import { aiCostSink } from "@/lib/ai/ai-cost-sink";
+import { columnMapper } from "@/lib/ai/column-mapper";
 import { documentExtractor } from "@/lib/ai/document-extractor";
-import { fileDeletionSink, importSink } from "@/lib/imports/import-sink";
+import {
+  columnMappingsSink,
+  fileDeletionSink,
+  importSink,
+} from "@/lib/imports/import-sink";
+import { readDocument } from "@/lib/imports/read-document";
+import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { serverLog } from "@/lib/log/server-log";
 import { getJson } from "@/lib/quotes/get-json";
 import { quoteSink } from "@/lib/quotes/quote-sink";
@@ -21,7 +28,13 @@ export const { GET, POST, PUT } = serve(
     }),
     imports: () => ({
       store: importSink(),
-      extract: documentExtractor({ record: aiCostSink() }),
+      extract: readDocument({
+        document: documentExtractor({ record: aiCostSink() }),
+        sheet: spreadsheetReader({
+          mappings: columnMappingsSink(),
+          mapColumns: columnMapper({ record: aiCostSink() }),
+        }),
+      }),
       log: serverLog,
     }),
     files: () => ({

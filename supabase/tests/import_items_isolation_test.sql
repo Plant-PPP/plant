@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(10);
+SELECT plan(11);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -76,20 +76,26 @@ SELECT set_eq(
 SELECT set_eq(
   $$ SELECT 'import_items.' || pg_temp.acl('public.import_items', 'service_role')
      UNION ALL SELECT 'imports.' || pg_temp.acl('public.imports', 'service_role')
-     UNION ALL SELECT 'uploaded_documents.' || pg_temp.acl('public.uploaded_documents', 'service_role') $$,
+     UNION ALL SELECT 'uploaded_documents.' || pg_temp.acl('public.uploaded_documents', 'service_role')
+     UNION ALL SELECT 'source_connections.' || pg_temp.acl('public.source_connections', 'service_role') $$,
   ARRAY['import_items.(table):DELETE', 'import_items.id:SELECT', 'import_items.import_id:SELECT',
+        'import_items.user_id:SELECT', 'import_items.value:INSERT',
         'import_items.user_id:INSERT', 'import_items.import_id:INSERT', 'import_items.position:INSERT',
         'import_items.symbol:INSERT', 'import_items.quantity:INSERT', 'import_items.price:INSERT',
         'import_items.currency:INSERT', 'import_items.confidence:INSERT',
         'import_items.source_page:INSERT',
         'imports.id:SELECT', 'imports.user_id:SELECT', 'imports.document_id:SELECT',
         'imports.status:SELECT', 'imports.status:UPDATE', 'imports.failure:UPDATE',
-        'imports.document_date:UPDATE',
+        'imports.document_date:UPDATE', 'imports.printed_total_ars:UPDATE',
+        'imports.printed_total_usd:UPDATE',
         'uploaded_documents.id:SELECT', 'uploaded_documents.user_id:SELECT',
         'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT',
         'uploaded_documents.delete_after:SELECT', 'uploaded_documents.file_deleted_at:SELECT',
-        'uploaded_documents.file_deleted_at:UPDATE'],
-  'the jobs read an import and its file, move the import along, write its draft and mark a file deleted, nothing more'
+        'uploaded_documents.file_deleted_at:UPDATE',
+        'uploaded_documents.source_connection_id:SELECT',
+        'source_connections.id:SELECT', 'source_connections.user_id:SELECT',
+        'source_connections.institution:SELECT'],
+  'the jobs read an import, its file and its account''s institution, move the import along, write its draft and mark a file deleted, nothing more'
 );
 
 SELECT is_empty(
@@ -118,6 +124,14 @@ SELECT is(
                               'b1000000-0000-4000-8000-0000000000b1', 0, 'AAPL', '1', 'ARS', 'high') $$),
   '23503',
   'the job never files a row under another user''s import'
+);
+
+SELECT results_eq(
+  $$ SELECT s.institution FROM public.uploaded_documents d
+     JOIN public.source_connections s ON (s.user_id, s.id) = (d.user_id, d.source_connection_id)
+     WHERE d.id = 'a8000000-0000-4000-8000-0000000000a8' AND d.user_id = 'a0000000-0000-4000-8000-00000000000a' $$,
+  $$ VALUES ('IOL') $$,
+  'the job reads the institution of the account a file was uploaded to'
 );
 
 SELECT is(

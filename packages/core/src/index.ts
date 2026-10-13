@@ -133,13 +133,27 @@ export {
   quantityOn,
 } from "./movements/admit";
 export {
+  type CatalogInstrument,
   exactUnitPrice,
   INSTRUMENT_PRICING,
   INSTRUMENT_TYPES,
+  type InstrumentIndex,
+  instrumentIndex,
   type InstrumentType,
+  normalizeSymbol,
+  type PricingBasis,
   quotedPrice,
+  type ResolvedSymbol,
+  resolveSymbol,
   unitPrice,
 } from "./instruments";
+export {
+  documentDateIssue,
+  IMPORT_ISSUES,
+  type ImportIssue,
+  validateHoldings,
+  type ValidatedRow,
+} from "./imports/validate";
 export {
   admitManualPrice,
   type ManualPrice,

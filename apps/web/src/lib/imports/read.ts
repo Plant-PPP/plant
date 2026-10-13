@@ -1,6 +1,6 @@
 import "server-only";
-import { unitPrice } from "@plant/core";
-import { buenosAiresDate, type Database } from "@plant/shared";
+import { instrumentIndex, resolveSymbol, unitPrice } from "@plant/core";
+import { buenosAiresDate, Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -27,10 +27,8 @@ export class ImportsReadError extends Error {
 
 const rowSchema = z.object({
   id: z.string(),
-  status: z.enum(["queued", "reading", "ready", "failed", "confirmed"]),
-  failure: z
-    .enum(["unsupported", "unreadable", "nothing_found", "extraction_failed"])
-    .nullable(),
+  status: z.enum(Constants.public.Enums.import_status),
+  failure: z.enum(Constants.public.Enums.import_failure).nullable(),
   document_date: z.string().nullable(),
   created_at: z.string(),
   document: z.object({
@@ -88,33 +86,50 @@ const itemSchema = z.object({
   symbol: z.string(),
   quantity: z.string(),
   price: z.string().nullable(),
-  currency: z.enum(["ARS", "USD"]),
-  confidence: z.enum(["high", "medium", "low"]),
+  value: z.string().nullable(),
+  currency: z.enum(Constants.public.Enums.currency),
+  confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
+});
+
+const totalsSchema = z.object({
+  printed_total_ars: z.string().nullable(),
+  printed_total_usd: z.string().nullable(),
 });
 
 // A draft row as the review edits it. An instrument Plant knows keeps its
 // symbol and its price per unit (a bond's document prints it per 100); one it
 // does not know is left for the user to choose, with what the document named.
+// A line in another currency than the instrument's (AL30D, a dollar line of
+// AL30, or a peso instrument the document prices in dollars) leaves its price
+// and value for the user, so no dollar price is ever written as a peso one.
 function reviewRow(
   data: unknown,
-  instruments: ReadonlyMap<string, InstrumentRow>,
+  index: ReturnType<typeof instrumentIndex>,
 ): ImportRow {
   const row = itemSchema.parse(data);
-  const known = instruments.get(row.symbol.trim().toUpperCase());
+  const known = resolveSymbol(row.symbol, index);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
-  const named = known ? null : `Leído como "${row.symbol}"`;
+  const named =
+    known && known.symbol === row.symbol.trim().toUpperCase()
+      ? null
+      : `Leído como "${row.symbol}"`;
+  const sameCurrency =
+    !known ||
+    (known.currency === known.instrumentCurrency &&
+      row.currency === known.instrumentCurrency);
   return {
     id: row.id,
     symbol: known?.symbol ?? "",
     quantity: row.quantity,
     price:
-      row.price === null
+      row.price === null || !sameCurrency
         ? null
         : known
           ? unitPrice(known.type, row.price)
           : row.price,
-    currency: known?.currency ?? row.currency,
+    value: sameCurrency ? row.value : null,
+    currency: known?.instrumentCurrency ?? row.currency,
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || "Del documento",
     discarded: false,
@@ -133,6 +148,7 @@ export async function readImportForReview(
       .from("imports")
       .select(
         "id, status, failure, document_date, created_at, " +
+          "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, " +
           "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, source_connection_id)",
       )
       .eq("id", id)
@@ -140,7 +156,8 @@ export async function readImportForReview(
     client
       .from("import_items")
       .select(
-        "id, symbol, quantity:quantity::text, price:price::text, currency, confidence, source_page",
+        "id, symbol, quantity:quantity::text, price:price::text, value:value::text, " +
+          "currency, confidence, source_page",
       )
       .eq("import_id", id)
       .order("position"),
@@ -153,7 +170,10 @@ export async function readImportForReview(
   const [data] = found.data as unknown[];
   if (data === undefined) return null;
   const row = rowSchema.parse(data);
-  const bySymbol = new Map(instruments.map((each) => [each.symbol, each]));
+  const printed = totalsSchema.parse(data);
+  const index = instrumentIndex(
+    instruments.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
+  );
   return {
     id: row.id,
     fileName: row.document.file_name,
@@ -161,8 +181,13 @@ export async function readImportForReview(
     status: row.status,
     error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
     documentDate: row.document_date,
-    documentTotals: [],
-    rows: (items.data as unknown[]).map((each) => reviewRow(each, bySymbol)),
+    documentTotals: [
+      { currency: "ARS" as const, amount: printed.printed_total_ars },
+      { currency: "USD" as const, amount: printed.printed_total_usd },
+    ].flatMap(({ currency, amount }) =>
+      amount === null ? [] : [{ currency, amount }],
+    ),
+    rows: (items.data as unknown[]).map((each) => reviewRow(each, index)),
     createdOn: buenosAiresDate(new Date(row.created_at)),
   };
 }

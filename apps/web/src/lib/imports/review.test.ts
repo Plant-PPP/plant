@@ -30,13 +30,21 @@ it("adds up what was read, leaving out discarded and unpriced rows", () => {
     true,
   );
   expect(totalsMatch(totals, [{ currency: "ARS", amount: "200" }])).toBe(false);
-  expect(totalsMatch(totals, [{ currency: "USD", amount: "1" }])).toBe(false);
-  // A currency read that the document does not print does not match.
+  // A currency read that the document prints no total for leaves nothing to
+  // compare: one peso total over peso and dollar rows.
+  expect(totalsMatch(totals, [{ currency: "USD", amount: "1" }])).toBe("none");
   expect(
     totalsMatch(
       [...totals, { currency: "USD", amount: "5" }],
       [{ currency: "ARS", amount: "201" }],
     ),
-  ).toBe(false);
+  ).toBe("none");
+  // Nor does a printed currency nothing was read in.
+  expect(
+    totalsMatch(totals, [
+      { currency: "ARS", amount: "201" },
+      { currency: "USD", amount: "5" },
+    ]),
+  ).toBe("none");
   expect(totalsMatch(totals, [])).toBe("none");
 });

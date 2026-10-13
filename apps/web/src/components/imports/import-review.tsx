@@ -1,7 +1,12 @@
 "use client";
 
-import { exactUnitPrice, type InstrumentType } from "@plant/core";
-import { exactOf, times, toDecimal } from "@plant/shared";
+import {
+  documentDateIssue,
+  exactUnitPrice,
+  type InstrumentType,
+  validateHoldings,
+} from "@plant/core";
+import { buenosAiresDate, exactOf, times, toDecimal } from "@plant/shared";
 import {
   ArrowLeft,
   Check,
@@ -49,8 +54,10 @@ import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
   CONFIDENCE_LABELS,
+  DATE_ISSUE_LABELS,
   type ImportItem,
   type ImportRow,
+  ISSUE_LABELS,
   readTotals,
   rowChange,
   totalsMatch,
@@ -189,6 +196,7 @@ export function ImportReview({
     symbol: row.symbol,
     quantity: quantity ?? "0",
     price,
+    value: row.value ?? null,
     currency: row.currency,
     confidence: row.confidence,
     source: row.source,
@@ -198,9 +206,30 @@ export function ImportReview({
   }));
   const totals = readTotals(finalRows);
   const matches = totalsMatch(totals, item.documentTotals);
+  // What the kept rows' figures fail, as they stand: a corrected row clears.
+  // Prices are per unit here, whatever the instrument's quote basis.
+  const issues = validateHoldings(
+    finalRows.map((row) => ({
+      symbol: row.discarded ? "" : row.symbol,
+      quantity: row.quantity,
+      price: row.discarded ? null : row.price,
+      value: row.value ?? null,
+      basis: 1,
+    })),
+  );
+  const dateIssue = documentDateIssue(
+    item.documentDate,
+    buenosAiresDate(new Date()),
+  );
   const doubtful = rows.filter(
-    (row) => !row.discarded && row.confidence === "low",
+    (row, index) =>
+      !row.discarded && (row.confidence === "low" || issues[index]!.length > 0),
   ).length;
+  // What the account holds that no kept row lists: it stays as it is.
+  const kept = new Set(
+    rows.filter((row) => !row.discarded).map((row) => row.symbol),
+  );
+  const omitted = [...held.keys()].filter((symbol) => !kept.has(symbol));
 
   const change = (id: string, patch: Partial<EditedRow>) =>
     setRows((current) =>
@@ -246,6 +275,12 @@ export function ImportReview({
             {`${item.fileName} · ${institution}`}
             {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
           </p>
+          {dateIssue && (
+            <p className="flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300">
+              <TriangleAlert aria-hidden className="size-4" />
+              {DATE_ISSUE_LABELS[dateIssue]}
+            </p>
+          )}
         </div>
       </div>
 
@@ -374,7 +409,7 @@ export function ImportReview({
                 key={row.id}
                 className={cn(
                   "grid gap-3 rounded-lg border p-3 @container sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end",
-                  row.confidence === "low" &&
+                  (row.confidence === "low" || issues[index]!.length > 0) &&
                     !row.discarded &&
                     "border-amber-500/60 bg-amber-500/5",
                   row.discarded && "opacity-50",
@@ -389,12 +424,16 @@ export function ImportReview({
                         (each) => !listed(row.id).has(each.symbol),
                       )}
                       value={row.symbol}
-                      onChange={(symbol) =>
+                      onChange={(symbol) => {
+                        const currency = currencyOf(instruments, symbol);
+                        // A value printed in another currency no longer
+                        // describes the row.
                         change(row.id, {
                           symbol,
-                          currency: currencyOf(instruments, symbol),
-                        })
-                      }
+                          currency,
+                          ...(currency !== row.currency && { value: null }),
+                        });
+                      }}
                       placeholder="Elegí un activo"
                     />
                   ) : (
@@ -411,6 +450,15 @@ export function ImportReview({
                         : CHANGE_TEXT[effect.kind]}
                     </span>
                   </span>
+                  {issues[index]!.map((issue) => (
+                    <span
+                      key={issue}
+                      className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
+                    >
+                      <TriangleAlert aria-hidden className="size-3" />
+                      {ISSUE_LABELS[issue]}
+                    </span>
+                  ))}
                 </div>
                 <label className="grid gap-1 text-xs">
                   <span className="text-muted-foreground">Cantidad</span>
@@ -475,11 +523,31 @@ export function ImportReview({
             );
           })}
         </ul>
-        <p className="text-muted-foreground text-xs">
-          Lo que tenés en la cuenta y no aparece en el documento queda como
-          está.
-        </p>
       </section>
+
+      {omitted.length > 0 && (
+        <section className="grid gap-2" aria-labelledby={`${pickerId}-omitted`}>
+          <h2 id={`${pickerId}-omitted`} className="text-base font-semibold">
+            No figuran en el resumen
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            Los tenés en la cuenta y el documento no los lista: quedan como
+            están.
+          </p>
+          <ul className="grid gap-1 text-sm">
+            {omitted.map((symbol) => (
+              <li key={symbol} className="flex justify-between gap-4">
+                <span className="truncate">
+                  {instrumentLabel(symbol, names.get(symbol))}
+                </span>
+                <span className="text-muted-foreground tabular-nums">
+                  {formatQuantity(held.get(symbol)!)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {alert && <FormAlert>{alert}</FormAlert>}
       <div className="flex flex-wrap justify-end gap-2">

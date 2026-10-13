@@ -4,6 +4,11 @@ import type { FileDeletionStorePort, ImportStorePort } from "@plant/jobs";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import {
+  ColumnMappingsError,
+  type ColumnMappingsPort,
+  createColumnMappingsStore,
+} from "./column-mappings-store";
+import {
   createFileDeletionStore,
   FileDeletionStoreError,
 } from "./file-deletion-store";
@@ -20,11 +25,25 @@ export function importSink(): ImportStorePort {
       load: unconfigured,
       download: unconfigured,
       reading: unconfigured,
+      institution: unconfigured,
       saveDraft: unconfigured,
       failed: unconfigured,
     };
   }
   return createImportStore(client);
+}
+
+// Reads and adds any user's spreadsheet column mappings, past RLS.
+export function columnMappingsSink(): ColumnMappingsPort {
+  const client = createServiceRoleClient();
+  if (!client) {
+    return {
+      get: () => Promise.reject(new ColumnMappingsError("get", "unconfigured")),
+      save: () =>
+        Promise.reject(new ColumnMappingsError("save", "unconfigured")),
+    };
+  }
+  return createColumnMappingsStore(client);
 }
 
 // Removes any user's due files, past RLS and Storage's policies.

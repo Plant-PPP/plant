@@ -1,6 +1,8 @@
+import type { ImportIssue } from "@plant/core";
 import {
   compareDecimals,
   type Currency,
+  type Database,
   exactOf,
   plus,
   times,
@@ -9,8 +11,7 @@ import {
 
 // Where an import stands: waiting, being read, read and waiting for the
 // user's review, refused with a reason, or confirmed into the account.
-export type ImportStatus =
-  "queued" | "reading" | "ready" | "failed" | "confirmed";
+export type ImportStatus = Database["public"]["Enums"]["import_status"];
 
 export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   queued: "En cola",
@@ -25,7 +26,7 @@ export const isBusy = (status: ImportStatus): boolean =>
 
 // Why an import failed, in the user's words, by `imports.failure`.
 export const IMPORT_FAILURE_MESSAGES = {
-  unsupported: "Por ahora leemos PDF e imágenes; CSV y Excel llegan pronto.",
+  unsupported: "No leemos este tipo de archivo.",
   unreadable: "No pudimos leer el archivo. Probá con otra copia o una captura.",
   nothing_found: "No encontramos tenencias en el archivo.",
   extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
@@ -40,6 +41,18 @@ export const CONFIDENCE_LABELS: Record<Confidence, string> = {
   low: "Baja",
 };
 
+// What a row's figures fail, in the user's words.
+export const ISSUE_LABELS: Record<ImportIssue, string> = {
+  value_mismatch: "El valor no coincide con cantidad × precio",
+  duplicate_symbol: "Este instrumento aparece más de una vez",
+};
+
+// Why the statement's date looks wrong, in the user's words.
+export const DATE_ISSUE_LABELS = {
+  future: "La fecha del resumen es posterior a hoy.",
+  old: "La fecha del resumen parece demasiado antigua.",
+} as const;
+
 // One holding as the document lists it: the instrument, how many, the price
 // per unit in its currency, and where in the document it was read.
 export type ImportRow = {
@@ -47,6 +60,9 @@ export type ImportRow = {
   symbol: string;
   quantity: string;
   price: string | null;
+  // The row's value as the document prints it, in its currency; the
+  // prototype's rows print none.
+  value?: string | null;
   currency: Currency;
   confidence: Confidence;
   source: string;
@@ -95,15 +111,20 @@ export function rowChange(
   return { kind: order > 0 ? "up" : "down", held };
 }
 
-// What the rows read add up to, per currency: each row's quantity times its
-// price. Rows discarded or without a price are left out.
+// What the rows read add up to, per currency: each row's printed value, else
+// its quantity times its price. Rows discarded or with neither are left out.
 export function readTotals(
   rows: readonly ImportRow[],
 ): { currency: Currency; amount: string }[] {
   const totals = new Map<Currency, ReturnType<typeof exactOf>>();
   for (const row of rows) {
-    if (row.discarded || row.price === null) continue;
-    const value = times(exactOf(row.quantity), exactOf(row.price));
+    if (row.discarded) continue;
+    const printed = row.value ?? null;
+    if (printed === null && row.price === null) continue;
+    const value =
+      printed !== null
+        ? exactOf(printed)
+        : times(exactOf(row.quantity), exactOf(row.price!));
     totals.set(
       row.currency,
       plus(totals.get(row.currency) ?? exactOf("0"), value),
@@ -115,15 +136,19 @@ export function readTotals(
   }));
 }
 
-// Whether what was read matches the totals the document prints, to the cent:
-// the same currencies, each with the same amount; "none" when the document
-// prints no total to compare against.
+// Whether what was read matches the totals the document prints, to the cent,
+// currency by currency; "none" when there is nothing to compare: no printed
+// total, or totals in other currencies than the rows read (one peso total
+// over peso and dollar rows, or a dollar total over dollar lines left for the
+// user to price).
 export function totalsMatch(
   read: readonly { currency: Currency; amount: string }[],
   printed: readonly { currency: Currency; amount: string }[],
 ): boolean | "none" {
   if (printed.length === 0) return "none";
-  if (read.length !== printed.length) return false;
+  const currencies = (list: typeof read) =>
+    [...new Set(list.map(({ currency }) => currency))].sort().join();
+  if (currencies(read) !== currencies(printed)) return "none";
   return printed.every((total) => {
     const mine = read.find((each) => each.currency === total.currency);
     return (

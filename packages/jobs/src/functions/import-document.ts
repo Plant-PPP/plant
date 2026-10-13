@@ -3,7 +3,7 @@ import {
   SourceError,
   type SourceErrorCode,
 } from "@plant/sources";
-import type { Logger } from "@plant/shared";
+import type { Database, Logger } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
@@ -13,34 +13,51 @@ export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
 // An import as the job reads it: whose it is, where it stands, and its file.
 export type ImportToRead = {
   userId: string;
-  status: "queued" | "reading" | "ready" | "failed" | "confirmed";
+  status: Database["public"]["Enums"]["import_status"];
   path: string;
   mimeType: string;
 };
 
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
-// the import's id, and saveDraft replaces any draft a failed attempt left.
+// the import's id and its user, and saveDraft replaces any draft a failed
+// attempt left.
 export interface ImportStorePort {
-  load(importId: string): Promise<ImportToRead | null>;
+  load(importId: string, userId: string): Promise<ImportToRead | null>;
   download(path: string): Promise<Uint8Array>;
-  reading(importId: string): Promise<void>;
+  reading(importId: string, userId: string): Promise<void>;
+  // The institution of the account the import's file was uploaded to.
+  institution(importId: string, userId: string): Promise<string>;
   saveDraft(
     importId: string,
     userId: string,
     draft: ImportDraft,
   ): Promise<void>;
-  failed(importId: string, failure: SourceErrorCode): Promise<void>;
+  failed(
+    importId: string,
+    userId: string,
+    failure: SourceErrorCode,
+  ): Promise<void>;
 }
+
+// How a file was read: by a model reading the document, or from a
+// spreadsheet's columns, whose mapping was saved already (hit), made now
+// (miss) or not needed (none).
+export type ImportRead = {
+  reader: "document" | "sheet";
+  mapping: "none" | "hit" | "miss";
+};
 
 export type ImportJobDeps = {
   store: ImportStorePort;
   // Reads a file's holdings, throwing a SourceError when it cannot.
   extract(input: {
+    importId: string;
     bytes: Uint8Array;
     mimeType: string;
     userId: string;
-  }): Promise<ImportDraft>;
+    institution: string;
+  }): Promise<{ draft: ImportDraft; read: ImportRead }>;
   log: Logger;
 };
 
@@ -50,7 +67,7 @@ export type ImportJobDeps = {
 type Prepared =
   | { ok: true; path: string; mimeType: string }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
-type Read = { rows: number };
+type Read = { rows: number } & ImportRead;
 
 export type ImportSteps = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -85,7 +102,7 @@ export async function runImportDocument(
   };
 
   const prepared = await step.run("prepare", async (): Promise<Prepared> => {
-    const found = await deps.store.load(importId);
+    const found = await deps.store.load(importId, userId);
     if (!found || found.userId !== userId)
       return { ok: false, reason: "missing" };
     if (found.status !== "queued" && found.status !== "reading") {
@@ -94,7 +111,7 @@ export async function runImportDocument(
     if (!found.path.startsWith(`${userId}/imports/`)) {
       return { ok: false, reason: "path" };
     }
-    await deps.store.reading(importId);
+    await deps.store.reading(importId, userId);
     return { ok: true, path: found.path, mimeType: found.mimeType };
   });
   if (!prepared.ok) {
@@ -111,16 +128,18 @@ export async function runImportDocument(
     read = await step.run("read", async (): Promise<Read> => {
       try {
         const bytes = await deps.store.download(prepared.path);
-        const draft = await deps.extract({
+        const { draft, read } = await deps.extract({
+          importId,
           bytes,
           mimeType: prepared.mimeType,
           userId,
+          institution: await deps.store.institution(importId, userId),
         });
         if (draft.rows.length === 0) {
           throw new SourceError("nothing_found", false);
         }
         await deps.store.saveDraft(importId, userId, draft);
-        return { rows: draft.rows.length };
+        return { rows: draft.rows.length, ...read };
       } catch (error) {
         if (error instanceof SourceError && !error.retryable) {
           throw new NonRetriableError(error.code, { cause: error });
@@ -131,7 +150,7 @@ export async function runImportDocument(
   } catch (error) {
     const cause = error instanceof NonRetriableError ? error.cause : error;
     const failure = failureOf(cause);
-    await step.run("fail", () => deps.store.failed(importId, failure));
+    await step.run("fail", () => deps.store.failed(importId, userId, failure));
     deps.log.warn("imports.read", {
       ...fields,
       "plant.outcome": "failed",
@@ -144,8 +163,44 @@ export async function runImportDocument(
     ...fields,
     "plant.outcome": "ok",
     "plant.import.row_count": read.rows,
+    "plant.import.reader": read.reader,
+    "plant.import.mapping": read.mapping,
   });
   return { outcome: "ready", rows: read.rows };
+}
+
+// Ends an import whose run died past its retries without reaching "fail"
+// (the process ran out of memory or time), so it never stays "reading".
+export async function failAbandonedImport(
+  deps: Pick<ImportJobDeps, "store" | "log">,
+  data: unknown,
+): Promise<void> {
+  const { importId, userId } = (data ?? {}) as Record<string, unknown>;
+  if (typeof importId !== "string" || typeof userId !== "string") {
+    deps.log.warn("imports.read", {
+      "plant.outcome": "skipped",
+      "plant.import.skip_reason": "no_import",
+    });
+    return;
+  }
+  const fields = { "plant.import.id": importId, "enduser.id": userId };
+  const found = await deps.store.load(importId, userId);
+  if (!found || found.userId !== userId) {
+    deps.log.warn("imports.read", {
+      ...fields,
+      "plant.outcome": "skipped",
+      "plant.import.skip_reason": "missing",
+    });
+    return;
+  }
+  // The run ended it already, as failed or ready.
+  if (found.status !== "queued" && found.status !== "reading") return;
+  await deps.store.failed(importId, userId, "extraction_failed");
+  deps.log.warn("imports.read", {
+    ...fields,
+    "plant.outcome": "failed",
+    "error.type": "function_failed",
+  });
 }
 
 export const importDocument = (deps: ImportJobDeps) =>
@@ -157,6 +212,8 @@ export const importDocument = (deps: ImportJobDeps) =>
       // everyone else's.
       concurrency: { key: "event.data.userId", limit: 1 },
       retries: 3,
+      onFailure: ({ event }) =>
+        failAbandonedImport(deps, event.data.event.data),
     },
     ({ step, runId, attempt, event }) => {
       const { importId, userId } = event.data as Record<string, unknown>;
