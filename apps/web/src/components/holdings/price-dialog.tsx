@@ -29,14 +29,16 @@ const fieldOf = (text: string): PriceField | null =>
       ? "price"
       : null;
 
-// States an instrument's price as of a date, for one the feeds do not price;
-// it hands its fields to `onSubmit` as it closes, and a refused write opens it
-// again with the fields and the alert.
+// States an instrument's price as of a date: for one the feeds do not price,
+// or over the feeds' quote (`overrides`), which it beats on its day until the
+// feeds bring a newer one. It hands its fields to `onSubmit` as it closes, and
+// a refused write opens it again with the fields and the alert.
 export function PriceDialog({
   instrument,
   initial,
   initialError,
   today,
+  overrides = false,
   returnFocusTo,
   onClose,
   onSubmit,
@@ -51,6 +53,8 @@ export function PriceDialog({
   initial: PriceFields;
   initialError?: string;
   today: string;
+  // Whether the feeds price the instrument, so the price corrects theirs.
+  overrides?: boolean;
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
@@ -103,8 +107,12 @@ export function PriceDialog({
   return (
     <AppDialog
       onClose={onClose}
-      title="Cargar precio"
-      description={`${instrumentLabel(instrument.symbol, instrument.name)}. Lo usamos hasta que cargues otro.`}
+      title={overrides ? "Corregir precio" : "Cargar precio"}
+      description={`${instrumentLabel(instrument.symbol, instrument.name)}. ${
+        overrides
+          ? "Le gana a la cotización de ese día y sigue hasta que llegue una más nueva."
+          : "Lo usamos hasta que cargues otro."
+      }`}
       returnFocusTo={focus.returnFocusTo}
     >
       <form
@@ -144,7 +152,7 @@ export function PriceDialog({
                 onClose();
               }}
             >
-              Borrar este precio
+              {overrides ? "Volver a la cotización" : "Borrar este precio"}
             </Button>
           )}
           <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import type { QuoteSnapshot } from "@plant/core";
+import type { ManualRateKind, QuoteSnapshot } from "@plant/core";
 import {
   createContext,
   type ReactNode,
@@ -29,6 +29,7 @@ import {
   deleteHolding,
   deleteOperation,
   deletePrice,
+  deleteRate,
   freshState,
   initialState,
   pricedSnapshotOf,
@@ -36,6 +37,7 @@ import {
   setInTaxReport,
   setPreferences,
   setPrice,
+  setRate,
   type Write,
   updateHolding,
   updateHoldingDetails,
@@ -57,6 +59,8 @@ type Prototype = {
   snapshot: QuoteSnapshot;
   manual: ReadonlyMap<string, { price: string; date: string }>;
   fed: (symbol: string) => boolean;
+  // The date of each dollar rate the user stated that the snapshot took.
+  manualRates: ReadonlyMap<ManualRateKind, string>;
   details: HoldingDetails;
   actions: {
     holdings: HoldingActions;
@@ -68,6 +72,14 @@ type Prototype = {
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
+    rates: {
+      set: (rate: {
+        kind: ManualRateKind;
+        sell: string;
+        date: string;
+      }) => Promise<{ ok: boolean }>;
+      revert: (kind: ManualRateKind, date: string) => Promise<{ ok: boolean }>;
+    };
     // Leaves the store as a new user's.
     deleteAccount: () => void;
   };
@@ -129,6 +141,11 @@ export function PrototypeProvider({
     // close is marked recalculated.
     preferences: {
       set: (next) => writeState((s) => setPreferences(s, next)),
+    },
+    rates: {
+      set: ({ kind, sell, date }) =>
+        write((s) => setRate(s, { kind, sell, rate_date: date })),
+      revert: (kind, date) => write((s) => deleteRate(s, kind, date)),
     },
     deleteAccount: () =>
       void writeState((s) => ({
@@ -283,6 +300,7 @@ export function PrototypeProvider({
           ]),
         ),
         fed,
+        manualRates: priced.rates,
         details,
         actions,
       }}

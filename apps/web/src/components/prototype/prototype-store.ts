@@ -3,6 +3,9 @@ import {
   type CashFlow,
   type Liability,
   withManualPrices,
+  type ManualRate,
+  manualRateSchema,
+  withManualRates,
   cashFlowsOf,
   type QuoteSnapshot,
   admitMovement,
@@ -113,6 +116,9 @@ export type PrototypeState = {
   revisions: ReadonlyMap<string, number>;
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
+  // The dollar rates the user stated, each kind's newest winning as a
+  // manual price does.
+  manualRates: readonly ManualRate[];
   // The assets the user left out of the report, by `assetKey`.
   outOfTaxReport: ReadonlySet<AssetKey>;
   // Where each operation came from, by id; one typed by hand has none.
@@ -192,6 +198,7 @@ export function initialState(
     revisions: new Map([...movements.keys()].map((id) => [id, 0])),
     quotes: fixtures.quotes,
     manualPrices: fixtures.manualPrices,
+    manualRates: [],
     outOfTaxReport: new Set(),
     operationOrigins: new Map(),
     recalculated: new Map(),
@@ -748,13 +755,21 @@ export function movementsPage(
   };
 }
 
-// The feeds' quotes with the user's manual prices, as every page, the
-// assistant and a write's suggested price read them.
-export const pricedSnapshotOf = (
+// The feeds' quotes with the user's manual prices and dollar rates, as every
+// page, the assistant and a write's suggested price read them; with the date
+// of each manual price and rate taken.
+export function pricedSnapshotOf(
   state: PrototypeState,
   snapshot: QuoteSnapshot,
-): ReturnType<typeof withManualPrices> =>
-  withManualPrices(snapshot, state.manualPrices);
+): ReturnType<typeof withManualPrices> & {
+  rates: ReturnType<typeof withManualRates>["manual"];
+} {
+  const rated = withManualRates(snapshot, state.manualRates);
+  return {
+    ...withManualPrices(rated.snapshot, state.manualPrices),
+    rates: rated.manual,
+  };
+}
 
 // --- Writes ----------------------------------------------------------------
 
@@ -1451,6 +1466,45 @@ export function deleteOperation(
 }
 
 // The manual price an instrument had on a date.
+// A dollar rate the user states, one per kind and day; none after today.
+export function setRate(
+  state: PrototypeState,
+  input: unknown,
+): Write<PriceResult> {
+  const parsed = manualRateSchema.safeParse(input);
+  if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
+  const rate = parsed.data;
+  if (rate.rate_date > state.today) {
+    return refused(state, { ok: false, code: "future_date" });
+  }
+  return {
+    state: {
+      ...state,
+      manualRates: [
+        ...state.manualRates.filter(
+          (each) =>
+            each.kind !== rate.kind || each.rate_date !== rate.rate_date,
+        ),
+        rate,
+      ],
+    },
+    result: { ok: true },
+  };
+}
+
+export function deleteRate(
+  state: PrototypeState,
+  kind: string,
+  date: string,
+): Write<PriceResult> {
+  const manualRates = state.manualRates.filter(
+    (each) => each.kind !== kind || each.rate_date !== date,
+  );
+  return manualRates.length === state.manualRates.length
+    ? refused(state, { ok: false, code: "invalid" })
+    : { state: { ...state, manualRates }, result: { ok: true } };
+}
+
 export function deletePrice(
   state: PrototypeState,
   symbol: string,
