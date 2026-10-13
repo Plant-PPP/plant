@@ -8,12 +8,34 @@ export const CHAT_UNITS = [
 ] as const satisfies readonly Denominator[];
 export type ChatUnit = (typeof CHAT_UNITS)[number];
 
-// A chart an answer carries: bars, each a label and a value in the
-// conversation's unit. Its numbers come from the data, never from the text.
+export const CHART_KINDS = ["bars", "line"] as const;
+export type ChartKind = (typeof CHART_KINDS)[number];
+
+// A chart an answer carries: bars, or a line through points in order, each a
+// label and a value in the conversation's unit. Its numbers come from the
+// data, never from the text.
 export type ChartPart = {
+  kind: ChartKind;
   title: string;
   unit: ChatUnit;
-  bars: { label: string; value: string }[];
+  points: { label: string; value: string }[];
+};
+
+export const barsOf = (
+  title: string,
+  unit: ChatUnit,
+  points: ChartPart["points"],
+): ChartPart => ({ kind: "bars", title, unit, points });
+
+// The most charts one answer shows.
+export const MAX_CHARTS = 3;
+
+// A table an answer carries: a row per item, its day, what it is and its
+// value in the conversation's unit.
+export type TablePart = {
+  title: string;
+  unit: ChatUnit;
+  rows: { date: string; label: string; value: string | null }[];
 };
 
 export type UserMessage = {
@@ -26,7 +48,8 @@ export type AssistantMessage = {
   id: string;
   role: "assistant";
   text: string;
-  chart: ChartPart | null;
+  charts: ChartPart[];
+  table: TablePart | null;
   // What it consulted, named for the user.
   sources: string[];
   // The day it was calculated, and the dollar it used when the unit is one.
@@ -55,6 +78,8 @@ export const SUGGESTED_QUESTIONS = [
   "¿Cuánto cobré de dividendos?",
   "¿Cuánto debo?",
   "¿Cómo le fue a Apple?",
+  "¿Qué cobro este mes?",
+  "¿Cómo evolucionó mi patrimonio?",
 ];
 
 export const NOT_ADVICE =

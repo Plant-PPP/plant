@@ -14,6 +14,24 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **CEDEARs, bonds and FCI are instrument types**, and ten instruments are seeded (seven CEDEARs and three bonds) with no feed: the user prices them by hand. The FCI catalog arrives with the instrument normalization (PLA-39).
 - **Holdings created before this keep their amount with no movements.** Staging has no real users; the app half writes instrument holdings only through the RPC.
 
+## 2026-10-13 · Charts and the income calendar in the chat (PLA-53, PLA-83, prototype)
+
+- **An answer carries up to three charts and one table**: `charts` (bars or a line) and `table`. The numbers in both come from the data, never from the text.
+- **Every chart says what its data is**: "Datos al <day> en <unit>". It has three actions: see it larger, save it as a CSV, and save it as a PNG drawn on a canvas. A chart that fails to draw says so in its place, and the rest of the answer stays.
+- **"¿Cómo evolucionó mi patrimonio?" draws a line** of the last 12 month ends from the closes.
+- **"¿Qué cobro este mes?" shows the next 90 days**: this month's sum, the window's, a table of each payment and a chart by month.
+  - The dividends and coupons are an estimate from what each instrument paid before: the next payment comes one typical gap (the median between payments) after the last, at the last payment per unit times the units held today. `upcomingIncome` in `packages/core` does it.
+  - An instrument that paid fewer than twice, or skipped two payments in a row, is expected to pay nothing.
+  - A placement that matures in the window counts with its capital and interest.
+  - The amounts are converted at today's rates, and the answer says it is an estimate.
+
+## 2026-10-13 · The assistant beside every page (PLA-82, prototype)
+
+- **Every page but Asistente's own has a "Preguntale a Plant" button that opens the chat beside it**: a column about 400px wide that pushes the page aside on a wide screen, a sheet over it on a phone. The column holds one conversation; the list of them stays on Asistente's page.
+- **The questions offered first are about the page it was opened from**: Activos asks how the net worth is spread, how the year went, dividends and an instrument; Deudas what is owed and the largest debt; Cierres the year and the month. Other pages get the general ones. Every suggested question has an answer from the data.
+- **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action that the real chat fills from its tool calls; without it, "Consultando tus datos…".
+- **Production is unchanged**: the panel is mounted by the prototype's root, and `suggestions`, `compact` and `consults` are optional.
+
 ## 2026-10-13 · A statement as of its own day (PLA-119, prototype)
 
 - **A statement is weighed against what the account held at the end of its day, and its differences are booked on that day.** The review's "Sube de / Baja de" compares with that day too, so it says what will be booked. Units taken out come from the holdings that had them that day, largest first.
