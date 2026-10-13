@@ -1,6 +1,8 @@
 import "server-only";
+import { validateHoldings } from "@plant/core";
 import type { ImportJobDeps } from "@plant/jobs";
 import { buenosAiresDate } from "@plant/shared";
+import type { ImportDraft } from "@plant/sources";
 import {
   type ColumnMapping,
   columnMappingFor,
@@ -13,9 +15,36 @@ import { serverLog } from "@/lib/log/server-log";
 
 import type { ColumnMappingsPort } from "./column-mappings-store";
 
+// Whether a reading looks right enough to keep its mapping: it reads more rows
+// than it skips, and when the rows print quantity, price and value, most of
+// them agree, at a price per unit or per 100 nominal.
+function looksRight({
+  draft,
+  skippedRows,
+}: {
+  draft: ImportDraft;
+  skippedRows: number;
+}): boolean {
+  if (draft.rows.length <= skippedRows) return false;
+  const priced = draft.rows.filter(
+    (row) => row.price !== null && row.value !== null,
+  );
+  if (priced.length === 0) return true;
+  const issuesAt = (basis: 1 | 100) =>
+    validateHoldings(priced.map((row) => ({ ...row, symbol: "", basis })));
+  const perUnit = issuesAt(1);
+  const perHundred = issuesAt(100);
+  const agreeing = priced.filter(
+    (_, i) =>
+      !perUnit[i]!.includes("value_mismatch") ||
+      !perHundred[i]!.includes("value_mismatch"),
+  ).length;
+  return agreeing * 2 > priced.length;
+}
+
 // Reads a spreadsheet's holdings in code. The model maps a format's columns
 // only the first time; the mapping is saved per user, account institution and
-// headers once it yields rows, so one that reads nothing is not kept.
+// headers once a reading with it looks right, so a wrong one is asked again.
 export function spreadsheetReader({
   mappings,
   mapColumns,
@@ -36,8 +65,8 @@ export function spreadsheetReader({
     const mapping = stored.success
       ? stored.data
       : await mapColumns({ sheet, userId });
-    const draft = sheetToDraft(sheet, mapping, buenosAiresDate(now()));
-    if (!stored.success && draft.rows.length > 0) {
+    const reading = sheetToDraft(sheet, mapping, buenosAiresDate(now()));
+    if (!stored.success && looksRight(reading)) {
       await mappings
         .save(userId, institution, sheet.headers, mapping)
         .catch((error: unknown) =>
@@ -50,8 +79,12 @@ export function spreadsheetReader({
         );
     }
     return {
-      draft,
-      read: { reader: "sheet", mapping: stored.success ? "hit" : "miss" },
+      draft: reading.draft,
+      read: {
+        reader: "sheet",
+        mapping: stored.success ? "hit" : "miss",
+        skippedRows: reading.skippedRows,
+      },
     };
   };
 }

@@ -42,10 +42,11 @@ export interface ImportStorePort {
 
 // How a file was read: by a model reading the document, or from a
 // spreadsheet's columns, whose mapping was saved already (hit), made now
-// (miss) or not needed (none).
+// (miss) or not needed (none); and how many of its rows made no holding.
 export type ImportRead = {
   reader: "document" | "sheet";
   mapping: "none" | "hit" | "miss";
+  skippedRows: number;
 };
 
 export type ImportJobDeps = {
@@ -189,6 +190,7 @@ export async function runImportDocument(
     "plant.import.row_count": read.rows,
     "plant.import.reader": read.reader,
     "plant.import.mapping": read.mapping,
+    "plant.import.skipped_count": read.skippedRows,
   });
   return { outcome: "ready", rows: read.rows };
 }

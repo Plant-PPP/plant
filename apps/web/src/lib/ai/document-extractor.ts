@@ -137,7 +137,7 @@ export function documentExtractor({
     });
     return {
       draft: toDraft(answer),
-      read: { reader: "document", mapping: "none" },
+      read: { reader: "document", mapping: "none", skippedRows: 0 },
     };
   };
 }

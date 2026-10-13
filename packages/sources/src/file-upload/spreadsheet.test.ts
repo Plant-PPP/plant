@@ -5,6 +5,7 @@ import {
   type ColumnMapping,
   columnMappingFor,
   currencyOf,
+  numberConventionOf,
   parseSheetDate,
   parseSheetDecimal,
   readSheet,
@@ -76,6 +77,14 @@ describe("readSheet", () => {
         ["GGAL", "$", "10,5"],
       ],
     });
+  });
+
+  it("reads a CSV that is not UTF-8 as Windows-1252", () => {
+    const bytes = Uint8Array.from(
+      "Especie;Moneda\nAL30;D\u00f3lares\n",
+      (char) => char.charCodeAt(0),
+    );
+    expect(readSheet(bytes, "text/csv").rows).toEqual([["AL30", "Dólares"]]);
   });
 
   it("keeps XLSX number cells as numbers", () => {
@@ -158,6 +167,39 @@ describe("parseSheetDecimal", () => {
     [1e13],
   ])("refuses %p", (cell) => {
     expect(parseSheetDecimal(cell)).toBeNull();
+  });
+});
+
+describe("parseSheetDecimal in US", () => {
+  it.each([
+    ["1,234.56", "1234.56"],
+    ["1,500", "1500"],
+    ["1,234,567", "1234567"],
+    ["1.234", "1.234"],
+    ["230.50", "230.50"],
+    ["US$ 1,234.5", "1234.5"],
+    [1234.5, "1234.5"],
+  ])("reads %p as %p", (cell, decimal) => {
+    expect(parseSheetDecimal(cell, "US")).toBe(decimal);
+  });
+
+  it.each([["12,5"], ["1.234,56"], ["1,23,4"]])("refuses %p", (cell) => {
+    expect(parseSheetDecimal(cell, "US")).toBeNull();
+  });
+});
+
+describe("numberConventionOf", () => {
+  it.each([
+    [["1,234.56", "10"], "US"],
+    [["1,234,567"], "US"],
+    [["230.50", "1,500"], "US"],
+    [["1,234.56", "12,5"], "es-AR"],
+    [["1.234,56"], "es-AR"],
+    [["1.234.567", "230.50"], "es-AR"],
+    [["1,500", "1.234", "10"], null],
+    [[1234.5, ""], null],
+  ] as const)("reads %j as %p", (cells, convention) => {
+    expect(numberConventionOf(cells)).toBe(convention);
   });
 });
 
@@ -245,6 +287,8 @@ describe("columnMappingFor", () => {
 });
 
 describe("sheetToDraft", () => {
+  const draftOf = (...args: Parameters<typeof sheetToDraft>) =>
+    sheetToDraft(...args).draft;
   const sheet = {
     headers: ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
     rows: [
@@ -258,8 +302,53 @@ describe("sheetToDraft", () => {
     ],
   };
 
+  it("counts the rows that make no holding", () => {
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(4);
+  });
+
+  it("reads a sheet in US formats", () => {
+    const { draft, skippedRows } = sheetToDraft(
+      {
+        ...sheet,
+        rows: [
+          ["AAPL", "1,500", "1,234.56", "USD", ""],
+          ["MELI", "3", "230.50", "USD", ""],
+        ],
+      },
+      mapping,
+      "2026-10-13",
+    );
+    expect(skippedRows).toBe(0);
+    expect(
+      draft.rows.map(({ quantity, price, confidence }) => [
+        quantity,
+        price,
+        confidence,
+      ]),
+    ).toEqual([
+      // "1,500" still also reads as one and a half: for the user to check.
+      ["1500", "1234.56", "low"],
+      ["3", "230.50", "high"],
+    ]);
+  });
+
+  it("keeps es-AR for a column that shows it, in a sheet that looks US", () => {
+    const { draft } = sheetToDraft(
+      {
+        ...sheet,
+        rows: [
+          ["AAPL", "2,5", "1,234.56", "USD", ""],
+          ["MELI", "1,500", "230.50", "USD", ""],
+        ],
+      },
+      mapping,
+      "2026-10-13",
+    );
+    expect(draft.rows.map((row) => row.quantity)).toEqual(["2.5", "1.500"]);
+  });
+
   it("keeps the rows that make a holding and the latest date up to today", () => {
-    expect(sheetToDraft(sheet, mapping, "2026-10-13")).toEqual({
+    expect(draftOf(sheet, mapping, "2026-10-13")).toEqual({
       documentDate: "2026-09-30",
       rows: [
         // "1.234" also reads as one and a fraction: for the user to check.
@@ -297,7 +386,7 @@ describe("sheetToDraft", () => {
   });
 
   it("marks a comma that also reads as thousands for the user to check", () => {
-    const { rows } = sheetToDraft(
+    const { rows } = draftOf(
       { ...sheet, rows: [["AAPL", "1,500", "", "ARS", ""]] },
       mapping,
       "2026-10-13",
@@ -310,7 +399,7 @@ describe("sheetToDraft", () => {
   it.each(["US$ 1,500", "$ 1.500"])(
     "checks %j as it reads it, after its currency mark",
     (price) => {
-      const { rows } = sheetToDraft(
+      const { rows } = draftOf(
         { ...sheet, rows: [["AAPL", "10", price, "ARS", ""]] },
         mapping,
         "2026-10-13",
@@ -320,7 +409,7 @@ describe("sheetToDraft", () => {
   );
 
   it("falls back to the default currency", () => {
-    const { rows } = sheetToDraft(
+    const { rows } = draftOf(
       sheet,
       { ...mapping, currency: null, currencyDefault: "USD" },
       "2026-10-13",
@@ -335,8 +424,7 @@ describe("sheetToDraft", () => {
 
   it("has no date without a date column", () => {
     expect(
-      sheetToDraft(sheet, { ...mapping, date: null }, "2026-10-13")
-        .documentDate,
+      draftOf(sheet, { ...mapping, date: null }, "2026-10-13").documentDate,
     ).toBeNull();
   });
 
@@ -351,7 +439,7 @@ describe("sheetToDraft", () => {
         "",
       ]),
     ]);
-    const { rows } = sheetToDraft(
+    const { rows } = draftOf(
       readSheet(xlsxOf(long), XLSX_TYPE),
       mapping,
       "2026-10-13",

@@ -29,7 +29,11 @@ const DRAFT: ImportDraft = {
   ],
   totals: [{ currency: "ARS", amount: "90000" }],
 };
-const READ = { reader: "document", mapping: "none" } as const;
+const READ = {
+  reader: "document",
+  mapping: "none",
+  skippedRows: 0,
+} as const;
 
 type Line = { level: string; event: string; fields: LogFields };
 
@@ -100,12 +104,24 @@ it("reads the file into a draft and marks the import ready", async () => {
         "plant.import.row_count": 1,
         "plant.import.reader": "document",
         "plant.import.mapping": "none",
+        "plant.import.skipped_count": 0,
         "plant.import.id": IMPORT,
       }),
     },
   ]);
   expect(JSON.stringify(lines)).not.toContain("AAPL");
   expect(JSON.stringify(lines)).not.toContain("IOL");
+});
+
+it("logs how many rows the reading skipped", async () => {
+  const { lines, run } = setUp({
+    extract: jest.fn().mockResolvedValue({
+      draft: DRAFT,
+      read: { reader: "sheet", mapping: "hit", skippedRows: 2 },
+    }),
+  });
+  await run();
+  expect(lines[0]!.fields["plant.import.skipped_count"]).toBe(2);
 });
 
 it.each([

@@ -88,7 +88,11 @@ it("reads the holdings and costs the call to the user", async () => {
     }),
   );
   const { draft, read } = await extract(model);
-  expect(read).toEqual({ reader: "document", mapping: "none" });
+  expect(read).toEqual({
+    reader: "document",
+    mapping: "none",
+    skippedRows: 0,
+  });
   expect(draft).toEqual({
     documentDate: "2026-09-30",
     rows: [
