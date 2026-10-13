@@ -231,6 +231,6 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/inngest(?:/|$)|api/reports(?:/|$)|.*\\.(?:ico|png|svg|jpg|jpeg|gif|webp|webmanifest|txt|xml)$).*)",
+    "/((?!_next/static|_next/image|api/inngest(?:/|$)|api/reports(?:/|$)|(?:brand/)?[^/]+\\.(?:ico|png|svg|jpg|jpeg|gif|webp|webmanifest|txt|xml)$).*)",
   ],
 };

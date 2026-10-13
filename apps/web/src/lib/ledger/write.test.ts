@@ -23,6 +23,7 @@ jest.mock("@/lib/supabase/server", () => ({
         select: () => builder,
         delete: () => builder,
         limit: () => builder,
+        is: (...args: unknown[]) => (filters.push(["is", ...args]), builder),
         eq: (...args: unknown[]) => (filters.push(["eq", ...args]), builder),
         gte: (...args: unknown[]) => (filters.push(["gte", ...args]), builder),
         lte: (...args: unknown[]) => (filters.push(["lte", ...args]), builder),
@@ -62,6 +63,7 @@ import {
   PURCHASE,
 } from "./ledger-fixture.test-support";
 import {
+  createInstrumentHolding,
   deleteHoldingRow,
   quoteOnDate,
   runOperation,
@@ -394,5 +396,95 @@ describe("deleting a holding", () => {
     expect(await deleteHoldingRow("x")).toEqual({ ok: false, code: "invalid" });
     expect(transfersOf).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("creating an instrument holding", () => {
+  const HOLDING = "a9000000-0000-4000-8000-0000000000a9";
+  const INPUT = {
+    asset_class: "instrument",
+    label: null,
+    instrument_symbol: "AAPL",
+    amount: "10",
+    currency: null,
+    annual_rate: null,
+    started_on: null,
+    matures_on: null,
+    valued_on: null,
+    source_connection_id: ACCOUNT,
+    portfolio_id: PORTFOLIO,
+  };
+  const pricedToday = () => {
+    const ledger = emptyLedger();
+    return {
+      ...ledger,
+      quotes: {
+        fxRates: ledger.quotes.fxRates.map((rate) => ({
+          ...rate,
+          rate_date: ledger.today,
+        })),
+        prices: [
+          {
+            symbol: "AAPL",
+            price_date: ledger.today,
+            price: "18000",
+            currency: "ARS",
+          },
+        ],
+      },
+    };
+  };
+  beforeEach(() => {
+    jest.mocked(revalidatePath).mockClear();
+    deleted
+      .mockReset()
+      .mockReturnValue({ data: [{ id: HOLDING }], error: null, status: 200 });
+  });
+
+  it("opens it with its units at today's price", async () => {
+    readLedger.mockResolvedValue({
+      ledger: pricedToday(),
+      truncated: false,
+      symbolOf: new Map(),
+    });
+    rpc.mockResolvedValue({ data: OPERATION, error: null, status: 200 });
+    expect(await createInstrumentHolding(INPUT)).toEqual({
+      ok: true,
+      id: HOLDING,
+    });
+    const [name, args] = rpc.mock.calls[0]!;
+    expect(name).toBe("write_operation");
+    expect(args.p_operation_id).toBeNull();
+    expect(args.p_parts).toEqual([
+      expect.objectContaining({
+        kind: "opening_balance",
+        instrument_symbol: "AAPL",
+        portfolio_id: PORTFOLIO,
+        quantity: "10",
+        price: "18000",
+        date: "2026-10-12",
+      }),
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/assets", "layout");
+  });
+
+  it("refuses one without a price today, without writing", async () => {
+    expect(await createInstrumentHolding(INPUT)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a holding of another class", async () => {
+    expect(
+      await createInstrumentHolding({
+        ...INPUT,
+        asset_class: "cash",
+        instrument_symbol: null,
+        currency: "ARS",
+      }),
+    ).toEqual({ ok: false, code: "invalid" });
+    expect(readLedger).not.toHaveBeenCalled();
   });
 });

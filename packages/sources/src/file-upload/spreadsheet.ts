@@ -89,7 +89,7 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
 }
 
 const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
-const AMBIGUOUS_DOT = /^[1-9]\d{0,2}\.\d{3}$/;
+const AMBIGUOUS = /^[1-9]\d{0,2}[.,]\d{3}$/;
 // The currency marks a number may start with; CURRENCY_TOKENS names the same
 // ones and more, for a whole cell.
 const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars)/i;
@@ -225,9 +225,10 @@ export function sheetToDraft(
     return positiveDecimalSchema.safeParse(parsed).success ? parsed : null;
   };
   // "1.500" is a thousand and a half in es-AR and one and a half with a dot
-  // keypad: read as the first, but for the user to check.
+  // keypad, and "1,500" the other way round: read as es-AR, but for the user
+  // to check.
   const ambiguous = (cell: SheetCell) =>
-    typeof cell === "string" && AMBIGUOUS_DOT.test(cell.trim());
+    typeof cell === "string" && AMBIGUOUS.test(cell.trim());
 
   const rows: DraftRow[] = [];
   let documentDate: string | null = null;

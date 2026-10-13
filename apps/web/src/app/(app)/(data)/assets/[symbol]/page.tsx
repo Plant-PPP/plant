@@ -79,7 +79,8 @@ export default async function InstrumentPage({
       holding.asset_class === "instrument" &&
       holding.instrument_symbol === symbol,
   );
-  if (held.length === 0) notFound();
+  // With no holding left, as after deleting the last one here, the page
+  // shows its empty state.
   const quotes = await readSnapshot(
     createQuoteReader(client),
     today,

@@ -90,12 +90,12 @@ it("hands the history only data and server actions", async () => {
   ).toEqual([]);
 });
 
-it("has no page for an instrument the user holds nothing of, or that does not exist", async () => {
+it("shows an instrument the user holds nothing of empty, and has no page for one that does not exist", async () => {
   readLedger.mockResolvedValue({
     ledger: emptyLedger(),
     truncated: false,
     symbolOf: new Map(),
   });
-  await expect(render("aapl")).rejects.toThrow("NEXT_NOT_FOUND");
+  expect((await render("aapl")).props.holdings).toEqual([]);
   await expect(render("nope")).rejects.toThrow("NEXT_NOT_FOUND");
 });

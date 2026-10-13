@@ -279,7 +279,7 @@ export function toOperationInput(
   const perUnit = (typed: string): string | null => {
     const quoted = parseAmountInput(typed);
     if (quoted === null || !type) return quoted;
-    return exactUnitPrice(type, quoted) ?? typed;
+    return exactUnitPrice(type, quoted);
   };
   const income = isIncome(fields.kind);
   const envelope = {

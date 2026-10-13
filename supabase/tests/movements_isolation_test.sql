@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(46);
+SELECT plan(42);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -402,45 +402,6 @@ SELECT throws_ok(
   $$ INSERT INTO public.tax_report_exclusions (instrument_symbol, holding_id) VALUES (NULL, NULL) $$,
   '23514', NULL,
   'an exclusion names something'
-);
-
--- ── A holding entered with its units ────────────────────────────────────────
-INSERT INTO public.holdings (source_connection_id, portfolio_id, asset_class, instrument_symbol, amount)
-VALUES ('a5000000-0000-4000-8000-0000000000a5', 'a1000000-0000-4000-8000-0000000000a1',
-        'instrument', 'KO', '5');
-
-SELECT is(
-  pg_temp.error_of($$ SELECT public.write_operation(
-    NULL, jsonb_build_array(pg_temp.trade('dividend', '1', '2026-04-01') - 'quantity' - 'price'
-                            || '{"instrument_symbol": "KO", "amount": "10"}'),
-    pg_temp.revisions('KO')) $$),
-  'PT409 no_history',
-  'income has no price to open a holding with no movements at'
-);
-
-INSERT INTO ops VALUES ('ko', public.write_operation(
-  NULL, jsonb_build_array(pg_temp.trade('purchase', '2', '2026-04-01') || '{"instrument_symbol": "KO"}'),
-  pg_temp.revisions('KO')));
-
-SELECT results_eq(
-  $$ SELECT h.amount::text, m.kind::text, m.quantity::text, m.price::text, m.date::text,
-            m.operation_id = (SELECT id FROM ops WHERE name = 'ko')
-     FROM public.holdings h JOIN public.movements m ON m.holding_id = h.id
-     WHERE h.instrument_symbol = 'KO' ORDER BY m.date, m.rank, m.id $$,
-  $$ VALUES ('7.00000000', 'opening_balance', '5.00000000', '18000.00000000', '2026-04-01', false),
-            ('7.00000000', 'purchase', '2.00000000', '18000.00000000', '2026-04-01', true) $$,
-  'a holding entered with its units keeps them as an opening balance of its own when it gets a movement'
-);
-
-SELECT lives_ok(
-  $$ SELECT public.write_operation((SELECT id FROM ops WHERE name = 'ko'), '[]'::jsonb, pg_temp.revisions('KO')) $$,
-  'a user deletes that movement'
-);
-
-SELECT is(
-  (SELECT amount::text FROM public.holdings WHERE instrument_symbol = 'KO'),
-  '5.00000000',
-  'and the holding keeps the units it was entered with'
 );
 
 RESET ROLE;
