@@ -184,7 +184,7 @@ export function runArchive(
 
 // One row of the user, by id, set to `fields`; each caller adds which
 // archive state it may be in.
-function ownRow<T extends SetupTable>(
+export function ownRow<T extends SetupTable>(
   { client, userId, id }: Pick<UpdateArgs<unknown>, "client" | "userId" | "id">,
   table: T,
   fields: Tables[T]["Update"],

@@ -9,6 +9,7 @@ import {
   holdingUpdateSchema,
 } from "@/lib/holdings/schemas";
 import {
+  ownRow,
   restoreWrite,
   runArchive,
   runInsert,
@@ -66,19 +67,17 @@ export async function updateHolding(
       input,
     },
     id,
-    ({ client, userId, input, id }) => {
-      const { asset_class, ...columns } = input;
+    (args) => {
+      const { asset_class, ...columns } = args.input;
       const row = columns satisfies DecimalWrite<
         Update,
         Extract<Exclude<KeysOf<HoldingUpdate>, "asset_class">, keyof Update>,
         Amounts
       >;
-      return client
-        .from("holdings")
-        .update(row as unknown as Update)
-        .eq("user_id", userId)
-        .eq("id", id)
-        .eq("asset_class", asset_class)
+      // ownRow's query is typed over every setup table, which share no
+      // asset_class; the column is named as a plain string.
+      return ownRow(args, "holdings", row as unknown as Update)
+        .eq<string>("asset_class", asset_class)
         .is("archived_at", null)
         .select("id");
     },
