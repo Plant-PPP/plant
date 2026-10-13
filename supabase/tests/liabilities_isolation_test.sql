@@ -86,8 +86,8 @@ VALUES ('crypto_loan', 'Préstamo BTC', 'BTC', '0.05');
 
 SELECT results_eq(
   $$ SELECT kind::text, balance::text, user_id::text FROM public.liabilities ORDER BY kind $$,
-  $$ VALUES ('mortgage', '45000.50000000', 'a0000000-0000-4000-8000-00000000000a'),
-            ('crypto_loan', '0.05000000', 'a0000000-0000-4000-8000-00000000000a') $$,
+  $$ VALUES ('crypto_loan', '0.05000000', 'a0000000-0000-4000-8000-00000000000a'),
+            ('mortgage', '45000.50000000', 'a0000000-0000-4000-8000-00000000000a') $$,
   'a user writes their debts under their own id and reads only them'
 );
 
