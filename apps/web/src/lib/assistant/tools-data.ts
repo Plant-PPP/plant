@@ -578,10 +578,14 @@ export function assistantData({
       unit,
       chart: {
         ...chart,
-        title: chart.title.slice(0, 60),
+        title: Array.from(chart.title).slice(0, 60).join(""),
         points: chart.points
           .slice(0, MAX_CHART_POINTS)
-          .map((point) => ({ ...point, label: point.label.slice(0, 30) })),
+          // By code point, so a cut never splits a character in two.
+          .map((point) => ({
+            ...point,
+            label: Array.from(point.label).slice(0, 30).join(""),
+          })),
       },
     };
   }

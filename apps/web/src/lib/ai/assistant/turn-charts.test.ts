@@ -1,14 +1,20 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
-const CHART = {
-  kind: "line" as const,
+const CHART: {
+  kind: "line" | "bars";
+  title: string;
+  unit: "usd_mep";
+  points: { label: string; value: string }[];
+} = {
+  kind: "line",
   title: "Patrimonio neto al cierre de cada mes",
-  unit: "usd_mep" as const,
+  unit: "usd_mep",
   points: [
     { label: "agosto 2026", value: "100" },
     { label: "septiembre 2026", value: "120" },
   ],
 };
+let mockChart = CHART;
 jest.mock("@/lib/assistant/tools-data", () => ({
   ...jest.requireActual("@/lib/assistant/tools-data"),
   assistantData: () => ({
@@ -18,7 +24,7 @@ jest.mock("@/lib/assistant/tools-data", () => ({
       rate: null,
       complete: true,
       unit: "usd_mep",
-      chart: CHART,
+      chart: mockChart,
     }),
   }),
 }));
@@ -53,15 +59,15 @@ const streamOf = (parts: LanguageModelV3StreamPart[]) =>
     },
   });
 
-const steps = () => [
+const steps = (calls = 1) => [
   streamOf([
     { type: "stream-start", warnings: [] },
-    {
+    ...Array.from({ length: calls }, (_, index): LanguageModelV3StreamPart => ({
       type: "tool-call",
-      toolCallId: "1",
+      toolCallId: String(index),
       toolName: "renderChart",
       input: JSON.stringify({ kind: "net_worth" }),
-    },
+    })),
     {
       type: "finish",
       usage,
@@ -89,7 +95,7 @@ afterAll(() => {
   process.env.ANTHROPIC_API_KEY = env;
 });
 
-it("keeps the chart a tool drew with the answer", async () => {
+async function answer(calls = 1) {
   const saved: StoredMessage[][] = [];
   const store: AssistantStore = {
     reserveQuestion: async () => "ok",
@@ -100,7 +106,7 @@ it("keeps the chart a tool drew with the answer", async () => {
       saved.push(messages);
     },
   };
-  const queue = steps();
+  const queue = steps(calls);
   const response = await runAssistantTurn({
     client: {} as never,
     store,
@@ -123,9 +129,33 @@ it("keeps the chart a tool drew with the answer", async () => {
   });
   await response.text();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  const answer = saved[0]?.[1];
-  expect(answer?.metadata).toMatchObject({
+  return saved[0]?.[1];
+}
+
+it("keeps the chart a tool drew with the answer", async () => {
+  expect((await answer())?.metadata).toMatchObject({
     charts: [CHART],
     sources: ["Cierres"],
   });
+});
+
+it("keeps only the charts that fit what a message's metadata may take", async () => {
+  mockChart = {
+    kind: "bars",
+    title: "Tus tenencias más grandes",
+    unit: "usd_mep",
+    points: Array.from({ length: 12 }, (_, index) => ({
+      label: "Сбербанк Россия ГДР акции".padEnd(30, "ж") + index,
+      value: "123456789012.12345678",
+    })),
+  };
+  try {
+    const metadata = (await answer(3))?.metadata as { charts: unknown[] };
+    expect(metadata.charts.length).toBeLessThan(3);
+    expect(
+      new TextEncoder().encode(JSON.stringify(metadata)).length,
+    ).toBeLessThanOrEqual(3500);
+  } finally {
+    mockChart = CHART;
+  }
 });

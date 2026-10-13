@@ -94,6 +94,12 @@ const forModel = (message: StoredMessage): AssistantUIMessage => {
   };
 };
 
+// The most an answer's metadata takes as JSON, under the 4096 bytes its
+// column keeps (ai_messages.metadata), with room for jsonb's own overhead.
+const METADATA_BYTES = 3500;
+const bytesOf = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).length;
+
 const stored = (message: AssistantUIMessage): StoredMessage => ({
   id: message.id,
   role: message.role === "user" ? "user" : "assistant",
@@ -252,9 +258,13 @@ export async function runAssistantTurn({
           read.rate = output.rate;
         }
         if (output.complete === false) read.complete = false;
-        // A chart drawn on the server, at most MAX_CHARTS an answer.
+        // A chart drawn on the server, at most MAX_CHARTS an answer, and
+        // only while the answer's metadata stays within what a message keeps.
         if ("chart" in output && read.charts.length < MAX_CHARTS) {
-          read.charts.push(output.chart as ChartPart);
+          const charts = [...read.charts, output.chart as ChartPart];
+          if (bytesOf({ ...read, charts }) <= METADATA_BYTES) {
+            read.charts = charts;
+          }
         }
       }
     },
