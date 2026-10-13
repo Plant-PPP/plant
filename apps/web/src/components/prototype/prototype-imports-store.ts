@@ -149,11 +149,14 @@ export function finishReading(
       discarded: false,
     };
   });
-  const currencies = new Set(truth.map((row) => row.currency));
+  // One the account could hold: a type it already has in that currency.
+  const kindOf = (each: { type: string; currency: string }) =>
+    `${each.type}:${each.currency}`;
+  const kinds = new Set(symbols.map((symbol) => kindOf(instrumentOf(symbol))));
   const extra = state.instruments.find(
     (each) =>
       !held.has(each.symbol) &&
-      currencies.has(each.currency) &&
+      kinds.has(kindOf(each)) &&
       priceOf(each.symbol) !== null,
   );
   if (extra) {
@@ -168,10 +171,15 @@ export function finishReading(
       discarded: false,
     });
   }
-  // The last row read with a digit missing.
-  const misread = truth.at(-2) ?? truth[0]!;
+  // The last held row with a price read with a digit missing: a row with no
+  // price leaves the totals as printed. With no such row, or one under 10
+  // units, the reading has no misread row.
+  const misread = truth
+    .slice(0, symbols.length)
+    .filter((row) => row.price !== null)
+    .at(-1);
   const rows = truth.map((row) =>
-    row.id === misread.id && compareDecimals(row.quantity, "10") >= 0
+    row.id === misread?.id && compareDecimals(row.quantity, "10") >= 0
       ? {
           ...row,
           quantity: stored({
@@ -291,7 +299,11 @@ export function confirmImport(
         reference: null,
         note: `Carga de ${item.fileName}`.slice(0, 200),
       },
-      { operationId: newId(), newId },
+      {
+        operationId: newId(),
+        newId,
+        origin: { kind: "import", fileName: item.fileName, date },
+      },
     );
     if (!written.result.ok) return { state, result: written.result };
     next = written.state;

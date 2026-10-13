@@ -1,6 +1,13 @@
 import { holdingSchema, type Position } from "@plant/core";
 
-import { byHolding, byInstrument, holdingsOf, rowFigures } from "./assets-rows";
+import {
+  assetKey,
+  byHolding,
+  byInstrument,
+  distinct,
+  holdingsOf,
+  rowFigures,
+} from "./assets-rows";
 import type { HoldingRow } from "./read";
 import type { HoldingsValuation, Sum } from "./valuation-view";
 
@@ -102,6 +109,27 @@ describe("byInstrument", () => {
       ["holding", "e1"],
       ["holding", "e2"],
     ]);
+  });
+});
+
+describe("assetKey", () => {
+  it("keys an instrument by its symbol across accounts and portfolios", () => {
+    const one = assetKey(eth("e1", "1", IOL, PRINCIPAL).holding);
+    expect(one).toBe("instrument:ETH");
+    expect(assetKey(eth("e2", "0.5", BINANCE, LARGO).holding)).toBe(one);
+    expect(one).not.toBe("e1");
+  });
+
+  it("keys any other holding by its own id", () => {
+    expect(assetKey(cash("c1").holding)).toBe("c1");
+    expect(assetKey(cash("c2").holding)).not.toBe(assetKey(cash("c1").holding));
+  });
+
+  it("is the id byInstrument gives each row", () => {
+    const rows = [eth("e1", "1"), cash("c1")];
+    expect(byInstrument(rows).map((row) => row.id)).toEqual(
+      rows.map((row) => assetKey(row.holding)),
+    );
   });
 });
 
@@ -221,5 +249,39 @@ describe("rowFigures", () => {
       value: "1000",
       share: "10.0",
     });
+  });
+});
+
+describe("distinct", () => {
+  it("keeps each id once, in the order first seen", () => {
+    expect(
+      distinct([
+        { id: "b", n: 1 },
+        { id: "a", n: 2 },
+        { id: "b", n: 3 },
+        { id: "c", n: 4 },
+        { id: "a", n: 5 },
+      ]),
+    ).toEqual([
+      { id: "b", n: 1 },
+      { id: "a", n: 2 },
+      { id: "c", n: 4 },
+    ]);
+  });
+
+  it("tells apart two items that share every other field", () => {
+    expect(distinct([IOL, { ...IOL, id: "a9" }])).toEqual([
+      IOL,
+      { ...IOL, id: "a9" },
+    ]);
+  });
+
+  it("returns a new array and leaves its input as it was", () => {
+    const items = [IOL, IOL];
+    const once = distinct(items);
+    expect(once).toEqual([IOL]);
+    expect(once).not.toBe(items);
+    expect(items).toEqual([IOL, IOL]);
+    expect(distinct([])).toEqual([]);
   });
 });

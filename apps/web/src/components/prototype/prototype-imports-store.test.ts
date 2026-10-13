@@ -180,6 +180,36 @@ it("adjusts an instrument the portfolio sold out of back in", () => {
       (row) => row.id === sold.holding.id,
     )?.holding.amount,
   ).toBe("2");
+  // Opened again by the import, it keeps where it first came from.
+  expect(
+    confirmed.state.holdings.find((each) => each.holding.id === sold.holding.id)
+      ?.origin,
+  ).toEqual({ kind: "manual" });
+});
+
+it("records a holding an import opens as imported, with its file and day", () => {
+  const after = read("resumen.pdf");
+  const rows = after.imports[0]!.rows.map((row) =>
+    row.confidence === "low"
+      ? { ...row, quantity: String(Number(row.quantity) * 10) }
+      : row,
+  );
+  const added = rows.find((row) => row.id.endsWith("-new"))!;
+  const confirmed = confirmImport(after, "i1", rows, newId);
+  expect(confirmed.result).toEqual({ ok: true, id: "i1" });
+  const originOf = (symbol: string) =>
+    confirmed.state.holdings.find(
+      (each) =>
+        each.accountId === IOL &&
+        each.holding.asset_class === "instrument" &&
+        each.holding.instrument_symbol === symbol,
+    )?.origin;
+  expect(originOf(added.symbol)).toEqual({
+    kind: "import",
+    fileName: "resumen.pdf",
+    date: TODAY,
+  });
+  expect(originOf("AAPL")).toEqual({ kind: "manual" });
 });
 
 it("refuses a kept row with no units, changing nothing", () => {
@@ -249,4 +279,53 @@ it("keeps counting a deleted account's uploads against the month", () => {
   expect(deleted.result.ok).toBe(true);
   expect(deleted.state.imports.some((each) => each.id === "i8")).toBe(false);
   expect(deleted.state.uploadedOn).toEqual([TODAY]);
+});
+
+describe("what a reading makes of each account", () => {
+  const readings = state.accounts.flatMap((account) => {
+    const after = finishReading(
+      addImport(state, {
+        id: `r-${account.id}`,
+        fileName: "resumen.pdf",
+        accountId: account.id,
+      }).state,
+      `r-${account.id}`,
+    );
+    const item = after.imports.find((each) => each.id === `r-${account.id}`)!;
+    return item.status === "ready" ? [{ account, item }] : [];
+  });
+  const instrumentOf = (symbol: string) =>
+    state.instruments.find((each) => each.symbol === symbol)!;
+
+  it("reads at least one account", () => {
+    expect(readings.length).toBeGreaterThan(0);
+  });
+
+  it("misreads at most one row, a held one with a price", () => {
+    for (const { account, item } of readings) {
+      const low = item.rows.filter((row) => row.confidence === "low");
+      expect(low.length).toBeLessThanOrEqual(1);
+      for (const row of low) {
+        expect(row.id.endsWith("-new")).toBe(false);
+        expect(heldIn(state, account.id).has(row.symbol)).toBe(true);
+        expect(row.price).not.toBeNull();
+      }
+    }
+  });
+
+  it("adds an instrument of a type and currency the account already holds", () => {
+    for (const { account, item } of readings) {
+      const added = item.rows.find((row) => row.id.endsWith("-new"));
+      if (!added) continue;
+      const held = [...heldIn(state, account.id).keys()].map(instrumentOf);
+      const extra = instrumentOf(added.symbol);
+      expect(held.map((each) => each.symbol)).not.toContain(extra.symbol);
+      expect(
+        held.some(
+          (each) =>
+            each.type === extra.type && each.currency === extra.currency,
+        ),
+      ).toBe(true);
+    }
+  });
 });

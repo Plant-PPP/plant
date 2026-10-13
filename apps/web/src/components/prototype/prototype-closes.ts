@@ -15,7 +15,6 @@ import {
   takesUnits,
   valueHoldings,
   valueLiabilities,
-  withManualPrices,
 } from "@plant/core";
 import {
   compareExact,
@@ -52,6 +51,7 @@ import {
   moneyChange,
   operationOf,
   positionBefore,
+  pricedSnapshotOf,
   type PrototypeState,
   stepsOf,
 } from "./prototype-store";
@@ -215,13 +215,13 @@ export function closesOf(
       .at(0) ?? state.today;
   const need = quotesNeeded(allRows(state).map((row) => row.holding));
   const snapshotAt = (date: string): QuoteSnapshot => {
-    const quoted = withManualPrices(
+    const quoted = pricedSnapshotOf(
+      state,
       snapshotOn(state.quotes, date, {
         ...need,
         fxKinds: [...need.fxKinds, "uva"],
         symbols: state.instruments.map(({ symbol }) => symbol),
       }).snapshot,
-      state.manualPrices,
     ).snapshot;
     return {
       ...quoted,

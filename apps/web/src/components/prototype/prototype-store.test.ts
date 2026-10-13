@@ -1,4 +1,11 @@
-import { compareMovements, DENOMINATORS, referenceUnit } from "@plant/core";
+import {
+  compareMovements,
+  DENOMINATORS,
+  type Holding,
+  quotesNeeded,
+  readSnapshot,
+  referenceUnit,
+} from "@plant/core";
 import {
   addDays,
   exactOf,
@@ -8,7 +15,10 @@ import {
   toDecimal,
 } from "@plant/shared";
 
+import { initialFields, toUpdate } from "@/components/holdings/holding-fields";
+import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { buildFixtures } from "@/lib/prototype/fixtures";
+import { createFixtureQuoteReader } from "@/lib/prototype/quote-reader";
 
 import {
   allRows,
@@ -24,13 +34,30 @@ import {
   salesOf,
   updateHolding,
   operationOf,
+  pricedSnapshotOf,
+  setInTaxReport,
+  updateHoldingDetails,
   writeOperation,
   yearsOf,
 } from "./prototype-store";
 
+import { assetKey } from "@/lib/holdings/assets-rows";
+
 const TODAY = "2026-10-12";
 const fixtures = buildFixtures(TODAY);
 const state = initialState(fixtures, TODAY);
+// Asset keys as the store makes them: an instrument's from a holding of it,
+// anything else's from its holding.
+const anInstrument = state.holdings
+  .map((each) => each.holding)
+  .find(
+    (holding): holding is Extract<Holding, { asset_class: "instrument" }> =>
+      holding.asset_class === "instrument",
+  )!;
+const instrumentKey = (symbol: string) =>
+  assetKey({ ...anInstrument, instrument_symbol: symbol });
+const holdingKey = (id: string) =>
+  assetKey(state.holdings.find((each) => each.holding.id === id)!.holding);
 const NO_FILTER = { portfolioId: null, holdingClass: null, search: "" };
 const NAMES = new Map(fixtures.instruments.map((i) => [i.symbol, i.name]));
 
@@ -900,5 +927,184 @@ it("names a part's missing portfolio before another part's oversell", () => {
   expect(writeOperation(state, input, options())).toEqual({
     state,
     result: { ok: false, code: "not_found" },
+  });
+});
+
+it("values bonds and FCIs at their latest manual price, and one with none as missing", async () => {
+  const { snapshot } = await readSnapshot(
+    createFixtureQuoteReader(fixtures.quotes),
+    TODAY,
+    quotesNeeded(fixtures.holdings.map((row) => row.holding)),
+  );
+  const priced = pricedSnapshotOf(state, snapshot).snapshot;
+  const latest = (symbol: string) =>
+    fixtures.manualPrices
+      .filter((row) => row.symbol === symbol)
+      .sort((a, b) => b.price_date.localeCompare(a.price_date))[0]!.price;
+  const amountOf = (symbol: string) =>
+    allRows(state).find((row) => row.id === idOf(symbol))!.holding.amount;
+  const valued = (unit: "ars" | "usd_mep") =>
+    holdingsValuation({
+      holdings: holdingsView(state).active,
+      truncated: false,
+      snapshot: priced,
+      unit,
+      referenceDollar: state.referenceDollar,
+    });
+  const times2 = (a: string, b: string) =>
+    toDecimal(times(exactOf(a), exactOf(b)), 2);
+
+  // GD30 is held in dollars, so in dollars its value needs no rate.
+  expect(valued("usd_mep").values[idOf("GD30")]?.value).toBe(
+    times2(amountOf("GD30"), latest("GD30")),
+  );
+  expect(valued("ars").values[idOf("FIMAAHO")]?.value).toBe(
+    times2(amountOf("FIMAAHO"), latest("FIMAAHO")),
+  );
+  // In pesos, GD30 takes the dollar.
+  expect(valued("ars").values[idOf("GD30")]?.value).not.toBeNull();
+  expect(valued("ars").values[idOf("TX26")]?.value).toBeNull();
+  expect(valued("ars").kinds.total.missing).toBe(1);
+});
+
+describe("origin and the report", () => {
+  it("starts every holding as typed by hand", () => {
+    expect(new Set(state.holdings.map((each) => each.origin.kind))).toEqual(
+      new Set(["manual"]),
+    );
+  });
+
+  it("leaves an asset out of the report and back in", () => {
+    const out = setInTaxReport(state, instrumentKey("AAPL"), false);
+    expect(out.result).toEqual({ ok: true, id: instrumentKey("AAPL") });
+    expect(out.state.outOfTaxReport).toEqual(new Set([instrumentKey("AAPL")]));
+    const back = setInTaxReport(out.state, instrumentKey("AAPL"), true);
+    expect(back.state.outOfTaxReport).toEqual(new Set());
+  });
+
+  it("takes the choice for an asset only held closed, and keys others by holding", () => {
+    expect(setInTaxReport(state, instrumentKey("TSLA"), false).result.ok).toBe(
+      true,
+    );
+    expect(
+      setInTaxReport(state, holdingKey(CASH), false).state.outOfTaxReport.has(
+        holdingKey(CASH),
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves the state as it was when the choice is already the asset's", () => {
+    const same = setInTaxReport(state, instrumentKey("AAPL"), true);
+    expect(same.result).toEqual({ ok: true, id: instrumentKey("AAPL") });
+    expect(same.state).toBe(state);
+    const out = setInTaxReport(state, instrumentKey("AAPL"), false).state;
+    const again = setInTaxReport(out, instrumentKey("AAPL"), false);
+    expect(again.result).toEqual({ ok: true, id: instrumentKey("AAPL") });
+    expect(again.state).toBe(out);
+  });
+
+  it("refuses an asset the user has no holding of", () => {
+    const refused = setInTaxReport(state, instrumentKey("MSFT"), false);
+    expect(refused.result).toEqual({ ok: false, code: "not_found" });
+    expect(refused.state).toBe(state);
+  });
+
+  it("forgets the choice with the asset's last holding", () => {
+    const out = setInTaxReport(state, holdingKey(CASH), false).state;
+    expect(
+      deleteHolding(out, CASH).state.outOfTaxReport.has(holdingKey(CASH)),
+    ).toBe(false);
+    const aapl = setInTaxReport(state, instrumentKey("AAPL"), false).state;
+    expect(
+      deleteHolding(aapl, AAPL).state.outOfTaxReport.has(instrumentKey("AAPL")),
+    ).toBe(false);
+  });
+
+  it("keeps an instrument's choice while another holding of it stays", () => {
+    const eth = fixtures.holdings.filter(
+      (row) =>
+        row.holding.asset_class === "instrument" &&
+        row.holding.instrument_symbol === "ETH",
+    );
+    expect(eth).toHaveLength(2);
+    // The ETH holding in Largo plazo only shares a purchase, no transfer.
+    const largo = eth.find((row) => row.portfolio.id === LARGO)!;
+    const out = setInTaxReport(state, instrumentKey("ETH"), false).state;
+    const deleted = deleteHolding(out, largo.id);
+    expect(deleted.result.ok).toBe(true);
+    expect(deleted.state.outOfTaxReport.has(instrumentKey("ETH"))).toBe(true);
+  });
+
+  it("saves a holding's edit and its report choice together, or neither", () => {
+    const cash = allRows(state).find((row) => row.id === CASH)!;
+    const fields = initialFields(cash, {
+      accountId: "",
+      portfolioId: "",
+      today: TODAY,
+    });
+    const edit = toUpdate({ ...fields, amount: "1" }, cash.portfolio.id);
+    const saved = updateHoldingDetails(state, CASH, edit, false);
+    expect(saved.result).toEqual({ ok: true, id: CASH });
+    expect(saved.state.outOfTaxReport.has(holdingKey(CASH))).toBe(true);
+    expect(
+      saved.state.holdings.find((each) => each.holding.id === CASH)?.holding
+        .amount,
+    ).toBe("1");
+
+    const refused = updateHoldingDetails(
+      state,
+      CASH,
+      toUpdate({ ...fields, amount: "-1" }, cash.portfolio.id),
+      false,
+    );
+    expect(refused.result.ok).toBe(false);
+    expect(refused.state).toBe(state);
+  });
+
+  it("refuses the edit of a holding there is not, leaving the choices alone", () => {
+    const out = setInTaxReport(state, holdingKey(CASH), false).state;
+    const cash = allRows(out).find((row) => row.id === CASH)!;
+    const fields = initialFields(cash, {
+      accountId: "",
+      portfolioId: "",
+      today: TODAY,
+    });
+    const refused = updateHoldingDetails(
+      out,
+      NEW_ID,
+      toUpdate(fields, cash.portfolio.id),
+      true,
+    );
+    expect(refused.result).toEqual({ ok: false, code: "not_found" });
+    expect(refused.state).toBe(out);
+  });
+
+  it("puts an asset back in the report with the edit that turns it on", () => {
+    const out = setInTaxReport(state, holdingKey(CASH), false).state;
+    const cash = allRows(out).find((row) => row.id === CASH)!;
+    const fields = initialFields(cash, {
+      accountId: "",
+      portfolioId: "",
+      today: TODAY,
+    });
+    const saved = updateHoldingDetails(
+      out,
+      CASH,
+      toUpdate(fields, cash.portfolio.id),
+      true,
+    );
+    expect(saved.result).toEqual({ ok: true, id: CASH });
+    expect(saved.state.outOfTaxReport.has(holdingKey(CASH))).toBe(false);
+  });
+
+  it("keeps the other assets' choices when one is put back", () => {
+    const out = setInTaxReport(
+      setInTaxReport(state, holdingKey(CASH), false).state,
+      instrumentKey("AAPL"),
+      false,
+    ).state;
+    const back = setInTaxReport(out, holdingKey(CASH), true);
+    expect(back.state.outOfTaxReport).toEqual(new Set([instrumentKey("AAPL")]));
+    expect(out.outOfTaxReport.has(holdingKey(CASH))).toBe(true);
   });
 });

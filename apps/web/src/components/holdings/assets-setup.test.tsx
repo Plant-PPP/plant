@@ -10,6 +10,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { type AssetsTab, SALES_TABS, TABS } from "@/lib/holdings/assets-filter";
+import { assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
 import {
   type HoldingsValuation,
@@ -19,7 +20,8 @@ import {
 
 import type { HoldingActions } from "@/lib/holdings/write-actions";
 
-import { AssetsSetup } from "./assets-setup";
+import { AssetsSetup, saveHoldingEdit } from "./assets-setup";
+import { initialFields } from "./holding-fields";
 
 const done = async () => ({ ok: true as const, id: "x" });
 const ACTIONS: HoldingActions = {
@@ -740,5 +742,122 @@ describe("with movements", () => {
     expect(html).toContain("Comisiones e impuestos");
     expect(html).toContain("+US$ 14.996,00");
     expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Ventas /);
+  });
+});
+
+describe("saving an edit", () => {
+  const holding = row("h1", PRINCIPAL, "100");
+  const fields = {
+    ...initialFields(holding, { accountId: "", portfolioId: "", today: "" }),
+    amount: "200",
+  };
+
+  it("writes the holding alone on a page without details", async () => {
+    const update = jest.fn(done);
+    await saveHoldingEdit({ actions: { ...ACTIONS, update } }, holding, fields);
+    expect(update).toHaveBeenCalledWith(
+      "h1",
+      expect.not.objectContaining({ inTaxReport: expect.anything() }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      "h1",
+      expect.objectContaining({ amount: "200" }),
+    );
+  });
+
+  it("writes the holding and the report choice together with details", async () => {
+    const update = jest.fn(done);
+    const together = jest.fn(done);
+    await saveHoldingEdit(
+      {
+        actions: { ...ACTIONS, update },
+        details: {
+          originOf: () => ({ kind: "manual" }),
+          inTaxReport: () => true,
+          actions: { setInTaxReport: done, update: together },
+        },
+      },
+      holding,
+      { ...fields, inTaxReport: false },
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(together).toHaveBeenCalledWith(
+      "h1",
+      expect.objectContaining({ amount: "200" }),
+      false,
+    );
+    expect(together).toHaveBeenCalledWith(
+      "h1",
+      expect.not.objectContaining({ inTaxReport: expect.anything() }),
+      false,
+    );
+  });
+});
+
+describe("saving an edit that leaves the report switch untouched", () => {
+  const gd30: HoldingRow = {
+    id: "h7",
+    holding: holdingSchema.parse({
+      id: "h7",
+      portfolio_id: PRINCIPAL.id,
+      asset_class: "instrument",
+      instrument_symbol: "GD30",
+      amount: "10",
+      currency: null,
+      annual_rate: null,
+      started_on: null,
+      matures_on: null,
+      valued_on: null,
+      label: null,
+    }),
+    account: { id: "a1", institution: "IOL" },
+    instrumentType: "bond",
+    portfolio: PRINCIPAL,
+  };
+  const save = async (holding: HoldingRow, saved: boolean) => {
+    const together = jest.fn(done);
+    const inTaxReport = jest.fn(() => saved);
+    const fields = initialFields(holding, {
+      accountId: "",
+      portfolioId: "",
+      today: "",
+    });
+    expect(fields.inTaxReport).toBeUndefined();
+    await saveHoldingEdit(
+      {
+        actions: ACTIONS,
+        details: {
+          originOf: () => ({ kind: "manual" }),
+          inTaxReport,
+          actions: { setInTaxReport: done, update: together },
+        },
+      },
+      holding,
+      fields,
+    );
+    return { together, inTaxReport };
+  };
+
+  it.each([true, false])(
+    "writes the asset's saved choice (%s) with the holding",
+    async (saved) => {
+      const { together } = await save(gd30, saved);
+      expect(together).toHaveBeenCalledWith("h7", expect.anything(), saved);
+    },
+  );
+
+  it("asks for an instrument's choice by its asset, not its holding", async () => {
+    const { inTaxReport } = await save(gd30, false);
+    expect(inTaxReport).toHaveBeenCalledWith(assetKey(gd30.holding));
+    expect(inTaxReport).not.toHaveBeenCalledWith(gd30.id);
+  });
+
+  it("asks for any other holding's choice by the holding", async () => {
+    const { together, inTaxReport } = await save(
+      row("h1", PRINCIPAL, "100"),
+      false,
+    );
+    expect(inTaxReport).toHaveBeenCalledWith("h1");
+    expect(together).toHaveBeenCalledWith("h1", expect.anything(), false);
   });
 });

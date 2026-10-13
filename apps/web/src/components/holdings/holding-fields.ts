@@ -50,6 +50,9 @@ export type HoldingFields = {
   maturesOn: string;
   valuedOn: string;
   label: string;
+  // Whether the asset counts in the report, on a page that lets the user
+  // choose; the holding's own columns never carry it.
+  inTaxReport?: boolean;
 };
 
 export function initialFields(

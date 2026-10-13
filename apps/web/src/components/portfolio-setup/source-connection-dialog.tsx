@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   CHOICE_MESSAGES,
   WRITE_MESSAGES,
@@ -31,6 +30,7 @@ import {
 } from "./institution-field";
 import { useFieldAlert } from "./field-alert";
 import { useSavedFocus } from "./saved-focus";
+import { ReportSwitch } from "./report-switch";
 
 export type SourceConnectionFields = {
   institution: string;
@@ -240,14 +240,11 @@ export function SourceConnectionDialog({
             </p>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
-            <Label htmlFor={ids.tax}>Incluir en el reporte</Label>
-            <Switch
-              id={ids.tax}
-              checked={includeInTaxReport}
-              onCheckedChange={setIncludeInTaxReport}
-            />
-          </div>
+          <ReportSwitch
+            id={ids.tax}
+            checked={includeInTaxReport}
+            onCheckedChange={setIncludeInTaxReport}
+          />
 
           {alert && <FormAlert id={ids.alert}>{alert.text}</FormAlert>}
         </div>

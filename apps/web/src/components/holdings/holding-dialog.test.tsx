@@ -13,6 +13,7 @@ import {
   holdingRow,
   initialFields,
 } from "./holding-fields";
+import type { HoldingOrigin } from "@/lib/holdings/holding-name";
 import type { AssetClass } from "@/lib/holdings/messages";
 
 const PRINCIPAL = { id: "p1", name: "Principal" };
@@ -36,6 +37,10 @@ function render(
   mode: "create" | "edit",
   fields: Partial<HoldingFields> = {},
   initialError?: string,
+  extra: {
+    details?: { origin: HoldingOrigin | undefined; inTaxReport: boolean };
+    accounts?: SourceConnectionRow[];
+  } = {},
 ) {
   const initial = {
     ...initialFields(null, {
@@ -62,7 +67,8 @@ function render(
     <HoldingDialog
       mode={mode}
       row={row}
-      accounts={[ACCOUNT]}
+      details={extra.details}
+      accounts={extra.accounts ?? [ACCOUNT]}
       portfolios={[PRINCIPAL]}
       instruments={INSTRUMENTS}
       initial={initial}
@@ -145,4 +151,118 @@ it("reopens an edit's duplicate on the portfolio it moved to", () => {
     html,
   )![0];
   expect(portfolio).toContain('aria-invalid="true"');
+});
+
+describe("with details", () => {
+  const CASH = { assetClass: "cash" as const, currency: "ARS" as const };
+
+  it("shows no origin and no report switch without them", () => {
+    const html = render("edit", CASH);
+    expect(html).not.toContain("Origen");
+    expect(html).not.toContain("Incluir en el reporte");
+  });
+
+  it("shows where a holding came from and its report switch", () => {
+    const html = render("edit", { ...CASH, inTaxReport: false }, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+    });
+    expect(html).toContain("<dd>Cargada a mano</dd>");
+    expect(labels(html)).toContain("Incluir en el reporte");
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="false"/);
+  });
+
+  it("links an imported holding to the imports", () => {
+    const html = render("edit", CASH, undefined, {
+      details: {
+        origin: { kind: "import", fileName: "resumen.pdf", date: "2026-10-01" },
+        inTaxReport: true,
+      },
+    });
+    expect(html).toContain(
+      'class="underline" href="/import">Importada de resumen.pdf el 01/10/2026</a>',
+    );
+  });
+
+  it("starts the switch at the asset's saved choice", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: false },
+    });
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="false"/);
+  });
+
+  it("says the account's choice leaves the holding out", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+      accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
+    });
+    expect(html).toContain(
+      '<a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
+    );
+    expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
+  });
+
+  it("puts the account's whole note, by name, in the switch's note", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+      accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
+    });
+    expect(html).toMatch(
+      /<p id="[^"]*-tax-note"[^>]*>La cuenta <a class="underline" href="\/accounts">IOL<\/a> no se incluye en el reporte, así que esta tenencia tampoco\.<\/p>/,
+    );
+    expect(html).not.toContain("donde lo tenés");
+  });
+
+  it("offers no report switch and no origin on a create", () => {
+    const html = render("create", CASH, undefined, {
+      details: {
+        origin: { kind: "import", fileName: "resumen.pdf", date: "2026-10-01" },
+        inTaxReport: false,
+      },
+    });
+    expect(html).not.toContain("Origen");
+    expect(html).not.toContain("Incluir en el reporte");
+  });
+
+  it("shows the report switch but no origin for a holding with none", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: undefined, inTaxReport: true },
+    });
+    expect(html).not.toContain("Origen");
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="true"/);
+  });
+
+  it("adds no note while the holding's account is in the report", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: true },
+    });
+    expect(html).not.toContain("no se incluye en el reporte");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
+});
+
+describe("the instrument picker on a create", () => {
+  const trigger = (html: string) =>
+    /<button[^>]*id="([^"]*-instrument)"[^>]*>/.exec(html)!;
+
+  it("is the control its label names, by the label and the chosen instrument", () => {
+    const html = render("create", { instrument: "BTC" });
+    const [tag, id] = trigger(html);
+    expect(html).toContain(`id="${id}-label" for="${id}"`);
+    expect(tag).toContain(`aria-labelledby="${id}-label ${id}-value"`);
+    expect(html).toContain(
+      `<span id="${id}-value" class="truncate">BTC · Bitcoin</span>`,
+    );
+  });
+
+  it("takes a refused duplicate's alert and focus on its trigger", () => {
+    const html = render(
+      "create",
+      { instrument: "BTC", amount: "1" },
+      WRITE_MESSAGES.holdings.duplicate,
+    );
+    const [tag] = trigger(html);
+    expect(tag).toContain('aria-invalid="true"');
+    expect(tag).toMatch(/aria-describedby="[^"]*-alert"/);
+    expect(tag).toMatch(/autofocus/i);
+  });
 });

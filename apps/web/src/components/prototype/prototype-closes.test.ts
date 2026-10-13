@@ -538,3 +538,10 @@ it("shows an opening balance in a month's detail at what its figures count", () 
   )!;
   expect(Number(line.amount)).toBeCloseTo(100 * Number(quote.price), 2);
 });
+
+describe("the closes' manual prices", () => {
+  it("values the months with the manual prices", () => {
+    const unpriced = { ...state, manualPrices: [] };
+    expect(closesOf(unpriced, "ars")).not.toEqual(closesOf(state, "ars"));
+  });
+});

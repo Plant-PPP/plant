@@ -24,7 +24,7 @@ export function PrototypeInstrument({
   symbol: string;
   params: KeysetParams;
 }) {
-  const { state, latest, snapshot, manual, actions } = usePrototype();
+  const { state, latest, snapshot, manual, details, actions } = usePrototype();
   const instrument = state.instruments.find((each) => each.symbol === symbol);
   const reference = referenceUnit(state.referenceDollar);
   const { unit: chosen } = parseAssetsParams(params, {
@@ -79,6 +79,7 @@ export function PrototypeInstrument({
       }}
       movementActions={actions.movements}
       actions={actions.holdings}
+      details={details}
       accounts={state.accounts}
       portfolios={state.portfolios}
       instruments={state.instruments}

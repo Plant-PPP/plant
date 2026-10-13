@@ -87,3 +87,58 @@ it("reads today's rates and prices through the quote reader", async () => {
   expect(snapshot.prices.BTC?.date).toBe(TODAY);
   expect(snapshot.prices.KO).toBeUndefined();
 });
+
+it("states each manual price in its instrument's currency", () => {
+  const symbols = new Set(fixtures.manualPrices.map((row) => row.symbol));
+  expect(symbols).toEqual(new Set(["KO", "GD30", "FIMAAHO"]));
+  for (const row of fixtures.manualPrices) {
+    const instrument = fixtures.instruments.find(
+      (each) => each.symbol === row.symbol,
+    );
+    expect(row.currency).toBe(instrument?.currency);
+  }
+  expect(
+    fixtures.manualPrices.find((row) => row.symbol === "GD30")?.currency,
+  ).toBe("USD");
+});
+
+describe("each instrument's currency", () => {
+  const currencyOf = (symbol: string | null) =>
+    fixtures.instruments.find((each) => each.symbol === symbol)?.currency;
+  const symbolOf = (holdingId: string) =>
+    fixtures.holdings.find((row) => row.id === holdingId)?.holding
+      .instrument_symbol ?? null;
+
+  it("states every trade of an instrument holding in the instrument's currency", () => {
+    const trades = fixtures.movements.filter((m) => m.kind !== "dividend");
+    expect(trades.length).toBeGreaterThan(0);
+    for (const m of trades) {
+      expect(currencyOf(symbolOf(m.holding_id))).toBeDefined();
+      expect(m.currency).toBe(currencyOf(symbolOf(m.holding_id)));
+    }
+  });
+
+  it("trades a dollar bond in dollars and a peso FCI and bond in pesos", () => {
+    const currenciesOf = (symbol: string) =>
+      new Set(
+        fixtures.movements
+          .filter(
+            (m) => m.kind !== "dividend" && symbolOf(m.holding_id) === symbol,
+          )
+          .map((m) => m.currency),
+      );
+    expect(currenciesOf("GD30")).toEqual(new Set(["USD"]));
+    expect(currenciesOf("FIMAAHO")).toEqual(new Set(["ARS"]));
+    expect(currenciesOf("TX26")).toEqual(new Set(["ARS"]));
+    expect(currenciesOf("AAPL")).toEqual(new Set(["ARS"]));
+    expect(currenciesOf("BTC")).toEqual(new Set(["USD"]));
+  });
+
+  it("states every fed price in its instrument's currency", () => {
+    expect(fixtures.quotes.prices.length).toBeGreaterThan(0);
+    for (const quote of fixtures.quotes.prices) {
+      expect(currencyOf(quote.symbol)).toBeDefined();
+      expect(quote.currency).toBe(currencyOf(quote.symbol));
+    }
+  });
+});

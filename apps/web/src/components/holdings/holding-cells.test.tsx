@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { AccountsCell, PortfoliosCell } from "./holding-cells";
+import { AccountsCell, ImportOrigin, PortfoliosCell } from "./holding-cells";
 
 it("shows the first two of several accounts and how many, naming every one", () => {
   const html = renderToStaticMarkup(
@@ -32,4 +32,17 @@ it("shows how many of several portfolios, naming every one", () => {
   expect(html).toContain(">2 carteras<");
   expect(html).toContain('title="Principal, Largo plazo"');
   expect(html).toMatch(/class="sr-only">Principal, Largo plazo</);
+});
+
+it("links an imported holding's origin to the imports, titled by it", () => {
+  expect(
+    renderToStaticMarkup(
+      <ImportOrigin
+        origin={{ kind: "import", fileName: "iol.pdf", date: "2026-10-01" }}
+        className="underline"
+      />,
+    ),
+  ).toBe(
+    '<a title="Importada de iol.pdf el 01/10/2026" class="underline" href="/import">Importada de iol.pdf el 01/10/2026</a>',
+  );
 });

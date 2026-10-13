@@ -329,3 +329,56 @@ describe("a yield", () => {
     }
   });
 });
+
+describe("an operation with no account or instrument fixed", () => {
+  const renderOpen = (initial: MovementFields) =>
+    renderToStaticMarkup(
+      <MovementDialog
+        mode="create"
+        accounts={[ACCOUNT]}
+        portfolios={[PRINCIPAL, LARGO]}
+        instruments={INSTRUMENTS}
+        initial={initial}
+        today={TODAY}
+        returnFocusTo={() => null}
+        onClose={() => {}}
+        onSubmit={() => true}
+      />,
+    );
+  const purchase = newMovementFields({
+    kind: "purchase",
+    accountId: "a1",
+    instrument: "",
+    currency: "USD",
+    date: TODAY,
+    portfolioId: "p1",
+  });
+
+  it("picks the instrument with the picker its label names", () => {
+    const html = renderOpen(purchase);
+    const [tag, id] = /<button[^>]*id="([^"]*-instrument)"[^>]*>/.exec(html)!;
+    expect(html).toContain(`id="${id}-label" for="${id}"`);
+    expect(tag).toContain(`aria-labelledby="${id}-label ${id}-value"`);
+    expect(tag).toContain('aria-haspopup="dialog"');
+    expect(html).toContain(
+      `<span id="${id}-value" class="truncate">Elegí un instrumento</span>`,
+    );
+  });
+
+  it("shows the chosen instrument on the trigger", () => {
+    expect(renderOpen({ ...purchase, instrument: "BTC" })).toMatch(
+      /<span id="[^"]*-instrument-value" class="truncate">BTC · Bitcoin<\/span>/,
+    );
+  });
+
+  it("labels every control it names", () => {
+    const html = renderOpen(purchase);
+    const ids = new Set([...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
+    for (const [, target] of html.matchAll(/ for="([^"]+)"/g)) {
+      expect(ids).toContain(target);
+    }
+    for (const [, named] of html.matchAll(/ aria-labelledby="([^"]+)"/g)) {
+      for (const each of named!.split(" ")) expect(ids).toContain(each);
+    }
+  });
+});

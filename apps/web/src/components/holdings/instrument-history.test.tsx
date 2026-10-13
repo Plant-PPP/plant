@@ -15,8 +15,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import type { MovementLine } from "@/lib/holdings/movements-input";
+import { assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingRow } from "@/lib/holdings/read";
 
+import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
+
+import type { HoldingDetails } from "./assets-setup";
 import { InstrumentHistory } from "./instrument-history";
 import { instrumentPreset } from "./movement-dialogs";
 
@@ -60,7 +64,13 @@ const held = (
 
 const done = async () => ({ ok: true as const, id: "x" });
 
-function render(holdings: InstrumentHolding[]) {
+function render(
+  holdings: InstrumentHolding[],
+  extra: {
+    details?: HoldingDetails;
+    accounts?: SourceConnectionRow[];
+  } = {},
+) {
   return renderToStaticMarkup(
     <InstrumentHistory
       instrument={ETH}
@@ -85,7 +95,8 @@ function render(holdings: InstrumentHolding[]) {
       }}
       movementActions={{ create: done, update: done, delete: done }}
       actions={{ delete: async () => ({ ok: true, id: "x" }) }}
-      accounts={[]}
+      details={extra.details}
+      accounts={extra.accounts ?? []}
       portfolios={[]}
       instruments={[ETH]}
       today="2026-10-12"
@@ -217,5 +228,176 @@ describe("with movements loaded", () => {
   it("puts only the type under the date of a line whose holding is gone", () => {
     const html = render([held("e1", "IOL")]);
     expect(html).toMatch(/01\/09\/2026<span[^>]*@2xl:hidden[^>]*>Venta</);
+  });
+});
+
+describe("with details", () => {
+  const details = (
+    inTaxReport: boolean,
+    origin: HoldingDetails["originOf"] = () => ({ kind: "manual" }),
+  ): HoldingDetails => ({
+    originOf: origin,
+    inTaxReport: (key) =>
+      key === assetKey(row("e1", "IOL").holding) && inTaxReport,
+    actions: { setInTaxReport: done, update: done },
+  });
+
+  it("has no report switch and no origin without them", () => {
+    const html = render([held("e1", "IOL")]);
+    expect(html).not.toContain("Incluir en el reporte");
+    expect(html).not.toContain("Importada");
+  });
+
+  it("offers no report switch once the user holds none of it", () => {
+    const html = render([], { details: details(false) });
+    expect(html).not.toContain("Incluir en el reporte");
+  });
+
+  it("shows the asset's report switch with its choice", () => {
+    const html = render([held("e1", "IOL")], { details: details(false) });
+    expect(html).toContain("Incluir en el reporte</label>");
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="false"/);
+    expect(html).not.toContain("en el reporte, así que");
+  });
+
+  it("links an imported holding to the imports, and says nothing of a typed one", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance")], {
+      details: details(true, (id) =>
+        id === "e1"
+          ? { kind: "import", fileName: "iol.pdf", date: "2026-10-01" }
+          : { kind: "manual" },
+      ),
+    });
+    expect(html).toContain(">Importada de iol.pdf el 01/10/2026</a>");
+    expect(html.match(/Importada de/g)).toHaveLength(2);
+    expect(html).not.toContain("Cargada a mano");
+  });
+
+  it("weighs only the accounts that still hold it", () => {
+    const excluded = (id: string) => ({
+      id,
+      institution: "IOL",
+      includeInTaxReport: id === "a-e2",
+      portfolio: { id: "p1", name: "Principal", archived: false },
+    });
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [excluded("a-e1"), excluded("a-e2")],
+    });
+    expect(html).toContain("no se incluye en el reporte");
+  });
+
+  const outOfReport = (id: string, institution: string) => ({
+    id,
+    institution,
+    includeInTaxReport: false,
+    portfolio: { id: "p1", name: "Principal", archived: false },
+  });
+
+  it("names the one account holding it that leaves it out of the report", () => {
+    const html = render([held("e1", "IOL")], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL")],
+    });
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+  });
+
+  it("names the one account when it holds two of the asset's holdings", () => {
+    const inIol = (id: string, portfolio: string): InstrumentHolding => {
+      const each = held(id, "IOL");
+      return {
+        ...each,
+        row: {
+          ...each.row,
+          account: { id: "a-iol", institution: "IOL" },
+          portfolio: { id: portfolio, name: portfolio },
+        },
+      };
+    };
+    const html = render(
+      [
+        inIol("e1", "Principal"),
+        inIol("e2", "Largo"),
+        held("e3", "Binance", true),
+      ],
+      {
+        details: details(true),
+        accounts: [outOfReport("a-iol", "IOL"), outOfReport("a-e3", "Binance")],
+      },
+    );
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("donde lo tenés no se incluyen");
+  });
+
+  it("says the accounts leave it out when two accounts share an institution", () => {
+    const html = render([held("e1", "IOL"), held("e2", "IOL")], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "IOL")],
+    });
+    expect(html).toContain(
+      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("La cuenta <a");
+  });
+
+  it("says nothing of the accounts while one holding it is in the report", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance")], {
+      details: details(true),
+      accounts: [
+        outOfReport("a-e1", "IOL"),
+        { ...outOfReport("a-e2", "Binance"), includeInTaxReport: true },
+      ],
+    });
+    expect(html).not.toContain("en el reporte, así que");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
+
+  it("names the one open holding's account, leaving out a sold holding's", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "Binance")],
+    });
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("donde lo tenés");
+  });
+
+  it("keeps the note while only a sold holding's account is in the report", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [
+        outOfReport("a-e1", "IOL"),
+        { ...outOfReport("a-e2", "Binance"), includeInTaxReport: true },
+      ],
+    });
+    expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte',
+    );
+  });
+
+  it("adds no note once every holding of it is sold", () => {
+    const html = render([held("e1", "IOL", true)], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL")],
+    });
+    expect(html).toContain("Incluir en el reporte");
+    expect(html).not.toContain("no se incluye en el reporte");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
+
+  it("says the accounts holding it leave it out of the report", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance")], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "Binance")],
+    });
+    expect(html).toContain(
+      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+    );
   });
 });

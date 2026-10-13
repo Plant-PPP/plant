@@ -1,4 +1,4 @@
-import type { Position } from "@plant/core";
+import type { Holding, Position } from "@plant/core";
 import { sumOrNull } from "@plant/shared";
 
 import { costTotals, overExactSum, type CostTotals } from "./cost-totals";
@@ -11,6 +11,16 @@ export type AssetsRow<R extends HoldingRow> =
   | { kind: "instrument"; id: string; symbol: string; rows: [R, ...R[]] }
   | { kind: "holding"; id: string; row: R };
 
+// What the user sees as one asset: an instrument, across every holding of
+// it, or any other holding on its own. Only `assetKey` makes one, so a
+// holding's id never passes for an instrument's key.
+export type AssetKey = string & { readonly __brand: "AssetKey" };
+
+export const assetKey = (holding: Holding): AssetKey =>
+  (holding.asset_class === "instrument"
+    ? `instrument:${holding.instrument_symbol}`
+    : holding.id) as AssetKey;
+
 // Instrument holdings merged by symbol, in the order each symbol first
 // appears; every other holding on its own.
 export function byInstrument<R extends HoldingRow>(
@@ -20,7 +30,7 @@ export function byInstrument<R extends HoldingRow>(
   const bySymbol = new Map<string, R[]>();
   for (const row of rows) {
     if (row.holding.asset_class !== "instrument") {
-      merged.push({ kind: "holding", id: row.id, row });
+      merged.push({ kind: "holding", id: assetKey(row.holding), row });
       continue;
     }
     const symbol = row.holding.instrument_symbol;
@@ -33,7 +43,7 @@ export function byInstrument<R extends HoldingRow>(
     bySymbol.set(symbol, started);
     merged.push({
       kind: "instrument",
-      id: `instrument:${symbol}`,
+      id: assetKey(row.holding),
       symbol,
       rows: started,
     });
@@ -110,7 +120,10 @@ export function rowFigures<R extends HoldingRow>(
   };
 }
 
-const distinct = <T extends { id: string }>(items: readonly T[]): T[] => {
+// Each item once, by id, in the order first seen.
+export const distinct = <T extends { id: string }>(
+  items: readonly T[],
+): T[] => {
   const seen = new Set<string>();
   return items.filter((item) =>
     seen.has(item.id) ? false : (seen.add(item.id), true),

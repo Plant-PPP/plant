@@ -1,6 +1,6 @@
 "use client";
 
-import { type QuoteSnapshot, withManualPrices } from "@plant/core";
+import type { QuoteSnapshot } from "@plant/core";
 import {
   createContext,
   type ReactNode,
@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import type { AssistantActions } from "@/components/assistant/assistant-page";
+import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ReviewActions } from "@/components/imports/import-review";
@@ -28,10 +29,13 @@ import {
   deleteOperation,
   deletePrice,
   initialState,
+  pricedSnapshotOf,
   type PrototypeState,
+  setInTaxReport,
   setPrice,
   type Write,
   updateHolding,
+  updateHoldingDetails,
   writeOperation,
 } from "./prototype-store";
 import * as accounts from "./prototype-accounts-store";
@@ -50,6 +54,7 @@ type Prototype = {
   snapshot: QuoteSnapshot;
   manual: ReadonlyMap<string, { price: string; date: string }>;
   fed: (symbol: string) => boolean;
+  details: HoldingDetails;
   actions: {
     holdings: HoldingActions;
     movements: MovementActions;
@@ -174,7 +179,7 @@ export function PrototypeProvider({
                   s,
                   question,
                   unit,
-                  withManualPrices(snapshot, s.manualPrices).snapshot,
+                  pricedSnapshotOf(s, snapshot).snapshot,
                 ),
               }),
               result: null,
@@ -236,7 +241,17 @@ export function PrototypeProvider({
       delete: (id) => write((s) => accounts.deletePortfolio(s, id)),
     },
   };
-  const priced = withManualPrices(snapshot, state.manualPrices);
+  const details: HoldingDetails = {
+    originOf: (id) =>
+      state.holdings.find((each) => each.holding.id === id)?.origin,
+    inTaxReport: (key) => !state.outOfTaxReport.has(key),
+    actions: {
+      setInTaxReport: (key, on) => write((s) => setInTaxReport(s, key, on)),
+      update: (id, input, inTaxReport) =>
+        write((s) => updateHoldingDetails(s, id, input, inTaxReport)),
+    },
+  };
+  const priced = pricedSnapshotOf(state, snapshot);
   // Whether the feeds priced a symbol today, before any manual price.
   const fed = (symbol: string) => snapshot.prices[symbol] !== undefined;
   return (
@@ -252,6 +267,7 @@ export function PrototypeProvider({
           ]),
         ),
         fed,
+        details,
         actions,
       }}
     >

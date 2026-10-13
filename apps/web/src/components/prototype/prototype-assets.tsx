@@ -26,7 +26,8 @@ export const PROTOTYPE_HREFS: ScopeHrefs = {
 
 // Activos over the prototype's store, with movements and the sales tab.
 export function PrototypeAssets({ params }: { params: KeysetParams }) {
-  const { state, latest, snapshot, manual, fed, actions } = usePrototype();
+  const { state, latest, snapshot, manual, fed, details, actions } =
+    usePrototype();
   const names = instrumentNames(state.instruments);
   const view = holdingsView(state);
   const years = yearsOf(state);
@@ -83,6 +84,7 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       movements={movements}
       movementActions={actions.movements}
       prices={{ manual, fed, actions: actions.prices }}
+      details={details}
       hrefs={PROTOTYPE_HREFS}
     />
   );

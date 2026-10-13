@@ -34,7 +34,6 @@ import {
   CURRENCY_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
-import { instrumentLabel } from "@/lib/holdings/holding-name";
 import { formatQuotedPrice, priceBasisLabel } from "@/lib/holdings/price-input";
 import type { MovementsInput } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
@@ -55,6 +54,7 @@ import {
   withKind,
   withShownPrice,
 } from "./movement-fields";
+import { InstrumentPicker } from "./instrument-picker";
 
 const DIRECTION_LABELS = { in: "Entran unidades", out: "Salen unidades" };
 const YIELD_LABELS = { in: "Ganancia", out: "Pérdida" };
@@ -307,7 +307,7 @@ export function MovementDialog({
           {adjustment &&
             textField("date", "Fecha", { type: "date", max: today })}
           {!fixed && (
-            <div className="grid grid-cols-2 gap-3">
+            <>
               {select(
                 "account",
                 "Cuenta",
@@ -315,26 +315,34 @@ export function MovementDialog({
                 accounts.map((each) => [each.id, each.institution]),
                 (value) => set("accountId")(value),
               )}
-              {select(
-                "instrument",
-                "Instrumento",
-                fields.instrument,
-                instruments.map((each) => [
-                  each.symbol,
-                  instrumentLabel(each.symbol, each.name),
-                ]),
-                (value) => {
-                  const instrument = instruments.find(
-                    (each) => each.symbol === value,
-                  );
-                  setFields((current) => ({
-                    ...current,
-                    instrument: value,
-                    currency: instrument?.currency ?? current.currency,
-                  }));
-                },
-              )}
-            </div>
+              <div className="grid gap-2">
+                <Label
+                  id={`${fieldId("instrument")}-label`}
+                  htmlFor={fieldId("instrument")}
+                >
+                  Instrumento
+                </Label>
+                <InstrumentPicker
+                  id={fieldId("instrument")}
+                  {...control("instrument")}
+                  autoFocus={firstField === "instrument"}
+                  labelId={`${fieldId("instrument")}-label`}
+                  instruments={instruments}
+                  value={fields.instrument}
+                  onChange={pick("instrument", (value) => {
+                    const instrument = instruments.find(
+                      (each) => each.symbol === value,
+                    );
+                    setFields((current) => ({
+                      ...current,
+                      instrument: value,
+                      currency: instrument?.currency ?? current.currency,
+                    }));
+                  })}
+                  placeholder="Elegí un instrumento"
+                />
+              </div>
+            </>
           )}
           <div className="grid grid-cols-2 gap-3">
             {select(
