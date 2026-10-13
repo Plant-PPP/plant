@@ -69,8 +69,9 @@ export type ImportItem = {
   createdOn: string;
 };
 
-// The most imports a month on the free plan.
-export const IMPORTS_PER_MONTH = 10;
+// The most imports a calendar month in Buenos Aires on the beta plan; the
+// database refuses the next one (private.check_import_quota).
+export const IMPORTS_PER_MONTH = 20;
 
 // What a row does to the account: a holding it does not have, more or fewer
 // units than it has, the same, or nothing (discarded).

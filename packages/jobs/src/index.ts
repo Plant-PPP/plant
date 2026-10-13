@@ -2,12 +2,21 @@ import type { ServeHandlerOptions } from "inngest";
 
 import { DEV_SERVER_MODE, inngest } from "./client";
 import {
+  deleteExpiredFiles,
+  type FileDeletionJobDeps,
+} from "./functions/delete-expired-files";
+import {
   type ImportJobDeps,
   importDocument,
 } from "./functions/import-document";
 import { ping } from "./functions/ping";
 import { type QuoteJobDeps, refreshQuotes } from "./functions/refresh-quotes";
 
+export type {
+  DueFile,
+  FileDeletionJobDeps,
+  FileDeletionStorePort,
+} from "./functions/delete-expired-files";
 export type {
   ImportJobDeps,
   ImportStorePort,
@@ -24,12 +33,13 @@ const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
 // Vercel integration are signed, so they keep working. `satisfies` makes a
 // misspelled option a type error instead of a silent default.
 //
-// refresh-quotes and import-document register only in dev-server mode, and
+// refresh-quotes, import-document and delete-expired-files register only in dev-server mode, and
 // only then are their dependencies built. Dev mode checks no signature, so its
 // registered URL is the loopback `next dev` binds, never the request's Host.
 export function createServeOptions(opts: {
   quotes?: () => QuoteJobDeps;
   imports?: () => ImportJobDeps;
+  files?: () => FileDeletionJobDeps;
 }) {
   return {
     client: inngest,
@@ -38,6 +48,7 @@ export function createServeOptions(opts: {
           ping,
           ...(opts.quotes ? [refreshQuotes(opts.quotes())] : []),
           ...(opts.imports ? [importDocument(opts.imports())] : []),
+          ...(opts.files ? [deleteExpiredFiles(opts.files())] : []),
         ]
       : [ping],
     enableUnauthedSync: false,

@@ -11,7 +11,12 @@ jest.mock("@plant/jobs", () => ({
   inngestJobRunner: () => ({ startImport }),
 }));
 
-type Answer = { data?: unknown; error?: unknown; status: number };
+type Answer = {
+  data?: unknown;
+  error?: unknown;
+  status: number;
+  count?: number;
+};
 const answers: Record<string, jest.Mock<Answer, [string]>> = {};
 const writes: { table: string; verb: string; body?: unknown }[] = [];
 const storage = {
@@ -37,6 +42,7 @@ jest.mock("@/lib/supabase/server", () => ({
           return builder;
         },
         eq: () => builder,
+        gte: () => builder,
         is: () => builder,
         order: () => builder,
         limit: () => builder,
@@ -58,6 +64,7 @@ import { createHash } from "node:crypto";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { CONSENT_VERSION } from "@/lib/onboarding/steps";
 
+import { IMPORTS_PER_MONTH } from "./review";
 import { acceptTerms, finishUpload, startUpload } from "./write";
 
 const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n");
@@ -86,11 +93,11 @@ beforeEach(() => {
       ? { status: 201, data: [{ id: "d1" }], error: null }
       : { status: 204, error: null },
   );
-  answers.imports = jest.fn<Answer, [string]>(() => ({
-    status: 201,
-    data: [{ id: "i1" }],
-    error: null,
-  }));
+  answers.imports = jest.fn<Answer, [string]>((verb) =>
+    verb === "insert"
+      ? { status: 201, data: [{ id: "i1" }], error: null }
+      : { status: 200, count: 0, error: null },
+  );
   storage.createSignedUploadUrl
     .mockReset()
     .mockResolvedValue({ data: { token: "t1" }, error: null });
@@ -167,6 +174,17 @@ describe("startUpload", () => {
       error: null,
     });
     expect(await start()).toEqual({ ok: false, code: "not_found" });
+  });
+
+  it("refuses once the month's imports are used up", async () => {
+    answers.imports!.mockReturnValue({
+      status: 200,
+      count: IMPORTS_PER_MONTH,
+      error: null,
+    });
+    expect(await start()).toEqual({ ok: false, code: "quota" });
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
+    expect(lines.at(-1)).toMatchObject({ "plant.outcome": "quota" });
   });
 
   it("logs a failure to sign the URL", async () => {
@@ -259,6 +277,18 @@ describe("finishUpload", () => {
       "uploaded_documents:delete",
     ]);
     expect(storage.remove).toHaveBeenCalledWith([PATH]);
+  });
+
+  it("takes back the file when the database finds the month used up", async () => {
+    answers.imports!.mockReturnValue({ status: 429, error: { code: "PT429" } });
+    expect(await finish()).toEqual({ ok: false, code: "quota" });
+    expect(writes.map(({ table, verb }) => `${table}:${verb}`)).toEqual([
+      "uploaded_documents:insert",
+      "imports:insert",
+      "uploaded_documents:delete",
+    ]);
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(lines.at(-1)).toMatchObject({ "plant.outcome": "quota" });
   });
 });
 

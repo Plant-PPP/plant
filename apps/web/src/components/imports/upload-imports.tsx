@@ -24,6 +24,7 @@ export const UPLOAD_MESSAGES: Record<UploadCode, string> = {
   terms: "aceptá los términos antes de subir archivos.",
   not_found: "esa cuenta ya no está disponible.",
   duplicate: "ya lo subiste a esta cuenta.",
+  quota: "ya usaste las cargas de este mes.",
   failed: "no pudimos subirlo. Probá de nuevo.",
 };
 

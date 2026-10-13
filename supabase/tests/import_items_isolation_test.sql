@@ -86,8 +86,10 @@ SELECT set_eq(
         'imports.status:SELECT', 'imports.status:UPDATE', 'imports.failure:UPDATE',
         'imports.document_date:UPDATE',
         'uploaded_documents.id:SELECT', 'uploaded_documents.user_id:SELECT',
-        'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT'],
-  'the job reads an import and its file, moves the import along and writes its draft, nothing more'
+        'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT',
+        'uploaded_documents.delete_after:SELECT', 'uploaded_documents.file_deleted_at:SELECT',
+        'uploaded_documents.file_deleted_at:UPDATE'],
+  'the jobs read an import and its file, move the import along, write its draft and mark a file deleted, nothing more'
 );
 
 SELECT is_empty(

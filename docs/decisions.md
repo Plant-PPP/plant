@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · The import quota and deleting uploaded files (PLA-42, PLA-43)
+
+- **20 imports a calendar month in Buenos Aires** for every user while everyone is on the beta plan. The database enforces it with a trigger on `imports`; the upload action checks it first so a user over it does not send the file.
+- **A file is deleted 30 days after its upload** by `delete-expired-files`, once a day. The row, its import and the draft stay, with `file_deleted_at` set, and each deletion writes an audit row.
+- **No index on the due files yet.** The quota bounds the table, and the job reads it once a day.
+- **The deletion job runs only under `next dev`**, like the other jobs, until PLA-73.
+
 ## 2026-10-13 · Reviewing and confirming an import (PLA-41, PLA-80)
 
 - **The review runs the prototype's code.** `writeImport` (`lib/imports/confirm.ts`) turns the reviewed rows into one operation per instrument that changes, against what the account held at the document's date; the prototype and the server both call it.
@@ -25,7 +32,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The file's type is the one its name says, checked against its first bytes**, not what the browser reports: the browser sends it as that type, and the bucket also refuses any other.
 - **A document is deleted, not archived.** Deleting it deletes its import; the server does it when an import fails to start, so a file never blocks the same file again.
 - **The terms are accepted on Cargar** as three consents (terms, privacy and AI providers) of `CONSENT_VERSION`; an upload waits for them.
-- **Cargar shows the month's uploads against `IMPORTS_PER_MONTH` but does not enforce it yet.** The quota arrives with PLA-42.
+- **Cargar shows the month's uploads against `IMPORTS_PER_MONTH`.** PLA-42 enforces it.
 
 ## 2026-10-13 · The real Resumen and closes (PLA-30)
 
