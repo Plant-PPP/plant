@@ -1,5 +1,7 @@
 export const REQUEST_ID_HEADER = "x-request-id";
 export const REQUEST_ID_FIELD = "plant.request_id";
+// The meta tag that hands the page's request id to its own error reports.
+export const REQUEST_ID_META = "plant-request-id";
 
 export function createRequestId(): string {
   return crypto.randomUUID();

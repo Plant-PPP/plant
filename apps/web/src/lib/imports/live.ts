@@ -1,6 +1,8 @@
 import type { Database } from "@plant/shared";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 
+import { reportClientError } from "@/lib/reports/client";
+
 let subscriptions = 0;
 
 // Calls onChange when one of the user's imports is added or changes, and each
@@ -46,6 +48,10 @@ export function watchImports(
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") changed();
+        // realtime-js keeps rejoining; the server hears of each failure.
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          reportClientError({ kind: "realtime", type: status });
+        }
       });
   };
 
