@@ -136,9 +136,11 @@ export type NumberConvention = "es-AR" | "US";
 export function numberConventionOf(
   cells: readonly SheetCell[],
 ): NumberConvention | null {
+  // Only cells written as a number: a note in the column says nothing.
   const texts = cells
     .filter((cell): cell is string => typeof cell === "string")
-    .map(numberText);
+    .map(numberText)
+    .filter((text) => /^-?[\d.,]+$/.test(text));
   const writes = (patterns: readonly RegExp[]) =>
     texts.some((text) => patterns.some((pattern) => pattern.test(text)));
   if (writes(ES_AR_ONLY)) return "es-AR";
@@ -330,7 +332,11 @@ export function sheetToDraft(
       page: null,
     });
     if (parsed.success) rows.push(parsed.data);
-    else skippedRows += 1;
+    // A row with a quantity that does not read is a holding left out; one
+    // without, a section's title or a total.
+    else if (String(cellOf(row, mapping.quantity)).trim() !== "") {
+      skippedRows += 1;
+    }
   }
   return { draft: { documentDate, rows, totals: [] }, skippedRows };
 }

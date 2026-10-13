@@ -302,8 +302,8 @@ describe("sheetToDraft", () => {
     ],
   };
 
-  it("counts the rows that make no holding", () => {
-    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(4);
+  it("counts the rows with a quantity that make no holding", () => {
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(3);
   });
 
   it("reads a sheet in US formats", () => {
@@ -447,4 +447,26 @@ describe("sheetToDraft", () => {
     expect(rows).toHaveLength(DRAFT_ROW_LIMIT);
     expect(rows.at(-1)).toMatchObject({ symbol: "S499", quantity: "500" });
   });
+});
+
+it("counts as skipped only rows with a quantity, not titles or totals", () => {
+  const { skippedRows, draft } = sheetToDraft(
+    {
+      headers: ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+      rows: [
+        ["Acciones", "", "", "", ""],
+        ["GGAL", "10", "1.500,50", "ARS", ""],
+        ["Total", "", "", "", ""],
+        ["YPFD", "abc", "1", "ARS", ""],
+      ],
+    },
+    mapping,
+    "2026-10-13",
+  );
+  expect(draft.rows).toHaveLength(1);
+  expect(skippedRows).toBe(1);
+});
+
+it("takes no convention from a note in a figure column", () => {
+  expect(numberConventionOf(["Precios al 10/14, 12", "1,234.56"])).toBe("US");
 });
