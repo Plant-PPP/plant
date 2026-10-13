@@ -1,17 +1,18 @@
 "use client";
 
-import { referenceUnit, valueLiabilities } from "@plant/core";
+import { valueLiabilities } from "@plant/core";
 
 import { DebtsSetup } from "@/components/debts/debts-setup";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { usePrototype } from "./prototype-provider";
+import { homeUnit } from "./prototype-store";
 
 // Deudas over the prototype's store.
 export function PrototypeDebts({ params }: { params: KeysetParams }) {
   const { state, snapshot, actions } = usePrototype();
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = homeUnit(state);
   const unit =
     parseAssetsParams(params, { portfolioIds: [], tabs: TABS, salesYears: [] })
       .unit ?? reference;

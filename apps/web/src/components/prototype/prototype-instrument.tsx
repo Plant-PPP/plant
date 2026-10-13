@@ -1,6 +1,6 @@
 "use client";
 
-import { priceSource, referenceUnit } from "@plant/core";
+import { priceSource } from "@plant/core";
 import { notFound } from "next/navigation";
 import { useState } from "react";
 
@@ -12,7 +12,7 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { prototypeMovementsInput } from "./prototype-movements";
 import { usePrototype } from "./prototype-provider";
-import { instrumentHoldings, positionsOf } from "./prototype-store";
+import { homeUnit, instrumentHoldings, positionsOf } from "./prototype-store";
 
 // An instrument's history over the prototype's store. A symbol the user holds
 // nothing of has no page; one whose last holding they delete here keeps it,
@@ -26,7 +26,7 @@ export function PrototypeInstrument({
 }) {
   const { state, latest, snapshot, manual, details, actions } = usePrototype();
   const instrument = state.instruments.find((each) => each.symbol === symbol);
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = homeUnit(state);
   const { unit: chosen } = parseAssetsParams(params, {
     portfolioIds: [],
     tabs: TABS,

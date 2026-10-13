@@ -20,7 +20,7 @@ The browser holds the session cookie and sends the factor id and the TOTP code; 
 
 ## Where it is enforced
 
-- **Server action:** `app/(app)/settings/actions.ts` (non-string id refused before the gate; the gate), `lib/auth/mfa-disable.ts` (fresh code, same user, own factor, verified factor last).
+- **Server action:** `app/(app)/(data)/settings/actions.ts` (non-string id refused before the gate; the gate), `lib/auth/mfa-disable.ts` (fresh code, same user, own factor, verified factor last).
 - **Rules:** `lib/auth/mfa-rules.ts` (`sensitiveRequirement`, `totpIsFresh`, one `amr` walk).
 - **Lint:** only `mfa-disable.ts` may unenroll on the server, and it may hold no server action; enroll, challenge and verify stay in `mfa-browser.ts`.
 - **Auth:** removing a verified factor needs `aal2`; verify is rate-limited per caller IP.

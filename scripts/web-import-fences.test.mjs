@@ -247,7 +247,7 @@ flagged.push(
     'const m = "@/lib/auth/session-claims-unchecked";\nexport const f = () => import(m);',
   ],
   [
-    "src/app/(app)/settings/actions.ts",
+    "src/app/(app)/(data)/settings/actions.ts",
     "export const f = (s) => s.auth.mfa.verify({ factorId: 'f', code: '1' });",
   ],
   [
@@ -433,7 +433,7 @@ flagged.push(
     'export async function f() {\n  "use server";\n}',
   ],
   [
-    "src/app/(app)/settings/actions.ts",
+    "src/app/(app)/(data)/settings/actions.ts",
     "export const f = (s) => s.auth.mfa.unenroll({ factorId: 'f' });",
   ],
 );
@@ -578,10 +578,6 @@ flagged.push(
     'import { buildFixtures } from "@/lib/prototype/fixtures";',
   ],
   // Pages outside the data group never show the prototype.
-  [
-    "src/app/(app)/settings/page.tsx",
-    'import { PrototypeRoot } from "@/components/prototype/prototype-root";',
-  ],
   [
     "src/app/(app)/layout.tsx",
     'import { PrototypeRoot } from "@/components/prototype/prototype-root";',

@@ -1,6 +1,5 @@
 "use client";
 
-import { referenceUnit } from "@plant/core";
 import { notFound } from "next/navigation";
 
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
@@ -13,7 +12,12 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { usePrototype } from "./prototype-provider";
 import { prototypeMovementsInput } from "./prototype-movements";
-import { allRows, holdingsView, positionsOf } from "./prototype-store";
+import {
+  allRows,
+  holdingsView,
+  homeUnit,
+  positionsOf,
+} from "./prototype-store";
 
 // An account's or portfolio's page over the prototype's store.
 export function PrototypeScope({
@@ -41,7 +45,7 @@ export function PrototypeScope({
     kind === "account" ? row.account.id === id : row.portfolio.id === id;
   const rows = holdingsView(state).active.filter(inScope);
   const open = new Set(rows.map((row) => row.id));
-  const reference = referenceUnit(state.referenceDollar);
+  const reference = homeUnit(state);
   const { unit: chosen } = parseAssetsParams(params, {
     portfolioIds: [],
     tabs: TABS,

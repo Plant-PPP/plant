@@ -97,6 +97,8 @@ import type { Fixtures } from "@/lib/prototype/fixtures";
 export type PrototypeState = {
   today: string;
   referenceDollar: ReferenceDollar;
+  // The unit the data pages open in; null for the reference dollar's.
+  preferredUnit: Denominator | null;
   instruments: InstrumentRow[];
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
@@ -130,6 +132,23 @@ export type PrototypeState = {
   askedOn: string[];
 };
 
+// The unit a data page shows with no ?unit=: the user's choice, else their
+// reference dollar's.
+export const homeUnit = (state: PrototypeState): Denominator =>
+  state.preferredUnit ?? referenceUnit(state.referenceDollar);
+
+// The user's view preferences: the reference dollar and the unit the pages
+// open in.
+export function setPreferences(
+  state: PrototypeState,
+  preferences: Pick<PrototypeState, "referenceDollar" | "preferredUnit">,
+): Write<{ ok: true; id: string }> {
+  return {
+    state: { ...state, ...preferences },
+    result: { ok: true, id: "preferences" },
+  };
+}
+
 export type StoredHolding = {
   holding: Holding;
   accountId: string;
@@ -154,6 +173,7 @@ export function initialState(
   return {
     today,
     referenceDollar: fixtures.referenceDollar,
+    preferredUnit: null,
     instruments: fixtures.instruments,
     accounts: fixtures.accounts,
     portfolios: fixtures.portfolios,
