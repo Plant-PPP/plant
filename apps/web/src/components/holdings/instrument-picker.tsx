@@ -116,13 +116,14 @@ export function InstrumentPicker({
     activeSymbol === undefined ? undefined : optionId(activeSymbol);
 
   const searchInput = useRef<HTMLInputElement>(null);
-  // Whether the active option should scroll into view: on opening and on
-  // keys, never on hover, which would scroll the list under the pointer.
-  const followActive = useRef(false);
+  // How the active option scrolls into view: to the top on opening, as Radix
+  // may then shrink the list from the bottom; into view on keys and typing;
+  // never on hover, which would scroll the list under the pointer.
+  const followActive = useRef<ScrollLogicalPosition | null>(null);
 
   function openWith(next: boolean, search = "") {
     if (next) {
-      followActive.current = true;
+      followActive.current = "start";
       setQuery(search);
       setActive(
         Math.max(
@@ -146,7 +147,7 @@ export function InstrumentPicker({
     if (!action) return;
     event.preventDefault();
     if (action.kind === "move") {
-      followActive.current = true;
+      followActive.current = "nearest";
       setActive(action.active);
     }
     if (action.kind === "choose") choose(shown[action.index]!.symbol);
@@ -212,6 +213,7 @@ export function InstrumentPicker({
             autoComplete="off"
             value={query}
             onChange={(event) => {
+              followActive.current = "nearest";
               setQuery(event.target.value);
               setActive(0);
             }}
@@ -245,7 +247,9 @@ export function InstrumentPicker({
                   index === active
                     ? (option) => {
                         if (option && followActive.current) {
-                          option.scrollIntoView({ block: "nearest" });
+                          option.scrollIntoView({
+                            block: followActive.current,
+                          });
                         }
                       }
                     : undefined
@@ -253,7 +257,7 @@ export function InstrumentPicker({
                 // Keeps focus in the search while the click picks.
                 onMouseDown={(event) => event.preventDefault()}
                 onMouseMove={() => {
-                  followActive.current = false;
+                  followActive.current = null;
                   setActive(index);
                 }}
                 onClick={() => choose(each.symbol)}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Label } from "@/components/ui/label";
@@ -42,5 +43,35 @@ export function ReportSwitch({
         </p>
       )}
     </div>
+  );
+}
+
+// Why an asset's account choice leaves it out of the report anyway, linked to
+// Cuentas, where each account's own switch is: the one account by name, or
+// every account still holding it.
+export function ExcludedAccountsNote({
+  institutions,
+  subject,
+}: {
+  institutions: readonly string[];
+  // What is left out, as the sentence ends: "esta tenencia", "este activo".
+  subject: string;
+}) {
+  return institutions.length === 1 ? (
+    <>
+      La cuenta{" "}
+      <Link href="/accounts" className="underline">
+        {institutions[0]}
+      </Link>{" "}
+      no se incluye en el reporte, así que {subject} tampoco.
+    </>
+  ) : (
+    <>
+      Las{" "}
+      <Link href="/accounts" className="underline">
+        cuentas
+      </Link>{" "}
+      donde lo tenés no se incluyen en el reporte, así que {subject} tampoco.
+    </>
   );
 }

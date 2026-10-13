@@ -1,7 +1,6 @@
 "use client";
 
 import type { Currency } from "@plant/shared";
-import Link from "next/link";
 import type * as React from "react";
 import { useId, useState } from "react";
 
@@ -23,7 +22,10 @@ import {
   choose,
   useFieldAlert,
 } from "@/components/portfolio-setup/field-alert";
-import { ReportSwitch } from "@/components/portfolio-setup/report-switch";
+import {
+  ExcludedAccountsNote,
+  ReportSwitch,
+} from "@/components/portfolio-setup/report-switch";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import {
   type HoldingOrigin,
@@ -411,13 +413,10 @@ export function HoldingDialog({
               onCheckedChange={set("inTaxReport")}
               note={
                 !accountIncluded && (
-                  <>
-                    La cuenta{" "}
-                    <Link href="/accounts" className="underline">
-                      {row.account.institution}
-                    </Link>{" "}
-                    no se incluye en el reporte, así que esta tenencia tampoco.
-                  </>
+                  <ExcludedAccountsNote
+                    institutions={[row.account.institution]}
+                    subject="esta tenencia"
+                  />
                 )
               }
             />

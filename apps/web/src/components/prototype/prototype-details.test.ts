@@ -546,6 +546,7 @@ describe("where each operation came from, through its lifecycle", () => {
     const moved = edit(edited.state, operationId, msftIn([CORTO, "3"]));
     expect(moved.result).toEqual({ ok: true, id: operationId });
     expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+    expect(moved.state.operationOrigins.get(operationId)).toEqual(imported);
   });
 
   it("records nothing for an edit of a hand-typed operation", () => {
@@ -626,6 +627,7 @@ describe("where each operation came from, through its lifecycle", () => {
     const moved = edit(removed.state, operationId, msftIn([CORTO, "1"]));
     expect(moved.result).toEqual({ ok: true, id: operationId });
     expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+    expect(moved.state.operationOrigins.get(operationId)).toEqual(imported);
   });
 
   it("leaves no operation, and no origin, once its only holding is deleted", () => {

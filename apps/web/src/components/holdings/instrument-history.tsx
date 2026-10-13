@@ -10,7 +10,10 @@ import { toast } from "sonner";
 import { dialogAnswer } from "@/components/portfolio-setup/answers";
 import type { ListChange } from "@/components/portfolio-setup/list-change";
 import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
-import { ReportSwitch } from "@/components/portfolio-setup/report-switch";
+import {
+  ExcludedAccountsNote,
+  ReportSwitch,
+} from "@/components/portfolio-setup/report-switch";
 import { useSetupCard } from "@/components/portfolio-setup/setup-card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
@@ -180,7 +183,6 @@ export function InstrumentHistory({
   const accountsExcluded =
     held.length > 0 &&
     held.every((each) => !accountInTaxReport(accounts, each.row.account.id));
-  const heldIn = new Set(held.map((each) => each.row.account.id));
 
   // The switch keeps focus; the answer is a toast, and a refusal puts it back.
   function setInTaxReport(on: boolean) {
@@ -353,25 +355,19 @@ export function InstrumentHistory({
                 pending={pending}
                 onCheckedChange={setInTaxReport}
                 note={
-                  accountsExcluded &&
-                  (heldIn.size === 1 ? (
-                    <>
-                      La cuenta{" "}
-                      <Link href="/accounts" className="underline">
-                        {held[0]!.row.account.institution}
-                      </Link>{" "}
-                      no se incluye en el reporte, así que este activo tampoco.
-                    </>
-                  ) : (
-                    <>
-                      Las{" "}
-                      <Link href="/accounts" className="underline">
-                        cuentas
-                      </Link>{" "}
-                      donde lo tenés no se incluyen en el reporte, así que este
-                      activo tampoco.
-                    </>
-                  ))
+                  accountsExcluded && (
+                    <ExcludedAccountsNote
+                      institutions={[
+                        ...new Map(
+                          held.map((each) => [
+                            each.row.account.id,
+                            each.row.account.institution,
+                          ]),
+                        ).values(),
+                      ]}
+                      subject="este activo"
+                    />
+                  )
                 }
               />
             </div>
