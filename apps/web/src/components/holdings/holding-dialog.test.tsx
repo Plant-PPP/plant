@@ -266,3 +266,19 @@ describe("the instrument picker on a create", () => {
     expect(tag).toMatch(/autofocus/i);
   });
 });
+
+it("links an archived account's alert to Cuentas, inside the alert", () => {
+  const html = render(
+    "create",
+    {},
+    WRITE_MESSAGES.holdings.source_connection_archived,
+  );
+  expect(html).toMatch(
+    /<p[^>]*role="alert"[^>]*>Esa cuenta está archivada\. Restaurala en Cuentas primero\. <a class="underline" href="\/accounts">Ir a Cuentas<\/a><\/p>/,
+  );
+});
+
+it("adds no link to an alert with nothing to go to", () => {
+  const html = render("create", {}, WRITE_MESSAGES.holdings.duplicate);
+  expect(html).not.toContain("Ir a Cuentas");
+});

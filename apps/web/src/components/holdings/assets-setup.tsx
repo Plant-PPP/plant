@@ -9,6 +9,7 @@ import Link from "next/link";
 
 import {
   dialogAnswer,
+  type LinksFor,
   type MessagesFor,
 } from "@/components/portfolio-setup/answers";
 import {
@@ -86,7 +87,7 @@ import {
   hasUnitPrice,
 } from "@/lib/holdings/valuation-view";
 import { PAGE_ROW_LIMIT, SALES_LIMIT } from "@/lib/portfolio-setup/limits";
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import { HOLDING_LINKS, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 import type {
   PortfolioRow,
   SourceConnectionRow,
@@ -323,12 +324,18 @@ export function AssetsSetup({
     row: HoldingRow,
     actionId: "archive" | "restore" | "delete",
     done: string,
+    links?: LinksFor<R>,
   ) {
-    card.rowAction(change, call, (result) => dialogAnswer(result, messages), {
-      done: `${done} ${named(row)}`,
-      rowId: row.id,
-      actionId,
-    });
+    card.rowAction(
+      change,
+      call,
+      (result) => dialogAnswer(result, messages, links),
+      {
+        done: `${done} ${named(row)}`,
+        rowId: row.id,
+        actionId,
+      },
+    );
   }
 
   function submit(
@@ -341,6 +348,7 @@ export function AssetsSetup({
   ): boolean {
     return card.dialogAction(change, call, MESSAGES, {
       done: `${done} ${named(row)}`,
+      links: HOLDING_LINKS,
       reopen: (error) =>
         setDialog({ ...dialog, initial: fields, initialError: error }),
     });
@@ -765,6 +773,7 @@ export function AssetsSetup({
               row,
               "restore",
               "Restauraste",
+              HOLDING_LINKS,
             ),
         },
       ],

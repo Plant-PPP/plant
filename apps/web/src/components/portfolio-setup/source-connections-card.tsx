@@ -9,6 +9,7 @@ import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
   deleteAccountDescription,
   deleteMessages,
+  toAssets,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -150,7 +151,10 @@ export function SourceConnectionsCard({
     card.rowAction(
       { list: "sourceConnections", change: { kind: "archive", id: row.id } },
       () => actions.archive(row.id),
-      (result) => rowAnswer(result, "archive", MESSAGES),
+      (result) =>
+        rowAnswer(result, "archive", MESSAGES, {
+          links: { source_connection_has_holdings: toAssets() },
+        }),
       {
         done: `Archivaste ${row.institution}`,
         rowId: row.id,

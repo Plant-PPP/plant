@@ -1,6 +1,7 @@
 "use client";
 
 import type { Currency } from "@plant/shared";
+import Link from "next/link";
 import type * as React from "react";
 import { useId, useState } from "react";
 
@@ -53,6 +54,7 @@ import {
   FIELDS_BY_CLASS,
   type HoldingFields,
   refusal,
+  refusalLink,
   refusedField,
   toInsert,
   toUpdate,
@@ -132,6 +134,7 @@ export function HoldingDialog({
       (text) => refusedField(mode, text),
       mode === "create" ? "account" : "amount",
     );
+  const link = alert && refusalLink(alert.text);
   const focus = useSavedFocus(returnFocusTo, false);
   const shown = new Set<string>(FIELDS_BY_CLASS[fields.assetClass]);
 
@@ -426,7 +429,19 @@ export function HoldingDialog({
             />
           )}
 
-          {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
+          {alert && (
+            <FormAlert id={alertId}>
+              {alert.text}
+              {link && (
+                <>
+                  {" "}
+                  <Link className="underline" href={link.href}>
+                    {link.label}
+                  </Link>
+                </>
+              )}
+            </FormAlert>
+          )}
         </div>
         <DialogFooter>
           <Button

@@ -1,4 +1,8 @@
-import { WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import {
+  TO_ACCOUNTS,
+  toAssets,
+  WRITE_MESSAGES,
+} from "@/lib/portfolio-setup/messages";
 import { rowAnswer, dialogAnswer } from "./answers";
 
 const ID = "22222222-2222-4222-8222-222222222222";
@@ -44,12 +48,9 @@ describe("rowAnswer", () => {
   });
 
   const inUse = (usedBy: string[]) =>
-    rowAnswer(
-      { ok: false, code: "portfolio_in_use" },
-      "archive",
-      PORTFOLIOS,
+    rowAnswer({ ok: false, code: "portfolio_in_use" }, "archive", PORTFOLIOS, {
       usedBy,
-    );
+    });
 
   test.each([
     [
@@ -114,5 +115,46 @@ describe("dialogAnswer", () => {
       kind: "alert",
       text: "Esa cartera está archivada. Restaurala en Cuentas primero.",
     });
+  });
+});
+
+describe("a refusal's link", () => {
+  const HOLDINGS = WRITE_MESSAGES.holdings;
+
+  it("rides the alert of a code that has one, and only that code", () => {
+    const links = { portfolio_archived: TO_ACCOUNTS };
+    expect(
+      dialogAnswer({ ok: false, code: "portfolio_archived" }, HOLDINGS, links),
+    ).toEqual({
+      kind: "alert",
+      text: HOLDINGS.portfolio_archived,
+      link: TO_ACCOUNTS,
+    });
+    expect(
+      dialogAnswer({ ok: false, code: "duplicate" }, HOLDINGS, links),
+    ).toEqual({ kind: "alert", text: HOLDINGS.duplicate });
+    expect(dialogAnswer("rejected", HOLDINGS, links)).toEqual({
+      kind: "alert",
+      text: HOLDINGS.failed,
+    });
+  });
+
+  it("points an archive refused for holdings to Activos", () => {
+    expect(
+      rowAnswer(
+        { ok: false, code: "portfolio_has_holdings" },
+        "archive",
+        WRITE_MESSAGES.portfolios,
+        { links: { portfolio_has_holdings: toAssets("p1") } },
+      ),
+    ).toEqual({
+      kind: "alert",
+      text: WRITE_MESSAGES.portfolios.portfolio_has_holdings,
+      link: { label: "Ir a Activos", href: "/assets?portfolio=p1" },
+    });
+  });
+
+  it("links to Activos unfiltered with no portfolio", () => {
+    expect(toAssets()).toEqual({ label: "Ir a Activos", href: "/assets" });
   });
 });

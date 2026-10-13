@@ -18,7 +18,12 @@ import type { AssetClass } from "@/lib/holdings/messages";
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
 import { firstRefused } from "@/components/portfolio-setup/refusal";
-import { invalidName, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
+import {
+  HOLDING_LINKS,
+  invalidName,
+  type NoticeLink,
+  WRITE_MESSAGES,
+} from "@/lib/portfolio-setup/messages";
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
 
 // The class columns a holding of each class fills; the rest are null.
@@ -242,6 +247,15 @@ export function refusal(error: z.ZodError): FieldAlert<DialogField> {
   if (!first) return { field: "maturesOn", text: MATURITY_MESSAGE };
   const missing = first.empty ? MISSING_DATE[first.field] : undefined;
   return { field: first.field, text: missing ?? FIELD_MESSAGES[first.field] };
+}
+
+// The page a refused write's alert points to, found by its text as the field
+// is.
+export function refusalLink(text: string): NoticeLink | undefined {
+  const code = (
+    Object.keys(HOLDING_LINKS) as (keyof typeof HOLDING_LINKS)[]
+  ).find((each) => MESSAGES[each] === text);
+  return code && HOLDING_LINKS[code];
 }
 
 // The field a refused write's alert is about; none for an alert about the
