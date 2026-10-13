@@ -12,11 +12,14 @@ export type AssetsRow<R extends HoldingRow> =
   | { kind: "holding"; id: string; row: R };
 
 // What the user sees as one asset: an instrument, across every holding of
-// it, or any other holding on its own.
-export const assetKey = (holding: Holding): string =>
-  holding.asset_class === "instrument"
+// it, or any other holding on its own. Only `assetKey` makes one, so a
+// holding's id never passes for an instrument's key.
+export type AssetKey = string & { readonly __brand: "AssetKey" };
+
+export const assetKey = (holding: Holding): AssetKey =>
+  (holding.asset_class === "instrument"
     ? `instrument:${holding.instrument_symbol}`
-    : holding.id;
+    : holding.id) as AssetKey;
 
 // Instrument holdings merged by symbol, in the order each symbol first
 // appears; every other holding on its own.

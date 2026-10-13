@@ -66,6 +66,7 @@ import {
   overExactSum,
 } from "@/lib/holdings/cost-totals";
 import {
+  type AssetKey,
   assetKey,
   type AssetsRow,
   byHolding,
@@ -182,9 +183,9 @@ export type ManualPrices = {
 // together, both or neither.
 export type HoldingDetails = {
   originOf: (holdingId: string) => HoldingOrigin | undefined;
-  inTaxReport: (assetKey: string) => boolean;
+  inTaxReport: (assetKey: AssetKey) => boolean;
   actions: {
-    setInTaxReport: (assetKey: string, on: boolean) => Promise<WriteResult>;
+    setInTaxReport: (assetKey: AssetKey, on: boolean) => Promise<WriteResult>;
     update: (
       id: string,
       input: unknown,
@@ -202,7 +203,11 @@ export const saveHoldingEdit = (
 ): Promise<WriteResult> => {
   const input = toUpdate(fields, row.portfolio.id);
   return details
-    ? details.actions.update(row.id, input, fields.inTaxReport ?? true)
+    ? details.actions.update(
+        row.id,
+        input,
+        fields.inTaxReport ?? details.inTaxReport(assetKey(row.holding)),
+      )
     : actions.update(row.id, input);
 };
 
@@ -1054,7 +1059,12 @@ export function AssetsSetup({
               }),
             }
           }
-          details={details && { origin: details.originOf(dialog.row.id) }}
+          details={
+            details && {
+              origin: details.originOf(dialog.row.id),
+              inTaxReport: details.inTaxReport(assetKey(dialog.row.holding)),
+            }
+          }
           initialError={dialog.initialError}
           onSubmit={(fields, chosen) => {
             const row = holdingRow(dialog.row.id, fields, chosen);

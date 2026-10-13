@@ -171,8 +171,10 @@ export function finishReading(
       discarded: false,
     });
   }
-  // The last row read with a digit missing.
-  const misread = truth.at(-2) ?? truth[0]!;
+  // The last priced row read with a digit missing, before the new one: a row
+  // with no price leaves the totals as printed.
+  const priced = truth.filter((row) => row.price !== null);
+  const misread = priced.at(-2) ?? priced[0] ?? truth[0]!;
   const rows = truth.map((row) =>
     row.id === misread.id && compareDecimals(row.quantity, "10") >= 0
       ? {

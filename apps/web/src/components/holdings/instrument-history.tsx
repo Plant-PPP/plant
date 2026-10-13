@@ -12,8 +12,6 @@ import type { ListChange } from "@/components/portfolio-setup/list-change";
 import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
 import { useSetupCard } from "@/components/portfolio-setup/setup-card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   DataTable,
   TruncatedText,
@@ -61,6 +59,7 @@ import {
 } from "./instrument-change";
 import { instrumentPreset, useMovementDialogs } from "./movement-dialogs";
 import { MovementsTable } from "./movements-table";
+import { ReportSwitch } from "./report-switch";
 import {
   AmountText,
   CALCULATING,
@@ -129,7 +128,6 @@ export function InstrumentHistory({
   movementActions: MovementActions;
   // A page that deletes holdings, each with its movements.
   actions: Pick<HoldingActions, "delete">;
-  // Each holding's origin and the asset's report choice.
   details?: HoldingDetails;
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
@@ -177,10 +175,11 @@ export function InstrumentHistory({
     .map((each) => movements.revisions.get(each.row.id) ?? 0)
     .join(".");
   const taxId = `${unitId}-tax`;
-  const taxNoteId = `${unitId}-tax-note`;
-  const accountsExcluded = shown.every(
-    (each) => !accountInTaxReport(accounts, each.row.account.id),
-  );
+  // Where it is still held: a sold holding's account does not hold it.
+  const held = shown.filter((each) => !each.closed);
+  const accountsExcluded =
+    held.length > 0 &&
+    held.every((each) => !accountInTaxReport(accounts, each.row.account.id));
 
   // The switch keeps focus; the answer is a toast, and a refusal puts it back.
   function setInTaxReport(on: boolean) {
@@ -192,7 +191,9 @@ export function InstrumentHistory({
       (answer) => {
         if (answer.kind === "done") {
           toast.success(
-            on ? "Lo incluiste en el reporte" : "Lo sacaste del reporte",
+            on
+              ? `Incluiste ${instrument.symbol} en el reporte`
+              : `Sacaste ${instrument.symbol} del reporte`,
           );
         } else if (answer.kind === "alert") toast.error(answer.text);
       },
@@ -344,25 +345,25 @@ export function InstrumentHistory({
       ) : (
         <>
           {page.inTaxReport !== null && (
-            <div className="grid gap-1">
-              <div className="flex items-center gap-3">
-                <Switch
-                  id={taxId}
-                  checked={page.inTaxReport}
-                  aria-disabled={pending || undefined}
-                  aria-describedby={accountsExcluded ? taxNoteId : undefined}
-                  onCheckedChange={(on) => {
-                    if (!pending) setInTaxReport(on);
-                  }}
-                />
-                <Label htmlFor={taxId}>Incluir en el reporte</Label>
-              </div>
-              {accountsExcluded && (
-                <p id={taxNoteId} className="text-xs text-muted-foreground">
-                  Las cuentas donde lo tenés no se incluyen en el reporte, así
-                  que este activo tampoco.
-                </p>
-              )}
+            <div className="max-w-sm">
+              <ReportSwitch
+                id={taxId}
+                checked={page.inTaxReport}
+                pending={pending}
+                onCheckedChange={setInTaxReport}
+                note={
+                  accountsExcluded && (
+                    <>
+                      Las{" "}
+                      <Link href="/accounts" className="underline">
+                        cuentas
+                      </Link>{" "}
+                      donde lo tenés no se incluyen en el reporte, así que este
+                      activo tampoco.
+                    </>
+                  )
+                }
+              />
             </div>
           )}
           <div

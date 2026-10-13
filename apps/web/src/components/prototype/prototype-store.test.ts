@@ -40,6 +40,11 @@ import {
   yearsOf,
 } from "./prototype-store";
 
+import type { AssetKey } from "@/lib/holdings/assets-rows";
+
+// An asset key as the store writes it.
+const asset = (key: string) => key as AssetKey;
+
 const TODAY = "2026-10-12";
 const fixtures = buildFixtures(TODAY);
 const state = initialState(fixtures, TODAY);
@@ -941,34 +946,42 @@ describe("origin and the report", () => {
   });
 
   it("leaves an asset out of the report and back in", () => {
-    const out = setInTaxReport(state, "instrument:AAPL", false);
-    expect(out.result).toEqual({ ok: true, id: "instrument:AAPL" });
-    expect(out.state.outOfTaxReport).toEqual(new Set(["instrument:AAPL"]));
-    const back = setInTaxReport(out.state, "instrument:AAPL", true);
+    const out = setInTaxReport(state, asset("instrument:AAPL"), false);
+    expect(out.result).toEqual({ ok: true, id: asset("instrument:AAPL") });
+    expect(out.state.outOfTaxReport).toEqual(
+      new Set([asset("instrument:AAPL")]),
+    );
+    const back = setInTaxReport(out.state, asset("instrument:AAPL"), true);
     expect(back.state.outOfTaxReport).toEqual(new Set());
   });
 
   it("takes the choice for an asset only held closed, and keys others by holding", () => {
-    expect(setInTaxReport(state, "instrument:TSLA", false).result.ok).toBe(
-      true,
-    );
     expect(
-      setInTaxReport(state, CASH, false).state.outOfTaxReport.has(CASH),
+      setInTaxReport(state, asset("instrument:TSLA"), false).result.ok,
+    ).toBe(true);
+    expect(
+      setInTaxReport(state, asset(CASH), false).state.outOfTaxReport.has(
+        asset(CASH),
+      ),
     ).toBe(true);
   });
 
   it("refuses an asset the user has no holding of", () => {
-    const refused = setInTaxReport(state, "instrument:MSFT", false);
+    const refused = setInTaxReport(state, asset("instrument:MSFT"), false);
     expect(refused.result).toEqual({ ok: false, code: "not_found" });
     expect(refused.state).toBe(state);
   });
 
   it("forgets the choice with the asset's last holding", () => {
-    const out = setInTaxReport(state, CASH, false).state;
-    expect(deleteHolding(out, CASH).state.outOfTaxReport.has(CASH)).toBe(false);
-    const aapl = setInTaxReport(state, "instrument:AAPL", false).state;
+    const out = setInTaxReport(state, asset(CASH), false).state;
+    expect(deleteHolding(out, CASH).state.outOfTaxReport.has(asset(CASH))).toBe(
+      false,
+    );
+    const aapl = setInTaxReport(state, asset("instrument:AAPL"), false).state;
     expect(
-      deleteHolding(aapl, AAPL).state.outOfTaxReport.has("instrument:AAPL"),
+      deleteHolding(aapl, AAPL).state.outOfTaxReport.has(
+        asset("instrument:AAPL"),
+      ),
     ).toBe(false);
   });
 
@@ -981,10 +994,12 @@ describe("origin and the report", () => {
     expect(eth).toHaveLength(2);
     // The ETH holding in Largo plazo only shares a purchase, no transfer.
     const largo = eth.find((row) => row.portfolio.id === LARGO)!;
-    const out = setInTaxReport(state, "instrument:ETH", false).state;
+    const out = setInTaxReport(state, asset("instrument:ETH"), false).state;
     const deleted = deleteHolding(out, largo.id);
     expect(deleted.result.ok).toBe(true);
-    expect(deleted.state.outOfTaxReport.has("instrument:ETH")).toBe(true);
+    expect(deleted.state.outOfTaxReport.has(asset("instrument:ETH"))).toBe(
+      true,
+    );
   });
 
   it("saves a holding's edit and its report choice together, or neither", () => {
@@ -997,7 +1012,7 @@ describe("origin and the report", () => {
     const edit = toUpdate({ ...fields, amount: "1" }, cash.portfolio.id);
     const saved = updateHoldingDetails(state, CASH, edit, false);
     expect(saved.result).toEqual({ ok: true, id: CASH });
-    expect(saved.state.outOfTaxReport.has(CASH)).toBe(true);
+    expect(saved.state.outOfTaxReport.has(asset(CASH))).toBe(true);
     expect(
       saved.state.holdings.find((each) => each.holding.id === CASH)?.holding
         .amount,

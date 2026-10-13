@@ -179,7 +179,8 @@ it("adjusts an instrument the portfolio sold out of back in", () => {
     holdingsView(confirmed.state).active.find(
       (row) => row.id === sold.holding.id,
     )?.holding.amount,
-  ).toBe("2"); // Opened again by the import, it keeps where it first came from.
+  ).toBe("2");
+  // Opened again by the import, it keeps where it first came from.
   expect(
     confirmed.state.holdings.find((each) => each.holding.id === sold.holding.id)
       ?.origin,

@@ -53,7 +53,7 @@ import {
 
 import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
-import { assetKey } from "@/lib/holdings/assets-rows";
+import { type AssetKey, assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingOrigin } from "@/lib/holdings/holding-name";
 import type {
   MovementLine,
@@ -112,7 +112,7 @@ export type PrototypeState = {
   quotes: StoredQuotes;
   manualPrices: readonly ManualPrice[];
   // The assets the user left out of the report, by `assetKey`.
-  outOfTaxReport: ReadonlySet<string>;
+  outOfTaxReport: ReadonlySet<AssetKey>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
   // Newest first.
@@ -694,8 +694,8 @@ export function movementsPage(
   };
 }
 
-// Today's quotes with the user's manual prices, as every page and the
-// assistant value them.
+// The feeds' quotes with the user's manual prices, as every page, the
+// assistant and a write's suggested price read them.
 export const pricedSnapshotOf = (
   state: PrototypeState,
   snapshot: QuoteSnapshot,
@@ -725,9 +725,9 @@ export function priceOn(
   state: PrototypeState,
   { symbol, currency, date }: QuoteQuery,
 ): string | null {
-  const quote = withManualPrices(
+  const quote = pricedSnapshotOf(
+    state,
     snapshotOn(state.quotes, date, { fxKinds: [], symbols: [symbol] }).snapshot,
-    state.manualPrices,
   ).snapshot.prices[symbol];
   return quote && quote.currency === currency ? quote.price : null;
 }
@@ -956,8 +956,8 @@ export const holdingIn = (
 // a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
 // amount). Every touched holding is admitted again, or nothing changes. A
-// holding it creates comes from `origin`; one sold to zero and opened again
-// keeps its own.
+// holding it creates comes from `origin`, or from the operation's own holding
+// when an edit moves it; one sold to zero and opened again keeps its own.
 export function writeOperation(
   state: PrototypeState,
   input: unknown,
@@ -996,6 +996,12 @@ export function writeOperation(
   if (replacing && !was)
     return refused(state, { ok: false, code: "not_found" });
   if (!replacing && was) return refused(state, { ok: false, code: "invalid" });
+  const createdFrom =
+    (was &&
+      state.holdings.find(
+        (each) => each.holding.id === was.parts[0]!.movement.holding_id,
+      )?.origin) ??
+    origin;
   // An edit keeps the operation's account and instrument, as its dialog does.
   if (
     was &&
@@ -1093,7 +1099,7 @@ export function writeOperation(
         next = createdHolding(next, account, instrument, portfolio, {
           id: holdingId,
           quantity: sizes[index]!,
-          origin,
+          origin: createdFrom,
         });
       }
       const own = touched.get(holdingId) ?? [
@@ -1275,7 +1281,7 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
 // makes it one the user has.
 export function setInTaxReport(
   state: PrototypeState,
-  key: string,
+  key: AssetKey,
   on: boolean,
 ): Write<WriteResult> {
   if (!state.holdings.some((each) => assetKey(each.holding) === key)) {

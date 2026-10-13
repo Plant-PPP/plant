@@ -1,6 +1,7 @@
 "use client";
 
 import type { Currency } from "@plant/shared";
+import Link from "next/link";
 import type * as React from "react";
 import { useId, useState } from "react";
 
@@ -9,7 +10,6 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -56,6 +56,7 @@ import {
 import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 import { ImportOrigin } from "./holding-cells";
+import { ReportSwitch } from "./report-switch";
 import { InstrumentPicker } from "./instrument-picker";
 
 // What the amount is, by class.
@@ -98,7 +99,8 @@ export function HoldingDialog({
 }: {
   mode: "create" | "edit";
   row?: HoldingRow;
-  details?: { origin: HoldingOrigin | undefined };
+  // The holding's origin and its asset's report choice as saved.
+  details?: { origin: HoldingOrigin | undefined; inTaxReport: boolean };
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
@@ -115,7 +117,6 @@ export function HoldingDialog({
   const fieldId = (field: DialogField | "assetClass") => `${id}-${field}`;
   const alertId = `${id}-alert`;
   const taxId = `${id}-tax`;
-  const taxNoteId = `${id}-tax-note`;
   const accountIncluded = !row || accountInTaxReport(accounts, row.account.id);
   const [fields, setFields] = useState(initial);
   // The portfolio follows the account's until the user picks one.
@@ -404,22 +405,25 @@ export function HoldingDialog({
             )}
 
           {mode === "edit" && details && row && (
-            <div className="grid gap-1">
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor={taxId}>Incluir en el reporte</Label>
-                <Switch
-                  id={taxId}
-                  checked={fields.inTaxReport ?? true}
-                  onCheckedChange={set("inTaxReport")}
-                  aria-describedby={accountIncluded ? undefined : taxNoteId}
-                />
-              </div>
-              {!accountIncluded && (
-                <p id={taxNoteId} className="text-xs text-muted-foreground">
-                  {`La cuenta ${row.account.institution} no se incluye en el reporte, así que esta tenencia tampoco.`}
-                </p>
-              )}
-            </div>
+            <ReportSwitch
+              id={taxId}
+              checked={fields.inTaxReport ?? details.inTaxReport}
+              onCheckedChange={set("inTaxReport")}
+              note={
+                !accountIncluded && (
+                  <>
+                    La cuenta{" "}
+                    <Link
+                      href={`/accounts/${row.account.id}`}
+                      className="underline"
+                    >
+                      {row.account.institution}
+                    </Link>{" "}
+                    no se incluye en el reporte, así que esta tenencia tampoco.
+                  </>
+                )
+              }
+            />
           )}
 
           {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}

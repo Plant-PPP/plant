@@ -38,7 +38,7 @@ function render(
   fields: Partial<HoldingFields> = {},
   initialError?: string,
   extra: {
-    details?: { origin: HoldingOrigin | undefined };
+    details?: { origin: HoldingOrigin | undefined; inTaxReport: boolean };
     accounts?: SourceConnectionRow[];
   } = {},
 ) {
@@ -164,7 +164,7 @@ describe("with details", () => {
 
   it("shows where a holding came from and its report switch", () => {
     const html = render("edit", { ...CASH, inTaxReport: false }, undefined, {
-      details: { origin: { kind: "manual" } },
+      details: { origin: { kind: "manual" }, inTaxReport: true },
     });
     expect(html).toContain("<dd>Cargada a mano</dd>");
     expect(labels(html)).toContain("Incluir en el reporte");
@@ -175,6 +175,7 @@ describe("with details", () => {
     const html = render("edit", CASH, undefined, {
       details: {
         origin: { kind: "import", fileName: "resumen.pdf", date: "2026-10-01" },
+        inTaxReport: true,
       },
     });
     expect(html).toContain(
@@ -182,13 +183,20 @@ describe("with details", () => {
     );
   });
 
+  it("starts the switch at the asset's saved choice", () => {
+    const html = render("edit", CASH, undefined, {
+      details: { origin: { kind: "manual" }, inTaxReport: false },
+    });
+    expect(html).toMatch(/<button[^>]*role="switch"[^>]*aria-checked="false"/);
+  });
+
   it("says the account's choice leaves the holding out", () => {
     const html = render("edit", CASH, undefined, {
-      details: { origin: { kind: "manual" } },
+      details: { origin: { kind: "manual" }, inTaxReport: true },
       accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
     });
     expect(html).toContain(
-      "La cuenta IOL no se incluye en el reporte, así que esta tenencia tampoco.",
+      '<a class="underline" href="/accounts/a1">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
     );
     expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
   });

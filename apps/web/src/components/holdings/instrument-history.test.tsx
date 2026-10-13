@@ -266,6 +266,20 @@ describe("with details", () => {
     expect(html).not.toContain("Cargada a mano");
   });
 
+  it("weighs only the accounts that still hold it", () => {
+    const excluded = (id: string) => ({
+      id,
+      institution: "IOL",
+      includeInTaxReport: id === "a-e2",
+      portfolio: { id: "p1", name: "Principal", archived: false },
+    });
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [excluded("a-e1"), excluded("a-e2")],
+    });
+    expect(html).toContain("no se incluyen en el reporte");
+  });
+
   it("says the accounts holding it leave it out of the report", () => {
     const html = render([held("e1", "IOL")], {
       details: details(true),
@@ -279,7 +293,7 @@ describe("with details", () => {
       ],
     });
     expect(html).toContain(
-      "Las cuentas donde lo tenés no se incluyen en el reporte, así que este activo tampoco.",
+      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
     );
   });
 });

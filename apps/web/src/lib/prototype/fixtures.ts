@@ -20,12 +20,11 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 
-// The prototype's made-up data, sized like most users' net worth: a dozen
-// holdings across CEDEARs, bonds, an FCI and crypto, some cash and one
-// apartment, with two
-// years of purchases, sales and dividends, the dollar rates and prices of every
-// day, and the manual prices of what the feeds do not price. Built from
-// `today`, so the same day gives the same data.
+// The prototype's made-up data, sized like most users' net worth: about
+// fifteen holdings across CEDEARs, bonds, an FCI and crypto, some cash and one
+// apartment, with two years of purchases, sales and dividends, the dollar
+// rates and prices of every day, and the manual prices of what the feeds do
+// not price. Built from `today`, so the same day gives the same data.
 export type Fixtures = {
   referenceDollar: ReferenceDollar;
   accounts: SourceConnectionRow[];

@@ -6,7 +6,7 @@ import { countOf } from "@/lib/format/text";
 import { type HoldingOrigin, originText } from "@/lib/holdings/holding-name";
 
 // An imported holding's origin, linked to the imports list: a confirmed
-// import's own review no longer opens.
+// import's review does not open.
 export function ImportOrigin({
   origin,
   className,
