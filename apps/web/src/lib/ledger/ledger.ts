@@ -644,7 +644,7 @@ export function movementsPage(
 // page, the assistant and a write's suggested price read them; with the date
 // of each manual price and rate taken.
 export function pricedSnapshotOf(
-  state: Ledger,
+  state: Pick<Ledger, "manualPrices" | "manualRates">,
   snapshot: QuoteSnapshot,
 ): ReturnType<typeof withManualPrices> & {
   rates: ReturnType<typeof withManualRates>["manual"];
@@ -679,7 +679,7 @@ export const refusedWrite = <S extends Ledger>(
 // snapshotAt values a day on its own, in any unit and from trades when nothing
 // quotes it; the two become one if a suggestion ever takes that fallback.
 export function priceOn(
-  state: Ledger,
+  state: Pick<Ledger, "quotes" | "manualPrices" | "manualRates">,
   { symbol, currency, date }: QuoteQuery,
 ): string | null {
   const quote = pricedSnapshotOf(

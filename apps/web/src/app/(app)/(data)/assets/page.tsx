@@ -13,7 +13,9 @@ import {
   deleteManualPrice,
   deleteOperation,
   loadMovements,
+  quoteOn,
   setManualPrice,
+  transferCost,
   updateOperation,
 } from "@/app/(app)/(data)/assets/movement-actions";
 import {
@@ -223,6 +225,8 @@ export default async function AssetsPage({
           }),
           years,
           loadMovements,
+          transferCost,
+          quoteOn,
         }}
         movementActions={{
           create: createOperation,

@@ -4,6 +4,8 @@ import {
   isDenominator,
   manualPriceSchema,
   type MovementCursor,
+  type ManualPrice,
+  QUOTE_CARRY_DAYS,
   type ReferenceDollar,
   UNIT_FX_KINDS,
 } from "@plant/core";
@@ -26,7 +28,13 @@ import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 
-import { deleteOperation, movementsPage, writeOperation } from "./ledger";
+import {
+  deleteOperation,
+  movementsPage,
+  priceOn,
+  suggestedTransferCost,
+  writeOperation,
+} from "./ledger";
 import { LedgerReadError, readLedger } from "./read";
 import { expectedRevisions, operationSymbols, rpcPartsOf } from "./rpc-parts";
 
@@ -37,6 +45,8 @@ export type LedgerAction =
   | "update_operation"
   | "delete_operation"
   | "load_movements"
+  | "suggest_transfer_cost"
+  | "quote_on"
   | "set_manual_price"
   | "delete_manual_price";
 
@@ -84,7 +94,7 @@ async function ledgerFor(client: Client, input: unknown) {
   const quotes =
     date.success && date.data.date <= today
       ? await createQuoteReader(client).read({
-          from: addDays(date.data.date, -7),
+          from: addDays(date.data.date, -QUOTE_CARRY_DAYS),
           to: date.data.date,
           fxKinds: [...UNIT_FX_KINDS],
           symbols: [],
@@ -237,6 +247,98 @@ export async function loadMovementsPage(
   } catch (error) {
     log("load_movements", { ...fields, outcome: "failed" }, error);
     return { ok: false, code: "failed" };
+  }
+}
+
+// What a transfer's units would carry if their cost were left to them,
+// worked out as the write would: null when it cannot be written.
+export async function suggestTransferCost(
+  query: unknown,
+): Promise<string | null> {
+  const claims = await getSessionClaims();
+  const fields = {
+    requestId: await currentRequestId(),
+    userId: claims.sub,
+    started: performance.now(),
+  };
+  const parsed = z
+    .object({ input: z.unknown(), operationId: z.uuid().nullable() })
+    .safeParse(query);
+  if (!parsed.success) {
+    log("suggest_transfer_cost", { ...fields, outcome: "invalid" });
+    return null;
+  }
+  try {
+    const client: Client = await createClient();
+    const { ledger, truncated } = await ledgerFor(client, parsed.data.input);
+    if (truncated) throw new LedgerReadError("movements", "truncated");
+    const cost = suggestedTransferCost(ledger, {
+      input: parsed.data.input,
+      operationId: parsed.data.operationId,
+    });
+    log("suggest_transfer_cost", { ...fields, outcome: "ok" });
+    return cost;
+  } catch (error) {
+    log("suggest_transfer_cost", { ...fields, outcome: "failed" }, error);
+    return null;
+  }
+}
+
+const quoteQuerySchema = z
+  .object({
+    symbol: z.string().regex(/^[A-Z0-9]{1,15}$/),
+    currency: z.enum(["ARS", "USD"]),
+    date: z.iso.date(),
+  })
+  .strict();
+
+// An instrument's price on a date in a currency, from the feeds or the
+// user's manual price: what a yield suggests as each unit's value.
+export async function quoteOnDate(query: unknown): Promise<string | null> {
+  const claims = await getSessionClaims();
+  const fields = {
+    requestId: await currentRequestId(),
+    userId: claims.sub,
+    started: performance.now(),
+  };
+  const parsed = quoteQuerySchema.safeParse(query);
+  if (!parsed.success || parsed.data.date > buenosAiresDate(new Date())) {
+    log("quote_on", { ...fields, outcome: "invalid" });
+    return null;
+  }
+  const { symbol, date } = parsed.data;
+  try {
+    const client: Client = await createClient();
+    const [quotes, manual] = await Promise.all([
+      createQuoteReader(client).read({
+        from: addDays(date, -QUOTE_CARRY_DAYS),
+        to: date,
+        fxKinds: [],
+        symbols: [symbol],
+      }),
+      client
+        .from("manual_prices")
+        .select("symbol, price_date, price:price::text, currency")
+        .eq("symbol", symbol)
+        .gte("price_date", addDays(date, -QUOTE_CARRY_DAYS))
+        .lte("price_date", date),
+    ]);
+    if (classifyPostgrestResult(manual, 200) || !manual.data) {
+      throw new LedgerReadError("manual_prices", "no_data");
+    }
+    const price = priceOn(
+      {
+        quotes,
+        manualPrices: manual.data as unknown as ManualPrice[],
+        manualRates: [],
+      },
+      parsed.data,
+    );
+    log("quote_on", { ...fields, outcome: "ok" });
+    return price;
+  } catch (error) {
+    log("quote_on", { ...fields, outcome: "failed" }, error);
+    return null;
   }
 }
 

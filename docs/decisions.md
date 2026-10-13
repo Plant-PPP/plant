@@ -2,13 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · Transfers and yields on the real pages (PLA-103)
+
+- **A suggested price may come from the server.** `transferCost` and `quoteOn` return a price or a promise of one, and the movement dialog asks again only when a field the suggestion reads changes. Until the answer to the latest question arrives it suggests nothing, as when there is none: a transfer's cost left empty still carries what the units had, and a yield asks for its value.
+- **The server answers a transfer's cost by running the write and throwing it away**, on the whole ledger and the stored rates of its date, as the prototype does in the browser. A day's quote reads only the feed's prices and the user's manual prices of that instrument in the week up to the day; it answers nothing for a day still to come.
+
 ## 2026-10-13 · The real Activos and instrument pages over the database (PLA-103, PLA-104)
 
 - **The prototype's ledger logic is the app's.** Positions, sales, pages of movements, admitting and writing an operation and manual prices move from `components/prototype/prototype-store.ts` to `lib/ledger/ledger.ts`, over a `Ledger` type: the holdings, movements, accounts, portfolios, quotes and manual prices and rates every one of them reads. The prototype's state is a `Ledger` plus what only it keeps (placements, property sheets, the report choices, debts, imports, chat), and it forgets those for a holding a ledger write removed. The writes are generic over the state they get, so the prototype keeps its own fields.
 - **A page reads the user's whole ledger** (`lib/ledger/read.ts`): accounts and portfolios, open instrument holdings with every movement, the revision and instrument of every instrument holding (archived ones included, as `write_operation` expects them), the instruments and the manual prices and rates. A position needs a holding's whole history, so there is no partial read. Past `LEDGER_MOVEMENT_LIMIT` (20 000 movements) the read is cut, the page logs it and a write refuses with `failed` rather than admit an operation against part of the history.
 - **A write is admitted by the same code the prototype runs**, then sent to `write_operation` (`lib/ledger/write.ts`): the server action reads the ledger and the stored dollar rates of the operation's date, runs the ledger's `writeOperation` or `deleteOperation`, and sends the operation's parts with the revisions it read. The database refuses only a race (`stale`, `negative_units`), which the dialog shows as a failed save to retry.
 - **A holding sold out holds 0 units in the database** and is left out of the holdings list (`readList`'s `heldOnly`); the ledger reads it as closed, its amount never read.
-- **The real Activos page offers movements, the sales tab and manual prices**, and the real instrument page shows an instrument's history. Manual prices and dollar rates value the page's snapshot as in the prototype. Transfers between portfolios and a yield given as a balance wait for a follow-up: their dialogs need `transferCost` and `quoteOn`, which answer at once in the browser, and the browser does not hold the ledger. The account and portfolio links stay on Cuentas until their pages exist (PLA-106).
+- **The real Activos page offers movements, the sales tab and manual prices**, and the real instrument page shows an instrument's history. Manual prices and dollar rates value the page's snapshot as in the prototype. The account and portfolio links stay on Cuentas until their pages exist (PLA-106).
 
 ## 2026-10-13 · Movements, manual prices and the report in the database (PLA-103, PLA-104, PLA-122)
 
