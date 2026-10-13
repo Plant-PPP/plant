@@ -10,6 +10,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The Deudas page values each debt at today's stored quotes**, the UVA's included when a debt is in UVA (`liabilityQuotesNeeded`).
 - **Debts write through their own server actions** (`lib/debts/write.ts`), not portfolio setup's runner: they take no portfolio setup lock or guard, and the runner's table list is pinned to those tables' checks.
 - **Log keys say `liability`, not `debt`**: the log scrubber masks any key with a `debt` segment, as it does amounts.
+
 ## 2026-10-13 · Transfers, yields, deleting holdings and the account and portfolio pages (PLA-103, PLA-106, PLA-117)
 
 - **A suggested price may come from the server.** `transferCost` and `quoteOn` return a price or a promise of one, and the movement dialog asks again only when a field the suggestion reads changes. Until the answer to the latest question arrives it suggests nothing, as when there is none: a transfer's cost left empty still carries what the units had, and a yield asks for its value.
