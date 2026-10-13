@@ -40,6 +40,7 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import {
   createHolding,
   deleteOperation,
+  type Ledger,
   movementsPage,
   priceOn,
   suggestedTransferCost,
@@ -121,6 +122,22 @@ export async function ledgerFor(client: Client, input: unknown) {
   });
 }
 
+// Whether the operation as written takes the next entry order, as a new one
+// would: an edit that moved to another day and went last on it.
+function goesLast(
+  state: Ledger,
+  operationId: string,
+  read: Pick<Ledger, "nextEntryOrder">,
+): boolean {
+  for (const movements of state.movements.values()) {
+    const movement = movements.find(
+      (each) => each.operation_id === operationId,
+    );
+    if (movement) return movement.entry_order >= read.nextEntryOrder;
+  }
+  return false;
+}
+
 // What write_operation's refusal means to the dialog. A stale read or a
 // history below zero only follows a race, since the app admitted the
 // operation against what it read: the user tries again.
@@ -129,8 +146,8 @@ export function rpcFailure(error: {
   hint?: string | null;
 }): Extract<MovementResult, { ok: false }>["code"] {
   if (error.code === "PT404" || error.code === "23503") return "not_found";
-  // The database keeps an edited operation's place in its day, which the app
-  // may have admitted last: retrying gets the same answer.
+  // A history the app admitted but the database finds below zero: a write
+  // that landed in between. Retrying against it gets the same answer.
   if (error.hint === "negative_units") return "oversold";
   if (
     error.hint === "portfolio_archived" ||
@@ -194,6 +211,8 @@ export async function runOperation(
         p_operation_id: id as string,
         p_parts: rpcPartsOf(written.state, target),
         p_expected: expectedRevisions(ledger.revisions, symbolOf, symbols),
+        // An edit admitted last on its day takes the next place there too.
+        p_last: id !== null && goesLast(written.state, target, ledger),
       });
       if (classifyPostgrestResult(response, 200)) {
         result = { ok: false, code: rpcFailure(response.error ?? {}) };

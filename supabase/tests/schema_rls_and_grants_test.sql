@@ -144,6 +144,7 @@ SELECT is_empty(
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
             OR (has_function_privilege('authenticated', p.oid, 'EXECUTE')
                 AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
+                                       'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
@@ -155,6 +156,7 @@ SELECT ok(
   (SELECT bool_and(NOT p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""'])
    FROM pg_proc p
    WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
+                                       'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure])),
   'the RPCs run as the caller with an empty search_path'
 );

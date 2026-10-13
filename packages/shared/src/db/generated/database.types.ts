@@ -408,6 +408,8 @@ isOneToOne: false
                            },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
+                           } |
+{ Args: { "p_expected": Json,"p_last": boolean,"p_operation_id": string,"p_parts": Json }; Returns: string
                            }
           }
           Enums: {
