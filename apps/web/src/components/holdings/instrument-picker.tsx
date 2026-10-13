@@ -116,9 +116,13 @@ export function InstrumentPicker({
     activeSymbol === undefined ? undefined : optionId(activeSymbol);
 
   const searchInput = useRef<HTMLInputElement>(null);
+  // Whether the active option should scroll into view: on opening and on
+  // keys, never on hover, which would scroll the list under the pointer.
+  const followActive = useRef(false);
 
   function openWith(next: boolean, search = "") {
     if (next) {
+      followActive.current = true;
       setQuery(search);
       setActive(
         Math.max(
@@ -141,7 +145,10 @@ export function InstrumentPicker({
     const action = searchKey(event.key, active, shown.length);
     if (!action) return;
     event.preventDefault();
-    if (action.kind === "move") setActive(action.active);
+    if (action.kind === "move") {
+      followActive.current = true;
+      setActive(action.active);
+    }
     if (action.kind === "choose") choose(shown[action.index]!.symbol);
     if (action.kind === "close") setOpen(false);
   }
@@ -186,7 +193,7 @@ export function InstrumentPicker({
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             const input = searchInput.current;
-            input?.focus();
+            input?.focus({ preventScroll: true });
             input?.setSelectionRange(input.value.length, input.value.length);
           }}
           aria-label="Elegir instrumento"
@@ -221,7 +228,9 @@ export function InstrumentPicker({
             id={listId}
             role="listbox"
             aria-label="Instrumentos"
-            className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height)-3rem))] overflow-y-auto"
+            // Capped from its first render, before Radix measures the room
+            // left, so the active option can scroll into view on opening.
+            className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height,21rem)-3rem))] overflow-y-auto"
           >
             {shown.map((each, index) => (
               <li
@@ -234,12 +243,19 @@ export function InstrumentPicker({
                 // which the portal mounts a render after it opens.
                 ref={
                   index === active
-                    ? (option) => option?.scrollIntoView({ block: "nearest" })
+                    ? (option) => {
+                        if (option && followActive.current) {
+                          option.scrollIntoView({ block: "nearest" });
+                        }
+                      }
                     : undefined
                 }
                 // Keeps focus in the search while the click picks.
                 onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => setActive(index)}
+                onMouseMove={() => {
+                  followActive.current = false;
+                  setActive(index);
+                }}
                 onClick={() => choose(each.symbol)}
                 className="cursor-default truncate rounded-sm px-2 py-1.5 text-sm aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
               >

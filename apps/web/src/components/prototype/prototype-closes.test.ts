@@ -538,3 +538,45 @@ it("shows an opening balance in a month's detail at what its figures count", () 
   )!;
   expect(Number(line.amount)).toBeCloseTo(100 * Number(quote.price), 2);
 });
+
+describe("the closes' manual prices", () => {
+  // closesOf with the feeds' quotes and the manual prices merged directly,
+  // as before it read them through pricedSnapshotOf.
+  const directCloses = (
+    unit: Parameters<typeof closesOf>[1],
+  ): ReturnType<typeof closesOf> => {
+    let closes: ReturnType<typeof closesOf> = [];
+    jest.isolateModules(() => {
+      jest.doMock("./prototype-store", () => {
+        const actual: typeof import("./prototype-store") =
+          jest.requireActual("./prototype-store");
+        const { withManualPrices }: typeof import("@plant/core") =
+          jest.requireActual("@plant/core");
+        return {
+          ...actual,
+          pricedSnapshotOf: (
+            each: Parameters<typeof actual.pricedSnapshotOf>[0],
+            snapshot: Parameters<typeof actual.pricedSnapshotOf>[1],
+          ) => withManualPrices(snapshot, each.manualPrices),
+        };
+      });
+      const isolated: typeof import("./prototype-closes") =
+        jest.requireActual("./prototype-closes");
+      closes = isolated.closesOf(state, unit);
+    });
+    jest.dontMock("./prototype-store");
+    return closes;
+  };
+
+  it.each(["ars", "usd_mep"] as const)(
+    "closes the fixtures' months in %s as merging the manual prices directly does",
+    (unit) => {
+      expect(closesOf(state, unit)).toEqual(directCloses(unit));
+    },
+  );
+
+  it("values the months with the manual prices", () => {
+    const unpriced = { ...state, manualPrices: [] };
+    expect(closesOf(unpriced, "ars")).not.toEqual(closesOf(state, "ars"));
+  });
+});

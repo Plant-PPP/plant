@@ -190,3 +190,17 @@ it("keeps the messages that name a field apart from every other", () => {
   expect(new Set(named).size).toBe(named.length);
   for (const text of named) expect(others).not.toContain(text);
 });
+
+it.each([true, false])(
+  "links the report switch to its label and shows it %s, with no note or pending state",
+  (includeInTaxReport) => {
+    const html = render(undefined, { includeInTaxReport });
+    const tag = control(html, "Incluir en el reporte");
+    expect(tag).toMatch(/^<button[^>]*role="switch"/);
+    expect(tag).toContain(`aria-checked="${includeInTaxReport}"`);
+    expect(tag).not.toContain("aria-disabled");
+    expect(tag).not.toContain("aria-describedby");
+    expect(tag).not.toMatch(/\sdisabled=""/);
+    expect(html).not.toMatch(/id="[^"]*-note"/);
+  },
+);

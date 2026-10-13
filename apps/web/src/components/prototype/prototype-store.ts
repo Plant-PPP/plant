@@ -1140,7 +1140,7 @@ export function writeOperation(
         ...next,
         nextEntryOrder: Math.max(state.nextEntryOrder, entryOrder + 1),
         ...(createdFrom.kind !== "manual" && {
-          operationOrigins: new Map(state.operationOrigins).set(
+          operationOrigins: new Map(next.operationOrigins).set(
             operationId,
             createdFrom,
           ),
@@ -1281,7 +1281,26 @@ function removeHolding(state: PrototypeState, id: string): PrototypeState {
   // shared shows one part fewer.
   const revisions = bumpGroup(state, id);
   revisions.delete(id);
-  return { ...state, holdings, movements, revisions, outOfTaxReport };
+  // An operation whose every part was here is gone, and so is its origin.
+  const gone = new Set(
+    state.movements.get(id)!.map((each) => each.operation_id),
+  );
+  for (const own of movements.values()) {
+    for (const each of own) gone.delete(each.operation_id);
+  }
+  const operationOrigins = [...gone].some((each) =>
+    state.operationOrigins.has(each),
+  )
+    ? new Map([...state.operationOrigins].filter(([each]) => !gone.has(each)))
+    : state.operationOrigins;
+  return {
+    ...state,
+    holdings,
+    movements,
+    revisions,
+    outOfTaxReport,
+    operationOrigins,
+  };
 }
 
 // Whether an asset counts in the report. Any of its holdings, open or closed,

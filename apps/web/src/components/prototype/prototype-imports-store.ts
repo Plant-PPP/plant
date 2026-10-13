@@ -172,8 +172,8 @@ export function finishReading(
     });
   }
   // The last held row with a price read with a digit missing: a row with no
-  // price leaves the totals as printed, and none of them leaves the reading
-  // without a misread row.
+  // price leaves the totals as printed. With no such row, or one under 10
+  // units, the reading has no misread row.
   const misread = truth
     .slice(0, symbols.length)
     .filter((row) => row.price !== null)

@@ -180,6 +180,7 @@ export function InstrumentHistory({
   const accountsExcluded =
     held.length > 0 &&
     held.every((each) => !accountInTaxReport(accounts, each.row.account.id));
+  const heldIn = new Set(held.map((each) => each.row.account.id));
 
   // The switch keeps focus; the answer is a toast, and a refusal puts it back.
   function setInTaxReport(on: boolean) {
@@ -352,7 +353,16 @@ export function InstrumentHistory({
                 pending={pending}
                 onCheckedChange={setInTaxReport}
                 note={
-                  accountsExcluded && (
+                  accountsExcluded &&
+                  (heldIn.size === 1 ? (
+                    <>
+                      La cuenta{" "}
+                      <Link href="/accounts" className="underline">
+                        {held[0]!.row.account.institution}
+                      </Link>{" "}
+                      no se incluye en el reporte, así que este activo tampoco.
+                    </>
+                  ) : (
                     <>
                       Las{" "}
                       <Link href="/accounts" className="underline">
@@ -361,7 +371,7 @@ export function InstrumentHistory({
                       donde lo tenés no se incluyen en el reporte, así que este
                       activo tampoco.
                     </>
-                  )
+                  ))
                 }
               />
             </div>

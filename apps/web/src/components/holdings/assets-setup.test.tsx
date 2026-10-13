@@ -10,6 +10,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { type AssetsTab, SALES_TABS, TABS } from "@/lib/holdings/assets-filter";
+import { assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
 import {
   type HoldingsValuation,
@@ -847,7 +848,8 @@ describe("saving an edit that leaves the report switch untouched", () => {
 
   it("asks for an instrument's choice by its asset, not its holding", async () => {
     const { inTaxReport } = await save(gd30, false);
-    expect(inTaxReport).toHaveBeenCalledWith("instrument:GD30");
+    expect(inTaxReport).toHaveBeenCalledWith(assetKey(gd30.holding));
+    expect(inTaxReport).not.toHaveBeenCalledWith(gd30.id);
   });
 
   it("asks for any other holding's choice by the holding", async () => {

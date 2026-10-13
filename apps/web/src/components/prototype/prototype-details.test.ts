@@ -1,4 +1,5 @@
 import { type Holding, snapshotOn } from "@plant/core";
+import { compareDecimals } from "@plant/shared";
 
 import { readTotals, totalsMatch } from "@/lib/imports/review";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -6,15 +7,23 @@ import { buildFixtures } from "@/lib/prototype/fixtures";
 import { prototypeAnswer } from "./prototype-assistant";
 import { createAccount } from "./prototype-accounts-store";
 import { closesOf } from "./prototype-closes";
-import { addImport, finishReading } from "./prototype-imports-store";
+import {
+  addImport,
+  confirmImport,
+  finishReading,
+  heldIn,
+} from "./prototype-imports-store";
 import {
   createHolding,
   deleteHolding,
   deleteOperation,
   initialState,
+  operationOf,
   pricedSnapshotOf,
+  priceToday,
   type PrototypeState,
   setInTaxReport,
+  setPrice,
   writeOperation,
 } from "./prototype-store";
 
@@ -244,8 +253,8 @@ describe("the reading's demo for every account", () => {
     expect(extra?.symbol).toBe(symbol);
   });
 
-  // The demo's point: the misread row leaves the totals off, so the review
-  // flags it. A misread row with no price is left out of the totals.
+  // The demo's point: the misread row, a priced one, leaves the totals off,
+  // so the review flags it.
   it.each(["IOL", "Cocos", "Balanz"])(
     "makes %s's misread row not add up",
     (institution) => {
@@ -318,7 +327,7 @@ describe("origin of a holding an edit creates", () => {
   const edit = (before: PrototypeState, operationId: string, input: unknown) =>
     writeOperation(before, input, { operationId, replacing: true, newId });
 
-  it("gives a portfolio a split adds the origin of the holding that stays", () => {
+  it("gives a portfolio a split adds its operation's origin", () => {
     const operationId = newId();
     const written = writeOperation(state, msftIn([PRINCIPAL, "2"]), {
       operationId,
@@ -489,4 +498,274 @@ describe("the reading's misread row with few priced rows", () => {
       }
     },
   );
+});
+
+describe("where each operation came from, through its lifecycle", () => {
+  const imported = {
+    kind: "import" as const,
+    fileName: "balanz.pdf",
+    date: TODAY,
+  };
+  const msftIn = (...parts: [string, string][]) => ({
+    ...msftPurchase(PRINCIPAL),
+    parts: parts.map(([portfolio_id, quantity]) => ({
+      portfolio_id,
+      quantity,
+    })),
+  });
+  const importOf = (input: unknown) => {
+    const operationId = newId();
+    const written = writeOperation(state, input, {
+      operationId,
+      newId,
+      origin: imported,
+    });
+    expect(written.result).toEqual({ ok: true, id: operationId });
+    return { operationId, after: written.state };
+  };
+  const edit = (before: PrototypeState, operationId: string, input: unknown) =>
+    writeOperation(before, input, { operationId, replacing: true, newId });
+
+  it("records an imported operation, and no hand-typed one", () => {
+    const { operationId, after } = importOf(msftIn([PRINCIPAL, "2"]));
+    expect([...after.operationOrigins]).toEqual([[operationId, imported]]);
+    const typedId = newId();
+    const typed = writeOperation(after, msftIn([PRINCIPAL, "1"]), {
+      operationId: typedId,
+      newId,
+    });
+    expect(typed.result.ok).toBe(true);
+    expect(typed.state.operationOrigins).toBe(after.operationOrigins);
+  });
+
+  it("keeps an imported operation's origin through an edit, and the next edit still creates from it", () => {
+    const { operationId, after } = importOf(msftIn([PRINCIPAL, "2"]));
+    const edited = edit(after, operationId, msftIn([PRINCIPAL, "3"]));
+    expect(edited.result).toEqual({ ok: true, id: operationId });
+    expect(edited.state.operationOrigins.get(operationId)).toEqual(imported);
+    const moved = edit(edited.state, operationId, msftIn([CORTO, "3"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+  });
+
+  it("records nothing for an edit of a hand-typed operation", () => {
+    const typedId = newId();
+    const typed = writeOperation(state, msftIn([PRINCIPAL, "2"]), {
+      operationId: typedId,
+      newId,
+    });
+    const edited = edit(typed.state, typedId, msftIn([CORTO, "2"]));
+    expect(edited.result).toEqual({ ok: true, id: typedId });
+    expect(edited.state.operationOrigins.has(typedId)).toBe(false);
+    expect(holdingOf(edited.state, "MSFT", CORTO)?.origin).toEqual({
+      kind: "manual",
+    });
+  });
+
+  it("leaves the origins as they were when a write is refused", () => {
+    const { operationId, after } = importOf(msftIn([PRINCIPAL, "2"]));
+    const refusals = [
+      // Not an operation at all.
+      writeOperation(
+        after,
+        { kind: "purchase" },
+        {
+          operationId: newId(),
+          newId,
+          origin: imported,
+        },
+      ),
+      // A new operation under an id that already has one.
+      writeOperation(after, msftIn([PRINCIPAL, "1"]), {
+        operationId,
+        newId,
+        origin: { kind: "import", fileName: "otro.pdf", date: TODAY },
+      }),
+      // An edit of an operation that does not exist.
+      writeOperation(after, msftIn([PRINCIPAL, "1"]), {
+        operationId: newId(),
+        replacing: true,
+        newId,
+        origin: imported,
+      }),
+      // An edit that moves the operation to another account.
+      edit(after, operationId, {
+        ...msftIn([PRINCIPAL, "2"]),
+        source_connection_id: COCOS,
+      }),
+    ];
+    for (const refused of refusals) {
+      expect(refused.result.ok).toBe(false);
+      expect(refused.state).toBe(after);
+      expect(refused.state.operationOrigins).toBe(after.operationOrigins);
+    }
+  });
+
+  it("keeps the origins the same map when a hand-typed operation is deleted", () => {
+    const { after } = importOf(msftIn([PRINCIPAL, "2"]));
+    const typedId = newId();
+    const typed = writeOperation(after, msftIn([LARGO, "1"]), {
+      operationId: typedId,
+      newId,
+    }).state;
+    const deleted = deleteOperation(typed, typedId);
+    expect(deleted.result).toEqual({ ok: true, id: typedId });
+    expect(deleted.state.operationOrigins).toBe(typed.operationOrigins);
+    expect(deleteOperation(typed, newId()).state).toBe(typed);
+  });
+
+  it("keeps an operation's origin when one of its holdings is deleted and another part remains", () => {
+    const { operationId, after } = importOf(
+      msftIn([PRINCIPAL, "2"], [LARGO, "1"]),
+    );
+    const principal = holdingOf(after, "MSFT", PRINCIPAL)!.holding.id;
+    const removed = deleteHolding(after, principal);
+    expect(removed.result).toEqual({ ok: true, id: principal });
+    expect(removed.state.operationOrigins.get(operationId)).toEqual(imported);
+    expect(operationOf(removed.state, operationId)?.parts).toHaveLength(1);
+    const moved = edit(removed.state, operationId, msftIn([CORTO, "1"]));
+    expect(moved.result).toEqual({ ok: true, id: operationId });
+    expect(holdingOf(moved.state, "MSFT", CORTO)?.origin).toEqual(imported);
+  });
+
+  it("leaves no operation, and no origin, once its only holding is deleted", () => {
+    const { operationId, after } = importOf(msftIn([PRINCIPAL, "2"]));
+    const holdingId = holdingOf(after, "MSFT", PRINCIPAL)!.holding.id;
+    const removed = deleteHolding(after, holdingId).state;
+    expect(operationOf(removed, operationId)).toBeNull();
+    expect(removed.operationOrigins.has(operationId)).toBe(false);
+    expect(deleteOperation(removed, operationId).result).toEqual({
+      ok: false,
+      code: "not_found",
+    });
+    expect(edit(removed, operationId, msftIn([CORTO, "2"])).result).toEqual({
+      ok: false,
+      code: "not_found",
+    });
+  });
+
+  it("records the import as the origin of every operation a confirmed reading writes", () => {
+    const iol = state.accounts.find((each) => each.id === IOL)!;
+    const read = finishReading(
+      addImport(state, { id: "i8", fileName: "iol.pdf", accountId: iol.id })
+        .state,
+      "i8",
+    );
+    const item = read.imports[0]!;
+    const held = heldIn(read, IOL);
+    const changed = item.rows.filter(
+      (row) =>
+        !row.discarded &&
+        compareDecimals(row.quantity, held.get(row.symbol) ?? "0") !== 0,
+    );
+    expect(changed.length).toBeGreaterThanOrEqual(2);
+    const confirmed = confirmImport(read, "i8", item.rows, newId);
+    expect(confirmed.result).toEqual({ ok: true, id: "i8" });
+    const origins = [...confirmed.state.operationOrigins];
+    expect(origins).toHaveLength(changed.length);
+    for (const [operationId, origin] of origins) {
+      expect(origin).toEqual({
+        kind: "import",
+        fileName: "iol.pdf",
+        date: TODAY,
+      });
+      expect(operationOf(confirmed.state, operationId)?.accountId).toBe(IOL);
+    }
+    expect(
+      new Set(
+        origins.map(
+          ([operationId]) =>
+            operationOf(confirmed.state, operationId)!.instrument,
+        ),
+      ),
+    ).toEqual(new Set(changed.map((row) => row.symbol)));
+  });
+});
+
+describe("the reading's misread row and suggestion", () => {
+  it.each(
+    state.accounts
+      .filter((each) => heldIn(state, each.id).size > 0)
+      .map((each) => [each.institution, each.id]),
+  )(
+    "misreads, in %s, the last of its held rows with a price, never the suggested one",
+    (_, accountId) => {
+      const item = finishReading(
+        addImport(state, { id: "i10", fileName: "resumen.pdf", accountId })
+          .state,
+        "i10",
+      ).imports[0]!;
+      expect(item.status).toBe("ready");
+      const held = [...heldIn(state, accountId).keys()];
+      const heldRows = item.rows.filter((row) => !row.id.endsWith("-new"));
+      expect(heldRows.map((row) => row.symbol).sort()).toEqual(held.sort());
+      const low = item.rows.filter((row) => row.confidence === "low");
+      expect(low.length).toBeLessThanOrEqual(1);
+      const expected = heldRows.filter((row) => row.price !== null).at(-1);
+      if (low[0]) {
+        expect(low[0].id).toBe(expected?.id);
+        expect(held).toContain(low[0].symbol);
+      }
+    },
+  );
+
+  it("suggests only a type the account holds in that same currency", () => {
+    const ACCOUNT = "a9200000-0000-4000-8000-000000000001";
+    // AL30 is an ARS bond; with a price it would pair the USD bond's type
+    // with the ARS fund's currency.
+    let next = setPrice(state, {
+      symbol: "AL30",
+      price_date: TODAY,
+      price: "60000",
+      currency: "ARS",
+    }).state;
+    expect(
+      priceToday(next, { symbol: "AL30", currency: "ARS" }),
+    ).not.toBeNull();
+    next = createAccount(
+      next,
+      {
+        institution: "Banco de prueba",
+        includeInTaxReport: true,
+        defaultPortfolioId: PRINCIPAL,
+      },
+      ACCOUNT,
+    ).state;
+    for (const [symbol, currency] of [
+      ["GD30", "USD"],
+      ["FIMAAHO", "ARS"],
+    ] as const) {
+      const written = writeOperation(
+        next,
+        {
+          ...msftPurchase(PRINCIPAL),
+          source_connection_id: ACCOUNT,
+          instrument_symbol: symbol,
+          currency,
+          price: "1",
+          parts: [{ portfolio_id: PRINCIPAL, quantity: "20" }],
+        },
+        { operationId: newId(), newId },
+      );
+      expect(written.result.ok).toBe(true);
+      next = written.state;
+    }
+    const kindOf = (symbol: string) => {
+      const instrument = next.instruments.find(
+        (each) => each.symbol === symbol,
+      )!;
+      return `${instrument.type}:${instrument.currency}`;
+    };
+    expect(kindOf("AL30")).toBe("bond:ARS");
+    const item = finishReading(
+      addImport(next, { id: "i11", fileName: "banco.pdf", accountId: ACCOUNT })
+        .state,
+      "i11",
+    ).imports[0]!;
+    expect(item.status).toBe("ready");
+    for (const row of item.rows.filter((each) => each.id.endsWith("-new"))) {
+      expect(["bond:USD", "fci:ARS"]).toContain(kindOf(row.symbol));
+    }
+    expect(item.rows.map((row) => row.symbol)).not.toContain("AL30");
+  });
 });
