@@ -34,8 +34,6 @@ const props = (key: string, value: string) => ({
 
 // These pages have no production version yet.
 it.each([
-  ["a portfolio", () => PortfolioPage(props("id", "p1"))],
-  ["an account", () => AccountPage(props("id", "a1"))],
   ["a close", () => ClosePage(props("period", "2026-09"))],
   [
     "an import's review",
@@ -44,6 +42,18 @@ it.each([
 ])("is not found in production for %s", async (_, render) => {
   process.env.VERCEL_ENV = "production";
   await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+});
+
+it.each([
+  ["a portfolio", () => PortfolioPage(props("id", "p1")), "portfolio"],
+  ["an account", () => AccountPage(props("id", "a1")), "account"],
+])("shows made-up data elsewhere for %s", async (_, render, kind) => {
+  process.env.VERCEL_ENV = "preview";
+  const page = (await render()) as React.ReactElement<{
+    kind: string;
+    id: string;
+  }>;
+  expect(page.props).toMatchObject({ kind });
 });
 
 it("passes the instrument's symbol upper-cased elsewhere", async () => {

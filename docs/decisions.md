@@ -10,6 +10,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The Deudas page values each debt at today's stored quotes**, the UVA's included when a debt is in UVA (`liabilityQuotesNeeded`).
 - **Debts write through their own server actions** (`lib/debts/write.ts`), not portfolio setup's runner: they take no portfolio setup lock or guard, and the runner's table list is pinned to those tables' checks.
 - **Log keys say `liability`, not `debt`**: the log scrubber masks any key with a `debt` segment, as it does amounts.
+## 2026-10-13 · Transfers, yields, deleting holdings and the account and portfolio pages (PLA-103, PLA-106, PLA-117)
+
+- **A suggested price may come from the server.** `transferCost` and `quoteOn` return a price or a promise of one, and the movement dialog asks again only when a field the suggestion reads changes. Until the answer to the latest question arrives it suggests nothing, as when there is none: a transfer's cost left empty still carries what the units had, and a yield asks for its value.
+- **The server answers a transfer's cost by running the write and throwing it away**, on the whole ledger and the stored rates of its date, as the prototype does in the browser. A day's quote reads only the feed's prices and the user's manual prices of that instrument in the week up to the day; it answers nothing for a day still to come.
+- **Deleting a holding is a plain delete (PLA-117)**: its movements go with it through the foreign key, and an operation it shared keeps its other parts, as in the prototype. One with a transfer is refused after reading its movements; a transfer written between that read and the delete leaves its other side alone, a race only the user's own two tabs can run.
+- **The real account and portfolio pages (PLA-106)** read the holdings list and the ledger: the list gives the open holdings of every class, and the ledger the instrument holdings sold out, their positions and their movements. An archived account or portfolio, or an id the user does not have, has no page. Every name on Activos and on these pages links to its page.
 
 ## 2026-10-13 · The real Activos and instrument pages over the database (PLA-103, PLA-104)
 
@@ -17,7 +23,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A page reads the user's whole ledger** (`lib/ledger/read.ts`): accounts and portfolios, open instrument holdings with every movement, the revision and instrument of every instrument holding (archived ones included, as `write_operation` expects them), the instruments and the manual prices and rates. A position needs a holding's whole history, so there is no partial read. Past `LEDGER_MOVEMENT_LIMIT` (20 000 movements) the read is cut, the page logs it and a write refuses with `failed` rather than admit an operation against part of the history.
 - **A write is admitted by the same code the prototype runs**, then sent to `write_operation` (`lib/ledger/write.ts`): the server action reads the ledger and the stored dollar rates of the operation's date, runs the ledger's `writeOperation` or `deleteOperation`, and sends the operation's parts with the revisions it read. The database refuses only a race (`stale`, `negative_units`), which the dialog shows as a failed save to retry.
 - **A holding sold out holds 0 units in the database** and is left out of the holdings list (`readList`'s `heldOnly`); the ledger reads it as closed, its amount never read.
-- **The real Activos page offers movements, the sales tab and manual prices**, and the real instrument page shows an instrument's history. Manual prices and dollar rates value the page's snapshot as in the prototype. Transfers between portfolios and a yield given as a balance wait for a follow-up: their dialogs need `transferCost` and `quoteOn`, which answer at once in the browser, and the browser does not hold the ledger. Account and portfolio names are plain text until their pages exist (PLA-106).
+- **The real Activos page offers movements, the sales tab and manual prices**, and the real instrument page shows an instrument's history. Manual prices and dollar rates value the page's snapshot as in the prototype.
 
 ## 2026-10-13 · Movements, manual prices and the report in the database (PLA-103, PLA-104, PLA-122)
 

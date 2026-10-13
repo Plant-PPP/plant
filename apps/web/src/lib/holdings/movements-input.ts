@@ -93,12 +93,15 @@ export type MovementsInput = {
   // The cost per unit, in the transfer's currency, its units would carry if
   // their cost were left to them; null when the transfer cannot be written. A
   // page that passes it offers transfers between portfolios.
-  transferCost?: (query: TransferCostQuery) => string | null;
+  transferCost?: (query: TransferCostQuery) => Suggestion;
   // An instrument's latest price on a date in `currency`, from the feeds or
   // the user's manual prices; null when there is none in it. A yield's
   // dialog suggests it as the value of each unit.
-  quoteOn?: (query: QuoteQuery) => string | null;
+  quoteOn?: (query: QuoteQuery) => Suggestion;
 };
+
+// A suggested price: worked out on the spot, or by the server later.
+export type Suggestion = string | null | Promise<string | null>;
 
 export type QuoteQuery = { symbol: string; currency: Currency; date: string };
 

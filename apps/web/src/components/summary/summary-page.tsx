@@ -7,7 +7,7 @@ import type * as React from "react";
 import { useId } from "react";
 
 import { AccountsBreakdown } from "@/components/holdings/accounts-breakdown";
-import { type ScopeHrefs, scopeLink } from "@/components/holdings/assets-setup";
+import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import { AssetsSummary } from "@/components/holdings/assets-summary";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { FilterSelect, UnitSelect } from "@/components/holdings/filter-select";

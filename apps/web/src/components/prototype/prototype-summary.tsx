@@ -17,9 +17,9 @@ import { currencyOf } from "@/lib/holdings/holding-name";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { onboardingSteps } from "@/lib/onboarding/steps";
 import { closeUnit } from "@/lib/summary/closes";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import { PROTOTYPE_HREFS } from "./prototype-assets";
 import { closesOf, monthDetail, yearsOfCloses } from "./prototype-closes";
 import { usePrototype } from "./prototype-provider";
 import { holdingsView, type PrototypeState } from "./prototype-store";
@@ -102,7 +102,7 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
       unit={unit}
       referenceUnit={reference}
       params={params}
-      hrefs={PROTOTYPE_HREFS}
+      hrefs={SCOPE_HREFS}
       onboarding={onboardingSteps({
         consentVersion: state.consent?.version ?? null,
         accounts: state.accounts.length,

@@ -17,10 +17,10 @@ import type {
   MovementsInput,
 } from "@/lib/holdings/movements-input";
 import type { HoldingRow } from "@/lib/holdings/read";
+import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import { type ScopeHrefs, scopeLink } from "./assets-setup";
 import { AssetsSummary } from "./assets-summary";
 import { useAssetsUrl } from "./assets-url";
 import { UnitSelect } from "./filter-select";

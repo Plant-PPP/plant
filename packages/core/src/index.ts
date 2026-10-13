@@ -29,7 +29,12 @@ export {
 } from "./quotes/contract/quote";
 export { upcomingIncome, type UpcomingIncome } from "./income/upcoming";
 export { quoteFeeds } from "./quotes/factory";
-export { readSnapshot, type SnapshotRead, snapshotOn } from "./quotes/snapshot";
+export {
+  QUOTE_CARRY_DAYS,
+  readSnapshot,
+  type SnapshotRead,
+  snapshotOn,
+} from "./quotes/snapshot";
 export {
   DENOMINATORS,
   type Denominator,
