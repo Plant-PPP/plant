@@ -104,6 +104,7 @@ import { InstitutionIcon } from "@/components/portfolio-setup/institution-field"
 import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
+import { MepNotice } from "./mep-notice";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
 import { PriceDialog } from "./price-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -935,6 +936,7 @@ export function AssetsSetup({
           classes={new Set(holdings.active.map(classOf))}
           pending={pending}
         />
+        <MepNotice unit={unit} />
         <div
           role="tabpanel"
           id={panelId(tabsId)}

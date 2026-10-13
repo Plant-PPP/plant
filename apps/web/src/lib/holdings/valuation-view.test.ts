@@ -217,6 +217,30 @@ describe("holdingsValuation", () => {
   });
 });
 
+describe("holdingsValuation by currency", () => {
+  const currencyOf = (h: Holding) =>
+    h.asset_class === "instrument" ? "USD" : h.currency!;
+
+  it("sums each currency's holdings, with its share of the whole", () => {
+    const view = holdingsValuation({ ...base, currencyOf });
+    const options = {
+      denominator: "ars" as const,
+      referenceDollar: "mep" as const,
+    };
+    const dollars = HOLDINGS.filter((h) => h.id !== "cash");
+    expect(view.currencies.USD).toMatchObject({
+      value: valueHoldings(dollars, SNAPSHOT, options).total,
+      count: 2,
+      share: "99.9",
+    });
+    expect(view.currencies.ARS).toMatchObject({ count: 1, share: "0.1" });
+  });
+
+  it("splits nothing for a caller that does not say the currency", () => {
+    expect(holdingsValuation(base).currencies).toEqual({});
+  });
+});
+
 describe("holdingsValuation shares", () => {
   it("gives each part its share of the whole, and the classes add up", () => {
     const view = holdingsValuation(base);

@@ -11,6 +11,7 @@ import {
 import {
   compareDecimals,
   compareExact,
+  type Currency,
   exactOf,
   over,
   times,
@@ -70,6 +71,8 @@ export type HoldingsValuation = {
   kinds: Breakdown;
   classes: Partial<Record<HoldingClass, Sum>>;
   instruments: Record<string, Sum>;
+  // Each currency's sum, for a caller that says each holding's currency.
+  currencies: Partial<Record<Currency, Sum>>;
 };
 
 // The caller passes the holdings the page shows. Each sum is rounded once from
@@ -80,6 +83,7 @@ export function holdingsValuation({
   snapshot,
   unit,
   referenceDollar,
+  currencyOf,
 }: {
   holdings: readonly (Pick<HoldingRow, "holding" | "instrumentType"> & {
     account: { id: string };
@@ -88,6 +92,8 @@ export function holdingsValuation({
   snapshot: QuoteSnapshot;
   unit: Denominator;
   referenceDollar: ReferenceDollar;
+  // The currency a holding is in: its instrument's, or its own.
+  currencyOf?: (holding: Holding) => Currency;
 }): HoldingsValuation {
   const options = { denominator: unit, referenceDollar };
   const value = (subset: readonly Holding[]) =>
@@ -199,5 +205,13 @@ export function holdingsValuation({
         all.flatMap((h) => (h.asset_class === "instrument" ? [h] : [])),
       ).map(([symbol, subset]) => [symbol, sum(subset)]),
     ),
+    currencies: currencyOf
+      ? Object.fromEntries(
+          groupBy(currencyOf, all).map(([currency, subset]) => [
+            currency,
+            sum(subset),
+          ]),
+        )
+      : {},
   };
 }

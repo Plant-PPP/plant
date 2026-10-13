@@ -11,6 +11,7 @@ import { useId, useState } from "react";
 
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { UnitSelect } from "@/components/holdings/filter-select";
+import { MepNotice } from "@/components/holdings/mep-notice";
 import {
   MissingFigure,
   NO_QUOTE,
@@ -254,6 +255,7 @@ export function DebtsSetup({
           onChange={(param) => url.set("unit", param)}
         />
       </div>
+      <MepNotice unit={unit} />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryTile
           label="Total"
