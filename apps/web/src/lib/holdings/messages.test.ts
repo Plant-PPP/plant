@@ -8,6 +8,7 @@ import {
   lineLabel,
   MOVEMENT_DELETE_MESSAGES,
   MOVEMENT_MESSAGES,
+  movementName,
   SAME_DAY_ORDER,
 } from "./messages";
 
@@ -92,4 +93,38 @@ it("says an archived account or portfolio needs restoring as the holding dialog 
   expect(MOVEMENT_MESSAGES.source_connection_archived).toBe(
     WRITE_MESSAGES.holdings.source_connection_archived,
   );
+});
+
+describe("a movement's name in its actions", () => {
+  const named = (movement: Partial<Movement>) => {
+    const full = {
+      holding_id: "h1",
+      date: "2026-09-01",
+      currency: "USD",
+      ...movement,
+    } as Movement;
+    return movementName({
+      movement: full,
+      operation: {
+        accountId: "a1",
+        instrument: "BTC",
+        parts: [
+          { movement: full, portfolioId: "p1", portfolioName: "Principal" },
+        ],
+      },
+    });
+  };
+
+  it("tells two purchases of one day apart by what they bought", () => {
+    const first = named({ kind: "purchase", quantity: "2", price: "10" });
+    const second = named({ kind: "purchase", quantity: "0.5", price: "10" });
+    expect(first).toBe("compra de 2 del 01/09/2026");
+    expect(second).toBe("compra de 0,5 del 01/09/2026");
+  });
+
+  it("names income by its amount, in its currency", () => {
+    expect(named({ kind: "dividend", amount: "10" })).toBe(
+      "dividendo de US$ 10,00 del 01/09/2026",
+    );
+  });
 });

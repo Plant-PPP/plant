@@ -15,8 +15,6 @@ import type {
 import type { ConfirmSpec } from "@/components/ui/confirm-dialog";
 import type { RowAction } from "@/components/ui/data-table";
 import { PendingButton } from "@/components/ui/pending-button";
-import { formatDate } from "@/lib/format/date";
-import { inSentence } from "@/lib/format/text";
 import {
   currencyOf,
   holdingInSentence,
@@ -24,7 +22,7 @@ import {
 } from "@/lib/holdings/holding-name";
 import {
   HOLDING_DELETE_MESSAGES,
-  lineLabel,
+  movementName,
   MOVEMENT_DELETE_MESSAGES,
   MOVEMENT_MESSAGES,
 } from "@/lib/holdings/messages";
@@ -265,10 +263,6 @@ export function useMovementDialogs({
           : undefined;
     return portfolio === undefined ? undefined : { portfolio, quoteOn };
   }
-
-  // A movement as its actions name it: "compra del 01/09/2026".
-  const movementName = (line: MovementLine) =>
-    `${inSentence(lineLabel(line))} del ${formatDate(line.movement.date)}`;
 
   // The account and instrument a dialog keeps, by name.
   const fixedOf = (accountId: string, symbol: string) => ({

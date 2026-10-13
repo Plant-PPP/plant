@@ -8,6 +8,9 @@ import {
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
 
+import { formatAmount, formatQuantity } from "@/lib/format/amount";
+import { formatDate } from "@/lib/format/date";
+import { inSentence } from "@/lib/format/text";
 import { FAILED, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
 
 import type { HoldingDeleteResult } from "./delete-result";
@@ -75,6 +78,20 @@ export function lineLabel({
   return movement.direction === "out"
     ? `Traspaso a ${other.portfolioName}`
     : `Traspaso desde ${other.portfolioName}`;
+}
+
+// A movement as its actions name it, with what it moved so two of one kind on
+// one day read apart: "compra de 2 del 01/09/2026", "dividendo de US$ 10,00
+// del 01/09/2026".
+export function movementName(
+  line: Pick<MovementLine, "movement" | "operation">,
+): string {
+  const { movement } = line;
+  const moved =
+    "quantity" in movement
+      ? formatQuantity(movement.quantity)
+      : formatAmount(movement.amount, movement.currency);
+  return `${inSentence(lineLabel(line))} de ${moved} del ${formatDate(movement.date)}`;
 }
 
 export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
