@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · The assistant beside every page (PLA-82, prototype)
+
+- **Every page but Asistente's own has a "Preguntale a Plant" button that opens the chat beside it**: a column about 400px wide that pushes the page aside on a wide screen, a sheet over it on a phone. The column holds one conversation; the list of them stays on Asistente's page.
+- **The questions offered first are about the page it was opened from**: Activos asks how the net worth is spread, how the year went, dividends and an instrument; Deudas what is owed and the largest debt; Cierres the year and the month. Other pages get the general ones. Every suggested question has an answer from the data.
+- **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action that the real chat fills from its tool calls; without it, "Consultando tus datos…".
+- **Production is unchanged**: the panel is mounted by the prototype's root, and `suggestions`, `compact` and `consults` are optional.
+
 ## 2026-10-13 · Where a statement's units go (PLA-41, PLA-100, prototype)
 
 - **The review lets each row that adds units choose where they go**: a new instrument picks its portfolio (the account's default to start with, as PLA-41 asks), and an instrument the user holds in another account can come from there as a "Traspaso desde …", so a change of broker keeps the units' cost and date and makes no result (PLA-100). A row that is a transfer needs no price.

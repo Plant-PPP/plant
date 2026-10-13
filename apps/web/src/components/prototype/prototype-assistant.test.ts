@@ -1,6 +1,7 @@
 import { snapshotOn } from "@plant/core";
 
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
+import { suggestionsFor } from "@/lib/assistant/suggestions";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -169,4 +170,12 @@ it("reads rendimientos as the year's result, not as income", () => {
   const answer = ask("¿Cómo vinieron mis rendimientos este año?");
   expect(answer.text).toMatch(/En 2026 tu patrimonio/);
   expect(answer.chart?.title).toBe("Resultado por mes de 2026");
+});
+
+it("answers every question a screen suggests from the data", () => {
+  for (const path of ["/", "/assets", "/debts", "/closes"]) {
+    for (const question of suggestionsFor(path)) {
+      expect(ask(question).sources).not.toEqual([]);
+    }
+  }
 });

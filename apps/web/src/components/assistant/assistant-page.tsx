@@ -19,6 +19,7 @@ import {
   QUESTIONS_PER_MONTH,
   SUGGESTED_QUESTIONS,
 } from "@/lib/assistant/chat";
+import { consultingText } from "@/lib/assistant/suggestions";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,8 @@ export type AssistantActions = {
     unit: ChatUnit,
   ) => Promise<string>;
   delete: (conversationId: string) => void;
+  // The sources a question will read, named while it waits.
+  consults?: (question: string, unit: ChatUnit) => readonly string[];
 };
 
 const WORDS_PER_TICK = 3;
@@ -86,12 +89,15 @@ function Answer({
 }
 
 // The assistant: a conversation about the user's own data, in one unit, with
-// the questions it can start from and the conversations before.
+// the questions it can start from and the conversations before. `compact`
+// fits it in a side panel: one conversation, under a second-level title.
 export function AssistantPage({
   conversations,
   used,
   defaultUnit,
   actions,
+  suggestions = SUGGESTED_QUESTIONS,
+  compact = false,
 }: {
   conversations: Conversation[];
   // The unit a new conversation starts in: the user's reference dollar.
@@ -99,13 +105,17 @@ export function AssistantPage({
   // The questions asked this month.
   used: number;
   actions: AssistantActions;
+  // The questions offered before the first one.
+  suggestions?: readonly string[];
+  compact?: boolean;
 }) {
   const id = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fresh, setFresh] = useState(() => crypto.randomUUID());
   const [unit, setUnit] = useState<ChatUnit>(defaultUnit);
   const [draft, setDraft] = useState("");
-  const [waiting, setWaiting] = useState(false);
+  // What is being consulted while a question waits, or null.
+  const [waiting, setWaiting] = useState<string | null>(null);
   // The answer that just arrived, which streams in and is announced once;
   // opening another conversation lets it go.
   const [arrived, setArrived] = useState<string | null>(null);
@@ -113,6 +123,7 @@ export function AssistantPage({
   const heading = useRef<HTMLHeadingElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const [deleting, setDeleting] = useState<Conversation | null>(null);
+  const Title = compact ? "h2" : "h1";
   const newButton = useRef<HTMLButtonElement>(null);
 
   const conversation = conversations.find((each) => each.id === activeId);
@@ -126,7 +137,7 @@ export function AssistantPage({
 
   function ask(question: string) {
     const text = question.trim();
-    if (!text || waiting || left === 0) return;
+    if (!text || waiting !== null || left === 0) return;
     const conversationId = conversation?.id ?? fresh;
     setActiveId(conversationId);
     setDraft("");
@@ -134,9 +145,10 @@ export function AssistantPage({
     // A clicked suggestion unmounts, so focus moves to the question field, or
     // to the title when this question used the month's last one.
     (left > 1 ? questionField : heading).current?.focus();
-    setWaiting(true);
+    const asked = conversation?.unit ?? unit;
+    setWaiting(consultingText(actions.consults?.(text, asked) ?? []));
     void actions
-      .ask(conversationId, text, conversation?.unit ?? unit)
+      .ask(conversationId, text, asked)
       .then(
         (answerId) => setArrived(answerId),
         () => {
@@ -144,7 +156,7 @@ export function AssistantPage({
           toast.error("No pudimos responder. Probá de nuevo.");
         },
       )
-      .finally(() => setWaiting(false));
+      .finally(() => setWaiting(null));
   }
 
   function open(conversationId: string | null) {
@@ -158,9 +170,16 @@ export function AssistantPage({
   }
 
   return (
-    <div className="grid min-h-[calc(100svh-8rem)] gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "grid gap-4",
+        compact
+          ? "h-full"
+          : "min-h-[calc(100svh-8rem)] md:grid-cols-[14rem_minmax(0,1fr)]",
+      )}
+    >
       <aside
-        className="hidden flex-col gap-2 md:flex"
+        className={cn("hidden flex-col gap-2", !compact && "md:flex")}
         aria-label="Conversaciones"
       >
         <Button
@@ -222,14 +241,17 @@ export function AssistantPage({
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-1">
-            <h1
+            <Title
               id={`${id}-title`}
               ref={heading}
               tabIndex={-1}
-              className="text-xl font-semibold outline-none"
+              className={cn(
+                "font-semibold outline-none",
+                compact ? "text-base" : "text-xl",
+              )}
             >
               {conversation?.title ?? "Asistente"}
-            </h1>
+            </Title>
             <p className="text-muted-foreground text-xs">
               {`${leftThisMonth(left, QUESTIONS_PER_MONTH, "consultas")} · ${NOT_ADVICE}`}
             </p>
@@ -240,7 +262,7 @@ export function AssistantPage({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="md:hidden"
+                className={cn(!compact && "md:hidden")}
                 onClick={startNew}
               >
                 <MessageSquarePlus />
@@ -251,7 +273,7 @@ export function AssistantPage({
               id={`${id}-unit`}
               label="Responder en"
               value={conversation?.unit ?? unit}
-              pending={waiting || conversation !== undefined}
+              pending={waiting !== null || conversation !== undefined}
               options={CHAT_UNITS.map(
                 (each) => [each, UNIT_LABELS[each]] as const,
               )}
@@ -261,21 +283,21 @@ export function AssistantPage({
         </div>
 
         <p role="status" className="sr-only">
-          {waiting
-            ? "Consultando tus datos…"
+          {waiting !== null
+            ? waiting
             : lastAnswer?.role === "assistant"
               ? lastAnswer.text
               : ""}
         </p>
         <div className="flex flex-1 flex-col gap-6">
-          {messages.length === 0 && !waiting && (
+          {messages.length === 0 && waiting === null && (
             <div className="grid flex-1 place-content-center gap-4 py-10 text-center">
               <p className="text-muted-foreground text-sm">
                 Preguntale a Plant sobre tu patrimonio, tus inversiones o tus
                 deudas.
               </p>
               <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTED_QUESTIONS.map((question) => (
+                {suggestions.map((question) => (
                   <button
                     key={question}
                     type="button"
@@ -306,10 +328,10 @@ export function AssistantPage({
               />
             ),
           )}
-          {waiting && (
+          {waiting !== null && (
             <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <LoaderCircle aria-hidden className="size-4 animate-spin" />
-              Consultando tus datos…
+              {waiting}
             </p>
           )}
           <div ref={end} />
@@ -350,7 +372,7 @@ export function AssistantPage({
             type="submit"
             size="icon"
             aria-label="Enviar"
-            disabled={waiting || draft.trim() === "" || left === 0}
+            disabled={waiting !== null || draft.trim() === "" || left === 0}
             className="size-9"
           >
             <ArrowUp />
