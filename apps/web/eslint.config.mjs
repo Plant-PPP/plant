@@ -8,6 +8,7 @@ import {
   AI_PROVIDERS,
   ALL_FENCED,
   asSelector,
+  ASSISTANT_SINK,
   COST_SINK,
   fenceExcept,
   IMPORT_SINK,
@@ -207,6 +208,21 @@ export default defineConfig([
   {
     files: ["src/lib/imports/import-sink.test.ts"],
     rules: webRules({ allow: [IMPORT_SINK], syntax: LIB_SYNTAX }),
+  },
+  {
+    files: ["src/lib/assistant/assistant-sink.ts"],
+    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
+  },
+  {
+    files: ["src/lib/assistant/assistant-sink.test.ts"],
+    rules: webRules({ allow: [ASSISTANT_SINK], syntax: LIB_SYNTAX }),
+  },
+  {
+    files: ["src/app/api/chat/route.ts"],
+    rules: webRules({
+      allow: [COST_SINK, ASSISTANT_SINK],
+      syntax: SERVICE_WRITER_SYNTAX,
+    }),
   },
   {
     files: ["src/app/api/inngest/route.ts"],

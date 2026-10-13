@@ -7,7 +7,8 @@ import {
 } from "@plant/sources/spreadsheet";
 
 import { EXTRACTION_MODEL } from "./document-extractor";
-import { type ModelFactory, structuredCall } from "./structured-call";
+import type { ModelFactory } from "./costed-model";
+import { structuredCall } from "./structured-call";
 
 // The longest a mapping may take before the step retries the reading.
 const MAPPING_TIMEOUT_MS = 60_000;

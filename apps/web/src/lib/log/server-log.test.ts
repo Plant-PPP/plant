@@ -181,6 +181,7 @@ describe("errorType", () => {
     ],
     ["nothing without an error", null, undefined],
     ["nothing for no result", undefined, undefined],
+    ["nothing for a thrown string", "boom", undefined],
   ])("returns %s", (_label, value, type) => {
     expect(errorType(value)).toBe(type);
   });

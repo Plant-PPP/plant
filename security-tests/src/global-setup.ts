@@ -11,6 +11,7 @@ import {
   prepareMfaCases,
   runEnv,
   seedAiCost,
+  seedAssistant,
   seedColumnMapping,
   seedImportItem,
   seedQuotes,
@@ -55,6 +56,8 @@ export default async function globalSetup(): Promise<void> {
     await seedColumnMapping(stack, b.id);
     await seedImportItem(stack, a);
     await seedImportItem(stack, b);
+    await seedAssistant(stack, a.id);
+    await seedAssistant(stack, b.id);
     process.env[runEnv.quotes] = JSON.stringify(await seedQuotes(stack));
     const publicStack: PublicStack = {
       apiUrl: stack.apiUrl,

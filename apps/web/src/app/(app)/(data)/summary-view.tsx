@@ -1,4 +1,4 @@
-import { referenceUnit, snapshotOn } from "@plant/core";
+import { referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import { notFound } from "next/navigation";
 
@@ -10,14 +10,9 @@ import { SummaryPage } from "@/components/summary/summary-page";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
-import { currencyOf } from "@/lib/holdings/holding-name";
 import { readReferenceDollar } from "@/lib/holdings/read";
 import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
-import {
-  type HoldingsValuation,
-  holdingsValuation,
-} from "@/lib/holdings/valuation-view";
-import { pricedSnapshotOf } from "@/lib/ledger/ledger";
+import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import { serverLog } from "@/lib/log/server-log";
 import { contextFields, type ReadContext } from "@/lib/portfolio-setup/read";
 import { currentRequestId } from "@/lib/request-id-server";
@@ -29,13 +24,13 @@ import {
   type MonthDetail,
   type YearClose,
 } from "@/lib/summary/closes";
+import { closesOf, monthDetail, yearsOfCloses } from "@/lib/summary/compute";
 import {
-  closesNeed,
-  closesOf,
-  monthDetail,
-  yearsOfCloses,
-} from "@/lib/summary/compute";
-import { readCloses, SUMMARY_VIEW_EVENT } from "@/lib/summary/read";
+  type ClosesRead,
+  readCloses,
+  SUMMARY_VIEW_EVENT,
+} from "@/lib/summary/read";
+import { summaryValuation } from "@/lib/summary/valuation";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 import { createClient } from "@/lib/supabase/server";
 
@@ -101,25 +96,13 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
   });
   const portfolio =
     state.portfolios.find((each) => each.id === portfolioId) ?? null;
-  const rows = read.holdings.active.filter(
-    (row) => portfolio === null || row.portfolio.id === portfolio.id,
-  );
+  let rows: ClosesRead["holdings"]["active"];
   let valuation: HoldingsValuation;
   try {
-    valuation = holdingsValuation({
-      holdings: rows,
-      truncated: read.holdings.activeTruncated,
-      snapshot: pricedSnapshotOf(
-        state,
-        snapshotOn(state.quotes, state.today, closesNeed(state)).snapshot,
-      ).snapshot,
+    ({ rows, valuation } = summaryValuation(read, {
       unit,
-      referenceDollar: state.referenceDollar,
-      currencyOf: (holding) =>
-        holding.asset_class === "instrument"
-          ? currencyOf(state.instruments, holding.instrument_symbol)
-          : holding.currency,
-    });
+      portfolioId: portfolio?.id ?? null,
+    }));
   } catch (error) {
     assetsViewFailure(context, "valuation", error);
   }

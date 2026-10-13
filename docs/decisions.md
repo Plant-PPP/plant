@@ -2,6 +2,26 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-13 · The real assistant (PLA-47, PLA-48, PLA-49, PLA-50, PLA-51)
+
+- **Production only.** `/assistant` and `/api/chat` answer with the real chat in production; previews, staging included, keep the prototype, so PLA-47's "streaming in staging" is checked in production and locally with production's code. Without `ANTHROPIC_API_KEY` a question that needs the model gets 503 and counts nothing; the fixed answer still works.
+- **Not yet:** a link from a cost row to its conversation and prompt caching, which the AI costs entry expected with the chat; one user's 30 questions a month cost too little to need either.
+- **Tool calls are logged, not audited**: they only read, and each turn's line counts them; `audit_log` keeps what changes data, like a deleted conversation.
+- **Claude Haiku 4.5 through AI SDK's `ToolLoopAgent`** (`lib/ai/assistant/turn.ts`, the one line to change the model). It takes up to 6 steps, the last without tools, within 50 seconds. Each call is costed as `assistant_chat` (`costedModel`, shared with the import's calls).
+- **Five read-only tools** (`lib/assistant/tools-data.ts`), read once per turn the way Resumen reads (`readCloses`), through the session's client under RLS:
+  - net worth today: assets, debts and what is left;
+  - the largest holdings;
+  - the split by kind, currency and account;
+  - the last 12 closes and this year's result;
+  - converting between pesos, MEP and CCL.
+  
+  Every result says its sources, its day, its dollar and whether a figure left something out. A portfolio narrows the assets only: debts and closes are of the whole. The unit is the conversation's, not the model's choice; PLA-48's oficial and Bitcoin units are left out, as the chat answers in pesos, MEP and CCL.
+- **A question about what to buy or sell gets the fixed answer without a model** (`isAdvice`, shared with the prototype). The prompt says the same, for a question the check misses. The prompt's keyword skills and the evals wait for PLA-55.
+- **Conversations are kept per user** (`ai_conversations`, `ai_messages`), and only the chat route writes them (`assistant-sink.ts`), so a stored conversation is what the server streamed. The model reads the last 10 turns again, text only, the questions as untrusted text. The title is the first question cut short, with no model call.
+- **30 questions a month, counted in `ai_questions` before the model runs**, under a lock (`check_assistant_quota`). A question counts once asked, even if its answer fails or its conversation is deleted.
+- **Under each answer: the day, the dollar and what it read.** These come from the tools' results; the transcript shows them once the answer has finished. Charts wait for PLA-53, and the suggested questions are the ones the tools answer.
+- **Stopping an answer** stops the screen; the server finishes and keeps it.
+
 ## 2026-10-13 · Asistente as a page like the reference chat (PLA-136)
 
 - **The assistant is its own page, laid out as the reference app's chat**, which Tomas chose on 2026-10-13. There is no button or panel on other pages.

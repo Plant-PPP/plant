@@ -1,6 +1,10 @@
 import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
-import { buenosAiresDate, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  buenosAiresMonthStart,
+  type Database,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -137,7 +141,7 @@ async function quotaLeft(client: Client): Promise<boolean> {
   const result = await client
     .from("imports")
     .select("id", { count: "exact", head: true })
-    .gte("created_at", `${today.slice(0, 7)}-01T00:00:00-03:00`);
+    .gte("created_at", buenosAiresMonthStart(today));
   if (classifyPostgrestResult(result, 200) || result.count === null) {
     throw new Error("imports count failed");
   }
