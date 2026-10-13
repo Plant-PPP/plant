@@ -208,14 +208,14 @@ describe("with movements loaded", () => {
     const html = render([held("e1", "IOL")]);
     // A line names where it is, so two lines of one day stay apart.
     expect(html).toContain(
-      'aria-label="Editar venta del 01/10/2026 en IOL · Principal"',
+      'aria-label="Editar venta de 0,5 del 01/10/2026 en IOL · Principal"',
     );
     expect(html).toContain(
-      'aria-label="Borrar venta del 01/10/2026 en IOL · Principal"',
+      'aria-label="Borrar venta de 0,5 del 01/10/2026 en IOL · Principal"',
     );
     // A line of a holding the page no longer lists takes neither action.
-    expect(html).not.toContain('aria-label="Editar venta del 01/09/2026"');
-    expect(html).not.toContain('aria-label="Borrar venta del 01/09/2026"');
+    expect(html).not.toContain("Editar venta de 0,5 del 01/09/2026");
+    expect(html).not.toContain("Borrar venta de 0,5 del 01/09/2026");
   });
 
   it("puts each movement's type and holding under its date on a narrow table", () => {

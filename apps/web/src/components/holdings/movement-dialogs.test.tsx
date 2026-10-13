@@ -130,7 +130,7 @@ it("asks before deleting a movement, naming where it is", () => {
   }, confirm);
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(confirm.mock.calls[0]![0].title).toBe(
-    "¿Borrar venta del 01/10/2026 en IOL · Largo plazo?",
+    "¿Borrar venta de 0,5 del 01/10/2026 en IOL · Largo plazo?",
   );
 });
 
