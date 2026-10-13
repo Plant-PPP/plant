@@ -93,6 +93,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"liabilities": {
+                  Row: {
+                    "annual_rate": number | null,"balance": number,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"installment": number | null,"installments_left": number | null,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender": string | null,"matures_on": string | null,"next_due_on": string | null,"updated_at": string,"user_id": string,"uva": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "annual_rate"?: number | null,"balance": number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                  }
+                  Update: {
+                    "annual_rate"?: number | null,"balance"?: number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"],"label"?: string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "liabilities_instrument_symbol_fkey"
+      columns: ["instrument_symbol"]
+isOneToOne: false
+      referencedRelation: "instruments"
+      referencedColumns: ["symbol"]
+    }
+                  ]
                 },"manual_prices": {
                   Row: {
                     "created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"price": number,"price_date": string,"symbol": string,"updated_at": string,"user_id": string
@@ -266,7 +286,7 @@ isOneToOne: true
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto"|"cedear"|"bond"|"fci","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -382,7 +402,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const
