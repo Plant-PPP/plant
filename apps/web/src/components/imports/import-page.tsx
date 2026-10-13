@@ -26,6 +26,7 @@ import {
 } from "@/lib/imports/review";
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
 import { cn } from "@/lib/utils";
+import { ConsentCard } from "./consent-card";
 
 export type ImportActions = {
   // Starts reading each file into the account; each import's status then
@@ -62,6 +63,7 @@ export function ImportPage({
   used,
   reviewHref,
   actions,
+  consent,
 }: {
   accounts: SourceConnectionRow[];
   // Named in the list of earlier imports, never offered for a new one.
@@ -71,6 +73,9 @@ export function ImportPage({
   used: number;
   reviewHref: (id: string) => string;
   actions: ImportActions;
+  // On a page that asks for the terms: whether the user accepted the ones in
+  // force, and the accepting; the upload waits for it.
+  consent?: { accepted: boolean; accept: () => void };
 }) {
   const id = useId();
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
@@ -157,109 +162,113 @@ export function ImportPage({
         </p>
       </div>
 
-      <section className="grid gap-4 rounded-lg border p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid w-full gap-2 sm:w-64">
-            <Label htmlFor={`${id}-account`}>Cuenta</Label>
-            <Select
-              value={accountId}
-              onValueChange={(value) => value && setAccountId(value)}
-            >
-              <SelectTrigger id={`${id}-account`} className="w-full">
-                <SelectValue placeholder="Elegí una cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((each) => (
-                  <SelectItem key={each.id} value={each.id}>
-                    {each.institution}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {consent && !consent.accepted ? (
+        <ConsentCard onAccept={consent.accept} />
+      ) : (
+        <section className="grid gap-4 rounded-lg border p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="grid w-full gap-2 sm:w-64">
+              <Label htmlFor={`${id}-account`}>Cuenta</Label>
+              <Select
+                value={accountId}
+                onValueChange={(value) => value && setAccountId(value)}
+              >
+                <SelectTrigger id={`${id}-account`} className="w-full">
+                  <SelectValue placeholder="Elegí una cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((each) => (
+                    <SelectItem key={each.id} value={each.id}>
+                      {each.institution}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1 text-right">
+              <span className="text-muted-foreground text-xs">
+                {leftThisMonth(left, IMPORTS_PER_MONTH, "cargas")}
+              </span>
+              <span className="bg-muted h-1.5 w-40 overflow-hidden rounded-full">
+                <span
+                  className="bg-chart-3 block h-full"
+                  style={{ width: `${(used / IMPORTS_PER_MONTH) * 100}%` }}
+                />
+              </span>
+            </div>
           </div>
-          <div className="grid gap-1 text-right">
-            <span className="text-muted-foreground text-xs">
-              {leftThisMonth(left, IMPORTS_PER_MONTH, "cargas")}
-            </span>
-            <span className="bg-muted h-1.5 w-40 overflow-hidden rounded-full">
-              <span
-                className="bg-chart-3 block h-full"
-                style={{ width: `${(used / IMPORTS_PER_MONTH) * 100}%` }}
-              />
-            </span>
-          </div>
-        </div>
-        <div
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            send(event.dataTransfer.files);
-          }}
-          className={cn(
-            "grid place-items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center",
-            dragging && "border-primary bg-primary/5",
-          )}
-        >
-          <FileUp aria-hidden className="text-muted-foreground size-8" />
-          <p className="text-sm">
-            Arrastrá acá uno o varios archivos
-            <span className="text-muted-foreground block text-xs">
-              PDF, fotos o capturas, CSV o Excel
-            </span>
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={left === 0 || !accountId}
-              onClick={() => files.current?.click()}
-            >
-              Elegir archivos
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={left === 0 || !accountId}
-              onClick={() => camera.current?.click()}
-            >
-              <Camera />
-              Sacar foto
-            </Button>
-          </div>
-          <input
-            ref={files}
-            type="file"
-            multiple
-            accept={ACCEPT}
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
-            onChange={(event) => {
-              send(event.target.files);
-              event.target.value = "";
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
             }}
-          />
-          <input
-            ref={camera}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
-            onChange={(event) => {
-              send(event.target.files);
-              event.target.value = "";
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              send(event.dataTransfer.files);
             }}
-          />
-        </div>
-      </section>
+            className={cn(
+              "grid place-items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center",
+              dragging && "border-primary bg-primary/5",
+            )}
+          >
+            <FileUp aria-hidden className="text-muted-foreground size-8" />
+            <p className="text-sm">
+              Arrastrá acá uno o varios archivos
+              <span className="text-muted-foreground block text-xs">
+                PDF, fotos o capturas, CSV o Excel
+              </span>
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={left === 0 || !accountId}
+                onClick={() => files.current?.click()}
+              >
+                Elegir archivos
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={left === 0 || !accountId}
+                onClick={() => camera.current?.click()}
+              >
+                <Camera />
+                Sacar foto
+              </Button>
+            </div>
+            <input
+              ref={files}
+              type="file"
+              multiple
+              accept={ACCEPT}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(event) => {
+                send(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={camera}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(event) => {
+                send(event.target.files);
+                event.target.value = "";
+              }}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-3" aria-labelledby={`${id}-imports`}>
         <h2 id={`${id}-imports`} className="text-base font-semibold">

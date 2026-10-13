@@ -9,6 +9,11 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **While a question waits, the chat names what it reads**: "Consultando 2 fuentes: Movimientos, Cotizaciones…", from an optional `consults` action that the real chat fills from its tool calls; without it, "Consultando tus datos…".
 - **Production is unchanged**: the panel is mounted by the prototype's root, and `suggestions`, `compact` and `consults` are optional.
 
+## 2026-10-13 · First use (PLA-85, prototype)
+
+- **Resumen shows a new user the way to their net worth**: accept the terms, add an account, upload a statement or load a holding, and ask the assistant its first suggested question. Each step marks itself done from the data, and the card leaves once all are. Deleting the account in Ajustes shows it, as the prototype then holds a new user's data.
+- **Cargar asks for the terms before the first file**: what Plant does with the file (reads it, keeps it 30 days, ignores DNI, CUIT and CBU) and that it never trades or moves money, with a checkbox and "Aceptar y seguir". The acceptance records the terms' version (`CONSENT_VERSION`) and the day; a new version asks again. The real record goes in `consents`, and the copy waits for the lawyer's review (PLA-56).
+
 ## 2026-10-13 · Where a statement's units go (PLA-41, PLA-100, prototype)
 
 - **The review lets each row that adds units choose where they go**: a new instrument picks its portfolio (the account's default to start with, as PLA-41 asks), and an instrument the user holds in another account can come from there as a "Traspaso desde …", so a change of broker keeps the units' cost and date and makes no result (PLA-100). A row that is a transfer needs no price.

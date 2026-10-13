@@ -59,6 +59,7 @@ import { rowOf } from "@/components/holdings/holding-fields";
 import { type AssetsFilter, matchesFilter } from "@/lib/holdings/assets-filter";
 import { type AssetKey, assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingOrigin } from "@/lib/holdings/holding-name";
+import { CONSENT_VERSION } from "@/lib/onboarding/steps";
 import {
   PLACEMENT_KINDS,
   type PlacementKind,
@@ -112,6 +113,9 @@ export type PrototypeState = {
   referenceDollar: ReferenceDollar;
   // The unit the data pages open in; null for the reference dollar's.
   preferredUnit: Denominator | null;
+  // The version of the terms the user accepted, and when; null before the
+  // first file.
+  consent: { version: string; acceptedOn: string } | null;
   instruments: InstrumentRow[];
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
@@ -156,6 +160,17 @@ export type PrototypeState = {
 
 // The unit a data page shows with no ?unit=: the user's choice, else their
 // reference dollar's.
+// The terms accepted, in the version in force, before the first file.
+export function acceptConsent(
+  state: PrototypeState,
+  version: string,
+): Write<{ ok: true; id: string }> {
+  return {
+    state: { ...state, consent: { version, acceptedOn: state.today } },
+    result: { ok: true, id: version },
+  };
+}
+
 export const homeUnit = (state: PrototypeState): Denominator =>
   state.preferredUnit ?? referenceUnit(state.referenceDollar);
 
@@ -196,6 +211,11 @@ export function initialState(
     today,
     referenceDollar: fixtures.referenceDollar,
     preferredUnit: null,
+    // The made-up user loaded their files already, so accepted the terms.
+    consent:
+      fixtures.accounts.length > 0
+        ? { version: CONSENT_VERSION, acceptedOn: today }
+        : null,
     instruments: fixtures.instruments,
     accounts: fixtures.accounts,
     portfolios: fixtures.portfolios,
