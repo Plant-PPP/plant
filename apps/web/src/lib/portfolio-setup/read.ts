@@ -75,6 +75,9 @@ export type ListSpec<Row> = {
   param: string;
   columns: string;
   toRow: (data: Record<string, unknown>) => Row;
+  // Leaves out the rows holding nothing: an instrument holding sold out,
+  // which the pages with movements show apart.
+  heldOnly?: boolean;
 };
 
 const EVENT = "portfolio_setup.read";
@@ -85,7 +88,7 @@ const EVENT = "portfolio_setup.read";
 // LoggedError, which the (app) error page shows with a retry.
 export async function readList<Row>(
   client: SupabaseClient<Database>,
-  { table, param, columns, toRow }: ListSpec<Row>,
+  { table, param, columns, toRow, heldOnly = false }: ListSpec<Row>,
   context: ReadContext,
   { archived: withArchived = true }: ListOptions = {},
 ): Promise<ListView<Row>> {
@@ -103,20 +106,26 @@ export async function readList<Row>(
   }
   const cursor: Keyset | null = parsed.ok ? parsed.cursor : null;
 
-  const activeQuery = client
-    .from(table)
-    .select(columns)
-    .eq("user_id", userId)
-    .is("archived_at", null)
+  const held = <Q extends { filter: (...args: string[]) => Q }>(query: Q) =>
+    heldOnly ? query.filter("amount", "gt", "0") : query;
+  const activeQuery = held(
+    client
+      .from(table)
+      .select(columns)
+      .eq("user_id", userId)
+      .is("archived_at", null),
+  )
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(PAGE_ROW_LIMIT + 1);
   const archivedQuery = () => {
-    let query = client
-      .from(table)
-      .select(`${columns}, archived_at`)
-      .eq("user_id", userId)
-      .not("archived_at", "is", null);
+    let query = held(
+      client
+        .from(table)
+        .select(`${columns}, archived_at`)
+        .eq("user_id", userId)
+        .not("archived_at", "is", null),
+    );
     if (cursor) {
       query = query
         .lte("archived_at", cursor.at)

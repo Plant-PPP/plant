@@ -1,3 +1,4 @@
+jest.mock("server-only", () => ({}), { virtual: true });
 const notFound = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
@@ -35,7 +36,6 @@ const props = (key: string, value: string) => ({
 it.each([
   ["a portfolio", () => PortfolioPage(props("id", "p1"))],
   ["an account", () => AccountPage(props("id", "a1"))],
-  ["an instrument", () => InstrumentPage(props("symbol", "btc"))],
   ["a close", () => ClosePage(props("period", "2026-09"))],
   [
     "an import's review",

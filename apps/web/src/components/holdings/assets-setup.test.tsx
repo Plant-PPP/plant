@@ -501,9 +501,9 @@ describe("with movements", () => {
     referenceDollar: "mep",
   });
   const HREFS = {
-    instrument: (symbol: string) => `/assets/${symbol}`,
-    account: (id: string) => `/accounts/${id}`,
-    portfolio: (id: string) => `/portfolios/${id}`,
+    instrument: "/assets/",
+    account: "/accounts/",
+    portfolio: "/portfolios/",
   };
   const renderWith = (
     tab: AssetsTab,

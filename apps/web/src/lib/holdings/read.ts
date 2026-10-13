@@ -69,6 +69,7 @@ export function readHoldings(
       table: "holdings",
       param: "holdings",
       columns: HOLDING_COLUMNS,
+      heldOnly: true,
       toRow: (data) => {
         const {
           source_connection: account,
