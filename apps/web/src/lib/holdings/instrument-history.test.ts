@@ -20,6 +20,7 @@ it("sums the open holdings' value and cost, and every holding's results", () => 
       { date: "2025-06-01", amount: "40", kind: "sell", charges: "0" },
     ],
     "2025-12-01",
+    "130",
   );
   expect(summary).toMatchObject({
     quantity: "2",
@@ -38,7 +39,25 @@ it("has no result while a held unit has no value", () => {
     [{ row, closed: false, position: EMPTY_POSITION, value: null }],
     [],
     "2025-12-01",
+    null,
   );
   expect(summary.value).toBeNull();
   expect(summary.returns).toBeNull();
+});
+
+it("takes its value and gain over the exact sum it is given", () => {
+  const summary = instrumentSummary(
+    [
+      { row, closed: false, position: position("0.5", "500"), value: "500.01" },
+      { row, closed: false, position: position("0.5", "500"), value: "500.01" },
+    ],
+    [],
+    "2025-12-01",
+    // 1000.01 split in two halves of 500.005, each rounded up alone.
+    "1000.01",
+  );
+  expect(summary).toMatchObject({
+    value: "1000.01",
+    unrealized: { amount: "0.01" },
+  });
 });

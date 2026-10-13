@@ -1,5 +1,7 @@
 "use client";
 
+import { type ReactNode, useState } from "react";
+
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -56,4 +58,32 @@ export function ConfirmDialog({
       </DialogFooter>
     </AppDialog>
   );
+}
+
+export type ConfirmSpec = {
+  title: string;
+  description: string;
+  run: () => void;
+};
+
+// One confirmation at a time, for a page that asks before more than one kind
+// of delete; it confirms with "Borrar".
+export function useConfirm(returnFocusTo: () => HTMLElement | null): {
+  confirm: (spec: ConfirmSpec) => void;
+  dialog: ReactNode;
+} {
+  const [shown, setShown] = useState<ConfirmSpec | null>(null);
+  return {
+    confirm: setShown,
+    dialog: shown && (
+      <ConfirmDialog
+        title={shown.title}
+        description={shown.description}
+        confirmLabel="Borrar"
+        returnFocusTo={returnFocusTo}
+        onClose={() => setShown(null)}
+        onConfirm={shown.run}
+      />
+    ),
+  };
 }

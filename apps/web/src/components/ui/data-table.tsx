@@ -5,11 +5,9 @@ import {
   type ColumnDefTemplate,
   type RowData,
   getCoreRowModel,
-  getExpandedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronRight, type LucideIcon } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
 import { IconButton } from "@/components/ui/icon-button";
 import {
@@ -50,27 +48,21 @@ function slot<P extends object>(
 type DataTableRow = { id: string; unsaved?: true };
 
 const ACTIONS_COLUMN = "actions";
-const EXPAND_COLUMN = "expand";
 
 // Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
 // the table's width with `@`-variants. `footer` is one more row after the
-// body, such as a total. A row for which `expandable` is true opens what
-// `renderExpanded` renders beneath it, through `expandColumn`'s button.
+// body, such as a total.
 function DataTable<T extends DataTableRow>({
   columns,
   data,
   caption,
   footer,
-  expandable,
-  renderExpanded,
 }: {
   columns: ColumnDef<T>[];
   data: T[];
   caption: string;
   footer?: React.ReactNode;
-  expandable?: (row: T) => boolean;
-  renderExpanded?: (row: T) => React.ReactNode;
 }) {
   // The app has no React Compiler, and nothing memoizes the table instance.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -81,8 +73,6 @@ function DataTable<T extends DataTableRow>({
     // column without `size` stays the flexible one.
     defaultColumn: { size: undefined },
     getCoreRowModel: getCoreRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-    getRowCanExpand: (row) => expandable?.(row.original) ?? false,
     getRowId: (row) => row.id,
   });
 
@@ -92,16 +82,11 @@ function DataTable<T extends DataTableRow>({
   // out of view, and the caption names it. visibility: collapse keeps the
   // fixed layout's column widths, which the header cells set; the row's
   // border would still paint, so it goes too.
-  const dataColumns = columns.filter(
-    (column) => column.id !== ACTIONS_COLUMN && column.id !== EXPAND_COLUMN,
-  );
+  const dataColumns = columns.filter((column) => column.id !== ACTIONS_COLUMN);
   const headerRowClass =
     dataColumns.length > 1
       ? "@max-2xl:collapse @max-2xl:border-b-0!"
       : "collapse border-b-0!";
-
-  const headerRow = useRef<HTMLTableRowElement>(null);
-  const shownColumns = useShownColumns(headerRow, renderExpanded !== undefined);
 
   return (
     <div data-slot="data-table" className="@container rounded-md border">
@@ -109,11 +94,7 @@ function DataTable<T extends DataTableRow>({
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow
-              key={headerGroup.id}
-              ref={headerRow}
-              className={headerRowClass}
-            >
+            <TableRow key={headerGroup.id} className={headerRowClass}>
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
@@ -134,33 +115,21 @@ function DataTable<T extends DataTableRow>({
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <Fragment key={row.id}>
-              <TableRow
-                data-row-id={row.id}
-                aria-busy={row.original.unsaved || undefined}
-                className={row.original.unsaved ? "opacity-60" : undefined}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cell.column.columnDef.meta?.className}
-                  >
-                    {slot(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-              {row.getIsExpanded() && renderExpanded && (
-                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableCell
-                    id={expandedId(row.id)}
-                    colSpan={shownColumns ?? row.getVisibleCells().length}
-                    className="p-3"
-                  >
-                    {renderExpanded(row.original)}
-                  </TableCell>
-                </TableRow>
-              )}
-            </Fragment>
+            <TableRow
+              key={row.id}
+              data-row-id={row.id}
+              aria-busy={row.original.unsaved || undefined}
+              className={row.original.unsaved ? "opacity-60" : undefined}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell
+                  key={cell.id}
+                  className={cell.column.columnDef.meta?.className}
+                >
+                  {slot(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
           ))}
         </TableBody>
         {footer && <TableFooter>{footer}</TableFooter>}
@@ -230,65 +199,6 @@ function actionsColumn<T>(
   };
 }
 
-const expandedId = (rowId: string) => `expanded-${rowId}`;
-
-// How many columns the table shows at its width: its secondary columns hide
-// with CSS, and an expanded row spanning more columns than show would add
-// empty ones that squeeze the rest.
-function useShownColumns(
-  headerRow: React.RefObject<HTMLTableRowElement | null>,
-  enabled: boolean,
-): number | null {
-  const [count, setCount] = useState<number | null>(null);
-  useEffect(() => {
-    const row = headerRow.current;
-    if (!enabled || !row) return;
-    const measure = () =>
-      setCount(
-        [...row.children].filter(
-          (cell) => getComputedStyle(cell).display !== "none",
-        ).length,
-      );
-    const observer = new ResizeObserver(measure);
-    observer.observe(row.closest("table") ?? row);
-    return () => observer.disconnect();
-  }, [headerRow, enabled]);
-  return count;
-}
-
-// The button that opens a row `expandable` says, first in its row.
-function expandColumn<T>({
-  label,
-}: {
-  label: (row: T) => string;
-}): ColumnDef<T> {
-  return {
-    id: EXPAND_COLUMN,
-    size: 40,
-    header: () => <span className="sr-only">Abrir</span>,
-    meta: { className: "pr-0" },
-    cell: ({ row }) =>
-      row.getCanExpand() ? (
-        <button
-          type="button"
-          aria-expanded={row.getIsExpanded()}
-          aria-controls={row.getIsExpanded() ? expandedId(row.id) : undefined}
-          aria-label={label(row.original)}
-          onClick={row.getToggleExpandedHandler()}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 place-items-center rounded-md outline-none focus-visible:ring-2"
-        >
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              "size-4 transition-transform",
-              row.getIsExpanded() && "rotate-90",
-            )}
-          />
-        </button>
-      ) : null,
-  };
-}
-
 // A row's action button, found by the row and action ids `actionsColumn`
 // renders, so focus can return to it when the row comes back.
 function rowActionButton(
@@ -306,6 +216,6 @@ export {
   type DataTableRow,
   TruncatedText,
   actionsColumn,
-  expandColumn,
   rowActionButton,
+  type RowAction,
 };

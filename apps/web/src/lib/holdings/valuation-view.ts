@@ -61,14 +61,15 @@ export type Breakdown = Record<HoldingKind | "total", Sum>;
 
 // What the assets page shows, every amount computed by core: each holding's
 // value and price; each portfolio's and account's sum, the account's split by
-// kind; and the whole split by kind (its total among them) and by class, in
-// one unit.
+// kind; each instrument's sum by symbol, across accounts and portfolios; and
+// the whole split by kind (its total among them) and by class, in one unit.
 export type HoldingsValuation = {
   values: Record<string, HoldingValue>;
   portfolios: Record<string, Sum>;
   accounts: Record<string, Breakdown>;
   kinds: Breakdown;
   classes: Partial<Record<HoldingClass, Sum>>;
+  instruments: Record<string, Sum>;
 };
 
 // The caller passes the holdings the page shows. Each sum is rounded once from
@@ -118,9 +119,12 @@ export function holdingsValuation({
     other: sum(subset.filter((h) => kindOf(h) === "other")),
     total: sum(subset),
   });
-  const groupBy = <K extends string>(key: (holding: Holding) => K) => {
-    const groups = new Map<K, Holding[]>();
-    for (const holding of all) {
+  const groupBy = <K extends string, H extends Holding = Holding>(
+    key: (holding: H) => K,
+    list: readonly H[],
+  ) => {
+    const groups = new Map<K, H[]>();
+    for (const holding of list) {
       const id = key(holding);
       const group = groups.get(id) ?? [];
       group.push(holding);
@@ -171,20 +175,29 @@ export function holdingsValuation({
       }),
     ),
     portfolios: Object.fromEntries(
-      groupBy((h) => h.portfolio_id).map(([id, subset]) => [id, sum(subset)]),
+      groupBy((h) => h.portfolio_id, all).map(([id, subset]) => [
+        id,
+        sum(subset),
+      ]),
     ),
     accounts: Object.fromEntries(
-      groupBy((h) => accountOf.get(h.id) ?? "").map(([id, subset]) => [
+      groupBy((h) => accountOf.get(h.id) ?? "", all).map(([id, subset]) => [
         id,
         breakdown(subset),
       ]),
     ),
     kinds: breakdown(all),
     classes: Object.fromEntries(
-      groupBy((h) => classById.get(h.id)!).map(([id, subset]) => [
+      groupBy((h) => classById.get(h.id)!, all).map(([id, subset]) => [
         id,
         sum(subset),
       ]),
+    ),
+    instruments: Object.fromEntries(
+      groupBy(
+        (h) => h.instrument_symbol,
+        all.flatMap((h) => (h.asset_class === "instrument" ? [h] : [])),
+      ).map(([symbol, subset]) => [symbol, sum(subset)]),
     ),
   };
 }

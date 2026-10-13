@@ -6,7 +6,11 @@ import {
   valueHoldings,
 } from "@plant/core";
 
-import { holdingName, instrumentNames } from "./holding-name";
+import {
+  holdingInSentence,
+  holdingName,
+  instrumentNames,
+} from "./holding-name";
 import { holdingsValuation } from "./valuation-view";
 
 // Test data mirroring core's valuation fixture.
@@ -235,6 +239,36 @@ describe("holdingsValuation shares", () => {
     expect(view.kinds.cash.share).not.toBeNull();
   });
 
+  it("sums an instrument across its holdings, other classes left out", () => {
+    const second = holding({
+      id: "btc2",
+      portfolio_id: "p2",
+      asset_class: "instrument",
+      instrument_symbol: "BTC",
+      amount: "0.25",
+    });
+    const both = [...HOLDINGS, second];
+    const view = holdingsValuation({
+      ...base,
+      holdings: rows(both).map((row) =>
+        row.holding.id === "btc2" ? { ...row, account: { id: "a2" } } : row,
+      ),
+    });
+    const btc = valueHoldings([HOLDINGS[0]!, second], SNAPSHOT, {
+      denominator: "ars",
+      referenceDollar: "mep",
+    });
+    expect(Object.keys(view.instruments)).toEqual(["BTC"]);
+    expect(view.instruments.BTC).toMatchObject({
+      value: btc.total,
+      count: 2,
+      missing: 0,
+    });
+    // The share of the exact sum, not the sum of the rounded shares.
+    // BTC is the only crypto, so its class carries the same exact share.
+    expect(view.instruments.BTC?.share).toBe(view.classes.crypto?.share);
+  });
+
   it("has no share for a part with no holding", () => {
     expect(holdingsValuation(base).accounts.a1?.other.share).toBeNull();
   });
@@ -278,4 +312,17 @@ describe("holdingName", () => {
       ),
     ).toBe(name);
   });
+});
+
+it("names a holding in a sentence by where it is", () => {
+  expect(
+    holdingInSentence(
+      {
+        holding: HOLDINGS[0]!,
+        account: { institution: "IOL" },
+        portfolio: { name: "Largo plazo" },
+      },
+      instrumentNames([{ symbol: "BTC", name: "Bitcoin" }]),
+    ),
+  ).toBe("BTC · Bitcoin de IOL en Largo plazo");
 });

@@ -2,18 +2,24 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-import { type Denominator, holdingSchema } from "@plant/core";
+import {
+  type Denominator,
+  holdingSchema,
+  type QuoteSnapshot,
+} from "@plant/core";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { type AssetsTab, SALES_TABS, TABS } from "@/lib/holdings/assets-filter";
-import type { HoldingRow } from "@/lib/holdings/read";
+import type { HoldingRow, InstrumentRow } from "@/lib/holdings/read";
 import {
   type HoldingsValuation,
   type Sum,
   holdingsValuation,
 } from "@/lib/holdings/valuation-view";
 
-import { AssetsSetup, type HoldingActions } from "./assets-setup";
+import type { HoldingActions } from "@/lib/holdings/write-actions";
+
+import { AssetsSetup } from "./assets-setup";
 
 const done = async () => ({ ok: true as const, id: "x" });
 const ACTIONS: HoldingActions = {
@@ -101,6 +107,7 @@ const VALUATION: HoldingsValuation = {
   accounts: { a1: KINDS },
   kinds: KINDS,
   classes: { cash: TOTAL },
+  instruments: {},
 };
 
 const ACCOUNT = {
@@ -272,6 +279,7 @@ it("says a total with no quoted holding has none, never 0", () => {
       accounts: { a1: { ...KINDS, total: missing } },
       kinds: { ...KINDS, cash: missing, total: missing },
       classes: { cash: missing },
+      instruments: {},
     },
   });
   expect(unquoted).not.toContain("$ 0,00");
@@ -488,11 +496,20 @@ describe("with movements", () => {
     unit: "usd_mep",
     referenceDollar: "mep",
   });
-  const renderWith = (tab: AssetsTab) =>
+  const HREFS = {
+    instrument: (symbol: string) => `/assets/${symbol}`,
+    account: (id: string) => `/accounts/${id}`,
+    portfolio: (id: string) => `/portfolios/${id}`,
+  };
+  const renderWith = (
+    tab: AssetsTab,
+    rows: HoldingRow[] = [btc, row("h1", PRINCIPAL, "1000")],
+    shown = valuation,
+  ) =>
     renderToStaticMarkup(
       <AssetsSetup
-        holdings={list([btc, row("h1", PRINCIPAL, "1000")])}
-        valuation={valuation}
+        holdings={list(rows)}
+        valuation={shown}
         unit="usd_mep"
         referenceUnit="usd_mep"
         filter={{ portfolioId: null, holdingClass: null, search: "" }}
@@ -505,6 +522,7 @@ describe("with movements", () => {
         actions={ACTIONS}
         movements={movements}
         movementActions={{ create: done, update: done }}
+        hrefs={HREFS}
       />,
     );
 
@@ -517,13 +535,202 @@ describe("with movements", () => {
     expect(html).toMatch(/Sin movimientos/);
   });
 
-  it("opens an instrument holding into its movements, and offers to add one", () => {
-    const html = renderWith("holdings");
-    expect(html).toContain(
-      'aria-label="Movimientos de BTC de IOL en Principal"',
+  it("shows an instrument once across its holdings, linked to its page", () => {
+    const binance = { id: "a2", institution: "Binance" };
+    const second: HoldingRow = {
+      ...btc,
+      id: "h8",
+      holding: { ...btc.holding, id: "h8", portfolio_id: LARGO.id },
+      account: binance,
+      portfolio: LARGO,
+    };
+    const rows = [btc, second, row("h1", PRINCIPAL, "1000")];
+    const html = renderWith(
+      "holdings",
+      rows,
+      holdingsValuation({
+        holdings: rows,
+        truncated: false,
+        snapshot: {
+          date: "2026-10-10",
+          fx: { mep: { sell: "1200", date: "2026-10-10" } },
+          prices: {
+            BTC: { price: "60000", currency: "USD", date: "2026-10-10" },
+          },
+        },
+        unit: "usd_mep",
+        referenceDollar: "mep",
+      }),
     );
-    expect(html).not.toContain('aria-label="Movimientos de Caja h1');
-    expect(html).toContain("Agregar movimiento");
+    expect(html.match(/href="\/assets\/BTC"/g)).toHaveLength(1);
+    expect(html).toContain("2 cuentas");
+    expect(html).toMatch(/class="sr-only">IOL, Binance</);
+    expect(html).toContain("2 carteras");
+    expect(html).toMatch(/class="sr-only">Principal, Largo plazo</);
+    // Both holdings' units, at 60.000 each.
+    expect(html).toContain("US$ 60.000,00");
+    // No row opens under itself.
+    expect(html).not.toContain("Movimientos de");
+    // Its one action adds a movement; a holding of its own keeps Editar.
+    expect(html).toContain('aria-label="Agregar movimiento de BTC"');
+    expect(html).not.toContain('aria-label="Borrar BTC');
+    expect(html).toContain('aria-label="Editar Caja h1 de IOL en Principal"');
+  });
+
+  describe("an instrument held twice", () => {
+    const second: HoldingRow = {
+      ...btc,
+      id: "h8",
+      holding: { ...btc.holding, id: "h8", portfolio_id: LARGO.id },
+      account: { id: "a2", institution: "Binance" },
+      portfolio: LARGO,
+    };
+    // 48.000.000 pesos at 1.200 are US$ 40.000: more than one BTC holding
+    // (US$ 30.000), less than both (US$ 60.000).
+    const cash = row("h1", PRINCIPAL, "48000000");
+    const rows = [btc, second, cash];
+    const twice = holdingsValuation({
+      holdings: rows,
+      truncated: false,
+      snapshot: {
+        date: "2026-10-10",
+        fx: { mep: { sell: "1200", date: "2026-10-10" } },
+        prices: {
+          BTC: { price: "60000", currency: "USD", date: "2026-10-10" },
+        },
+      },
+      unit: "usd_mep",
+      referenceDollar: "mep",
+    });
+    const valuedAt = (
+      holdings: HoldingRow[],
+      prices: QuoteSnapshot["prices"],
+    ) =>
+      holdingsValuation({
+        holdings,
+        truncated: false,
+        snapshot: {
+          date: "2026-10-10",
+          fx: { mep: { sell: "1200", date: "2026-10-10" } },
+          prices,
+        },
+        unit: "usd_mep",
+        referenceDollar: "mep",
+      });
+    const renderTwice = (
+      holdings: HoldingRow[] = rows,
+      {
+        valuation = twice,
+        instruments = [],
+      }: { valuation?: HoldingsValuation; instruments?: InstrumentRow[] } = {},
+    ) =>
+      renderToStaticMarkup(
+        <AssetsSetup
+          holdings={list(holdings)}
+          valuation={valuation}
+          unit="usd_mep"
+          referenceUnit="usd_mep"
+          filter={{ portfolioId: null, holdingClass: null, search: "" }}
+          params={{}}
+          accounts={[ACCOUNT]}
+          portfolios={[PRINCIPAL, LARGO]}
+          instruments={instruments}
+          today="2026-10-10"
+          tabs={SALES_TABS}
+          actions={ACTIONS}
+          movements={{
+            ...movements,
+            positions: new Map([
+              ...movements.positions,
+              [
+                "h8",
+                {
+                  quantity: "0.5",
+                  money: {
+                    cost: "20000",
+                    charges: "0",
+                    income: "0",
+                    realized: "0",
+                  },
+                },
+              ],
+            ]),
+          }}
+          movementActions={{ create: done, update: done }}
+          hrefs={HREFS}
+        />,
+      );
+    const html = renderTwice();
+
+    it("sorts the instrument by the value of all its holdings", () => {
+      expect(html.indexOf('href="/assets/BTC"')).toBeLessThan(
+        html.indexOf("Caja h1"),
+      );
+    });
+
+    it("totals the cost of every holding with movements in the footer", () => {
+      expect(html).toMatch(/<tfoot[^>]*>.*US\$ 35\.000,00.*<\/tfoot>/);
+    });
+
+    it("archives a holding of its own but not an instrument's row", () => {
+      expect(html).toContain(
+        'aria-label="Archivar Caja h1 de IOL en Principal"',
+      );
+      expect(html).not.toContain("Archivar BTC");
+    });
+
+    it("calculates the instrument's row while a write to any holding of it runs", () => {
+      expect(html).not.toContain("Calculando…");
+      const unsaved = { ...second, unsaved: true as const };
+      expect(renderTwice([btc, unsaved, cash])).toContain("Calculando…");
+    });
+
+    it("keeps the instrument's place while a write to a holding of it runs", () => {
+      const unsaved = { ...second, unsaved: true as const };
+      const saving = renderTwice([btc, unsaved, cash]);
+      expect(saving.indexOf('href="/assets/BTC"')).toBeLessThan(
+        saving.indexOf("Caja h1"),
+      );
+    });
+
+    it("names the instrument's movement by its symbol and name", () => {
+      const named = renderTwice(rows, {
+        instruments: [
+          { symbol: "BTC", name: "Bitcoin", currency: "USD", type: "crypto" },
+        ],
+      });
+      expect(named).toContain(
+        'aria-label="Agregar movimiento de BTC · Bitcoin"',
+      );
+    });
+
+    it("counts each holding with no quote in the note, as the total does", () => {
+      const unquoted = renderTwice(rows, {
+        valuation: valuedAt(rows, {}),
+      });
+      expect(unquoted).toContain(
+        "A 2 tenencias les falta cotización; el total no las incluye.",
+      );
+    });
+
+    it("takes the footer's gain over the total, rounded once", () => {
+      // At 60.000,01 each half BTC rounds to 30.000,01 alone, while both
+      // are worth 60.000,01: a gain of 25.000,01 over the cost of 35.000.
+      const both = [btc, second];
+      const footer = renderTwice(both, {
+        valuation: valuedAt(both, {
+          BTC: { price: "60000.01", currency: "USD", date: "2026-10-10" },
+        }),
+      }).match(/<tfoot[^>]*>.*<\/tfoot>/)?.[0];
+      expect(footer).toContain("+US$ 25.000,01");
+    });
+  });
+
+  it("keeps one row per holding without movements", () => {
+    const btcAlone = { ...btc };
+    const html = render([btcAlone, row("h1", PRINCIPAL, "1000")]);
+    expect(html).toContain('aria-label="Editar BTC de IOL en Principal"');
+    expect(html).not.toContain("Agregar movimiento de");
   });
 
   it("shows the year's sales with their totals and counts them in the tab", () => {

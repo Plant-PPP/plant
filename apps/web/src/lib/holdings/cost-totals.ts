@@ -3,7 +3,7 @@ import { exactOf, over, stored, sumOrNull } from "@plant/shared";
 
 import { percentOf } from "@/lib/format/amount";
 
-import type { HoldingsValuation } from "./valuation-view";
+import type { Sum } from "./valuation-view";
 
 // What units would gain or lose at their value: the amount, and that as a
 // percent of cost to one decimal (null when cost is 0).
@@ -22,33 +22,59 @@ export const gainLoss = (
 ): GainLoss | null =>
   position.money && value !== null ? gainOf(position.money.cost, value) : null;
 
-// The cost of one unit held, or null when there is none to price.
-export function averageCost(position: Position): string | null {
-  if (!position.money || exactOf(position.quantity).n === 0n) return null;
-  return stored(over(exactOf(position.money.cost), exactOf(position.quantity)));
+// A cost over its units, or null for no units.
+export function averageOf(cost: string, quantity: string): string | null {
+  if (exactOf(quantity).n === 0n) return null;
+  return stored(over(exactOf(cost), exactOf(quantity)));
 }
 
-// The cost and gain of the shown holdings that have movements, each summed
-// exactly: null when one of them cannot be expressed in the unit or has no
-// value.
+export type CostTotals = {
+  count: number;
+  cost: string | null;
+  gain: GainLoss | null;
+  // Their units, which only add up within one instrument.
+  quantity: string | null;
+};
+
+// The cost, gain and units of the holdings that have movements, each summed
+// exactly: cost and gain null when one of them cannot be expressed in the
+// unit or has no value.
 export function costTotals(
-  rows: readonly { id: string }[],
-  positions: ReadonlyMap<string, Position>,
-  valuation: Pick<HoldingsValuation, "values">,
-): { count: number; cost: string | null; gain: GainLoss | null } {
-  const held = rows.flatMap((row) => {
-    const position = positions.get(row.id);
-    return position
-      ? [{ money: position.money, value: valuation.values[row.id]?.value }]
-      : [];
-  });
+  items: readonly {
+    position: Position | null | undefined;
+    value: string | null | undefined;
+  }[],
+): CostTotals {
+  const held = items.flatMap(({ position, value }) =>
+    position ? [{ position, value: value ?? null }] : [],
+  );
   // No holding with movements has no cost to show, not a cost of 0.
-  if (held.length === 0) return { count: 0, cost: null, gain: null };
-  const cost = sumOrNull(held.map(({ money }) => money?.cost ?? null));
-  const value = sumOrNull(held.map(({ value }) => value ?? null));
+  if (held.length === 0) {
+    return { count: 0, cost: null, gain: null, quantity: null };
+  }
+  const cost = sumOrNull(
+    held.map(({ position }) => position.money?.cost ?? null),
+  );
+  const value = sumOrNull(held.map(({ value }) => value));
   return {
     count: held.length,
     cost,
     gain: cost === null || value === null ? null : gainOf(cost, value),
+    quantity: sumOrNull(held.map(({ position }) => position.quantity)),
   };
+}
+
+// Totals whose gain is over an exact sum rounded once, when every holding the
+// sum covers has movements and a quote: costTotals adds each holding's value
+// rounded alone, which can miss the shown sum by a cent.
+export function overExactSum(
+  totals: CostTotals,
+  sum: Pick<Sum, "value" | "count" | "missing"> | null | undefined,
+): CostTotals {
+  return sum &&
+    totals.count === sum.count &&
+    totals.cost !== null &&
+    sum.missing === 0
+    ? { ...totals, gain: gainOf(totals.cost, sum.value) }
+    : totals;
 }

@@ -14,7 +14,7 @@ import {
   shownSign,
   signed,
 } from "@/lib/format/amount";
-import { folded } from "@/lib/format/text";
+import { countOf, folded } from "@/lib/format/text";
 import {
   type AssistantMessage,
   type ChatUnit,
@@ -152,7 +152,7 @@ export function prototypeAnswer(
     (each) => words.includes(folded(each.symbol)) || namesIn(words, each.name),
   );
   if (instrument) {
-    const { holdings, flows } = instrumentHoldings(
+    const { holdings, flows, value } = instrumentHoldings(
       state,
       instrument.symbol,
       unit,
@@ -166,7 +166,7 @@ export function prototypeAnswer(
         sources: ["Tus tenencias"],
       };
     }
-    const summary = instrumentSummary(holdings, flows, state.today);
+    const summary = instrumentSummary(holdings, flows, state.today, value);
     const returns = summary.returns;
     const held = exactOf(summary.quantity).n !== 0n;
     return {
@@ -240,7 +240,7 @@ export function prototypeAnswer(
     const count = state.liabilities.length;
     return {
       ...base,
-      text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${count === 1 ? "1 deuda" : `${count} deudas`}.${
+      text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${countOf(count, "deuda", "deudas")}.${
         count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
       }`,
       chart:
