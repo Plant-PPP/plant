@@ -974,6 +974,16 @@ describe("origin and the report", () => {
     ).toBe(true);
   });
 
+  it("leaves the state as it was when the choice is already the asset's", () => {
+    const same = setInTaxReport(state, instrumentKey("AAPL"), true);
+    expect(same.result).toEqual({ ok: true, id: instrumentKey("AAPL") });
+    expect(same.state).toBe(state);
+    const out = setInTaxReport(state, instrumentKey("AAPL"), false).state;
+    const again = setInTaxReport(out, instrumentKey("AAPL"), false);
+    expect(again.result).toEqual({ ok: true, id: instrumentKey("AAPL") });
+    expect(again.state).toBe(out);
+  });
+
   it("refuses an asset the user has no holding of", () => {
     const refused = setInTaxReport(state, instrumentKey("MSFT"), false);
     expect(refused.result).toEqual({ ok: false, code: "not_found" });

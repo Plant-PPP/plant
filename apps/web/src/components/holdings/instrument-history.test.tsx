@@ -351,6 +351,41 @@ describe("with details", () => {
     expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
   });
 
+  it("names the one open holding's account, leaving out a sold holding's", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "Binance")],
+    });
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+    expect(html).not.toContain("donde lo tenés");
+  });
+
+  it("keeps the note while only a sold holding's account is in the report", () => {
+    const html = render([held("e1", "IOL"), held("e2", "Binance", true)], {
+      details: details(true),
+      accounts: [
+        outOfReport("a-e1", "IOL"),
+        { ...outOfReport("a-e2", "Binance"), includeInTaxReport: true },
+      ],
+    });
+    expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
+    expect(html).toContain(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte',
+    );
+  });
+
+  it("adds no note once every holding of it is sold", () => {
+    const html = render([held("e1", "IOL", true)], {
+      details: details(true),
+      accounts: [outOfReport("a-e1", "IOL")],
+    });
+    expect(html).toContain("Incluir en el reporte");
+    expect(html).not.toContain("no se incluye en el reporte");
+    expect(html).not.toMatch(/role="switch"[^>]*aria-describedby/);
+  });
+
   it("says the accounts holding it leave it out of the report", () => {
     const html = render([held("e1", "IOL"), held("e2", "Binance")], {
       details: details(true),

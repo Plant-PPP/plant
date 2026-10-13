@@ -108,6 +108,18 @@ describe("the excluded-accounts note", () => {
     );
   });
 
+  it("agrees the whole plural sentence with a holding", () => {
+    expect(note(["IOL", "Binance"], "holding")).toBe(
+      'Las <a class="underline" href="/accounts">cuentas</a> donde la tenés no se incluyen en el reporte, así que esta tenencia tampoco.',
+    );
+  });
+
+  it("names the one account the same way for an asset", () => {
+    expect(note(["IOL"], "asset")).toBe(
+      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+    );
+  });
+
   it("counts accounts, not names: two accounts of one institution read plural", () => {
     expect(note(["IOL", "IOL"], "asset")).toContain(
       '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen',
