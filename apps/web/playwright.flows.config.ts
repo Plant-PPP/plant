@@ -3,35 +3,49 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 3101;
 
+const notRunning =
+  "Local Supabase is not running. Run: pnpm exec supabase start";
+
+// The flows sign up users, and plant-staging is also production's database
+// until the beta. The same guard as security-tests/src/local-stack.ts, copied:
+// security-tests is a leaf no package may import, and a config-only helper
+// does not earn a place in a shared package.
+const localHosts = new Set(["127.0.0.1", "localhost"]);
+
+function assertLocal(url: string) {
+  if (!localHosts.has(new URL(url).hostname)) {
+    throw new Error("The e2e flows run only against local Supabase");
+  }
+}
+
 // The local stack's URL and anon key, read once: workers load this file again
 // and inherit the runner's environment.
 function pointAtLocalSupabase() {
-  if (
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
+  const { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_ANON_KEY: key } =
+    process.env;
+  if (url && key) {
+    assertLocal(url);
     return;
   }
-  const status = execFileSync(
-    "pnpm",
-    ["exec", "supabase", "status", "-o", "env"],
-    {
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  ).toString();
-  const read = (name: string) => {
-    const value = status.match(
-      new RegExp(`^${name}="?([^"\\n]*)"?$`, "m"),
-    )?.[1];
-    if (!value) {
-      throw new Error(
-        `supabase status did not return ${name}; run pnpm exec supabase start`,
-      );
-    }
-    return value;
-  };
-  process.env.NEXT_PUBLIC_SUPABASE_URL = read("API_URL");
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = read("ANON_KEY");
+  let status: Record<string, unknown>;
+  try {
+    status = JSON.parse(
+      execFileSync("pnpm", ["exec", "supabase", "status", "-o", "json"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    );
+  } catch {
+    // The CLI output carries the keys, so none of it goes into the error.
+    throw new Error(notRunning);
+  }
+  const { API_URL: apiUrl, ANON_KEY: anonKey } = status;
+  if (typeof apiUrl !== "string" || typeof anonKey !== "string") {
+    throw new Error(notRunning);
+  }
+  assertLocal(apiUrl);
+  process.env.NEXT_PUBLIC_SUPABASE_URL = apiUrl;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = anonKey;
 }
 
 pointAtLocalSupabase();

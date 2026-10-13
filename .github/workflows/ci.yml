@@ -153,9 +153,11 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
+        id: chromium
         run: pnpm --filter @plant/web exec playwright install --with-deps chromium
 
       - name: E2E tests
@@ -166,7 +168,7 @@ jobs:
       # so it is dropped.
       - name: Start Supabase (database, Auth, PostgREST, Mailpit)
         id: db
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.chromium.outcome == 'success' }}
         run: pnpm exec supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /dev/null
 
       - name: E2E flows

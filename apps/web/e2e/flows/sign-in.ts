@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 
+// Local Mailpit ([local_smtp] in supabase/config.toml); E2E_MAILPIT_URL points
+// the flows at another one.
 const MAILPIT_URL = process.env.E2E_MAILPIT_URL ?? "http://127.0.0.1:54324";
 
 type MailpitSearch = { messages: { Created: string; Snippet: string }[] };
