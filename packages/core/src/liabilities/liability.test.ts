@@ -2,6 +2,7 @@ import type { QuoteSnapshot } from "../quotes/contract/quote";
 import {
   type Liability,
   liabilityInputSchema,
+  liabilityQuotesNeeded,
   liabilityValue,
   valueLiabilities,
 } from "./liability";
@@ -110,4 +111,15 @@ it("refuses a rate it cannot read instead of throwing", () => {
 
 it("leaves a debt with no currency unvalued, never as pesos", () => {
   expect(value({ currency: null })).toEqual({ missing: "currency" });
+});
+
+it("needs the UVA only for a UVA debt, and each loaned instrument's price", () => {
+  const none = liabilityQuotesNeeded([]);
+  expect(none.fxKinds).not.toContain("uva");
+  const need = liabilityQuotesNeeded([
+    { uva: true, instrument_symbol: null },
+    { uva: false, instrument_symbol: "ETH" },
+  ]);
+  expect(need.fxKinds).toEqual([...none.fxKinds, "uva"]);
+  expect(need.symbols).toEqual([...none.symbols, "ETH"]);
 });

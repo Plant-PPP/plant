@@ -20,6 +20,7 @@ export const OWNED_KEYS = {
   ai_costs: "id",
   consents: "id",
   holdings: "id",
+  liabilities: "id",
   manual_prices: "id",
   manual_rates: "id",
   movements: "id",
@@ -36,6 +37,7 @@ export const OWNED_KEYS = {
 // in supabase/tests pins the grant.
 export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
   "holdings",
+  "liabilities",
   "manual_prices",
   "manual_rates",
   "movements",

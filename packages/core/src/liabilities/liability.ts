@@ -10,9 +10,14 @@ import {
 } from "@plant/shared";
 import { z } from "zod";
 
-import { SYMBOL_PATTERN, type QuoteSnapshot } from "../quotes/contract/quote";
+import {
+  type QuoteNeed,
+  SYMBOL_PATTERN,
+  type QuoteSnapshot,
+} from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import { DENOMINATORS, type Denominator } from "../valuation/denominators";
+import { quotesNeeded } from "../valuation/holdings";
 import {
   annualRate,
   holdingDateSchema,
@@ -157,4 +162,24 @@ export function valueLiabilities(
     };
   });
   return { total: toDecimal(total, scale), complete, items };
+}
+
+// The quotes valuing these debts in any unit can read: what valuing no
+// holding needs, the UVA when a debt is in UVA, and each loaned instrument's
+// price.
+export function liabilityQuotesNeeded(
+  debts: readonly Pick<Liability, "uva" | "instrument_symbol">[],
+): QuoteNeed {
+  const base = quotesNeeded([]);
+  return {
+    fxKinds: debts.some((debt) => debt.uva)
+      ? [...base.fxKinds, "uva"]
+      : base.fxKinds,
+    symbols: [
+      ...base.symbols,
+      ...debts.flatMap((debt) =>
+        debt.instrument_symbol === null ? [] : [debt.instrument_symbol],
+      ),
+    ],
+  };
 }
