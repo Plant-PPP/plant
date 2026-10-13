@@ -16,7 +16,9 @@ import type { ListView } from "@/lib/portfolio-setup/read";
 import { type Answer, dialogAnswer, type MessagesFor } from "./answers";
 import type { OptimisticRun, Result } from "./optimistic-writes";
 
-type SetupCardState = ReturnType<typeof useSetupCard>;
+// What a section's writes call: its heading and the row and dialog actions
+// that give them feedback.
+export type SetupCardState<C = unknown> = ReturnType<typeof useSetupCard<C>>;
 
 // A dialog a refused write opens again, with what the user typed and the
 // alert.

@@ -1,6 +1,7 @@
 import type { Denominator } from "@plant/core";
 import type { ReactNode } from "react";
 
+import { countOf } from "@/lib/format/text";
 import {
   formatAmount,
   formatShare,
@@ -21,7 +22,7 @@ export const CALCULATING = "Calculando…";
 export const NO_QUOTE = "Sin cotización";
 
 export const holdingsCountText = (count: number) =>
-  count === 1 ? "1 tenencia" : `${count} tenencias`;
+  countOf(count, "tenencia", "tenencias");
 
 // A figure the page has no value for: a dash, read as what it means.
 export function MissingFigure({ text }: { text: string }) {

@@ -7,7 +7,6 @@ import {
   type MovementCursor,
 } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import {
   DataTable,
   TruncatedText,
   actionsColumn,
+  type RowAction,
 } from "@/components/ui/data-table";
 import { formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -36,14 +36,6 @@ type Loaded =
   | { kind: "loading"; rows: Row[] }
   | { kind: "ready"; rows: Row[]; next: MovementCursor | null }
   | { kind: "failed"; rows: Row[]; retry: MovementCursor | null };
-
-export type MovementRowAction = {
-  id: string;
-  icon: LucideIcon;
-  tooltip: string;
-  label: (line: MovementLine) => string;
-  onClick: (line: MovementLine) => void;
-};
 
 const money = (value: string | null | undefined, unit: Denominator) => (
   <AmountText amount={value} unit={unit} />
@@ -72,7 +64,7 @@ export function MovementsTable({
   instrumentTypes?: ReadonlyMap<string, InstrumentType>;
   // Shows only the newest `limit`, with no more to page.
   limit?: number;
-  actions?: MovementRowAction[];
+  actions?: RowAction<MovementLine>[];
   pending?: boolean;
 }) {
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading", rows: [] });
@@ -114,15 +106,29 @@ export function MovementsTable({
     {
       id: "date",
       header: "Fecha",
-      size: 96,
-      meta: { className: "tabular-nums" },
-      cell: ({ row: { original } }) => formatDate(original.movement.date),
+      // Below @2xl the type and the holding ride under the date.
+      meta: { className: "w-32 tabular-nums @2xl:w-24" },
+      cell: ({ row: { original } }) => (
+        <>
+          {formatDate(original.movement.date)}
+          <TruncatedText
+            className="text-xs text-muted-foreground @2xl:hidden"
+            text={[
+              lineLabel(original),
+              holdingName?.(original.movement.holding_id),
+            ]
+              .filter((part) => part)
+              .join(" · ")}
+          />
+        </>
+      ),
     },
     ...(holdingName
       ? [
           {
             id: "holding",
             header: "Activo",
+            meta: { className: "hidden @2xl:table-cell" },
             cell: ({ row: { original } }: { row: { original: Row } }) => (
               <TruncatedText text={holdingName(original.movement.holding_id)} />
             ),
@@ -133,6 +139,7 @@ export function MovementsTable({
       id: "kind",
       header: "Tipo",
       size: 112,
+      meta: { className: "hidden @2xl:table-cell" },
       cell: ({ row: { original } }) => lineLabel(original),
     },
     {

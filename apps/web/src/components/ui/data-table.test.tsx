@@ -6,7 +6,6 @@ import {
   DataTable,
   TruncatedText,
   actionsColumn,
-  expandColumn,
   rowActionButton,
 } from "./data-table";
 
@@ -274,33 +273,6 @@ describe("the footer", () => {
     expect(html).toMatch(
       /<\/tbody><tfoot[^>]*><tr><td>Total<\/td><\/tr><\/tfoot>/,
     );
-  });
-});
-
-describe("expandable rows", () => {
-  const html = renderToStaticMarkup(
-    <DataTable
-      columns={[
-        expandColumn<Row>({ label: (row) => `Movimientos de ${row.name}` }),
-        nameColumn,
-      ]}
-      data={rows}
-      caption="Carteras"
-      expandable={(row) => row.id === "a"}
-      renderExpanded={(row) => `Detalle de ${row.name}`}
-    />,
-  );
-
-  it("offers a closed button only on the rows that open", () => {
-    expect(html).toContain(
-      'aria-expanded="false" aria-label="Movimientos de Principal"',
-    );
-    expect(html).not.toContain("Movimientos de Largo plazo");
-    expect(html).not.toContain("Detalle de");
-  });
-
-  it("keeps the button column out of the header row's names", () => {
-    expect(html).toMatch(/<span class="sr-only">Abrir<\/span>/);
   });
 });
 

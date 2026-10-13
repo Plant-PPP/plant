@@ -35,16 +35,18 @@ export type InstrumentSummary = {
   returns: Returns | null;
 };
 
+// `value` is the open holdings' exact sum, rounded once, as Tenencias shows
+// it: null when one has no value.
 export function instrumentSummary(
   holdings: readonly InstrumentHolding[],
   flows: readonly CashFlow[] | null,
   today: string,
+  value: string | null,
 ): InstrumentSummary {
   const open = holdings.filter((each) => !each.closed);
   const money = holdings.map((each) => each.position.money);
   const pick = (key: "realized" | "income" | "charges") =>
     sumOrNull(money.map((each) => each?.[key] ?? null));
-  const value = sumOrNull(open.map((each) => each.value));
   const cost = sumOrNull(open.map((each) => each.position.money?.cost ?? null));
   return {
     quantity: sumOrNull(open.map((each) => each.position.quantity)) ?? "0",
