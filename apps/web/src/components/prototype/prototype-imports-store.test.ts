@@ -1,4 +1,4 @@
-import { compareDecimals, exactOf, plus, stored } from "@plant/shared";
+import { addDays, compareDecimals, exactOf, plus, stored } from "@plant/shared";
 
 import { readTotals, totalsMatch } from "@/lib/imports/review";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -7,7 +7,9 @@ import {
   addImport,
   confirmImport,
   finishReading,
+  documentDateOf,
   heldIn,
+  heldOn,
 } from "./prototype-imports-store";
 import { createAccount, deleteAccount } from "./prototype-accounts-store";
 import { holdingsView, initialState } from "./prototype-store";
@@ -222,38 +224,119 @@ it("refuses a kept row with no units, changing nothing", () => {
   expect(refused.state).toBe(after);
 });
 
-it("books a statement's differences today, against what is held today", () => {
-  const read = finishReading(
-    addImport(state, { id: "i9", fileName: "septiembre.pdf", accountId: IOL })
-      .state,
-    "i9",
-  );
-  const dated = {
-    ...read,
-    imports: read.imports.map((each) =>
-      each.id === "i9" ? { ...each, documentDate: "2026-09-01" } : each,
-    ),
+describe("a statement as of a past day", () => {
+  const DAY = "2026-09-01";
+  const dated = (fileName: string) => {
+    const read = finishReading(
+      addImport(state, { id: "i9", fileName, accountId: IOL }).state,
+      "i9",
+    );
+    return {
+      ...read,
+      imports: read.imports.map((each) =>
+        each.id === "i9" ? { ...each, documentDate: DAY } : each,
+      ),
+    };
   };
-  const held = heldIn(state, IOL).get("AAPL")!;
-  const rows = [
-    {
-      id: "aapl",
-      symbol: "AAPL",
-      quantity: stored(plus(exactOf(held), exactOf("3"))),
-      price: "20000",
-      currency: "ARS" as const,
-      confidence: "high" as const,
-      source: "Página 1",
-      discarded: false,
-    },
-  ];
-  const confirmed = confirmImport(dated, "i9", rows, newId);
-  expect(confirmed.result.ok).toBe(true);
-  expect(heldIn(confirmed.state, IOL).get("AAPL")).toBe(rows[0]!.quantity);
-  const added = [...confirmed.state.movements.values()]
-    .flat()
-    .find((each) => each.note === "Carga de septiembre.pdf")!;
-  expect(added.date).toBe(TODAY);
+  const row = (quantity: string) => ({
+    id: "aapl",
+    symbol: "AAPL",
+    quantity,
+    price: "20000",
+    currency: "ARS" as const,
+    confidence: "high" as const,
+    source: "Página 1",
+    discarded: false,
+  });
+
+  it("is weighed against what the account held that day, and booked on it", () => {
+    const then = heldOn(state, IOL, DAY).get("AAPL")!;
+    const now = heldIn(state, IOL).get("AAPL")!;
+    const confirmed = confirmImport(
+      dated("septiembre.pdf"),
+      "i9",
+      [row(stored(plus(exactOf(then), exactOf("3"))))],
+      newId,
+    );
+    expect(confirmed.result.ok).toBe(true);
+    expect(heldOn(confirmed.state, IOL, DAY).get("AAPL")).toBe(
+      stored(plus(exactOf(then), exactOf("3"))),
+    );
+    expect(heldIn(confirmed.state, IOL).get("AAPL")).toBe(
+      stored(plus(exactOf(now), exactOf("3"))),
+    );
+    const added = [...confirmed.state.movements.values()]
+      .flat()
+      .find((each) => each.note === "Carga de septiembre.pdf")!;
+    expect(added.date).toBe(DAY);
+  });
+
+  it("is refused where taking units out then leaves a later sale short", () => {
+    // A holding with a sale, and a statement of its account the day before.
+    const [held, sale] = state.holdings.flatMap((each) => {
+      const found = (state.movements.get(each.holding.id) ?? []).find(
+        (movement) => movement.kind === "sale",
+      );
+      return found && each.holding.asset_class === "instrument"
+        ? [[each, found] as const]
+        : [];
+    })[0]!;
+    const before = addDays(sale.date, -1);
+    const read = finishReading(
+      addImport(state, {
+        id: "i11",
+        fileName: `resumen-${before}.pdf`,
+        accountId: held.accountId,
+      }).state,
+      "i11",
+    );
+    expect(read.imports[0]!.documentDate).toBe(before);
+    const refused = confirmImport(
+      read,
+      "i11",
+      [
+        {
+          ...row("0.00000001"),
+          id: "sold",
+          symbol:
+            held.holding.asset_class === "instrument"
+              ? held.holding.instrument_symbol
+              : "",
+        },
+      ],
+      newId,
+    );
+    expect(refused.result).toEqual({ ok: false, code: "oversold" });
+  });
+});
+
+it("holds today what the account holds now", () => {
+  for (const account of state.accounts) {
+    expect(heldOn(state, account.id, TODAY)).toEqual(heldIn(state, account.id));
+  }
+});
+
+describe("the statement's date", () => {
+  it.each([
+    ["iol-2026-09-30.pdf", "2026-09-30"],
+    ["resumen.pdf", TODAY],
+    ["iol-2026-12-31.pdf", TODAY],
+    ["iol-2026-02-31.pdf", TODAY],
+  ])("of %s is %s", (fileName, date) => {
+    expect(documentDateOf(fileName, TODAY)).toBe(date);
+  });
+
+  it("dates a reading of a named day, and compares its rows with that day", () => {
+    const read = finishReading(
+      addImport(state, {
+        id: "i10",
+        fileName: "iol-2026-09-01.pdf",
+        accountId: IOL,
+      }).state,
+      "i10",
+    );
+    expect(read.imports[0]!.documentDate).toBe("2026-09-01");
+  });
 });
 
 it("keeps counting a deleted account's uploads against the month", () => {
