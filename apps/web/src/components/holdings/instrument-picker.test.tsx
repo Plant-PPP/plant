@@ -172,3 +172,20 @@ describe("the closed picker and the keys that open it", () => {
     expect(matchesInstrument(FCI, key("Á")!)).toBe(true);
   });
 });
+
+describe("keys the other cases leave unpinned", () => {
+  it("leaves an Alt shortcut to the button, as Ctrl and Meta ones", () => {
+    expect(
+      triggerKey({ key: "g", altKey: true, ctrlKey: false, metaKey: false }),
+    ).toBeNull();
+  });
+
+  it("stays on ArrowUp in an empty list, as on ArrowDown", () => {
+    expect(searchKey("ArrowUp", 0, 0)).toEqual({ kind: "stay" });
+  });
+
+  it("picks nothing with Enter when the active option is past the list", () => {
+    expect(searchKey("Enter", 2, 2)).toEqual({ kind: "stay" });
+    expect(searchKey("Enter", 1, 2)).toEqual({ kind: "choose", index: 1 });
+  });
+});
