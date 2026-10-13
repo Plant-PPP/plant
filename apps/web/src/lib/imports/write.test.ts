@@ -318,6 +318,7 @@ describe("finishUpload", () => {
         {
           id: "d0",
           storage_path: "earlier",
+          file_deleted_at: null,
           imports: { id: "i0", status: "queued" },
         },
       ],
@@ -328,6 +329,39 @@ describe("finishUpload", () => {
     expect(storage.remove).toHaveBeenCalledWith([PATH]);
     expect(startImport).toHaveBeenCalledWith({ importId: "i0", userId: USER });
   });
+
+  it.each([
+    ["with no import", null, null],
+    ["queued after its file expired", "2026-11-01T00:00:00Z", "queued"],
+  ])(
+    "reads again a file uploaded before %s",
+    async (_, fileDeletedAt, status) => {
+      answers.uploaded_documents = jest.fn((verb) =>
+        verb === "select"
+          ? {
+              status: 200,
+              data: [
+                {
+                  id: "d0",
+                  storage_path: "earlier",
+                  file_deleted_at: fileDeletedAt,
+                  imports: status && { id: "i0", status },
+                },
+              ],
+              error: null,
+            }
+          : verb === "insert"
+            ? { status: 201, data: [{ id: "d1" }], error: null }
+            : { status: 204, error: null },
+      );
+      expect(await finish()).toEqual({ ok: true, importId: "i1" });
+      expect(writes.map(({ table, verb }) => `${table}:${verb}`)).toEqual([
+        "uploaded_documents:delete",
+        "uploaded_documents:insert",
+        "imports:insert",
+      ]);
+    },
+  );
 
   it("keeps a file whose reading did not fail", async () => {
     answers.uploaded_documents = jest.fn((verb) =>
