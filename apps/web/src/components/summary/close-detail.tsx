@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/format/date";
 import { lineLabel } from "@/lib/holdings/messages";
 import { formatQuotedPrice, shownPrice } from "@/lib/holdings/price-input";
 import {
+  closeHref,
   type MonthClose,
   type MonthDetail,
   monthInText,
@@ -242,12 +243,13 @@ export function YearCloseDetail({
   year,
   unit,
   backHref,
-  closeHref,
+  closesQuery,
 }: {
   year: YearClose;
   unit: Denominator;
   backHref: string;
-  closeHref: (period: string) => string;
+  // The query each month's close keeps, from closesQuery.
+  closesQuery: string;
 }) {
   const recalculated = year.months.some(
     (each: MonthClose) => each.recalculatedOn !== null,
@@ -279,7 +281,11 @@ export function YearCloseDetail({
       />
       <section className="grid gap-3">
         <h2 className="text-base font-semibold">Mes a mes</h2>
-        <ClosesTable year={year} unit={unit} href={closeHref} />
+        <ClosesTable
+          year={year}
+          unit={unit}
+          href={(period) => closeHref(period, closesQuery)}
+        />
       </section>
     </div>
   );

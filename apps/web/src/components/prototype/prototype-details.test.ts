@@ -6,7 +6,7 @@ import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import { prototypeAnswer } from "./prototype-assistant";
 import { createAccount } from "./prototype-accounts-store";
-import { closesOf } from "./prototype-closes";
+import { closesOf } from "@/lib/summary/compute";
 import {
   addImport,
   confirmImport,

@@ -30,7 +30,7 @@ import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { monthName, monthOf } from "@/lib/summary/closes";
 
-import { closesOf, yearsOfCloses } from "./prototype-closes";
+import { closesOf, yearsOfCloses } from "@/lib/summary/compute";
 import {
   CALENDAR_DAYS,
   type IncomeEvent,

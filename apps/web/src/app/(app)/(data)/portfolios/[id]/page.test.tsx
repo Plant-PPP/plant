@@ -9,15 +9,11 @@ jest.mock("@/components/prototype/prototype-scope", () => ({
 jest.mock("@/components/prototype/prototype-imports", () => ({
   PrototypeImportReview: () => null,
 }));
-jest.mock("@/components/prototype/prototype-summary", () => ({
-  PrototypeClose: () => null,
-}));
 
 import type * as React from "react";
 
 import AccountPage from "../../accounts/[id]/page";
 import InstrumentPage from "../../assets/[symbol]/page";
-import ClosePage from "../../closes/[period]/page";
 import ImportReviewPage from "../../import/[id]/page";
 import PortfolioPage from "./page";
 
@@ -32,16 +28,12 @@ const props = (key: string, value: string) => ({
   searchParams: Promise.resolve({}),
 });
 
-// These pages have no production version yet.
-it.each([
-  ["a close", () => ClosePage(props("period", "2026-09"))],
-  [
-    "an import's review",
-    () => ImportReviewPage({ params: Promise.resolve({ id: "i1" }) }),
-  ],
-])("is not found in production for %s", async (_, render) => {
+// An import's review has no production version yet.
+it("is not found in production for an import's review", async () => {
   process.env.VERCEL_ENV = "production";
-  await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+  await expect(
+    ImportReviewPage({ params: Promise.resolve({ id: "i1" }) }),
+  ).rejects.toThrow("NEXT_NOT_FOUND");
 });
 
 it.each([

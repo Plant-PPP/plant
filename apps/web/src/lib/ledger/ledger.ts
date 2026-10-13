@@ -675,9 +675,10 @@ export const refusedWrite = <S extends Ledger>(
 ): Write<WriteResult, S> => refused(state, { ok: false, code });
 
 // An instrument's price on a date when quoted in `currency`, from the feeds or
-// else the user's manual price; none when neither has one in it. prototype-closes'
-// snapshotAt values a day on its own, in any unit and from trades when nothing
-// quotes it; the two become one if a suggestion ever takes that fallback.
+// else the user's manual price; none when neither has one in it. The closes'
+// snapshotAt (lib/summary/compute.ts) values a day on its own, in any unit and
+// from trades when nothing quotes it; the two become one if a suggestion ever
+// takes that fallback.
 export function priceOn(
   state: Pick<Ledger, "quotes" | "manualPrices" | "manualRates">,
   { symbol, currency, date }: QuoteQuery,

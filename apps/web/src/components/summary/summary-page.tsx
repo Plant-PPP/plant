@@ -18,6 +18,7 @@ import type { HoldingRow } from "@/lib/holdings/read";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import {
   CLOSE_UNITS,
+  closeHref,
   type MonthClose,
   monthName,
   type YearClose,
@@ -67,8 +68,7 @@ export function SummaryPage({
   referenceUnit,
   params,
   hrefs,
-  closeHref,
-  yearHref,
+  closesQuery,
   onboarding,
 }: {
   // Every month, oldest first, the last one in progress.
@@ -88,8 +88,8 @@ export function SummaryPage({
   referenceUnit: Denominator;
   params: KeysetParams;
   hrefs?: Pick<ScopeHrefs, "account" | "portfolio">;
-  closeHref: (period: string) => string;
-  yearHref: (year: string) => string;
+  // The query a close's page keeps, from closesQuery.
+  closesQuery: string;
   // A new user's steps to their net worth, while one is left.
   onboarding?: readonly OnboardingStep[];
 }) {
@@ -282,10 +282,14 @@ export function SummaryPage({
           </p>
           {year && (
             <>
-              <ClosesTable year={year} unit={unit} href={closeHref} />
+              <ClosesTable
+                year={year}
+                unit={unit}
+                href={(period) => closeHref(period, closesQuery)}
+              />
               <p className="text-sm">
                 <Link
-                  href={yearHref(year.year)}
+                  href={closeHref(year.year, closesQuery)}
                   className="underline-offset-2 hover:underline"
                 >
                   {`Ver el cierre de ${year.year}`}

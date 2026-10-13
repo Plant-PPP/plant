@@ -1,6 +1,7 @@
 import { addDays } from "@plant/shared";
 import type { Denominator, InstrumentType, PeriodResult } from "@plant/core";
 
+import { unitParam } from "@/lib/holdings/assets-filter";
 import type { MovementLine } from "@/lib/holdings/movements-input";
 
 // A month as the closes name it ("2026-09"), with the day before it starts
@@ -50,6 +51,34 @@ export const closeUnit = (
   unit !== null && (CLOSE_UNITS as readonly Denominator[]).includes(unit)
     ? unit
     : reference;
+
+// The query Resumen and a close's page keep: the unit, unless it is the
+// reference one, and on Resumen the year its table shows when it is not the
+// newest.
+export function closesQuery(
+  unit: Denominator,
+  reference: Denominator,
+  year: string | null = null,
+): string {
+  const search = new URLSearchParams();
+  const param = unitParam(unit, reference);
+  if (param !== null) search.set("unit", param);
+  if (year !== null) search.set("year", year);
+  const text = search.toString();
+  return text === "" ? "" : `?${text}`;
+}
+
+// The year Resumen goes back to from a close: the close's, unless it is the
+// newest, which Resumen shows anyway.
+export const backYear = (
+  period: string,
+  years: readonly { year: string }[],
+): string | null =>
+  period.slice(0, 4) === years[0]?.year ? null : period.slice(0, 4);
+
+// A month's (2026-09) or a year's (2026) close, with the query it keeps.
+export const closeHref = (period: string, query: string): string =>
+  `/closes/${period}${query}`;
 
 // One month's close in the page's unit: its period's result, plus what it
 // realized from sales and yields out (null when unknown in the unit), whether nothing was left out
