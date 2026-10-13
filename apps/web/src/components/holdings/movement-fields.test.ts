@@ -374,6 +374,24 @@ describe("a transfer", () => {
     });
   });
 
+  it("reads back the account the units arrive in, when it is another", () => {
+    const fields = operationFields(
+      [
+        {
+          movement: leg("out", null),
+          portfolioId: PRINCIPAL,
+          accountId: ACCOUNT,
+        },
+        { movement: leg("in", null), portfolioId: PRINCIPAL, accountId: "a2" },
+      ],
+      { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
+    );
+    expect(fields.parts).toEqual([
+      { portfolioId: PRINCIPAL, size: "0,5" },
+      { portfolioId: PRINCIPAL, size: "0,5", accountId: "a2" },
+    ]);
+  });
+
   it("reads back a carried cost as not changed", () => {
     expect(
       operationFields(
@@ -690,5 +708,45 @@ describe("the key of a transfer's suggested cost", () => {
     expect(
       JSON.parse(transferCostKey({ ...fields, note: "x", reference: "y" })),
     ).toEqual({ ...fields, note: "", reference: "" });
+  });
+});
+
+describe("a transfer to another account", () => {
+  const fields = withKind(
+    {
+      ...newMovementFields({
+        kind: "purchase",
+        accountId: "a1",
+        instrument: "BTC",
+        currency: "USD",
+        date: "2026-10-10",
+        portfolioId: "p1",
+      }),
+      parts: [{ portfolioId: "p1", size: "0,5" }],
+    },
+    "transfer",
+    { transfer: "p1" },
+  );
+  const across = {
+    ...fields,
+    parts: [
+      fields.parts[0]!,
+      { portfolioId: "p1", size: "0,5", accountId: "a2" },
+    ],
+  };
+
+  it("names the arriving account only when it is another one", () => {
+    const [, arriving] = toOperationInput(across, "crypto").parts as {
+      source_connection_id?: string;
+    }[];
+    expect(arriving!.source_connection_id).toBe("a2");
+    const same = toOperationInput(
+      {
+        ...across,
+        parts: [across.parts[0]!, { ...across.parts[1]!, accountId: "a1" }],
+      },
+      "crypto",
+    ).parts[1] as { source_connection_id?: string };
+    expect(same).not.toHaveProperty("source_connection_id");
   });
 });

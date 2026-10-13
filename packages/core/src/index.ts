@@ -60,6 +60,12 @@ export {
   type RealEstateTerms,
 } from "./real-estate/figures";
 export {
+  interestTo,
+  type Placement,
+  type PlacementFigures,
+  placementFigures,
+} from "./valuation/placement";
+export {
   type HoldingsValue,
   quotesNeeded,
   valueHoldings,

@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   House,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
@@ -66,6 +67,10 @@ import {
   holdingPlace,
   instrumentNames,
 } from "@/lib/holdings/holding-name";
+import {
+  PLACEMENT_KIND_LABELS,
+  type PlacementKind,
+} from "@/lib/holdings/placement";
 import type { RealEstateSheet } from "@/lib/real-estate/sheet";
 import { PRICE_MESSAGES } from "@/lib/holdings/messages";
 import {
@@ -115,6 +120,7 @@ import { AssetsSummary } from "./assets-summary";
 import { MepNotice } from "./mep-notice";
 import { RealEstateDialog } from "./real-estate-dialog";
 import { type SheetFields, sheetFields } from "./real-estate-fields";
+import { RenewDialog } from "./renew-dialog";
 import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
 import { PriceDialog } from "./price-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -195,13 +201,18 @@ export type ManualPrices = {
 export type HoldingDetails = {
   originOf: (holdingId: string) => HoldingOrigin | undefined;
   inTaxReport: (assetKey: AssetKey) => boolean;
+  // What a placement at a rate is, and the placement a renewal renewed.
+  placementOf: (holdingId: string) => PlacementKind;
+  renewalOf: (holdingId: string) => HoldingRow | undefined;
   actions: {
     setInTaxReport: (assetKey: AssetKey, on: boolean) => Promise<WriteResult>;
     update: (
       id: string,
       input: unknown,
-      inTaxReport: boolean,
+      choices: { inTaxReport: boolean; placement?: PlacementKind },
     ) => Promise<WriteResult>;
+    setPlacement: (id: string, kind: PlacementKind) => Promise<WriteResult>;
+    renew: (id: string, input: unknown) => Promise<WriteResult>;
   };
 };
 
@@ -219,8 +230,9 @@ export type RealEstateSheets = {
   save: (holdingId: string, sheet: RealEstateSheet) => Promise<WriteResult>;
 };
 
-// An edit's write: with `details`, the holding and its asset's report choice
-// together; otherwise the holding alone, whose parsed update takes no flag.
+// An edit's write: with `details`, the holding, its asset's report choice and
+// a placement's kind together; otherwise the holding alone, whose parsed
+// update takes neither.
 export const saveHoldingEdit = (
   { actions, details }: { actions: HoldingActions; details?: HoldingDetails },
   row: HoldingRow,
@@ -228,11 +240,11 @@ export const saveHoldingEdit = (
 ): Promise<WriteResult> => {
   const input = toUpdate(fields, row.portfolio.id);
   return details
-    ? details.actions.update(
-        row.id,
-        input,
-        fields.inTaxReport ?? details.inTaxReport(assetKey(row.holding)),
-      )
+    ? details.actions.update(row.id, input, {
+        inTaxReport:
+          fields.inTaxReport ?? details.inTaxReport(assetKey(row.holding)),
+        ...(fields.placement && { placement: fields.placement }),
+      })
     : actions.update(row.id, input);
 };
 
@@ -317,14 +329,31 @@ export function AssetsSetup({
     initial?: SheetFields;
     initialError?: string;
   } | null>(null);
+  const [renewing, setRenewing] = useState<{
+    row: HoldingRow;
+    initialError?: string;
+  } | null>(null);
   const names = instrumentNames(instruments);
-  const name = (row: HoldingRow) => holdingName(row.holding, names);
+  // A placement at a rate with no name goes by its kind, where the page
+  // knows it.
+  const kindLabel = (row: HoldingRow) =>
+    details && row.holding.asset_class === "fixed_term"
+      ? PLACEMENT_KIND_LABELS[details.placementOf(row.id)]
+      : undefined;
+  const name = (row: HoldingRow) =>
+    holdingName(row.holding, names, kindLabel(row));
   // What the table calls an asset: an instrument by its name, beside its
   // ticker.
-  const assetName = ({ holding }: HoldingRow) =>
-    holding.asset_class === "instrument"
-      ? (names.get(holding.instrument_symbol) ?? holding.instrument_symbol)
-      : holdingName(holding, names);
+  const assetName = (row: HoldingRow) =>
+    row.holding.asset_class === "instrument"
+      ? (names.get(row.holding.instrument_symbol) ??
+        row.holding.instrument_symbol)
+      : holdingName(row.holding, names, kindLabel(row));
+  // A placement that reached its maturity, on a page that can renew it.
+  const renewable = (row: HoldingRow) =>
+    details !== undefined &&
+    row.holding.asset_class === "fixed_term" &&
+    row.holding.matures_on <= today;
   const named = (row: HoldingRow) => holdingInSentence(row, names);
   const { confirm, dialog: confirmDialog } = useConfirm(card.focusHeading);
   const dialogs = useMovementDialogs({
@@ -719,6 +748,22 @@ export function AssetsSetup({
               },
             ]
           : []),
+        ...(details
+          ? [
+              {
+                id: "renew",
+                icon: RefreshCw,
+                tooltip: "Renovar",
+                hidden: (row: TenenciaRow) =>
+                  row.kind !== "holding" || !renewable(row.row),
+                label: (row: TenenciaRow) => `Renovar ${named(firstOf(row))}`,
+                onClick: (row: TenenciaRow) =>
+                  row.kind === "holding" &&
+                  !pending &&
+                  setRenewing({ row: row.row }),
+              },
+            ]
+          : []),
         ...(archiving
           ? [
               {
@@ -952,6 +997,24 @@ export function AssetsSetup({
     }
   }
 
+  // A new holding, and then what a placement at a rate is when it is not a
+  // plazo fijo.
+  async function createWithPlacement(fields: HoldingFields) {
+    const created = await actions.create(toInsert(fields));
+    const kind = fields.placement;
+    if (
+      !created.ok ||
+      !details ||
+      fields.assetClass !== "fixed_term" ||
+      kind === undefined ||
+      kind === "fixed_term"
+    ) {
+      return created;
+    }
+    const placed = await details.actions.setPlacement(created.id, kind);
+    return placed.ok ? created : placed;
+  }
+
   const defaultAccount = accounts.length === 1 ? accounts[0] : undefined;
   const dialogBase = {
     accounts,
@@ -1036,6 +1099,7 @@ export function AssetsSetup({
           key={dialog.attempt ?? 0}
           mode="create"
           {...dialogBase}
+          placement={details && { kind: "fixed_term", today }}
           initial={
             dialog.initial ??
             initialFields(null, {
@@ -1095,7 +1159,7 @@ export function AssetsSetup({
               dialog,
               fields,
               { kind: "create", row },
-              () => actions.create(toInsert(fields)),
+              () => createWithPlacement(fields),
               "Agregaste",
               row,
             );
@@ -1124,6 +1188,13 @@ export function AssetsSetup({
             details && {
               origin: details.originOf(dialog.row.id),
               inTaxReport: details.inTaxReport(assetKey(dialog.row.holding)),
+            }
+          }
+          placement={
+            details && {
+              kind: details.placementOf(dialog.row.id),
+              today,
+              renewed: details.renewalOf(dialog.row.id),
             }
           }
           initialError={dialog.initialError}
@@ -1178,6 +1249,31 @@ export function AssetsSetup({
                       }),
                       initialError: error,
                     }),
+                },
+              );
+            }}
+          />
+        )}
+      {renewing &&
+        details &&
+        renewing.row.holding.asset_class === "fixed_term" && (
+          <RenewDialog
+            key={renewing.initialError ?? ""}
+            name={name(renewing.row)}
+            placement={renewing.row.holding}
+            today={today}
+            initialError={renewing.initialError}
+            returnFocusTo={card.focusHeading}
+            onClose={() => setRenewing(null)}
+            onSubmit={(input) => {
+              const { row } = renewing;
+              return card.dialogAction(
+                null,
+                () => details.actions.renew(row.id, input),
+                MESSAGES,
+                {
+                  done: `Renovaste ${named(row)}`,
+                  reopen: (error) => setRenewing({ row, initialError: error }),
                 },
               );
             }}

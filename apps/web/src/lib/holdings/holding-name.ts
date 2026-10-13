@@ -57,13 +57,13 @@ export const holdingInSentence = (
 export function holdingName(
   holding: Holding,
   instrumentNames: ReadonlyMap<string, string>,
+  // What the holding is called when it has no name, where the page knows
+  // more than its class: "Caución" for a placement at a rate.
+  kindLabel: string = ASSET_CLASS_LABELS[holding.asset_class],
 ): string {
   if (holding.asset_class === "instrument") {
     const symbol = holding.instrument_symbol;
     return instrumentLabel(symbol, instrumentNames.get(symbol));
   }
-  return (
-    holding.label ??
-    `${ASSET_CLASS_LABELS[holding.asset_class]} ${holding.currency}`
-  );
+  return holding.label ?? `${kindLabel} ${holding.currency}`;
 }

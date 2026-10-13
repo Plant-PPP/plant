@@ -1043,7 +1043,9 @@ describe("origin and the report", () => {
       today: TODAY,
     });
     const edit = toUpdate({ ...fields, amount: "1" }, cash.portfolio.id);
-    const saved = updateHoldingDetails(state, CASH, edit, false);
+    const saved = updateHoldingDetails(state, CASH, edit, {
+      inTaxReport: false,
+    });
     expect(saved.result).toEqual({ ok: true, id: CASH });
     expect(saved.state.outOfTaxReport.has(holdingKey(CASH))).toBe(true);
     expect(
@@ -1055,7 +1057,7 @@ describe("origin and the report", () => {
       state,
       CASH,
       toUpdate({ ...fields, amount: "-1" }, cash.portfolio.id),
-      false,
+      { inTaxReport: false },
     );
     expect(refused.result.ok).toBe(false);
     expect(refused.state).toBe(state);
@@ -1073,7 +1075,7 @@ describe("origin and the report", () => {
       out,
       NEW_ID,
       toUpdate(fields, cash.portfolio.id),
-      true,
+      { inTaxReport: true },
     );
     expect(refused.result).toEqual({ ok: false, code: "not_found" });
     expect(refused.state).toBe(out);
@@ -1091,7 +1093,7 @@ describe("origin and the report", () => {
       out,
       CASH,
       toUpdate(fields, cash.portfolio.id),
-      true,
+      { inTaxReport: true },
     );
     expect(saved.result).toEqual({ ok: true, id: CASH });
     expect(saved.state.outOfTaxReport.has(holdingKey(CASH))).toBe(false);

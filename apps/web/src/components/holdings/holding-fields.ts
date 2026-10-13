@@ -15,6 +15,7 @@ import {
   percentToFraction,
 } from "@/lib/format/amount";
 import type { AssetClass } from "@/lib/holdings/messages";
+import type { PlacementKind } from "@/lib/holdings/placement";
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { FieldAlert } from "@/components/portfolio-setup/field-alert";
 import { firstRefused } from "@/components/portfolio-setup/refusal";
@@ -55,9 +56,11 @@ export type HoldingFields = {
   maturesOn: string;
   valuedOn: string;
   label: string;
-  // Whether the asset counts in the report, on a page that lets the user
-  // choose; the holding's own columns never carry it.
+  // Whether the asset counts in the report, and what a placement at a rate
+  // is, on a page that lets the user choose; the holding's own columns never
+  // carry either.
   inTaxReport?: boolean;
+  placement?: PlacementKind;
 };
 
 export function initialFields(

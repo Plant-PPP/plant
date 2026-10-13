@@ -336,6 +336,13 @@ describe("holdingName", () => {
       ),
     ).toBe(name);
   });
+
+  it("names a holding with no name by the kind the page gives, not its class", () => {
+    const cash = HOLDINGS.find((h) => h.id === "cash")!;
+    expect(holdingName(cash, instruments, "Caución")).toBe("Caución ARS");
+    const home = HOLDINGS.find((h) => h.id === "home")!;
+    expect(holdingName(home, instruments, "Caución")).toBe("Depto");
+  });
 });
 
 it("names a holding in a sentence by where it is", () => {
