@@ -27,6 +27,7 @@ export {
   type Refusal,
   REFUSALS,
 } from "./quotes/contract/quote";
+export { upcomingIncome, type UpcomingIncome } from "./income/upcoming";
 export { quoteFeeds } from "./quotes/factory";
 export { readSnapshot, type SnapshotRead, snapshotOn } from "./quotes/snapshot";
 export {
@@ -37,6 +38,7 @@ export {
   type UnitFxKind,
 } from "./valuation/denominators";
 export {
+  express,
   lift,
   rate,
   referenceUnit,

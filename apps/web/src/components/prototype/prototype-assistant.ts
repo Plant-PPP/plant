@@ -17,6 +17,7 @@ import {
 import { countOf, folded } from "@/lib/format/text";
 import {
   type AssistantMessage,
+  barsOf,
   type ChatUnit,
   type Conversation,
   titleOf,
@@ -27,9 +28,14 @@ import {
 } from "@/lib/holdings/classes";
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
-import { monthOf } from "@/lib/summary/closes";
+import { monthName, monthOf } from "@/lib/summary/closes";
 
 import { closesOf, yearsOfCloses } from "./prototype-closes";
+import {
+  CALENDAR_DAYS,
+  type IncomeEvent,
+  incomeCalendar,
+} from "./prototype-income";
 import {
   holdingsView,
   instrumentHoldings,
@@ -119,6 +125,72 @@ const moved = (amount: string, unit: ChatUnit) =>
     even: "no ganó ni perdió",
   });
 
+// A question about what is coming in: "¿qué cobro este mes?", "¿cuándo
+// cobro?", "¿qué voy a cobrar?", "próximos cobros", "calendario de cobros".
+const CALENDAR =
+  /(que|cuanto|cuando) cobro\b|voy a cobrar|proxim\w* (cobro|pago|dividendo|cupon)|calendario|por cobrar/;
+
+const EVENT_KINDS: Record<IncomeEvent["kind"], string> = {
+  dividend: "Dividendo",
+  coupon: "Cupón",
+  maturity: "Vencimiento",
+};
+
+// What comes in over the next days: this month's sum, the whole window's,
+// a table of each payment and a chart by month.
+function calendarAnswer(
+  state: PrototypeState,
+  snapshot: QuoteSnapshot,
+  unit: ChatUnit,
+  base: Pick<Answer, "role" | "asOf" | "rate">,
+): Answer {
+  const events = incomeCalendar(state, snapshot, unit);
+  const sources = ["Movimientos", "Tus tenencias", "Cotizaciones"];
+  if (events.length === 0) {
+    return {
+      ...base,
+      text: `No esperás cobros en los próximos ${CALENDAR_DAYS} días: ningún activo tuyo viene pagando dividendos o cupones, ni vence una colocación.`,
+      charts: [],
+      table: null,
+      sources,
+    };
+  }
+  const month = state.today.slice(0, 7);
+  const sum = (some: readonly IncomeEvent[]) =>
+    stored(plus(...some.map((each) => exactOf(each.value ?? "0"))));
+  const complete = events.every((each) => each.value !== null);
+  const thisMonth = events.filter((each) => each.date.startsWith(month));
+  const months = [...new Set(events.map((each) => each.date.slice(0, 7)))];
+  return {
+    ...base,
+    text: `${
+      thisMonth.length === 0
+        ? "Este mes no esperás cobros."
+        : `Este mes esperás cobrar ${formatAmount(sum(thisMonth), unit)} en ${countOf(thisMonth.length, "pago", "pagos")}.`
+    } En los próximos ${CALENDAR_DAYS} días, ${formatAmount(sum(events), unit)}${complete ? "" : WITHOUT_PRICE}. Los dividendos y cupones son una estimación por lo que pagó cada activo antes; los vencimientos incluyen el capital.`,
+    charts: [
+      barsOf(
+        "Cobros por mes",
+        unit,
+        months.map((each) => ({
+          label: monthName(each),
+          value: sum(events.filter((event) => event.date.startsWith(each))),
+        })),
+      ),
+    ],
+    table: {
+      title: `Próximos ${CALENDAR_DAYS} días`,
+      unit,
+      rows: events.map((each) => ({
+        date: each.date,
+        label: `${EVENT_KINDS[each.kind]} · ${each.name}`,
+        value: each.value,
+      })),
+    },
+    sources,
+  };
+}
+
 // What the assistant would answer, standing in for the model: it picks what
 // the question is about and builds the answer from the user's own data, its
 // figures and its chart computed here, never written by a model. A question
@@ -137,13 +209,18 @@ export function prototypeAnswer(
     "fx" in spec && dollar
       ? { label: spec.fx.toUpperCase(), sell: dollar.sell }
       : null;
-  const base = { role: "assistant" as const, asOf: state.today, rate };
+  const base = {
+    role: "assistant" as const,
+    asOf: state.today,
+    rate,
+    table: null,
+  };
 
   if (ADVICE.test(asked)) {
     return {
       ...base,
       text: "No te puedo decir qué comprar ni qué vender: Plant explica tus datos y no recomienda. Sí te puedo contar cómo vienen tus inversiones, cuánto ganaste o cuánto cobraste.",
-      chart: null,
+      charts: [],
       sources: [],
     };
   }
@@ -162,7 +239,7 @@ export function prototypeAnswer(
       return {
         ...base,
         text: `No tenés ni tuviste ${instrument.name} en Plant.`,
-        chart: null,
+        charts: [],
         sources: ["Tus tenencias"],
       };
     }
@@ -190,24 +267,26 @@ export function prototypeAnswer(
       ]
         .filter(Boolean)
         .join(" "),
-      chart: returns
-        ? {
-            title: `${instrument.symbol}: de dónde sale el resultado`,
-            unit,
-            bars: resultBars(returns.result, unit, [
-              { label: "Realizado", value: summary.realized ?? "0" },
-              { label: "Rentas", value: summary.income ?? "0" },
-              ...(held
-                ? [
-                    {
-                      label: "Lo que tenés",
-                      value: summary.unrealized?.amount ?? "0",
-                    },
-                  ]
-                : []),
-            ]),
-          }
-        : null,
+      charts: returns
+        ? [
+            barsOf(
+              `${instrument.symbol}: de dónde sale el resultado`,
+              unit,
+              resultBars(returns.result, unit, [
+                { label: "Realizado", value: summary.realized ?? "0" },
+                { label: "Rentas", value: summary.income ?? "0" },
+                ...(held
+                  ? [
+                      {
+                        label: "Lo que tenés",
+                        value: summary.unrealized?.amount ?? "0",
+                      },
+                    ]
+                  : []),
+              ]),
+            ),
+          ]
+        : [],
       sources: ["Movimientos", "Cotizaciones"],
     };
   }
@@ -215,6 +294,33 @@ export function prototypeAnswer(
   const closes = closesOf(state, unit);
   const years = yearsOfCloses(closes);
   const thisYear = years[0];
+
+  if (CALENDAR.test(asked)) return calendarAnswer(state, snapshot, unit, base);
+
+  if (
+    /evoluc|historia|a lo largo|con el tiempo/.test(asked) &&
+    closes.length > 0
+  ) {
+    const shown = closes.slice(-12);
+    const first = shown[0]!;
+    const last = shown.at(-1)!;
+    return {
+      ...base,
+      text: `Tu patrimonio pasó de ${formatAmount(first.figures.startValue, unit)} a principios de ${monthName(first.period).toLowerCase()} a ${formatAmount(last.figures.endValue, unit)} hoy${shown.every((close) => close.endComplete) ? "" : WITHOUT_PRICE}.`,
+      charts: [
+        {
+          kind: "line",
+          title: "Tu patrimonio, mes a mes",
+          unit,
+          points: shown.map((close) => ({
+            label: `${monthOf(close.period).slice(0, 3)} ${close.period.slice(2, 4)}`,
+            value: close.figures.endValue,
+          })),
+        },
+      ],
+      sources: ["Cierres", "Cotizaciones"],
+    };
+  }
 
   if (/deud|debo|hipotec|prestamo|tarjeta/.test(asked)) {
     const owed = valueLiabilities(state.liabilities, snapshot, {
@@ -225,7 +331,7 @@ export function prototypeAnswer(
       return {
         ...base,
         text: "No tenés deudas cargadas en Plant.",
-        chart: null,
+        charts: [],
         sources: ["Deudas"],
       };
     }
@@ -243,10 +349,7 @@ export function prototypeAnswer(
       text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${countOf(count, "deuda", "deudas")}.${
         count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
       }`,
-      chart:
-        valued.length > 0
-          ? { title: "Lo que debés", unit, bars: valued }
-          : null,
+      charts: valued.length > 0 ? [barsOf("Lo que debés", unit, valued)] : [],
       sources: ["Deudas", "Cotizaciones"],
     };
   }
@@ -258,14 +361,16 @@ export function prototypeAnswer(
     return {
       ...base,
       text: `En ${thisYear.year} tus dividendos, cupones y rendimientos sumaron ${formatAmount(thisYear.totals.income, unit)}, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
-      chart: {
-        title: `Rentas de ${thisYear.year}`,
-        unit,
-        bars: thisYear.months.map((month) => ({
-          label: monthOf(month.period).slice(0, 3),
-          value: month.figures.income,
-        })),
-      },
+      charts: [
+        barsOf(
+          `Rentas de ${thisYear.year}`,
+          unit,
+          thisYear.months.map((month) => ({
+            label: monthOf(month.period).slice(0, 3),
+            value: month.figures.income,
+          })),
+        ),
+      ],
       sources: ["Movimientos"],
     };
   }
@@ -296,14 +401,16 @@ export function prototypeAnswer(
               even: "Sin contar lo que pusiste, lo que tenías no rindió ni perdió.",
             })}`
       }${thisYear.complete ? "" : PARTIAL_YEAR} En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
-      chart: {
-        title: `Resultado por mes de ${thisYear.year}`,
-        unit,
-        bars: thisYear.months.map((month) => ({
-          label: monthOf(month.period).slice(0, 3),
-          value: month.figures.result,
-        })),
-      },
+      charts: [
+        barsOf(
+          `Resultado por mes de ${thisYear.year}`,
+          unit,
+          thisYear.months.map((month) => ({
+            label: monthOf(month.period).slice(0, 3),
+            value: month.figures.result,
+          })),
+        ),
+      ],
       sources: ["Cierres", "Cotizaciones"],
     };
   }
@@ -326,21 +433,23 @@ export function prototypeAnswer(
       // Today's net worth as Resumen shows it, and what is held as that
       // figure plus what is owed, so the three add up.
       text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
-      chart: {
-        title: "Cómo está repartido",
-        unit,
-        bars: (
-          Object.entries(valuation.classes) as [
-            HoldingClass,
-            { value: string },
-          ][]
-        )
-          .map(([holdingClass, sum]) => ({
-            label: HOLDING_CLASS_GROUP_LABELS[holdingClass],
-            value: sum.value,
-          }))
-          .sort((a, b) => compareDecimals(b.value, a.value)),
-      },
+      charts: [
+        barsOf(
+          "Cómo está repartido",
+          unit,
+          (
+            Object.entries(valuation.classes) as [
+              HoldingClass,
+              { value: string },
+            ][]
+          )
+            .map(([holdingClass, sum]) => ({
+              label: HOLDING_CLASS_GROUP_LABELS[holdingClass],
+              value: sum.value,
+            }))
+            .sort((a, b) => compareDecimals(b.value, a.value)),
+        ),
+      ],
       sources: ["Tus tenencias", "Deudas", "Cotizaciones"],
     };
   }
@@ -348,7 +457,7 @@ export function prototypeAnswer(
   return {
     ...base,
     text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
-    chart: null,
+    charts: [],
     sources: [],
   };
 }
