@@ -5,6 +5,7 @@ const readReferenceDollar = jest.fn();
 const readSourceConnections = jest.fn();
 const readPortfolios = jest.fn();
 const read = jest.fn();
+const readLedger = jest.fn();
 
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("@/lib/auth/session-claims", () => ({
@@ -24,6 +25,10 @@ jest.mock("@/lib/portfolio-setup/read", () => ({
   readSourceConnections: (...args: unknown[]) => readSourceConnections(...args),
   readPortfolios: (...args: unknown[]) => readPortfolios(...args),
 }));
+jest.mock("@/lib/ledger/read", () => ({
+  ...jest.requireActual("@/lib/ledger/read"),
+  readLedger: (...args: unknown[]) => readLedger(...args),
+}));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
 }));
@@ -39,6 +44,7 @@ import type * as React from "react";
 
 import type { AssetsFilter } from "@/lib/holdings/assets-filter";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
+import { emptyLedger } from "@/lib/ledger/ledger-fixture.test-support";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 import { isLoggedError } from "@/lib/log/logged-error";
 
@@ -99,6 +105,11 @@ beforeEach(() => {
     list([holding("h1", P1, "100"), holding("h2", P2, "50")]),
   );
   readInstruments.mockResolvedValue({ rows: [], truncated: false });
+  readLedger.mockResolvedValue({
+    ledger: emptyLedger(),
+    truncated: false,
+    symbolOf: new Map(),
+  });
   readReferenceDollar.mockResolvedValue("ccl");
   readSourceConnections.mockResolvedValue(list([]));
   readPortfolios.mockResolvedValue(
@@ -153,6 +164,8 @@ const VIEW_KEYS = [
   "plant.assets.tab",
   "plant.assets.truncated",
   "plant.assets.unit",
+  "plant.ledger.movement_count",
+  "plant.ledger.truncated",
   "plant.outcome",
   "plant.page",
   "plant.quotes.dropped_count",
@@ -312,11 +325,11 @@ it("leaves out the holdings no filter matches", async () => {
   });
 });
 
-it("does not offer the sales tab, and reads no year", async () => {
-  await render({ tab: "sales", year: "2025" });
+it("offers the sales tab", async () => {
+  await render({ tab: "sales" });
   expect(viewLine()).toMatchObject({
-    "plant.assets.tab": "holdings",
-    "plant.assets.invalid_tab": true,
+    "plant.assets.tab": "sales",
+    "plant.assets.invalid_tab": false,
   });
   expect(Object.keys(viewLine()!).sort()).toEqual(VIEW_KEYS);
 });
