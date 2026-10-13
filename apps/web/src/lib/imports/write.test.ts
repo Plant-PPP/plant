@@ -6,6 +6,10 @@ jest.mock("@/lib/auth/session-claims", () => ({
 jest.mock("@/lib/request-id-server", () => ({
   currentRequestId: async () => undefined,
 }));
+const startImport = jest.fn();
+jest.mock("@plant/jobs", () => ({
+  inngestJobRunner: () => ({ startImport }),
+}));
 
 type Answer = { data?: unknown; error?: unknown; status: number };
 const answers: Record<string, jest.Mock<Answer, [string]>> = {};
@@ -94,6 +98,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ data: blobOf(PDF), error: null });
   storage.remove.mockReset().mockResolvedValue({ data: [], error: null });
+  startImport.mockReset().mockResolvedValue(undefined);
 });
 
 const start = (input: Record<string, unknown> = {}) =>
@@ -200,6 +205,17 @@ describe("finishUpload", () => {
       },
     ]);
     expect(storage.remove).not.toHaveBeenCalled();
+    expect(startImport).toHaveBeenCalledWith({ importId: "i1", userId: USER });
+  });
+
+  it("keeps the import queued when its job cannot start", async () => {
+    startImport.mockRejectedValue(new Error("no event key"));
+    expect(await finish()).toEqual({ ok: true, importId: "i1" });
+    expect(lines.at(-1)).toMatchObject({
+      level: "error",
+      "plant.import.step": "job",
+      "plant.outcome": "failed",
+    });
   });
 
   it.each([

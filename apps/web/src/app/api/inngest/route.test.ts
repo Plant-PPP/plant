@@ -9,7 +9,7 @@ jest.mock("server-only", () => ({}), { virtual: true });
 
 // The deployed handler, not just its options: a route that stops building
 // them with createServeOptions would reopen unsigned syncs or register the
-// quotes job outside development.
+// quotes and import jobs outside development.
 const ORIGINAL_FETCH = global.fetch;
 
 afterEach(() => {
@@ -61,10 +61,10 @@ it("rejects an unsigned sync outside development", async () => {
   expect(outbound).not.toHaveBeenCalled();
 });
 
-it("registers the quotes job under next dev", async () => {
+it("registers the quotes and import jobs under next dev", async () => {
   jest.spyOn(console, "warn").mockImplementation(() => {});
   const route = loadRoute({ NODE_ENV: "development" });
-  expect(await functionCount(route)).toBe(2);
+  expect(await functionCount(route)).toBe(3);
 });
 
 it("registers only ping outside development", async () => {

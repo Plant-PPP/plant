@@ -20,6 +20,14 @@ export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   confirmed: "Confirmada",
 };
 
+// Why an import failed, in the user's words, by `imports.failure`.
+export const IMPORT_FAILURE_MESSAGES = {
+  unsupported: "Por ahora leemos PDF e imágenes; CSV y Excel llegan pronto.",
+  unreadable: "No pudimos leer el archivo. Probá con otra copia o una captura.",
+  nothing_found: "No encontramos tenencias en el archivo.",
+  extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
+} as const;
+
 // How sure the reading is of a row; a low one is for the user to check.
 export type Confidence = "high" | "medium" | "low";
 
