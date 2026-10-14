@@ -112,7 +112,7 @@ export type RawQuoteRows = {
 
 // Why a row was not kept:
 // - early: read before the close hour, when nothing traded is due yet;
-// - closed: the dollar market's Friday rate, read on the weekend;
+// - closed: the dollar market's or BYMA's Friday quote, read on the weekend;
 // - stale: dated any other day than today;
 // - invalid: failed the schemas, shares its primary key with a later kept
 //   row, or was never read.
@@ -137,10 +137,12 @@ export const QUOTE_FEED_CODES = {
   provider_busy: true,
   empty: true,
   http_4xx: false,
+  unauthorized: false,
   too_large: false,
   bad_json: false,
   bad_shape: false,
   provider_error: false,
+  unconfigured: false,
 } as const;
 export type QuoteFeedCode = keyof typeof QUOTE_FEED_CODES;
 
@@ -235,9 +237,12 @@ export function quoteFailureOf(error: unknown): {
 }
 
 // The contract's code table applied to an HTTP status, for the reader the
-// composition root injects.
+// composition root injects. 401 and 403 are a refused credential.
 export function feedErrorForStatus(status: number): QuoteFeedError {
   if (status === 429) return new QuoteFeedError("http_429");
+  if (status === 401 || status === 403) {
+    return new QuoteFeedError("unauthorized");
+  }
   return new QuoteFeedError(status >= 500 ? "http_5xx" : "http_4xx");
 }
 
@@ -257,20 +262,24 @@ function weekendFriday(date: string): string | null {
   return addDays(date, weekday === 6 ? -1 : -2);
 }
 
-// Crypto trades every day; the dollar market closes on the weekend.
-const closesOnWeekends = (kind: FxRateKind | "price"): boolean =>
-  kind !== "price" && !isDailyIndex(kind);
+// Crypto trades every day; the dollar market and BYMA close on the weekend.
+type WindowKind = FxRateKind | "price" | "listed";
+const closesOnWeekends = (kind: WindowKind): boolean =>
+  kind === "listed" || (kind !== "price" && !isDailyIndex(kind));
+
+// The sources whose prices are of instruments listed on BYMA.
+const LISTED_SOURCES: readonly QuoteSource[] = ["iol"];
 
 // Today in Buenos Aires is the only date the quotes' insert guard accepts. A
 // daily index is due at any hour; anything traded is due from the close hour
 // on, and on the weekend Friday's dollar rate is the market's last one.
 export function quoteWindow(
-  kind: FxRateKind | "price",
+  kind: WindowKind,
   date: string,
   now: Date,
 ): "kept" | Exclude<Refusal, "invalid"> {
   const today = buenosAiresDate(now);
-  if (kind !== "price" && isDailyIndex(kind)) {
+  if (kind !== "price" && kind !== "listed" && isDailyIndex(kind)) {
     return date === today ? "kept" : "stale";
   }
   if (buenosAiresHour(now) < QUOTE_CLOSE_HOUR) return "early";
@@ -352,7 +361,12 @@ export function checkBatch(
       schema: priceSchema,
       keys: QUOTE_KEYS.prices,
       keyField: priceSchema.shape[QUOTE_KEYS.prices[0]],
-      window: (row) => quoteWindow("price", row.price_date, now),
+      window: (row) =>
+        quoteWindow(
+          LISTED_SOURCES.includes(row.source) ? "listed" : "price",
+          row.price_date,
+          now,
+        ),
     },
     raw.prices,
     stamp,
