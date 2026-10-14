@@ -98,17 +98,3 @@ export function upcomingFrom(
   }
   return upcoming;
 }
-
-// The payments a holding is expected to make after `today` and up to `days`
-// later, from what it paid before, for the units it holds today.
-export const upcomingIncome = (
-  movements: readonly Movement[],
-  today: string,
-  days: number,
-): UpcomingIncome[] =>
-  upcomingFrom(
-    incomePattern(movements, today),
-    quantityOn(movements, today),
-    today,
-    days,
-  );
