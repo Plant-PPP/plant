@@ -2,6 +2,27 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Findings from a full-repository review
+
+- **Imported cash is a cash holding.** A provider's or a sheet's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`). The review shows it as "Efectivo en pesos/dólares" with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the amounts the review saw:
+  - with no cash holding it opens one in the account's default portfolio;
+  - with one it sets its amount;
+  - with several it refuses the row, and the review says to update them by hand.
+
+  Cash is written as of confirmation, with no history. Wallbit's USDC and USDT stay their own crypto rows.
+
+- **Balances Plant does not keep are counted.** For every exchange using `balanceRow`, and for IBKR, IOL and Nexo, a fiat Plant does not keep or a negative balance counts as a skipped row. A sheet row whose currency comes from the model's default is medium confidence. A currency cell Plant does not recognise skips the row, and an average cost that also reads as thousands is flagged too.
+- **Provider bodies are capped**: 2 MB of JSON, 20 MB for an IBKR statement and 5 MB for a Mercado Pago report. Past the cap the read fails for good.
+- **No cause crosses a job step.** Steps rethrow failures without their cause, and `SourceError` is never built with one, so the model's raw answer or a request's URL never reaches the run history. A store failure past retries logs at error level with `plant.import.store_step` and `plant.import.store_code`, carried in the error's message because Inngest drops custom error fields.
+- **The export asks for a recent sign-in and is audited.** `exportData` refuses a stale session (signing out, then `/login?next=/settings`, like turning TOTP off) and writes `data.exported` through `public.record_data_export`, a SECURITY DEFINER RPC that takes the user from the session. Its outcomes are `denied`, `failure` and `success`. The tables are handed over only once the success row is written. Imports export up to `MAX_ROWS - 1`, and any table cut marks the file partial, which the card says.
+- **Ledger reads**: the holdings' revisions are read before the movements, and movements are paged by keyset on `(date, rank, id)`, so a write during the read leaves a stale revision that `write_operation` refuses. Holdings are still paged by offset; past 1000 instrument holdings a repeat only shows twice.
+- **Span scrubbing** runs `scrubSensitiveText` and the Flex token mask over every span name and URL attribute (`http.url`, `url.full`, `http.target`, `url.query`, `next.span_name`), wherever the URL sits in the text.
+- **An instrument holding's units are written only inside `write_operation`**: inserting one, or updating its amount, raises 42501 for `authenticated` without the transaction mark PLA-147 uses for movements.
+- **Pinned charts are capped at 12 by a trigger** (hint `pinned_charts_full`), the same number as `MAX_PINS`.
+- **A price alert reads the latest quote in its own currency**, filtered before the latest is picked.
+- **Quote feeds declare whether they are listed** (`RawQuoteFeed.listed`). A listed feed's Friday price is the market's last on the weekend; shared code names no source.
+- **Indexes** on `uploaded_documents (delete_after) WHERE file_deleted_at IS NULL` for the file deletion job and on `uploaded_documents (storage_path)` for the orphan sweep.
+
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 
 - **Four more adapters on the same port, holdings only.** Each is its adapter, its line in `connectionAdapters()` and its `PROVIDERS` copy; none needs a migration (the provider check is a pattern since PLA-155). The only change outside them: the web app bounds each credential value at 4096 characters instead of 512, so a PEM private key fits, and checks the whole object against the database's 4 KiB cap (measured as Postgres prints the jsonb), so an oversize one is `invalid`, not a failed write. Shared helpers moved into `connections/http.ts`: `hmacSha256` (Binance and Nexo use it too) and `balanceRow`/`balancesReading`, which turn an exchange's balances into holdings: pesos and dollars as cash, other fiat (MXN, BRL, COP, CLP, PEN, UYU, EUR) left out, any other currency as a crypto asset in units valued in dollars.
@@ -457,7 +478,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-13 · Correcting a quoted price or dollar rate by hand (PLA-122, prototype)
 
 - **Any price or dollar rate can be corrected by hand** (Tomas, 2026-10-13): an instrument's price from Activos ("Corregir" beside a quoted price), and the MEP, CCL and official dollar from Ajustes ("Dólar de hoy").
-- **The newest wins, and the user's on a tie**: a value the user states beats the feeds' quote of its day, and every day after until the feeds bring a newer one; a quote the feeds carry over a weekend is older and loses. With no quote at all, the user's value lasts however old, as before. Core applies the rule (`withManualPrices`, `withManualRates`), so Activos, Resumen, the closes and the assistant read the same snapshot.
+- **The newest wins, and the user's on a tie**: a value the user states beats the feeds' quote of its day, and every day after until the feeds bring a newer one; a quote the feeds carry over a weekend is older and loses. With no quote at all, the user's value lasts however old, as before. Not yet enforced past `QUOTE_CARRY_DAYS`: once the feeds' newer quote is older than that window, an older value of the user's shows again, until the reader can tell the feeds' latest date per key. Core applies the rule (`withManualPrices`, `withManualRates`), so Activos, Resumen, the closes and the assistant read the same snapshot.
 - **A corrected value shows as such and can go back**: "Manual · date" on the price, "corregido a mano el …" on the rate, and "Volver a la cotización", which deletes the user's value. The prototype keeps the rates beside the prices; the database gets a manual rates table beside the manual prices one.
 
 ## 2026-10-13 · A property's sheet (PLA-90, prototype)
@@ -481,7 +502,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-13 · Export and deleting the account (PLA-58, PLA-84, prototype)
 
-- **Ajustes exports the user's data as one CSV per kind of row**: holdings, movements, debts and imports, each built when its button is pressed. Amounts are written as stored (a point before the decimals, no grouping) so any spreadsheet reads them back; the file starts with a byte order mark so accents read as UTF-8. A text field a spreadsheet would read as a formula starts with an apostrophe (`toCsv`); a signed number does not. The real export adds the stored files, the MFA step-up and the `audit_log` row, which the prototype has no counterpart for.
+- **Ajustes exports the user's data as one CSV per kind of row**: holdings, movements, debts and imports, each built when its button is pressed. Amounts are written as stored (a point before the decimals, no grouping) so any spreadsheet reads them back; the file starts with a byte order mark so accents read as UTF-8. A text field a spreadsheet would read as a formula starts with an apostrophe (`toCsv`); a signed number does not. The real export adds the step-up and the `audit_log` row (see "Findings from a full-repository review"), which the prototype has no counterpart for.
 - **Deleting the account asks first and leaves the prototype as a new user's**: one "Principal" portfolio, as the database gives a new user, and nothing else; the market data stays, and the user lands on Resumen. The real deletion is the Inngest job of PLA-84, with its step-up and audit row.
 
 ## 2026-10-13 · View preferences (PLA-109, prototype)

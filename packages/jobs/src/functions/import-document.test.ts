@@ -7,7 +7,7 @@ import {
   SourceError,
 } from "@plant/sources";
 import type { LogFields } from "@plant/shared";
-import { NonRetriableError } from "inngest";
+import { NonRetriableError, serializeError } from "inngest";
 
 import {
   failAbandonedImport,
@@ -399,6 +399,102 @@ it.each([
       event: { data: { importId: IMPORT, userId: USER } },
     });
     expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
+  },
+);
+
+// The model's raw answer rides on the AI SDK's errors, below a SourceError's
+// cause.
+const leaky = new Error("Type validation failed: SECRET_ROW");
+
+it.each([
+  [
+    "a failure a retry would not pass",
+    new SourceError("unreadable", false, { cause: leaky }),
+  ],
+  [
+    "a retryable failure",
+    new SourceError("extraction_failed", true, { cause: leaky }),
+  ],
+  ["anything else", new Error("boom", { cause: leaky })],
+])(
+  "keeps the cause of %s out of what the step hands the engine",
+  async (_, error) => {
+    const thrown: unknown[] = [];
+    const { deps } = setUp({ read: jest.fn().mockRejectedValue(error) });
+    await runImportDocument(deps, {
+      step: {
+        run: async (id, fn) => {
+          try {
+            return await fn();
+          } catch (caught) {
+            thrown.push(caught);
+            throw caught;
+          }
+        },
+      },
+      runId: "r1",
+      attempt: 0,
+      event: { data: { importId: IMPORT, userId: USER } },
+    });
+    expect(thrown).toHaveLength(1);
+    expect(JSON.stringify(serializeError(thrown[0] as Error))).not.toContain(
+      "SECRET_ROW",
+    );
+  },
+);
+
+// What the composition root's store throws.
+class ImportStoreError extends Error {
+  override readonly name = "ImportStoreError";
+  constructor(
+    readonly step: string,
+    readonly code: string,
+  ) {
+    super(`import store ${step} failed: ${code}`);
+  }
+}
+
+it.each([
+  ["as thrown", (error: unknown) => error],
+  ["once the engine rebuilds it", rebuilt],
+])(
+  "logs a store that kept failing as an error with its step and code, %s",
+  async (_, engine) => {
+    const { store, lines, deps } = setUp();
+    store.saveDraft.mockRejectedValue(new ImportStoreError("draft", "42501"));
+    expect(
+      await runImportDocument(deps, {
+        step: {
+          run: async (id, fn) => {
+            try {
+              return await fn();
+            } catch (thrown) {
+              throw engine(thrown);
+            }
+          },
+        },
+        runId: "r1",
+        attempt: 0,
+        event: { data: { importId: IMPORT, userId: USER } },
+      }),
+    ).toEqual({ outcome: "failed" });
+    expect(store.failed).toHaveBeenCalledWith(
+      IMPORT,
+      USER,
+      "extraction_failed",
+    );
+    expect(lines).toEqual([
+      {
+        level: "error",
+        event: "imports.read",
+        fields: expect.objectContaining({
+          "plant.outcome": "failed",
+          "error.type": "extraction_failed",
+          "plant.import.store_step": "draft",
+          "plant.import.store_code": "42501",
+        }),
+      },
+    ]);
   },
 );
 

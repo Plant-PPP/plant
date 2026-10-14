@@ -14,9 +14,10 @@ import { z } from "zod";
 import { type AlertWriteResult, newAlertSchema } from "@/lib/alerts/alerts";
 import { createAlert, deleteAlert, markAlertSeen } from "@/lib/alerts/read";
 import { readLiabilities } from "@/lib/debts/read";
+import { recordExport } from "@/lib/export/audit";
 import type { ExportTable } from "@/lib/export/csv";
-import { readOtherHoldings } from "@/lib/export/read";
-import { exportTables } from "@/lib/export/tables";
+import { EXPORT_IMPORTS_LIMIT, readOtherHoldings } from "@/lib/export/read";
+import { type ExportAnswer, exportTables } from "@/lib/export/tables";
 import { readImports } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
 import { refreshGainAlerts } from "@/lib/ledger/write";
@@ -46,55 +47,89 @@ export async function disableTotp(factorId: unknown): Promise<DisableResult> {
   });
 }
 
-// Everything the session's user loaded, as the tables of an export, read
-// under RLS when they ask for a file; null when it could not be read.
-export async function exportData(): Promise<ExportTable[] | null> {
-  const claims = await getSessionClaims();
-  const requestId = await currentRequestId();
-  const started = performance.now();
-  const client = await createClient();
-  try {
-    const [{ ledger, truncated }, other, debts, { items }] = await Promise.all([
-      readLedger(client, {
-        today: buenosAiresDate(new Date()),
-        referenceDollar: "mep",
-      }),
-      readOtherHoldings(client),
-      readLiabilities(client),
-      readImports(client),
-    ]);
-    const tables = exportTables({
+async function readExport(
+  client: Awaited<ReturnType<typeof createClient>>,
+): Promise<{ tables: ExportTable[]; truncated: boolean }> {
+  const [{ ledger, truncated }, other, debts, imports] = await Promise.all([
+    readLedger(client, {
+      today: buenosAiresDate(new Date()),
+      referenceDollar: "mep",
+    }),
+    readOtherHoldings(client),
+    readLiabilities(client),
+    readImports(client, { limit: EXPORT_IMPORTS_LIMIT }),
+  ]);
+  return {
+    tables: exportTables({
       ...ledger,
       otherHoldings: other.rows,
       liabilities: debts.active,
-      imports: items,
-    });
-    serverLog.info("settings.export", {
-      [REQUEST_ID_FIELD]: requestId,
-      "enduser.id": claims.sub,
-      "plant.outcome": "ok",
-      "plant.export.truncated":
-        truncated || other.truncated || debts.activeTruncated,
-      "plant.export.row_count": tables.reduce(
-        (sum, table) => sum + table.rows.length,
-        0,
-      ),
-      "plant.duration_ms": Math.round(performance.now() - started),
-    });
-    return tables;
-  } catch (error) {
+      imports: imports.items,
+    }),
+    truncated:
+      truncated ||
+      other.truncated ||
+      debts.activeTruncated ||
+      imports.truncated,
+  };
+}
+
+// Everything the session's user loaded, as the tables of an export, read
+// under RLS once the step-up lets them through. Each try leaves an audit row
+// with its outcome, and the tables go out only once theirs is written.
+export async function exportData(): Promise<ExportAnswer> {
+  const requestId = await currentRequestId();
+  const gate = await requireSensitiveSession("export");
+  const claims = await getSessionClaims();
+  const client = await createClient();
+  const started = performance.now();
+  const failed = (step: "audit" | "read", error: unknown) =>
     serverLog.error(
       "settings.export",
       {
         [REQUEST_ID_FIELD]: requestId,
         "enduser.id": claims.sub,
         "plant.outcome": "failed",
+        "plant.export.step": step,
         "plant.duration_ms": Math.round(performance.now() - started),
       },
       error,
     );
+
+  if (!gate.ok) {
+    await recordExport(client, "denied", requestId).catch((error: unknown) =>
+      failed("audit", error),
+    );
+    return { stepUp: gate.stepUp };
+  }
+  let answer: { tables: ExportTable[]; truncated: boolean };
+  try {
+    answer = await readExport(client);
+  } catch (error) {
+    failed("read", error);
+    await recordExport(client, "failure", requestId).catch((auditError) =>
+      failed("audit", auditError),
+    );
     return null;
   }
+  try {
+    await recordExport(client, "success", requestId);
+  } catch (error) {
+    failed("audit", error);
+    return null;
+  }
+  serverLog.info("settings.export", {
+    [REQUEST_ID_FIELD]: requestId,
+    "enduser.id": claims.sub,
+    "plant.outcome": "ok",
+    "plant.export.truncated": answer.truncated,
+    "plant.export.row_count": answer.tables.reduce(
+      (sum, table) => sum + table.rows.length,
+      0,
+    ),
+    "plant.duration_ms": Math.round(performance.now() - started),
+  });
+  return answer;
 }
 
 const alertId = z.uuid();

@@ -1,4 +1,8 @@
-import { currencySchema, positiveDecimalSchema } from "@plant/shared";
+import {
+  Constants,
+  currencySchema,
+  positiveDecimalSchema,
+} from "@plant/shared";
 import { z } from "zod";
 
 import { holdingDateSchema } from "../valuation/holding";
@@ -18,33 +22,46 @@ export type ManualPrice = z.output<typeof manualPriceSchema>;
 
 export type PriceSource = "feed" | "manual" | "missing";
 
-// The snapshot with the user's latest manual price on or before its date for
-// each symbol, where the feeds have none or an older one: a price the user
-// states wins on its day, and every day after until the feeds bring a newer
-// one. With the date of each manual price it took.
+// Each key's latest manual value on or before the snapshot's date, where the
+// snapshot has no feed quote or an older one: a value the user states wins on
+// its day, and every day after until a newer feed quote. A feed quote past
+// QUOTE_CARRY_DAYS is not in the snapshot, so it does not hold back an older
+// manual value. With the date of each manual value it took.
+function withManual<K extends string, M extends K, Q extends { date: string }>(
+  date: string,
+  fed: Partial<Record<K, Q>>,
+  manual: readonly { key: M; quote: Q }[],
+): { quotes: Partial<Record<K, Q>>; taken: Map<M, string> } {
+  const latest = new Map<M, Q>();
+  for (const { key, quote } of manual) {
+    if (quote.date > date) continue;
+    const kept = latest.get(key);
+    if (!kept || kept.date < quote.date) latest.set(key, quote);
+  }
+  const quotes = { ...fed };
+  const taken = new Map<M, string>();
+  for (const [key, quote] of latest) {
+    const feed = fed[key];
+    if (feed && feed.date > quote.date) continue;
+    quotes[key] = quote;
+    taken.set(key, quote.date);
+  }
+  return { quotes, taken };
+}
+
 export function withManualPrices(
   snapshot: QuoteSnapshot,
   manual: readonly ManualPrice[],
 ): { snapshot: QuoteSnapshot; manual: ReadonlyMap<string, string> } {
-  const latest = new Map<string, ManualPrice>();
-  for (const row of manual) {
-    if (row.price_date > snapshot.date) continue;
-    const kept = latest.get(row.symbol);
-    if (!kept || kept.price_date < row.price_date) latest.set(row.symbol, row);
-  }
-  const prices = { ...snapshot.prices };
-  const taken = new Map<string, string>();
-  for (const row of latest.values()) {
-    const fed = snapshot.prices[row.symbol];
-    if (fed && fed.date > row.price_date) continue;
-    prices[row.symbol] = {
-      price: row.price,
-      currency: row.currency,
-      date: row.price_date,
-    };
-    taken.set(row.symbol, row.price_date);
-  }
-  return { snapshot: { ...snapshot, prices }, manual: taken };
+  const { quotes, taken } = withManual(
+    snapshot.date,
+    snapshot.prices,
+    manual.map((row) => ({
+      key: row.symbol,
+      quote: { price: row.price, currency: row.currency, date: row.price_date },
+    })),
+  );
+  return { snapshot: { ...snapshot, prices: quotes }, manual: taken };
 }
 
 // Where a symbol's price comes from in a snapshot `withManualPrices` built.
@@ -57,7 +74,7 @@ export function priceSource(
 }
 
 // A dollar rate the user states, as of its date: the selling rate, in pesos.
-export const MANUAL_RATE_KINDS = ["mep", "ccl", "official"] as const;
+export const MANUAL_RATE_KINDS = Constants.public.Enums.manual_rate_kind;
 export type ManualRateKind = (typeof MANUAL_RATE_KINDS)[number];
 
 export const manualRateSchema = z
@@ -69,28 +86,19 @@ export const manualRateSchema = z
   .strict();
 export type ManualRate = z.output<typeof manualRateSchema>;
 
-// The snapshot with the user's latest rate of each kind on or before its
-// date, where the feeds have none or an older one, as manual prices take
-// theirs; with the date of each rate it took.
 export function withManualRates(
   snapshot: QuoteSnapshot,
   manual: readonly ManualRate[],
 ): { snapshot: QuoteSnapshot; manual: ReadonlyMap<ManualRateKind, string> } {
-  const latest = new Map<ManualRateKind, ManualRate>();
-  for (const row of manual) {
-    if (row.rate_date > snapshot.date) continue;
-    const kept = latest.get(row.kind);
-    if (!kept || kept.rate_date < row.rate_date) latest.set(row.kind, row);
-  }
-  const fx = { ...snapshot.fx };
-  const taken = new Map<ManualRateKind, string>();
-  for (const row of latest.values()) {
-    const fed = snapshot.fx[row.kind];
-    if (fed && fed.date > row.rate_date) continue;
-    fx[row.kind] = { sell: row.sell, date: row.rate_date };
-    taken.set(row.kind, row.rate_date);
-  }
-  return { snapshot: { ...snapshot, fx }, manual: taken };
+  const { quotes, taken } = withManual(
+    snapshot.date,
+    snapshot.fx,
+    manual.map((row) => ({
+      key: row.kind,
+      quote: { sell: row.sell, date: row.rate_date },
+    })),
+  );
+  return { snapshot: { ...snapshot, fx: quotes }, manual: taken };
 }
 
 export type ManualPriceRefusal = "future_date";

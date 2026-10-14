@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(92);
+SELECT plan(96);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -142,6 +142,7 @@ SELECT results_eq(
      ORDER BY t.tgname $$,
   ARRAY[
     'O CREATE TRIGGER holdings_set_updated_at BEFORE UPDATE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.set_updated_at()',
+    'O CREATE TRIGGER holdings_units_written_by_write_operation BEFORE INSERT OR UPDATE OF amount ON public.holdings FOR EACH ROW WHEN ((new.asset_class = ''instrument''::asset_class)) EXECUTE FUNCTION private.ledger_written_by_write_operation()',
     'O CREATE TRIGGER holdings_without_transfers BEFORE DELETE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.holding_without_transfers()',
     'O CREATE TRIGGER portfolio_setup_1_lock BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.lock_portfolio_setup()',
     'O CREATE TRIGGER portfolio_setup_1_lock_reopen BEFORE UPDATE OF amount ON public.holdings FOR EACH ROW WHEN (((old.amount = (0)::numeric) AND (new.amount > (0)::numeric))) EXECUTE FUNCTION private.lock_portfolio_setup()',
@@ -150,7 +151,7 @@ SELECT results_eq(
     'O CREATE TRIGGER portfolio_setup_3_guard BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.guard_holding_write()',
     'O CREATE TRIGGER portfolio_setup_3_guard_reopen BEFORE UPDATE OF amount ON public.holdings FOR EACH ROW WHEN (((old.amount = (0)::numeric) AND (new.amount > (0)::numeric))) EXECUTE FUNCTION private.guard_holding_write()'
   ],
-  'holdings has the lock, default, stamp, guard and transfer triggers, also on a sold-out holding getting units back, all enabled'
+  'holdings has the units, lock, default, stamp, guard and transfer triggers, also on a sold-out holding getting units back, all enabled'
 );
 
 -- The label's bound, in the form limits.test.ts reads.
@@ -299,6 +300,42 @@ SELECT results_eq(
   'a user restores a holding into an active account and portfolio'
 );
 
+-- An instrument's units are what its movements leave: only write_operation
+-- writes them.
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.holdings (source_connection_id, portfolio_id, asset_class, instrument_symbol, amount)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'a1000000-0000-4000-8000-0000000000a1',
+                              'instrument', 'ETH', '0') $$),
+  '42501 -',
+  'a user does not add an instrument holding but through write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.holdings SET amount = '7' WHERE id = 'a7000000-0000-4000-8000-0000000000a7' $$),
+  '42501 -',
+  'a user does not edit an instrument holding''s units but through write_operation'
+);
+
+SAVEPOINT through_write_operation;
+SELECT isnt(
+  public.write_operation(NULL, jsonb_build_array(jsonb_build_object(
+    'source_connection_id', 'a5000000-0000-4000-8000-0000000000a5',
+    'portfolio_id', 'a1000000-0000-4000-8000-0000000000a1',
+    'instrument_symbol', 'ETH', 'kind', 'opening_balance', 'date', '2026-09-30',
+    'currency', 'ARS', 'quantity', '3', 'price', '18000', 'rates', '{}'::jsonb)), '{}'::jsonb),
+  NULL,
+  'write_operation opens an instrument holding'
+);
+SELECT results_eq(
+  $$ SELECT amount::text FROM public.holdings WHERE instrument_symbol = 'ETH' $$,
+  $$ VALUES ('3.00000000') $$,
+  'and its units are those its movements leave'
+);
+ROLLBACK TO SAVEPOINT through_write_operation;
+
+-- The keys and checks on instrument holdings, as write_operation meets them.
+SELECT set_config('plant.write_operation', 'on', true);
+
 SELECT lives_ok(
   $$ INSERT INTO public.holdings (source_connection_id, portfolio_id, asset_class, instrument_symbol, amount)
      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'a1000000-0000-4000-8000-0000000000a1',
@@ -374,6 +411,8 @@ SELECT throws_ok(
   '23514', NULL,
   'an instrument holding has no currency'
 );
+
+SELECT set_config('plant.write_operation', '', true);
 
 SELECT throws_ok(
   $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount)
@@ -656,6 +695,7 @@ SELECT is(
 -- A sold-out instrument holding keeps nothing active, and units cannot come
 -- back into it once its portfolio or account is archived.
 SAVEPOINT sold_out;
+SELECT set_config('plant.write_operation', 'on', true);
 INSERT INTO public.holdings (source_connection_id, portfolio_id, asset_class, instrument_symbol, amount)
 VALUES ('a9000000-0000-4000-8000-0000000000a9', 'a4000000-0000-4000-8000-0000000000a4',
         'instrument', 'SOL', '1');

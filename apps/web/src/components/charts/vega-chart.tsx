@@ -27,6 +27,8 @@ const load = () =>
 
 const FORMAT_LOCALE = d3FormatLocale("es-AR");
 
+const FAILED = "No pudimos mostrar este gráfico.";
+
 // A CSS color the page defines, as the browser paints it: Vega draws SVG
 // attributes, which take no var().
 function cssColor(name: string): string {
@@ -143,14 +145,15 @@ export function VegaChart({
   }, [key, dark]);
 
   // The box stays mounted, so a new spec or theme draws again after a
-  // failure.
+  // failure. A screen reader reads only the label of an img, so the failure
+  // takes it.
   return (
-    <div role="img" aria-label={label} className={cn("w-full", className)}>
-      {failed && (
-        <p className="text-muted-foreground text-xs">
-          No pudimos mostrar este gráfico.
-        </p>
-      )}
+    <div
+      role="img"
+      aria-label={failed ? FAILED : label}
+      className={cn("w-full", className)}
+    >
+      {failed && <p className="text-muted-foreground text-xs">{FAILED}</p>}
       <div
         ref={box}
         aria-hidden

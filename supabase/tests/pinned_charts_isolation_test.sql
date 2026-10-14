@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(10);
+SELECT plan(12);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -28,7 +28,20 @@ CREATE FUNCTION pg_temp.acl(rel regclass, role regrole) RETURNS SETOF text LANGU
   WHERE a.attrelid = rel AND acl.grantee = role
 $f$;
 
+-- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
+CREATE FUNCTION pg_temp.refusal_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
+DECLARE state text; hint text;
+BEGIN
+  EXECUTE statement;
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS state = RETURNED_SQLSTATE, hint = PG_EXCEPTION_HINT;
+  RETURN state || ' ' || coalesce(nullif(hint, ''), '-');
+END
+$f$;
+
 GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.refusal_of(text) TO authenticated;
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -38,6 +51,10 @@ VALUES
    'authenticated', 'authenticated', 'ana@pgtap.invalid', '', now(), '{}', '{}', now(), now()),
   ('b0000000-0000-4000-8000-00000000000b', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'beto@pgtap.invalid', '', now(), '{}', '{}', now(), now());
+
+-- Ana has four more portfolios to pin charts of.
+INSERT INTO public.portfolios (user_id, name)
+SELECT 'a0000000-0000-4000-8000-00000000000a', 'Cartera ' || n FROM generate_series(1, 4) n;
 
 -- Beto pinned his net worth.
 INSERT INTO public.pinned_charts (user_id, topic)
@@ -66,7 +83,7 @@ SET LOCAL ROLE authenticated;
 
 INSERT INTO public.pinned_charts (topic) VALUES ('allocation');
 INSERT INTO public.pinned_charts (topic, portfolio_id)
-SELECT 'holdings', id FROM public.portfolios LIMIT 1;
+SELECT 'holdings', id FROM public.portfolios WHERE name NOT LIKE 'Cartera %' LIMIT 1;
 
 SELECT results_eq(
   $$ SELECT topic, portfolio_id IS NOT NULL FROM public.pinned_charts ORDER BY topic $$,
@@ -99,6 +116,27 @@ SELECT is(
                       VALUES ('allocation', 'b1000000-0000-4000-8000-0000000000b1') $$),
   '23503',
   'a chart of a portfolio that is not the user''s is refused'
+);
+
+-- Ana's 2 pins, 4 of the whole and 6 of three more portfolios make 12.
+INSERT INTO public.pinned_charts (topic)
+VALUES ('net_worth'), ('income'), ('debts'), ('holdings');
+INSERT INTO public.pinned_charts (topic, portfolio_id)
+SELECT t.topic, p.id
+FROM (VALUES ('allocation'), ('holdings')) t (topic)
+CROSS JOIN (SELECT id FROM public.portfolios WHERE name IN ('Cartera 1', 'Cartera 2', 'Cartera 3')) p;
+
+SELECT is(
+  (SELECT count(*)::int FROM public.pinned_charts),
+  12,
+  'a user pins up to 12 charts'
+);
+
+SELECT is(
+  pg_temp.refusal_of($$ INSERT INTO public.pinned_charts (topic, portfolio_id)
+                        SELECT 'allocation', id FROM public.portfolios WHERE name = 'Cartera 4' $$),
+  'P0001 pinned_charts_full',
+  'and no more'
 );
 
 DELETE FROM public.pinned_charts;

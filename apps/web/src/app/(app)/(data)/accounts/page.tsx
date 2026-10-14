@@ -16,6 +16,7 @@ import { AccountsSetup } from "@/components/portfolio-setup/accounts-setup";
 import { PrototypeAccounts } from "@/components/prototype/prototype-accounts";
 import { isProductionDeployment } from "@/lib/deployment";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import { navTitle } from "@/lib/navigation";
 import {
   readDeletable,
@@ -78,6 +79,7 @@ export default async function AccountsPage({
           },
         }}
         deletable={deletable}
+        hrefs={SCOPE_HREFS}
       />
     </div>
   );

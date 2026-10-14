@@ -87,6 +87,9 @@ export const DATE_ISSUE_LABELS = {
 // per unit in its currency, and where in the document it was read.
 export type ImportRow = {
   id: string;
+  // A cash balance: its symbol is its currency's code, its quantity the
+  // amount, and it has no price. A row without it is an instrument.
+  assetClass?: "cash";
   symbol: string;
   quantity: string;
   price: string | null;
@@ -194,15 +197,17 @@ export function rowChange(
   return { kind: order > 0 ? "up" : "down", held };
 }
 
-// What the rows read add up to, per currency: each row's printed value, else
-// its quantity times its price. Rows discarded or with neither are left out.
+// What the rows read add up to, per currency: cash's amount, each other
+// row's printed value, else its quantity times its price. Rows discarded or
+// with neither are left out.
 export function readTotals(
   rows: readonly ImportRow[],
 ): { currency: Currency; amount: string }[] {
   const totals = new Map<Currency, ReturnType<typeof exactOf>>();
   for (const row of rows) {
     if (row.discarded) continue;
-    const printed = row.value ?? null;
+    const printed =
+      row.assetClass === "cash" ? row.quantity : (row.value ?? null);
     if (printed === null && row.price === null) continue;
     const value =
       printed !== null

@@ -4,7 +4,7 @@ import { DeleteAccountCard } from "./delete-account-card";
 import { ExportCard } from "./export-card";
 
 it("offers the Excel and each CSV by its name, without reading the data", () => {
-  const load = jest.fn(async () => []);
+  const load = jest.fn(async () => ({ tables: [], truncated: false }));
   const html = renderToStaticMarkup(<ExportCard load={load} />);
   expect(html).toContain("Todo en Excel</button>");
   expect(html).toContain("Tenencias</button>");

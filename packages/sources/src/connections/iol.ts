@@ -3,8 +3,10 @@ import { z } from "zod";
 import type { DraftRow } from "../file-upload/draft";
 import {
   call,
+  cashRow,
   decimalOf,
   holdingsReading,
+  isZero,
   jsonOf,
   positive,
   rejected,
@@ -147,16 +149,12 @@ export function iolConnection({
       for (const { moneda, saldo } of state.data.cuentas) {
         const currency = currencyOf(moneda);
         const quantity = decimalOf(saldo);
-        if (currency === null || !positive(quantity)) continue;
-        rows.push({
-          symbol: currency,
-          quantity,
-          price: null,
-          value: null,
-          currency,
-          confidence: "medium",
-          page: null,
-        });
+        if (isZero(quantity)) continue;
+        if (currency === null || !positive(quantity)) {
+          skipped += 1;
+          continue;
+        }
+        rows.push(cashRow(currency, quantity, "medium"));
       }
       return holdingsReading(rows, skipped, now());
     },

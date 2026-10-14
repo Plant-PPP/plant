@@ -4,7 +4,8 @@ import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
+import { NameLink } from "@/components/holdings/holding-cells";
+import { actionsColumn } from "@/components/ui/data-table";
 import { PAGE_ROW_LIMIT } from "@/lib/portfolio-setup/limits";
 import {
   deleteMessages,
@@ -14,7 +15,7 @@ import {
 import type { PortfolioRow, PortfoliosView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { dialogAnswer, rowAnswer } from "./answers";
-import { type ListChange, temporaryId } from "./list-change";
+import { type ListChange, savedRowHref, temporaryId } from "./list-change";
 import { NameDialog } from "./name-dialog";
 import {
   ActiveList,
@@ -66,11 +67,19 @@ export type PortfolioActions = {
   delete?: (id: unknown) => Promise<WriteResult>;
 };
 
-const DATA_COLUMNS: ColumnDef<PortfolioRow>[] = [
+// The name links to the portfolio's page when the list is given one.
+const dataColumns = (
+  href?: (id: string) => string,
+): ColumnDef<PortfolioRow>[] => [
   {
     id: "name",
     header: "Nombre",
-    cell: ({ row }) => <TruncatedText text={row.original.name} />,
+    cell: ({ row }) => (
+      <NameLink
+        text={row.original.name}
+        href={savedRowHref(href, row.original.id)}
+      />
+    ),
   },
 ];
 
@@ -81,11 +90,14 @@ export function PortfoliosCard({
   actions,
   usedBy,
   deletable = [],
+  href,
 }: {
   view: PortfoliosView;
   pending: boolean;
   run: SetupRun;
   actions: PortfolioActions;
+  // The page an active portfolio's name opens.
+  href?: (id: string) => string;
   // How the active accounts that use a portfolio are named.
   usedBy: (id: string) => string[];
   // The portfolios whose delete would go through, the only ones that offer it.
@@ -177,7 +189,7 @@ export function PortfoliosCard({
         emptyText={COPY.emptyText}
         truncatedText={COPY.truncated}
         columns={[
-          ...DATA_COLUMNS,
+          ...dataColumns(href),
           actionsColumn<PortfolioRow>(
             [
               {
@@ -208,7 +220,7 @@ export function PortfoliosCard({
         firstPageLabel={COPY.firstPageLabel}
         pending={pending}
         columns={[
-          ...DATA_COLUMNS,
+          ...dataColumns(),
           actionsColumn<PortfolioRow>(
             [
               {

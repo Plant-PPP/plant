@@ -9,7 +9,8 @@ import { CHART_TOPICS, type ChartPart, type PinResult } from "./chat";
 
 type Client = SupabaseClient<Database>;
 
-// The most charts Resumen shows pinned.
+// The most charts Resumen shows pinned; private.pinned_charts_limit holds
+// the same figure.
 export const MAX_PINS = 12;
 
 export type Pin = {
@@ -58,17 +59,18 @@ export async function readPins(client: Client): Promise<Pin[]> {
   });
 }
 
-// Pins a chart for the session's user: once, and at most MAX_PINS of them.
+// Pins a chart for the session's user: once, and at most MAX_PINS of them,
+// which the database counts.
 export async function pinChart(
   client: Client,
   source: NonNullable<ChartPart["source"]>,
 ): Promise<PinResult> {
-  if ((await readPins(client)).length >= MAX_PINS) return "full";
   const result = await client.from("pinned_charts").insert({
     topic: source.topic,
     portfolio_id: source.portfolioId,
   });
   if (result.error?.code === "23505") return "already";
+  if (result.error?.hint === "pinned_charts_full") return "full";
   return classifyPostgrestResult(result, 201) ? "failed" : "pinned";
 }
 

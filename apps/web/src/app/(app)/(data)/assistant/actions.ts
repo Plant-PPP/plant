@@ -15,6 +15,8 @@ import {
 } from "@/lib/assistant/pins";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { serverLog } from "@/lib/log/server-log";
+import { REQUEST_ID_FIELD } from "@/lib/request-id";
+import { currentRequestId } from "@/lib/request-id-server";
 import { createClient } from "@/lib/supabase/server";
 
 // The arguments come from the browser: each is parsed, and every read and
@@ -28,6 +30,7 @@ export async function loadConversation(
   const parsed = conversationId.safeParse(id);
   if (!parsed.success) return null;
   const claims = await getSessionClaims();
+  const requestId = await currentRequestId();
   try {
     const messages = await conversationMessages(
       await createClient(),
@@ -35,6 +38,7 @@ export async function loadConversation(
       parsed.data,
     );
     serverLog.info("assistant.conversation", {
+      [REQUEST_ID_FIELD]: requestId,
       "enduser.id": claims.sub,
       "plant.assistant.action": "load",
       "plant.outcome": "ok",
@@ -45,6 +49,7 @@ export async function loadConversation(
     serverLog.error(
       "assistant.conversation",
       {
+        [REQUEST_ID_FIELD]: requestId,
         "enduser.id": claims.sub,
         "plant.assistant.action": "load",
         "plant.outcome": "failed",
@@ -59,9 +64,11 @@ export async function deleteConversation(id: unknown): Promise<boolean> {
   const parsed = conversationId.safeParse(id);
   if (!parsed.success) return false;
   const claims = await getSessionClaims();
+  const requestId = await currentRequestId();
   try {
     await deleteOwn(await createClient(), claims.sub, parsed.data);
     serverLog.info("assistant.conversation", {
+      [REQUEST_ID_FIELD]: requestId,
       "enduser.id": claims.sub,
       "plant.assistant.action": "delete",
       "plant.outcome": "ok",
@@ -71,6 +78,7 @@ export async function deleteConversation(id: unknown): Promise<boolean> {
     serverLog.error(
       "assistant.conversation",
       {
+        [REQUEST_ID_FIELD]: requestId,
         "enduser.id": claims.sub,
         "plant.assistant.action": "delete",
         "plant.outcome": "failed",
@@ -86,6 +94,7 @@ export async function pinChart(source: unknown): Promise<PinResult> {
   const parsed = pinSourceSchema.safeParse(source);
   if (!parsed.success) return "failed";
   const claims = await getSessionClaims();
+  const requestId = await currentRequestId();
   let result: PinResult;
   let failure: unknown;
   try {
@@ -95,6 +104,7 @@ export async function pinChart(source: unknown): Promise<PinResult> {
     failure = error;
   }
   const line = {
+    [REQUEST_ID_FIELD]: requestId,
     "enduser.id": claims.sub,
     "plant.assistant.action": "pin",
     "plant.assistant.chart_topic": parsed.data.topic,
@@ -110,9 +120,11 @@ export async function unpinChart(id: unknown): Promise<boolean> {
   const parsed = conversationId.safeParse(id);
   if (!parsed.success) return false;
   const claims = await getSessionClaims();
+  const requestId = await currentRequestId();
   try {
     const removed = await unpinOwn(await createClient(), parsed.data);
     serverLog.info("assistant.pin", {
+      [REQUEST_ID_FIELD]: requestId,
       "enduser.id": claims.sub,
       "plant.assistant.action": "unpin",
       "plant.outcome": removed ? "ok" : "not_found",
@@ -124,6 +136,7 @@ export async function unpinChart(id: unknown): Promise<boolean> {
     serverLog.error(
       "assistant.pin",
       {
+        [REQUEST_ID_FIELD]: requestId,
         "enduser.id": claims.sub,
         "plant.assistant.action": "unpin",
         "plant.outcome": "failed",

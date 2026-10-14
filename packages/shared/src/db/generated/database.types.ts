@@ -183,14 +183,14 @@ isOneToOne: false
                   ]
                 },"import_items": {
                   Row: {
-                    "account": string | null,"confidence": Database["public"]['Enums']["import_confidence"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"import_id": string,"position": number,"price": number | null,"quantity": number,"source_page": number | null,"symbol": string,"user_id": string,"value": number | null
+                    "account": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"confidence": Database["public"]['Enums']["import_confidence"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"import_id": string,"position": number,"price": number | null,"quantity": number,"source_page": number | null,"symbol": string,"user_id": string,"value": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "account"?: string | null,"confidence": Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"id"?: string,"import_id": string,"position": number,"price"?: number | null,"quantity": number,"source_page"?: number | null,"symbol": string,"user_id": string,"value"?: number | null
+                    "account"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"confidence": Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"id"?: string,"import_id": string,"position": number,"price"?: number | null,"quantity": number,"source_page"?: number | null,"symbol": string,"user_id": string,"value"?: number | null
                   }
                   Update: {
-                    "account"?: string | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"id"?: string,"import_id"?: string,"position"?: number,"price"?: number | null,"quantity"?: number,"source_page"?: number | null,"symbol"?: string,"user_id"?: string,"value"?: number | null
+                    "account"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"confidence"?: Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"id"?: string,"import_id"?: string,"position"?: number,"price"?: number | null,"quantity"?: number,"source_page"?: number | null,"symbol"?: string,"user_id"?: string,"value"?: number | null
                   }
                   Relationships: [
                     {
@@ -522,6 +522,9 @@ isOneToOne: false
 { Args: { "p_after"?: string,"p_limit": number }; Returns: {
               "id": string,"name": string
             }[]
+                           },
+"record_data_export":
+{ Args: { "p_outcome": string,"p_request_id"?: string }; Returns: undefined
                            },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string

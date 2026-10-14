@@ -21,7 +21,8 @@ import type {
 } from "@/lib/portfolio-setup/read";
 import { InstitutionIcon } from "./institution-field";
 import { dialogAnswer, rowAnswer } from "./answers";
-import { temporaryId } from "./list-change";
+import { NameLink } from "@/components/holdings/holding-cells";
+import { savedRowHref, temporaryId } from "./list-change";
 import {
   ActiveList,
   ArchivedList,
@@ -65,8 +66,11 @@ export type SourceConnectionActions = {
 };
 
 // Below @2xl the portfolio and report status take a muted second line; from
-// @2xl each has its own column.
-const COLUMNS: ColumnDef<SourceConnectionRow>[] = [
+// @2xl each has its own column. The institution links to the account's page
+// when the list is given one.
+const columns = (
+  href?: (id: string) => string,
+): ColumnDef<SourceConnectionRow>[] => [
   {
     id: "institution",
     header: "Cuenta",
@@ -75,9 +79,7 @@ const COLUMNS: ColumnDef<SourceConnectionRow>[] = [
       <>
         <span className="flex min-w-0 items-center gap-2">
           <InstitutionIcon name={row.institution} icon={row.icon} />
-          <span className="block truncate" title={row.institution}>
-            {row.institution}
-          </span>
+          <NameLink text={row.institution} href={savedRowHref(href, row.id)} />
         </span>
         <TruncatedText
           className="pl-6 text-xs text-muted-foreground @2xl:hidden"
@@ -109,12 +111,15 @@ export function SourceConnectionsCard({
   actions,
   deletable = [],
   deletesUploads = [],
+  href,
 }: {
   view: SourceConnectionsView;
   pending: boolean;
   run: SetupRun;
   portfolios: PortfolioRow[];
   actions: SourceConnectionActions;
+  // The page an active account's name opens.
+  href?: (id: string) => string;
   // The accounts whose delete would go through, the only ones that offer it.
   deletable?: readonly string[];
   // Those of them that would take their uploads along.
@@ -216,7 +221,7 @@ export function SourceConnectionsCard({
         emptyText="Todavía no agregaste cuentas."
         truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
         columns={[
-          ...COLUMNS,
+          ...columns(href),
           actionsColumn<SourceConnectionRow>(
             [
               {
@@ -247,7 +252,7 @@ export function SourceConnectionsCard({
         firstPageLabel="Ver las más recientes"
         pending={pending}
         columns={[
-          ...COLUMNS,
+          ...columns(),
           actionsColumn<SourceConnectionRow>(
             [
               {

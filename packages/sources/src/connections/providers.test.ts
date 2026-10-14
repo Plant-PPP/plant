@@ -511,7 +511,7 @@ describe("mercado pago", () => {
 });
 
 describe("bitso", () => {
-  it("reads each currency's total, pesos as cash, and leaves out a fiat Plant does not keep", async () => {
+  it("reads each currency's total, pesos as cash, and counts a fiat Plant does not keep as left out", async () => {
     fake.answer = PROVIDER_FIXTURES.bitso.ok;
     const reading = (await bitsoConnection(deps()).read(
       BITSO_CREDENTIALS,
@@ -521,7 +521,7 @@ describe("bitso", () => {
       ["ARS", "52000.75", "ARS"],
       ["BTC", "0.03", "USD"],
     ]);
-    expect(reading.read.skippedRows).toBe(0);
+    expect(reading.read.skippedRows).toBe(1);
     const nonce = String(fake.requests[0]!.headers.authorization).split(":")[1];
     expect(nonce?.startsWith(String(NOW.getTime()))).toBe(true);
   });
