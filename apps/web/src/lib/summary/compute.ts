@@ -279,6 +279,16 @@ function holdingsAt(
   });
 }
 
+// The holdings as they stood at the end of `date`, with that day's quotes as
+// the closes value them.
+export const heldOn = (
+  state: ClosesState,
+  date: string,
+): { rows: HoldingRow[]; snapshot: QuoteSnapshot } => ({
+  rows: holdingsAt(state, ledgersOf(state, "ars"), date),
+  snapshot: pricedAt(state, date),
+});
+
 const cache = new WeakMap<ClosesState, Map<string, MonthClose[]>>();
 const worthCache = new WeakMap<
   ClosesState,

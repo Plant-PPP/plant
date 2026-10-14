@@ -2,6 +2,17 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Impuestos: Bienes Personales and Ganancias estimates (PLA-66)
+
+- **A page, Impuestos (`/taxes?year=`), computed from the data the closes already read**: no migration and nothing stored. It opens on the last year that ended (the one being declared) when there is data for it, else on the one in progress, and offers every year from the first movement's. The year in progress is valued at today and says so.
+- **It is an estimate, not tax advice, and says so first.** The rules are deliberately simple and listed on the page; it computes no tax due, no non-taxable minimum, no deductions and no rates, which change every year and depend on the person.
+- **Bienes Personales values what was held at the end of December 31** as the closes value that day (each instrument at its quote of the day or the last one within a week, else its last trade price), a foreign-currency asset at the **official buying rate** (`fx_rates` kind `official`, column `buy`, from DolarApi's Banco Nación rate) of that day or the last one within a week. That rate is read apart: the valuation snapshot only carries selling rates. With no buying rate, dollar assets show no value and the totals say a figure is missing. The prototype's made-up quotes have no buying rate, so it takes the official selling rate less $ 40.
+- **Exempt, simplified**: plazos fijos (deposits in an Argentine bank) and bonds (the `bond` type covers government bonds and corporate notes, both exempt). Cash, CEDEARs, FCIs, crypto, real estate and other assets count as taxable; cash in an Argentine bank may be exempt, and the page says so rather than guessing where it sits. The real app keeps no placement kind, so every fixed-term placement there counts as a plazo fijo; the prototype excludes cauciones, loans and other placements. Real estate and other assets go at the value the user stated, not their fiscal valuation. Debts are not subtracted.
+- **Holdings with no history (cash, placements, real estate, other) count with today's amount in past years**, as the closes do; a placement that started after the year's end is left out.
+- **Ganancias adds up the year's realized results in pesos, by kind**: sales by instrument type, with the ledger's result (the oldest units first, less charges), and dividends, coupons and yields (staking, earn), before withholdings. Each movement is in pesos at its own day's rates, as every view in pesos computes it. It does not split exempt from taxable income: that depends on each asset and the person.
+- **The report leaves out what the user left out**: every holding of an account with "incluir en el reporte impositivo" off, and an asset in `tax_report_exclusions` (an instrument across every holding of it, or one holding), in both sections. The page counts the assets held that day it left out.
+- **Each section downloads as a CSV**, and the page saves as a PDF through the print dialog, as Resumen does.
+
 ## 2026-10-14 · Export to Excel and PDF (PLA-71)
 
 - **Ajustes exports everything the user loaded as one Excel workbook**, one sheet per kind of row, beside the CSVs it already offered. The real app reads the data only when the user asks for a file, through a server action under RLS: every holding and movement, the debts Deudas lists and the latest imports Cargar lists.
@@ -232,6 +243,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **30 questions a month, counted in `ai_questions` before the model runs**, under a lock (`check_assistant_quota`). A question counts once asked, even if its answer fails or its conversation is deleted.
 - **Under each answer: the day, the dollar and what it read.** These come from the tools' results; the transcript shows them once the answer has finished. Charts wait for PLA-53, and the suggested questions are the ones the tools answer.
 - **Stopping an answer** stops the screen; the server finishes and keeps it.
+
 ## 2026-10-13 · Promote to production (PLA-13)
 
 - **`.github/workflows/promote-to-production.yml`, run by hand from `staging`**, promotes staging HEAD or the full SHA it is given (an earlier one rolls back): `detect-changes` → `approve` → `supabase` → `vercel` → `inngest` → `smoke-test` → `tag`. It refuses a dispatch from another branch and a SHA that is not on `staging`.

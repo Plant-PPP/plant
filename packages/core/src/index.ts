@@ -67,6 +67,7 @@ export {
   instrumentValue,
   MAX_ANNUAL_RATE,
   type OmittableColumn,
+  valueHolding,
 } from "./valuation/holding";
 export {
   type RealEstateFigures,
