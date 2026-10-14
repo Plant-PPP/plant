@@ -2,31 +2,50 @@ import type { QuoteSnapshot } from "@plant/core";
 
 import { benchmarksBetween, beyond, chainedChange } from "./benchmarks";
 
-const snapshot = (fx: Record<string, string>): QuoteSnapshot =>
-  ({
-    date: "2026-09-30",
+const at = (
+  day: string,
+  fx: Record<string, string>,
+  rateDate = day,
+): { day: string; snapshot: QuoteSnapshot } => ({
+  day,
+  snapshot: {
+    date: day,
     fx: Object.fromEntries(
       Object.entries(fx).map(([kind, sell]) => [
         kind,
-        { sell, buy: null, date: "2026-09-30" },
+        { sell, buy: null, date: rateDate },
       ]),
     ),
     prices: {},
-  }) as unknown as QuoteSnapshot;
+  } as unknown as QuoteSnapshot,
+});
 
 it("reads inflation from the UVA and the dollar from the MEP", () => {
   expect(
     benchmarksBetween(
-      snapshot({ uva: "1000", mep: "1200" }),
-      snapshot({ uva: "1030", mep: "1260" }),
+      at("2026-08-31", { uva: "1000", mep: "1200" }),
+      at("2026-09-30", { uva: "1030", mep: "1260" }),
     ),
   ).toEqual({ inflation: "0.03", dollar: "0.05" });
 });
 
 it("knows no change for a rate missing at either end", () => {
   expect(
-    benchmarksBetween(snapshot({ mep: "1200" }), snapshot({ uva: "1030" })),
+    benchmarksBetween(
+      at("2026-08-31", { mep: "1200" }),
+      at("2026-09-30", { uva: "1030" }),
+    ),
   ).toEqual({ inflation: null, dollar: null });
+});
+
+it("refuses a rate older than a quote carries", () => {
+  // A manual MEP of March at both ends would make September look flat.
+  expect(
+    benchmarksBetween(
+      at("2026-08-31", { mep: "1200" }, "2026-03-10"),
+      at("2026-09-30", { mep: "1200" }, "2026-03-10"),
+    ).dollar,
+  ).toBeNull();
 });
 
 it("chains a year's months, and knows none when a month is unknown", () => {
