@@ -274,17 +274,14 @@ it("keeps only data URLs of images it shows", () => {
   expect(isStoredIcon("https://brubank.com/fav.png")).toBe(false);
 });
 
-// A host that answers its first lookup with a public address and every later
-// one with a loopback address.
-function rebinding() {
-  let asked = 0;
-  return async () => (asked++ === 0 ? ["93.184.216.34"] : ["127.0.0.1"]);
-}
-
+// A host that answers the check with a public address and every connection
+// with a loopback one (DNS rebinding).
 it("refuses a host whose address changes to a private one at connection", async () => {
-  const resolve = rebinding();
-  const connection = publicOnlyFetch(resolve);
-  const deps: FaviconDeps = { lookup: resolve, fetch: connection.fetch };
+  const connection = publicOnlyFetch(async () => ["127.0.0.1"]);
+  const deps: FaviconDeps = {
+    lookup: async () => ["93.184.216.34"],
+    fetch: connection.fetch,
+  };
   try {
     await expect(fetchFavicon("brubank.com", deps)).rejects.toEqual(
       new FaviconError("private"),
