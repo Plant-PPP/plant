@@ -52,6 +52,28 @@ describe("importDraftSchema", () => {
     ).toBe(false);
   });
 
+  it("takes cash at zero, a balance the account no longer holds", () => {
+    const cash = {
+      ...row,
+      symbol: "ARS",
+      quantity: "0",
+      price: null,
+      value: null,
+      assetClass: "cash",
+    };
+    expect(
+      importDraftSchema.parse({ documentDate: null, rows: [cash], totals: [] })
+        .rows[0],
+    ).toMatchObject({ assetClass: "cash", quantity: "0" });
+    expect(
+      importDraftSchema.safeParse({
+        documentDate: null,
+        rows: [{ ...cash, quantity: "-1" }],
+        totals: [],
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     ["no units", { quantity: "0" }],
     ["a float", { quantity: 5 }],

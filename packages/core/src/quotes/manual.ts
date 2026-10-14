@@ -23,14 +23,15 @@ export type ManualPrice = z.output<typeof manualPriceSchema>;
 
 export type PriceSource = "feed" | "manual" | "missing";
 
-// Each key's latest manual value on or before the snapshot's date, where the
-// snapshot has no feed quote or an older one: a value the user states wins on
-// its day, and every day after until a newer feed quote. A feed quote past
-// QUOTE_CARRY_DAYS is not in the snapshot, so it does not hold back an older
-// manual value. With the date of each manual value it took.
+// Each key's latest manual value on or before the snapshot's date, unless the
+// feeds stored a newer quote for the key: a value the user states wins on its
+// day, and every day after until a newer feed quote, even one past
+// QUOTE_CARRY_DAYS that values nothing. With the date of each manual value it
+// took.
 function withManual<K extends string, M extends K, Q extends { date: string }>(
   date: string,
   fed: Partial<Record<K, Q>>,
+  fedOn: Partial<Record<K, string>> | undefined,
   manual: readonly { key: M; quote: Q }[],
 ): { quotes: Partial<Record<K, Q>>; taken: Map<M, string> } {
   const latest = new Map<M, Q>();
@@ -42,8 +43,8 @@ function withManual<K extends string, M extends K, Q extends { date: string }>(
   const quotes = { ...fed };
   const taken = new Map<M, string>();
   for (const [key, quote] of latest) {
-    const feed = fed[key];
-    if (feed && feed.date > quote.date) continue;
+    const feed = fedOn?.[key] ?? fed[key]?.date;
+    if (feed && feed > quote.date) continue;
     quotes[key] = quote;
     taken.set(key, quote.date);
   }
@@ -57,6 +58,7 @@ export function withManualPrices(
   const { quotes, taken } = withManual(
     snapshot.date,
     snapshot.prices,
+    snapshot.feedDates?.prices,
     manual.map((row) => ({
       key: row.symbol,
       quote: { price: row.price, currency: row.currency, date: row.price_date },
@@ -94,6 +96,7 @@ export function withManualRates(
   const { quotes, taken } = withManual(
     snapshot.date,
     snapshot.fx,
+    snapshot.feedDates?.fx,
     manual.map((row) => ({
       key: row.kind,
       quote: { sell: row.sell, date: row.rate_date },

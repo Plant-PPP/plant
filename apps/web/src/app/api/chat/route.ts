@@ -15,6 +15,7 @@ import { ANSWER_FAILED, CHAT_UNITS } from "@/lib/assistant/chat";
 import { textOf } from "@/lib/assistant/messages-view";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { boundedText } from "@/lib/bounded-body";
+import { AI_CONSENTS, consentsGiven } from "@/lib/consent-given";
 import { isProductionDeployment } from "@/lib/deployment";
 import { serverLog } from "@/lib/log/server-log";
 import {
@@ -36,7 +37,8 @@ const body = z.object({
   message: z.object({ parts: z.array(z.unknown()).max(20) }),
 });
 
-type Outcome = TurnOutcome | "disabled" | "bad_request" | "unauthenticated";
+type Outcome =
+  TurnOutcome | "disabled" | "bad_request" | "unauthenticated" | "consent";
 
 const LEVEL: Record<Outcome, "info" | "warn" | "error"> = {
   answered: "info",
@@ -44,6 +46,7 @@ const LEVEL: Record<Outcome, "info" | "warn" | "error"> = {
   quota: "info",
   disabled: "info",
   unauthenticated: "info",
+  consent: "info",
   bad_request: "warn",
   aborted: "warn",
   misconfigured: "error",
@@ -125,8 +128,17 @@ export async function POST(request: Request): Promise<Response> {
     fields["plant.assistant.conversation_id"] = parsed.data.conversationId;
     outcome = "failed";
     status = 500;
+    const client = await createClient();
+    if (!(await consentsGiven(client, AI_CONSENTS))) {
+      outcome = "consent";
+      status = 403;
+      return plainText(
+        "Para preguntarle al asistente, aceptá los términos en Cargar.",
+        status,
+      );
+    }
     const response = await runAssistantTurn({
-      client: await createClient(),
+      client,
       store: assistantSink(),
       record: aiCostSink(),
       context: {

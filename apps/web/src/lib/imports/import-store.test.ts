@@ -366,20 +366,35 @@ it("throws when the import stopped being read before it was marked ready", async
   expect(error).toMatchObject({ step: "draft", code: "not_being_read" });
 });
 
-it("claims an import for reading only from queued", async () => {
+const RUN = "01M8Z3K4567890QWERTYXABCDE";
+
+it("claims an import for reading only from queued, for its run", async () => {
   const { store, calls } = storeWith(() => ({
     status: 200,
     body: [{ id: IMPORT }],
   }));
-  expect(await store.reading(IMPORT, USER)).toBe(true);
+  expect(await store.reading(IMPORT, USER, RUN)).toBe(true);
+  expect(calls).toHaveLength(1);
   expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
   expect(calls[0]!.url.searchParams.get("status")).toBe("eq.queued");
-  expect(calls[0]!.body).toEqual({ status: "reading" });
+  expect(calls[0]!.body).toEqual({ status: "reading", read_run_id: RUN });
+});
+
+it("answers an import its own run claimed already as claimed", async () => {
+  const { store, calls } = storeWith((call) => ({
+    status: 200,
+    body: call.method === "PATCH" ? [] : [{ id: IMPORT }],
+  }));
+  expect(await store.reading(IMPORT, USER, RUN)).toBe(true);
+  expect(calls[1]!.method).toBe("GET");
+  expect(calls[1]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  expect(calls[1]!.url.searchParams.get("status")).toBe("eq.reading");
+  expect(calls[1]!.url.searchParams.get("read_run_id")).toBe(`eq.${RUN}`);
 });
 
 it("does not claim an import another run claimed", async () => {
   const { store } = storeWith(() => ({ status: 200, body: [] }));
-  expect(await store.reading(IMPORT, USER)).toBe(false);
+  expect(await store.reading(IMPORT, USER, RUN)).toBe(false);
 });
 
 it("marks an import failed with its reason, only while it is being read", async () => {
@@ -398,7 +413,7 @@ it("throws a store error with only the step and code", async () => {
     status: 500,
     body: { code: "XX000", message: "row details" },
   }));
-  const error = await store.reading(IMPORT, USER).catch((e: unknown) => e);
+  const error = await store.reading(IMPORT, USER, RUN).catch((e: unknown) => e);
   expect(error).toBeInstanceOf(ImportStoreError);
   expect(error).toMatchObject({ step: "reading", code: "XX000" });
   expect(String(error)).not.toContain("row details");

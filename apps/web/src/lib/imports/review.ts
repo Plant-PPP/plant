@@ -112,6 +112,17 @@ export const lackingField = (
   origin: ImportOrigin,
 ): string => (draft === null ? missingText(origin) : "Completá este dato");
 
+// Why an operation's date is not accepted: later than today, or lacking.
+export const lackingDate = (
+  date: string | null,
+  draft: string | null,
+  origin: ImportOrigin,
+  today: string,
+): string =>
+  date !== null && date > today
+    ? "La fecha es posterior a hoy"
+    : lackingField(draft, origin);
+
 // The toast after confirming `what` of an import into the account named
 // `institution`: a sync's by the account alone, a file's by the file too.
 export const savedToast = (

@@ -272,10 +272,14 @@ describe("balances a draft cannot hold", () => {
     const reading = holdings(
       await ibkrConnection(deps()).read(IBKR_CREDENTIALS, "holdings"),
     );
-    expect(reading.draft.rows.map((row) => row.symbol)).toEqual([
-      "AAPL",
-      "SPY",
-    ]);
+    // Pesos at zero are cash at zero, which the review brings to zero.
+    expect(reading.draft.rows.map((row) => [row.symbol, row.quantity])).toEqual(
+      [
+        ["AAPL", "10"],
+        ["ARS", "0"],
+        ["SPY", "2.5"],
+      ],
+    );
     // The euro position, the negative dollars and the euros.
     expect(reading.read.skippedRows).toBe(3);
   });
@@ -297,10 +301,14 @@ describe("balances a draft cannot hold", () => {
     const reading = holdings(
       await iolConnection(deps()).read(IOL_CREDENTIALS, "holdings"),
     );
-    expect(reading.draft.rows.map((row) => row.symbol)).toEqual([
-      "AAPL",
-      "AL30",
-    ]);
+    // Dollars at zero are cash at zero, which the review brings to zero.
+    expect(reading.draft.rows.map((row) => [row.symbol, row.quantity])).toEqual(
+      [
+        ["AAPL", expect.any(String)],
+        ["AL30", expect.any(String)],
+        ["USD", "0"],
+      ],
+    );
     expect(reading.read.skippedRows).toBe(2);
   });
 
@@ -390,6 +398,18 @@ describe("a provider's body", () => {
       retryable: false,
     });
     expect(pulled()).toBeLessThan(20);
+  });
+
+  it("fails as unavailable when the body breaks off, for a later attempt", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new TypeError("terminated"));
+      },
+    });
+    expect(await failure(bodyText(new Response(body), 2048))).toEqual({
+      code: "extraction_failed",
+      retryable: true,
+    });
   });
 
   it("reads a body within the cap, and JSON that does not parse as null", async () => {

@@ -42,7 +42,7 @@ import {
   type ImportItem,
   type ImportOperationKind,
   type ImportOperationRow,
-  lackingField,
+  lackingDate,
   lackingFigure,
   missingText,
   savedToast,
@@ -502,9 +502,11 @@ export function ImportOperationsReview({
                     />
                     {!row.discarded && missing[index]!.has("date") && (
                       <ProblemText
-                        text={lackingField(
+                        text={lackingDate(
+                          row.date,
                           item.operations?.[index]?.date ?? null,
                           item.origin,
+                          today,
                         )}
                       />
                     )}

@@ -3,7 +3,9 @@ import {
   type Currency,
   decimalStringSchema,
   fromScaled,
+  nonNegativeDecimalSchema,
   positiveDecimalSchema,
+  readCappedBytes,
   toScaled,
 } from "@plant/shared";
 
@@ -53,36 +55,13 @@ export async function bodyText(
   response: Response,
   maxBytes: number,
 ): Promise<string> {
-  const declared = Number(response.headers.get("content-length") ?? "");
-  if (declared > maxBytes) {
-    await response.body?.cancel().catch(() => undefined);
-    throw tooLarge();
-  }
-  const reader = response.body?.getReader();
-  if (!reader) return "";
-  const chunks: Uint8Array[] = [];
-  let size = 0;
+  let bytes: Uint8Array | null;
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) {
-        await reader.cancel().catch(() => undefined);
-        throw tooLarge();
-      }
-      chunks.push(value);
-    }
-  } catch (error) {
-    if (error instanceof SourceError) throw error;
+    bytes = await readCappedBytes(response, maxBytes, { over: "fail" });
+  } catch {
     throw unavailable();
   }
-  const bytes = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, at);
-    at += chunk.byteLength;
-  }
+  if (bytes === null) throw tooLarge();
   return new TextDecoder().decode(bytes);
 }
 
@@ -243,7 +222,8 @@ export const cashRow = (
 });
 
 // Cash held in several balances of one currency, one row per currency with
-// their sum, and how many sums Plant cannot store (below zero).
+// their sum (zero too, which brings the account's cash to zero), and how many
+// sums Plant cannot store (below zero).
 export function summedCashRows(
   balances: readonly { currency: Currency; amount: string }[],
   confidence: DraftRow["confidence"],
@@ -255,17 +235,16 @@ export function summedCashRows(
   const rows: DraftRow[] = [];
   let skipped = 0;
   for (const [currency, units] of sums) {
-    if (units === 0n) continue;
-    const quantity = fromScaled(units);
-    if (positive(quantity)) rows.push(cashRow(currency, quantity, confidence));
-    else skipped += 1;
+    if (units < 0n) skipped += 1;
+    else rows.push(cashRow(currency, fromScaled(units), confidence));
   }
   return { rows, skipped };
 }
 
 // A balance of one symbol as a holding, from the parts it is held in: pesos
-// and dollars as cash, anything else in units valued in dollars. "empty"
-// when nothing is held, null when the balance is not one Plant can store.
+// and dollars as cash, at zero too, anything else in units valued in
+// dollars. "empty" when no units are held, null when the balance is not one
+// Plant can store.
 export function heldRow(
   symbol: string,
   parts: readonly unknown[],
@@ -278,15 +257,17 @@ export function heldRow(
       if (decimal === null) return null;
       units += toScaled(decimal);
     }
-    if (units === 0n) return "empty";
     quantity = fromScaled(units);
   } catch {
     return null;
   }
-  if (!positive(quantity)) return null;
   if (symbol === "ARS" || symbol === "USD") {
-    return cashRow(symbol, quantity, "high");
+    return nonNegativeDecimalSchema.safeParse(quantity).success
+      ? cashRow(symbol, quantity, "high")
+      : null;
   }
+  if (quantity === "0") return "empty";
+  if (!positive(quantity)) return null;
   return {
     symbol,
     quantity,

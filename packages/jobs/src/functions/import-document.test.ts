@@ -18,6 +18,7 @@ import {
 
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const IMPORT = "a1000000-0000-4000-8000-0000000000a1";
+const RUN_ID = "01M8Z3K4567890QWERTYXABCDE";
 const PATH = `${USER}/imports/a9000000-0000-4000-8000-0000000000a9/a7000000-0000-4000-8000-0000000000a7`;
 const BYTES = new TextEncoder().encode("%PDF-1.7");
 const ACCOUNT = "a2000000-0000-4000-8000-0000000000a2";
@@ -132,7 +133,7 @@ function setUp({
   const run = (userId = USER) =>
     runImportDocument(deps, {
       step,
-      runId: "01M8Z3K4567890QWERTYXABCDE",
+      runId: RUN_ID,
       attempt: 0,
       event: { data: { importId: IMPORT, userId } },
     });
@@ -284,7 +285,7 @@ it("reads the file into a draft and marks the import ready", async () => {
   const { store, deps, lines, ran, run } = setUp();
   expect(await run()).toEqual({ outcome: "ready", rows: 1 });
   expect(ran).toEqual(["prepare", "read"]);
-  expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
+  expect(store.reading).toHaveBeenCalledWith(IMPORT, USER, RUN_ID);
   expect(store.institution).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.download).toHaveBeenCalledWith(PATH, USER);
@@ -578,6 +579,7 @@ describe("two runs of one import", () => {
   function shared() {
     const { deps, store, lines } = setUp();
     let status = "queued";
+    let claimedBy: string | undefined;
     store.load.mockImplementation(async () => ({
       userId: USER,
       status,
@@ -585,11 +587,15 @@ describe("two runs of one import", () => {
       path: PATH,
       mimeType: "application/pdf",
     }));
-    store.reading.mockImplementation(async () => {
-      if (status !== "queued") return false;
-      status = "reading";
-      return true;
-    });
+    store.reading.mockImplementation(
+      async (_: string, __: string, runId: string) => {
+        if (status === "reading") return claimedBy === runId;
+        if (status !== "queued") return false;
+        status = "reading";
+        claimedBy = runId;
+        return true;
+      },
+    );
     store.saveDraft.mockImplementation(async () => {
       if (status !== "reading") return false;
       status = "ready";
@@ -635,9 +641,35 @@ describe("two runs of one import", () => {
     );
   });
 
+  it("reads it once when a second run's first prepare failed while the first reads", async () => {
+    const { deps, store, runOf } = shared();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let atRead = () => {};
+    const reached = new Promise<void>((resolve) => (atRead = resolve));
+    const first = runOf({
+      run: async (id, fn) => {
+        if (id === "read") {
+          atRead();
+          await gate;
+        }
+        return fn();
+      },
+    });
+    await reached;
+    store.load.mockRejectedValueOnce(new Error("load failed"));
+    const plain: ImportSteps = { run: async (_, fn) => fn() };
+    await expect(runOf(plain, 0, "second")).rejects.toThrow("load failed");
+    const retried = await runOf(plain, 1, "second");
+    release();
+    expect(await first).toEqual({ outcome: "ready", rows: 1 });
+    expect(retried).toEqual({ outcome: "skipped" });
+    expect(deps.source.read).toHaveBeenCalledTimes(1);
+  });
+
   it("reads it when its own prepare is retried after claiming it", async () => {
     const { deps, store, runOf } = shared();
-    await store.reading(IMPORT, USER);
+    await store.reading(IMPORT, USER, "first");
     expect(await runOf({ run: async (_, fn) => fn() }, 1)).toEqual({
       outcome: "ready",
       rows: 1,
@@ -691,7 +723,7 @@ describe("a sync", () => {
     const { store, lines, ran, run } = setUp({ exchangeRead });
     store.load.mockResolvedValue(SYNC);
     expect(await run()).toEqual({ outcome: "ready", rows: 1 });
-    expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
+    expect(store.reading).toHaveBeenCalledWith(IMPORT, USER, RUN_ID);
     expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "binance");
     expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "holdings", {
       from: null,
@@ -716,7 +748,7 @@ describe("a sync", () => {
           return output;
         },
       },
-      runId: "01M8Z3K4567890QWERTYXABCDE",
+      runId: RUN_ID,
       attempt: 0,
       event: { data: { importId: IMPORT, userId: USER } },
     });

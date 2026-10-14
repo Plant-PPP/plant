@@ -66,11 +66,11 @@ function fakeClient(
         },
         or: (filter: string) => {
           own.push(["or", filter]);
-          after = /id\.gt\.([^,)]+)\)$/.exec(filter)?.[1];
+          after = /id\.(?:gt|lt)\.([^,)]+)\)$/.exec(filter)?.[1];
           return builder;
         },
       };
-      for (const method of ["select", "eq", "gte", "order"]) {
+      for (const method of ["select", "eq", "gte", "lte", "order"]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
           return builder;
@@ -111,6 +111,7 @@ const MOVEMENT_ROW = {
 
 const holdingRow = (id: string, amount: string, archived = false) => ({
   id,
+  created_at: "2026-10-01T12:00:00.123456+00:00",
   source_connection_id: ACCOUNT,
   portfolio_id: PORTFOLIO,
   asset_class: "instrument",
@@ -252,6 +253,50 @@ it("neither repeats nor skips a movement when one is written between two pages",
   expect(new Set(ids).size).toBe(ids.length);
   expect(ids.filter((id) => id !== "m-new")).toEqual(
     movementRows(2_500).map((each) => each.id),
+  );
+});
+
+// Ids that sort as the page order does: newest first.
+const holdingRows = (count: number) =>
+  Array.from({ length: count }, (_, n) =>
+    holdingRow(`h${String(count - n).padStart(5, "0")}`, "1.00000000"),
+  );
+
+it("pages the holdings after the last one read, not by offset", async () => {
+  const { client, calls } = fakeClient({
+    ...responses(),
+    holdings: ok(holdingRows(2_500)),
+  });
+  const { ledger, truncated } = await readLedger(client, OPTIONS);
+  expect(truncated).toBe(false);
+  expect(ledger.revisions.size).toBe(2_500);
+  expect(calls.holdings!.filter(([method]) => method === "range")).toEqual([]);
+  expect(calls.holdings).toContainEqual(["limit", 1000]);
+  const at = "2026-10-01T12:00:00.123456+00:00";
+  expect(calls.holdings!.filter(([method]) => method === "or")).toEqual([
+    ["or", `created_at.lt."${at}",and(created_at.eq."${at}",id.lt.h01501)`],
+    ["or", `created_at.lt."${at}",and(created_at.eq."${at}",id.lt.h00501)`],
+  ]);
+  expect(calls.holdings!.filter(([method]) => method === "lte")).toEqual([
+    ["lte", "created_at", at],
+    ["lte", "created_at", at],
+  ]);
+});
+
+it("neither repeats nor skips a holding when one is written between two pages", async () => {
+  const rows = holdingRows(2_500);
+  let pages = 0;
+  const { client } = fakeClient(
+    { ...responses(), holdings: ok(rows) },
+    (table) => {
+      if (table === "holdings" && ++pages === 1) {
+        rows.unshift(holdingRow("h-new", "1.00000000"));
+      }
+    },
+  );
+  const { ledger } = await readLedger(client, OPTIONS);
+  expect(ledger.holdings.map((each) => each.holding.id)).toEqual(
+    holdingRows(2_500).map((each) => each.id),
   );
 });
 

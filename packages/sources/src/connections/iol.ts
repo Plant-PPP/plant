@@ -243,7 +243,7 @@ export function iolConnection({
       for (const { moneda, saldo } of state.data.cuentas) {
         const currency = currencyOf(moneda);
         const amount = decimalOf(saldo);
-        if (isZero(amount)) continue;
+        if (currency === null && isZero(amount)) continue;
         if (currency === null || amount === null) {
           skipped += 1;
           continue;

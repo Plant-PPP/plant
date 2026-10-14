@@ -73,7 +73,8 @@ function pricedAt(
     snapshotOn(state.quotes, date, need).snapshot,
   ).snapshot;
   return {
-    ...quoted,
+    date: quoted.date,
+    fx: quoted.fx,
     prices: { ...lastTradePrices(ledgers, date), ...quoted.prices },
   };
 }

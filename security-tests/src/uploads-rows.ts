@@ -23,7 +23,7 @@ export async function inserted<T extends "uploaded_documents" | "imports">(
   table: T,
   body: Insert<T>,
 ): Promise<string> {
-  const res = await rest(user, "POST", table, {
+  const res = await rest(user, "POST", `${table}?select=id`, {
     body,
     headers: { Prefer: "return=representation" },
   });

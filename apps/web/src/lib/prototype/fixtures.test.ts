@@ -103,6 +103,41 @@ it("reads today's rates and prices through the quote reader", async () => {
   expect(snapshot.prices.KO).toBeUndefined();
 });
 
+it("reads each key's latest quote before the range, as the store does", async () => {
+  const reader = createFixtureQuoteReader({
+    fxRates: [
+      { kind: "mep", rate_date: "2026-03-01", sell: "1000" },
+      { kind: "mep", rate_date: "2026-09-01", sell: "1300" },
+    ],
+    prices: [
+      {
+        symbol: "KO",
+        price_date: "2026-09-01",
+        price: "9000",
+        currency: "ARS",
+      },
+    ],
+  });
+  expect(
+    await reader.read({
+      from: "2026-09-02",
+      to: "2026-09-09",
+      fxKinds: ["mep", "ccl"],
+      symbols: ["KO", "BTC"],
+    }),
+  ).toEqual({
+    fxRates: [{ kind: "mep", rate_date: "2026-09-01", sell: "1300" }],
+    prices: [
+      {
+        symbol: "KO",
+        price_date: "2026-09-01",
+        price: "9000",
+        currency: "ARS",
+      },
+    ],
+  });
+});
+
 it("states each manual price in its instrument's currency", () => {
   const symbols = new Set(fixtures.manualPrices.map((row) => row.symbol));
   expect(symbols).toEqual(new Set(["KO", "GD30", "FIMAAHO"]));

@@ -20,8 +20,14 @@ const writes: {
   body?: unknown;
   filters: [string, unknown][];
 }[] = [];
+const rpcs: { name: string; args: unknown }[] = [];
+let rpcAnswer: (name: string) => Answer = () => ({ status: 404 });
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
+    rpc: async (name: string, args: unknown) => {
+      rpcs.push({ name, args });
+      return rpcAnswer(name);
+    },
     from: (table: string) => {
       let verb = "select";
       const filters: [string, unknown][] = [];
@@ -48,6 +54,7 @@ jest.mock("@/lib/supabase/server", () => ({
           return builder;
         },
         is: () => builder,
+        order: () => builder,
         limit: () => builder,
         then: (resolve: (value: unknown) => unknown) =>
           resolve(answers[table]!(verb)),
@@ -67,6 +74,7 @@ import {
   SourceError,
 } from "@plant/sources";
 
+import { CONSENT_VERSION } from "@/lib/consent";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
 import {
@@ -108,6 +116,8 @@ beforeEach(() => {
   lines = captureServerLog();
   mockSessionUser.id = USER;
   writes.length = 0;
+  rpcs.length = 0;
+  rpcAnswer = () => ({ status: 404 });
   checkReadOnly.mockReset().mockResolvedValue(undefined);
   startImport.mockReset().mockResolvedValue(undefined);
   answers.source_connections = answer(() => ({
@@ -125,6 +135,11 @@ beforeEach(() => {
           ? { status: 200, data: [], error: null }
           : { status: 200, data: [{ provider: "binance" }], error: null },
   );
+  answers.consents = answer(() => ({
+    status: 200,
+    data: [{ version: CONSENT_VERSION, granted: true }],
+    error: null,
+  }));
   // No sync in flight.
   answers.imports = answer((verb) =>
     verb === "insert"
@@ -544,7 +559,13 @@ describe("syncAccount", () => {
   });
 
   it.each([
-    ["another draft", "holdings", null, { sync_draft: "operations" }],
+    [
+      "another draft",
+      "holdings",
+      null,
+      { sync_draft: "operations" },
+      { p_sync_draft: "holdings" },
+    ],
     [
       "another period",
       "operations",
@@ -554,42 +575,42 @@ describe("syncAccount", () => {
         sync_from: "2026-01-01",
         sync_to: "2026-01-31",
       },
+      {
+        p_sync_draft: "operations",
+        p_sync_from: "2026-02-01",
+        p_sync_to: "2026-02-28",
+      },
     ],
   ] as const)(
-    "fails a queued sync of %s and starts the one asked for, so a lost job never locks the account",
-    async (_, draft, period, queued) => {
+    "fails a queued sync of %s and starts the one asked for in one write, so a lost job never locks the account",
+    async (_, draft, period, queued, asked) => {
       answers.account_api_keys = answer(() => ({
         status: 200,
         data: [{ provider: "wallbit" }],
         error: null,
       }));
-      answers.imports = answer((verb) =>
-        verb === "insert"
-          ? { status: 201, data: [{ id: "i1" }], error: null }
-          : verb === "update"
-            ? { status: 200, data: [{ id: "q1" }], error: null }
-            : {
-                status: 200,
-                data: [
-                  { id: "q1", status: "queued", ...HOLDINGS_SYNC, ...queued },
-                ],
-                error: null,
-              },
-      );
+      answers.imports = answer(() => ({
+        status: 200,
+        data: [{ id: "q1", status: "queued", ...HOLDINGS_SYNC, ...queued }],
+        error: null,
+      }));
+      rpcAnswer = () => ({ status: 200, data: "i1", error: null });
       expect(await syncAccount(ACCOUNT, draft, period)).toEqual({
         ok: true,
         importId: "i1",
       });
-      const imports = writes.filter((each) => each.table === "imports");
-      expect(imports.map((each) => each.verb)).toEqual(["update", "insert"]);
-      expect(imports[0]).toMatchObject({
-        body: { status: "failed" },
-        filters: [
-          ["user_id", USER],
-          ["id", "q1"],
-          ["status", "queued"],
-        ],
-      });
+      expect(rpcs).toEqual([
+        {
+          name: "supersede_queued_sync",
+          args: {
+            p_queued_id: "q1",
+            p_source_connection_id: ACCOUNT,
+            p_provider: "wallbit",
+            ...asked,
+          },
+        },
+      ]);
+      expect(writes.filter((each) => each.table === "imports")).toEqual([]);
       expect(startImport).toHaveBeenCalledWith({
         importId: "i1",
         userId: USER,
@@ -598,32 +619,24 @@ describe("syncAccount", () => {
     },
   );
 
-  const supersededQueue = (insert: Answer) =>
-    answer((verb) =>
-      verb === "insert"
-        ? insert
-        : verb === "update"
-          ? { status: 200, data: [{ id: "q1" }], error: null }
-          : {
-              status: 200,
-              data: [
-                {
-                  id: "q1",
-                  status: "queued",
-                  ...HOLDINGS_SYNC,
-                  sync_draft: "operations",
-                },
-              ],
-              error: null,
-            },
-    );
+  // A queued sync of operations, which a sync of holdings supersedes.
+  const queuedOperations = () =>
+    answer(() => ({
+      status: 200,
+      data: [
+        {
+          id: "q1",
+          status: "queued",
+          ...HOLDINGS_SYNC,
+          sync_draft: "operations",
+        },
+      ],
+      error: null,
+    }));
 
   it("logs the queued sync it failed for the new one", async () => {
-    answers.imports = supersededQueue({
-      status: 201,
-      data: [{ id: "i1" }],
-      error: null,
-    });
+    answers.imports = queuedOperations();
+    rpcAnswer = () => ({ status: 200, data: "i1", error: null });
     await syncAccount(ACCOUNT);
     expect(lines).toContainEqual(
       expect.objectContaining({
@@ -634,52 +647,36 @@ describe("syncAccount", () => {
     );
   });
 
-  it("logs both ids when the new sync fails to start after failing the queued one", async () => {
-    answers.imports = supersededQueue({
-      status: 500,
-      data: null,
-      error: { code: "XX000" },
-    });
+  it("leaves the queued sync as it was when the new one fails to start", async () => {
+    answers.imports = queuedOperations();
+    rpcAnswer = () => ({ status: 500, data: null, error: { code: "XX000" } });
     expect(await syncAccount(ACCOUNT)).toEqual({
       ok: false,
       code: "failed",
     });
-    expect(lines).toContainEqual(
-      expect.objectContaining({
-        "plant.connection.step": "sync",
-        "plant.outcome": "superseded_not_replaced",
-        "plant.import.id": "q1",
-        "plant.source_connection.id": ACCOUNT,
-      }),
+    expect(lines).not.toContainEqual(
+      expect.objectContaining({ "plant.outcome": "superseded" }),
     );
+    expect(startImport).not.toHaveBeenCalled();
+  });
+
+  it("answers not connected when the key went before the new sync started", async () => {
+    answers.imports = queuedOperations();
+    rpcAnswer = () => ({ status: 404, data: null, error: { code: "PT404" } });
+    expect(await syncAccount(ACCOUNT)).toEqual({
+      ok: false,
+      code: "not_connected",
+    });
   });
 
   it("answers in progress when the queued sync it would fail starts being read", async () => {
-    answers.imports = answer((verb) =>
-      verb === "update"
-        ? { status: 200, data: [], error: null }
-        : {
-            status: 200,
-            data: [
-              {
-                id: "q1",
-                status: "queued",
-                ...HOLDINGS_SYNC,
-                sync_draft: "operations",
-              },
-            ],
-            error: null,
-          },
-    );
+    answers.imports = queuedOperations();
+    rpcAnswer = () => ({ status: 200, data: null, error: null });
     expect(await syncAccount(ACCOUNT)).toEqual({
       ok: false,
       code: "in_progress",
     });
-    expect(
-      writes.filter(
-        (each) => each.verb === "insert" && each.table === "imports",
-      ),
-    ).toEqual([]);
+    expect(writes.filter((each) => each.table === "imports")).toEqual([]);
     expect(startImport).not.toHaveBeenCalled();
   });
 
@@ -770,6 +767,14 @@ describe("syncAccount", () => {
       userId: USER,
       retry: expect.any(String),
     });
+  });
+
+  it("waits for the terms in force before asking the provider for anything", async () => {
+    answers.consents = answer(() => ({ status: 200, data: [], error: null }));
+    expect(await syncAccount(ACCOUNT)).toEqual({ ok: false, code: "terms" });
+    expect(writes).toEqual([]);
+    expect(startImport).not.toHaveBeenCalled();
+    expect(lines.at(-1)).toMatchObject({ "plant.outcome": "terms" });
   });
 
   it("does not start on an account with no key", async () => {

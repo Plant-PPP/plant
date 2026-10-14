@@ -157,7 +157,7 @@ export function ibkrConnection({
       if (each.currency === "BASE_SUMMARY") continue;
       const currency = currencyOf(each.currency);
       const amount = decimalOf(each.endingCash);
-      if (isZero(amount)) continue;
+      if (currency === null && isZero(amount)) continue;
       if (currency === null || amount === null) {
         skipped += 1;
         continue;
