@@ -147,6 +147,7 @@ it("values what was held at the year's end in pesos, bonds exempt", () => {
   const report = taxReport(state, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(state, NONE),
     isPlazoFijo: () => true,
   });
@@ -181,6 +182,7 @@ it("adds up the year's sales, oldest units first, and its income", () => {
   const { gains } = taxReport(state, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(state, NONE),
     isPlazoFijo: () => true,
   });
@@ -202,6 +204,7 @@ it("leaves out an asset the user left out, and every one of an account", () => {
   const report = taxReport(state, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(state, new Set([assetKey(aapl.holding)])),
     isPlazoFijo: () => true,
   });
@@ -221,6 +224,7 @@ it("leaves out an asset the user left out, and every one of an account", () => {
   const none = taxReport(outOfReport, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(outOfReport, NONE),
     isPlazoFijo: () => true,
   });
@@ -245,11 +249,55 @@ it("marks dollars unvalued without a buying rate", () => {
   const { wealth } = taxReport(state, {
     year: "2025",
     officialBuy: null,
+    euroBuy: null,
     leftOut: leftOutOf(state, NONE),
     isPlazoFijo: () => true,
   });
   expect(wealth.complete).toBe(false);
   expect(wealth.taxable).toBe("20000");
+});
+
+it("values euros at the euro's buying rate, not the dollar's", () => {
+  const base = ledger();
+  const euros: Holding = {
+    ...CASH,
+    id: "c0000000-0000-4000-8000-0000000000c1",
+    currency: "EUR",
+    amount: "50",
+  };
+  const state: ClosesState = {
+    ...base,
+    holdings: [
+      ...base.holdings,
+      {
+        holding: euros,
+        accountId: ACCOUNT,
+        portfolioId: PORTFOLIO,
+        closed: false,
+        origin: MANUAL,
+      },
+    ],
+  };
+  const valued = (euroBuy: { buy: string; date: string } | null) =>
+    taxReport(state, {
+      year: "2025",
+      officialBuy: OFFICIAL_BUY,
+      euroBuy,
+      leftOut: leftOutOf(state, NONE),
+      isPlazoFijo: () => true,
+    });
+  const report = valued({ buy: "1200", date: "2025-12-30" });
+  expect(
+    report.wealth.lines.find((line) => line.currency === "EUR"),
+  ).toMatchObject({ amount: "50", ars: "60000" });
+  expect(report.wealth).toMatchObject({ taxable: "180000", complete: true });
+  expect(report.euroBuy).toEqual({ buy: "1200", date: "2025-12-30" });
+
+  const unrated = valued(null);
+  expect(
+    unrated.wealth.lines.find((line) => line.currency === "EUR")?.ars,
+  ).toBeNull();
+  expect(unrated.wealth).toMatchObject({ taxable: "120000", complete: false });
 });
 
 it("offers every year from the first movement's and opens on the last one that ended", () => {
@@ -269,6 +317,7 @@ it("exports both sections as tables", () => {
     taxReport(state, {
       year: "2025",
       officialBuy: OFFICIAL_BUY,
+      euroBuy: null,
       leftOut: leftOutOf(state, NONE),
       isPlazoFijo: () => true,
     }),
@@ -311,6 +360,7 @@ it("counts a yield that takes units out as the ledger books it", () => {
   const { gains } = taxReport(after, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(after, NONE),
     isPlazoFijo: () => true,
   });
@@ -349,6 +399,7 @@ it("counts no placement left out that started after the year ended", () => {
   const report = taxReport(withPlacement, {
     year: "2025",
     officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
     leftOut: leftOutOf(withPlacement, new Set([assetKey(placement)])),
     isPlazoFijo: () => true,
   });

@@ -43,8 +43,9 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
   const { state } = read;
   const years = taxYears(state);
   const year = taxYearOf(params.year, years, today);
-  const [officialBuy, excluded] = await Promise.all([
-    readOfficialBuy(client, taxDate(year, today)),
+  const [officialBuy, euroBuy, excluded] = await Promise.all([
+    readOfficialBuy(client, taxDate(year, today), "official"),
+    readOfficialBuy(client, taxDate(year, today), "eur"),
     readExclusions(client),
   ]).catch((error: unknown) => assetsViewFailure(context, "taxes", error));
 
@@ -53,6 +54,7 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
     report = taxReport(state, {
       year,
       officialBuy,
+      euroBuy,
       leftOut: leftOutOf(state, excluded),
       // The real pages keep no placement kind: every placement at a rate is
       // a plazo fijo.
@@ -68,6 +70,7 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
       report.wealth.complete && report.gains.complete ? "ok" : "incomplete",
     "plant.taxes.provisional": report.provisional,
     "plant.taxes.official_buy": officialBuy !== null,
+    "plant.taxes.euro_buy": euroBuy !== null,
     "plant.taxes.asset_count": report.wealth.lines.length,
     "plant.taxes.left_out_count": report.leftOut,
     "plant.taxes.gains_group_count": report.gains.groups.length,

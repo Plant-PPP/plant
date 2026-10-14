@@ -26,19 +26,22 @@ export function PrototypeTaxes({ params }: { params: KeysetParams }) {
   const { state } = usePrototype();
   const years = taxYears(state);
   const year = taxYearOf(params.year, years, state.today);
-  const official = heldOn(state, taxDate(year, state.today)).snapshot.fx
-    .official;
-  const officialBuy: OfficialBuy | null = official
-    ? {
-        buy: stored(minus(exactOf(official.sell), exactOf(PROTOTYPE_SPREAD))),
-        date: official.date,
-      }
-    : null;
+  const { fx } = heldOn(state, taxDate(year, state.today)).snapshot;
+  const buyOf = (
+    rate: { sell: string; date: string } | undefined,
+  ): OfficialBuy | null =>
+    rate
+      ? {
+          buy: stored(minus(exactOf(rate.sell), exactOf(PROTOTYPE_SPREAD))),
+          date: rate.date,
+        }
+      : null;
   return (
     <TaxesPage
       report={taxReport(state, {
         year,
-        officialBuy,
+        officialBuy: buyOf(fx.official),
+        euroBuy: buyOf(fx.eur),
         leftOut: leftOutOf(state, state.outOfTaxReport),
         // A placement the user named is not a plazo fijo.
         isPlazoFijo: (row) =>

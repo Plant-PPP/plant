@@ -17,6 +17,9 @@ describe("formatAmount", () => {
     ["12345.67", "usd_mep", "US$ 12.345,67"],
     ["12345.67", "USD", "US$ 12.345,67"],
     ["1234567.89", "ARS", "$ 1.234.567,89"],
+    ["1234.56", "EUR", "€ 1.234,56"],
+    ["-1234.56", "EUR", "-€ 1.234,56"],
+    ["1234.56", "eur", "€ 1.234,56"],
     ["0.5", "btc", "0,50000000 BTC"],
     ["39000000", "ars", "$ 39.000.000,00"],
     ["999999999999.99", "ars", "$ 999.999.999.999,99"],
@@ -166,4 +169,5 @@ describe("amountInput", () => {
 it("writes a currency's symbol as its amounts start", () => {
   expect(currencySymbol("ARS")).toBe("$");
   expect(currencySymbol("USD")).toBe("US$");
+  expect(currencySymbol("EUR")).toBe("€");
 });

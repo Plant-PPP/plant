@@ -36,11 +36,13 @@ export const UNIT_LABELS: Record<Denominator, string> = {
   usd_ccl: "Dólar CCL",
   usd_official: "Dólar oficial",
   btc: "Bitcoin",
+  eur: "Euro",
 };
 
 export const CURRENCY_LABELS: Record<Currency, string> = {
   ARS: "Pesos (ARS)",
   USD: "Dólares (USD)",
+  EUR: "Euros (EUR)",
 };
 
 export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {

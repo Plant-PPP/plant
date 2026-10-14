@@ -33,17 +33,18 @@ const officialSchema = z.object({
   buy: positiveDecimalSchema,
 });
 
-// The official dollar's buying rate on `date`, or the latest one up to
-// QUOTE_CARRY_DAYS before it, as every other quote is carried; null when
-// none was stored.
+// The official buying rate of the dollar, or of the euro, on `date`, or the
+// latest one up to QUOTE_CARRY_DAYS before it, as every other quote is
+// carried; null when none was stored.
 export async function readOfficialBuy(
   client: Client,
   date: string,
+  kind: "official" | "eur",
 ): Promise<OfficialBuy | null> {
   const result = await client
     .from("fx_rates")
     .select("rate_date, buy:buy::text")
-    .eq("kind", "official")
+    .eq("kind", kind)
     .not("buy", "is", null)
     .gte("rate_date", addDays(date, -QUOTE_CARRY_DAYS))
     .lte("rate_date", date)
