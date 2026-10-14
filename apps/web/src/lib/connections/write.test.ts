@@ -72,6 +72,7 @@ import {
   connectApiKey,
   credentialsBytes,
   disconnectApiKey,
+  readApiKey,
   syncAccount,
 } from "./write";
 
@@ -328,6 +329,61 @@ describe("connectApiKey", () => {
   });
 });
 
+describe("readApiKey", () => {
+  const client = (imports: unknown[]) =>
+    ({
+      from: (table: string) => {
+        const data =
+          table === "account_api_keys"
+            ? [
+                {
+                  provider: "iol",
+                  key_hint: "lcom",
+                  created_at: "2026-10-14T15:10:00Z",
+                },
+              ]
+            : imports;
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          then: (resolve: (value: unknown) => unknown) =>
+            resolve({ status: 200, data, error: null }),
+        };
+        return builder;
+      },
+    }) as unknown as Parameters<typeof readApiKey>[0];
+
+  it("adds the latest sync, at its Buenos Aires day and time", async () => {
+    const view = await readApiKey(
+      client([
+        {
+          status: "failed",
+          failure: "connection_rejected",
+          updated_at: "2026-10-14T15:31:58Z",
+        },
+      ]),
+      ACCOUNT,
+    );
+    expect(view).toEqual({
+      provider: "iol",
+      keyHint: "lcom",
+      connectedOn: "2026-10-14",
+      lastSync: {
+        status: "failed",
+        failure: "connection_rejected",
+        on: "2026-10-14",
+        at: "12:31",
+      },
+    });
+  });
+
+  it("has no latest sync before the first", async () => {
+    expect((await readApiKey(client([]), ACCOUNT))?.lastSync).toBeNull();
+  });
+});
+
 describe("syncAccount", () => {
   it("starts an import of the account's holdings and its job", async () => {
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
@@ -342,7 +398,11 @@ describe("syncAccount", () => {
         },
       }),
     );
-    expect(startImport).toHaveBeenCalledWith({ importId: "i1", userId: USER });
+    expect(startImport).toHaveBeenCalledWith({
+      importId: "i1",
+      userId: USER,
+      retry: undefined,
+    });
   });
 
   it("starts a sync of operations only where the provider gives them", async () => {
@@ -390,7 +450,7 @@ describe("syncAccount", () => {
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
   });
 
-  it("sends a queued sync's job again instead of starting another, so a lost job never locks the account", async () => {
+  it("sends a queued sync's job again as a retry instead of starting another, so a lost job never locks the account", async () => {
     answers.imports = answer((verb) =>
       verb === "insert"
         ? { status: 409, data: null, error: { code: "PT409" } }
@@ -401,7 +461,11 @@ describe("syncAccount", () => {
           },
     );
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "q1" });
-    expect(startImport).toHaveBeenCalledWith({ importId: "q1", userId: USER });
+    expect(startImport).toHaveBeenCalledWith({
+      importId: "q1",
+      userId: USER,
+      retry: expect.any(String),
+    });
     expect(writes.filter((each) => each.table === "imports")).toEqual([]);
   });
 
@@ -430,7 +494,11 @@ describe("syncAccount", () => {
           },
     );
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "q2" });
-    expect(startImport).toHaveBeenCalledWith({ importId: "q2", userId: USER });
+    expect(startImport).toHaveBeenCalledWith({
+      importId: "q2",
+      userId: USER,
+      retry: expect.any(String),
+    });
   });
 
   it("does not start on an account with no key", async () => {

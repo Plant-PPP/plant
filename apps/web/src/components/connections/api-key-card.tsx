@@ -1,7 +1,14 @@
 "use client";
 
 import type { ConnectionDraft } from "@plant/sources";
-import { KeyRound, ListOrdered, RefreshCw } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  KeyRound,
+  ListOrdered,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState, useTransition } from "react";
 
@@ -17,6 +24,7 @@ import {
   type ApiKeyActions,
   type ApiKeyView,
   type ConnectionForm,
+  type LastSync,
   type ConnectResult,
   connectMessages,
   type DisconnectResult,
@@ -24,6 +32,7 @@ import {
   type SyncResult,
 } from "@/lib/connections/api-key";
 import { formatDate } from "@/lib/format/date";
+import { importFailureMessage, isBusy } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
@@ -71,6 +80,7 @@ export function ApiKeyCard({
   const opener = useRef<HTMLButtonElement>(null);
   const [dialog, setDialog] = useState<"connect" | "disconnect" | null>(null);
   const [synced, setSynced] = useState<ConnectionDraft | null>(null);
+  const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -78,6 +88,7 @@ export function ApiKeyCard({
     startTransition(async () => {
       setError(null);
       setSynced(null);
+      setConnected(false);
       const failure = await syncFailure(actions.sync(accountId, draft));
       if (failure) setError(failure);
       else setSynced(draft);
@@ -87,6 +98,7 @@ export function ApiKeyCard({
     startTransition(async () => {
       setError(null);
       setSynced(null);
+      setConnected(false);
       setError(await disconnectFailure(actions.disconnect(accountId)));
     });
 
@@ -156,6 +168,19 @@ export function ApiKeyCard({
           )}
         </div>
       </div>
+      {connected && (
+        <p
+          role="status"
+          className="border-gain/30 bg-gain/10 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+        >
+          <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+          Conectamos tu cuenta de {form.name}. Sincronizala para traer tus
+          tenencias.
+        </p>
+      )}
+      {!synced && !connected && apiKey?.lastSync && (
+        <SyncStatus sync={apiKey.lastSync} />
+      )}
       {synced && (
         <p role="status" className="text-sm">
           {synced === "operations"
@@ -174,6 +199,11 @@ export function ApiKeyCard({
           accountId={accountId}
           form={form}
           connect={actions.connect}
+          onConnected={() => {
+            setError(null);
+            setSynced(null);
+            setConnected(true);
+          }}
           onClose={() => setDialog(null)}
         />
       )}
@@ -191,15 +221,60 @@ export function ApiKeyCard({
   );
 }
 
+// How the account's latest sync stands: read and waiting in Cargar (or
+// confirmed), still running, or failed and why.
+export function SyncStatus({ sync }: { sync: LastSync }) {
+  const when = `${formatDate(sync.on)} a las ${sync.at}`;
+  if (isBusy(sync.status)) {
+    return (
+      <p className="flex items-center gap-2 text-sm">
+        <LoaderCircle aria-hidden className="text-warn size-4 animate-spin" />
+        Sincronizando desde el {when}.
+      </p>
+    );
+  }
+  if (sync.status === "failed") {
+    return (
+      <p className="text-destructive flex items-start gap-2 text-sm">
+        <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+        <span>
+          La última sincronización falló ({when}).{" "}
+          {importFailureMessage(sync.failure ?? "extraction_failed", true)}
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="flex items-center gap-2 text-sm">
+      <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+      <span>
+        Última sincronización: {when}.
+        {sync.status === "ready" && (
+          <>
+            {" "}
+            Revisala y confirmala en{" "}
+            <Link href="/import" className="underline underline-offset-4">
+              Cargar
+            </Link>
+            .
+          </>
+        )}
+      </span>
+    </p>
+  );
+}
+
 function ConnectDialog({
   accountId,
   form,
   connect,
+  onConnected,
   onClose,
 }: {
   accountId: string;
   form: ConnectionForm;
   connect: ApiKeyActions["connect"];
+  onConnected: () => void;
   onClose: () => void;
 }) {
   const id = useId();
@@ -243,7 +318,10 @@ function ConnectDialog({
               form.name,
             );
             if (failure) setError(failure);
-            else onClose();
+            else {
+              onConnected();
+              onClose();
+            }
           });
         }}
       >

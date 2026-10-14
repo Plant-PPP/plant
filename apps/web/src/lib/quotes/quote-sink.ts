@@ -1,5 +1,6 @@
 import "server-only";
 import { QuoteStoreError, type QuoteStorePort } from "@plant/core";
+import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createQuoteWriter } from "./quote-writer";
 
@@ -20,9 +21,10 @@ export function priceAlertsSink(): { meet(): Promise<number> } {
   return {
     meet: async () => {
       if (!client) throw new Error("price alerts: unconfigured");
-      const { data, error } = await client.rpc("meet_price_alerts");
-      if (error) throw new Error(`price alerts: ${error.code}`);
-      return data;
+      const result = await client.rpc("meet_price_alerts");
+      const failure = classifyPostgrestResult(result, 200);
+      if (failure) throw new Error(`price alerts: ${failure.code}`);
+      return result.data ?? 0;
     },
   };
 }

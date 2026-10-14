@@ -4,13 +4,25 @@ import {
   connectionAdapters,
   type ReadOnlyCheck,
 } from "@plant/sources";
+import type { Database } from "@plant/shared";
 
 // An account's connection as the page shows it: the provider and the last
-// characters of the field it names the credentials by, never a secret.
+// characters of the field it names the credentials by, never a secret, and
+// how its latest sync stands.
 export type ApiKeyView = {
   provider: ConnectionProvider;
   keyHint: string;
   connectedOn: string;
+  lastSync?: LastSync | null;
+};
+
+// The account's latest sync: its status, why it failed, and when it last
+// changed, as a Buenos Aires day (YYYY-MM-DD) and time (HH:MM).
+export type LastSync = {
+  status: Database["public"]["Enums"]["import_status"];
+  failure: Database["public"]["Enums"]["import_failure"] | null;
+  on: string;
+  at: string;
 };
 
 export type ApiKeyInput = {
