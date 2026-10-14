@@ -44,7 +44,13 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_*", "POSTHOG_*", "VERCEL_ENV", "INNGEST_*"]
+      "env": [
+        "NEXT_PUBLIC_*",
+        "POSTHOG_*",
+        "VERCEL_ENV",
+        "VERCEL_GIT_COMMIT_REF",
+        "INNGEST_*"
+      ]
     },
     "dev": {
       "cache": false,

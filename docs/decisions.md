@@ -2,10 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Staging serves the real app, and only staging deploys on push
+
+- **Staging serves the real app**, as production does: `isProductionDeployment()` is true on Vercel's production and on the preview of the `staging` branch, the one Tomas tests on `plant-staging`'s real data. Every other preview and `next dev` still serve the prototype, which the e2e flows rely on; `pnpm dev:up:real` runs the real app locally against local Supabase. For staging this supersedes "Outside production, the data pages show made-up data" (PLA-109) and the real chat being production only (PLA-47).
+- **Only `staging` deploys on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns off every branch prefix a PR uses (`feat/*`, `fix/*`, `ci/*`, `chore/*` and the rest), so PR branches stop spending Vercel Hobby's 100 deployments a day and staging always gets one. `claude/*` PRs still get a preview on request (`preview.yml`); the required checks are `ci` and `forbidden-words`, so no PR waits on a Vercel check. Staging's jobs and keys are the Preview variables scoped to the `staging` branch (see "The jobs on a deployment"), so a `claude/*` preview never runs a job.
+  \=======
+
 ## 2026-10-14 · A PDF's page cap (PLA-152)
 
 - **A PDF of more than 30 pages fails as `too_many_pages` before any model reads it**, so an import's cost stays bounded: the file_upload source counts its pages in code (the root `/Pages` node's `/Count`, or else its `/Page` objects) and Cargar asks for only the statement's pages.
 - **A PDF whose page count is not in plain sight**, as one with compressed object streams, is read as before rather than refused for a count nobody could take.
+
+> > > > > > > origin/staging
 
 ## 2026-10-14 · Security review fixes (PLA-62)
 
@@ -157,7 +165,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-14 · The jobs on a deployment (PLA-73)
 
-- **`PLANT_RUN_JOBS=1` registers the quotes, import and file-deletion jobs on a deployment.** Without the stored dollar rates of a day no movement can be written (`no_rate`), and only `refresh-quotes` stores them, so a deployment needs the job. One environment runs them, since plant-staging is also production's database until the beta: the variable is set only there, with `SUPABASE_SERVICE_ROLE_KEY` beside it, never in Preview or Development. Without it a deployment registers only `ping`, as before, and builds no dependency. On a deployment the jobs register at the signed sync's URL, never the dev loopback origin. Turning it on also needs the Inngest integration's Vercel Protection Bypass secret, auto-archive off for that environment, and the replay row of the Inngest threat model reviewed.
+- **`PLANT_RUN_JOBS=1` registers the quotes, import and file-deletion jobs on a deployment.** Without the stored dollar rates of a day no movement can be written (`no_rate`), and only `refresh-quotes` stores them, so a deployment needs the job. One environment runs them, since plant-staging is also production's database until the beta: until production ships, that is staging, so the variable is set in Preview scoped to the `staging` branch, with `SUPABASE_SERVICE_ROLE_KEY`, the Gemini key and, for the real chat, `ANTHROPIC_API_KEY` beside it, never on another branch's preview or in Development; when production ships it moves to Production. Without it a deployment registers only `ping`, as before, and builds no dependency. On a deployment the jobs register at the signed sync's URL, never the dev loopback origin. Turning it on also needs the Inngest integration's Vercel Protection Bypass secret, auto-archive off for that environment, and the replay row of the Inngest threat model reviewed.
 
 ## 2026-10-13 · Review fixes in the database (wave 1)
 

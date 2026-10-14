@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=@plant/web",
     "dev:up": "bash ./scripts/setup/dev-up.sh",
+    "dev:up:real": "VERCEL_ENV=production bash ./scripts/setup/dev-up.sh",
     "env:local": "bash ./scripts/setup/env-local.sh",
     "preflight": "bash ./scripts/setup/doctor.sh",
     "build": "turbo run build",
