@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(26);
+SELECT plan(28);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -57,9 +57,17 @@ VALUES
 
 UPDATE public.portfolios SET id = 'a1000000-0000-4000-8000-0000000000a1'
 WHERE user_id = 'a0000000-0000-4000-8000-00000000000a';
+UPDATE public.portfolios SET id = 'b1000000-0000-4000-8000-0000000000b1'
+WHERE user_id = 'b0000000-0000-4000-8000-00000000000b';
 INSERT INTO public.source_connections (id, user_id, institution, default_portfolio_id) VALUES
   ('a5000000-0000-4000-8000-0000000000a5', 'a0000000-0000-4000-8000-00000000000a', 'IOL',
-   'a1000000-0000-4000-8000-0000000000a1');
+   'a1000000-0000-4000-8000-0000000000a1'),
+  ('b5000000-0000-4000-8000-0000000000b5', 'b0000000-0000-4000-8000-00000000000b', 'IOL',
+   'b1000000-0000-4000-8000-0000000000b1');
+-- Beto's account holds dollars, which Ana's import must never reach.
+INSERT INTO public.holdings (user_id, source_connection_id, asset_class, currency, amount, label)
+VALUES ('b0000000-0000-4000-8000-00000000000b', 'b5000000-0000-4000-8000-0000000000b5',
+        'cash', 'USD', '700', 'Caja');
 
 -- Ana has two imports ready to review and one still queued.
 INSERT INTO public.uploaded_documents (id, user_id, source_connection_id, storage_path,
@@ -257,13 +265,47 @@ SELECT is(
   'a cash balance is refused where the account holds several in that currency'
 );
 
-SELECT isnt(
+-- Beto's account is not visible under RLS, so the default portfolio trigger
+-- resolves none for it: the not-null on portfolio_id refuses first.
+SELECT is(
   pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a6',
                         jsonb_build_array(jsonb_set(pg_temp.cash('USD', '5'), '{cash,source_connection_id}',
                                                     '"b5000000-0000-4000-8000-0000000000b5"'))) $$),
-  NULL,
+  '23502',
   'and never goes into an account that is not the user''s'
 );
+
+-- Were a portfolio of her own given to it, the account foreign key, which
+-- pairs the account with the user, would still refuse it.
+SAVEPOINT own_portfolio;
+RESET ROLE;
+CREATE OR REPLACE FUNCTION private.default_holding_portfolio()
+  RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $f$
+BEGIN
+  NEW.portfolio_id := 'a1000000-0000-4000-8000-0000000000a1';
+  RETURN NEW;
+END;
+$f$;
+SET LOCAL ROLE authenticated;
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a6',
+                        jsonb_build_array(jsonb_set(pg_temp.cash('USD', '5'), '{cash,source_connection_id}',
+                                                    '"b5000000-0000-4000-8000-0000000000b5"'))) $$),
+  '23503',
+  'the account foreign key pairs it with the user'
+);
+ROLLBACK TO SAVEPOINT own_portfolio;
+
+RESET ROLE;
+SELECT results_eq(
+  $$ SELECT user_id, source_connection_id, currency::text, amount::text FROM public.holdings
+     WHERE source_connection_id = 'b5000000-0000-4000-8000-0000000000b5'
+        OR user_id = 'b0000000-0000-4000-8000-00000000000b' $$,
+  $$ VALUES ('b0000000-0000-4000-8000-00000000000b'::uuid, 'b5000000-0000-4000-8000-0000000000b5'::uuid,
+             'USD', '700.00000000') $$,
+  'Beto''s account keeps only his own cash'
+);
+SET LOCAL ROLE authenticated;
 
 SELECT results_eq(
   $$ SELECT (SELECT status::text FROM public.imports WHERE id = 'a9000000-0000-4000-8000-0000000000a6'),
