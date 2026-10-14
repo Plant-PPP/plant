@@ -335,7 +335,12 @@ describe("finishUpload", () => {
     expect(await finish()).toEqual({ ok: true, importId: "i0" });
     expect(writes).toEqual([]);
     expect(storage.remove).toHaveBeenCalledWith([PATH]);
-    expect(startImport).toHaveBeenCalledWith({ importId: "i0", userId: USER });
+    // A new event id: Inngest drops an event whose id it has seen.
+    expect(startImport).toHaveBeenCalledWith({
+      importId: "i0",
+      userId: USER,
+      retry: expect.stringMatching(/^[0-9a-z]+$/),
+    });
   });
 
   it.each([
