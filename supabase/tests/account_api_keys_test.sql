@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(21);
+SELECT plan(23);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -69,14 +69,14 @@ SELECT set_eq(
   ARRAY['(table):DELETE', 'id:SELECT', 'user_id:SELECT', 'source_connection_id:SELECT',
         'provider:SELECT', 'key_hint:SELECT', 'created_at:SELECT',
         'source_connection_id:INSERT', 'provider:INSERT', 'key_hint:INSERT',
-        'secret_ciphertext:INSERT'],
-  'a user reads every column of a key but the sealed one, adds one and deletes it'
+        'secret_ciphertext:INSERT', 'provider:UPDATE', 'key_hint:UPDATE',
+        'secret_ciphertext:UPDATE'],
+  'a user reads every column of a key but the sealed one, adds, replaces and deletes one, never moving it'
 );
 
 SELECT ok(
-  NOT has_column_privilege('authenticated', 'public.account_api_keys', 'secret_ciphertext', 'SELECT')
-    AND NOT has_column_privilege('authenticated', 'public.account_api_keys', 'secret_ciphertext', 'UPDATE'),
-  'authenticated never reads or changes a sealed key'
+  NOT has_column_privilege('authenticated', 'public.account_api_keys', 'secret_ciphertext', 'SELECT'),
+  'authenticated never reads a sealed key'
 );
 
 SELECT set_eq(
@@ -136,6 +136,20 @@ SELECT is(
                       VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'ANA2', pg_temp.sealed()) $$),
   '23505',
   'an account holds one key'
+);
+
+UPDATE public.account_api_keys SET key_hint = 'ANA5', secret_ciphertext = pg_temp.sealed();
+
+SELECT results_eq(
+  $$ SELECT key_hint FROM public.account_api_keys $$,
+  $$ VALUES ('ANA5') $$,
+  'a user replaces their own key in place'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.account_api_keys SET source_connection_id = 'b5000000-0000-4000-8000-0000000000b5' $$),
+  '42501',
+  'a user never moves a key to another account'
 );
 
 SELECT is(

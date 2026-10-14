@@ -2,9 +2,8 @@ import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
 import { buenosAiresDate, type Database } from "@plant/shared";
 import {
-  BINANCE_BASE_URL,
-  binanceSource,
   type ExchangeAdapters,
+  exchangeAdapters,
   exchangeCredentialsSchema,
   exchangeProviderSchema,
   SourceError,
@@ -14,13 +13,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import type {
-  ApiKeyView,
-  ConnectCode,
-  ConnectResult,
-  DisconnectResult,
-  SyncCode,
-  SyncResult,
+import {
+  type ApiKeyView,
+  type ConnectCode,
+  type ConnectResult,
+  type DisconnectResult,
+  exchangeOf,
+  type SyncCode,
+  type SyncResult,
 } from "@/lib/connections/api-key";
 import { seal, sealContext, secretsKey } from "@/lib/connections/secret-box";
 import { serverLog } from "@/lib/log/server-log";
@@ -36,10 +36,6 @@ const EVENT = "connections.api_key";
 const connectSchema = exchangeCredentialsSchema
   .extend({ accountId: z.uuid(), provider: exchangeProviderSchema })
   .strict();
-
-const exchanges: ExchangeAdapters = {
-  binance: () => binanceSource({ baseUrl: BINANCE_BASE_URL }),
-};
 
 type Line = {
   step: "connect" | "disconnect" | "sync";
@@ -82,16 +78,55 @@ const REFUSALS: Partial<Record<string, ConnectCode>> = {
   extraction_failed: "unavailable",
 };
 
-async function accountOpen(client: Client, id: string): Promise<boolean> {
+// The institution of one of the user's open accounts, or null.
+async function openAccountInstitution(
+  client: Client,
+  id: string,
+): Promise<string | null> {
   const result = await client
     .from("source_connections")
-    .select("id")
+    .select("institution")
     .eq("id", id)
     .is("archived_at", null);
   if (classifyPostgrestResult(result, 200) || !result.data) {
     throw new Error("account read failed");
   }
-  return result.data.length === 1;
+  return result.data[0]?.institution ?? null;
+}
+
+// Stores the sealed key in place of the account's: the row is changed in one
+// write, so a failure leaves the key it held. An insert that lost a race with
+// another connect changes the row that won.
+async function storeKey(
+  client: Client,
+  userId: string,
+  row: {
+    source_connection_id: string;
+    provider: string;
+    key_hint: string;
+    secret_ciphertext: string;
+  },
+): Promise<"ok" | "not_found"> {
+  const replace = async () => {
+    const { source_connection_id, ...fields } = row;
+    const updated = await client
+      .from("account_api_keys")
+      .update(fields)
+      .eq("user_id", userId)
+      .eq("source_connection_id", source_connection_id)
+      .select("id");
+    if (classifyPostgrestResult(updated, 200)) {
+      throw new Error("key not replaced");
+    }
+    return (updated.data ?? []).length === 1;
+  };
+  if (await replace()) return "ok";
+  const added = await client.from("account_api_keys").insert(row);
+  const refused = classifyPostgrestResult(added, 201);
+  if (refused?.code === "23503") return "not_found";
+  if (refused?.code === "23505" && (await replace())) return "ok";
+  if (refused) throw new Error(`key not stored: ${refused.code}`);
+  return "ok";
 }
 
 // The account's key as its page shows it, or null when it holds none. Only
@@ -125,7 +160,7 @@ export async function readApiKey(
 // nor sent back.
 export async function connectApiKey(
   input: unknown,
-  adapters: ExchangeAdapters = exchanges,
+  adapters: ExchangeAdapters = exchangeAdapters(),
 ): Promise<ConnectResult> {
   const current = await line("connect");
   const parsed = connectSchema.safeParse(input);
@@ -141,9 +176,15 @@ export async function connectApiKey(
   }
   try {
     const client: Client = await createClient();
-    if (!(await accountOpen(client, accountId))) {
+    const institution = await openAccountInstitution(client, accountId);
+    if (institution === null) {
       log(current, "not_found");
       return { ok: false, code: "not_found" };
+    }
+    // Only an account at that exchange takes its key.
+    if (exchangeOf(institution) !== provider) {
+      log(current, "unsupported");
+      return { ok: false, code: "unsupported" };
     }
     try {
       await adapters[provider]().checkReadOnly({ apiKey, apiSecret });
@@ -159,26 +200,16 @@ export async function connectApiKey(
       sealContext(current.userId, accountId, provider),
       key,
     );
-    const removed = await client
-      .from("account_api_keys")
-      .delete()
-      .eq("user_id", current.userId)
-      .eq("source_connection_id", accountId);
-    if (classifyPostgrestResult(removed, 204)) {
-      throw new Error("earlier key not removed");
-    }
-    const added = await client.from("account_api_keys").insert({
+    const stored = await storeKey(client, current.userId, {
       source_connection_id: accountId,
       provider,
       key_hint: apiKey.slice(-4),
       secret_ciphertext: sealed,
     });
-    const refused = classifyPostgrestResult(added, 201);
-    if (refused?.code === "23503") {
+    if (stored === "not_found") {
       log(current, "not_found");
       return { ok: false, code: "not_found" };
     }
-    if (refused) throw new Error(`key not stored: ${refused.code}`);
     log(current, "ok");
     revalidatePath(`/accounts/${accountId}`);
     return { ok: true };
@@ -213,9 +244,47 @@ export async function disconnectApiKey(
   return { ok: true };
 }
 
+// Sends the job for a sync import. A failure to send leaves it queued, which
+// the next "Sincronizar" sends again: the event's id is the import's, so the
+// job runs once.
+async function startJob(userId: string, importId: string): Promise<void> {
+  try {
+    await inngestJobRunner().startImport({ importId, userId });
+  } catch (error) {
+    serverLog.error(
+      EVENT,
+      { "enduser.id": userId, "plant.connection.step": "job" },
+      error,
+    );
+  }
+}
+
+// The account's sync still in flight, if any: queued (its job may never have
+// started) or being read.
+async function syncInFlight(
+  client: Client,
+  accountId: string,
+): Promise<{ id: string; status: "queued" | "reading" } | null> {
+  const result = await client
+    .from("imports")
+    .select("id, status")
+    .eq("source_connection_id", accountId)
+    .in("status", ["queued", "reading"])
+    .limit(1);
+  if (classifyPostgrestResult(result, 200)) {
+    throw new Error("sync in flight not read");
+  }
+  const [row] = result.data ?? [];
+  return row && (row.status === "queued" || row.status === "reading")
+    ? { id: row.id, status: row.status }
+    : null;
+}
+
 // Starts a sync of the account: an import of its balances that the import
 // job reads with the account's key and leaves ready to review in Cargar. The
-// database refuses an account with no key and one already syncing.
+// database refuses an account with no key and one already syncing; a sync
+// still queued is started again instead, so a lost job never locks the
+// account.
 export async function syncAccount(accountId: unknown): Promise<SyncResult> {
   const current = await line("sync");
   const parsed = z.uuid().safeParse(accountId);
@@ -236,6 +305,19 @@ export async function syncAccount(accountId: unknown): Promise<SyncResult> {
       log(current, "not_connected");
       return { ok: false, code: "not_connected" };
     }
+    const resume = async (): Promise<SyncResult | null> => {
+      const flying = await syncInFlight(client, parsed.data);
+      if (!flying) return null;
+      if (flying.status === "reading") {
+        log(current, "in_progress");
+        return { ok: false, code: "in_progress" };
+      }
+      await startJob(current.userId, flying.id);
+      log(current, "ok");
+      return { ok: true, importId: flying.id };
+    };
+    const resumed = await resume();
+    if (resumed) return resumed;
     const started = await client
       .from("imports")
       .insert({ source_connection_id: parsed.data, provider: provider.data })
@@ -246,6 +328,9 @@ export async function syncAccount(accountId: unknown): Promise<SyncResult> {
       return { ok: false, code: "not_connected" };
     }
     if (refused?.code === "PT409") {
+      // Another sync started in between.
+      const raced = await resume();
+      if (raced) return raced;
       log(current, "in_progress");
       return { ok: false, code: "in_progress" };
     }
@@ -253,19 +338,7 @@ export async function syncAccount(accountId: unknown): Promise<SyncResult> {
       throw new Error(`sync not started: ${refused?.code ?? "no_row"}`);
     }
     const importId = started.data[0]!.id;
-    // A failure to send leaves the import queued, as an upload's does.
-    try {
-      await inngestJobRunner().startImport({
-        importId,
-        userId: current.userId,
-      });
-    } catch (error) {
-      serverLog.error(
-        EVENT,
-        { "enduser.id": current.userId, "plant.connection.step": "job" },
-        error,
-      );
-    }
+    await startJob(current.userId, importId);
     log(current, "ok");
     revalidatePath("/import");
     return { ok: true, importId };

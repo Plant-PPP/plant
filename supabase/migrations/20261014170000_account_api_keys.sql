@@ -43,6 +43,9 @@ GRANT SELECT (id, user_id, source_connection_id, provider, key_hint, created_at)
   ON TABLE public.account_api_keys TO authenticated;
 GRANT INSERT (source_connection_id, provider, key_hint, secret_ciphertext)
   ON TABLE public.account_api_keys TO authenticated;
+-- A new key replaces the account's in one write, so a failure keeps the old.
+GRANT UPDATE (provider, key_hint, secret_ciphertext)
+  ON TABLE public.account_api_keys TO authenticated;
 -- The import job reads the sealed key of the account it syncs.
 GRANT SELECT (user_id, source_connection_id, provider, secret_ciphertext)
   ON TABLE public.account_api_keys TO service_role;

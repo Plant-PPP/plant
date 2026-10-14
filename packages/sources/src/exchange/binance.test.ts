@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { SourceError } from "../file-upload/draft";
+import { exchangeAdapters } from "./adapters";
 import { binanceSource } from "./binance";
 
 // Made-up credentials; the fake answers only requests they sign.
@@ -171,8 +172,46 @@ describe("binanceSource", () => {
     );
   });
 
-  it("takes a read-only key", async () => {
+  it("takes a read-only key, with the fields that grant nothing set to anything", async () => {
+    fake.replies["/sapi/v1/account/apiRestrictions"] = {
+      status: 200,
+      body: {
+        ...READ_ONLY,
+        ipRestrict: true,
+        createTime: 1700000000000,
+        tradingAuthorityExpirationTime: 1800000000000,
+      },
+    };
     await expect(source().checkReadOnly(CREDENTIALS)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ["a field it does not know, granted as true", { newPower: true }],
+    ["a permission answered as a string", { enableWithdrawals: "true" }],
+    ["a permission answered as a number", { enableInternalTransfer: 1 }],
+    ["a permission answered as null", { enableSpotAndMarginTrading: null }],
+    ["a field it does not know, of any value", { somethingElse: "x" }],
+  ])("refuses a key with %s", async (_, extra) => {
+    fake.replies["/sapi/v1/account/apiRestrictions"] = {
+      status: 200,
+      body: { ...READ_ONLY, ...extra },
+    };
+    expect(await failure(source().checkReadOnly(CREDENTIALS))).toEqual({
+      code: "connection_not_read_only",
+      retryable: false,
+    });
+  });
+
+  it("is built against Binance's real API by the shared factory", async () => {
+    const get = jest.fn(async () => {
+      throw new Error("offline");
+    });
+    const adapter = exchangeAdapters({ fetch: get as never }).binance();
+    expect(adapter.provider).toBe("binance");
+    await adapter.checkReadOnly(CREDENTIALS).catch(() => undefined);
+    expect(String((get.mock.calls[0] as unknown[])[0])).toMatch(
+      /^https:\/\/api\.binance\.com\/sapi\/v1\/account\/apiRestrictions\?/,
+    );
   });
 
   it("refuses a key Binance does not take, and one that cannot read", async () => {

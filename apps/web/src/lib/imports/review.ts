@@ -38,6 +38,27 @@ export const IMPORT_FAILURE_MESSAGES = {
     "La clave puede operar, retirar o transferir. Conectá una de solo lectura.",
 } as const;
 
+// A sync reads an exchange, not a file: its own words where they differ.
+const SYNC_FAILURE_MESSAGES: Partial<
+  Record<keyof typeof IMPORT_FAILURE_MESSAGES, string>
+> = {
+  nothing_found: "No encontramos saldos en tu cuenta del exchange.",
+  extraction_failed:
+    "No pudimos leer tu cuenta del exchange. Probá de nuevo más tarde.",
+};
+
+// Why a failed import stopped, in the user's words: a sync's (`sync`) as
+// one, a file's otherwise.
+export function importFailureMessage(
+  failure: keyof typeof IMPORT_FAILURE_MESSAGES,
+  sync: boolean,
+): string {
+  return (
+    (sync ? SYNC_FAILURE_MESSAGES[failure] : undefined) ??
+    IMPORT_FAILURE_MESSAGES[failure]
+  );
+}
+
 // How sure the reading is of a row; a low one is for the user to check.
 export type Confidence = "high" | "medium" | "low";
 

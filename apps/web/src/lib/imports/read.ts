@@ -21,7 +21,7 @@ import { z } from "zod";
 
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
-  IMPORT_FAILURE_MESSAGES,
+  importFailureMessage,
   type ImportDebtRow,
   type ImportItem,
   type ImportOperationRow,
@@ -82,7 +82,8 @@ export async function readImports(
       id: row.id,
       ...importOrigin(row),
       status: row.status,
-      error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
+      error:
+        row.failure && importFailureMessage(row.failure, row.document === null),
       documentDate: row.document_date,
       documentTotals: [],
       rows: [],
@@ -342,7 +343,8 @@ export async function readImportForReview(
     id: row.id,
     ...importOrigin(row),
     status: row.status,
-    error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
+    error:
+      row.failure && importFailureMessage(row.failure, row.document === null),
     documentDate: row.document_date,
     documentTotals: [
       { currency: "ARS" as const, amount: printed.printed_total_ars },

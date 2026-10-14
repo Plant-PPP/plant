@@ -28,16 +28,20 @@ export type BinanceOptions = {
 // unknown key or one refused from this IP, a bad signature, an unknown key id.
 const REJECTED_CODES = new Set([-2014, -2015, -1022, -2008]);
 
-// What a key may do, as Binance lists it. A permission to read, or to read
-// over FIX, is the only one a key Plant takes may hold.
+// What a key may do, as Binance lists it. The fields that grant nothing, or
+// only reading; every other one must be literally false, so a permission
+// Binance adds, or one it answers as anything but false, refuses the key.
+const NOT_GRANTING = new Set([
+  "ipRestrict",
+  "createTime",
+  "tradingAuthorityExpirationTime",
+  "enableReading",
+  "enableFixReadOnly",
+]);
 const restrictionsSchema = z.record(z.string(), z.unknown());
 const isReadOnly = (restrictions: Record<string, unknown>) =>
-  restrictions.enableReading === true &&
   Object.entries(restrictions).every(
-    ([name, granted]) =>
-      granted !== true ||
-      !/^(enable|permits)/.test(name) ||
-      /(Reading|ReadOnly)$/.test(name),
+    ([name, value]) => NOT_GRANTING.has(name) || value === false,
   );
 
 const accountSchema = z.object({

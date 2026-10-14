@@ -1,5 +1,6 @@
 // The port every source implements, the file_upload adapter, what reading a
 // file yields and how a source fails, and the exchanges read by API.
+export { exchangeAdapters } from "./exchange/adapters";
 export {
   BINANCE_BASE_URL,
   type BinanceOptions,

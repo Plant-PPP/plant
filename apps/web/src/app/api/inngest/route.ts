@@ -1,9 +1,8 @@
 import { quoteFeeds } from "@plant/core";
 import { createServeOptions } from "@plant/jobs";
 import {
-  BINANCE_BASE_URL,
-  binanceSource,
   createSourceForConnection,
+  exchangeAdapters,
   fileUploadSource,
 } from "@plant/sources";
 import { serve } from "inngest/next";
@@ -50,9 +49,7 @@ export const { GET, POST, PUT } = serve(
             }),
         },
       ),
-      exchanges: {
-        binance: () => binanceSource({ baseUrl: BINANCE_BASE_URL }),
-      },
+      exchanges: exchangeAdapters(),
       log: serverLog,
     }),
     files: () => ({
