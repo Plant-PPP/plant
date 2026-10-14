@@ -26,12 +26,16 @@ const HEADER_LIMIT = 80;
 // Headers and a few title or blank rows above the table. Blank rows count
 // towards it.
 const SHEET_ROW_LIMIT = DRAFT_ROW_LIMIT + 20;
+// The rows read past SHEET_ROW_LIMIT to tell a table that goes on from the
+// blank lines or styled empty cells spreadsheet apps leave under it.
+const SHEET_LOOKAHEAD_ROWS = SHEET_ROW_LIMIT;
 
 export type SheetCell = string | number;
 
 // The first sheet of a file: its first non-empty row as headers and the rows
-// under it. `truncated` when the sheet goes on past SHEET_ROW_LIMIT rows,
-// which are not read.
+// under it, within SHEET_ROW_LIMIT rows from the top of its used range.
+// `truncated` when a non-blank row comes past them, or the sheet goes on past
+// the lookahead read to tell, and those rows are not read.
 export type Sheet = {
   headers: string[];
   rows: SheetCell[][];
@@ -67,7 +71,9 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   try {
     workbook = XLSX.read(text ?? bytes, {
       type: csv ? "string" : "array",
-      sheetRows: SHEET_ROW_LIMIT + 1,
+      // SheetJS counts these from row 1, not from the used range, which may
+      // start up to SHEET_ROW_LIMIT rows down and still be read whole.
+      sheetRows: 2 * SHEET_ROW_LIMIT + SHEET_LOOKAHEAD_ROWS,
       dense: true,
       raw: csv,
       cellFormula: false,
@@ -83,7 +89,10 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   if (!sheet || !ref) throw new SourceError("nothing_found", false);
   const range = XLSX.utils.decode_range(ref);
   range.e.c = Math.min(range.e.c, range.s.c + SHEET_COLUMN_LIMIT - 1);
-  range.e.r = Math.min(range.e.r, range.s.r + SHEET_ROW_LIMIT);
+  range.e.r = Math.min(
+    range.e.r,
+    range.s.r + SHEET_ROW_LIMIT + SHEET_LOOKAHEAD_ROWS - 1,
+  );
   const read = XLSX.utils
     .sheet_to_json<unknown[]>(sheet, {
       header: 1,
@@ -96,8 +105,11 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
         typeof cell === "number" ? cell : String(cell),
       ),
     );
-  const truncated = read.length > SHEET_ROW_LIMIT;
   const table = read.slice(0, SHEET_ROW_LIMIT);
+  const lookahead = read.slice(SHEET_ROW_LIMIT);
+  const truncated =
+    lookahead.some((row) => !isBlank(row)) ||
+    (sheet["!fullref"] !== undefined && lookahead.length === 0);
   const start = table.findIndex((row) => !isBlank(row));
   if (start === -1) throw new SourceError("nothing_found", false);
   const headers = table[start]!.map((cell) => String(cell).trim());

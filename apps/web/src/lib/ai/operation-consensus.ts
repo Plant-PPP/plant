@@ -40,7 +40,7 @@ function keyed(operations: readonly DraftOperation[]) {
 export function mergeOperations(
   first: readonly DraftOperation[],
   second: readonly DraftOperation[],
-): DraftOperation[] {
+): { rows: DraftOperation[]; cut: number } {
   const a = keyed(first);
   const b = keyed(second);
   // Operations the readers named differently are paired by their number,
@@ -115,5 +115,8 @@ export function mergeOperations(
       page: x.page ?? y.page,
     });
   }
-  return merged.slice(0, DRAFT_ROW_LIMIT);
+  return {
+    rows: merged.slice(0, DRAFT_ROW_LIMIT),
+    cut: Math.max(merged.length - DRAFT_ROW_LIMIT, 0),
+  };
 }

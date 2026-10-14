@@ -360,6 +360,56 @@ describe("readImportForReview", () => {
     expect(read!.rows[1]).not.toHaveProperty("assetClass");
   });
 
+  it("labels a synced balance by the sync, not a document", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [
+          {
+            ...IMPORT,
+            document: null,
+            source_connection_id: "a1",
+            provider: "binance",
+            sync_draft: "holdings",
+          },
+        ],
+        [
+          item({
+            id: "c1",
+            symbol: "USD",
+            quantity: "812.4",
+            price: null,
+            asset_class: "cash",
+            currency: "USD",
+            source_page: null,
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows[0]!.source).toBe("De la sincronización");
+  });
+
+  it("labels a synced holding by the sync, not a document", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [
+          {
+            ...IMPORT,
+            document: null,
+            source_connection_id: "a1",
+            provider: "binance",
+            sync_draft: "holdings",
+          },
+        ],
+        [item({ id: "h1", source_page: null })],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows[0]!.source).toBe("De la sincronización");
+  });
+
   it("names an instrument by its aliases and its dollar lines", async () => {
     const read = await readImportForReview(
       clientWith(
@@ -476,6 +526,43 @@ describe("readImportForReview", () => {
         source: 'Página 1 · Leído como "GD30D"',
       },
     ]);
+  });
+  it("keeps the currency of an operation named by an alias ending in D", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [],
+        [
+          {
+            id: "o1",
+            date: "2026-09-01",
+            kind: "purchase",
+            symbol: "XD",
+            quantity: "5",
+            price: "100",
+            amount: null,
+            charges: null,
+            reference: null,
+            currency: "ARS",
+            confidence: "high",
+            source_page: 1,
+          },
+        ],
+      ) as never,
+      "i1",
+      [
+        {
+          symbol: "X",
+          name: "Fondo X",
+          currency: "ARS",
+          type: "fci",
+          aliases: ["XD"],
+        },
+      ],
+    );
+    expect(
+      read?.operations?.map(({ symbol, currency }) => ({ symbol, currency })),
+    ).toEqual([{ symbol: "X", currency: "ARS" }]);
   });
   it("proposes a printed cost only when it reads as one unit's", async () => {
     const read = await readImportForReview(

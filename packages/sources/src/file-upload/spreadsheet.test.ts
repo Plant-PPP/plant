@@ -686,6 +686,61 @@ it("counts holdings past the rows read, blank lines included, as skipped", () =>
   expect(draft.rows.length === 300 || skippedRows > 0).toBe(true);
 });
 
+it("skips nothing for the blank separator lines a spreadsheet app appends", () => {
+  const { draft, skippedRows } = sheetToDraft(
+    readSheet(
+      csv(
+        `Especie,Cantidad,Precio,Moneda,Fecha\nAL30,10,1,ARS,\n${",,,,\n".repeat(600)}`,
+      ),
+      "text/csv",
+    ),
+    mapping,
+    "2026-10-13",
+  );
+  expect(draft.rows).toHaveLength(1);
+  expect(skippedRows).toBe(0);
+});
+
+it("skips nothing for styled empty rows under an XLSX table", () => {
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+    ["AL30", 10, 1, "ARS", ""],
+  ]);
+  for (let r = 2; r < 1500; r++) {
+    sheet[XLSX.utils.encode_cell({ r, c: 0 })] = { t: "z" };
+  }
+  sheet["!ref"] = "A1:E1500";
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Tenencias");
+  const bytes = new Uint8Array(
+    XLSX.write(book, {
+      type: "array",
+      bookType: "xlsx",
+      sheetStubs: true,
+    }) as ArrayBuffer,
+  );
+  expect(readSheet(bytes, XLSX_TYPE).truncated).toBeUndefined();
+});
+
+it("marks a sheet whose table starts below the first row as truncated past the limit", () => {
+  const sheet = XLSX.utils.sheet_add_aoa(
+    {},
+    [
+      ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+      ...Array.from({ length: DRAFT_ROW_LIMIT + 100 }, (_, i) => [
+        `S${i}`,
+        1,
+        1,
+        "ARS",
+        "",
+      ]),
+    ],
+    { origin: "A3" },
+  );
+  sheet["!ref"] = `A3:E${DRAFT_ROW_LIMIT + 103}`;
+  expect(readSheet(xlsxOf(sheet), XLSX_TYPE).truncated).toBe(true);
+});
+
 it("counts as skipped only rows with a quantity, not titles or totals", () => {
   const { skippedRows, draft } = sheetToDraft(
     {

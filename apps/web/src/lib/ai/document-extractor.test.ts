@@ -504,6 +504,38 @@ it("reads a document both readers call a card statement as its debts", async () 
   ]);
 });
 
+it("counts the debts two readings make past the limit as skipped", async () => {
+  const statement = (ars: number, usd: number) =>
+    JSON.stringify({
+      kind: "card_statement",
+      documentDate: null,
+      rows: [],
+      operations: [],
+      totals: [],
+      debts: [
+        ...Array.from({ length: ars }, () => ["ARS", "1000"]),
+        ...Array.from({ length: usd }, () => ["USD", "10"]),
+      ].map(([currency, balance]) => ({
+        label: "Visa",
+        lender: "Galicia",
+        currency,
+        balance,
+        minimumPayment: null,
+        dueDate: null,
+        confidence: "high",
+        page: 1,
+      })),
+    });
+  const { run } = byModel({
+    [READERS[0]]: statement(6, 4),
+    [READERS[1]]: statement(4, 6),
+  });
+  const reading = await run();
+  if (!("debts" in reading)) throw new Error("not read as debts");
+  expect(reading.debts).toHaveLength(10);
+  expect(reading.read.skippedRows).toBe(2);
+});
+
 it("keeps the holdings when the readers disagree on what the document is", async () => {
   const { run } = byModel({
     [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),

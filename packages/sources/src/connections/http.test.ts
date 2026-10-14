@@ -20,3 +20,12 @@ it("rounds a figure given as a string to eight decimals, as it does a number", (
   });
   expect(balanceRow("SOL", ["0.000000000"])).toBe("empty");
 });
+
+it("leaves out any fiat Plant does not keep, and keeps pesos and dollars", () => {
+  for (const code of ["TRY", "GBP", "JPY", "PLN", "eur"]) {
+    expect(balanceRow(code, ["1000"])).toBeNull();
+  }
+  expect(balanceRow("ARS", ["1000"])).toMatchObject({ assetClass: "cash" });
+  expect(balanceRow("USD", ["1000"])).toMatchObject({ assetClass: "cash" });
+  expect(balanceRow("MNT", ["1000"])).toMatchObject({ symbol: "MNT" });
+});

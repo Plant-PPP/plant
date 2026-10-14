@@ -1,5 +1,21 @@
+import { quantityOn } from "../movements/admit";
 import { income, trade } from "../movements/fixtures.test-support";
-import { upcomingIncome } from "./upcoming";
+import type { Movement } from "../movements/movement";
+import { incomePattern, upcomingFrom } from "./upcoming";
+
+// A holding's payments ahead on the units it holds today, as the assistant
+// reads them.
+const upcomingIncome = (
+  movements: readonly Movement[],
+  today: string,
+  days: number,
+) =>
+  upcomingFrom(
+    incomePattern(movements, today),
+    quantityOn(movements, today),
+    today,
+    days,
+  );
 
 const TODAY = "2026-10-12";
 

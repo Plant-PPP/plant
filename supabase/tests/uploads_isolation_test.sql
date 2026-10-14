@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(23);
+SELECT plan(24);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -210,6 +210,13 @@ SELECT is(
                       VALUES ('b8000000-0000-4000-8000-0000000000b8') $$),
   '23503',
   'nor imports another user''s file'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (document_id, sync_from)
+                      SELECT id, '2026-01-01' FROM public.uploaded_documents $$),
+  '23514',
+  'a file import reads no period'
 );
 
 SELECT is(

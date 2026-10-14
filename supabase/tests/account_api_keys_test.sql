@@ -9,7 +9,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(35);
+SELECT plan(37);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -230,6 +230,20 @@ SELECT is(
                       VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations', '2026-02-01', '2026-01-01') $$),
   '23514',
   'a period never ends before it starts'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider, sync_draft, sync_from, sync_to)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations', '2026-01-01', 'infinity') $$),
+  '23514',
+  'nor ends at infinity'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider, sync_draft, sync_to)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations', '1999-12-31') $$),
+  '23514',
+  'nor ends before 2000'
 );
 
 SELECT is(

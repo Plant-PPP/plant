@@ -2,7 +2,6 @@ import "server-only";
 import {
   type InstrumentType,
   quotedPrice,
-  normalizeSymbol,
   instrumentIndex,
   resolveSymbol,
   unitPrice,
@@ -25,6 +24,7 @@ import {
   importFailureMessage,
   type ImportDebtRow,
   type ImportItem,
+  type ImportOrigin,
   type ImportOperationRow,
   type ImportRow,
 } from "@/lib/imports/review";
@@ -158,12 +158,6 @@ function reviewDebt(data: unknown): ImportDebtRow {
   };
 }
 
-// Whether the document names an instrument by its D (MEP) or C (cable) line.
-const isDollarLine = (printed: string, symbol: string) => {
-  const key = normalizeSymbol(printed.trim().replace(/\.BA$/i, ""));
-  return /[DC]$/.test(key) && key.slice(0, -1) === normalizeSymbol(symbol);
-};
-
 // An operation as the review completes it. An instrument Plant knows keeps
 // its symbol; one it does not, or none named, is left for the user to choose,
 // with what the document called it. The currency is the operation's own: a
@@ -194,8 +188,7 @@ function reviewOperation(
     reference: row.reference?.trim() || null,
     // A dollar line (AL30D, GD30C) is a dollar trade, whatever currency was
     // read.
-    currency:
-      known && isDollarLine(row.symbol!, known.symbol) ? "USD" : row.currency,
+    currency: known?.dollarLine ? "USD" : row.currency,
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || "Del documento",
     discarded: false,
@@ -247,9 +240,11 @@ function isUnitCost(
 function reviewRow(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
+  origin: ImportOrigin,
 ): ImportRow {
   const row = itemSchema.parse(data);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
+  const unpaged = origin === "sync" ? "De la sincronización" : "Del documento";
   if (row.asset_class === "cash") {
     return {
       id: row.id,
@@ -261,7 +256,7 @@ function reviewRow(
       ...(row.account != null && { accountLabel: row.account }),
       currency: row.currency,
       confidence: row.confidence,
-      source: page ?? "Del documento",
+      source: page ?? unpaged,
       discarded: false,
     };
   }
@@ -293,7 +288,7 @@ function reviewRow(
       }),
     currency: known?.instrumentCurrency ?? row.currency,
     confidence: row.confidence,
-    source: [page, named].filter(Boolean).join(" · ") || "Del documento",
+    source: [page, named].filter(Boolean).join(" · ") || unpaged,
     discarded: false,
   };
 }
@@ -362,9 +357,10 @@ export async function readImportForReview(
   const index = instrumentIndex(
     instruments.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
   );
+  const origin = importOrigin(row);
   return {
     id: row.id,
-    ...importOrigin(row),
+    ...origin,
     status: row.status,
     error: row.failure && importFailureMessage(row.failure, syncProvider(row)),
     documentDate: row.document_date,
@@ -374,7 +370,9 @@ export async function readImportForReview(
     ].flatMap(({ currency, amount }) =>
       amount === null ? [] : [{ currency, amount }],
     ),
-    rows: (items.data as unknown[]).map((each) => reviewRow(each, index)),
+    rows: (items.data as unknown[]).map((each) =>
+      reviewRow(each, index, origin.origin),
+    ),
     ...(operations.data.length > 0 && {
       operations: (operations.data as unknown[]).map((each) =>
         reviewOperation(each, index),

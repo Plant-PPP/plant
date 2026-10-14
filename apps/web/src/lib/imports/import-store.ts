@@ -182,7 +182,13 @@ export function createImportStore(client: Client): ImportStorePort {
 
     // Storage answers a missing object with a 400 whose body's statusCode is
     // "404", or with a 404.
-    async download(path) {
+    async download(path, userId) {
+      if (
+        !path.startsWith(`${userId}/imports/`) ||
+        path.split("/").includes("..")
+      ) {
+        throw new ImportStoreError("download", "path");
+      }
       const { data, error } = await client.storage
         .from(UPLOAD_BUCKET)
         .download(path);

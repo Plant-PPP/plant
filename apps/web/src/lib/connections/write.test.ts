@@ -411,6 +411,12 @@ describe("readApiKey", () => {
   });
 });
 
+const HOLDINGS_SYNC = {
+  sync_draft: "holdings",
+  sync_from: null,
+  sync_to: null,
+};
+
 describe("syncAccount", () => {
   it("starts an import of the account's holdings and its job", async () => {
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
@@ -477,6 +483,16 @@ describe("syncAccount", () => {
       { from: "2026-02-01", to: "2026-01-01" },
     ],
     ["a day that is not one", "operations", { from: "2026-02-30", to: null }],
+    [
+      "a period that ends before 2000",
+      "operations",
+      { from: null, to: "1999-12-31" },
+    ],
+    [
+      "a period past year 9999",
+      "operations",
+      { from: "2026-01-01", to: "10000-01-01" },
+    ],
   ])("refuses %s", async (_, draft, period) => {
     answers.account_api_keys = answer(() => ({
       status: 200,
@@ -514,7 +530,7 @@ describe("syncAccount", () => {
         ? { status: 409, data: null, error: { code: "PT409" } }
         : {
             status: 200,
-            data: [{ id: "q1", status: "queued" }],
+            data: [{ id: "q1", status: "queued", ...HOLDINGS_SYNC }],
             error: null,
           },
     );
@@ -526,6 +542,41 @@ describe("syncAccount", () => {
     });
     expect(writes.filter((each) => each.table === "imports")).toEqual([]);
   });
+
+  it.each([
+    ["another draft", "holdings", null, { sync_draft: "operations" }],
+    [
+      "another period",
+      "operations",
+      { from: "2026-01-01", to: null },
+      { sync_draft: "operations", sync_from: "2026-02-01" },
+    ],
+  ] as const)(
+    "leaves a queued sync of %s alone",
+    async (_, draft, period, queued) => {
+      answers.account_api_keys = answer(() => ({
+        status: 200,
+        data: [{ provider: "wallbit" }],
+        error: null,
+      }));
+      answers.imports = answer((verb) =>
+        verb === "insert"
+          ? { status: 409, data: null, error: { code: "PT409" } }
+          : {
+              status: 200,
+              data: [
+                { id: "q1", status: "queued", ...HOLDINGS_SYNC, ...queued },
+              ],
+              error: null,
+            },
+      );
+      expect(await syncAccount(ACCOUNT, draft, period)).toEqual({
+        ok: false,
+        code: "in_progress",
+      });
+      expect(startImport).not.toHaveBeenCalled();
+    },
+  );
 
   it("leaves a sync being read alone", async () => {
     answers.imports = answer(() => ({
@@ -547,7 +598,10 @@ describe("syncAccount", () => {
         ? { status: 409, data: null, error: { code: "PT409" } }
         : {
             status: 200,
-            data: (reads += 1) === 1 ? [] : [{ id: "q2", status: "queued" }],
+            data:
+              (reads += 1) === 1
+                ? []
+                : [{ id: "q2", status: "queued", ...HOLDINGS_SYNC }],
             error: null,
           },
     );

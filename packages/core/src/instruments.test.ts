@@ -53,6 +53,7 @@ describe("resolveSymbol", () => {
       type: "crypto",
       instrumentCurrency: "USD",
       currency: "USD",
+      dollarLine: false,
     });
     expect(resolve(" ZB30 ")?.symbol).toBe("ZB30");
     expect(resolve("ZKO")?.currency).toBe("ARS");
@@ -69,6 +70,7 @@ describe("resolveSymbol", () => {
       type: "bond",
       instrumentCurrency: "ARS",
       currency: "USD",
+      dollarLine: true,
     });
     expect(resolve("ZKOC")).toMatchObject({ symbol: "ZKO", currency: "USD" });
     expect(resolve("ZB30D.BA")).toMatchObject({
@@ -78,8 +80,16 @@ describe("resolveSymbol", () => {
   });
 
   it("keeps a catalog symbol that ends in D", () => {
-    expect(resolve("ZXYD")).toMatchObject({ symbol: "ZXYD", currency: "ARS" });
-    expect(resolve("ZXYC")).toMatchObject({ symbol: "ZXY", currency: "USD" });
+    expect(resolve("ZXYD")).toMatchObject({
+      symbol: "ZXYD",
+      currency: "ARS",
+      dollarLine: false,
+    });
+    expect(resolve("ZXYC")).toMatchObject({
+      symbol: "ZXY",
+      currency: "USD",
+      dollarLine: true,
+    });
   });
 
   it("never reads a crypto with a D or C suffix as a dollar line", () => {
