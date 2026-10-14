@@ -11,6 +11,7 @@ import {
   readSheet,
   sheetToDraft,
 } from "./spreadsheet";
+import { WORKBOOK_UNZIPPED_LIMIT } from "./zip";
 
 const XLSX_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -132,6 +133,73 @@ describe("readSheet", () => {
       () => readSheet(new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3]), XLSX_TYPE),
       "unreadable",
     );
+  });
+
+  describe("a compressed XLSX", () => {
+    const compressed = () => {
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        book,
+        XLSX.utils.aoa_to_sheet([
+          ["Especie", "Cantidad"],
+          ["AL30", 1],
+        ]),
+        "Tenencias",
+      );
+      return new Uint8Array(
+        XLSX.write(book, {
+          type: "array",
+          bookType: "xlsx",
+          compression: true,
+        }) as ArrayBuffer,
+      );
+    };
+
+    // SheetJS allocates what both headers declare and still reads the sheet.
+    const declaringSheetSize = (bytes: Uint8Array, size: number) => {
+      const view = new DataView(bytes.buffer);
+      const end = bytes.length - 22;
+      let at = view.getUint32(end + 16, true);
+      for (let entry = 0; entry < view.getUint16(end + 8, true); entry += 1) {
+        const nameLength = view.getUint16(at + 28, true);
+        const name = new TextDecoder().decode(
+          bytes.subarray(at + 46, at + 46 + nameLength),
+        );
+        if (name.endsWith("sheet1.xml")) {
+          view.setUint32(at + 24, size, true);
+          view.setUint32(view.getUint32(at + 42, true) + 22, size, true);
+        }
+        at +=
+          46 +
+          nameLength +
+          view.getUint16(at + 30, true) +
+          view.getUint16(at + 32, true);
+      }
+      return bytes;
+    };
+
+    it("reads", () => {
+      expect(readSheet(compressed(), XLSX_TYPE).rows).toEqual([["AL30", 1]]);
+    });
+
+    it("refuses one that unzips past the limit", () => {
+      expectSourceError(
+        () =>
+          readSheet(
+            declaringSheetSize(compressed(), WORKBOOK_UNZIPPED_LIMIT + 1),
+            XLSX_TYPE,
+          ),
+        "unreadable",
+      );
+    });
+
+    it("refuses one cut short", () => {
+      const bytes = compressed();
+      expectSourceError(
+        () => readSheet(bytes.subarray(0, bytes.length - 40), XLSX_TYPE),
+        "unreadable",
+      );
+    });
   });
 });
 

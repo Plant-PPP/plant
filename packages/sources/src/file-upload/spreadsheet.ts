@@ -16,6 +16,7 @@ import {
   type ImportDraft,
   SourceError,
 } from "./draft";
+import { isZip, zipFitsLimit } from "./zip";
 
 // Past it a column is not part of a holdings table; it also bounds a forged
 // `!ref` that claims thousands of columns.
@@ -47,6 +48,9 @@ const csvText = (bytes: Uint8Array) => {
 
 export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const csv = mimeType === "text/csv";
+  if (!csv && isZip(bytes) && !zipFitsLimit(bytes)) {
+    throw new SourceError("unreadable", false);
+  }
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(csv ? csvText(bytes) : bytes, {
