@@ -30,6 +30,11 @@ describe("the provider registry", () => {
     ["Nexo", "nexo"],
     ["IOL", "iol"],
     ["InvertirOnline", "iol"],
+    ["Roxom", "roxom"],
+    ["Mercado Pago", "mercadopago"],
+    ["MercadoPago", "mercadopago"],
+    ["Bitso", "bitso"],
+    ["Ripio Trade", "ripio"],
     ["Balanz", null],
     ["Cocos", null],
   ])("knows %s as %s", (institution, provider) => {

@@ -1,10 +1,14 @@
 import { z } from "zod";
 
 import { binanceConnection } from "./binance";
+import { bitsoConnection } from "./bitso";
 import { ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
+import { mercadoPagoConnection } from "./mercadopago";
 import { nexoConnection } from "./nexo";
 import type { ConnectionDeps, ConnectionProviderPort } from "./port";
+import { ripioConnection } from "./ripio";
+import { roxomConnection } from "./roxom";
 import { wallbitConnection } from "./wallbit";
 
 // Every provider an account may connect by API, each by its adapter. Adding
@@ -16,6 +20,10 @@ const ADAPTERS = {
   ibkr: ibkrConnection,
   nexo: nexoConnection,
   iol: iolConnection,
+  roxom: roxomConnection,
+  mercadopago: mercadoPagoConnection,
+  bitso: bitsoConnection,
+  ripio: ripioConnection,
 } satisfies Record<string, (deps?: ConnectionDeps) => ConnectionProviderPort>;
 
 export type ConnectionProvider = keyof typeof ADAPTERS;

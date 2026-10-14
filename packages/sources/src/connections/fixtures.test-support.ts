@@ -1,16 +1,20 @@
-import { createHmac } from "node:crypto";
+import { createHmac, createVerify, generateKeyPairSync } from "node:crypto";
 
 import type { ConnectionProvider } from "./adapters";
 import { binanceConnection } from "./binance";
+import { bitsoConnection } from "./bitso";
 import type { FakeReply, FakeRequest } from "./fake-provider.test-support";
 import { ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
+import { mercadoPagoConnection } from "./mercadopago";
 import { nexoConnection } from "./nexo";
 import type {
   ConnectionDeps,
   ConnectionProviderPort,
   Credentials,
 } from "./port";
+import { ripioConnection } from "./ripio";
+import { roxomConnection } from "./roxom";
 import { wallbitConnection } from "./wallbit";
 
 // Each provider faked for its adapter, with made-up credentials and data:
@@ -343,10 +347,263 @@ const iol: ProviderFixture = {
       : json({}, 401),
 };
 
+// ── Roxom ───────────────────────────────────────────────────────────────────
+// A key pair made for the tests: Roxom keeps the public half.
+const roxomKeys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+export const ROXOM_CREDENTIALS = {
+  apiKey: "rxk_key_0000000000000001",
+  privateKey: roxomKeys.privateKey
+    .export({ type: "pkcs8", format: "pem" })
+    .toString(),
+};
+const roxomSigned = (request: FakeRequest) =>
+  request.headers["x-api-key"] === ROXOM_CREDENTIALS.apiKey &&
+  createVerify("sha256")
+    .update(`${request.method}:${request.url}`)
+    .verify(
+      roxomKeys.publicKey,
+      String(request.headers["x-api-signature"] ?? ""),
+      "base64",
+    );
+const roxom: ProviderFixture = {
+  make: roxomConnection,
+  credentials: ROXOM_CREDENTIALS,
+  ok: (request) =>
+    !roxomSigned(request)
+      ? json({ error: 401, message: "Unauthorized" }, 401)
+      : request.path === "/v1/accounts/balance" &&
+          request.query.get("unit") === "btc"
+        ? json({
+            error: false,
+            data: {
+              lastUpdated: NOW.getTime(),
+              balances: [
+                {
+                  asset: "BTC",
+                  assetClass: "crypto",
+                  available: "0.10000000",
+                  current: "0.12500000",
+                  lockedInOrders: "0.02500000",
+                },
+                {
+                  asset: "USDT",
+                  assetClass: "crypto",
+                  available: "350.00000000",
+                  current: "350.00000000",
+                },
+                {
+                  asset: "USDC",
+                  assetClass: "crypto",
+                  available: "0.00000000",
+                  current: "0.00000000",
+                },
+              ],
+            },
+          })
+        : json({}, 404),
+  refuse: () => json({ error: 401, message: "Unauthorized" }, 401),
+};
+
+// ── Mercado Pago ────────────────────────────────────────────────────────────
+export const MERCADO_PAGO_CREDENTIALS = {
+  accessToken: "APP_USR-0000000000000001-101412-made0up0token0000000-123456789",
+};
+export const MERCADO_PAGO_REPORT = [
+  "DATE,SOURCE_ID,EXTERNAL_REFERENCE,RECORD_TYPE,DESCRIPTION,NET_CREDIT_AMOUNT,NET_DEBIT_AMOUNT,GROSS_AMOUNT,BALANCE_AMOUNT,CURRENCY",
+  "2026-10-07T15:00:00.000-04:00,,,initial_available_balance,,0.00,0.00,0.00,180000.00,ARS",
+  '2026-10-09T10:12:00.000-04:00,111,,release,"Pago, cuota 1",25000.50,0.00,26000.00,205000.50,ARS',
+  "2026-10-12T09:00:00.000-04:00,112,,available_balance,pre_payout_1,0.00,0.00,0.00,205000.50,ARS",
+  "2026-10-12T09:00:00.000-04:00,112,,payout,Retiro,0.00,5000.00,0.00,200000.50,ARS",
+  "2026-10-14T11:00:00.000-04:00,,,total,,25000.50,5000.00,26000.00,,ARS",
+].join("\n");
+type MercadoPagoReport = {
+  begin_date: string;
+  end_date: string;
+  file_name: string;
+  status: string;
+};
+// The reports Mercado Pago lists: one asked for is pending on the first list
+// after it, and processed from then on.
+let mercadoPagoReports: MercadoPagoReport[] = [];
+export const resetMercadoPagoReports = () => {
+  mercadoPagoReports = [];
+};
+const MERCADO_PAGO_FILE = "release-report-123456789-2026-10-14-150000.csv";
+const mercadoPago: ProviderFixture = {
+  make: (deps) =>
+    mercadoPagoConnection({ ...deps, sleep: async () => undefined }),
+  credentials: MERCADO_PAGO_CREDENTIALS,
+  posts: ["/v1/account/release_report"],
+  ok: (request) => {
+    if (
+      request.headers.authorization !==
+      `Bearer ${MERCADO_PAGO_CREDENTIALS.accessToken}`
+    ) {
+      return json({ message: "invalid access token", status: 401 }, 401);
+    }
+    if (request.path === "/users/me") {
+      return json({ id: 123456789, site_id: "MLA" });
+    }
+    if (
+      request.method === "POST" &&
+      request.path === "/v1/account/release_report"
+    ) {
+      const { begin_date, end_date } = JSON.parse(request.body) as {
+        begin_date: string;
+        end_date: string;
+      };
+      mercadoPagoReports.push({
+        begin_date,
+        end_date,
+        file_name: MERCADO_PAGO_FILE,
+        status: "pending",
+      });
+      return json({ id: 1, status: "pending" }, 202);
+    }
+    if (request.path === "/v1/account/release_report/list") {
+      const listed = mercadoPagoReports.map((each) => ({ ...each }));
+      for (const each of mercadoPagoReports) each.status = "processed";
+      return json(listed);
+    }
+    if (request.path === `/v1/account/release_report/${MERCADO_PAGO_FILE}`) {
+      return { status: 200, type: "text", body: MERCADO_PAGO_REPORT };
+    }
+    return json({}, 404);
+  },
+  refuse: () => json({ message: "invalid access token", status: 401 }, 401),
+};
+
+// ── Bitso ───────────────────────────────────────────────────────────────────
+export const BITSO_CREDENTIALS = {
+  apiKey: "BitsoKey01",
+  apiSecret: "bitsoSecret00000000000000000001",
+};
+const bitsoSigned = (request: FakeRequest) => {
+  const [scheme, rest = ""] = String(request.headers.authorization).split(" ");
+  const [key, nonce = "", signature] = rest.split(":");
+  return (
+    scheme === "Bitso" &&
+    key === BITSO_CREDENTIALS.apiKey &&
+    /^\d{19}$/.test(nonce) &&
+    signature ===
+      createHmac("sha256", BITSO_CREDENTIALS.apiSecret)
+        .update(`${nonce}${request.method}${request.url}`)
+        .digest("hex")
+  );
+};
+const bitsoRefused = json(
+  {
+    success: false,
+    error: { code: "0201", message: "Invalid Nonce or Invalid Credentials" },
+  },
+  401,
+);
+const bitso: ProviderFixture = {
+  make: bitsoConnection,
+  credentials: BITSO_CREDENTIALS,
+  ok: (request) =>
+    !bitsoSigned(request)
+      ? bitsoRefused
+      : request.path === "/api/v3/balance/"
+        ? json({
+            success: true,
+            payload: {
+              balances: [
+                {
+                  currency: "btc",
+                  total: "0.03000000",
+                  locked: "0.01000000",
+                  available: "0.02000000",
+                },
+                {
+                  currency: "ars",
+                  total: "52000.75",
+                  locked: "0.00",
+                  available: "52000.75",
+                },
+                {
+                  currency: "mxn",
+                  total: "300.00",
+                  locked: "0.00",
+                  available: "300.00",
+                },
+                {
+                  currency: "eth",
+                  total: "0.00000000",
+                  locked: "0.00000000",
+                  available: "0.00000000",
+                },
+              ],
+            },
+          })
+        : json({}, 404),
+  refuse: () => bitsoRefused,
+};
+
+// ── Ripio Trade ─────────────────────────────────────────────────────────────
+export const RIPIO_CREDENTIALS = {
+  apiToken: "ripioToken0000000000000001",
+  secretKey: "ripioSecret000000000000001",
+};
+const ripioSigned = (request: FakeRequest) =>
+  request.headers.authorization === RIPIO_CREDENTIALS.apiToken &&
+  request.headers.signature ===
+    createHmac("sha256", RIPIO_CREDENTIALS.secretKey)
+      .update(`${String(request.headers.timestamp)}GET${request.path}`)
+      .digest("base64");
+const ripioRefused = json(
+  { data: null, error_code: 40100, message: "Not authorized" },
+  401,
+);
+const ripio: ProviderFixture = {
+  make: ripioConnection,
+  credentials: RIPIO_CREDENTIALS,
+  ok: (request) =>
+    !ripioSigned(request)
+      ? ripioRefused
+      : request.path === "/user/balances"
+        ? json({
+            data: [
+              {
+                available_amount: 0.0215,
+                currency_code: "BTC",
+                last_update: "2026-10-14T12:00:00.000Z",
+                locked_amount: 0.001,
+              },
+              {
+                available_amount: 150000.5,
+                currency_code: "ARS",
+                last_update: "2026-10-14T12:00:00.000Z",
+                locked_amount: 0,
+              },
+              {
+                available_amount: 10,
+                currency_code: "BRL",
+                last_update: "2026-10-14T12:00:00.000Z",
+                locked_amount: 0,
+              },
+              {
+                available_amount: 80.25,
+                currency_code: "USDC",
+                last_update: "2026-10-14T12:00:00.000Z",
+                locked_amount: 0,
+              },
+            ],
+            error_code: null,
+            message: null,
+          })
+        : json({}, 404),
+  refuse: () => ripioRefused,
+};
+
 export const PROVIDER_FIXTURES: Record<ConnectionProvider, ProviderFixture> = {
   binance,
   wallbit,
   ibkr,
   nexo,
   iol,
+  roxom,
+  mercadopago: mercadoPago,
+  bitso,
+  ripio,
 };

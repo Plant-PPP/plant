@@ -2,8 +2,10 @@ import { z } from "zod";
 
 import type { DraftRow } from "../file-upload/draft";
 import {
+  base64Of,
   call,
   decimalOf,
+  hmacSha256,
   holdingsReading,
   jsonOf,
   positive,
@@ -28,18 +30,8 @@ const summarySchema = z.object({
 
 const ASSET = /^[A-Z0-9]{1,20}$/;
 
-async function signature(secret: string, nonce: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signed = await crypto.subtle.sign("HMAC", key, encoder.encode(nonce));
-  return btoa(String.fromCharCode(...new Uint8Array(signed)));
-}
+const signature = async (secret: string, nonce: string) =>
+  base64Of(await hmacSha256(secret, nonce));
 
 // Nexo Pro by API, with a key the user made with the VIEWER role. Nexo Pro
 // does not say what a key may do, so the user confirms its role. Each

@@ -36,12 +36,13 @@ type Client = SupabaseClient<Database>;
 const EVENT = "connections.api_key";
 
 // The credentials are checked by the provider's own schema; this only bounds
-// their shape.
+// their shape: a value fits a private key in PEM, and the database caps the
+// whole object at 4 KiB.
 const connectSchema = z
   .object({
     accountId: z.uuid(),
     provider: connectionProviderSchema,
-    credentials: z.record(z.string().max(40), z.string().max(512)),
+    credentials: z.record(z.string().max(40), z.string().max(4096)),
     confirmedReadOnly: z.boolean(),
   })
   .strict();

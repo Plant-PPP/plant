@@ -99,6 +99,37 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
     confirm:
       "Entiendo que IOL no tiene acceso de solo lectura y que Plant solo lee.",
   },
+  roxom: {
+    name: "Roxom",
+    institution: /^roxom\b/i,
+    fields: { apiKey: "Key ID", privateKey: "Clave privada" },
+    help: 'En Roxom, tocá tu perfil → API → "Generate API Key" y copiá el Key ID y la clave privada, que Roxom muestra una sola vez (el bloque entero, de "-----BEGIN PRIVATE KEY-----" a "-----END PRIVATE KEY-----"). Roxom no tiene keys de solo lectura: Plant guarda la clave cifrada y solo la usa para leer tus saldos; nunca opera.',
+    confirm:
+      "Entiendo que la key de Roxom no es de solo lectura y que Plant solo lee.",
+  },
+  mercadopago: {
+    name: "Mercado Pago",
+    institution: /^mercado ?pago\b/i,
+    fields: { accessToken: "Access Token de producción" },
+    help: 'En Mercado Pago Developers, entrá a "Tus integraciones", creá una aplicación y copiá su Access Token de producción (empieza con APP_USR-). Leemos el dinero disponible en tu cuenta con el reporte de liberaciones, que Mercado Pago tarda unos minutos en generar; lo que rinde en Mercado Fondo y tus otros movimientos cargalos con un resumen.',
+    confirm:
+      "Entiendo que el Access Token de Mercado Pago tiene todos los permisos y que Plant solo lee.",
+  },
+  bitso: {
+    name: "Bitso",
+    institution: /^bitso\b/i,
+    fields: { apiKey: "API key", apiSecret: "API secret" },
+    help: 'En Bitso, andá a Perfil → API y creá una key con los permisos "View balances" y "View account information" solamente, sin "Place orders", "Make withdrawals" ni "Perform security actions". Leemos tus saldos.',
+    confirm:
+      'Confirmo que la key tiene solo "View balances" y "View account information".',
+  },
+  ripio: {
+    name: "Ripio Trade",
+    institution: /^ripio\b/i,
+    fields: { apiToken: "API Token", secretKey: "Secret Key" },
+    help: 'En Ripio Trade, entrá a API (trade.ripio.com/market/api/token) y creá credenciales con el acceso "Read" solamente, sin "Buy/Sell" ni retiros. Copiá el API Token y la Secret Key, que se muestra una sola vez. Leemos los saldos de Ripio Trade; los de la app de Ripio cargalos con un resumen.',
+    confirm: 'Confirmo que las credenciales tienen solo el acceso "Read".',
+  },
 };
 
 // The provider an account's institution is, by its name; null for any
