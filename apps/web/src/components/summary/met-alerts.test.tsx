@@ -27,3 +27,14 @@ it("names each Listo button by its alert", () => {
     expect(html).toContain(`aria-label="Listo: ${alertLine(alert)}"`);
   }
 });
+
+it("says when the alerts could not be read", () => {
+  const html = renderToStaticMarkup(
+    <MetAlerts alerts={[]} readFailed onSeen={async () => true} />,
+  );
+  expect(html).toContain('role="alert"');
+  expect(html).toContain("No pudimos leer tus alertas de precio");
+  expect(
+    renderToStaticMarkup(<MetAlerts alerts={[]} onSeen={async () => true} />),
+  ).toBe("");
+});

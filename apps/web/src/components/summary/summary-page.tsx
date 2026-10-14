@@ -74,6 +74,7 @@ export function SummaryPage({
   pinned = [],
   onUnpin,
   metAlerts = [],
+  alertsReadFailed = false,
   onAlertSeen,
 }: {
   // Every month, oldest first, the last one in progress.
@@ -99,8 +100,10 @@ export function SummaryPage({
   // one go.
   pinned?: readonly PinnedChart[];
   onUnpin?: (id: string) => Promise<boolean>;
-  // The price alerts met and not seen yet, and the way to mark one seen.
+  // The price alerts met and not seen yet, whether they could not be read,
+  // and the way to mark one seen.
   metAlerts?: readonly PriceAlert[];
+  alertsReadFailed?: boolean;
   onAlertSeen?: (id: string) => Promise<boolean>;
 }) {
   const url = useAssetsUrl(params);
@@ -148,7 +151,13 @@ export function SummaryPage({
           <PrintButton />
         </div>
       </div>
-      {onAlertSeen && <MetAlerts alerts={metAlerts} onSeen={onAlertSeen} />}
+      {onAlertSeen && (
+        <MetAlerts
+          alerts={metAlerts}
+          readFailed={alertsReadFailed}
+          onSeen={onAlertSeen}
+        />
+      )}
       <MepNotice unit={unit} />
 
       {portfolio ? (
