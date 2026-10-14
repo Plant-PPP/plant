@@ -11,6 +11,7 @@ import { buenosAiresDate } from "@plant/shared";
 
 import { readLiabilities } from "@/lib/debts/read";
 import type { ExportTable } from "@/lib/export/csv";
+import { readOtherHoldings } from "@/lib/export/read";
 import { exportTables } from "@/lib/export/tables";
 import { readImports } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
@@ -48,16 +49,18 @@ export async function exportData(): Promise<ExportTable[] | null> {
   const started = performance.now();
   const client = await createClient();
   try {
-    const [{ ledger }, debts, { items }] = await Promise.all([
+    const [{ ledger, truncated }, other, debts, { items }] = await Promise.all([
       readLedger(client, {
         today: buenosAiresDate(new Date()),
         referenceDollar: "mep",
       }),
+      readOtherHoldings(client),
       readLiabilities(client),
       readImports(client),
     ]);
     const tables = exportTables({
       ...ledger,
+      otherHoldings: other.rows,
       liabilities: debts.active,
       imports: items,
     });
@@ -65,6 +68,8 @@ export async function exportData(): Promise<ExportTable[] | null> {
       [REQUEST_ID_FIELD]: requestId,
       "enduser.id": claims.sub,
       "plant.outcome": "ok",
+      "plant.export.truncated":
+        truncated || other.truncated || debts.activeTruncated,
       "plant.export.row_count": tables.reduce(
         (sum, table) => sum + table.rows.length,
         0,

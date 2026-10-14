@@ -53,13 +53,33 @@ const embeds = z.object({
 // Amounts are selected as text, so they stay exact decimal strings. The
 // account and the portfolio are embedded through the composite
 // foreign keys, so each is the holding owner's; RLS applies to them as well.
-const HOLDING_COLUMNS =
+export const HOLDING_COLUMNS =
   "id, portfolio_id, asset_class, instrument_symbol, amount:amount::text, currency, " +
   "annual_rate:annual_rate::text, started_on, matures_on, valued_on, label, " +
   "source_connection:source_connections!holdings_user_id_source_connection_id_fkey" +
   "(id, institution), " +
   "portfolio:portfolios!holdings_user_id_portfolio_id_fkey(id, name), " +
   "instrument:instruments!holdings_instrument_symbol_fkey(type)";
+
+// A holding row as HOLDING_COLUMNS selects it.
+export function holdingRowOf(data: Record<string, unknown>): HoldingRow {
+  const {
+    source_connection: account,
+    portfolio,
+    instrument,
+  } = embeds.parse(data);
+  const holding = holdingSchema.parse(data);
+  // The instrument's type comes through its foreign key, so only an
+  // instrument holding has one, and it always does.
+  z.literal(holding.asset_class === "instrument").parse(instrument !== null);
+  return {
+    id: String(data.id),
+    holding,
+    account,
+    portfolio,
+    instrumentType: instrument?.type ?? null,
+  };
+}
 
 export function readHoldings(
   client: Client,
@@ -72,26 +92,7 @@ export function readHoldings(
       param: "holdings",
       columns: HOLDING_COLUMNS,
       heldOnly: true,
-      toRow: (data) => {
-        const {
-          source_connection: account,
-          portfolio,
-          instrument,
-        } = embeds.parse(data);
-        const holding = holdingSchema.parse(data);
-        // The instrument's type comes through its foreign key, so only an
-        // instrument holding has one, and it always does.
-        z.literal(holding.asset_class === "instrument").parse(
-          instrument !== null,
-        );
-        return {
-          id: String(data.id),
-          holding,
-          account,
-          portfolio,
-          instrumentType: instrument?.type ?? null,
-        };
-      },
+      toRow: holdingRowOf,
     },
     context,
   );

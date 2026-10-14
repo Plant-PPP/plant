@@ -11,6 +11,11 @@ it("writes a decimal as a number and everything else as text", () => {
   expect(cellOf(null)).toBeNull();
 });
 
+it("reads an amount as the database writes it, trailing zeros and all", () => {
+  expect(cellOf("10000000.00000000")).toBe(10000000);
+  expect(cellOf("123456789.12000000")).toBe(123456789.12);
+});
+
 it("keeps as text what a double would change: leading zeros and long decimals", () => {
   expect(cellOf("000123")).toBe("000123");
   expect(cellOf("12345678901234567.89")).toBe("12345678901234567.89");

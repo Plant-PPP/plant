@@ -6,14 +6,17 @@ import {
   ASSET_CLASS_LABELS,
   MOVEMENT_KIND_LABELS,
 } from "@/lib/holdings/messages";
+import type { HoldingRow } from "@/lib/holdings/read";
 import type { ImportItem } from "@/lib/imports/review";
 import { IMPORT_STATUS_LABELS } from "@/lib/imports/review";
 import { allRows, type Ledger } from "@/lib/ledger/ledger";
 
 import type { ExportTable } from "./csv";
 
-// What an export is built from: the ledger, the debts and the imports.
+// What an export is built from: the ledger, the holdings it does not carry
+// (the real ledger has instruments only), the debts and the imports.
 export type ExportData = Ledger & {
+  otherHoldings?: readonly HoldingRow[];
   liabilities: readonly Liability[];
   imports: readonly ImportItem[];
 };
@@ -34,7 +37,7 @@ const yesNo = (on: boolean) => (on ? "Sí" : "No");
 // Everything the user loaded, one table per kind of row, amounts as stored
 // (a point before the decimals) so any spreadsheet reads them back.
 export function exportTables(data: ExportData): ExportTable[] {
-  const rows = allRows(data);
+  const rows = [...allRows(data), ...(data.otherHoldings ?? [])];
   const byId = new Map(rows.map((row) => [row.id, row]));
   const account = (id: string) =>
     data.accounts.find((each) => each.id === id)?.institution ??
@@ -65,7 +68,8 @@ export function exportTables(data: ExportData): ExportTable[] {
       portfolio.name,
       ASSET_CLASS_LABELS[holding.asset_class],
       holding.instrument_symbol,
-      holding.amount,
+      // A holding sold to zero holds nothing.
+      closed.has(id) ? "0" : holding.amount,
       holding.currency,
       holding.annual_rate,
       holding.started_on,

@@ -1,7 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* The dark theme is the screen's only: a printed page, as Resumen's PDF, is
+   always light, since paper has no dark background. */
+@custom-variant dark {
+  @media screen {
+    &:is(.dark *) {
+      @slot;
+    }
+  }
+}
 
 /* Extends Tailwind's scrollbar-none with the ::-webkit-scrollbar fallback for
    Safari without scrollbar-width support. */
@@ -124,41 +132,43 @@
   --sidebar-ring: oklch(0.705 0.015 286.067);
 }
 
-.dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.141 0.005 285.823);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.141 0.005 285.823);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: var(--brand);
-  --primary-foreground: oklch(0.141 0.005 285.823);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
-  --brand: #a3c29c;
-  --gain: #4ade80;
-  --loss: #f87171;
-  --warn: #fbbf24;
-  --canvas: #171717;
-  --canvas-border: #2e2e2e;
-  /* Dark page background (#09090B): darker than the canvas card (--canvas),
-     swapped vs light mode so the card is the lighter surface. */
-  --sidebar: #09090b;
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--brand);
-  --sidebar-primary-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
+@media screen {
+  .dark {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.141 0.005 285.823);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.141 0.005 285.823);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: var(--brand);
+    --primary-foreground: oklch(0.141 0.005 285.823);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.552 0.016 285.938);
+    --brand: #a3c29c;
+    --gain: #4ade80;
+    --loss: #f87171;
+    --warn: #fbbf24;
+    --canvas: #171717;
+    --canvas-border: #2e2e2e;
+    /* Dark page background (#09090B): darker than the canvas card (--canvas),
+       swapped vs light mode so the card is the lighter surface. */
+    --sidebar: #09090b;
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: var(--brand);
+    --sidebar-primary-foreground: oklch(0.141 0.005 285.823);
+    --sidebar-accent: oklch(0.274 0.006 286.033);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.552 0.016 285.938);
+  }
 }
 
 @layer base {

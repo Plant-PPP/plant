@@ -10,7 +10,11 @@ const EXACT_DIGITS = 15;
 export function cellOf(value: string | null): string | number | null {
   if (value === null) return null;
   if (!DECIMAL.test(value) || /^-?0\d/.test(value)) return value;
-  const digits = value.replace(/^-/, "").replace(".", "").replace(/^0+/, "");
+  const digits = value
+    .replace(/^-/, "")
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(".", "")
+    .replace(/^0+/, "");
   return digits.length <= EXACT_DIGITS ? Number(value) : value;
 }
 
