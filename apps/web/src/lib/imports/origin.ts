@@ -46,3 +46,9 @@ export function importOrigin(row: z.infer<typeof importOriginSchema>): {
   }
   throw new Error("an import reads neither a document nor an account");
 }
+
+// The name of the provider a sync reads; null for a document.
+export const syncProvider = (
+  row: z.infer<typeof importOriginSchema>,
+): string | null =>
+  row.document === null && row.provider ? PROVIDERS[row.provider].name : null;

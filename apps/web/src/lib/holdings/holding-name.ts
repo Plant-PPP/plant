@@ -65,5 +65,9 @@ export function holdingName(
     const symbol = holding.instrument_symbol;
     return instrumentLabel(symbol, instrumentNames.get(symbol));
   }
-  return holding.label ?? `${kindLabel} ${holding.currency}`;
+  return holding.label ?? unlabeledName(kindLabel, holding.currency);
 }
+
+// A holding with no label of its own, by its class and currency.
+export const unlabeledName = (kindLabel: string, currency: Currency): string =>
+  `${kindLabel} ${currency}`;

@@ -181,13 +181,35 @@ describe("cash", () => {
       held: new Map([["USD", "500"]]),
       several: new Set(),
     });
-    expect(html).toContain("Efectivo en dólares");
-    expect(html).toContain("Efectivo en pesos");
+    expect(html).toContain("Efectivo USD");
+    expect(html).toContain("Efectivo ARS");
     expect(html).toContain("Sube de 500");
     expect(html).toContain("Nueva");
     expect(html).toContain('aria-label="Monto de la fila 1"');
     expect(html).not.toContain("Precio de la fila");
     expect(html).not.toContain("Cartera de la fila");
+  });
+
+  it("says a balance listed twice is a repeated balance", () => {
+    const html = renderToStaticMarkup(
+      <ImportReview
+        item={{
+          ...ITEM,
+          rows: [
+            cashRow("USD", "812.4"),
+            { ...cashRow("USD", "10"), id: "cash-USD-2" },
+          ],
+        }}
+        institution="IBKR"
+        instruments={[]}
+        held={new Map()}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+      />,
+    );
+    expect(html).toContain("Este saldo aparece más de una vez");
+    expect(html).not.toContain("Este instrumento aparece más de una vez");
   });
 
   it("asks to set by hand a balance the account holds in several cash holdings", () => {
@@ -236,4 +258,36 @@ it("asks for the account of a row a document lists under one it cannot name", ()
   );
   expect(html).toContain("el documento dice &quot;BingX&quot;");
   expect(html).toContain("Elegí una cuenta");
+});
+
+it("takes the same instrument routed to two accounts as two holdings", () => {
+  const account = (id: string, institution: string) => ({
+    id,
+    institution,
+    held: new Map(),
+    defaultPortfolioId: "p1",
+    elsewhere: new Map(),
+  });
+  const row = ITEM.rows[1]!;
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        rows: [
+          { ...row, accountLabel: "Cocos", accountId: "a2" },
+          { ...row, id: "other", accountLabel: "Nexo", accountId: "a3" },
+        ],
+      }}
+      institution="Cocos"
+      instruments={[
+        { symbol: "GD30", name: "Global 2030", currency: "USD", type: "bond" },
+      ]}
+      held={new Map()}
+      accounts={[account("a2", "Cocos"), account("a3", "Nexo")]}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).not.toContain("aparece más de una vez");
 });
