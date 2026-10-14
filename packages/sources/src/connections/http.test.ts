@@ -1,4 +1,4 @@
-import { balanceRow, call } from "./http";
+import { balanceRow, call, summedCashRows } from "./http";
 
 it("fails as unavailable without the network error, which may name the request", async () => {
   const get = jest
@@ -39,3 +39,31 @@ it.each(["SCR", "ERN", "RON", "TOP", "SOS"])(
     });
   },
 );
+
+it("keeps pesos and dollars listed at zero as cash at zero, not an empty balance", () => {
+  expect(balanceRow("ARS", ["0", "0.00"])).toMatchObject({
+    symbol: "ARS",
+    quantity: "0",
+    assetClass: "cash",
+  });
+  expect(balanceRow("USD", [0])).toMatchObject({ quantity: "0" });
+});
+
+it("sums cash that adds up to zero into a row at zero, not a skipped one", () => {
+  expect(
+    summedCashRows(
+      [
+        { currency: "ARS", amount: "150.5" },
+        { currency: "ARS", amount: "-150.5" },
+        { currency: "USD", amount: "0" },
+      ],
+      "high",
+    ),
+  ).toEqual({
+    rows: [
+      expect.objectContaining({ symbol: "ARS", quantity: "0" }),
+      expect.objectContaining({ symbol: "USD", quantity: "0" }),
+    ],
+    skipped: 0,
+  });
+});

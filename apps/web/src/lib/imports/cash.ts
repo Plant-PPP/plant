@@ -4,8 +4,8 @@ import {
   currencySchema,
   type Database,
   exactOf,
+  nonNegativeDecimalSchema,
   plus,
-  positiveDecimalSchema,
   stored,
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -101,8 +101,9 @@ export type CashEntry = {
   };
 };
 
+// A balance at zero brings the account's cash in its currency to zero.
 const cashRowSchema = z.object({
-  quantity: positiveDecimalSchema,
+  quantity: nonNegativeDecimalSchema,
   currency: currencySchema,
   accountLabel: z.string().optional(),
   accountId: z.string().min(1).optional(),

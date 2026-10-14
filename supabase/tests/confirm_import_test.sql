@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(30);
+SELECT plan(38);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -80,13 +80,17 @@ FROM (VALUES ('a8000000-0000-4000-8000-0000000000a1'::uuid, '1'),
              ('a8000000-0000-4000-8000-0000000000a3'::uuid, '3'),
              ('a8000000-0000-4000-8000-0000000000a4'::uuid, '4'),
              ('a8000000-0000-4000-8000-0000000000a5'::uuid, '5'),
-             ('a8000000-0000-4000-8000-0000000000a6'::uuid, '6')) AS docs (id, digit);
--- And three statements of cash, ready to review.
+             ('a8000000-0000-4000-8000-0000000000a6'::uuid, '6'),
+             ('a8000000-0000-4000-8000-0000000000a7'::uuid, '7'),
+             ('a8000000-0000-4000-8000-0000000000a8'::uuid, '8')) AS docs (id, digit);
+-- And five statements of cash, ready to review.
 INSERT INTO public.imports (id, user_id, document_id, status)
 SELECT id, 'a0000000-0000-4000-8000-00000000000a', document_id, 'ready'
 FROM (VALUES ('a9000000-0000-4000-8000-0000000000a4'::uuid, 'a8000000-0000-4000-8000-0000000000a4'::uuid),
              ('a9000000-0000-4000-8000-0000000000a5'::uuid, 'a8000000-0000-4000-8000-0000000000a5'::uuid),
-             ('a9000000-0000-4000-8000-0000000000a6'::uuid, 'a8000000-0000-4000-8000-0000000000a6'::uuid))
+             ('a9000000-0000-4000-8000-0000000000a6'::uuid, 'a8000000-0000-4000-8000-0000000000a6'::uuid),
+             ('a9000000-0000-4000-8000-0000000000a7'::uuid, 'a8000000-0000-4000-8000-0000000000a7'::uuid),
+             ('a9000000-0000-4000-8000-0000000000a8'::uuid, 'a8000000-0000-4000-8000-0000000000a8'::uuid))
   AS ready (id, document_id);
 INSERT INTO public.imports (id, user_id, document_id, status) VALUES
   ('a9000000-0000-4000-8000-0000000000a1', 'a0000000-0000-4000-8000-00000000000a',
@@ -328,6 +332,72 @@ SELECT results_eq(
   $$ VALUES ('ready', '10.00000000,90000.00000000') $$,
   'leaving the import ready and the cash as it was'
 );
+
+-- A balance at zero: the account's cash in that currency is gone.
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a7',
+                        jsonb_build_array(pg_temp.cash('ARS', '0'))) $$),
+  '22023',
+  'a balance at zero is refused where the account holds several in that currency'
+);
+
+SELECT is(
+  public.confirm_import('a9000000-0000-4000-8000-0000000000a7',
+    jsonb_build_array(pg_temp.cash('USD', '0'))),
+  'a9000000-0000-4000-8000-0000000000a7'::uuid,
+  'a balance at zero confirms where the account holds no cash in that currency'
+);
+
+SELECT is(
+  (SELECT count(*)::int FROM public.holdings WHERE asset_class = 'cash' AND currency = 'USD'),
+  0,
+  'opening no cash holding'
+);
+
+INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, label)
+VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'USD', '50', 'Dólares');
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a8',
+                        jsonb_build_array(jsonb_set(pg_temp.cash('USD', '0'), '{cash,expected}', '{}'))) $$),
+  'PT409',
+  'a balance at zero read before the cash changed is refused'
+);
+
+SELECT is(
+  public.confirm_import('a9000000-0000-4000-8000-0000000000a8',
+    jsonb_build_array(pg_temp.cash('USD', '0'))),
+  'a9000000-0000-4000-8000-0000000000a8'::uuid,
+  'a balance at zero confirms where the account holds one cash holding in that currency'
+);
+
+SELECT results_eq(
+  $$ SELECT amount::text, archived_at IS NOT NULL FROM public.holdings
+     WHERE asset_class = 'cash' AND currency = 'USD' $$,
+  $$ VALUES ('50.00000000', true) $$,
+  'archiving that holding, as the user would'
+);
+
+-- Only a draft's cash may be at zero.
+RESET ROLE;
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.import_items (user_id, import_id, position, symbol, quantity,
+                                                       currency, confidence, asset_class)
+                      VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000000a6',
+                              0, 'USD', '0', 'USD', 'high', 'cash') $$),
+  NULL,
+  'a draft holds cash at zero'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.import_items (user_id, import_id, position, symbol, quantity,
+                                                       currency, confidence)
+                      VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000000a6',
+                              1, 'AAPL', '0', 'USD', 'high') $$),
+  '23514',
+  'and no instrument at zero'
+);
+SET LOCAL ROLE authenticated;
 
 -- ── Enrolled in MFA but signed in at aal1 ───────────────────────────────────
 SELECT set_config('request.jwt.claims',

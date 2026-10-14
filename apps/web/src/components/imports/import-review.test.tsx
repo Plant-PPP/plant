@@ -242,6 +242,29 @@ describe("cash", () => {
     expect(html).not.toContain("Cartera de la fila");
   });
 
+  it("shows a balance at zero as one that brings the account's cash to zero, never as invalid", () => {
+    const zero = (held: Map<"ARS" | "USD", string>) =>
+      renderToStaticMarkup(
+        <ImportReview
+          item={{ ...ITEM, rows: [cashRow("ARS", "0.00000000")] }}
+          institution="IOL"
+          instruments={[]}
+          held={new Map()}
+          cash={{ held, several: new Set() }}
+          backHref="/import"
+          doneHref="/import"
+          actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+        />,
+      );
+    const html = zero(new Map([["ARS", "1000"]]));
+    expect(html).toContain("Efectivo ARS");
+    expect(html).toContain("Baja de 1.000");
+    expect(html).toMatch(/value="0"/);
+    expect(html).not.toContain('aria-invalid="true"');
+    expect(zero(new Map())).toContain("Sin cambios");
+    expect(zero(new Map())).not.toContain("Nueva");
+  });
+
   it("says a balance listed twice is a repeated balance", () => {
     const html = renderToStaticMarkup(
       <ImportReview
