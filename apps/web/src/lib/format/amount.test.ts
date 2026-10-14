@@ -1,5 +1,6 @@
 import {
   amountInput,
+  currencySymbol,
   formatAmount,
   formatPrice,
   formatQuantity,
@@ -160,4 +161,9 @@ describe("amountInput", () => {
     expect(amountInput(decimal)).toBe(text);
     expect(parseAmountInput(text)).toBe(decimal.replace(/\.?0+$/, ""));
   });
+});
+
+it("writes a currency's symbol as its amounts start", () => {
+  expect(currencySymbol("ARS")).toBe("$");
+  expect(currencySymbol("USD")).toBe("US$");
 });

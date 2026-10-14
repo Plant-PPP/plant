@@ -34,7 +34,7 @@ import {
   newAlertSchema,
   type PriceAlert,
 } from "@/lib/alerts/alerts";
-import { parseAmountInput } from "@/lib/format/amount";
+import { currencySymbol, parseAmountInput } from "@/lib/format/amount";
 
 // An instrument the user holds, which an alert can watch, and the currency
 // it is quoted in.
@@ -62,8 +62,6 @@ const REFUSED: Record<Exclude<AlertWriteResult, "ok">, string> = {
   unknown_instrument: "No encontramos ese activo.",
   failed: "No pudimos crear la alerta. Probá de nuevo.",
 };
-
-const symbolLabel = (currency: Currency) => (currency === "USD" ? "US$" : "$");
 
 // The user's alerts: each one waiting or met, a form to set another, and the
 // way to delete one. Both change the list at once and come back if the
@@ -318,7 +316,7 @@ function AlertForm({
             {subject === GAIN
               ? "Porcentaje"
               : subject === PRICE
-                ? `Precio en ${symbolLabel(instrument?.currency ?? "ARS")}`
+                ? `Precio en ${currencySymbol(instrument?.currency ?? "ARS")}`
                 : "Precio en $"}
           </Label>
           <Input

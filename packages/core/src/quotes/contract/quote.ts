@@ -236,6 +236,13 @@ export function quoteFailureOf(error: unknown): {
   };
 }
 
+// The feed code a part of a source failed with, else null. By name and code,
+// so an error raised by another copy of core still counts.
+export function feedReadCode(error: unknown): QuoteFeedCode | null {
+  const { known, stage, code } = quoteFailureOf(error);
+  return known && stage === "read" ? (code as QuoteFeedCode) : null;
+}
+
 // The contract's code table applied to an HTTP status, for the reader the
 // composition root injects. 401 and 403 are a refused credential.
 export function feedErrorForStatus(status: number): QuoteFeedError {
@@ -266,9 +273,6 @@ function weekendFriday(date: string): string | null {
 type WindowKind = FxRateKind | "price" | "listed";
 const closesOnWeekends = (kind: WindowKind): boolean =>
   kind === "listed" || (kind !== "price" && !isDailyIndex(kind));
-
-// The sources whose prices are of instruments listed on BYMA.
-const LISTED_SOURCES: readonly QuoteSource[] = ["iol"];
 
 // Today in Buenos Aires is the only date the quotes' insert guard accepts. A
 // daily index is due at any hour; anything traded is due from the close hour
@@ -336,10 +340,12 @@ function checkTable<T>(
   return [...kept];
 }
 
+// listed: the feed's prices are of instruments listed on BYMA (RawQuoteFeed).
 export function checkBatch(
   raw: RawQuoteRows,
   now: Date,
   source: QuoteSource,
+  listed = false,
 ): QuoteBatch {
   const stamp = { source, fetched_at: now.toISOString() };
   const refused = Object.fromEntries(
@@ -362,11 +368,7 @@ export function checkBatch(
       keys: QUOTE_KEYS.prices,
       keyField: priceSchema.shape[QUOTE_KEYS.prices[0]],
       window: (row) =>
-        quoteWindow(
-          LISTED_SOURCES.includes(row.source) ? "listed" : "price",
-          row.price_date,
-          now,
-        ),
+        quoteWindow(listed ? "listed" : "price", row.price_date, now),
     },
     raw.prices,
     stamp,

@@ -16,11 +16,40 @@ import { PendingButton } from "@/components/ui/pending-button";
 import {
   type ApiKeyActions,
   type ApiKeyView,
-  CONNECT_MESSAGES,
   type ConnectionForm,
+  type ConnectResult,
+  connectMessages,
+  type DisconnectResult,
   SYNC_MESSAGES,
+  type SyncResult,
 } from "@/lib/connections/api-key";
 import { formatDate } from "@/lib/format/date";
+import { settle } from "@/lib/server-action-call";
+
+export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
+
+// What the card says when a call is refused or does not reach the server;
+// null when it went through.
+export async function syncFailure(call: Promise<SyncResult>) {
+  const result = await settle(call);
+  if (result === "rejected") return SYNC_MESSAGES.failed;
+  return result.ok ? null : SYNC_MESSAGES[result.code];
+}
+
+export async function disconnectFailure(call: Promise<DisconnectResult>) {
+  const result = await settle(call);
+  return result !== "rejected" && result.ok ? null : DISCONNECT_FAILED;
+}
+
+export async function connectFailure(
+  call: Promise<ConnectResult>,
+  name: string,
+) {
+  const result = await settle(call);
+  const messages = connectMessages(name);
+  if (result === "rejected") return messages.failed;
+  return result.ok ? null : messages[result.code];
+}
 
 // An account's connection by API with its broker or exchange: connect its
 // credentials, sync its holdings (or its operations, where the provider
@@ -49,17 +78,16 @@ export function ApiKeyCard({
     startTransition(async () => {
       setError(null);
       setSynced(null);
-      const result = await actions.sync(accountId, draft);
-      if (result.ok) setSynced(draft);
-      else setError(SYNC_MESSAGES[result.code]);
+      const failure = await syncFailure(actions.sync(accountId, draft));
+      if (failure) setError(failure);
+      else setSynced(draft);
     });
 
   const disconnect = () =>
     startTransition(async () => {
       setError(null);
       setSynced(null);
-      const result = await actions.disconnect(accountId);
-      if (!result.ok) setError("No pudimos desconectar la cuenta.");
+      setError(await disconnectFailure(actions.disconnect(accountId)));
     });
 
   return (
@@ -205,14 +233,17 @@ function ConnectDialog({
           const confirmedReadOnly = data.get("confirmedReadOnly") === "on";
           startTransition(async () => {
             setError(null);
-            const result = await connect({
-              accountId,
-              provider: form.provider,
-              credentials,
-              confirmedReadOnly,
-            });
-            if (result.ok) onClose();
-            else setError(CONNECT_MESSAGES[result.code]);
+            const failure = await connectFailure(
+              connect({
+                accountId,
+                provider: form.provider,
+                credentials,
+                confirmedReadOnly,
+              }),
+              form.name,
+            );
+            if (failure) setError(failure);
+            else onClose();
           });
         }}
       >

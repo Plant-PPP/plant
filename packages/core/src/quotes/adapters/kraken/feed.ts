@@ -63,6 +63,7 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
 export function createKrakenFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "kraken",
+    listed: false,
     async readRaw(now) {
       return parse(await getJson(ENDPOINT), now);
     },

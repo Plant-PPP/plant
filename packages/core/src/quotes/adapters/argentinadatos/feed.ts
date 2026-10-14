@@ -45,6 +45,7 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
 export function createArgentinadatosFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "argentinadatos",
+    listed: false,
     async readRaw(now) {
       return parse(await getJson(ENDPOINT), now);
     },
