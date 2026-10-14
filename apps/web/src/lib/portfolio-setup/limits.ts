@@ -12,7 +12,7 @@ export type SetupTable = keyof typeof NAME_LIMITS;
 
 export type SetupPage = Extract<
   RouteHref,
-  "/" | "/accounts" | "/assets" | "/debts" | "/import"
+  "/" | "/accounts" | "/assets" | "/debts" | "/import" | "/taxes"
 >;
 
 // The page that lists each table's rows, revalidated after a write.

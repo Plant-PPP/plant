@@ -16,10 +16,19 @@ export type AssetsRow<R extends HoldingRow> =
 // holding's id never passes for an instrument's key.
 export type AssetKey = string & { readonly __brand: "AssetKey" };
 
+export const assetKeyOf = (
+  asset: { instrumentSymbol: string } | { holdingId: string },
+): AssetKey =>
+  ("instrumentSymbol" in asset
+    ? `instrument:${asset.instrumentSymbol}`
+    : asset.holdingId) as AssetKey;
+
 export const assetKey = (holding: Holding): AssetKey =>
-  (holding.asset_class === "instrument"
-    ? `instrument:${holding.instrument_symbol}`
-    : holding.id) as AssetKey;
+  assetKeyOf(
+    holding.asset_class === "instrument"
+      ? { instrumentSymbol: holding.instrument_symbol }
+      : { holdingId: holding.id },
+  );
 
 // Instrument holdings merged by symbol, in the order each symbol first
 // appears; every other holding on its own.
