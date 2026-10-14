@@ -98,3 +98,13 @@ it("says to keep one operation when every one is discarded", () => {
   const html = render([operation({ discarded: true })]);
   expect(html).toContain("Dejá al menos una operación.");
 });
+
+it("says an operation already in the account is loaded, set aside", () => {
+  const html = render([
+    operation({ loaded: true, discarded: true }),
+    operation({ id: "o2" }),
+  ]);
+  expect(html).toContain("Ya está cargada");
+  expect(html).toContain("1 ya estaba cargada");
+  expect(html).toContain("Recuperar");
+});

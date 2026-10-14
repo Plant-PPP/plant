@@ -174,6 +174,7 @@ export function ImportOperationsReview({
   const incomplete = missing.filter(
     (each, index) => each.size > 0 || invalidTyped[index]!.size > 0,
   ).length;
+  const loadedCount = rows.filter((row) => row.loaded).length;
   const doubtful = rows.filter(
     (row) => !row.discarded && row.confidence === "low",
   ).length;
@@ -263,6 +264,13 @@ export function ImportOperationsReview({
               {`${incomplete} con datos faltantes`}
             </span>
           )}
+          {loadedCount > 0 && (
+            <span className="text-muted-foreground text-xs">
+              {loadedCount === 1
+                ? "1 ya estaba cargada"
+                : `${loadedCount} ya estaban cargadas`}
+            </span>
+          )}
           {doubtful > 0 && (
             <span className="text-muted-foreground text-xs">
               {countOf(doubtful, "dudosa", "dudosas")}
@@ -307,6 +315,9 @@ export function ImportOperationsReview({
                       <span>{row.source}</span>
                       <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
                       {row.reference && <span>{`N° ${row.reference}`}</span>}
+                      {row.loaded && (
+                        <span className="text-foreground">Ya está cargada</span>
+                      )}
                     </span>
                     {!row.discarded && missing[index]!.has("symbol") && (
                       <MissingText />

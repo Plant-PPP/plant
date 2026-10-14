@@ -95,6 +95,8 @@ export type ImportOperationRow = {
   confidence: Confidence;
   source: string;
   discarded: boolean;
+  // Already in the account: it starts discarded.
+  loaded?: boolean;
 };
 
 export type ImportItem = {
