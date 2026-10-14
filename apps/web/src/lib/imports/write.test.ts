@@ -15,7 +15,6 @@ type Answer = {
   data?: unknown;
   error?: unknown;
   status: number;
-  count?: number;
 };
 const answers: Record<string, jest.Mock<Answer, [string]>> = {};
 const writes: { table: string; verb: string; body?: unknown }[] = [];
@@ -24,9 +23,12 @@ const storage = {
   download: jest.fn(),
   remove: jest.fn(),
 };
+const used = jest.fn<Answer, []>();
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     storage: { from: () => storage },
+    rpc: async (name: string) =>
+      name === "imports_used_this_month" ? used() : { status: 404 },
     from: (table: string) => {
       let verb = "select";
       const builder = {
@@ -42,7 +44,6 @@ jest.mock("@/lib/supabase/server", () => ({
           return builder;
         },
         eq: () => builder,
-        gte: () => builder,
         is: () => builder,
         order: () => builder,
         limit: () => builder,
@@ -91,13 +92,16 @@ beforeEach(() => {
   answers.uploaded_documents = jest.fn((verb) =>
     verb === "insert"
       ? { status: 201, data: [{ id: "d1" }], error: null }
-      : { status: 204, error: null },
+      : verb === "select"
+        ? { status: 200, data: [], error: null }
+        : { status: 204, error: null },
   );
-  answers.imports = jest.fn<Answer, [string]>((verb) =>
-    verb === "insert"
-      ? { status: 201, data: [{ id: "i1" }], error: null }
-      : { status: 200, count: 0, error: null },
-  );
+  answers.imports = jest.fn<Answer, [string]>(() => ({
+    status: 201,
+    data: [{ id: "i1" }],
+    error: null,
+  }));
+  used.mockReset().mockReturnValue({ status: 200, data: 0, error: null });
   storage.createSignedUploadUrl
     .mockReset()
     .mockResolvedValue({ data: { token: "t1" }, error: null });
@@ -176,15 +180,21 @@ describe("startUpload", () => {
     expect(await start()).toEqual({ ok: false, code: "not_found" });
   });
 
-  it("refuses once the month's imports are used up", async () => {
-    answers.imports!.mockReturnValue({
+  it("refuses once the month's imports are used up, deleted ones included", async () => {
+    used.mockReturnValue({
       status: 200,
-      count: IMPORTS_PER_MONTH,
+      data: IMPORTS_PER_MONTH,
       error: null,
     });
     expect(await start()).toEqual({ ok: false, code: "quota" });
     expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
     expect(lines.at(-1)).toMatchObject({ "plant.outcome": "quota" });
+  });
+
+  it("fails when the month's count cannot be read", async () => {
+    used.mockReturnValue({ status: 500, error: { code: "XX000" } });
+    expect(await start()).toEqual({ ok: false, code: "failed" });
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
   });
 
   it("logs a failure to sign the URL", async () => {
@@ -244,6 +254,28 @@ describe("finishUpload", () => {
     expect(storage.download).not.toHaveBeenCalled();
   });
 
+  it("removes the file when the terms were withdrawn since the start", async () => {
+    answers.consents = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: false, code: "terms" });
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(writes).toEqual([]);
+  });
+
+  it("removes the file when its account was closed since the start", async () => {
+    answers.source_connections = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: false, code: "not_found" });
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(writes).toEqual([]);
+  });
+
   it("answers not found when nothing was uploaded", async () => {
     storage.download.mockResolvedValue({ data: null, error: new Error("404") });
     expect(await finish()).toEqual({ ok: false, code: "not_found" });
@@ -259,11 +291,108 @@ describe("finishUpload", () => {
     expect(writes).toEqual([]);
   });
 
+  it("reads again a file whose reading failed, removing the failed one", async () => {
+    const EARLIER = `${USER}/imports/a9000000-0000-4000-8000-0000000000b9/f`;
+    answers.uploaded_documents = jest.fn((verb) =>
+      verb === "select"
+        ? {
+            status: 200,
+            data: [
+              {
+                id: "d0",
+                storage_path: EARLIER,
+                imports: { status: "failed" },
+              },
+            ],
+            error: null,
+          }
+        : verb === "insert"
+          ? { status: 201, data: [{ id: "d1" }], error: null }
+          : { status: 204, error: null },
+    );
+    expect(await finish()).toEqual({ ok: true, importId: "i1" });
+    expect(writes.map(({ table, verb }) => `${table}:${verb}`)).toEqual([
+      "uploaded_documents:delete",
+      "uploaded_documents:insert",
+      "imports:insert",
+    ]);
+    expect(storage.remove).toHaveBeenCalledWith([EARLIER]);
+  });
+
+  it("starts again the import of the same file still queued", async () => {
+    answers.uploaded_documents = jest.fn<Answer, [string]>(() => ({
+      status: 200,
+      data: [
+        {
+          id: "d0",
+          storage_path: "earlier",
+          file_deleted_at: null,
+          imports: { id: "i0", status: "queued" },
+        },
+      ],
+      error: null,
+    }));
+    expect(await finish()).toEqual({ ok: true, importId: "i0" });
+    expect(writes).toEqual([]);
+    expect(storage.remove).toHaveBeenCalledWith([PATH]);
+    expect(startImport).toHaveBeenCalledWith({ importId: "i0", userId: USER });
+  });
+
+  it.each([
+    ["with no import", null, null],
+    ["queued after its file expired", "2026-11-01T00:00:00Z", "queued"],
+  ])(
+    "reads again a file uploaded before %s",
+    async (_, fileDeletedAt, status) => {
+      answers.uploaded_documents = jest.fn((verb) =>
+        verb === "select"
+          ? {
+              status: 200,
+              data: [
+                {
+                  id: "d0",
+                  storage_path: "earlier",
+                  file_deleted_at: fileDeletedAt,
+                  imports: status && { id: "i0", status },
+                },
+              ],
+              error: null,
+            }
+          : verb === "insert"
+            ? { status: 201, data: [{ id: "d1" }], error: null }
+            : { status: 204, error: null },
+      );
+      expect(await finish()).toEqual({ ok: true, importId: "i1" });
+      expect(writes.map(({ table, verb }) => `${table}:${verb}`)).toEqual([
+        "uploaded_documents:delete",
+        "uploaded_documents:insert",
+        "imports:insert",
+      ]);
+    },
+  );
+
+  it("keeps a file whose reading did not fail", async () => {
+    answers.uploaded_documents = jest.fn((verb) =>
+      verb === "select"
+        ? {
+            status: 200,
+            data: [
+              { id: "d0", storage_path: "x", imports: { status: "ready" } },
+            ],
+            error: null,
+          }
+        : { status: 409, error: { code: "23505" } },
+    );
+    expect(await finish()).toEqual({ ok: false, code: "duplicate" });
+    expect(writes.map(({ verb }) => verb)).not.toContain("delete");
+  });
+
   it("removes a file the account already has", async () => {
-    answers.uploaded_documents!.mockReturnValue({
-      status: 409,
-      error: { code: "23505" },
-    });
+    answers.uploaded_documents = jest.fn((verb) =>
+      verb === "select"
+        ? { status: 200, data: [], error: null }
+        : { status: 409, error: { code: "23505" } },
+    );
     expect(await finish()).toEqual({ ok: false, code: "duplicate" });
     expect(storage.remove).toHaveBeenCalledWith([PATH]);
   });

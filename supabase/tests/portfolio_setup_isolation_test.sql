@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(42);
+SELECT plan(41);
 
 -- The hint a statement raises, or NULL if it succeeds. throws_ok checks only
 -- the code and the message, and the app maps the hint to its copy.
@@ -55,8 +55,8 @@ SELECT set_eq(
               || CASE WHEN acl.is_grantable THEN '+grant' ELSE '' END
      FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
      WHERE a.attrelid = 'public.portfolios'::regclass AND acl.grantee = 'authenticated'::regrole $$,
-  ARRAY['(table):SELECT', 'name:INSERT', 'name:UPDATE', 'archived_at:UPDATE'],
-  'a user reads portfolios, inserts a name and updates the name and the archive flag'
+  ARRAY['(table):SELECT', '(table):DELETE', 'name:INSERT', 'name:UPDATE', 'archived_at:UPDATE'],
+  'a user reads and deletes portfolios, inserts a name and updates the name and the archive flag'
 );
 
 SELECT is_empty(
@@ -95,9 +95,10 @@ SELECT results_eq(
     'O CREATE TRIGGER portfolio_setup_1_lock BEFORE INSERT OR UPDATE ON public.portfolios FOR EACH ROW EXECUTE FUNCTION private.lock_portfolio_setup()',
     'O CREATE TRIGGER portfolio_setup_2_stamp BEFORE UPDATE ON public.portfolios FOR EACH ROW EXECUTE FUNCTION private.stamp_archived_at()',
     'O CREATE TRIGGER portfolio_setup_3_guard BEFORE UPDATE ON public.portfolios FOR EACH ROW EXECUTE FUNCTION private.guard_portfolio_write()',
+    'O CREATE TRIGGER portfolio_setup_3_guard_delete BEFORE DELETE ON public.portfolios FOR EACH ROW EXECUTE FUNCTION private.guard_portfolio_delete()',
     'O CREATE TRIGGER portfolios_set_updated_at BEFORE UPDATE ON public.portfolios FOR EACH ROW EXECUTE FUNCTION private.set_updated_at()'
   ],
-  'portfolios fires lock, stamp, guard and then updated_at, all enabled'
+  'portfolios fires lock, stamp, guard, the delete guard and then updated_at, all enabled'
 );
 
 -- Postgres renders BETWEEN as >= and <=.
@@ -198,12 +199,6 @@ SELECT throws_ok(
   $$ UPDATE public.portfolios SET id = gen_random_uuid(), created_at = now() $$,
   '42501', 'permission denied for table portfolios',
   'a user cannot rewrite a portfolio''s id or creation time'
-);
-
-SELECT throws_ok(
-  $$ DELETE FROM public.portfolios $$,
-  '42501', 'permission denied for table portfolios',
-  'a user cannot delete portfolios'
 );
 
 SELECT throws_ok(

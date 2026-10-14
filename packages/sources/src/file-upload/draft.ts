@@ -23,6 +23,10 @@ export const draftRowSchema = z
     quantity: positiveDecimalSchema,
     price: positiveDecimalSchema.nullable(),
     value: positiveDecimalSchema.nullable(),
+    // The average cost per unit it prints, a bond's per 100 nominal.
+    cost: positiveDecimalSchema.nullable().optional(),
+    // The account it lists the holding under, when it lists several.
+    account: z.string().trim().min(1).max(60).optional(),
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),
@@ -53,6 +57,57 @@ export const importDraftSchema = z
   })
   .strict();
 
+// The operations a document of operations may show.
+export const OPERATION_KINDS = [
+  "purchase",
+  "sale",
+  "dividend",
+  "coupon",
+] as const;
+
+// One operation as the document shows it. Whatever it does not print, or the
+// readings disagreed on, is null for the review to ask: the instrument as it
+// names it, the units, the price as printed (a bond's per 100 nominal), a
+// dividend's or coupon's amount or a trade's printed total, its charges added
+// up, and its transaction number.
+export const draftOperationSchema = z
+  .object({
+    date: z.iso.date().nullable(),
+    kind: z.enum(OPERATION_KINDS).nullable(),
+    symbol: z.string().trim().min(1).max(30).nullable(),
+    quantity: positiveDecimalSchema.nullable(),
+    price: positiveDecimalSchema.nullable(),
+    amount: positiveDecimalSchema.nullable(),
+    charges: nonNegativeDecimalSchema.nullable(),
+    reference: z.string().trim().min(1).max(40).nullable(),
+    currency: currencySchema,
+    confidence: importConfidenceSchema,
+    page: z.number().int().min(1).max(10000).nullable(),
+  })
+  .strict();
+
+// What a card statement says is owed in one currency. Whatever it does not
+// print, or the readings disagreed on, is null for the review to ask: the
+// card's name, the bank that issued it, the statement's balance, its minimum
+// payment and its due date.
+export const draftDebtSchema = z
+  .object({
+    label: z.string().trim().min(1).max(60).nullable(),
+    lender: z.string().trim().min(1).max(60).nullable(),
+    currency: currencySchema,
+    balance: positiveDecimalSchema.nullable(),
+    minimumPayment: positiveDecimalSchema.nullable(),
+    dueDate: z.iso.date().nullable(),
+    confidence: importConfidenceSchema,
+    page: z.number().int().min(1).max(10000).nullable(),
+  })
+  .strict();
+
+// A card statement owes at most one balance per currency it bills in.
+export const DRAFT_DEBT_LIMIT = 10;
+
+export type DraftDebt = z.infer<typeof draftDebtSchema>;
+export type DraftOperation = z.infer<typeof draftOperationSchema>;
 export type DraftRow = z.infer<typeof draftRowSchema>;
 export type ImportDraft = z.infer<typeof importDraftSchema>;
 

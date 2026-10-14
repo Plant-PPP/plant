@@ -58,7 +58,7 @@ const Answer = memo(function Answer({
             <ChartCard chart={chart} asOf={message.asOf} />
           </ChartBoundary>
         ))}
-      {done && (
+      {done && message.asOf !== "" && (
         <p className="text-muted-foreground text-xs">
           {[
             `Calculado el ${formatDate(message.asOf)}`,

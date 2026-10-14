@@ -106,6 +106,15 @@ describe("onRequestError", () => {
     expect(JSON.stringify(line)).not.toContain("s3cr3t");
   });
 
+  it("logs the digest the error page gets", async () => {
+    await onRequestError(
+      Object.assign(new Error("x"), { digest: "123abc" }),
+      request(REQUEST_ID),
+      context,
+    );
+    expect(lineOf(error)).toMatchObject({ "plant.error.digest": "123abc" });
+  });
+
   it("drops a request id with text before its UUID", async () => {
     await onRequestError(new Error("x"), request(`x ${REQUEST_ID}`), context);
     expect(lineOf(error)).not.toHaveProperty(["plant.request_id"]);

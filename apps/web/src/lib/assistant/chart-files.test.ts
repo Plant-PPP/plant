@@ -9,7 +9,7 @@ import {
   linePoints,
 } from "./chart-files";
 
-const bars = barsOf("Resultado por mes de 2026", "usd_mep", [
+const bars = barsOf("income", "Resultado por mes de 2026", "usd_mep", [
   { label: "Ene", value: "10" },
   { label: "Feb", value: "-40" },
   { label: "Mar, abr", value: "20" },

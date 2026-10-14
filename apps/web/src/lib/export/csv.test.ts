@@ -23,6 +23,8 @@ it.each([
   ["+54 11", "'+54 11"],
   ["@SUM(A1)", "'@SUM(A1)"],
   ["-x", "'-x"],
+  ["-2+3", "'-2+3"],
+  ["-.5+cmd", "'-.5+cmd"],
   ["\tcmd", "'\tcmd"],
 ])("defuses %j as a formula", (value, written) => {
   expect(toCsv(["n"], [[value]])).toBe(`n\r\n${written}`);

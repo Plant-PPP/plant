@@ -746,11 +746,17 @@ export function MovementDialog({
             </fieldset>
           )}
 
-          {!suggesting && (
+          {!yielding && (
             <fieldset className="grid gap-2">
               <legend className="mb-2 text-sm font-medium">
                 Gastos (opcional)
               </legend>
+              {moving && (
+                <p className="-mt-2 text-xs text-muted-foreground">
+                  Se cobran en la cuenta de origen y cuentan como gasto del mes;
+                  no cambian el costo de las unidades.
+                </p>
+              )}
               {fields.charges.map((charge, index) => (
                 <div
                   key={index}

@@ -25,6 +25,8 @@ describe("initialFields", () => {
       institution: "",
       includeInTaxReport: true,
       defaultPortfolioId: "p1",
+      website: null,
+      icon: null,
     });
   });
 
@@ -37,6 +39,8 @@ describe("initialFields", () => {
       institution: "IOL",
       includeInTaxReport: false,
       defaultPortfolioId: "p2",
+      website: null,
+      icon: null,
     });
   });
 
@@ -80,6 +84,8 @@ describe("accountRow", () => {
           institution: "  Banco   Uno ",
           includeInTaxReport: false,
           defaultPortfolioId: "p2",
+          website: "https://bancouno.com.ar/",
+          icon: "data:image/png;base64,iVBORw0KGgo=",
         },
         { id: "p2", name: "Largo plazo" },
       ),
@@ -88,6 +94,8 @@ describe("accountRow", () => {
       institution: "Banco Uno",
       includeInTaxReport: false,
       portfolio: { id: "p2", name: "Largo plazo", archived: false },
+      website: "https://bancouno.com.ar/",
+      icon: "data:image/png;base64,iVBORw0KGgo=",
     });
   });
 });

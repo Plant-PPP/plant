@@ -11,6 +11,7 @@ import {
 } from "@plant/core";
 import {
   addDays,
+  daysBetween,
   buenosAiresDate,
   Constants,
   type Database,
@@ -34,8 +35,13 @@ import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 
+import { holdingInsertSchema } from "@/lib/holdings/schemas";
+import type { WriteResult } from "@/lib/portfolio-setup/write-result";
+
 import {
+  createHolding,
   deleteOperation,
+  type Ledger,
   movementsPage,
   priceOn,
   suggestedTransferCost,
@@ -54,6 +60,7 @@ export type LedgerAction =
   | "suggest_transfer_cost"
   | "quote_on"
   | "delete_holding"
+  | "create_instrument_holding"
   | "set_manual_price"
   | "delete_manual_price";
 
@@ -98,22 +105,63 @@ const dateOf = z.object({ date: z.iso.date() });
 // The ledger with the stored dollar rates of the date an operation dated
 // `input.date` takes, when it has one.
 export async function ledgerFor(client: Client, input: unknown) {
-  const today = buenosAiresDate(new Date());
   const date = dateOf.safeParse(input);
+  return ledgerForDates(client, date.success ? [date.data.date] : []);
+}
+
+// The days one quote read covers: what the reader takes for the dollar kinds
+// a unit needs, less the week each day carries back.
+const QUOTE_STRETCH_DAYS = 300;
+
+// The user's ledger with the dollar rates operations on these days need,
+// from a week before each to it, up to today.
+export async function ledgerForDates(client: Client, dates: readonly string[]) {
+  const today = buenosAiresDate(new Date());
+  const past = [...new Set(dates)].filter((date) => date <= today).sort();
+  // One read per stretch of days the reader takes at once.
+  const stretches: { from: string; to: string }[] = [];
+  for (const date of past) {
+    const last = stretches.at(-1);
+    if (last && daysBetween(last.from, date) < QUOTE_STRETCH_DAYS) {
+      last.to = date;
+    } else {
+      stretches.push({ from: addDays(date, -QUOTE_CARRY_DAYS), to: date });
+    }
+  }
+  const reader = createQuoteReader(client);
+  const read = await Promise.all(
+    stretches.map((stretch) =>
+      reader.read({ ...stretch, fxKinds: [...UNIT_FX_KINDS], symbols: [] }),
+    ),
+  );
   const quotes =
-    date.success && date.data.date <= today
-      ? await createQuoteReader(client).read({
-          from: addDays(date.data.date, -QUOTE_CARRY_DAYS),
-          to: date.data.date,
-          fxKinds: [...UNIT_FX_KINDS],
-          symbols: [],
-        })
+    read.length > 0
+      ? {
+          fxRates: read.flatMap((each) => each.fxRates),
+          prices: read.flatMap((each) => each.prices),
+        }
       : undefined;
   return readLedger(client, {
     today,
     referenceDollar: await referenceDollarOf(client),
     quotes,
   });
+}
+
+// Whether the operation as written takes the next entry order, as a new one
+// would: an edit that moved to another day and went last on it.
+function goesLast(
+  state: Ledger,
+  operationId: string,
+  read: Pick<Ledger, "nextEntryOrder">,
+): boolean {
+  for (const movements of state.movements.values()) {
+    const movement = movements.find(
+      (each) => each.operation_id === operationId,
+    );
+    if (movement) return movement.entry_order >= read.nextEntryOrder;
+  }
+  return false;
 }
 
 // What write_operation's refusal means to the dialog. A stale read or a
@@ -124,6 +172,9 @@ export function rpcFailure(error: {
   hint?: string | null;
 }): Extract<MovementResult, { ok: false }>["code"] {
   if (error.code === "PT404" || error.code === "23503") return "not_found";
+  // A history the app admitted but the database finds below zero: a write
+  // that landed in between. Retrying against it gets the same answer.
+  if (error.hint === "negative_units") return "oversold";
   if (
     error.hint === "portfolio_archived" ||
     error.hint === "source_connection_archived"
@@ -186,6 +237,8 @@ export async function runOperation(
         p_operation_id: id as string,
         p_parts: rpcPartsOf(written.state, target),
         p_expected: expectedRevisions(ledger.revisions, symbolOf, symbols),
+        // An edit admitted last on its day takes the next place there too.
+        p_last: id !== null && goesLast(written.state, target, ledger),
       });
       if (classifyPostgrestResult(response, 200)) {
         result = { ok: false, code: rpcFailure(response.error ?? {}) };
@@ -199,7 +252,8 @@ export async function runOperation(
     failure = error;
   }
   log(action, { ...fields, outcome: result.ok ? "ok" : result.code }, failure);
-  if (result.ok || result.code === "failed")
+  // Anything but a malformed request may mean the page is out of date.
+  if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
   return result;
 }
@@ -441,6 +495,95 @@ export async function deleteManualPrice(
     : { ok: false, code: outcome === "failed" ? "failed" : "invalid" };
 }
 
+// An instrument holding comes in through an opening balance at today's
+// price, so its units are what its movements leave, as everywhere else.
+// Without a price today it is refused: the page asks for an opening balance
+// with its price instead.
+export async function createInstrumentHolding(
+  input: unknown,
+): Promise<WriteResult> {
+  const claims = await getSessionClaims();
+  const fields = {
+    requestId: await currentRequestId(),
+    userId: claims.sub,
+    started: performance.now(),
+  };
+  const action = "create_instrument_holding";
+  const parsed = holdingInsertSchema.safeParse(input);
+  if (!parsed.success || parsed.data.asset_class !== "instrument") {
+    log(action, { ...fields, outcome: "invalid" });
+    return { ok: false, code: "invalid" };
+  }
+  const holding = parsed.data;
+  let result: WriteResult;
+  let failure: unknown;
+  try {
+    const client: Client = await createClient();
+    const today = buenosAiresDate(new Date());
+    const quotes = await createQuoteReader(client).read({
+      from: addDays(today, -QUOTE_CARRY_DAYS),
+      to: today,
+      fxKinds: [...UNIT_FX_KINDS],
+      symbols: [holding.instrument_symbol],
+    });
+    const { ledger, truncated, symbolOf } = await readLedger(client, {
+      today,
+      referenceDollar: await referenceDollarOf(client),
+      quotes,
+    });
+    if (truncated) throw new LedgerReadError("movements", "truncated");
+    const id = crypto.randomUUID();
+    const written = createHolding(ledger, holding, id);
+    if (!written.result.ok) {
+      result = written.result;
+    } else {
+      const response = await client.rpc("write_operation", {
+        // A new operation's id is the database's.
+        p_operation_id: null as unknown as string,
+        p_parts: rpcPartsOf(written.state, `${id}-opening`),
+        p_expected: expectedRevisions(
+          ledger.revisions,
+          symbolOf,
+          new Set([holding.instrument_symbol]),
+        ),
+      });
+      if (classifyPostgrestResult(response, 200)) {
+        const refusal = rpcFailure(response.error ?? {});
+        const code =
+          refusal === "not_found" ||
+          refusal === "portfolio_archived" ||
+          refusal === "source_connection_archived"
+            ? refusal
+            : "failed";
+        result = { ok: false, code };
+        if (code === "failed") failure = response.error;
+      } else {
+        const stored = await client
+          .from("holdings")
+          .select("id")
+          .eq("user_id", claims.sub)
+          .eq("source_connection_id", holding.source_connection_id)
+          .eq("portfolio_id", holding.portfolio_id)
+          .eq("instrument_symbol", holding.instrument_symbol)
+          .is("archived_at", null)
+          .limit(1);
+        const holdingId = stored.data?.[0]?.id;
+        if (classifyPostgrestResult(stored, 200) || !holdingId) {
+          throw stored.error ?? new Error("holding not found after write");
+        }
+        result = { ok: true, id: holdingId };
+      }
+    }
+  } catch (error) {
+    result = { ok: false, code: "failed" };
+    failure = error;
+  }
+  log(action, { ...fields, outcome: result.ok ? "ok" : result.code }, failure);
+  if (result.ok || result.code !== "invalid")
+    revalidatePath("/assets", "layout");
+  return result;
+}
+
 // A holding and, through the foreign key, every movement it has; an operation
 // it shared keeps its other portfolios' parts. One with a transfer is refused,
 // since the transfer's other side would be left alone.
@@ -478,7 +621,11 @@ export async function deleteHoldingRow(
       .delete()
       .eq("id", parsed.data)
       .select("id");
-    if (classifyPostgrestResult(response, 200)) {
+    const refused = classifyPostgrestResult(response, 200);
+    // A transfer that arrived after the check is refused by the database.
+    if (refused && response.error?.hint === "holding_has_transfers") {
+      result = { ok: false, code: "holding_has_transfers" };
+    } else if (refused) {
       result = { ok: false, code: "failed" };
       failure = response.error;
     } else {
@@ -493,7 +640,8 @@ export async function deleteHoldingRow(
     { ...fields, outcome: result.ok ? "ok" : result.code },
     failure,
   );
-  if (result.ok || result.code === "failed")
+  // Anything but a malformed request may mean the page is out of date.
+  if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
   return result;
 }

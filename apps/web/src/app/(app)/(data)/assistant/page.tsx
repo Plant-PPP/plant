@@ -1,20 +1,43 @@
+import { referenceUnit } from "@plant/core";
+import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 
+import { AssistantChat } from "@/components/assistant/assistant-chat";
 import { PrototypeChat } from "@/components/prototype/prototype-chat";
+import {
+  listConversations,
+  questionsThisMonth,
+} from "@/lib/assistant/conversations";
+import { getSessionClaims } from "@/lib/auth/session-claims";
 import { isProductionDeployment } from "@/lib/deployment";
+import { readReferenceDollar } from "@/lib/holdings/read";
 import { navTitle } from "@/lib/navigation";
+import { currentRequestId } from "@/lib/request-id-server";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: navTitle("/assistant") };
 
 // Outside production it answers from the made-up data.
-export default function AssistantPage() {
+export default async function AssistantPage() {
   if (!isProductionDeployment()) return <PrototypeChat />;
+  const claims = await getSessionClaims();
+  const client = await createClient();
+  const today = buenosAiresDate(new Date());
+  const [conversations, used, referenceDollar] = await Promise.all([
+    listConversations(client, claims.sub),
+    questionsThisMonth(client, claims.sub, today),
+    readReferenceDollar(client, {
+      userId: claims.sub,
+      requestId: await currentRequestId(),
+      page: "/assistant",
+      params: {},
+    }),
+  ]);
   return (
-    <div>
-      <h1 className="sr-only">{navTitle("/assistant")}</h1>
-      <p className="text-sm text-muted-foreground">
-        Acá vas a poder preguntarle a Plant sobre tu patrimonio.
-      </p>
-    </div>
+    <AssistantChat
+      conversations={conversations}
+      used={used}
+      defaultUnit={referenceUnit(referenceDollar)}
+    />
   );
 }

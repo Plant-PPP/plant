@@ -80,6 +80,7 @@ export function PortfoliosCard({
   run,
   actions,
   usedBy,
+  deletable = [],
 }: {
   view: PortfoliosView;
   pending: boolean;
@@ -87,6 +88,8 @@ export function PortfoliosCard({
   actions: PortfolioActions;
   // How the active accounts that use a portfolio are named.
   usedBy: (id: string) => string[];
+  // The portfolios whose delete would go through, the only ones that offer it.
+  deletable?: readonly string[];
 }) {
   const card = useSetupCard({ run, pending });
   const [dialog, setDialog] = useState<DialogState | null>(null);
@@ -98,6 +101,7 @@ export function PortfoliosCard({
     tooltip: "Borrar",
     label: (row: PortfolioRow) => `Borrar ${row.name}`,
     onClick: (row: PortfolioRow) => !pending && setDeleting(row),
+    hidden: (row: PortfolioRow) => !deletable.includes(row.id),
   };
 
   function deleteRow(

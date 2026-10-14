@@ -5,11 +5,18 @@ import {
   type ColumnMapping,
   columnMappingFor,
   currencyOf,
+  numberConventionOf,
   parseSheetDate,
   parseSheetDecimal,
   readSheet,
   sheetToDraft,
 } from "./spreadsheet";
+import { WORKBOOK_UNZIPPED_LIMIT } from "./zip";
+
+jest.mock("xlsx", () => {
+  const actual = jest.requireActual<typeof import("xlsx")>("xlsx");
+  return { ...actual, read: jest.fn(actual.read) };
+});
 
 const XLSX_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -78,6 +85,14 @@ describe("readSheet", () => {
     });
   });
 
+  it("reads a CSV that is not UTF-8 as Windows-1252", () => {
+    const bytes = Uint8Array.from(
+      "Especie;Moneda\nAL30;D\u00f3lares\n",
+      (char) => char.charCodeAt(0),
+    );
+    expect(readSheet(bytes, "text/csv").rows).toEqual([["AL30", "Dólares"]]);
+  });
+
   it("keeps XLSX number cells as numbers", () => {
     const sheet = XLSX.utils.aoa_to_sheet([
       ["Especie", "Cantidad"],
@@ -118,11 +133,94 @@ describe("readSheet", () => {
     expectSourceError(() => readSheet(bytes, mimeType), "nothing_found");
   });
 
+  it("refuses a CSV that starts like a zip behind a byte-order mark, before SheetJS opens it", () => {
+    const bytes = new Uint8Array([
+      0xef,
+      0xbb,
+      0xbf,
+      0x50,
+      0x4b,
+      3,
+      4,
+      ...new TextEncoder().encode("a,b"),
+    ]);
+    jest.mocked(XLSX.read).mockClear();
+    expectSourceError(() => readSheet(bytes, "text/csv"), "unreadable");
+    expect(XLSX.read).not.toHaveBeenCalled();
+  });
+
   it("refuses a file it cannot open", () => {
     expectSourceError(
       () => readSheet(new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3]), XLSX_TYPE),
       "unreadable",
     );
+  });
+
+  describe("a compressed XLSX", () => {
+    const compressed = () => {
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        book,
+        XLSX.utils.aoa_to_sheet([
+          ["Especie", "Cantidad"],
+          ["AL30", 1],
+        ]),
+        "Tenencias",
+      );
+      return new Uint8Array(
+        XLSX.write(book, {
+          type: "array",
+          bookType: "xlsx",
+          compression: true,
+        }) as ArrayBuffer,
+      );
+    };
+
+    // SheetJS allocates what both headers declare and still reads the sheet.
+    const declaringSheetSize = (bytes: Uint8Array, size: number) => {
+      const view = new DataView(bytes.buffer);
+      const end = bytes.length - 22;
+      let at = view.getUint32(end + 16, true);
+      for (let entry = 0; entry < view.getUint16(end + 8, true); entry += 1) {
+        const nameLength = view.getUint16(at + 28, true);
+        const name = new TextDecoder().decode(
+          bytes.subarray(at + 46, at + 46 + nameLength),
+        );
+        if (name.endsWith("sheet1.xml")) {
+          view.setUint32(at + 24, size, true);
+          view.setUint32(view.getUint32(at + 42, true) + 22, size, true);
+        }
+        at +=
+          46 +
+          nameLength +
+          view.getUint16(at + 30, true) +
+          view.getUint16(at + 32, true);
+      }
+      return bytes;
+    };
+
+    it("reads", () => {
+      expect(readSheet(compressed(), XLSX_TYPE).rows).toEqual([["AL30", 1]]);
+    });
+
+    it("refuses one that unzips past the limit", () => {
+      expectSourceError(
+        () =>
+          readSheet(
+            declaringSheetSize(compressed(), WORKBOOK_UNZIPPED_LIMIT + 1),
+            XLSX_TYPE,
+          ),
+        "unreadable",
+      );
+    });
+
+    it("refuses one cut short", () => {
+      const bytes = compressed();
+      expectSourceError(
+        () => readSheet(bytes.subarray(0, bytes.length - 40), XLSX_TYPE),
+        "unreadable",
+      );
+    });
   });
 });
 
@@ -158,6 +256,39 @@ describe("parseSheetDecimal", () => {
     [1e13],
   ])("refuses %p", (cell) => {
     expect(parseSheetDecimal(cell)).toBeNull();
+  });
+});
+
+describe("parseSheetDecimal in US", () => {
+  it.each([
+    ["1,234.56", "1234.56"],
+    ["1,500", "1500"],
+    ["1,234,567", "1234567"],
+    ["1.234", "1.234"],
+    ["230.50", "230.50"],
+    ["US$ 1,234.5", "1234.5"],
+    [1234.5, "1234.5"],
+  ])("reads %p as %p", (cell, decimal) => {
+    expect(parseSheetDecimal(cell, "US")).toBe(decimal);
+  });
+
+  it.each([["12,5"], ["1.234,56"], ["1,23,4"]])("refuses %p", (cell) => {
+    expect(parseSheetDecimal(cell, "US")).toBeNull();
+  });
+});
+
+describe("numberConventionOf", () => {
+  it.each([
+    [["1,234.56", "10"], "US"],
+    [["1,234,567"], "US"],
+    [["230.50", "1,500"], "US"],
+    [["1,234.56", "12,5"], "es-AR"],
+    [["1.234,56"], "es-AR"],
+    [["1.234.567", "230.50"], "es-AR"],
+    [["1,500", "1.234", "10"], null],
+    [[1234.5, ""], null],
+  ] as const)("reads %j as %p", (cells, convention) => {
+    expect(numberConventionOf(cells)).toBe(convention);
   });
 });
 
@@ -245,6 +376,8 @@ describe("columnMappingFor", () => {
 });
 
 describe("sheetToDraft", () => {
+  const draftOf = (...args: Parameters<typeof sheetToDraft>) =>
+    sheetToDraft(...args).draft;
   const sheet = {
     headers: ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
     rows: [
@@ -258,8 +391,121 @@ describe("sheetToDraft", () => {
     ],
   };
 
+  it("reads the average cost when a column holds it", () => {
+    const { draft } = sheetToDraft(
+      {
+        headers: ["Especie", "Cantidad", "PPC", "Moneda"],
+        rows: [["AAPL", "5", "12.000,50", "ARS"]],
+      },
+      {
+        symbol: "Especie",
+        quantity: "Cantidad",
+        price: null,
+        value: null,
+        cost: "PPC",
+        currency: "Moneda",
+        date: null,
+        currencyDefault: null,
+      },
+      "2026-10-13",
+    );
+    expect(draft.rows[0]).toMatchObject({ symbol: "AAPL", cost: "12000.50" });
+  });
+
+  it("reads each row's account when a column holds it", () => {
+    const { draft } = sheetToDraft(
+      {
+        headers: ["Activo", "Cuenta", "Cantidad"],
+        rows: [
+          ["BTC", "Nexo", "0,5"],
+          ["ETH", "", "2"],
+        ],
+      },
+      {
+        symbol: "Activo",
+        quantity: "Cantidad",
+        price: null,
+        value: null,
+        account: "Cuenta",
+        currency: null,
+        date: null,
+        currencyDefault: "USD",
+      },
+      "2026-10-13",
+    );
+    expect(draft.rows.map((row) => row.account)).toEqual(["Nexo", undefined]);
+  });
+
+  it("counts the holdings it leaves out, not a total without a symbol", () => {
+    // GD30 in euros and YPFD's negative quantity.
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);
+  });
+
+  it("counts every row with a quantity it cannot read, for the mapping", () => {
+    // The total without a symbol too.
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").unreadRows).toBe(3);
+  });
+
+  it("counts the holdings past the draft's row limit", () => {
+    const rows = Array.from({ length: DRAFT_ROW_LIMIT + 3 }, (_, i) => [
+      `S${i}`,
+      "1",
+      "1",
+      "ARS",
+      "",
+    ]);
+    const { draft, skippedRows } = sheetToDraft(
+      { ...sheet, rows },
+      mapping,
+      "2026-10-13",
+    );
+    expect(draft.rows).toHaveLength(DRAFT_ROW_LIMIT);
+    expect(skippedRows).toBe(3);
+  });
+
+  it("reads a sheet in US formats", () => {
+    const { draft, skippedRows } = sheetToDraft(
+      {
+        ...sheet,
+        rows: [
+          ["AAPL", "1,500", "1,234.56", "USD", ""],
+          ["MELI", "3", "230.50", "USD", ""],
+        ],
+      },
+      mapping,
+      "2026-10-13",
+    );
+    expect(skippedRows).toBe(0);
+    expect(
+      draft.rows.map(({ quantity, price, confidence }) => [
+        quantity,
+        price,
+        confidence,
+      ]),
+    ).toEqual([
+      // "1,500" still also reads as one and a half: for the user to check.
+      ["1500", "1234.56", "low"],
+      ["3", "230.50", "high"],
+    ]);
+  });
+
+  it("keeps es-AR for a column that shows it, in a sheet that looks US", () => {
+    const { draft } = sheetToDraft(
+      {
+        ...sheet,
+        rows: [
+          ["AAPL", "2,5", "1,234.56", "USD", ""],
+          ["MELI", "1,500", "230.50", "USD", ""],
+        ],
+      },
+      mapping,
+      "2026-10-13",
+    );
+    expect(draft.rows.map((row) => row.quantity)).toEqual(["2.5", "1.500"]);
+  });
+
   it("keeps the rows that make a holding and the latest date up to today", () => {
-    expect(sheetToDraft(sheet, mapping, "2026-10-13")).toEqual({
+    expect(draftOf(sheet, mapping, "2026-10-13")).toEqual({
       documentDate: "2026-09-30",
       rows: [
         // "1.234" also reads as one and a fraction: for the user to check.
@@ -296,8 +542,31 @@ describe("sheetToDraft", () => {
     });
   });
 
+  it("marks a comma that also reads as thousands for the user to check", () => {
+    const { rows } = draftOf(
+      { ...sheet, rows: [["AAPL", "1,500", "", "ARS", ""]] },
+      mapping,
+      "2026-10-13",
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ quantity: "1.500", confidence: "low" }),
+    ]);
+  });
+
+  it.each(["US$ 1,500", "$ 1.500"])(
+    "checks %j as it reads it, after its currency mark",
+    (price) => {
+      const { rows } = draftOf(
+        { ...sheet, rows: [["AAPL", "10", price, "ARS", ""]] },
+        mapping,
+        "2026-10-13",
+      );
+      expect(rows).toEqual([expect.objectContaining({ confidence: "low" })]);
+    },
+  );
+
   it("falls back to the default currency", () => {
-    const { rows } = sheetToDraft(
+    const { rows } = draftOf(
       sheet,
       { ...mapping, currency: null, currencyDefault: "USD" },
       "2026-10-13",
@@ -312,8 +581,7 @@ describe("sheetToDraft", () => {
 
   it("has no date without a date column", () => {
     expect(
-      sheetToDraft(sheet, { ...mapping, date: null }, "2026-10-13")
-        .documentDate,
+      draftOf(sheet, { ...mapping, date: null }, "2026-10-13").documentDate,
     ).toBeNull();
   });
 
@@ -328,7 +596,7 @@ describe("sheetToDraft", () => {
         "",
       ]),
     ]);
-    const { rows } = sheetToDraft(
+    const { rows } = draftOf(
       readSheet(xlsxOf(long), XLSX_TYPE),
       mapping,
       "2026-10-13",
@@ -336,4 +604,26 @@ describe("sheetToDraft", () => {
     expect(rows).toHaveLength(DRAFT_ROW_LIMIT);
     expect(rows.at(-1)).toMatchObject({ symbol: "S499", quantity: "500" });
   });
+});
+
+it("counts as skipped only rows with a quantity, not titles or totals", () => {
+  const { skippedRows, draft } = sheetToDraft(
+    {
+      headers: ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+      rows: [
+        ["Acciones", "", "", "", ""],
+        ["GGAL", "10", "1.500,50", "ARS", ""],
+        ["Total", "", "", "", ""],
+        ["YPFD", "abc", "1", "ARS", ""],
+      ],
+    },
+    mapping,
+    "2026-10-13",
+  );
+  expect(draft.rows).toHaveLength(1);
+  expect(skippedRows).toBe(1);
+});
+
+it("takes no convention from a note in a figure column", () => {
+  expect(numberConventionOf(["Precios al 10/14, 12", "1,234.56"])).toBe("US");
 });

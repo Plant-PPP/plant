@@ -4,6 +4,7 @@ import {
   AUTH_UNAVAILABLE_ERROR,
   authUnavailableReason,
 } from "@/lib/auth/session-state";
+import { errorDigest } from "@/lib/log/error-type";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { serverLog } from "@/lib/log/server-log";
 import {
@@ -59,6 +60,8 @@ export const onRequestError: Instrumentation.onRequestError = (
     "http.request.method": request.method,
     "http.route": context.routePath,
     "plant.route_type": context.routeType,
+    // What the error page gets instead of the error, to find this line from.
+    "plant.error.digest": errorDigest(error),
   };
   const unavailable = authUnavailableReason(error);
   if (unavailable) {

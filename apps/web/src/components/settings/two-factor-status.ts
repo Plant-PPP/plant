@@ -1,4 +1,5 @@
 import { type AuthClient, listVerifiedFactors } from "@/lib/auth/mfa-factors";
+import { reportAuthOutage } from "@/lib/auth/use-auth-request";
 import { SETTINGS_ITEM } from "@/lib/navigation";
 
 // Where the step-up's sign-in comes back to: Ajustes with the off dialog open.
@@ -23,7 +24,8 @@ export async function fetchTwoFactorState(
     return verified.length > 0
       ? { status: "on", totpId: totp[0]?.id }
       : { status: "off" };
-  } catch {
+  } catch (error) {
+    reportAuthOutage(error, "settings");
     return { status: "failed" };
   }
 }

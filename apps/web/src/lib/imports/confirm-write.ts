@@ -1,21 +1,28 @@
 import "server-only";
-import { buenosAiresDate, Constants, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  Constants,
+  currencySchema,
+  type Database,
+  positiveDecimalSchema,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
-import { type ImportToWrite, writeImport } from "@/lib/imports/confirm";
+import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
 import { ImportsReadError } from "@/lib/imports/read";
-import type { ImportRow } from "@/lib/imports/review";
+import { writeImportOperations } from "@/lib/imports/confirm-operations";
+import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
 import { LedgerReadError } from "@/lib/ledger/read";
 import {
   expectedRevisions,
   operationSymbols,
   rpcPartsOf,
 } from "@/lib/ledger/rpc-parts";
-import { ledgerFor, rpcFailure } from "@/lib/ledger/write";
+import { ledgerFor, ledgerForDates, rpcFailure } from "@/lib/ledger/write";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
@@ -72,6 +79,39 @@ async function readyImport(
   };
 }
 
+type LedgerRead = Awaited<ReturnType<typeof ledgerFor>>;
+
+// Sends the operations written to confirm_import, each with the revisions of
+// its instruments as the ledger was read: the database checks them once, and
+// writes them in turn, all or nothing.
+async function sendConfirm(
+  client: Client,
+  importId: string,
+  ledger: LedgerRead["ledger"],
+  symbolOf: LedgerRead["symbolOf"],
+  written: { state: LedgerRead["ledger"]; operations: string[] },
+): Promise<{ result: MovementResult; failure?: unknown }> {
+  const response = await client.rpc("confirm_import", {
+    p_import_id: importId,
+    p_operations: written.operations.map((operation) => ({
+      parts: rpcPartsOf(written.state, operation),
+      expected: expectedRevisions(
+        ledger.revisions,
+        symbolOf,
+        operationSymbols(written.state, operation),
+      ),
+    })),
+  });
+  if (!classifyPostgrestResult(response, 200)) {
+    return { result: { ok: true, id: importId } };
+  }
+  const code = rpcFailure(response.error ?? {});
+  return {
+    result: { ok: false, code },
+    ...(code === "failed" && { failure: response.error }),
+  };
+}
+
 // Writes the reviewed rows of a ready import into its account and marks it
 // confirmed, all in confirm_import's one transaction: admitted by the same
 // code the prototype runs against the user's ledger, then each operation
@@ -107,7 +147,7 @@ export async function confirmImportRows(
           date: item.date,
         });
         if (truncated) throw new LedgerReadError("movements", "truncated");
-        const written = writeImport(
+        const written = writeImportRouted(
           ledger,
           item,
           reviewed.data as unknown as ImportRow[],
@@ -117,23 +157,13 @@ export async function confirmImportRows(
           result = written.result;
         } else {
           operations = written.operations.length;
-          const response = await client.rpc("confirm_import", {
-            p_import_id: item.id,
-            p_operations: written.operations.map((operation) => ({
-              parts: rpcPartsOf(written.state, operation),
-              expected: expectedRevisions(
-                ledger.revisions,
-                symbolOf,
-                operationSymbols(written.state, operation),
-              ),
-            })),
-          });
-          if (classifyPostgrestResult(response, 200)) {
-            result = { ok: false, code: rpcFailure(response.error ?? {}) };
-            if (result.code === "failed") failure = response.error;
-          } else {
-            result = { ok: true, id: item.id };
-          }
+          ({ result, failure } = await sendConfirm(
+            client,
+            item.id,
+            ledger,
+            symbolOf,
+            written,
+          ));
         }
       }
     } catch (error) {
@@ -142,10 +172,41 @@ export async function confirmImportRows(
     }
   }
 
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "holdings",
+    operations,
+    started,
+    result,
+    failure,
+  });
+  return result;
+}
+
+// One line per confirmation, and the pages it changes revalidated.
+function logConfirm({
+  requestId,
+  userId,
+  draft,
+  operations,
+  started,
+  result,
+  failure,
+}: {
+  requestId: string | undefined;
+  userId: string;
+  draft: "holdings" | "operations" | "debts";
+  operations: number;
+  started: number;
+  result: MovementResult;
+  failure: unknown;
+}) {
   const outcome = result.ok ? "ok" : result.code;
   const line = {
     [REQUEST_ID_FIELD]: requestId,
-    "enduser.id": claims.sub,
+    "enduser.id": userId,
+    "plant.import.draft": draft,
     "plant.import.operation_count": operations,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
@@ -155,7 +216,177 @@ export async function confirmImportRows(
   else serverLog.warn(EVENT, line);
   if (result.ok || outcome === "failed") {
     revalidatePath("/import", "layout");
-    revalidatePath("/assets", "layout");
+    revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
   }
+}
+
+// Writes the reviewed operations of a ready import into its account and
+// marks it confirmed, in confirm_import's one transaction. A refusal names
+// the row it stopped at.
+export async function confirmImportOperations(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult & { rowId?: string }> {
+  // Outside any try: its redirect to /login or /auth/mfa must propagate.
+  const claims = await getSessionClaims();
+  const started = performance.now();
+  const requestId = await currentRequestId();
+
+  let result: MovementResult & { rowId?: string };
+  let failure: unknown;
+  let operations = 0;
+  const id = z.uuid().safeParse(importId);
+  const reviewed = z
+    .array(z.record(z.string(), z.unknown()))
+    .max(REVIEW_ROW_LIMIT)
+    .safeParse(rows);
+  if (!id.success || !reviewed.success) {
+    result = { ok: false, code: "invalid" };
+  } else {
+    try {
+      const client: Client = await createClient();
+      const today = buenosAiresDate(new Date());
+      const item = await readyImport(client, id.data, today);
+      if (!item) {
+        result = { ok: false, code: "not_found" };
+      } else {
+        const typed = reviewed.data as unknown as ImportOperationRow[];
+        const dates = typed.flatMap((row) =>
+          !row.discarded && z.iso.date().safeParse(row.date).success
+            ? [row.date!]
+            : [],
+        );
+        const { ledger, truncated, symbolOf } = await ledgerForDates(
+          client,
+          dates,
+        );
+        if (truncated) throw new LedgerReadError("movements", "truncated");
+        const written = writeImportOperations(ledger, item, typed, () =>
+          crypto.randomUUID(),
+        );
+        if (!written.result.ok) {
+          result = {
+            ...written.result,
+            ...(written.rowId && { rowId: written.rowId }),
+          };
+        } else {
+          operations = written.operations.length;
+          ({ result, failure } = await sendConfirm(
+            client,
+            item.id,
+            ledger,
+            symbolOf,
+            written,
+          ));
+        }
+      }
+    } catch (error) {
+      result = { ok: false, code: "failed" };
+      failure = error;
+    }
+  }
+
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "operations",
+    operations,
+    started,
+    result,
+    failure,
+  });
+  return result;
+}
+
+// A debt the review kept, as confirm_import_debts takes it: a new card debt,
+// named, or the user's card debt it updates.
+const reviewedDebtSchema = z
+  .object({
+    liabilityId: z.uuid().nullable(),
+    label: z.string().trim().min(1).max(60).nullable(),
+    lender: z.string().trim().min(1).max(60).nullable(),
+    currency: currencySchema,
+    balance: positiveDecimalSchema,
+    minimumPayment: positiveDecimalSchema.nullable(),
+    dueDate: z.iso.date().nullable(),
+  })
+  .loose()
+  .refine((debt) => debt.liabilityId !== null || debt.label !== null);
+
+// Writes the debts a review kept from a card statement and marks the import
+// confirmed, in confirm_import_debts' one transaction.
+export async function confirmImportDebts(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult> {
+  // Outside any try: its redirect to /login or /auth/mfa must propagate.
+  const claims = await getSessionClaims();
+  const started = performance.now();
+  const requestId = await currentRequestId();
+
+  let result: MovementResult;
+  let failure: unknown;
+  let debts = 0;
+  const id = z.uuid().safeParse(importId);
+  const kept = z
+    .array(z.object({ discarded: z.boolean() }).loose())
+    .max(10)
+    .safeParse(rows);
+  const reviewed = z
+    .array(reviewedDebtSchema)
+    // Two debts of one statement never update the same card debt.
+    .refine((debts) => {
+      const updated = debts.flatMap((debt) =>
+        debt.liabilityId === null ? [] : [debt.liabilityId],
+      );
+      return new Set(updated).size === updated.length;
+    })
+    .safeParse((kept.data ?? []).filter((row) => !row.discarded));
+  if (!id.success || !kept.success || !reviewed.success) {
+    result = { ok: false, code: "invalid" };
+  } else {
+    try {
+      const client: Client = await createClient();
+      debts = reviewed.data.length;
+      const response = await client.rpc("confirm_import_debts", {
+        p_import_id: id.data,
+        p_debts: reviewed.data.map((debt) => ({
+          liability_id: debt.liabilityId,
+          label: debt.label,
+          lender: debt.lender,
+          currency: debt.currency,
+          balance: debt.balance,
+          installment: debt.minimumPayment,
+          next_due_on: debt.dueDate,
+        })),
+      });
+      if (!classifyPostgrestResult(response, 200)) {
+        result = { ok: true, id: id.data };
+      } else {
+        const error = response.error ?? {};
+        // A CHECK the input passed but the database holds: a date out of
+        // range.
+        const code =
+          "code" in error && error.code === "23514"
+            ? "invalid"
+            : rpcFailure(error);
+        result = { ok: false, code };
+        if (code === "failed") failure = response.error;
+      }
+    } catch (error) {
+      result = { ok: false, code: "failed" };
+      failure = error;
+    }
+  }
+
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "debts",
+    operations: debts,
+    started,
+    result,
+    failure,
+  });
   return result;
 }

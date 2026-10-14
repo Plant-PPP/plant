@@ -27,7 +27,13 @@ export {
   type Refusal,
   REFUSALS,
 } from "./quotes/contract/quote";
-export { upcomingIncome, type UpcomingIncome } from "./income/upcoming";
+export {
+  type IncomePattern,
+  incomePattern,
+  upcomingFrom,
+  upcomingIncome,
+  type UpcomingIncome,
+} from "./income/upcoming";
 export { quoteFeeds } from "./quotes/factory";
 export {
   QUOTE_CARRY_DAYS,

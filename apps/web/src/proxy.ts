@@ -15,7 +15,15 @@ import {
   isSessionMissing,
   type MaybeAuthError,
 } from "@/lib/auth/session-state";
-import { buildCsp, createNonce, CSP_HEADER, NONCE_HEADER } from "@/lib/csp";
+import {
+  buildCsp,
+  createNonce,
+  CSP_HEADER,
+  NONCE_HEADER,
+  REPORTING_HEADER,
+  reportingEndpoints,
+  reportPathFor,
+} from "@/lib/csp";
 import {
   errorType,
   type LogFields,
@@ -48,10 +56,12 @@ export async function proxy(request: NextRequest) {
   // changes.
   try {
     const env = supabaseEnv();
+    const reportPath = reportPathFor(requestId);
     const csp = buildCsp({
       nonce,
       connectOrigins: env ? supabaseOrigins(env.url) : [],
       dev: process.env.NODE_ENV === "development",
+      reportPath,
     });
     request.headers.set(CSP_HEADER, csp);
     request.headers.set(NONCE_HEADER, nonce);
@@ -60,6 +70,10 @@ export async function proxy(request: NextRequest) {
 
     const session = await sessionResponse(request);
     session.response.headers.set(CSP_HEADER, csp);
+    session.response.headers.set(
+      REPORTING_HEADER,
+      reportingEndpoints(reportPath),
+    );
     session.response.headers.set(REQUEST_ID_HEADER, requestId);
     serverLog[LOG_LEVEL[session.outcome]]("proxy.request", {
       ...fields,
@@ -217,6 +231,6 @@ async function sessionResponse(request: NextRequest): Promise<SessionResult> {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/inngest(?:/|$)|.*\\.(?:ico|png|svg|jpg|jpeg|gif|webp|webmanifest|txt|xml)$).*)",
+    "/((?!_next/static|_next/image|api/inngest(?:/|$)|api/reports(?:/|$)|(?:brand/)?[^/]+\\.(?:ico|png|svg|jpg|jpeg|gif|webp|webmanifest|txt|xml)$).*)",
   ],
 };

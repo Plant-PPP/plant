@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(42);
+SELECT plan(59);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -92,7 +92,7 @@ INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency) 
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.operations') $$,
-  ARRAY['(table):SELECT', '(table):DELETE', 'entry_order:INSERT'],
+  ARRAY['(table):SELECT', '(table):DELETE', 'entry_order:INSERT', 'entry_order:UPDATE'],
   'a user reads and deletes operations and writes only their entry order'
 );
 
@@ -147,7 +147,10 @@ SELECT is_empty(
 SELECT ok(
   NOT has_function_privilege('anon', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
     AND NOT has_function_privilege('service_role', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
-    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE'),
+    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE')
+    AND NOT has_function_privilege('service_role', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE')
+    AND has_function_privilege('authenticated', 'public.write_operation(uuid,jsonb,jsonb,boolean)', 'EXECUTE'),
   'only authenticated may call write_operation'
 );
 
@@ -335,6 +338,30 @@ SELECT is(
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
+                                                    currency, direction, quantity, charges, rates)
+     SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'in', '1',
+            '[{"kind": "commission", "label": null, "amount": "5"}]', '{}'
+     FROM public.movements m LIMIT 1 $$),
+  '23514 -',
+  'units transferred in carry no fee'
+);
+
+-- The insert is rolled back by the exception its block raises after it.
+SELECT is(
+  pg_temp.error_of($$ DO $d$ BEGIN
+       INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date, currency,
+                                     direction, quantity, charges, rates)
+       SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'out', '1',
+              '[{"kind": "commission", "label": null, "amount": "5"}]', '{}'
+       FROM public.movements m LIMIT 1;
+       RAISE EXCEPTION 'inserted' USING HINT = 'inserted';
+     END $d$ $$),
+  'P0001 inserted',
+  'units transferred out carry the transfer''s fee'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
                                                     currency, quantity, price, rates)
      SELECT m.holding_id, m.operation_id, 9, 'purchase', '2026-02-03', 'ARS', '1', '5', '[]'
      FROM public.movements m LIMIT 1 $$),
@@ -403,6 +430,152 @@ SELECT throws_ok(
   '23514', NULL,
   'an exclusion names something'
 );
+
+-- An edit that moves a sale to a later day goes last there when the app
+-- admitted it so; keeping its place would sell before that day's purchase.
+SAVEPOINT edit_last;
+INSERT INTO ops VALUES ('ko_buy', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('purchase', '5', '2026-04-01') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+INSERT INTO ops VALUES ('ko_sale', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('sale', '5', '2026-04-01') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+INSERT INTO ops VALUES ('ko_later', public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('purchase', '5', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+  pg_temp.revisions('KO')));
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.write_operation(
+    (SELECT id FROM ops WHERE name = 'ko_sale'),
+    jsonb_build_array(pg_temp.trade('sale', '10', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+    pg_temp.revisions('KO'), false) $$),
+  'PT409 negative_units',
+  'an edit that keeps its place on its new day sells before that day''s purchase'
+);
+
+SELECT lives_ok(
+  $$ SELECT public.write_operation(
+    (SELECT id FROM ops WHERE name = 'ko_sale'),
+    jsonb_build_array(pg_temp.trade('sale', '10', '2026-04-03') || '{"instrument_symbol": "KO"}'),
+    pg_temp.revisions('KO'), true) $$,
+  'an edit that goes last on its new day sells after that day''s purchase'
+);
+
+SELECT results_eq(
+  $$ SELECT o.name, m.entry_order > (SELECT max(m2.entry_order) FROM public.movements m2
+                                      JOIN ops o2 ON o2.id = m2.operation_id
+                                      WHERE o2.name = 'ko_later'),
+            (SELECT h.amount::text FROM public.holdings h WHERE h.id = m.holding_id),
+            (SELECT op.entry_order = m.entry_order FROM public.operations op WHERE op.id = m.operation_id)
+     FROM public.movements m JOIN ops o ON o.id = m.operation_id WHERE o.name = 'ko_sale' $$,
+  $$ VALUES ('ko_sale', true, '0.00000000', true) $$,
+  'the edited sale takes the next entry order, with its operation, and the holding sells out'
+);
+ROLLBACK TO SAVEPOINT edit_last;
+
+-- An account whose holding is sold out is archived, and a buy cannot reopen
+-- the holding there.
+SAVEPOINT sold_out;
+SELECT public.write_operation(
+  NULL, jsonb_build_array(pg_temp.trade('sale', '3', '2026-03-02')), pg_temp.revisions('AAPL'));
+
+SELECT lives_ok(
+  $$ UPDATE public.source_connections SET archived_at = now()
+     WHERE id = 'a5000000-0000-4000-8000-0000000000a5' $$,
+  'an account whose only holding is sold out can be archived'
+);
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.write_operation(
+    NULL, jsonb_build_array(pg_temp.trade('purchase', '1', '2026-04-02')), pg_temp.revisions('AAPL')) $$),
+  'PT409 source_connection_archived',
+  'a buy cannot reopen a sold-out holding in an archived account'
+);
+ROLLBACK TO SAVEPOINT sold_out;
+
+-- Outside write_operation a user writes no operation or movement. Every
+-- earlier write_operation call marked this transaction, so the mark is
+-- cleared first, as a new request starts without it.
+SAVEPOINT direct;
+SELECT set_config('plant.write_operation', '', true);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
+                                                    currency, quantity, price, rates)
+     SELECT m.holding_id, m.operation_id, 9, 'purchase', '2026-02-03', 'ARS', '1', '5', '{}'
+     FROM public.movements m LIMIT 1 $$),
+  '42501 -',
+  'a movement cannot be inserted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.movements $$),
+  '42501 -',
+  'a movement cannot be deleted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.operations (entry_order)
+     SELECT max(o.entry_order) + 1 FROM public.operations o $$),
+  '42501 -',
+  'an operation cannot be inserted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.operations $$),
+  '42501 -',
+  'an operation cannot be deleted outside write_operation'
+);
+
+SELECT lives_ok(
+  $$ DELETE FROM public.holdings WHERE instrument_symbol = 'AAPL' $$,
+  'deleting a holding still takes its movements with it'
+);
+
+SELECT lives_ok(
+  $$ SELECT public.write_operation(
+       NULL, jsonb_build_array(pg_temp.trade('purchase', '1', '2026-04-02')), pg_temp.revisions('AAPL')) $$,
+  'write_operation still writes them'
+);
+ROLLBACK TO SAVEPOINT direct;
+
+-- A user moves an operation only to the last place, never past it.
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.operations SET entry_order = 9223372036854775807 $$),
+  '22023 -',
+  'an operation cannot be moved anywhere but last'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.operations (entry_order) VALUES (9223372036854775807) $$),
+  '22023 -',
+  'an operation cannot be entered anywhere but last'
+);
+
+SAVEPOINT goes_last;
+SELECT lives_ok(
+  $$ UPDATE public.operations
+     SET entry_order = (SELECT max(o.entry_order) + 1 FROM public.operations o)
+     WHERE id = (SELECT min(o.id::text)::uuid FROM public.operations o) $$,
+  'an operation can be moved last'
+);
+ROLLBACK TO SAVEPOINT goes_last;
+
+-- A holding with a transfer is not deleted.
+SAVEPOINT transfer_guard;
+SELECT set_config('plant.write_operation', 'on', true);
+INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date, currency,
+                              direction, quantity, rates)
+  SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'in', '1', '{}'
+  FROM public.movements m WHERE m.kind <> 'transfer' LIMIT 1;
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.holdings h
+     WHERE EXISTS (SELECT 1 FROM public.movements m
+                   WHERE m.holding_id = h.id AND m.kind = 'transfer') $$),
+  'PT409 holding_has_transfers',
+  'a holding with a transfer is not deleted'
+);
+ROLLBACK TO SAVEPOINT transfer_guard;
 
 RESET ROLE;
 

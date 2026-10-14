@@ -14,14 +14,20 @@ export type OwnedTable = Exclude<keyof Tables, ReferenceTable>;
 // The reference tables the server writes daily; migrations seed the others.
 export type QuoteTable = Extract<ReferenceTable, "fx_rates" | "prices">;
 
-// The key another user would guess a row by. A new owned table fails typecheck
-// here until it is listed.
+// The key another user would guess a row by: its id, its id paired with its
+// owner where the primary key is (user_id, id), or its owner. A new owned
+// table fails typecheck here until it is listed.
 export const OWNED_KEYS = {
+  ai_conversations: "user_id,id",
   ai_costs: "id",
+  ai_messages: "user_id,id",
+  ai_questions: "user_id,id",
   column_mappings: "id",
   consents: "id",
   holdings: "id",
+  import_debts: "id",
   import_items: "id",
+  import_operations: "id",
   imports: "id",
   liabilities: "id",
   manual_prices: "id",
@@ -34,18 +40,23 @@ export const OWNED_KEYS = {
   tax_report_exclusions: "id",
   uploaded_documents: "id",
 } as const satisfies {
-  [T in OwnedTable]: "id" extends keyof Tables[T]["Row"] ? "id" : "user_id";
+  [T in OwnedTable]: "id" extends keyof Tables[T]["Row"]
+    ? "id" | "user_id,id"
+    : "user_id";
 };
 
 // The owned tables authenticated may DELETE from, each table's isolation test
 // in supabase/tests pins the grant.
 export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
+  "ai_conversations",
   "holdings",
   "liabilities",
   "manual_prices",
   "manual_rates",
   "movements",
   "operations",
+  "portfolios",
+  "source_connections",
   "tax_report_exclusions",
   "uploaded_documents",
 ]);

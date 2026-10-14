@@ -1,4 +1,8 @@
-import { type ImportDraft, SourceError } from "@plant/sources";
+import {
+  type ImportDraft,
+  type PortfolioSourcePort,
+  SourceError,
+} from "@plant/sources";
 import type { LogFields } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
@@ -29,11 +33,22 @@ const DRAFT: ImportDraft = {
   ],
   totals: [{ currency: "ARS", amount: "90000" }],
 };
-const READ = { reader: "document", mapping: "none" } as const;
+const READ = {
+  reader: "document",
+  mapping: "none",
+  skippedRows: 0,
+  disputes: 0,
+  documentKind: "account_statement",
+} as const;
 
 type Line = { level: string; event: string; fields: LogFields };
 
-function setUp(overrides: Partial<ImportJobDeps> = {}) {
+function setUp({
+  read = jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
+  ...overrides
+}: Partial<Omit<ImportJobDeps, "source">> & {
+  read?: PortfolioSourcePort["read"];
+} = {}) {
   const lines: Line[] = [];
   const log = (level: string) => (event: string, fields: LogFields) =>
     lines.push({ level, event, fields });
@@ -48,11 +63,21 @@ function setUp(overrides: Partial<ImportJobDeps> = {}) {
     reading: jest.fn().mockResolvedValue(undefined),
     institution: jest.fn().mockResolvedValue("IOL"),
     saveDraft: jest.fn().mockResolvedValue(undefined),
+    saveOperations: jest.fn().mockResolvedValue(undefined),
+    saveDebts: jest.fn().mockResolvedValue(undefined),
     failed: jest.fn().mockResolvedValue(undefined),
   };
   const deps: ImportJobDeps = {
     store,
-    extract: jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
+    source: {
+      kind: "file_upload",
+      capabilities: () => ({
+        holdings: "native",
+        movements: "unsupported",
+        incremental: "unsupported",
+      }),
+      read,
+    },
     log: { info: log("info"), warn: log("warn"), error: log("error") },
     ...overrides,
   };
@@ -75,6 +100,73 @@ function setUp(overrides: Partial<ImportJobDeps> = {}) {
   return { deps, store, lines, ran, run };
 }
 
+it("saves a document of operations as operations", async () => {
+  const operations = [
+    {
+      date: null,
+      kind: "purchase" as const,
+      symbol: null,
+      quantity: "1",
+      price: null,
+      amount: null,
+      charges: null,
+      reference: null,
+      currency: "ARS" as const,
+      confidence: "low" as const,
+      page: null,
+    },
+  ];
+  const { store, lines, run } = setUp({
+    read: jest.fn().mockResolvedValue({
+      operations,
+      read: { ...READ, documentKind: "trade_ticket" },
+    }),
+  });
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, operations);
+  expect(store.saveDraft).not.toHaveBeenCalled();
+  expect(lines[0]!.fields).toMatchObject({
+    "plant.import.draft": "operations",
+    "plant.import.document_kind": "trade_ticket",
+  });
+});
+
+it("saves a card statement as debts", async () => {
+  const debts = [
+    {
+      label: "Visa",
+      lender: null,
+      currency: "ARS" as const,
+      balance: "1000",
+      minimumPayment: null,
+      dueDate: null,
+      confidence: "high" as const,
+      page: 1,
+    },
+  ];
+  const { store, lines, run } = setUp({
+    read: jest.fn().mockResolvedValue({
+      debts,
+      read: { ...READ, documentKind: "card_statement" },
+    }),
+  });
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, debts);
+  expect(store.saveDraft).not.toHaveBeenCalled();
+  expect(lines[0]!.fields).toMatchObject({
+    "plant.import.draft": "debts",
+    "plant.import.document_kind": "card_statement",
+  });
+});
+
+it("finds nothing in a document of no operations", async () => {
+  const { store, run } = setUp({
+    read: jest.fn().mockResolvedValue({ operations: [], read: READ }),
+  });
+  expect(await run()).toEqual({ outcome: "failed" });
+  expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "nothing_found");
+});
+
 it("reads the file into a draft and marks the import ready", async () => {
   const { store, deps, lines, ran, run } = setUp();
   expect(await run()).toEqual({ outcome: "ready", rows: 1 });
@@ -83,14 +175,15 @@ it("reads the file into a draft and marks the import ready", async () => {
   expect(store.institution).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.download).toHaveBeenCalledWith(PATH);
-  expect(deps.extract).toHaveBeenCalledWith({
+  expect(deps.source.read).toHaveBeenCalledWith({
     importId: IMPORT,
     bytes: BYTES,
     mimeType: "application/pdf",
     userId: USER,
     institution: "IOL",
+    lastAttempt: false,
   });
-  expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT);
+  expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
   expect(lines).toEqual([
     {
       level: "info",
@@ -100,12 +193,31 @@ it("reads the file into a draft and marks the import ready", async () => {
         "plant.import.row_count": 1,
         "plant.import.reader": "document",
         "plant.import.mapping": "none",
+        "plant.import.skipped_count": 0,
+        "plant.import.dispute_count": 0,
         "plant.import.id": IMPORT,
       }),
     },
   ]);
   expect(JSON.stringify(lines)).not.toContain("AAPL");
   expect(JSON.stringify(lines)).not.toContain("IOL");
+});
+
+it("logs how many rows the reading skipped", async () => {
+  const { lines, run } = setUp({
+    read: jest.fn().mockResolvedValue({
+      draft: DRAFT,
+      read: {
+        reader: "sheet",
+        mapping: "hit",
+        skippedRows: 2,
+        disputes: 0,
+        documentKind: null,
+      },
+    }),
+  });
+  await run();
+  expect(lines[0]!.fields["plant.import.skipped_count"]).toBe(2);
 });
 
 it.each([
@@ -151,7 +263,7 @@ it.each([
   ["a bug", new Error("boom"), "extraction_failed"],
 ])("marks the import failed on %s", async (_, error, failure) => {
   const { store, run } = setUp({
-    extract: jest.fn().mockRejectedValue(error),
+    read: jest.fn().mockRejectedValue(error),
   });
   expect(await run()).toEqual({ outcome: "failed" });
   expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
@@ -160,7 +272,7 @@ it.each([
 
 it("fails an import whose file lists nothing", async () => {
   const { store, run } = setUp({
-    extract: jest.fn().mockResolvedValue({
+    read: jest.fn().mockResolvedValue({
       draft: { documentDate: null, rows: [], totals: [] },
       read: READ,
     }),
@@ -172,7 +284,7 @@ it("fails an import whose file lists nothing", async () => {
 it("does not retry a failure a retry would not pass", async () => {
   const thrown: unknown[] = [];
   const { deps } = setUp({
-    extract: jest.fn().mockRejectedValue(new SourceError("unsupported", false)),
+    read: jest.fn().mockRejectedValue(new SourceError("unsupported", false)),
   });
   await runImportDocument(deps, {
     step: {
@@ -195,7 +307,7 @@ it("does not retry a failure a retry would not pass", async () => {
 it("lets a retryable failure reach the step, which retries it", async () => {
   const thrown: unknown[] = [];
   const { deps } = setUp({
-    extract: jest
+    read: jest
       .fn()
       .mockRejectedValue(new SourceError("extraction_failed", true)),
   });
@@ -216,6 +328,41 @@ it("lets a retryable failure reach the step, which retries it", async () => {
   });
   expect(thrown[0]).toBeInstanceOf(SourceError);
 });
+
+// The engine hands a failed step back rebuilt from JSON: a plain Error with
+// the original's name and message, its class and code gone.
+const rebuilt = (error: unknown) => {
+  const { name, message } = error as Error;
+  return Object.assign(new Error(message), { name });
+};
+
+it.each([
+  ["a NonRetriableError", new SourceError("unsupported", false), "unsupported"],
+  ["a retried SourceError", new SourceError("unreadable", true), "unreadable"],
+  ["anything else", new Error("boom"), "extraction_failed"],
+])(
+  "keeps the failure's code when the engine rebuilds %s",
+  async (_, error, failure) => {
+    const { deps, store } = setUp({
+      read: jest.fn().mockRejectedValue(error),
+    });
+    await runImportDocument(deps, {
+      step: {
+        run: async (id, fn) => {
+          try {
+            return await fn();
+          } catch (thrown) {
+            throw rebuilt(thrown);
+          }
+        },
+      },
+      runId: "r1",
+      attempt: 0,
+      event: { data: { importId: IMPORT, userId: USER } },
+    });
+    expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
+  },
+);
 
 describe("an import whose run died past its retries", () => {
   it("is marked failed when it is still being read", async () => {

@@ -16,8 +16,10 @@ import { holdingDateSchema } from "../valuation/holding";
 // coming in: its opening balance, a purchase, an adjustment in or a transfer
 // in. An adjustment changes the quantity without trading it: units in at a
 // cost (0 unless given), or units out with the cost of the oldest units and
-// no result. A transfer moves units between two portfolios of one account:
-// the oldest leave with their cost and arrive carrying it, with no result.
+// no result. A transfer moves units between two of the user's portfolios:
+// the oldest leave with their cost and arrive carrying it, with no result. A
+// fee for it is a charge of the side they leave, an expense apart from the
+// cost.
 // A yield is units a holding earned or lost without money in or out (staking,
 // earn, trading): their value that day is the holding's return. It never
 // starts a holding.
@@ -108,7 +110,6 @@ const KIND_FIELDS = {
     // The cost of each unit that comes in, when the user sets one; null
     // carries the cost the units left with. Units that go out take theirs.
     price: nonNegativeDecimalSchema.nullable().default(null),
-    charges: z.tuple([]).default([]),
   },
   yield: {
     ...moved,
@@ -158,6 +159,11 @@ export const movementSchema = z.discriminatedUnion("kind", [
     .refine(
       (movement) => movement.direction === "in" || movement.price === null,
       { message: "Units going out carry their own cost", path: ["price"] },
+    )
+    .refine(
+      (movement) =>
+        movement.direction === "out" || movement.charges.length === 0,
+      { message: "Only the side units leave pays the fee", path: ["charges"] },
     ),
   movementBranch("yield").extend(stored).strict(),
 ]);

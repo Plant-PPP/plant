@@ -1,19 +1,26 @@
-import type { Denominator } from "@plant/core";
-import { compareDecimals } from "@plant/shared";
+"use client";
 
+import type { Denominator } from "@plant/core";
+
+import { VegaChart } from "@/components/charts/vega-chart";
+import { netWorthSpec } from "@/lib/charts/templates";
 import { formatAmount } from "@/lib/format/amount";
 import { monthInText } from "@/lib/summary/closes";
 
 type Point = { period: string; value: string; contributed: string };
 
-const WIDTH = 640;
-const HEIGHT = 200;
-const PAD = { top: 16, right: 8, bottom: 6, left: 8 };
+const SHORT_MONTH = new Intl.DateTimeFormat("es-AR", {
+  month: "short",
+  year: "2-digit",
+  timeZone: "UTC",
+});
 
-// Net worth at the end of each month, beside what was put in so far, to
-// scale: both lines share one axis from the smallest value to the largest,
-// both labelled. A chart's numbers come from the closes; the lines only place
-// them.
+// "2026-09" as "sept 26".
+const shortMonth = (period: string) =>
+  SHORT_MONTH.format(new Date(`${period}-01T00:00:00Z`)).replace(".", "");
+
+// Net worth at the end of each month, beside what was put in so far, on one
+// axis. A chart's numbers come from the closes; the chart only places them.
 export function NetWorthChart({
   points,
   unit,
@@ -22,100 +29,22 @@ export function NetWorthChart({
   unit: Denominator;
 }) {
   if (points.length < 2) return null;
-  const values = points.flatMap((point) => [point.value, point.contributed]);
-  const top = values.reduce((max, each) =>
-    compareDecimals(each, max) > 0 ? each : max,
-  );
-  const bottom = values.reduce((min, each) =>
-    compareDecimals(each, min) < 0 ? each : min,
-  );
-  // Positions on screen only: a pixel needs no exact decimal.
-  const low = Number(bottom);
-  const span = Number(top) - low || 1;
-  const x = (index: number) =>
-    PAD.left + (index * (WIDTH - PAD.left - PAD.right)) / (points.length - 1);
-  const y = (value: string) =>
-    PAD.top +
-    (1 - (Number(value) - low) / span) * (HEIGHT - PAD.top - PAD.bottom);
-  const line = (key: "value" | "contributed") =>
-    points
-      .map(
-        (point, index) =>
-          `${index === 0 ? "M" : "L"}${x(index)},${y(point[key])}`,
-      )
-      .join(" ");
   const last = points.at(-1)!;
-  const yearTicks = points.flatMap((point, index) =>
-    point.period.endsWith("-01")
-      ? [{ index, label: point.period.slice(0, 4) }]
-      : [],
-  );
-
+  const datum = (point: Point, key: "value" | "contributed") => ({
+    label: shortMonth(point.period),
+    value: point[key],
+    shown: formatAmount(point[key], unit),
+  });
   return (
     <figure className="m-0 grid gap-2">
-      <span className="text-muted-foreground text-[11px] tabular-nums">
-        {formatAmount(top, unit)}
-      </span>
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-48 w-full"
-        role="img"
-        aria-label={`Patrimonio de ${monthInText(points[0]!.period)} a ${monthInText(last.period)}: termina en ${formatAmount(last.value, unit)}.`}
-        preserveAspectRatio="none"
-      >
-        {yearTicks.map(({ index, label }) => (
-          <g key={label}>
-            <line
-              x1={x(index)}
-              x2={x(index)}
-              y1={PAD.top}
-              y2={HEIGHT - PAD.bottom}
-              className="stroke-border"
-              strokeDasharray="2 3"
-              vectorEffect="non-scaling-stroke"
-            />
-          </g>
-        ))}
-        <path
-          d={line("contributed")}
-          fill="none"
-          className="stroke-muted-foreground"
-          strokeWidth={1.5}
-          strokeDasharray="4 3"
-          vectorEffect="non-scaling-stroke"
-        />
-        <path
-          d={line("value")}
-          fill="none"
-          className="stroke-chart-3"
-          strokeWidth={2.5}
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      {/* The year labels sit outside the stretched drawing, so they keep
-          their shape at any width; one near the right edge ends at its tick
-          instead of running past the chart. */}
-      <div aria-hidden className="relative h-3">
-        {yearTicks.map(({ index, label }) => {
-          const at = (x(index) / WIDTH) * 100;
-          return (
-            <span
-              key={label}
-              className="text-muted-foreground absolute top-0 text-[10px] tabular-nums"
-              style={
-                at > 90
-                  ? { right: `calc(${100 - at}% + 4px)` }
-                  : { left: `calc(${at}% + 4px)` }
-              }
-            >
-              {label}
-            </span>
-          );
-        })}
-      </div>
-      <span className="text-muted-foreground text-[11px] tabular-nums">
-        {formatAmount(bottom, unit)}
-      </span>
+      <VegaChart
+        spec={netWorthSpec(
+          points.map((point) => datum(point, "value")),
+          points.map((point) => datum(point, "contributed")),
+        )}
+        label={`Patrimonio de ${monthInText(points[0]!.period)} a ${monthInText(last.period)}: termina en ${formatAmount(last.value, unit)}.`}
+        className="min-h-52"
+      />
       <figcaption className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-3 h-0.5 w-4 rounded" />

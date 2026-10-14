@@ -12,6 +12,8 @@ import {
   scrubSensitiveText,
 } from "@/lib/security/credential-scrub";
 
+import { errorType as typeOfError } from "./error-type";
+
 export type { LogFields, Logger, LogValue } from "@plant/shared";
 
 export type LogLevel = "info" | "warn" | "error";
@@ -43,15 +45,7 @@ function cleanFields(fields: LogFields | undefined): Record<string, LogValue> {
   return out;
 }
 
-// An error's code when it has one (Auth's, Node's), else its class, so one
-// failure reads the same on every line.
-export function errorType(
-  error: { name?: unknown; code?: unknown } | null | undefined,
-): string | undefined {
-  const { code, name } = error ?? {};
-  if (typeof code === "string" && code) return code;
-  return typeof name === "string" && name ? name : undefined;
-}
+export const errorType = typeOfError;
 
 function exceptionFields(error: unknown): Record<string, LogValue> {
   if (!(error instanceof Error)) {

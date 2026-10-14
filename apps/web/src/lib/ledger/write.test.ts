@@ -23,6 +23,7 @@ jest.mock("@/lib/supabase/server", () => ({
         select: () => builder,
         delete: () => builder,
         limit: () => builder,
+        is: (...args: unknown[]) => (filters.push(["is", ...args]), builder),
         eq: (...args: unknown[]) => (filters.push(["eq", ...args]), builder),
         gte: (...args: unknown[]) => (filters.push(["gte", ...args]), builder),
         lte: (...args: unknown[]) => (filters.push(["lte", ...args]), builder),
@@ -50,6 +51,7 @@ jest.mock("./read", () => ({
   readLedger: (...args: unknown[]) => readLedger(...args),
 }));
 
+import { revalidatePath } from "next/cache";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
 import { suggestedTransferCost, writeOperation } from "./ledger";
@@ -61,7 +63,9 @@ import {
   PURCHASE,
 } from "./ledger-fixture.test-support";
 import {
+  createInstrumentHolding,
   deleteHoldingRow,
+  ledgerForDates,
   quoteOnDate,
   runOperation,
   suggestTransferCost,
@@ -136,6 +140,29 @@ it("expects the revision of every holding of the instrument when rewriting", asy
     Object.fromEntries(holdingIds.map((id) => [id, 3])),
   );
   expect(args.p_parts).toHaveLength(1);
+  // The same day: it keeps its place.
+  expect(args.p_last).toBe(false);
+});
+
+it("tells the database an edit moved to another day goes last there", async () => {
+  const written = writeOperation(emptyLedger(), PURCHASE, {
+    operationId: OPERATION,
+    newId: () => crypto.randomUUID(),
+  }).state;
+  readLedger.mockResolvedValue({
+    ledger: written,
+    truncated: false,
+    symbolOf: new Map(
+      written.holdings.map((each) => [each.holding.id, "AAPL"]),
+    ),
+  });
+  rpc.mockResolvedValue({ data: OPERATION, error: null, status: 200 });
+  const result = await runOperation("update_operation", OPERATION, {
+    ...PURCHASE,
+    date: "2026-09-16",
+  });
+  expect(result).toEqual({ ok: true, id: OPERATION });
+  expect(rpc.mock.calls[0]![1].p_last).toBe(true);
 });
 
 it("deletes an operation with no parts", async () => {
@@ -159,6 +186,7 @@ it.each([
   [{ code: "23503", hint: null }, "not_found"],
   [{ code: "PT409", hint: "portfolio_archived" }, "portfolio_archived"],
   [{ code: "PT409", hint: "stale" }, "failed"],
+  [{ code: "PT409", hint: "negative_units" }, "oversold"],
 ])("answers the database's %o as %s", async (error, code) => {
   rpc.mockResolvedValue({ data: null, error, status: 409 });
   expect(await runOperation("create_operation", null, PURCHASE)).toEqual({
@@ -332,6 +360,7 @@ describe("a day's quote", () => {
 describe("deleting a holding", () => {
   const HOLDING = "a9000000-0000-4000-8000-0000000000a9";
   beforeEach(() => {
+    jest.mocked(revalidatePath).mockClear();
     transfersOf
       .mockReset()
       .mockReturnValue({ data: [], error: null, status: 200 });
@@ -366,12 +395,29 @@ describe("deleting a holding", () => {
     expect(deleted).not.toHaveBeenCalled();
   });
 
+  it("refuses one a transfer reached after the check", async () => {
+    deleted.mockReturnValue({
+      data: null,
+      error: {
+        code: "PT409",
+        message: "a holding with transfers is not deleted",
+        hint: "holding_has_transfers",
+      },
+      status: 409,
+    });
+    expect(await deleteHoldingRow(HOLDING)).toEqual({
+      ok: false,
+      code: "holding_has_transfers",
+    });
+  });
+
   it("is not found when nothing was deleted", async () => {
     deleted.mockReturnValue({ data: [], error: null, status: 200 });
     expect(await deleteHoldingRow(HOLDING)).toEqual({
       ok: false,
       code: "not_found",
     });
+    expect(revalidatePath).toHaveBeenCalledWith("/assets", "layout");
   });
 
   it("fails when the movements cannot be read", async () => {
@@ -390,5 +436,117 @@ describe("deleting a holding", () => {
   it("refuses an id that is not one", async () => {
     expect(await deleteHoldingRow("x")).toEqual({ ok: false, code: "invalid" });
     expect(transfersOf).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("creating an instrument holding", () => {
+  const HOLDING = "a9000000-0000-4000-8000-0000000000a9";
+  const INPUT = {
+    asset_class: "instrument",
+    label: null,
+    instrument_symbol: "AAPL",
+    amount: "10",
+    currency: null,
+    annual_rate: null,
+    started_on: null,
+    matures_on: null,
+    valued_on: null,
+    source_connection_id: ACCOUNT,
+    portfolio_id: PORTFOLIO,
+  };
+  const pricedToday = () => {
+    const ledger = emptyLedger();
+    return {
+      ...ledger,
+      quotes: {
+        fxRates: ledger.quotes.fxRates.map((rate) => ({
+          ...rate,
+          rate_date: ledger.today,
+        })),
+        prices: [
+          {
+            symbol: "AAPL",
+            price_date: ledger.today,
+            price: "18000",
+            currency: "ARS",
+          },
+        ],
+      },
+    };
+  };
+  beforeEach(() => {
+    jest.mocked(revalidatePath).mockClear();
+    deleted
+      .mockReset()
+      .mockReturnValue({ data: [{ id: HOLDING }], error: null, status: 200 });
+  });
+
+  it("opens it with its units at today's price", async () => {
+    readLedger.mockResolvedValue({
+      ledger: pricedToday(),
+      truncated: false,
+      symbolOf: new Map(),
+    });
+    rpc.mockResolvedValue({ data: OPERATION, error: null, status: 200 });
+    expect(await createInstrumentHolding(INPUT)).toEqual({
+      ok: true,
+      id: HOLDING,
+    });
+    const [name, args] = rpc.mock.calls[0]!;
+    expect(name).toBe("write_operation");
+    expect(args.p_operation_id).toBeNull();
+    expect(args.p_parts).toEqual([
+      expect.objectContaining({
+        kind: "opening_balance",
+        instrument_symbol: "AAPL",
+        portfolio_id: PORTFOLIO,
+        quantity: "10",
+        price: "18000",
+        date: "2026-10-12",
+      }),
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/assets", "layout");
+  });
+
+  it("refuses one without a price today, without writing", async () => {
+    expect(await createInstrumentHolding(INPUT)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a holding of another class", async () => {
+    expect(
+      await createInstrumentHolding({
+        ...INPUT,
+        asset_class: "cash",
+        instrument_symbol: null,
+        currency: "ARS",
+      }),
+    ).toEqual({ ok: false, code: "invalid" });
+    expect(readLedger).not.toHaveBeenCalled();
+  });
+});
+
+describe("ledgerForDates", () => {
+  it("reads the rates of days far apart in stretches the reader takes", async () => {
+    quoteRead.mockClear();
+    quoteRead.mockResolvedValue({ fxRates: [], prices: [] });
+    readLedger.mockResolvedValue({ ledger: emptyLedger(), truncated: false });
+    const { createClient } = jest.requireMock("@/lib/supabase/server");
+    await ledgerForDates(await createClient(), [
+      "2025-01-10",
+      "2025-01-20",
+      "2026-03-01",
+      "2099-01-01",
+    ]);
+    expect(
+      quoteRead.mock.calls.map(([range]) => [range.from, range.to]),
+    ).toEqual([
+      ["2025-01-03", "2025-01-20"],
+      ["2026-02-22", "2026-03-01"],
+    ]);
   });
 });

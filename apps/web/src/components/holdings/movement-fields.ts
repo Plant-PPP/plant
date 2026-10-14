@@ -171,10 +171,11 @@ export function operationFields(
 }
 
 // The fields as another kind: a transfer takes its quantity out of the
-// portfolio `homes` names for it into one still to choose, and a yield goes
-// into the one named for it, both with no charges or price (either takes the
-// first part's portfolio when `homes` names none); leaving either keeps the
-// first part with no price, and any other change keeps every part.
+// portfolio `homes` names for it into one still to choose, with no price,
+// and a yield goes into the one named for it, with no charges or price
+// (either takes the first part's portfolio when `homes` names none); leaving
+// either keeps the first part with no price, and any other change keeps
+// every part.
 export function withKind(
   fields: MovementFields,
   kind: MovementKind,
@@ -196,7 +197,6 @@ export function withKind(
   if (kind === "transfer") {
     return {
       ...fresh,
-      charges: [],
       parts: [
         { portfolioId: portfolio, size },
         { portfolioId: "", size },
@@ -263,9 +263,10 @@ export function kindsOffered({
 const optional = (text: string) => (text.trim() === "" ? null : text);
 
 // The fields as a transfer's suggested cost reads them, as a key that
-// changes only when the cost can: the note and the reference are left out.
+// changes only when the cost can: the note, the reference and the fee are
+// left out.
 export const transferCostKey = (fields: MovementFields): string =>
-  JSON.stringify({ ...fields, note: "", reference: "" });
+  JSON.stringify({ ...fields, charges: [], note: "", reference: "" });
 
 // What the dialog sends: the kind's fields, each part, each charge, the price
 // typed as the market quotes it sent per unit. A value the parsers refuse goes
@@ -279,9 +280,14 @@ export function toOperationInput(
   const perUnit = (typed: string): string | null => {
     const quoted = parseAmountInput(typed);
     if (quoted === null || !type) return quoted;
-    return exactUnitPrice(type, quoted) ?? typed;
+    return exactUnitPrice(type, quoted);
   };
   const income = isIncome(fields.kind);
+  const charges = fields.charges.map((charge) => ({
+    kind: charge.kind,
+    label: optional(charge.label),
+    amount: parseAmountInput(charge.amount),
+  }));
   const envelope = {
     kind: fields.kind,
     source_connection_id: fields.accountId,
@@ -332,6 +338,7 @@ export function toOperationInput(
               price: cost,
             },
       ),
+      charges,
     };
   }
   return {
@@ -351,11 +358,7 @@ export function toOperationInput(
       portfolio_id: part.portfolioId,
       [income ? "amount" : "quantity"]: parseAmountInput(part.size),
     })),
-    charges: fields.charges.map((charge) => ({
-      kind: charge.kind,
-      label: optional(charge.label),
-      amount: parseAmountInput(charge.amount),
-    })),
+    charges,
   };
 }
 

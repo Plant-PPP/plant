@@ -136,10 +136,11 @@ jobs:
         run: pnpm exec turbo run test --affected --cache-dir=.turbo
 
   # A production build of apps/web in a real browser: the CSP headers, eval
-  # blocked, and the login page hydrating under the nonce.
+  # blocked, and the login page hydrating under the nonce, against no
+  # Supabase; then another build against local Supabase for the main flows.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -158,13 +159,27 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
+        id: chromium
         run: pnpm --filter @plant/web exec playwright install --with-deps chromium
 
       - name: E2E tests
         run: pnpm test:e2e
+
+      # Postgres, Auth, PostgREST, the gateway and Mailpit, where the flows
+      # read the sign-in code. stdout is the status block with the local keys,
+      # so it is dropped.
+      - name: Start Supabase (database, Auth, PostgREST, Mailpit)
+        id: db
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.chromium.outcome == 'success' }}
+        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /dev/null
+
+      - name: E2E flows
+        if: ${{ !cancelled() && steps.db.outcome == 'success' }}
+        run: pnpm test:e2e:flows
 
       - name: Upload Playwright report
         if: failure()

@@ -31,10 +31,13 @@
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
---   in them, authenticated only the RPCs (write_operation, confirm_import), which run as the
---   caller with an empty search_path, service_role none in private, the only
+--   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
+--   which run as the caller with an empty search_path, and
+--   imports_used_this_month), service_role none in private, only
+--   service_role orphan_import_files, which runs as the caller, the only
 --   SECURITY DEFINER
---   functions are the signup, session, MFA factor and file deletion triggers, and no trigger on public,
+--   functions are the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers
+--   and imports_used_this_month, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
@@ -71,7 +74,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(49);
+SELECT plan(53);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -144,7 +147,10 @@ SELECT is_empty(
        AND (has_function_privilege('anon', p.oid, 'EXECUTE')
             OR (has_function_privilege('authenticated', p.oid, 'EXECUTE')
                 AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
-                                       'public.confirm_import(uuid,jsonb)'::regprocedure]))
+                                       'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure,
+                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
+                                       'public.imports_used_this_month()'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
   'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'
@@ -155,8 +161,29 @@ SELECT ok(
   (SELECT bool_and(NOT p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""'])
    FROM pg_proc p
    WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
-                                       'public.confirm_import(uuid,jsonb)'::regprocedure])),
-  'the RPCs run as the caller with an empty search_path'
+                                       'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure,
+                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure])),
+  'the write RPCs run as the caller with an empty search_path'
+);
+
+-- The orphan files finder reads every user's objects, so only the job's role
+-- may ask, and it reads as that role.
+SELECT ok(
+  (SELECT NOT p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_path=""']
+   FROM pg_proc p WHERE p.oid = 'public.orphan_import_files(integer,uuid)'::regprocedure)
+    AND has_function_privilege('service_role', 'public.orphan_import_files(integer,uuid)', 'EXECUTE')
+    AND NOT has_function_privilege('authenticated', 'public.orphan_import_files(integer,uuid)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.orphan_import_files(integer,uuid)', 'EXECUTE'),
+  'orphan_import_files is a stable function only service_role executes, as the caller, with an empty search_path'
+);
+
+-- The quota's own count, private to the API roles, read only for the caller.
+SELECT ok(
+  (SELECT p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.import_requests'::regclass)
+   FROM pg_proc p WHERE p.oid = 'public.imports_used_this_month()'::regprocedure),
+  'imports_used_this_month is a stable definer owned by import_requests'' owner, with an empty search_path'
 );
 
 SELECT is_empty(
@@ -225,8 +252,10 @@ SELECT set_eq(
      WHERE p.pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
        AND p.prosecdef $$,
   ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
-        'private.record_mfa_factor_event()', 'private.record_file_deletion()'],
-  'the signup, session, MFA factor and file deletion triggers are the only SECURITY DEFINER functions'
+        'private.record_mfa_factor_event()', 'private.record_file_deletion()',
+        'private.record_conversation_deletion()', 'private.check_import_quota()',
+        'public.imports_used_this_month()'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers and the quota count are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
@@ -287,6 +316,33 @@ SELECT ok(
   'the file deletion trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires on file_deleted_at and is its function''s only trigger'
 );
 
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.audit_log'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.record_conversation_deletion()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER ai_conversations_record_deletion AFTER DELETE ON public.ai_conversations FOR EACH ROW EXECUTE FUNCTION private.record_conversation_deletion()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'public.ai_conversations'::regclass
+           AND t.tgname = 'ai_conversations_record_deletion')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.record_conversation_deletion()'::regprocedure) = 1,
+  'the conversation deletion trigger runs as the owner of audit_log, with an empty search_path, is enabled, fires on delete and is its function''s only trigger'
+);
+
+SELECT ok(
+  (SELECT p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.import_requests'::regclass)
+   FROM pg_proc p WHERE p.oid = 'private.check_import_quota()'::regprocedure)
+    AND (SELECT t.tgenabled = 'O'
+                AND pg_get_triggerdef(t.oid) = 'CREATE TRIGGER imports_check_quota BEFORE INSERT ON public.imports FOR EACH ROW EXECUTE FUNCTION private.check_import_quota()'
+         FROM pg_trigger t
+         WHERE t.tgrelid = 'public.imports'::regclass AND t.tgname = 'imports_check_quota')
+    AND (SELECT count(*) FROM pg_trigger t
+         WHERE t.tgfoid = 'private.check_import_quota()'::regprocedure) = 1,
+  'the import quota trigger runs as the owner of import_requests, with an empty search_path, is enabled, fires on insert and is its function''s only trigger'
+);
+
 -- Firing a trigger checks neither EXECUTE nor schema USAGE, so a definer in
 -- any schema runs as its owner, past RLS, on every write that fires it.
 SELECT is_empty(
@@ -300,8 +356,10 @@ SELECT is_empty(
              ('private.create_profile_for_new_user()'::regprocedure, 'auth.users'::regclass),
              ('private.record_session_event()'::regprocedure, 'auth.sessions'::regclass),
              ('private.record_mfa_factor_event()'::regprocedure, 'auth.mfa_factors'::regclass),
-             ('private.record_file_deletion()'::regprocedure, 'public.uploaded_documents'::regclass)) $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session, MFA factor and file deletion triggers'
+             ('private.record_file_deletion()'::regprocedure, 'public.uploaded_documents'::regclass),
+             ('private.record_conversation_deletion()'::regprocedure, 'public.ai_conversations'::regclass),
+             ('private.check_import_quota()'::regprocedure, 'public.imports'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.

@@ -16,6 +16,7 @@ import {
   type ImportDraft,
   SourceError,
 } from "./draft";
+import { isZip, zipFitsLimit } from "./zip";
 
 // Past it a column is not part of a holdings table; it also bounds a forged
 // `!ref` that claims thousands of columns.
@@ -34,12 +35,31 @@ export type Sheet = { headers: string[]; rows: SheetCell[][] };
 const isBlank = (row: readonly SheetCell[]) =>
   row.every((cell) => String(cell).trim() === "");
 
+// SheetJS reads CSV bytes as Latin-1, so they are decoded here: as UTF-8, or
+// as Windows-1252, which spreadsheet apps on Windows export, when they are not
+// UTF-8.
+const csvText = (bytes: Uint8Array) => {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+};
+
 export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const csv = mimeType === "text/csv";
+  const text = csv ? csvText(bytes) : null;
+  // SheetJS opens a CSV's text as a zip when it starts like one, after the
+  // decoder drops a byte-order mark; no real CSV does.
+  if (text !== null && isZip(new TextEncoder().encode(text.slice(0, 4)))) {
+    throw new SourceError("unreadable", false);
+  }
+  if (!csv && isZip(bytes) && !zipFitsLimit(bytes)) {
+    throw new SourceError("unreadable", false);
+  }
   let workbook: XLSX.WorkBook;
   try {
-    // SheetJS reads CSV bytes as Latin-1, so UTF-8 is decoded here.
-    workbook = XLSX.read(csv ? new TextDecoder().decode(bytes) : bytes, {
+    workbook = XLSX.read(text ?? bytes, {
       type: csv ? "string" : "array",
       sheetRows: SHEET_ROW_LIMIT,
       dense: true,
@@ -89,7 +109,22 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
 }
 
 const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(\.\d{3})+$/;
-const AMBIGUOUS_DOT = /^[1-9]\d{0,2}\.\d{3}$/;
+const US_NUMBER = /^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/;
+// Text only a US sheet writes ("1,234.56", "1,234,567", "230.50") and text
+// only an es-AR one writes ("12,5", "1.234,56", "1.234.567").
+const US_ONLY = [
+  /^-?\d{1,3}(,\d{3})+\.\d+$/,
+  /^-?\d{1,3}(,\d{3}){2,}$/,
+  /^-?\d+\.\d{1,2}$/,
+];
+const ES_AR_ONLY = [
+  /\d,\d{1,2}$/,
+  /,\d{4,}$/,
+  /\d{4},/,
+  /\.\d{3},/,
+  /^-?\d{1,3}(\.\d{3}){2,}$/,
+];
+const AMBIGUOUS = /^-?[1-9]\d{0,2}[.,]\d{3}$/;
 // The currency marks a number may start with; CURRENCY_TOKENS names the same
 // ones and more, for a whole cell.
 const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars)/i;
@@ -97,15 +132,44 @@ const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars)/i;
 const decimalOrNull = (text: string): string | null =>
   decimalStringSchema.safeParse(text).success ? text : null;
 
-// A cell as a decimal string, or null when it is not one. Text with a comma is
-// es-AR ("1.234,5"); without one, dots in groups of three are thousands
-// ("1.234" is a thousand, "0.001" is not) and any other dot is the decimal
-// point. A number cell is cut to the 15 significant digits a float holds, so
+// A text cell's number without its spaces or currency mark.
+const numberText = (cell: string) =>
+  cell.replace(/\s/g, "").replace(CURRENCY_PREFIX, "");
+
+// How a column writes its numbers: es-AR (dot thousands, comma decimal) or US
+// (comma thousands, dot decimal).
+export type NumberConvention = "es-AR" | "US";
+
+// The convention some cells show: es-AR when any is written only as an es-AR
+// sheet would, US when any is written only as a US one would and none is
+// es-AR, and null when nothing tells them apart ("1,500", "1.234", "10").
+export function numberConventionOf(
+  cells: readonly SheetCell[],
+): NumberConvention | null {
+  // Only cells written as a number: a note in the column says nothing.
+  const texts = cells
+    .filter((cell): cell is string => typeof cell === "string")
+    .map(numberText)
+    .filter((text) => /^-?[\d.,]+$/.test(text));
+  const writes = (patterns: readonly RegExp[]) =>
+    texts.some((text) => patterns.some((pattern) => pattern.test(text)));
+  if (writes(ES_AR_ONLY)) return "es-AR";
+  return writes(US_ONLY) ? "US" : null;
+}
+
+// A cell as a decimal string, or null when it is not one. In es-AR, text with
+// a comma is es-AR ("1.234,5"); without one, dots in groups of three are
+// thousands ("1.234" is a thousand, "0.001" is not) and any other dot is the
+// decimal point. In US, commas group thousands and a dot is the decimal point.
+// A number cell is cut to the 15 significant digits a float holds, so
 // 0.1 + 0.2 reads as 0.3. Signs pass through: the draft schemas refuse what is
 // not positive. apps/web's parseAmountInput reads the same es-AR text but
 // refuses a lone "1.234", which a keypad types meaning one and a fraction; a
 // sheet means a thousand. They become one parser if both read it alike.
-export function parseSheetDecimal(cell: SheetCell): string | null {
+export function parseSheetDecimal(
+  cell: SheetCell,
+  convention: NumberConvention = "es-AR",
+): string | null {
   if (typeof cell === "number") {
     if (!Number.isFinite(cell) || Math.abs(cell) >= 1e21) return null;
     const fixed = Number(cell.toPrecision(15))
@@ -113,7 +177,10 @@ export function parseSheetDecimal(cell: SheetCell): string | null {
       .replace(/\.?0+$/, "");
     return decimalOrNull(fixed === "-0" ? "0" : fixed);
   }
-  const text = cell.replace(/\s/g, "").replace(CURRENCY_PREFIX, "");
+  const text = numberText(cell);
+  if (convention === "US") {
+    return US_NUMBER.test(text) ? decimalOrNull(text.replace(/,/g, "")) : null;
+  }
   if (text.includes(",")) {
     const [whole = "", fraction, extra] = text.split(",");
     if (extra !== undefined) return null;
@@ -198,6 +265,9 @@ export function columnMappingFor(headers: readonly string[]) {
       quantity: header,
       price: header.nullable(),
       value: header.nullable(),
+      // Mappings saved before a sheet's cost or account was read have none.
+      cost: header.nullable().optional(),
+      account: header.nullable().optional(),
       currency: header.nullable(),
       date: header.nullable(),
       currencyDefault: currencySchema.nullable(),
@@ -209,27 +279,55 @@ export type ColumnMapping = z.infer<ReturnType<typeof columnMappingFor>>;
 
 // The draft a mapped sheet yields: the first DRAFT_ROW_LIMIT rows that make a
 // valid holding, and the latest date of the date column up to `today`
-// (YYYY-MM-DD).
+// (YYYY-MM-DD). `skippedRows` are the holdings it leaves out, for the user:
+// rows with a symbol and a quantity that make none or come past the limit.
+// `unreadRows` are the rows
+// before the limit with a quantity that make no holding, symbol or not, for
+// telling whether a mapping reads the sheet.
 export function sheetToDraft(
   sheet: Sheet,
   mapping: ColumnMapping,
   today: string,
-): ImportDraft {
+): { draft: ImportDraft; skippedRows: number; unreadRows: number } {
   const cellOf = (row: readonly SheetCell[], header: string | null) => {
     const index = header === null ? -1 : sheet.headers.indexOf(header);
     return index === -1 ? "" : (row[index] ?? "");
   };
+  // Each figure column reads as its cells show, or as the figure columns
+  // together show when its own cells tell nothing, or else as es-AR.
+  const cellsOf = (header: string | null) =>
+    sheet.rows.map((row) => cellOf(row, header));
+  const figureHeaders = [mapping.quantity, mapping.price, mapping.value];
+  const costHeader = mapping.cost ?? null;
+  const accountOf = (row: readonly SheetCell[]) =>
+    mapping.account
+      ? String(cellOf(row, mapping.account)).trim().slice(0, 60) || undefined
+      : undefined;
+  const sheetConvention =
+    numberConventionOf(figureHeaders.flatMap(cellsOf)) ?? "es-AR";
+  const conventionOf = (header: string | null) =>
+    numberConventionOf(cellsOf(header)) ?? sheetConvention;
+  const conventions = {
+    quantity: conventionOf(mapping.quantity),
+    price: conventionOf(mapping.price),
+    value: conventionOf(mapping.value),
+    cost: conventionOf(costHeader),
+  };
   // A price or value that is not a positive amount is left out, never the row.
-  const optionalDecimal = (cell: SheetCell) => {
-    const parsed = String(cell).trim() === "" ? null : parseSheetDecimal(cell);
+  const optionalDecimal = (cell: SheetCell, convention: NumberConvention) => {
+    const parsed =
+      String(cell).trim() === "" ? null : parseSheetDecimal(cell, convention);
     return positiveDecimalSchema.safeParse(parsed).success ? parsed : null;
   };
   // "1.500" is a thousand and a half in es-AR and one and a half with a dot
-  // keypad: read as the first, but for the user to check.
+  // keypad, and "1,500" the other way round: read as its column's convention,
+  // but for the user to check.
   const ambiguous = (cell: SheetCell) =>
-    typeof cell === "string" && AMBIGUOUS_DOT.test(cell.trim());
+    typeof cell === "string" && AMBIGUOUS.test(numberText(cell));
 
   const rows: DraftRow[] = [];
+  let skippedRows = 0;
+  let unreadRows = 0;
   let documentDate: string | null = null;
   for (const row of sheet.rows) {
     const date =
@@ -241,15 +339,28 @@ export function sheetToDraft(
     ) {
       documentDate = date;
     }
-    if (rows.length === DRAFT_ROW_LIMIT) continue;
-    const figures = [mapping.quantity, mapping.price, mapping.value].map(
-      (header) => cellOf(row, header),
-    );
+    // A row with a symbol and a quantity is a holding; one without either is
+    // a section's title or a total.
+    const holding =
+      String(cellOf(row, mapping.symbol)).trim() !== "" &&
+      String(cellOf(row, mapping.quantity)).trim() !== "";
+    if (rows.length === DRAFT_ROW_LIMIT) {
+      if (holding) skippedRows += 1;
+      continue;
+    }
+    const figures = figureHeaders.map((header) => cellOf(row, header));
     const parsed = draftRowSchema.safeParse({
       symbol: String(cellOf(row, mapping.symbol)),
-      quantity: parseSheetDecimal(cellOf(row, mapping.quantity)),
-      price: optionalDecimal(cellOf(row, mapping.price)),
-      value: optionalDecimal(cellOf(row, mapping.value)),
+      quantity: parseSheetDecimal(
+        cellOf(row, mapping.quantity),
+        conventions.quantity,
+      ),
+      price: optionalDecimal(cellOf(row, mapping.price), conventions.price),
+      value: optionalDecimal(cellOf(row, mapping.value), conventions.value),
+      ...(costHeader !== null && {
+        cost: optionalDecimal(cellOf(row, costHeader), conventions.cost),
+      }),
+      ...(accountOf(row) && { account: accountOf(row) }),
       currency:
         currencyOf(String(cellOf(row, mapping.currency))) ??
         mapping.currencyDefault,
@@ -257,6 +368,14 @@ export function sheetToDraft(
       page: null,
     });
     if (parsed.success) rows.push(parsed.data);
+    else {
+      if (holding) skippedRows += 1;
+      if (String(cellOf(row, mapping.quantity)).trim() !== "") unreadRows += 1;
+    }
   }
-  return { documentDate, rows, totals: [] };
+  return {
+    draft: { documentDate, rows, totals: [] },
+    skippedRows,
+    unreadRows,
+  };
 }

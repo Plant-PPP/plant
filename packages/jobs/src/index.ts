@@ -6,6 +6,10 @@ import {
   type FileDeletionJobDeps,
 } from "./functions/delete-expired-files";
 import {
+  deleteOrphanFiles,
+  type OrphanFileJobDeps,
+} from "./functions/delete-orphan-files";
+import {
   type ImportJobDeps,
   importDocument,
 } from "./functions/import-document";
@@ -18,8 +22,12 @@ export type {
   FileDeletionStorePort,
 } from "./functions/delete-expired-files";
 export type {
+  OrphanFile,
+  OrphanFileJobDeps,
+  OrphanFileStorePort,
+} from "./functions/delete-orphan-files";
+export type {
   ImportJobDeps,
-  ImportRead,
   ImportStorePort,
   ImportToRead,
 } from "./functions/import-document";
@@ -28,28 +36,34 @@ export { inngestJobRunner, type JobRunner } from "./job-runner";
 
 const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
 
+const RUNS_JOBS = DEV_SERVER_MODE || process.env.PLANT_RUN_JOBS === "1";
+
 // Options for the framework `serve()` in apps/web. Unauthenticated syncs stay
 // off: an unsigned PUT would otherwise re-register the app with Inngest at a
 // URL taken from the request's Host header. Syncs from the dashboard and the
 // Vercel integration are signed, so they keep working. `satisfies` makes a
 // misspelled option a type error instead of a silent default.
 //
-// refresh-quotes, import-document and delete-expired-files register only in dev-server mode, and
-// only then are their dependencies built. Dev mode checks no signature, so its
-// registered URL is the loopback `next dev` binds, never the request's Host.
+// refresh-quotes, import-document, delete-expired-files and
+// delete-orphan-files register in dev-server mode, and on a deployment only
+// where PLANT_RUN_JOBS is "1" (the one environment whose Supabase they may
+// write); only then are their dependencies built. Dev mode checks no signature, so its registered URL is
+// the loopback `next dev` binds, never the request's Host.
 export function createServeOptions(opts: {
   quotes?: () => QuoteJobDeps;
   imports?: () => ImportJobDeps;
   files?: () => FileDeletionJobDeps;
+  orphans?: () => OrphanFileJobDeps;
 }) {
   return {
     client: inngest,
-    functions: DEV_SERVER_MODE
+    functions: RUNS_JOBS
       ? [
           ping,
           ...(opts.quotes ? [refreshQuotes(opts.quotes())] : []),
           ...(opts.imports ? [importDocument(opts.imports())] : []),
           ...(opts.files ? [deleteExpiredFiles(opts.files())] : []),
+          ...(opts.orphans ? [deleteOrphanFiles(opts.orphans())] : []),
         ]
       : [ping],
     enableUnauthedSync: false,

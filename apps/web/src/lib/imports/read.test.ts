@@ -2,31 +2,26 @@ jest.mock("server-only", () => ({}), { virtual: true });
 
 import { readImportForReview, readImports } from "./read";
 
-const filters: unknown[][] = [];
-const clientOf = (list: unknown, count: number | null) => ({
+const rpcs: string[] = [];
+const clientOf = (list: unknown, used: number | null) => ({
   from: () => {
-    let head = false;
     const builder = {
-      select: (_: string, options?: { head?: boolean }) => {
-        head = options?.head === true;
-        return builder;
-      },
+      select: () => builder,
       order: () => builder,
       limit: () => builder,
-      gte: (...args: unknown[]) => (filters.push(args), builder),
       then: (resolve: (value: unknown) => unknown) =>
-        resolve(
-          head
-            ? { status: 200, count, data: null, error: null }
-            : { status: 200, data: list, error: null },
-        ),
+        resolve({ status: 200, data: list, error: null }),
     };
     return builder;
   },
+  rpc: async (name: string) => (
+    rpcs.push(name),
+    { status: 200, data: used, error: null }
+  ),
 });
 
 it("lists each import by its file and account, dated in Buenos Aires", async () => {
-  filters.length = 0;
+  rpcs.length = 0;
   const read = await readImports(
     clientOf(
       [
@@ -41,7 +36,6 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
       ],
       3,
     ) as never,
-    "2026-10-13",
   );
   expect(read).toEqual({
     used: 3,
@@ -54,12 +48,13 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
         error: null,
         documentDate: null,
         documentTotals: [],
+        skippedRows: 0,
         rows: [],
         createdOn: "2026-09-30",
       },
     ],
   });
-  expect(filters).toEqual([["created_at", "2026-10-01T00:00:00-03:00"]]);
+  expect(rpcs).toEqual(["imports_used_this_month"]);
 });
 
 it("says why a failed import stopped, and keeps a read one's date", async () => {
@@ -85,7 +80,6 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
       ],
       2,
     ) as never,
-    "2026-10-13",
   );
   expect(
     read.items.map(({ error, documentDate }) => [error, documentDate]),
@@ -96,9 +90,9 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
 });
 
 it("throws when the count is missing", async () => {
-  await expect(
-    readImports(clientOf([], null) as never, "2026-10-13"),
-  ).rejects.toThrow("imports read failed");
+  await expect(readImports(clientOf([], null) as never)).rejects.toThrow(
+    "imports read failed",
+  );
 });
 
 describe("readImportForReview", () => {
@@ -116,7 +110,11 @@ describe("readImportForReview", () => {
       type: "bond" as const,
     },
   ];
-  const clientWith = (found: unknown[], items: unknown[]) => ({
+  const clientWith = (
+    found: unknown[],
+    items: unknown[],
+    operations: unknown[] = [],
+  ) => ({
     from: (table: string) => {
       const builder = {
         select: () => builder,
@@ -127,7 +125,14 @@ describe("readImportForReview", () => {
           resolve({
             status: 200,
             error: null,
-            data: table === "imports" ? found : items,
+            data:
+              table === "imports"
+                ? found
+                : table === "import_operations"
+                  ? operations
+                  : table === "import_debts"
+                    ? []
+                    : items,
           }),
       };
       return builder;
@@ -141,6 +146,7 @@ describe("readImportForReview", () => {
     created_at: "2026-10-12T15:00:00+00:00",
     printed_total_ars: "90000.00",
     printed_total_usd: null,
+    skipped_rows: 0,
     document: { file_name: "resumen.pdf", source_connection_id: "a1" },
   };
   const item = (patch: Record<string, unknown>) => ({
@@ -263,5 +269,90 @@ describe("readImportForReview", () => {
     expect(
       await readImportForReview(clientWith([], []) as never, "i1", INSTRUMENTS),
     ).toBeNull();
+  });
+  it("reads a draft of operations, asking for what it does not name", async () => {
+    const operation = (patch: Record<string, unknown>) => ({
+      id: "o1",
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: "AAPL",
+      quantity: "5",
+      price: "18000",
+      amount: null,
+      charges: "120.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "high",
+      source_page: 1,
+      ...patch,
+    });
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [],
+        [
+          operation({}),
+          operation({ id: "o2", symbol: null, source_page: null }),
+          operation({
+            id: "o3",
+            symbol: "GD30D",
+            // Read as pesos: a dollar line is a dollar trade all the same.
+            currency: "ARS",
+            price: "65",
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read?.rows).toEqual([]);
+    expect(
+      read?.operations?.map(({ id, symbol, currency, price, source }) => ({
+        id,
+        symbol,
+        currency,
+        price,
+        source,
+      })),
+    ).toEqual([
+      {
+        id: "o1",
+        symbol: "AAPL",
+        currency: "ARS",
+        price: "18000",
+        source: "Página 1",
+      },
+      {
+        id: "o2",
+        symbol: "",
+        currency: "ARS",
+        price: "18000",
+        source: "El documento no dice qué activo es",
+      },
+      {
+        id: "o3",
+        symbol: "GD30",
+        currency: "USD",
+        price: "65",
+        source: 'Página 1 · Leído como "GD30D"',
+      },
+    ]);
+  });
+  it("proposes a printed cost only when it reads as one unit's", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({ id: "unit", cost: "15000" }),
+          item({ id: "total", cost: "900000" }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read?.rows.map((row) => [row.id, row.cost])).toEqual([
+      ["unit", "15000"],
+      ["total", undefined],
+    ]);
   });
 });

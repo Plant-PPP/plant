@@ -1,3 +1,5 @@
+import type { FileUploadType } from "@plant/sources";
+
 // What Cargar takes: PDFs, pictures and spreadsheets up to 20 MiB, each
 // checked by its first bytes, not by what the browser says it is. The bucket
 // and uploaded_documents hold the same list and limit.
@@ -5,15 +7,8 @@ export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 
 export const UPLOAD_BUCKET = "imports";
 
-export type UploadType =
-  | "application/pdf"
-  | "image/png"
-  | "image/jpeg"
-  | "image/webp"
-  | "image/heic"
-  | "text/csv"
-  | "application/vnd.ms-excel"
-  | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+// The types the file_upload source has a reader for.
+export type UploadType = FileUploadType;
 
 const startsWith = (bytes: Uint8Array, prefix: readonly number[], at = 0) =>
   bytes.length >= at + prefix.length &&
@@ -22,20 +17,15 @@ const startsWith = (bytes: Uint8Array, prefix: readonly number[], at = 0) =>
 const ascii = (text: string) => [...text].map((char) => char.charCodeAt(0));
 
 // The first bytes of a CSV: text, with no control byte but tab and line
-// breaks, and valid UTF-8 (a BOM allowed).
+// breaks. Its encoding may be UTF-8 or Windows-1252, which the reader tells
+// apart.
 function looksLikeText(bytes: Uint8Array): boolean {
   const head = bytes.subarray(0, 4096);
   for (const byte of head) {
     const breakOrTab = byte >= 0x09 && byte <= 0x0d;
     if ((byte < 0x20 && !breakOrTab) || byte === 0x7f) return false;
   }
-  try {
-    // stream: a character cut at the end of the head is not an error.
-    new TextDecoder("utf-8", { fatal: true }).decode(head, { stream: true });
-    return true;
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 // HEIC: an ISO box of type ftyp whose brand is one of HEIF's.

@@ -6,6 +6,7 @@ import {
   archivePortfolio,
   createAccount,
   createPortfolio,
+  deletableRows,
   deleteAccount,
   deletePortfolio,
   deletesUploads,
@@ -144,5 +145,47 @@ describe("deletesUploads", () => {
     const deleted = deleteAccount(emptied, account);
     expect(deleted.result).toEqual({ ok: true, id: account });
     expect(deleted.state.imports).toEqual([]);
+  });
+});
+
+describe("deletableRows", () => {
+  const LEMON = "e3000000-0000-4000-8000-000000000004";
+  const UPLOAD = "e3000000-0000-4000-8000-000000000005";
+  const withLemon = createAccount(
+    createPortfolio(state, { name: "Vacía" }, NEW_ID).state,
+    {
+      institution: "Lemon",
+      includeInTaxReport: true,
+      defaultPortfolioId: PRINCIPAL,
+    },
+    LEMON,
+  ).state;
+
+  it("offers exactly the rows whose delete goes through", () => {
+    const rows = deletableRows(withLemon);
+    expect(rows.sourceConnections).toContain(LEMON);
+    expect(rows.portfolios).toContain(NEW_ID);
+    expect(rows.portfolios).not.toContain(PRINCIPAL);
+    for (const id of rows.portfolios) {
+      expect(deletePortfolio(withLemon, id).result.ok).toBe(true);
+    }
+    for (const id of rows.sourceConnections) {
+      expect(deleteAccount(withLemon, id).result.ok).toBe(true);
+    }
+    for (const row of withLemon.accounts) {
+      if (!rows.sourceConnections.includes(row.id)) {
+        expect(deleteAccount(withLemon, row.id).result.ok).toBe(false);
+      }
+    }
+    expect(rows.deletesUploads).toEqual([]);
+  });
+
+  it("marks the deletable accounts that take uploads", () => {
+    const uploaded = addImport(withLemon, {
+      id: UPLOAD,
+      fileName: "resumen.pdf",
+      accountId: LEMON,
+    }).state;
+    expect(deletableRows(uploaded).deletesUploads).toEqual([LEMON]);
   });
 });

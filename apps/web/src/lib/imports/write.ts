@@ -1,6 +1,6 @@
 import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
-import { buenosAiresDate, type Database } from "@plant/shared";
+import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -133,15 +133,11 @@ async function accountOpen(client: Client, id: string): Promise<boolean> {
 // Whether the user has imports left this month. The database checks it again
 // when the import is filed.
 async function quotaLeft(client: Client): Promise<boolean> {
-  const today = buenosAiresDate(new Date());
-  const result = await client
-    .from("imports")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", `${today.slice(0, 7)}-01T00:00:00-03:00`);
-  if (classifyPostgrestResult(result, 200) || result.count === null) {
+  const result = await client.rpc("imports_used_this_month");
+  if (classifyPostgrestResult(result, 200) || typeof result.data !== "number") {
     throw new Error("imports count failed");
   }
-  return result.count < IMPORTS_PER_MONTH;
+  return result.data < IMPORTS_PER_MONTH;
 }
 
 // The size and type a file's name and size say, before any byte is sent.
@@ -249,6 +245,11 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     return { ok: false, code };
   };
   try {
+    // The terms or the account may have changed since the upload started.
+    if (!(await termsAccepted(client))) return await refuse("terms");
+    if (!(await accountOpen(client, accountId))) {
+      return await refuse("not_found");
+    }
     const { data: blob, error } = await bucket.download(path);
     if (error || !blob) {
       log(line, "not_found");
@@ -260,6 +261,56 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     if (!bytesMatch(file.type, bytes)) return await refuse("type");
     const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
+
+    // The same file uploaded before: one that cannot be read any more (its
+    // reading failed, its import never started or its file expired) goes,
+    // with its import and its file, and this one is read; one still queued,
+    // whose job may never have started, is started again (the job's event id
+    // keeps it to one run) and this upload goes.
+    const earlier = await client
+      .from("uploaded_documents")
+      .select("id, storage_path, file_deleted_at, imports(id, status)")
+      .eq("user_id", claims.sub)
+      .eq("source_connection_id", accountId)
+      .eq("sha256", sha256)
+      .limit(1);
+    if (classifyPostgrestResult(earlier, 200)) {
+      throw earlier.error ?? new Error("earlier document not read");
+    }
+    const failed = earlier.data?.[0];
+    const unreadable =
+      failed !== undefined &&
+      (failed.imports === null ||
+        failed.imports.status === "failed" ||
+        (failed.imports.status === "queued" &&
+          failed.file_deleted_at !== null));
+    const queued =
+      !unreadable && failed?.imports?.status === "queued"
+        ? failed.imports
+        : null;
+    if (queued) {
+      if (failed?.storage_path !== path) await bucket.remove([path]);
+      log(line, "ok");
+      await startJob(
+        { ...line, step: "job", started: performance.now() },
+        queued.id,
+      );
+      revalidatePath("/import");
+      return { ok: true, importId: queued.id };
+    }
+    if (failed && unreadable) {
+      const removed = await client
+        .from("uploaded_documents")
+        .delete()
+        .eq("user_id", claims.sub)
+        .eq("id", failed.id);
+      if (classifyPostgrestResult(removed, 204)) {
+        throw removed.error ?? new Error("earlier document not removed");
+      }
+      if (failed.storage_path !== path) {
+        await bucket.remove([failed.storage_path]);
+      }
+    }
 
     const document = await client
       .from("uploaded_documents")

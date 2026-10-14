@@ -1,5 +1,7 @@
 # Threat model: the import quota and deleting uploaded files
 
+> **Superseded by [2026-10-14-uploads-and-reading.md](2026-10-14-uploads-and-reading.md).** The quota now counts `private.import_requests`, not live imports, and the deletion job runs on a deployment behind `PLANT_RUN_JOBS` (PLA-73).
+
 Branch `feat/pla-42-quota-and-file-deletion` (PLA-42, PLA-43). The PR template requires it for a change in grants and a new job: `service_role` gets to read when a file is due and mark it deleted, and a new Inngest function removes files across every user.
 
 ## Scope and assets

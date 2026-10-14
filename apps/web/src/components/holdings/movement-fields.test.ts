@@ -169,6 +169,10 @@ it("takes a bond's price as quoted, per 100 nominal, and sends it per unit", () 
     parts: [{ portfolioId: PRINCIPAL, size: "1000" }],
   };
   expect(toOperationInput(bond, "bond")).toMatchObject({ price: "0.855" });
+  // Per unit it would need more decimals than a price keeps.
+  expect(
+    toOperationInput({ ...bond, price: "98.1234567" }, "bond"),
+  ).toMatchObject({ price: null });
   const rates = {
     mep: { sell: "1", date: "2026-03-02" },
     ccl: { sell: "1", date: "2026-03-02" },
@@ -390,6 +394,61 @@ describe("a transfer", () => {
       { portfolioId: PRINCIPAL, size: "0,5" },
       { portfolioId: PRINCIPAL, size: "0,5", accountId: "a2" },
     ]);
+  });
+
+  it("sends its fee as the operation's charges", () => {
+    const fields = {
+      ...moving,
+      parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+      charges: [{ kind: "commission" as const, label: "", amount: "1,5" }],
+    };
+    expect(
+      operationInputSchema.parse(toOperationInput(fields, "crypto")),
+    ).toMatchObject({
+      charges: [{ kind: "commission", label: null, amount: "1.5" }],
+    });
+  });
+
+  it("names a fee with no amount as the charges", () => {
+    const parsed = operationInputSchema.safeParse(
+      toOperationInput(
+        {
+          ...moving,
+          parts: [moving.parts[0]!, { portfolioId: LARGO, size: "0,5" }],
+          charges: [{ kind: "commission", label: "", amount: "" }],
+        },
+        "crypto",
+      ),
+    );
+    if (parsed.success) throw new Error("expected a refusal");
+    expect(
+      movementRefusal(parsed.error, { kind: "transfer", balance: null }).field,
+    ).toBe("charges");
+  });
+
+  it("keeps the charges typed when it becomes a transfer", () => {
+    const charges = [{ kind: "commission" as const, label: "", amount: "2" }];
+    expect(
+      withKind({ ...newMovementFields(defaults), charges }, "transfer", {
+        transfer: PRINCIPAL,
+      }).charges,
+    ).toEqual(charges);
+  });
+
+  it("reads back its fee from the side the units leave", () => {
+    const fee = [{ kind: "commission" as const, label: null, amount: "3" }];
+    expect(
+      operationFields(
+        [
+          {
+            movement: { ...leg("out", null), charges: fee } as Movement,
+            portfolioId: PRINCIPAL,
+          },
+          { movement: leg("in", null), portfolioId: LARGO },
+        ],
+        { accountId: ACCOUNT, instrument: "BTC", type: "crypto" },
+      ).charges,
+    ).toEqual([{ kind: "commission", label: "", amount: "3" }]);
   });
 
   it("reads back a carried cost as not changed", () => {
@@ -685,9 +744,15 @@ describe("the key of a transfer's suggested cost", () => {
   );
   const key = transferCostKey(fields);
 
-  it("stays the same while the note or the reference is typed", () => {
+  it("stays the same while the note, the reference or the fee is typed", () => {
     expect(transferCostKey({ ...fields, note: "Para largo plazo" })).toBe(key);
     expect(transferCostKey({ ...fields, reference: "OP-12" })).toBe(key);
+    expect(
+      transferCostKey({
+        ...fields,
+        charges: [{ kind: "commission", label: "", amount: "1" }],
+      }),
+    ).toBe(key);
   });
 
   it("changes with the quantity, the date and where the units go", () => {

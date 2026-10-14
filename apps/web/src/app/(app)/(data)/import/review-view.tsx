@@ -2,10 +2,19 @@ import { buenosAiresDate } from "@plant/shared";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { confirmImport } from "@/app/(app)/(data)/import/actions";
+import {
+  confirmImport,
+  confirmImportDebts,
+  confirmImportOperations,
+} from "@/app/(app)/(data)/import/actions";
+import { ImportDebtsReview } from "@/components/imports/import-debts-review";
+import { ImportOperationsReview } from "@/components/imports/import-operations-review";
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { readLiabilities } from "@/lib/debts/read";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
+import { routeRows } from "@/lib/imports/accounts-routing";
+import { markLoaded } from "@/lib/imports/operations-loaded";
 import { IMPORTS_VIEW_EVENT, readImportForReview } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
 import { readReferenceDollar } from "@/lib/holdings/read";
@@ -48,26 +57,80 @@ export async function ImportReviewView({ id }: { id: string }) {
   const account = ledger.accounts.find((each) => each.id === item.accountId);
   const state = { ...ledger, referenceDollar };
 
+  if (item.debts) {
+    const debts = await readLiabilities(client).catch(fail);
+    serverLog.info(IMPORTS_VIEW_EVENT, {
+      ...contextFields(context),
+      "plant.outcome": "ok",
+      "plant.import.draft": "debts",
+      "plant.import.row_count": item.debts.length,
+    });
+    return (
+      <ImportDebtsReview
+        item={item}
+        institution={account?.institution ?? ""}
+        cards={debts.active.filter((debt) => debt.kind === "credit_card")}
+        backHref="/import"
+        doneHref="/debts"
+        actions={{ confirm: confirmImportDebts }}
+      />
+    );
+  }
+
+  const lines = item.operations ?? item.rows;
   serverLog.info(IMPORTS_VIEW_EVENT, {
     ...contextFields(context),
     "plant.outcome": "ok",
-    "plant.import.row_count": item.rows.length,
-    "plant.import.unknown_count": item.rows.filter((row) => row.symbol === "")
+    "plant.import.draft": item.operations ? "operations" : "holdings",
+    "plant.import.row_count": lines.length,
+    "plant.import.unknown_count": lines.filter((row) => row.symbol === "")
       .length,
   });
 
+  if (item.operations) {
+    return (
+      <ImportOperationsReview
+        item={{
+          ...item,
+          operations: markLoaded(state, item.accountId, item.operations),
+        }}
+        institution={account?.institution ?? ""}
+        instruments={ledger.instruments}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: confirmImportOperations }}
+      />
+    );
+  }
+
+  const heldDate =
+    item.documentDate !== null && item.documentDate <= today
+      ? item.documentDate
+      : today;
+  // A document listing several accounts routes each row to the user's
+  // account its label names, and offers every account to choose from.
+  const several = item.rows.some((row) => row.accountLabel !== undefined);
   return (
     <ImportReview
-      item={item}
+      item={
+        several
+          ? { ...item, rows: routeRows(item.rows, ledger.accounts) }
+          : item
+      }
       institution={account?.institution ?? ""}
       instruments={ledger.instruments}
-      held={heldOn(
-        state,
-        item.accountId,
-        item.documentDate !== null && item.documentDate <= today
-          ? item.documentDate
-          : today,
-      )}
+      held={heldOn(state, item.accountId, heldDate)}
+      accounts={
+        several
+          ? ledger.accounts.map((each) => ({
+              id: each.id,
+              institution: each.institution,
+              held: heldOn(state, each.id, heldDate),
+              defaultPortfolioId: each.portfolio.id,
+              elsewhere: heldElsewhere(state, each.id),
+            }))
+          : undefined
+      }
       routing={
         account && {
           portfolios: ledger.portfolios,

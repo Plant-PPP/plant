@@ -1,4 +1,3 @@
-import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 
 import {
@@ -38,10 +37,9 @@ export default async function ImportPage() {
     page: "/import",
     params: {},
   };
-  const today = buenosAiresDate(new Date());
   const [accounts, reads] = await Promise.all([
     readSourceConnections(client, context),
-    Promise.all([readImports(client, today), termsAccepted(client)]).catch(
+    Promise.all([readImports(client), termsAccepted(client)]).catch(
       (error: unknown) => {
         serverLog.error(
           IMPORTS_VIEW_EVENT,

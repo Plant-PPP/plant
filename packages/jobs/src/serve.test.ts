@@ -106,3 +106,42 @@ describe("/api/inngest outside development", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("the jobs on a deployment", () => {
+  const ids = (env: Record<string, string | undefined>) =>
+    loadWithEnv({ NODE_ENV: "production", ...env }, () => {
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      const { createServeOptions } =
+        require("./index") as typeof import("./index");
+      /* eslint-enable @typescript-eslint/no-require-imports */
+      const built = jest.fn(() => ({}) as never);
+      const options = createServeOptions({
+        quotes: built,
+        imports: built,
+        files: built,
+        orphans: built,
+      });
+      return {
+        ids: options.functions.map((each) => each.id()),
+        built: built.mock.calls.length,
+        origin: "serveOrigin" in options,
+      };
+    });
+
+  it("register only ping, building nothing, by default", () => {
+    expect(ids({})).toEqual({ ids: ["ping"], built: 0, origin: false });
+  });
+
+  it("register every job where PLANT_RUN_JOBS is 1, at the request's URL", () => {
+    const { ids: registered, built, origin } = ids({ PLANT_RUN_JOBS: "1" });
+    expect(registered).toEqual([
+      "ping",
+      "refresh-quotes",
+      "import-document",
+      "delete-expired-files",
+      "delete-orphan-files",
+    ]);
+    expect(built).toBe(4);
+    expect(origin).toBe(false);
+  });
+});

@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(47);
+SELECT plan(46);
 
 -- The hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.hint_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -90,12 +90,13 @@ SELECT hasnt_function('private', 'guard_holder_write', 'there is no holder guard
 
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.source_connections') $$,
-  ARRAY['(table):SELECT',
+  ARRAY['(table):SELECT', '(table):DELETE',
         'institution:INSERT', 'include_in_tax_report:INSERT',
-        'default_portfolio_id:INSERT',
+        'default_portfolio_id:INSERT', 'website:INSERT', 'icon:INSERT',
         'institution:UPDATE', 'include_in_tax_report:UPDATE',
-        'default_portfolio_id:UPDATE', 'archived_at:UPDATE'],
-  'a user reads accounts and writes only their fields and the archive flag'
+        'default_portfolio_id:UPDATE', 'archived_at:UPDATE',
+        'website:UPDATE', 'icon:UPDATE'],
+  'a user reads and deletes accounts and writes only their fields and the archive flag'
 );
 
 -- The import job reads an account's institution (import_items_isolation_test.sql).
@@ -139,6 +140,7 @@ SELECT results_eq(
     'O CREATE TRIGGER portfolio_setup_1_lock BEFORE INSERT OR UPDATE ON public.source_connections FOR EACH ROW EXECUTE FUNCTION private.lock_portfolio_setup()',
     'O CREATE TRIGGER portfolio_setup_2_stamp BEFORE UPDATE ON public.source_connections FOR EACH ROW EXECUTE FUNCTION private.stamp_archived_at()',
     'O CREATE TRIGGER portfolio_setup_3_guard BEFORE INSERT OR UPDATE ON public.source_connections FOR EACH ROW EXECUTE FUNCTION private.guard_source_connection_write()',
+    'O CREATE TRIGGER portfolio_setup_3_guard_delete BEFORE DELETE ON public.source_connections FOR EACH ROW EXECUTE FUNCTION private.guard_source_connection_delete()',
     'O CREATE TRIGGER source_connections_set_updated_at BEFORE UPDATE ON public.source_connections FOR EACH ROW EXECUTE FUNCTION private.set_updated_at()'
   ],
   'source_connections has the lock, stamp and guard triggers, all enabled'
@@ -151,8 +153,10 @@ SELECT set_eq(
        AND contype IN ('c', 'u', 'f') AND conname NOT LIKE '%user_id_fkey' $$,
   ARRAY['source_connections CHECK ((((char_length(institution) >= 1) AND (char_length(institution) <= 60)) AND (institution = btrim(institution))))',
         'source_connections UNIQUE (user_id, id)',
-        'source_connections FOREIGN KEY (user_id, default_portfolio_id) REFERENCES portfolios(user_id, id)'],
-  'an institution is bounded with no outer spaces, and an account points only at its user''s portfolio'
+        'source_connections FOREIGN KEY (user_id, default_portfolio_id) REFERENCES portfolios(user_id, id)',
+        'source_connections CHECK ((((char_length(website) >= 9) AND (char_length(website) <= 200)) AND (website ~ ''^https://[^\s]+$''::text)))',
+        'source_connections CHECK (((char_length(icon) <= 87500) AND (icon ~ ''^data:image/(png|x-icon|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$''::text)))'],
+  'an institution is bounded with no outer spaces, a site is https, an icon is an image''s data URL, and an account points only at its user''s portfolio'
 );
 
 -- ── The lock ────────────────────────────────────────────────────────────────
@@ -344,12 +348,6 @@ SELECT throws_ok(
   $$ UPDATE public.source_connections SET id = gen_random_uuid(), created_at = now() $$,
   '42501', 'permission denied for table source_connections',
   'a user cannot rewrite an account''s id or creation time'
-);
-
-SELECT throws_ok(
-  $$ DELETE FROM public.source_connections $$,
-  '42501', 'permission denied for table source_connections',
-  'a user cannot delete accounts'
 );
 
 -- Updates with no WHERE reach only the user's own rows: every row an update

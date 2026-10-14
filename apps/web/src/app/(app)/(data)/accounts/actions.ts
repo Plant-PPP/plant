@@ -1,9 +1,16 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import {
+  type IconResult,
+  readInstitutionIcon as readIcon,
+} from "@/lib/institutions/read-icon";
+import { removeAccountUploads } from "@/lib/portfolio-setup/account-uploads";
 import {
   activeWrite,
   restoreWrite,
   runArchive,
+  runDelete,
   runInsert,
   runUpdate,
 } from "@/lib/portfolio-setup/run-write";
@@ -55,6 +62,11 @@ export async function archivePortfolio(id: unknown): Promise<WriteResult> {
   return runArchive("portfolios", "archive_portfolio", id);
 }
 
+// Only a portfolio nothing ever used; the guard refuses the rest.
+export async function deletePortfolio(id: unknown): Promise<WriteResult> {
+  return runDelete("portfolios", "delete_portfolio", id);
+}
+
 const restorePortfolioRow = restoreWrite(
   "portfolios",
   (input: Partial<PortfolioInput>) =>
@@ -95,7 +107,14 @@ function sourceConnectionRow(input: SourceConnectionInput) {
     institution: input.institution,
     include_in_tax_report: input.includeInTaxReport,
     default_portfolio_id: input.defaultPortfolioId,
+    ...(input.website !== undefined && { website: input.website }),
+    ...(input.icon !== undefined && { icon: input.icon }),
   };
+}
+
+// The icon of the site the user gives for an account's institution.
+export async function readInstitutionIcon(site: unknown): Promise<IconResult> {
+  return readIcon(site);
 }
 
 export async function createSourceConnection(
@@ -155,4 +174,19 @@ export async function restoreSourceConnection(
     id,
     restoreWrite("source_connections", sourceConnectionRow),
   );
+}
+
+// Only an account no holding ever sat in. Its uploads go with it, their files
+// first.
+export async function deleteSourceConnection(
+  id: unknown,
+): Promise<WriteResult> {
+  const result = await runDelete(
+    "source_connections",
+    "delete_source_connection",
+    id,
+    removeAccountUploads,
+  );
+  if (result.ok) revalidatePath("/import");
+  return result;
 }

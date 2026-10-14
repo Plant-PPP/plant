@@ -49,11 +49,18 @@ it("maps a format's columns once, then reads the same format without the model",
     bytes: STATEMENT,
     mimeType: CSV,
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   };
 
   const first = await read({ ...input, userId: "u1" });
-  expect(first.read).toEqual({ reader: "sheet", mapping: "miss" });
+  expect(first.read).toEqual({
+    reader: "sheet",
+    mapping: "miss",
+    skippedRows: 0,
+    disputes: 0,
+    documentKind: null,
+  });
   expect(
     first.draft.rows.map(({ symbol, quantity, price }) => [
       symbol,
@@ -66,7 +73,13 @@ it("maps a format's columns once, then reads the same format without the model",
   ]);
 
   const second = await read({ ...input, userId: "u1" });
-  expect(second.read).toEqual({ reader: "sheet", mapping: "hit" });
+  expect(second.read).toEqual({
+    reader: "sheet",
+    mapping: "hit",
+    skippedRows: 0,
+    disputes: 0,
+    documentKind: null,
+  });
   expect(mapColumns).toHaveBeenCalledTimes(1);
 
   // Another user with the same institution and headers maps their own.
@@ -88,9 +101,75 @@ it("keeps no mapping that reads no rows", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(draft.rows).toEqual([]);
+  expect(kept.size).toBe(0);
+});
+
+describe("with quantity, price and value mapped", () => {
+  const VALUED = csv(
+    "Especie;Cantidad;Precio;Valor;Moneda\n" +
+      "MELI;3;1.234,5;3.703,5;Pesos\n" +
+      "AL30;1.000;65.432,10;654.321;Pesos\n" +
+      "GGAL;10;5.000;50.000;Pesos\n",
+  );
+  const VALUED_MAPPING: ColumnMapping = { ...MAPPING, value: "Valor" };
+  const readWith = async (mapping: ColumnMapping) => {
+    const { port, kept } = memoryMappings();
+    const read = spreadsheetReader({
+      mappings: port,
+      mapColumns: jest.fn().mockResolvedValue(mapping),
+      now,
+    });
+    const { draft } = await read({
+      bytes: VALUED,
+      mimeType: CSV,
+      userId: "u1",
+      importId: "i1",
+      lastAttempt: false,
+      institution: "IOL",
+    });
+    return { draft, kept };
+  };
+
+  it("keeps a mapping whose rows agree, a bond's price per 100 nominal", async () => {
+    const { draft, kept } = await readWith(VALUED_MAPPING);
+    expect(draft.rows).toHaveLength(3);
+    expect(kept.size).toBe(1);
+  });
+
+  it("keeps no mapping whose rows mostly disagree", async () => {
+    const { draft, kept } = await readWith({
+      ...VALUED_MAPPING,
+      price: "Valor",
+      value: "Precio",
+    });
+    expect(draft.rows).toHaveLength(3);
+    expect(kept.size).toBe(0);
+  });
+});
+
+it("keeps no mapping that skips as many rows as it reads", async () => {
+  const { port, kept } = memoryMappings();
+  const read = spreadsheetReader({
+    mappings: port,
+    mapColumns: jest.fn().mockResolvedValue(MAPPING),
+    now,
+  });
+  const { draft, read: how } = await read({
+    bytes: csv(
+      "Especie;Cantidad;Precio;Moneda\nAL30;100;1;Pesos\nGGAL;n/a;1;Pesos\n",
+    ),
+    mimeType: CSV,
+    userId: "u1",
+    importId: "i1",
+    lastAttempt: false,
+    institution: "IOL",
+  });
+  expect(draft.rows).toHaveLength(1);
+  expect(how.skippedRows).toBe(1);
   expect(kept.size).toBe(0);
 });
 
@@ -104,6 +183,7 @@ it("maps again when a kept mapping no longer fits the headers", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(how.mapping).toBe("miss");
@@ -127,6 +207,7 @@ it("reads the rows even when the mapping cannot be kept", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(draft.rows).toHaveLength(2);

@@ -4,7 +4,7 @@ import {
   PORTFOLIO,
 } from "@/lib/ledger/ledger-fixture.test-support";
 
-import { heldOn, writeImport } from "./confirm";
+import { heldOn, writeImport, writeImportRouted } from "./confirm";
 
 const row = (symbol: string, quantity: string, price: string | null) => ({
   id: symbol,
@@ -81,4 +81,205 @@ it("refuses an account the user does not have", () => {
   expect(
     writeImport(emptyLedger(), { ...ITEM, accountId: "x" }, [], newId).result,
   ).toEqual({ ok: false, code: "not_found" });
+});
+
+it("refuses a statement older than a later statement of the instrument", () => {
+  const first = writeImport(
+    emptyLedger(),
+    { ...ITEM, id: "first", date: "2026-09-14" },
+    [row("AAPL", "50", "18000")],
+    newId,
+  ).state;
+  const latest = writeImport(
+    first,
+    { ...ITEM, id: "latest", date: "2026-09-20" },
+    [row("AAPL", "100", "18000")],
+    newId,
+  ).state;
+  const written = writeImport(
+    latest,
+    { ...ITEM, date: "2026-09-17" },
+    [row("AAPL", "80", "18000")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: false, code: "opens_later" });
+  expect(written.state).toBe(latest);
+});
+
+it("writes nothing for an older statement that changes nothing", () => {
+  const first = writeImport(
+    emptyLedger(),
+    { ...ITEM, id: "first", date: "2026-09-14" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  ).state;
+  const latest = writeImport(
+    first,
+    { ...ITEM, id: "latest", date: "2026-09-20" },
+    [row("AAPL", "8", "18000")],
+    newId,
+  ).state;
+  const written = writeImport(
+    latest,
+    { ...ITEM, date: "2026-09-17" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: ITEM.id });
+  expect(written.operations).toEqual([]);
+});
+
+it("refuses a statement older than a holding the account already has", () => {
+  const opened = writeImport(
+    emptyLedger(),
+    { ...ITEM, id: "later" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  ).state;
+  const written = writeImport(
+    opened,
+    { ...ITEM, date: "2026-09-01" },
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: false, code: "opens_later" });
+  expect(written.operations).toEqual([]);
+  expect(written.state).toBe(opened);
+});
+
+it("opens a holding at the cost the review kept, else at the price", () => {
+  const written = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", "18000"), cost: "12000" }],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const [movement] = [...written.state.movements.values()].flat();
+  expect(movement).toMatchObject({ kind: "opening_balance", price: "12000" });
+  const withoutPrice = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", null), cost: "12000" }],
+    newId,
+  );
+  expect(withoutPrice.result).toEqual({ ok: true, id: "i1" });
+});
+
+it("adds units to a holding already held at the price, not the position's cost", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", "20000"), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+  const last = [...topped.state.movements.values()].flat().at(-1);
+  expect(last).toMatchObject({ kind: "adjustment", price: "20000" });
+});
+
+it("adds units to a held position at the cost when no price was kept", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", null), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+});
+
+describe("a document listing several accounts", () => {
+  const OTHER = "0a000000-0000-4000-8000-00000000000b";
+  const ledger = () => {
+    const base = emptyLedger();
+    return {
+      ...base,
+      accounts: [
+        ...base.accounts,
+        {
+          id: OTHER,
+          institution: "Nexo",
+          includeInTaxReport: true,
+          portfolio: base.accounts[0]!.portfolio,
+        },
+      ],
+    };
+  };
+
+  it("writes each group into the account it was routed to", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [
+        {
+          ...row("AAPL", "5", "18000"),
+          accountLabel: "IOL",
+          accountId: ACCOUNT,
+        },
+        {
+          ...row("AAPL", "2", "18000"),
+          accountLabel: "Nexo",
+          accountId: OTHER,
+        },
+      ],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(heldOn(written.state, ACCOUNT, "2026-09-15").get("AAPL")).toBe("5");
+    expect(heldOn(written.state, OTHER, "2026-09-15").get("AAPL")).toBe("2");
+  });
+
+  it("refuses a row the review routed to no account", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [{ ...row("AAPL", "5", "18000"), accountLabel: "BingX" }],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("refuses a transfer from an account the document lists", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [
+        {
+          ...row("AAPL", "5", "18000"),
+          accountLabel: "IOL",
+          accountId: ACCOUNT,
+        },
+        {
+          ...row("MSFT", "2", "18000"),
+          accountLabel: "Nexo",
+          accountId: OTHER,
+          transferFrom: ACCOUNT,
+        },
+      ],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("refuses an account that is not the user's", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [{ ...row("AAPL", "5", "18000"), accountLabel: "X", accountId: "nope" }],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "not_found" });
+  });
 });

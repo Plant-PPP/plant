@@ -1,5 +1,6 @@
 import { quoteFeeds } from "@plant/core";
 import { createServeOptions } from "@plant/jobs";
+import { createSourceForConnection, fileUploadSource } from "@plant/sources";
 import { serve } from "inngest/next";
 
 import { aiCostSink } from "@/lib/ai/ai-cost-sink";
@@ -9,15 +10,16 @@ import {
   columnMappingsSink,
   fileDeletionSink,
   importSink,
+  orphanFileSink,
 } from "@/lib/imports/import-sink";
-import { readDocument } from "@/lib/imports/read-document";
 import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { serverLog } from "@/lib/log/server-log";
 import { getJson } from "@/lib/quotes/get-json";
 import { quoteSink } from "@/lib/quotes/quote-sink";
 
-// The quotes, import and file deletion jobs run only under `next dev` until PLA-73 registers
-// them on a deployment: plant-staging is also production's database.
+// The quotes, import and file deletion jobs run under `next dev`, and on a
+// deployment only where PLANT_RUN_JOBS is "1": plant-staging is also
+// production's database, so one environment runs them.
 export const { GET, POST, PUT } = serve(
   createServeOptions({
     quotes: () => ({
@@ -28,13 +30,20 @@ export const { GET, POST, PUT } = serve(
     }),
     imports: () => ({
       store: importSink(),
-      extract: readDocument({
-        document: documentExtractor({ record: aiCostSink() }),
-        sheet: spreadsheetReader({
-          mappings: columnMappingsSink(),
-          mapColumns: columnMapper({ record: aiCostSink() }),
-        }),
-      }),
+      // Every account reads uploaded files until a broker API arrives.
+      source: createSourceForConnection(
+        { kind: "file_upload" },
+        {
+          file_upload: () =>
+            fileUploadSource({
+              document: documentExtractor({ record: aiCostSink() }),
+              sheet: spreadsheetReader({
+                mappings: columnMappingsSink(),
+                mapColumns: columnMapper({ record: aiCostSink() }),
+              }),
+            }),
+        },
+      ),
       log: serverLog,
     }),
     files: () => ({
@@ -42,5 +51,6 @@ export const { GET, POST, PUT } = serve(
       log: serverLog,
       now: () => new Date(),
     }),
+    orphans: () => ({ store: orphanFileSink(), log: serverLog }),
   }),
 );

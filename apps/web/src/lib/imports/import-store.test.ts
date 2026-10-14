@@ -77,34 +77,56 @@ it("refuses an import with no account to read the institution of", async () => {
   expect(error).toMatchObject({ step: "institution", code: "no_data" });
 });
 
+const DRAFT = {
+  documentDate: "2026-09-30",
+  rows: [
+    {
+      symbol: "AAPL",
+      quantity: "5",
+      price: null,
+      value: "90000",
+      currency: "ARS" as const,
+      confidence: "low" as const,
+      page: 2,
+    },
+  ],
+  totals: [{ currency: "USD" as const, amount: "120.5" }],
+};
+
+// PostgREST's answers to a draft's writes, the import still being read
+// unless `beingRead` says otherwise.
+const draftAnswers =
+  ({ beingRead = true, marked = true } = {}) =>
+  ({ method }: Call) => {
+    if (method === "GET")
+      return { status: 200, body: beingRead ? [{ id: IMPORT }] : [] };
+    if (method === "POST") return { status: 201 };
+    if (method === "PATCH")
+      return { status: 200, body: marked ? [{ id: IMPORT }] : [] };
+    return { status: 204 };
+  };
+
 it("replaces the draft, then marks the import ready at the document's date", async () => {
-  const { store, calls } = storeWith(({ method }) => ({
-    status: method === "POST" ? 201 : 204,
-  }));
-  await store.saveDraft(IMPORT, USER, {
-    documentDate: "2026-09-30",
-    rows: [
-      {
-        symbol: "AAPL",
-        quantity: "5",
-        price: null,
-        value: "90000",
-        currency: "ARS",
-        confidence: "low",
-        page: 2,
-      },
-    ],
-    totals: [{ currency: "USD", amount: "120.5" }],
-  });
+  const { store, calls } = storeWith(draftAnswers());
+  await store.saveDraft(IMPORT, USER, DRAFT, 2);
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
+    "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
     "POST /rest/v1/import_items",
     "PATCH /rest/v1/imports",
   ]);
-  expect(calls[0]!.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
-  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
-  expect(calls[2]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
-  expect(calls[1]!.body).toEqual([
+  for (const call of [calls[0]!, calls[5]!]) {
+    expect(call.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
+    expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+    expect(call.url.searchParams.get("status")).toBe("in.(queued,reading)");
+  }
+  for (const call of [calls[1]!, calls[2]!, calls[3]!]) {
+    expect(call.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
+    expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  }
+  expect(calls[4]!.body).toEqual([
     {
       user_id: USER,
       import_id: IMPORT,
@@ -113,23 +135,101 @@ it("replaces the draft, then marks the import ready at the document's date", asy
       quantity: "5",
       price: null,
       value: "90000",
+      cost: null,
+      account: null,
       currency: "ARS",
       confidence: "low",
       source_page: 2,
     },
   ]);
-  expect(calls[2]!.body).toEqual({
+  expect(calls[5]!.body).toEqual({
     status: "ready",
     document_date: "2026-09-30",
     printed_total_ars: null,
     printed_total_usd: "120.5",
+    skipped_rows: 2,
   });
 });
 
-it("marks an import failed with its reason", async () => {
+it("replaces any draft with the operations, then marks the import ready", async () => {
+  const { store, calls } = storeWith(draftAnswers());
+  await store.saveOperations(IMPORT, USER, [
+    {
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: null,
+      quantity: "100",
+      price: "5000",
+      amount: null,
+      charges: "25.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "low",
+      page: 1,
+    },
+  ]);
+  expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
+    "GET /rest/v1/imports",
+    "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
+    "POST /rest/v1/import_operations",
+    "PATCH /rest/v1/imports",
+  ]);
+  expect(calls[4]!.body).toEqual([
+    {
+      user_id: USER,
+      import_id: IMPORT,
+      position: 0,
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: null,
+      quantity: "100",
+      price: "5000",
+      amount: null,
+      charges: "25.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "low",
+      source_page: 1,
+    },
+  ]);
+  expect(calls[5]!.body).toEqual({
+    status: "ready",
+    document_date: null,
+    printed_total_ars: null,
+    printed_total_usd: null,
+    skipped_rows: 0,
+  });
+});
+
+it("writes no draft for an import no longer being read", async () => {
+  const { store, calls } = storeWith(draftAnswers({ beingRead: false }));
+  await store.saveDraft(IMPORT, USER, DRAFT, 0);
+  expect(calls.map(({ method }) => method)).toEqual(["GET"]);
+});
+
+it("throws when the import stopped being read before it was marked ready", async () => {
+  const { store } = storeWith(draftAnswers({ marked: false }));
+  const error = await store
+    .saveDraft(IMPORT, USER, DRAFT, 0)
+    .catch((e: unknown) => e);
+  expect(error).toMatchObject({ step: "draft", code: "not_being_read" });
+});
+
+it("marks an import reading only from queued or reading", async () => {
+  const { store, calls } = storeWith(() => ({ status: 204 }));
+  await store.reading(IMPORT, USER);
+  expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  expect(calls[0]!.url.searchParams.get("status")).toBe("in.(queued,reading)");
+  expect(calls[0]!.body).toEqual({ status: "reading" });
+});
+
+it("marks an import failed with its reason, only while it is being read", async () => {
   const { store, calls } = storeWith(() => ({ status: 204 }));
   await store.failed(IMPORT, USER, "nothing_found");
   expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  expect(calls[0]!.url.searchParams.get("status")).toBe("in.(queued,reading)");
   expect(calls[0]!.body).toEqual({
     status: "failed",
     failure: "nothing_found",
@@ -145,4 +245,43 @@ it("throws a store error with only the step and code", async () => {
   expect(error).toBeInstanceOf(ImportStoreError);
   expect(error).toMatchObject({ step: "reading", code: "XX000" });
   expect(String(error)).not.toContain("row details");
+});
+
+it("replaces any draft with a card statement's debts, then marks the import ready", async () => {
+  const { store, calls } = storeWith(draftAnswers());
+  await store.saveDebts(IMPORT, USER, [
+    {
+      label: "Visa",
+      lender: null,
+      currency: "ARS",
+      balance: "250000.5",
+      minimumPayment: null,
+      dueDate: "2026-10-20",
+      confidence: "high",
+      page: 1,
+    },
+  ]);
+  expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
+    "GET /rest/v1/imports",
+    "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
+    "POST /rest/v1/import_debts",
+    "PATCH /rest/v1/imports",
+  ]);
+  expect(calls[4]!.body).toEqual([
+    {
+      user_id: USER,
+      import_id: IMPORT,
+      position: 0,
+      label: "Visa",
+      lender: null,
+      currency: "ARS",
+      balance: "250000.5",
+      minimum_payment: null,
+      due_date: "2026-10-20",
+      confidence: "high",
+      source_page: 1,
+    },
+  ]);
 });

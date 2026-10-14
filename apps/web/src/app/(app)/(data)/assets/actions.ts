@@ -19,7 +19,7 @@ import {
 } from "@/lib/portfolio-setup/run-write";
 import { noInput } from "@/lib/portfolio-setup/schemas";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-import { deleteHoldingRow } from "@/lib/ledger/write";
+import { createInstrumentHolding, deleteHoldingRow } from "@/lib/ledger/write";
 import type { DecimalWrite } from "@/lib/supabase/decimal-columns";
 
 // The arguments come from the browser and are parsed before any write. Updates
@@ -34,6 +34,8 @@ type Update = Tables["holdings"]["Update"];
 type KeysOf<T> = T extends unknown ? keyof T : never;
 
 export async function createHolding(input: unknown): Promise<WriteResult> {
+  if ((input as { asset_class?: unknown } | null)?.asset_class === "instrument")
+    return createInstrumentHolding(input);
   return runInsert(
     {
       table: "holdings",
@@ -71,7 +73,10 @@ export async function updateHolding(
     },
     id,
     (args) => {
-      const { asset_class, ...columns } = args.input;
+      const { asset_class, ...edited } = args.input;
+      // An instrument's units are what its movements leave.
+      const columns: Partial<typeof edited> = { ...edited };
+      if (asset_class === "instrument") delete columns.amount;
       const row = columns satisfies DecimalWrite<
         Update,
         Extract<Exclude<KeysOf<HoldingUpdate>, "asset_class">, keyof Update>,

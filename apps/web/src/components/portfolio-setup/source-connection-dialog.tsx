@@ -1,10 +1,11 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { IconResult } from "@/lib/institutions/read-icon";
 import {
   CHOICE_MESSAGES,
   WRITE_MESSAGES,
@@ -24,6 +26,7 @@ import type {
 } from "@/lib/portfolio-setup/read";
 import {
   InstitutionField,
+  OTHER_INSTITUTION,
   chosenInstitution,
   institutionChoice,
   typedInstitution,
@@ -36,6 +39,27 @@ export type SourceConnectionFields = {
   institution: string;
   includeInTaxReport: boolean;
   defaultPortfolioId: string;
+  // The site of an institution the app ships no icon of, and the icon Plant's
+  // server read from it; null when there is none.
+  website: string | null;
+  icon: string | null;
+};
+
+// Why a site gave no icon, as the user reads it.
+const ICON_MESSAGES: Record<
+  Extract<IconResult, { ok: false }>["reason"],
+  string
+> = {
+  url: "Escribí el sitio con https://, por ejemplo https://www.banco.com.ar.",
+  private:
+    "Ese sitio no es público. Usá la dirección que abrís en el navegador.",
+  unreachable:
+    "No pudimos abrir ese sitio. Revisá la dirección o dejalo vacío.",
+  not_image:
+    "Ese sitio no tiene un ícono que podamos mostrar. Dejalo vacío para usar la inicial.",
+  too_large:
+    "El ícono de ese sitio es muy grande. Dejalo vacío para usar la inicial.",
+  failed: "No pudimos leer el ícono. Probá de nuevo o dejalo vacío.",
 };
 
 // The dialog's starting values. An archived portfolio is not among the page's
@@ -52,16 +76,20 @@ export function initialFields(
       // The oldest active portfolio listed, the first one the user had unless
       // they archived it.
       defaultPortfolioId: portfolios.at(-1)?.id ?? "",
+      website: null,
+      icon: null,
     };
   }
   return {
     institution: row.institution,
     includeInTaxReport: row.includeInTaxReport,
     defaultPortfolioId: row.portfolio.id,
+    website: row.website ?? null,
+    icon: row.icon ?? null,
   };
 }
 
-type AccountField = "institution" | "portfolio";
+type AccountField = "institution" | "website" | "portfolio";
 
 const MESSAGES = WRITE_MESSAGES.source_connections;
 
@@ -85,6 +113,8 @@ export function accountRow(
     institution: normalizeName(fields.institution),
     includeInTaxReport: fields.includeInTaxReport,
     portfolio: { ...portfolio, archived: false },
+    ...(fields.website !== null && { website: fields.website }),
+    ...(fields.icon !== null && { icon: fields.icon }),
   };
 }
 
@@ -110,6 +140,7 @@ export function SourceConnectionDialog({
   savedRemovesOpener = false,
   onClose,
   onSubmit,
+  readIcon,
 }: {
   title: string;
   description: string;
@@ -126,10 +157,14 @@ export function SourceConnectionDialog({
     fields: SourceConnectionFields,
     portfolio: PortfolioRow,
   ) => boolean;
+  // Reads the icon of the site typed for an institution the app ships no
+  // icon of; without it the dialog asks for no site.
+  readIcon?: (site: string) => Promise<IconResult>;
 }) {
   const ids = {
     institution: useId(),
     portfolio: useId(),
+    website: useId(),
     tax: useId(),
     alert: useId(),
   };
@@ -143,6 +178,10 @@ export function SourceConnectionDialog({
   const { alert, setAlert, firstField, invalid, settle, pick } =
     useFieldAlert<AccountField>(initialError, refusedField, "institution");
   const institutionTrigger = useRef<HTMLButtonElement>(null);
+  const website = useRef<HTMLInputElement>(null);
+  const [reading, startReading] = useTransition();
+  // Closed while the icon was read: the read saves nothing.
+  const closed = useRef(false);
   const otherInstitution = useRef<HTMLInputElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
@@ -174,15 +213,49 @@ export function SourceConnectionDialog({
       institution,
       includeInTaxReport,
       defaultPortfolioId: offered.id,
+      website: null,
+      icon: null,
     };
-    if (!onSubmit(fields, offered)) return;
+    const site = website.current?.value.trim() ?? "";
+    if (institutionPick !== OTHER_INSTITUTION || !readIcon || site === "") {
+      save(fields, offered);
+      return;
+    }
+    // The same site keeps the icon read before.
+    if (site === initial.website && initial.icon !== null) {
+      save(
+        { ...fields, website: initial.website, icon: initial.icon },
+        offered,
+      );
+      return;
+    }
+    startReading(async () => {
+      const read = await readIcon(site).catch((): IconResult => ({
+        ok: false,
+        reason: "failed",
+      }));
+      if (closed.current) return;
+      if (!read.ok) {
+        setAlert({ text: ICON_MESSAGES[read.reason], field: "website" });
+        website.current?.focus();
+        return;
+      }
+      save({ ...fields, website: read.website, icon: read.icon }, offered);
+    });
+  }
+
+  function save(fields: SourceConnectionFields, portfolio: PortfolioRow) {
+    if (!onSubmit(fields, portfolio)) return;
     focus.markSaved();
     onClose();
   }
 
   return (
     <AppDialog
-      onClose={onClose}
+      onClose={() => {
+        closed.current = true;
+        onClose();
+      }}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
@@ -210,6 +283,32 @@ export function SourceConnectionDialog({
               autoFocus={firstField === "institution"}
             />
           </div>
+
+          {readIcon && (
+            <div
+              className="grid gap-2"
+              hidden={institutionPick !== OTHER_INSTITUTION}
+            >
+              <Label htmlFor={ids.website}>Sitio web · Opcional</Label>
+              <Input
+                ref={website}
+                id={ids.website}
+                inputMode="url"
+                placeholder="https://www.banco.com.ar"
+                defaultValue={initial.website ?? ""}
+                maxLength={200}
+                onChange={() => settle("website")}
+                aria-invalid={invalid("website")}
+                aria-describedby={invalid("website") ? ids.alert : undefined}
+                autoComplete="off"
+                autoFocus={firstField === "website"}
+              />
+              <p className="text-xs text-muted-foreground">
+                Lo usamos para mostrar su ícono. Lo baja Plant, sin avisarle a
+                nadie.
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor={ids.portfolio}>Cartera por defecto</Label>
@@ -252,6 +351,7 @@ export function SourceConnectionDialog({
           <Button
             type="submit"
             size="sm"
+            disabled={reading}
             aria-describedby={alert ? ids.alert : undefined}
           >
             {submitLabel}

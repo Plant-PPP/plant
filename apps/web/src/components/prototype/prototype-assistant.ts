@@ -1,8 +1,4 @@
-import {
-  DENOMINATORS,
-  type QuoteSnapshot,
-  valueLiabilities,
-} from "@plant/core";
+import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
 import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
 import {
@@ -15,6 +11,8 @@ import {
   signed,
 } from "@/lib/format/amount";
 import { countOf, folded } from "@/lib/format/text";
+import { ADVICE_ANSWER, isAdvice } from "@/lib/assistant/advice";
+import { netWorthOf, rateOf, SOURCES } from "@/lib/assistant/figures";
 import {
   type AssistantMessage,
   barsOf,
@@ -35,7 +33,7 @@ import {
   CALENDAR_DAYS,
   type IncomeEvent,
   incomeCalendar,
-} from "./prototype-income";
+} from "@/lib/assistant/income";
 import {
   holdingsView,
   instrumentHoldings,
@@ -43,12 +41,6 @@ import {
 } from "./prototype-store";
 
 type Answer = Omit<AssistantMessage, "id">;
-
-// A question that asks what to do, not what happened: "¿qué compro?",
-// "¿me conviene vender?", "¿me recomendás…?", "¿debería invertir…?",
-// "¿vendo Apple?", "¿qué hago con mis Tesla?", "¿es buen momento?".
-const ADVICE =
-  /\b(que|cual|cuanto) (compro|vendo|invierto)\b|^\W*(compro|vendo|invierto)\b|conviene|recomend|(deberia|debo|tengo que) (comprar|vender|invertir)|me sale (comprar|vender)|que hago con|buen momento/;
 
 // Where a result comes from, bar by bar: what is left once sales (net of
 // their charges), income and the units held are counted is what purchases'
@@ -145,7 +137,7 @@ function calendarAnswer(
   base: Pick<Answer, "role" | "asOf" | "rate">,
 ): Answer {
   const events = incomeCalendar(state, snapshot, unit);
-  const sources = ["Movimientos", "Tus tenencias", "Cotizaciones"];
+  const sources = [SOURCES.movements, SOURCES.holdings, SOURCES.quotes];
   if (events.length === 0) {
     return {
       ...base,
@@ -170,6 +162,7 @@ function calendarAnswer(
     } En los próximos ${CALENDAR_DAYS} días, ${formatAmount(sum(events), unit)}${complete ? "" : WITHOUT_PRICE}. Los dividendos y cupones son una estimación por lo que pagó cada activo antes; los vencimientos incluyen el capital.`,
     charts: [
       barsOf(
+        "income",
         "Cobros por mes",
         unit,
         months.map((each) => ({
@@ -203,26 +196,15 @@ export function prototypeAnswer(
 ): Answer {
   const asked = folded(question);
   const words = asked.split(/[^a-z0-9]+/);
-  const spec = DENOMINATORS[unit];
-  const dollar = "fx" in spec ? snapshot.fx[spec.fx] : undefined;
-  const rate =
-    "fx" in spec && dollar
-      ? { label: spec.fx.toUpperCase(), sell: dollar.sell }
-      : null;
   const base = {
     role: "assistant" as const,
     asOf: state.today,
-    rate,
+    rate: rateOf(unit, snapshot),
     table: null,
   };
 
-  if (ADVICE.test(asked)) {
-    return {
-      ...base,
-      text: "No te puedo decir qué comprar ni qué vender: Plant explica tus datos y no recomienda. Sí te puedo contar cómo vienen tus inversiones, cuánto ganaste o cuánto cobraste.",
-      charts: [],
-      sources: [],
-    };
+  if (isAdvice(question)) {
+    return { ...base, text: ADVICE_ANSWER, charts: [], sources: [] };
   }
 
   const instrument = state.instruments.find(
@@ -240,7 +222,7 @@ export function prototypeAnswer(
         ...base,
         text: `No tenés ni tuviste ${instrument.name} en Plant.`,
         charts: [],
-        sources: ["Tus tenencias"],
+        sources: [SOURCES.holdings],
       };
     }
     const summary = instrumentSummary(holdings, flows, state.today, value);
@@ -270,6 +252,7 @@ export function prototypeAnswer(
       charts: returns
         ? [
             barsOf(
+              "ranking",
               `${instrument.symbol}: de dónde sale el resultado`,
               unit,
               resultBars(returns.result, unit, [
@@ -287,7 +270,7 @@ export function prototypeAnswer(
             ),
           ]
         : [],
-      sources: ["Movimientos", "Cotizaciones"],
+      sources: [SOURCES.movements, SOURCES.quotes],
     };
   }
 
@@ -318,7 +301,7 @@ export function prototypeAnswer(
           })),
         },
       ],
-      sources: ["Cierres", "Cotizaciones"],
+      sources: [SOURCES.closes, SOURCES.quotes],
     };
   }
 
@@ -332,7 +315,7 @@ export function prototypeAnswer(
         ...base,
         text: "No tenés deudas cargadas en Plant.",
         charts: [],
-        sources: ["Deudas"],
+        sources: [SOURCES.debts],
       };
     }
     const byId = new Map(owed.items.map((item) => [item.id, item.value]));
@@ -349,8 +332,11 @@ export function prototypeAnswer(
       text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${countOf(count, "deuda", "deudas")}.${
         count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
       }`,
-      charts: valued.length > 0 ? [barsOf("Lo que debés", unit, valued)] : [],
-      sources: ["Deudas", "Cotizaciones"],
+      charts:
+        valued.length > 0
+          ? [barsOf("debts", "Lo que debés", unit, valued)]
+          : [],
+      sources: [SOURCES.debts, SOURCES.quotes],
     };
   }
 
@@ -363,6 +349,7 @@ export function prototypeAnswer(
       text: `En ${thisYear.year} tus dividendos, cupones y rendimientos sumaron ${formatAmount(thisYear.totals.income, unit)}, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
       charts: [
         barsOf(
+          "income",
           `Rentas de ${thisYear.year}`,
           unit,
           thisYear.months.map((month) => ({
@@ -371,7 +358,7 @@ export function prototypeAnswer(
           })),
         ),
       ],
-      sources: ["Movimientos"],
+      sources: [SOURCES.movements],
     };
   }
 
@@ -403,6 +390,7 @@ export function prototypeAnswer(
       }${thisYear.complete ? "" : PARTIAL_YEAR} En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
       charts: [
         barsOf(
+          "income",
           `Resultado por mes de ${thisYear.year}`,
           unit,
           thisYear.months.map((month) => ({
@@ -411,7 +399,7 @@ export function prototypeAnswer(
           })),
         ),
       ],
-      sources: ["Cierres", "Cotizaciones"],
+      sources: [SOURCES.closes, SOURCES.quotes],
     };
   }
 
@@ -428,13 +416,13 @@ export function prototypeAnswer(
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });
+    const worth = netWorthOf(today.figures.endValue, owed.total);
     return {
       ...base,
-      // Today's net worth as Resumen shows it, and what is held as that
-      // figure plus what is owed, so the three add up.
-      text: `Tu patrimonio neto es ${formatAmount(today.figures.endValue, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(stored(plus(exactOf(today.figures.endValue), exactOf(owed.total))), unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
+      text: `Tu patrimonio neto es ${formatAmount(worth.netWorth, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(worth.assets, unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
       charts: [
         barsOf(
+          "distribution",
           "Cómo está repartido",
           unit,
           (
@@ -450,7 +438,7 @@ export function prototypeAnswer(
             .sort((a, b) => compareDecimals(b.value, a.value)),
         ),
       ],
-      sources: ["Tus tenencias", "Deudas", "Cotizaciones"],
+      sources: [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
     };
   }
 

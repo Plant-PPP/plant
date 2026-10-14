@@ -43,7 +43,8 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
       expect(res.body).toEqual([]);
     });
 
-    if (OWNED_KEYS[table] === "id") {
+    const key = OWNED_KEYS[table];
+    if (key !== "user_id") {
       const idOfB = async (): Promise<string> => {
         const own = await rest(
           b,
@@ -73,15 +74,17 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
         // keeps A from probing which ids exist.
         for (const resolution of ["merge-duplicates", "ignore-duplicates"]) {
           expectError(
-            await rest(a, "POST", `${table}?on_conflict=id`, {
+            await rest(a, "POST", `${table}?on_conflict=${key}`, {
               body,
               headers: { Prefer: `resolution=${resolution}` },
             }),
             403,
           );
         }
+        // PUT filters on every primary key column.
+        const filter = key === "id" ? "" : `user_id=eq.${a.id}&`;
         expectError(
-          await rest(a, "PUT", `${table}?id=eq.${id}`, { body }),
+          await rest(a, "PUT", `${table}?${filter}id=eq.${id}`, { body }),
           403,
         );
       });

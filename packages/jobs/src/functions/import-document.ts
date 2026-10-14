@@ -1,12 +1,19 @@
 import {
+  type DraftDebt,
+  type DraftOperation,
   type ImportDraft,
+  type PortfolioSourcePort,
   SourceError,
   type SourceErrorCode,
+  type SourceReadInfo,
 } from "@plant/sources";
-import type { Database, Logger } from "@plant/shared";
+import { Constants, type Database, type Logger } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
+
+// How many times a failed run is tried again.
+export const IMPORT_RETRIES = 3;
 
 export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
 
@@ -20,18 +27,31 @@ export type ImportToRead = {
 
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
-// the import's id and its user, and saveDraft replaces any draft a failed
-// attempt left.
+// the import's id and its user, and saving a draft of holdings or of
+// operations replaces any draft, of either, a failed attempt left.
 export interface ImportStorePort {
   load(importId: string, userId: string): Promise<ImportToRead | null>;
   download(path: string): Promise<Uint8Array>;
   reading(importId: string, userId: string): Promise<void>;
   // The institution of the account the import's file was uploaded to.
   institution(importId: string, userId: string): Promise<string>;
+  // `skippedRows` are the holdings the reading left out, for the review to
+  // say.
   saveDraft(
     importId: string,
     userId: string,
     draft: ImportDraft,
+    skippedRows: number,
+  ): Promise<void>;
+  saveOperations(
+    importId: string,
+    userId: string,
+    operations: DraftOperation[],
+  ): Promise<void>;
+  saveDebts(
+    importId: string,
+    userId: string,
+    debts: DraftDebt[],
   ): Promise<void>;
   failed(
     importId: string,
@@ -40,24 +60,11 @@ export interface ImportStorePort {
   ): Promise<void>;
 }
 
-// How a file was read: by a model reading the document, or from a
-// spreadsheet's columns, whose mapping was saved already (hit), made now
-// (miss) or not needed (none).
-export type ImportRead = {
-  reader: "document" | "sheet";
-  mapping: "none" | "hit" | "miss";
-};
-
 export type ImportJobDeps = {
   store: ImportStorePort;
-  // Reads a file's holdings, throwing a SourceError when it cannot.
-  extract(input: {
-    importId: string;
-    bytes: Uint8Array;
-    mimeType: string;
-    userId: string;
-    institution: string;
-  }): Promise<{ draft: ImportDraft; read: ImportRead }>;
+  // The connection's source reads a file's holdings, throwing a
+  // SourceError when it cannot.
+  source: PortfolioSourcePort;
   log: Logger;
 };
 
@@ -67,7 +74,10 @@ export type ImportJobDeps = {
 type Prepared =
   | { ok: true; path: string; mimeType: string }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
-type Read = { rows: number } & ImportRead;
+type Read = {
+  rows: number;
+  draft: "holdings" | "operations" | "debts";
+} & SourceReadInfo;
 
 export type ImportSteps = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -80,10 +90,35 @@ type RunContext = {
   event: { data: { importId: string; userId: string } };
 };
 
+const FAILURES: readonly string[] = Constants.public.Enums.import_failure;
+const isFailure = (value: unknown): value is SourceErrorCode =>
+  typeof value === "string" && FAILURES.includes(value);
+
 // Ends the import: a SourceError that a retry would not pass, or a retryable
-// one past its retries.
-const failureOf = (error: unknown): SourceErrorCode =>
-  error instanceof SourceError ? error.code : "extraction_failed";
+// one past its retries. The engine hands a step's error back rebuilt from
+// JSON, without its class, so the code is read from what survives: a
+// SourceError's code, a NonRetriableError's message (the code), or
+// SourceError's message, down the causes.
+export function failureOf(error: unknown): SourceErrorCode {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current !== "object") break;
+    const { code, message, cause } = current as {
+      code?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    if (isFailure(code)) return code;
+    if (isFailure(message)) return message;
+    const named =
+      typeof message === "string"
+        ? /^source failed: (\w+)$/.exec(message)?.[1]
+        : undefined;
+    if (isFailure(named)) return named;
+    current = cause;
+  }
+  return "extraction_failed";
+}
 
 // Reads one queued import's file into its draft. The event names the import
 // and its user; the job trusts neither: the import must be that user's,
@@ -128,18 +163,43 @@ export async function runImportDocument(
     read = await step.run("read", async (): Promise<Read> => {
       try {
         const bytes = await deps.store.download(prepared.path);
-        const { draft, read } = await deps.extract({
+        const reading = await deps.source.read({
           importId,
           bytes,
           mimeType: prepared.mimeType,
           userId,
           institution: await deps.store.institution(importId, userId),
+          lastAttempt: attempt >= IMPORT_RETRIES,
         });
-        if (draft.rows.length === 0) {
-          throw new SourceError("nothing_found", false);
+        const rows =
+          "operations" in reading
+            ? reading.operations.length
+            : "debts" in reading
+              ? reading.debts.length
+              : reading.draft.rows.length;
+        if (rows === 0) throw new SourceError("nothing_found", false);
+        if ("operations" in reading) {
+          await deps.store.saveOperations(importId, userId, reading.operations);
+        } else if ("debts" in reading) {
+          await deps.store.saveDebts(importId, userId, reading.debts);
+        } else {
+          await deps.store.saveDraft(
+            importId,
+            userId,
+            reading.draft,
+            reading.read.skippedRows,
+          );
         }
-        await deps.store.saveDraft(importId, userId, draft);
-        return { rows: draft.rows.length, ...read };
+        return {
+          rows,
+          draft:
+            "operations" in reading
+              ? "operations"
+              : "debts" in reading
+                ? "debts"
+                : "holdings",
+          ...reading.read,
+        };
       } catch (error) {
         if (error instanceof SourceError && !error.retryable) {
           throw new NonRetriableError(error.code, { cause: error });
@@ -148,8 +208,7 @@ export async function runImportDocument(
       }
     });
   } catch (error) {
-    const cause = error instanceof NonRetriableError ? error.cause : error;
-    const failure = failureOf(cause);
+    const failure = failureOf(error);
     await step.run("fail", () => deps.store.failed(importId, userId, failure));
     deps.log.warn("imports.read", {
       ...fields,
@@ -163,8 +222,12 @@ export async function runImportDocument(
     ...fields,
     "plant.outcome": "ok",
     "plant.import.row_count": read.rows,
+    "plant.import.draft": read.draft,
     "plant.import.reader": read.reader,
     "plant.import.mapping": read.mapping,
+    "plant.import.skipped_count": read.skippedRows,
+    "plant.import.dispute_count": read.disputes,
+    "plant.import.document_kind": read.documentKind ?? "unknown",
   });
   return { outcome: "ready", rows: read.rows };
 }
@@ -211,7 +274,7 @@ export const importDocument = (deps: ImportJobDeps) =>
       // One file at a time per user, so one user's statements do not hold
       // everyone else's.
       concurrency: { key: "event.data.userId", limit: 1 },
-      retries: 3,
+      retries: IMPORT_RETRIES,
       onFailure: ({ event }) =>
         failAbandonedImport(deps, event.data.event.data),
     },

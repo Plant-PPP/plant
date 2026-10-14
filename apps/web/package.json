@@ -10,11 +10,15 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "eval:assistant": "node --env-file-if-exists=.env.local node_modules/jest/bin/jest.js --testRegex '\\.eval\\.ts$' --runInBand src/lib/ai/assistant",
+    "eval:extraction": "node --env-file-if-exists=.env.local node_modules/jest/bin/jest.js --testRegex '\\.eval\\.ts$' --runInBand src/lib/ai/evals",
+    "test:e2e:flows": "playwright test -c playwright.flows.config.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.127",
     "@ai-sdk/google": "^3.0.130",
+    "@ai-sdk/react": "3.0.304",
     "@opentelemetry/api": "^1.9.1",
     "@plant/core": "workspace:*",
     "@plant/jobs": "workspace:*",
@@ -36,6 +40,9 @@
     "react-dom": "19.3.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "vega": "6.2.0",
+    "vega-embed": "7.1.0",
+    "vega-lite": "6.4.2",
     "zod": "catalog:"
   },
   "devDependencies": {

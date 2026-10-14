@@ -3,7 +3,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(8);
+SELECT plan(13);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -15,7 +15,7 @@ EXCEPTION WHEN OTHERS THEN
 END
 $f$;
 
-GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO anon, authenticated, service_role;
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -124,6 +124,35 @@ SELECT is(
   1,
   'and keeps its row and its import'
 );
+
+-- ── Deleting files gives no import back ─────────────────────────────────────
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'a0000000-0000-4000-8000-00000000000a', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
+SET LOCAL ROLE authenticated;
+
+DELETE FROM public.uploaded_documents d
+WHERE EXISTS (SELECT 1 FROM public.imports i WHERE i.document_id = d.id);
+
+SELECT is((SELECT count(*)::int FROM public.imports), 0,
+          'a user deletes every file they imported, and its import with it');
+SELECT is(pg_temp.start_one(), 'PT429', 'and still starts no import past the month''s 20');
+SELECT is(public.imports_used_this_month(), 20::bigint,
+          'and reads the month''s 20 used, as the quota counts them');
+
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'b0000000-0000-4000-8000-00000000000b', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', false)::text, true);
+
+SELECT is(public.imports_used_this_month(), 1::bigint, 'another user reads only their own');
+
+RESET ROLE;
+SET LOCAL ROLE anon;
+
+SELECT is(pg_temp.error_of($$ SELECT public.imports_used_this_month() $$), '42501',
+          'anon cannot read the count');
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

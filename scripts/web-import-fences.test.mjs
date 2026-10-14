@@ -438,7 +438,7 @@ flagged.push(
   ],
 );
 
-// Both sinks write past RLS, so every shape a file could use to reach one, and
+// Every sink writes past RLS, so every shape a file could use to reach one, and
 // every way a sink could hand on what it holds, is fenced for each. user is a
 // route that may import the sink.
 const SINKS = [
@@ -459,6 +459,12 @@ const SINKS = [
     spec: "@/lib/imports/import-sink",
     file: "src/lib/imports/import-sink.ts",
     user: "src/app/api/inngest/route.ts",
+  },
+  {
+    name: "assistantSink",
+    spec: "@/lib/assistant/assistant-sink",
+    file: "src/lib/assistant/assistant-sink.ts",
+    user: "src/app/api/chat/route.ts",
   },
 ];
 const sinkParts = ({ spec, file }) => ({
@@ -562,6 +568,12 @@ flagged.push(
     [filePath, 'import "@/lib/quotes/quote-sink";'],
     [filePath, 'import "@/lib/imports/import-sink";'],
   ]),
+  // Only the chat route may use the assistant sink.
+  ...[
+    "src/app/api/inngest/route.ts",
+    "src/app/api/x/route.ts",
+    "src/app/(app)/page.tsx",
+  ].map((filePath) => [filePath, 'import "@/lib/assistant/assistant-sink";']),
 );
 
 flagged.push(
@@ -598,6 +610,12 @@ flagged.push(
   [
     "src/components/holdings/x.tsx",
     'import "../prototype/prototype-store.ts";',
+  ],
+  ["src/lib/ai/x.ts", 'import "@/lib/prototype/fixtures";'],
+  // Only the eval itself may read the prototype, not a helper beside it.
+  [
+    "src/lib/ai/assistant/evals/helpers.ts",
+    'import "@/lib/prototype/fixtures";',
   ],
   ["src/components/prototype/x.ts", 'import "@/lib/supabase/service-role";'],
   ["src/components/prototype/x.ts", '"use server";\nexport const x = 1;'],
@@ -650,6 +668,18 @@ const allowed = [
   [
     "src/lib/ai/ai-cost-sink.test.ts",
     'import { aiCostSink } from "./ai-cost-sink";\nexport const s = aiCostSink;',
+  ],
+  [
+    "src/lib/assistant/assistant-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";',
+  ],
+  [
+    "src/lib/assistant/assistant-sink.test.ts",
+    'import { assistantSink } from "./assistant-sink";\nexport const s = assistantSink;',
+  ],
+  [
+    "src/app/api/chat/route.ts",
+    'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nimport { assistantSink } from "@/lib/assistant/assistant-sink";\nexport async function POST() {\n  aiCostSink();\n  assistantSink();\n  return new Response();\n}',
   ],
   [
     "src/app/api/x/route.ts",
@@ -741,6 +771,11 @@ allowed.push(
   ["src/components/prototype/x.tsx", 'import "@/lib/prototype/fixtures";'],
   ["src/components/prototype/x.test.ts", 'import "@plant/shared/testing";'],
   ["src/lib/prototype/x.test.ts", 'import "@plant/shared/testing";'],
+  // The assistant's model evals run the real chat over the prototype's data.
+  [
+    "src/lib/ai/assistant/evals/x.eval.ts",
+    'import { generateText } from "ai";\nimport "@/lib/prototype/fixtures";',
+  ],
   // Only a path segment named prototype is fenced.
   ["src/lib/x.ts", 'import "./prototypes";'],
 );
@@ -761,9 +796,12 @@ const OVERRIDES = [
   ["src/lib/quotes/quote-sink.test.ts", []],
   ["src/lib/imports/import-sink.ts", []],
   ["src/lib/imports/import-sink.test.ts", []],
+  ["src/lib/assistant/assistant-sink.ts", []],
+  ["src/lib/assistant/assistant-sink.test.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/app/api/inngest/route.ts", []],
+  ["src/app/api/chat/route.ts", []],
   ["src/lib/auth/session-claims-unchecked.ts", []],
   ["src/lib/auth/session-claims.ts", ["reader", "claims"]],
   ["src/lib/auth/session-claims.test.ts", ["reader", "claims"]],
@@ -782,6 +820,7 @@ const OVERRIDES = [
   ["src/app/(app)/(data)/layout.tsx", ["prototype"]],
   ["src/app/(app)/(data)/layout.test.tsx", ["prototype", "testing"]],
   ["src/lib/prototype/x.test.ts", ["prototype", "testing"]],
+  ["src/lib/ai/assistant/evals/x.eval.ts", ["prototype"]],
 ];
 const PROBES = {
   reader: READER,
@@ -791,6 +830,7 @@ const PROBES = {
   sink: 'import "@/lib/ai/ai-cost-sink";',
   quoteSink: 'import "@/lib/quotes/quote-sink";',
   importSink: 'import "@/lib/imports/import-sink";',
+  assistantSink: 'import "@/lib/assistant/assistant-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   testing: 'import "@plant/shared/testing";',
   prototype: 'import "@/lib/prototype/fixtures";',
@@ -801,8 +841,8 @@ for (const [filePath, exempt] of OVERRIDES) {
     if (exempt.includes(probe)) continue;
     // Each block's own allowances: src/lib/ai except the cost sink reaches models,
     // each sink's test reaches its sink, route handlers reach the cost sink,
-    // the Inngest route the quote sink, and the sinks and service-role.ts the
-    // client.
+    // the Inngest route the quote and import sinks, the chat route the
+    // assistant sink, and the sinks and service-role.ts the client.
     if (
       probe === "ai" &&
       filePath.startsWith("src/lib/ai/") &&
@@ -831,8 +871,16 @@ for (const [filePath, exempt] of OVERRIDES) {
       continue;
     }
     if (
+      probe === "assistantSink" &&
+      /assistant-sink\.test\.ts$|^src\/app\/api\/chat\/route\.ts$/.test(
+        filePath,
+      )
+    ) {
+      continue;
+    }
+    if (
       probe === "service" &&
-      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts/.test(
+      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts|assistant-sink\.ts/.test(
         filePath,
       )
     ) {
@@ -898,6 +946,7 @@ for (const [dir, up] of [
     'import "./web/supabase/service-role";',
     'import "./web/ai/ai-cost-sink";',
     'import "./web/quotes/quote-sink";',
+    'import "./web/assistant/assistant-sink";',
     'import "./web/auth/session-claims-unchecked";',
     'import "@plant/shared/testing";',
     'import "./testing/migrations";',

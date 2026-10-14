@@ -1,4 +1,5 @@
 import type {
+  Deletable,
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
@@ -176,6 +177,8 @@ function accountRow(
     institution: parsed.data.institution,
     includeInTaxReport: parsed.data.includeInTaxReport,
     portfolio: { ...portfolio, archived: false },
+    ...(parsed.data.website != null && { website: parsed.data.website }),
+    ...(parsed.data.icon != null && { icon: parsed.data.icon }),
   };
 }
 
@@ -339,4 +342,19 @@ export function deletePortfolio(
     },
     id.data,
   );
+}
+
+// The rows whose delete would go through, the only ones that offer it.
+export function deletableRows(state: PrototypeState): Deletable {
+  const ids = (rows: { id: string }[]) => rows.map((row) => row.id);
+  return {
+    portfolios: ids([...state.portfolios, ...state.archivedPortfolios]).filter(
+      (id) => deletePortfolio(state, id).result.ok,
+    ),
+    sourceConnections: ids([
+      ...state.accounts,
+      ...state.archivedAccounts,
+    ]).filter((id) => deleteAccount(state, id).result.ok),
+    deletesUploads: accountsDeletingUploads(state),
+  };
 }

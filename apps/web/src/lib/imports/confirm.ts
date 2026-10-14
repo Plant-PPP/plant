@@ -52,7 +52,7 @@ export function heldOn(
 
 // The account's instrument holdings with units at the end of a day, with
 // how many, largest first.
-function holdingsOn(state: Ledger, accountId: string, date: string) {
+export function holdingsOn(state: Ledger, accountId: string, date: string) {
   return allRows(state)
     .flatMap((row) => {
       if (
@@ -67,6 +67,37 @@ function holdingsOn(state: Ledger, accountId: string, date: string) {
         : [];
     })
     .sort((a, b) => compareDecimals(b.quantity, a.quantity));
+}
+
+// The instruments whose balance the account set after a day, with an opening
+// balance or an adjustment (a later statement's, or one typed by hand). A
+// statement of that day booked under it would move that balance too; later
+// trades are weighed as they are.
+export function balancedAfter(
+  state: Ledger,
+  accountId: string,
+  date: string,
+): Set<string> {
+  const later = new Set<string>();
+  for (const row of allRows(state)) {
+    if (
+      row.account.id !== accountId ||
+      row.holding.asset_class !== "instrument"
+    ) {
+      continue;
+    }
+    const own = state.movements.get(row.id) ?? [];
+    if (
+      own.some(
+        (each) =>
+          each.date > date &&
+          (each.kind === "opening_balance" || each.kind === "adjustment"),
+      )
+    ) {
+      later.add(row.holding.instrument_symbol);
+    }
+  }
+  return later;
 }
 
 // Each instrument the account holds, summed across its portfolios.
@@ -120,8 +151,11 @@ const reviewedRowSchema = z.union([
     symbol: z.string().min(1),
     quantity: positiveDecimalSchema,
     price: nonNegativeDecimalSchema.nullable(),
+    cost: positiveDecimalSchema.nullable().optional(),
     portfolioId: z.string().min(1).optional(),
     transferFrom: z.string().min(1).optional(),
+    accountLabel: z.string().optional(),
+    accountId: z.string().min(1).optional(),
   }),
 ]);
 
@@ -171,6 +205,7 @@ export function writeImport<S extends Ledger>(
   // later refuses the write, as it would refuse a movement typed by hand.
   const date = item.date;
   const held = heldOn(state, account.id, date);
+  const later = balancedAfter(state, account.id, date);
   for (const row of kept) {
     const instrument = state.instruments.find(
       (each) => each.symbol === row.symbol,
@@ -179,6 +214,8 @@ export function writeImport<S extends Ledger>(
     const diff = difference(row.quantity, held.get(row.symbol) ?? "0");
     const order = compareDecimals(diff, "0");
     if (order === 0) continue;
+    if (later.has(row.symbol))
+      return refuse({ ok: false, code: "opens_later" });
     // The holdings of the instrument with units on that day, largest first.
     const holdings = holdingsOn(next, account.id, date)
       .filter((each) => each.symbol === row.symbol)
@@ -235,9 +272,6 @@ export function writeImport<S extends Ledger>(
     }
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
-      if (row.price === null || compareDecimals(row.price, "0") <= 0) {
-        return refuse({ ok: false, code: "invalid" });
-      }
       parts = [{ portfolio_id: destination, quantity: diff }];
     } else {
       let left = difference("0", diff);
@@ -256,6 +290,15 @@ export function writeImport<S extends Ledger>(
       order > 0 &&
       holdingIn(next, account.id, row.symbol, parts[0]!.portfolio_id) ===
         undefined;
+    // A holding that opens comes in at the average cost the review kept, the
+    // whole position's; units added to one already held come in at the price,
+    // as the average of the whole is not theirs, and at the cost only when no
+    // price was kept.
+    const entry =
+      (opens ? (row.cost ?? row.price) : (row.price ?? row.cost)) ?? null;
+    if (order > 0 && (entry === null || compareDecimals(entry, "0") <= 0)) {
+      return refuse({ ok: false, code: "invalid" });
+    }
     const operationId = newId();
     const written = writeOperation(
       next,
@@ -266,7 +309,7 @@ export function writeImport<S extends Ledger>(
         instrument_symbol: row.symbol,
         date,
         currency: instrument.currency,
-        price: order > 0 ? row.price : "0",
+        price: order > 0 ? entry : "0",
         parts,
         charges: [],
         reference: null,
@@ -280,6 +323,52 @@ export function writeImport<S extends Ledger>(
     );
     if (!written.result.ok) return refuse(written.result);
     operations.push(operationId);
+    next = written.state;
+  }
+  return { state: next, result: { ok: true, id: item.id }, operations };
+}
+
+// The reviewed rows of a document that lists several accounts, each group
+// written into the account the review routed it to, the import's first, all
+// or nothing. A row a document lists under an account the review routed to
+// none is refused, and so is a transfer from an account the document lists,
+// whose figure the document already gives.
+export function writeImportRouted<S extends Ledger>(
+  state: S,
+  item: ImportToWrite,
+  rows: readonly ImportRow[],
+  newId: () => string,
+): ImportWrite<S> {
+  const kept = rows.filter((row) => !row.discarded);
+  if (
+    kept.some(
+      (row) => row.accountLabel !== undefined && row.accountId === undefined,
+    )
+  ) {
+    return { state, result: { ok: false, code: "invalid" }, operations: [] };
+  }
+  const groups = new Map<string, ImportRow[]>([[item.accountId, []]]);
+  for (const row of kept) {
+    const accountId = row.accountId ?? item.accountId;
+    groups.set(accountId, [...(groups.get(accountId) ?? []), row]);
+  }
+  if (
+    groups.size > 1 &&
+    kept.some(
+      (row) => row.transferFrom !== undefined && groups.has(row.transferFrom),
+    )
+  ) {
+    return { state, result: { ok: false, code: "invalid" }, operations: [] };
+  }
+  let next = state;
+  const operations: string[] = [];
+  for (const [accountId, group] of groups) {
+    if (group.length === 0 && accountId !== item.accountId) continue;
+    const written = writeImport(next, { ...item, accountId }, group, newId);
+    if (!written.result.ok) {
+      return { state, result: written.result, operations: [] };
+    }
+    operations.push(...written.operations);
     next = written.state;
   }
   return { state: next, result: { ok: true, id: item.id }, operations };

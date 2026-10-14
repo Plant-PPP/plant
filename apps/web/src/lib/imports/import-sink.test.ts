@@ -10,7 +10,9 @@ import {
   columnMappingsSink,
   fileDeletionSink,
   importSink,
+  orphanFileSink,
 } from "./import-sink";
+import { OrphanFileStoreError } from "./orphan-file-store";
 
 it("rejects every call when there is no secret key", async () => {
   const sink = importSink();
@@ -48,6 +50,15 @@ it("rejects every file deletion call when there is no secret key", async () => {
   ]) {
     const error = await call().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(FileDeletionStoreError);
+    expect(error).toMatchObject({ code: "unconfigured" });
+  }
+});
+
+it("rejects every orphan file call when there is no secret key", async () => {
+  const sink = orphanFileSink();
+  for (const call of [() => sink.orphans(1, null), () => sink.remove(["p"])]) {
+    const error = await call().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(OrphanFileStoreError);
     expect(error).toMatchObject({ code: "unconfigured" });
   }
 });
