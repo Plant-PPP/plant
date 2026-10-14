@@ -45,6 +45,7 @@ export function addImport(
     documentDate: null,
     documentTotals: [],
     skippedRows: 0,
+    origin: "document",
     rows: [],
     createdOn: state.today,
   };

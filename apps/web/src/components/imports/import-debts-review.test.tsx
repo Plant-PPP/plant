@@ -33,6 +33,7 @@ const item = (debts: ImportDebtRow[]): ImportItem => ({
   rows: [],
   debts,
   skippedRows: 0,
+  origin: "document",
   createdOn: "2026-10-14",
 });
 

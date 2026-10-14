@@ -17,6 +17,7 @@ const ITEM: ImportItem = {
   documentDate: "2026-10-12",
   documentTotals: [],
   skippedRows: 0,
+  origin: "sheet",
   createdOn: "2026-10-12",
   rows: [
     {
@@ -109,6 +110,28 @@ it("says how many holdings of a spreadsheet were left out", () => {
   expect(html(0)).not.toContain("no se pud");
   expect(html(1)).toContain("Una fila de la planilla no se pudo leer");
   expect(html(3)).toContain("3 filas de la planilla no se pudieron leer");
+});
+
+it("words the left-out holdings by what the import read", () => {
+  const html = (origin: ImportItem["origin"]) =>
+    render(undefined, { ...ITEM, origin, skippedRows: 1 });
+  expect(html("sheet")).toContain("Una fila de la planilla no se pudo leer");
+  expect(html("sync")).not.toContain("planilla");
+  expect(html("sync")).toContain("no pudo traer");
+  expect(html("document")).not.toContain("planilla");
+  expect(html("document")).toContain("quedó afuera");
+});
+
+it("takes rows with no asset chosen yet as no repeat", () => {
+  const blank = { ...ITEM.rows[0]!, symbol: "" };
+  const html = render(undefined, {
+    ...ITEM,
+    rows: [
+      { ...blank, id: "b1" },
+      { ...blank, id: "b2" },
+    ],
+  });
+  expect(html).not.toContain("aparece más de una vez");
 });
 
 it("shows the average cost a document printed, for the units to come in at", () => {
