@@ -1,11 +1,13 @@
 "use client";
 
+import { LIABILITY_LABEL_MAX } from "@plant/core";
 import { ArrowLeft, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -163,6 +165,14 @@ export function ImportDebtsReview({
         </div>
       </div>
 
+      {item.skippedRows > 0 && (
+        <LeftOutNotice>
+          {item.skippedRows === 1
+            ? "Una deuda quedó afuera: revisala en el resumen antes de confirmar."
+            : `${item.skippedRows} deudas quedaron afuera: revisalas en el resumen antes de confirmar.`}
+        </LeftOutNotice>
+      )}
+
       <section className="grid gap-3" aria-labelledby={`${listId}-list`}>
         <h2 id={`${listId}-list`} className="text-base font-semibold">
           {countOf(rows.length, "deuda", "deudas")}
@@ -246,7 +256,7 @@ export function ImportDebtsReview({
                         <span className="text-muted-foreground">Nombre</span>
                         <Input
                           value={row.label ?? ""}
-                          maxLength={60}
+                          maxLength={LIABILITY_LABEL_MAX}
                           aria-label={`Nombre de la deuda ${index + 1}`}
                           aria-invalid={problem("label") || undefined}
                           disabled={row.discarded}
@@ -262,7 +272,7 @@ export function ImportDebtsReview({
                         </span>
                         <Input
                           value={row.lender ?? ""}
-                          maxLength={60}
+                          maxLength={LIABILITY_LABEL_MAX}
                           aria-label={`Emisor de la deuda ${index + 1}`}
                           disabled={row.discarded}
                           onChange={(event) =>

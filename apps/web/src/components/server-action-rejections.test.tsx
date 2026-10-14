@@ -65,6 +65,8 @@ import type { ReactNode } from "react";
 
 import { AssistantChat } from "@/components/assistant/assistant-chat";
 import { ChartCard } from "@/components/assistant/chart-card";
+import { suggestionAnswer } from "@/components/holdings/movement-dialog";
+import { readSiteIcon } from "@/components/portfolio-setup/source-connection-dialog";
 import { AlertsCard } from "@/components/settings/alerts-card";
 import { ExportCard } from "@/components/settings/export-card";
 import { MetAlerts } from "@/components/summary/met-alerts";
@@ -229,6 +231,39 @@ const sites: {
     failure: "No pudimos borrar la conversación. Probá de nuevo.",
   },
 ];
+
+// Calls a dialog answers itself, not with a toast, given how they reject.
+const answers: {
+  name: string;
+  call: (reject: () => Promise<never>) => Promise<unknown>;
+  failed: unknown;
+}[] = [
+  {
+    name: "reading an institution's icon",
+    call: (reject) => readSiteIcon(reject, "https://www.banco.com.ar"),
+    failed: { ok: false, reason: "failed" },
+  },
+  {
+    name: "suggesting a movement's price",
+    call: (reject) => suggestionAnswer(reject()),
+    failed: null,
+  },
+];
+
+describe.each(answers)("$name", ({ call, failed }) => {
+  it("answers a call that failed as the failure", async () => {
+    await expect(
+      call(() => Promise.reject(new Error("offline"))),
+    ).resolves.toEqual(failed);
+  });
+
+  it("lets the redirect of an ended session through", async () => {
+    const error = redirectError();
+    void call(() => Promise.reject(error));
+    await settled();
+    expect(mockRethrown).toEqual([error]);
+  });
+});
 
 describe.each(sites)("$name", ({ act, failure }) => {
   it("tells a call that failed as the failure", async () => {

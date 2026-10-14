@@ -627,3 +627,17 @@ it("keeps a lone reader's operations, every one low, when the other fails", asyn
     expect.objectContaining({ symbol: "GGAL", confidence: "low" }),
   ]);
 });
+
+it("logs a failed model call with the import it was reading", async () => {
+  const lines = captureServerLog();
+  const model = new MockLanguageModelV3({
+    doGenerate: () => Promise.reject(new Error("down")),
+  });
+  await extract(model).catch(() => undefined);
+  expect(lines).toContainEqual(
+    expect.objectContaining({
+      event: "ai.call_failed",
+      "plant.import.id": "i1",
+    }),
+  );
+});

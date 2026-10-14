@@ -1,4 +1,5 @@
 import "server-only";
+import { LIABILITY_LABEL_MAX } from "@plant/core";
 import {
   buenosAiresDate,
   Constants,
@@ -119,7 +120,10 @@ async function sendConfirm(
   if (!classifyPostgrestResult(response, 200)) {
     return { result: { ok: true, id: importId } };
   }
-  const code = rpcFailure(response.error ?? {});
+  const code =
+    response.error?.hint === "stale"
+      ? "stale"
+      : rpcFailure(response.error ?? {});
   return {
     result: { ok: false, code },
     ...(code === "failed" && { failure: response.error }),
@@ -241,7 +245,7 @@ async function logConfirm({
   if (outcome === "failed") serverLog.error(EVENT, line, failure);
   else if (outcome === "ok") serverLog.info(EVENT, line);
   else serverLog.warn(EVENT, line);
-  if (result.ok || outcome === "failed") {
+  if (result.ok || outcome === "failed" || outcome === "stale") {
     revalidatePath("/import", "layout");
     revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
   }
@@ -334,8 +338,8 @@ export async function confirmImportOperations(
 const reviewedDebtSchema = z
   .object({
     liabilityId: z.uuid().nullable(),
-    label: z.string().trim().min(1).max(60).nullable(),
-    lender: z.string().trim().min(1).max(60).nullable(),
+    label: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
+    lender: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
     currency: currencySchema,
     balance: positiveDecimalSchema,
     minimumPayment: positiveDecimalSchema.nullable(),

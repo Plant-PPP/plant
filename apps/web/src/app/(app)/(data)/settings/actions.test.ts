@@ -129,7 +129,11 @@ describe("exportData", () => {
     });
   }
 
+  // Each test starts a fresh minute of the export limiter.
+  let clock = 0;
   beforeEach(() => {
+    clock += 120_000;
+    jest.spyOn(Date, "now").mockReturnValue(clock);
     rpc.mockResolvedValue({ data: null, error: null, status: 204 });
     createClient.mockResolvedValue({});
     createServiceRoleClient.mockReturnValue({ rpc });
@@ -202,6 +206,22 @@ describe("exportData", () => {
     expect(lines.at(-1)).toMatchObject({
       level: "error",
       "plant.export.step": "audit",
+    });
+  });
+
+  it("refuses a sixth export in a minute, reading and auditing nothing", async () => {
+    readsSucceed();
+    for (let i = 0; i < 5; i += 1) await exportData();
+    readLedger.mockClear();
+    rpc.mockClear();
+    await expect(exportData()).resolves.toEqual({ limited: true });
+    expect(requireSensitiveSession).toHaveBeenCalledTimes(5);
+    expect(readLedger).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(lines.at(-1)).toMatchObject({
+      level: "warn",
+      event: "settings.export",
+      "plant.outcome": "limited",
     });
   });
 

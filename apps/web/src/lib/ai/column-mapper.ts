@@ -45,9 +45,11 @@ export function columnMapper({
   return async ({
     sheet,
     userId,
+    importId,
   }: {
     sheet: Sheet;
     userId: string;
+    importId?: string;
   }): Promise<ColumnMapping> => {
     const sample = sheet.rows
       .slice(0, SAMPLE_ROWS)
@@ -57,6 +59,7 @@ export function columnMapper({
       modelId: COLUMN_MAPPING_MODEL,
       costType: "import_column_mapping",
       userId,
+      importId,
       record,
       model,
       system: SYSTEM,

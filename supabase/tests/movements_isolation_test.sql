@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(59);
+SELECT plan(61);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -410,6 +410,19 @@ SELECT throws_ok(
      VALUES ('AAPL', '2026-01-03', '0', 'ARS') $$,
   '23514', NULL,
   'a price is positive'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.manual_prices (symbol, price_date, price, currency)
+     VALUES ('AAPL', '2026-01-04', '15', 'USD') $$,
+  '22023', NULL,
+  'a manual price is in its instrument''s currency'
+);
+
+SELECT throws_ok(
+  $$ UPDATE public.manual_prices SET currency = 'USD' WHERE symbol = 'AAPL' $$,
+  '22023', NULL,
+  'a manual price cannot move to another currency than its instrument''s'
 );
 
 SELECT throws_ok(

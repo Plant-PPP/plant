@@ -442,6 +442,14 @@ describe("mercado pago", () => {
     expect(balanceOf("DATE,RECORD_TYPE\n2026-10-01,release\n")).toBeNull();
   });
 
+  it("rounds a balance with more than eight decimals", () => {
+    expect(
+      balanceOf(
+        "DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-01,1500.123456789,ARS\n",
+      ),
+    ).toBe("1500.12345679");
+  });
+
   it("never reads a comma as a decimal mark in a report separated by commas", () => {
     expect(
       balanceOf(

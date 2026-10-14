@@ -265,8 +265,8 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     // The same file uploaded before: one that cannot be read any more (its
     // reading failed, its import never started or its file expired) goes,
     // with its import and its file, and this one is read; one still queued,
-    // whose job may never have started, is started again (the job's event id
-    // keeps it to one run) and this upload goes.
+    // whose job may never have started or ended without settling it, is
+    // started again as a retry and this upload goes.
     const earlier = await client
       .from("uploaded_documents")
       .select("id, storage_path, file_deleted_at, imports(id, status)")
@@ -294,6 +294,7 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
       await startJob(
         { ...line, step: "job", started: performance.now() },
         queued.id,
+        Date.now().toString(36),
       );
       revalidatePath("/import");
       return { ok: true, importId: queued.id };
@@ -359,9 +360,17 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
 
 // Starts reading the import's file. A failure leaves the import queued and is
 // logged: the upload itself succeeded.
-async function startJob(line: Line, importId: string): Promise<void> {
+async function startJob(
+  line: Line,
+  importId: string,
+  retry?: string,
+): Promise<void> {
   try {
-    await inngestJobRunner().startImport({ importId, userId: line.userId });
+    await inngestJobRunner().startImport({
+      importId,
+      userId: line.userId,
+      ...(retry && { retry }),
+    });
     log(line, "ok");
   } catch (error) {
     log(line, "failed", error);

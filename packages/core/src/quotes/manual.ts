@@ -1,5 +1,6 @@
 import {
   Constants,
+  type Currency,
   currencySchema,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -101,10 +102,19 @@ export function withManualRates(
   return { snapshot: { ...snapshot, fx: quotes }, manual: taken };
 }
 
-export type ManualPriceRefusal = "future_date";
+export type ManualPriceRefusal = "future_date" | "invalid";
 
-export const admitManualPrice = (
+// A price in another currency than its instrument's would value its holdings
+// in the wrong one; with no instrument (undefined) there is none to price.
+export function admitManualPrice(
   price: ManualPrice,
   today: string,
-): { ok: true } | { ok: false; code: ManualPriceRefusal } =>
-  price.price_date > today ? { ok: false, code: "future_date" } : { ok: true };
+  instrumentCurrency: Currency | undefined,
+): { ok: true } | { ok: false; code: ManualPriceRefusal } {
+  if (price.currency !== instrumentCurrency) {
+    return { ok: false, code: "invalid" };
+  }
+  return price.price_date > today
+    ? { ok: false, code: "future_date" }
+    : { ok: true };
+}

@@ -145,15 +145,18 @@ INSERT INTO public.manual_rates (user_id, kind, rate_date, sell)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'mep',
         (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 100000000);
 -- Ana's own PGTAPY price today is in pesos: it says nothing of her dollar
--- alert, which the feed's dollar price of the same day meets.
+-- alert, which the feed's dollar price of the same day meets. Such a row is
+-- one written before manual prices had to be in their instrument's currency.
 INSERT INTO public.instruments (symbol, name, type, currency)
 VALUES ('PGTAPY', 'PGTAP Y', 'crypto', 'USD');
 INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
 VALUES ('PGTAPY', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 120, 'USD',
         'kraken', now(), now());
+ALTER TABLE public.manual_prices DISABLE TRIGGER manual_prices_in_instrument_currency;
 INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'PGTAPY',
         (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 10, 'ARS');
+ALTER TABLE public.manual_prices ENABLE TRIGGER manual_prices_in_instrument_currency;
 SET LOCAL ROLE service_role;
 
 SELECT is(public.meet_price_alerts(), 4,

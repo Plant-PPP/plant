@@ -143,6 +143,7 @@ export function addSync(
     documentDate: null,
     documentTotals: [],
     skippedRows: 0,
+    origin: "sync",
     rows: [],
     createdOn: state.today,
   };

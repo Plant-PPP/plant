@@ -81,6 +81,9 @@ it("maps a format's columns once, then reads the same format without the model",
     documentKind: null,
   });
   expect(mapColumns).toHaveBeenCalledTimes(1);
+  expect(mapColumns).toHaveBeenCalledWith(
+    expect.objectContaining({ userId: "u1", importId: "i1" }),
+  );
 
   // Another user with the same institution and headers maps their own.
   await read({ ...input, userId: "u2" });

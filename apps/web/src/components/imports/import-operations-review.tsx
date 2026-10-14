@@ -9,6 +9,7 @@ import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { InstrumentPicker } from "@/components/holdings/instrument-picker";
+import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -283,6 +284,14 @@ export function ImportOperationsReview({
           </p>
         </div>
       </div>
+
+      {item.skippedRows > 0 && (
+        <LeftOutNotice>
+          {item.skippedRows === 1
+            ? "Una operación quedó afuera: revisala en el broker antes de confirmar."
+            : `${item.skippedRows} operaciones quedaron afuera: revisalas en el broker antes de confirmar.`}
+        </LeftOutNotice>
+      )}
 
       <section className="grid gap-3" aria-labelledby={`${pickerId}-list`}>
         <div className="flex flex-wrap items-center gap-2">

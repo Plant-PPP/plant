@@ -38,6 +38,7 @@ const item = (operations: ImportOperationRow[]): ImportItem => ({
   rows: [],
   operations,
   skippedRows: 0,
+  origin: "document",
   createdOn: "2026-10-12",
 });
 
@@ -107,6 +108,27 @@ it("says an operation already in the account is loaded, set aside", () => {
   expect(html).toContain("Ya está cargada");
   expect(html).toContain("1 ya estaba cargada");
   expect(html).toContain("Recuperar");
+});
+
+it("says how many operations the reading left out", () => {
+  const html = (skippedRows: number) =>
+    renderToStaticMarkup(
+      <ImportOperationsReview
+        item={{ ...item([operation()]), skippedRows }}
+        institution="IOL"
+        instruments={[]}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
+      />,
+    );
+  expect(html(0)).not.toContain("afuera");
+  expect(html(1)).toContain(
+    "Una operación quedó afuera: revisala en el broker antes de confirmar.",
+  );
+  expect(html(3)).toContain(
+    "3 operaciones quedaron afuera: revisalas en el broker antes de confirmar.",
+  );
 });
 
 it("counts the operations it will import, and filters them by kind and asset", () => {

@@ -69,11 +69,20 @@ it("reads a symbol with no price as missing", () => {
 
 it("refuses a future date", () => {
   expect(
-    admitManualPrice(price("KO", "2026-10-13", "1"), "2026-10-12"),
+    admitManualPrice(price("KO", "2026-10-13", "1"), "2026-10-12", "ARS"),
   ).toEqual({ ok: false, code: "future_date" });
   expect(
-    admitManualPrice(price("KO", "2026-10-12", "1"), "2026-10-12"),
+    admitManualPrice(price("KO", "2026-10-12", "1"), "2026-10-12", "ARS"),
   ).toEqual({ ok: true });
+});
+
+it("refuses a price in another currency than its instrument's, or with no instrument", () => {
+  expect(
+    admitManualPrice(price("KO", "2026-10-12", "1"), "2026-10-12", "USD"),
+  ).toEqual({ ok: false, code: "invalid" });
+  expect(
+    admitManualPrice(price("KO", "2026-10-12", "1"), "2026-10-12", undefined),
+  ).toEqual({ ok: false, code: "invalid" });
 });
 
 it("refuses a price that is not positive or an unknown key", () => {

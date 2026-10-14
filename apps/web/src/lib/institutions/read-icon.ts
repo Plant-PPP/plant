@@ -3,7 +3,7 @@ import { lookup } from "node:dns/promises";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { serverLog } from "@/lib/log/server-log";
-import { reportLimiter } from "@/lib/reports/limit";
+import { userLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 
@@ -28,9 +28,9 @@ const lookupAll = async (host: string) =>
 
 const { fetch: publicFetch } = publicOnlyFetch(lookupAll);
 
-// Each read makes a few outbound requests, so a user gets ten a minute, and
-// an instance a hundred. In memory, per serverless instance.
-const limit = reportLimiter({ perSender: 10, perInstance: 100 });
+// Each read makes a few outbound requests, so a user gets ten a minute. In
+// memory, per serverless instance.
+const limit = userLimiter({ perUser: 10 });
 
 // The icon of the site a signed-in user gives for an account's institution,
 // read by Plant's server. Neither the site nor the icon is logged.
@@ -44,7 +44,7 @@ export async function readInstitutionIcon(site: unknown): Promise<IconResult> {
   const url = typeof site === "string" ? siteUrl(site) : null;
   if (!url) {
     result = { ok: false, reason: "url" };
-  } else if (limit(claims.sub) !== "logged") {
+  } else if (!limit(claims.sub)) {
     result = { ok: false, reason: "limited" };
   } else {
     try {

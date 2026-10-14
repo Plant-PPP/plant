@@ -36,6 +36,7 @@ export async function structuredCall<T>({
   modelId,
   costType,
   userId,
+  importId,
   record,
   model = (id) => google(id),
   system,
@@ -46,6 +47,7 @@ export async function structuredCall<T>({
   modelId: PricedModelId;
   costType: AiCostType;
   userId: string;
+  importId?: string;
   record: (row: AiCostInsert) => Promise<void>;
   model?: ModelFactory;
   system: string;
@@ -74,6 +76,7 @@ export async function structuredCall<T>({
       "plant.cost_type": costType,
       "gen_ai.request.model": modelId,
       "enduser.id": userId,
+      "plant.import.id": importId,
       "error.type": errorType(last),
       "http.response.status_code": APICallError.isInstance(last)
         ? last.statusCode

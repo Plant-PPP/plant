@@ -2,6 +2,7 @@ import {
   compareExact,
   Constants,
   type Currency,
+  decimalStringSchema,
   exactOf,
   over,
   stored,
@@ -35,12 +36,14 @@ const basisOf = (type: InstrumentType) => ({
 export const unitPrice = (type: InstrumentType, quoted: string): string =>
   stored(over(exactOf(quoted), basisOf(type)));
 
-// A typed quote as the price of one unit, or null when 8 decimals cannot hold
-// it exactly: a price is never rounded on the way in.
+// A typed quote as the price of one unit, or null when the quote is not a
+// decimal string numeric(20, 8) holds or 8 decimals cannot hold its unit price
+// exactly: a price is never rounded on the way in.
 export function exactUnitPrice(
   type: InstrumentType,
   quoted: string,
 ): string | null {
+  if (!decimalStringSchema.safeParse(quoted).success) return null;
   const perUnit = over(exactOf(quoted), basisOf(type));
   const kept = unitPrice(type, quoted);
   return compareExact(exactOf(kept), perUnit) === 0 ? kept : null;

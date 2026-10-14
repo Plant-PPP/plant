@@ -13,7 +13,7 @@ jest.mock("@/lib/auth/session-claims", () => ({
 }));
 jest.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 jest.mock("@/lib/request-id-server", () => ({
-  currentRequestId: async () => undefined,
+  currentRequestId: async () => "req-1",
 }));
 jest.mock("@/lib/holdings/read", () => ({
   readHoldings: (...args: unknown[]) => readHoldings(...args),
@@ -35,8 +35,11 @@ jest.mock("@/lib/assistant/pins", () => ({ readPins: async () => [] }));
 // The server action Resumen hands the page to unpin a chart.
 const unpinChart = async () => true;
 jest.mock("@/app/(app)/(data)/assistant/actions", () => ({ unpinChart }));
-// No price alert met.
-jest.mock("@/lib/alerts/read", () => ({ readAlerts: async () => [] }));
+// No price alert met, unless a test says otherwise.
+const readAlerts = jest.fn();
+jest.mock("@/lib/alerts/read", () => ({
+  readAlerts: (...args: unknown[]) => readAlerts(...args),
+}));
 // The server action Resumen hands the page to mark an alert seen.
 const seePriceAlert = async () => true;
 jest.mock("@/app/(app)/(data)/settings/actions", () => ({ seePriceAlert }));
@@ -139,6 +142,8 @@ type SummaryProps = {
   portfolio: { id: string } | null;
   unit: string;
   closesQuery: string;
+  metAlerts: unknown[];
+  alertsReadFailed: boolean;
 };
 
 let lines: Record<string, unknown>[];
@@ -154,6 +159,8 @@ beforeEach(() => {
   readLiabilities.mockResolvedValue(debtsOf([]));
   read.mockReset();
   read.mockImplementation(async (range: QuoteRange) => quotesOf(range));
+  readAlerts.mockReset();
+  readAlerts.mockResolvedValue([]);
 });
 
 const summary = async (params: Record<string, string> = {}) =>
@@ -220,6 +227,22 @@ describe("Resumen", () => {
       "?unit=ars",
     );
     expect((await summary({ unit: "btc" })).props.unit).toBe("usd_ccl");
+  });
+
+  it("flags and logs alerts it could not read, and still shows the page", async () => {
+    readAlerts.mockRejectedValue(new Error("offline"));
+    const page = await summary();
+    expect(page.props.metAlerts).toEqual([]);
+    expect(page.props.alertsReadFailed).toBe(true);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        event: "summary.view",
+        "plant.outcome": "alerts_failed",
+        "plant.request_id": "req-1",
+      }),
+    );
+    readAlerts.mockResolvedValue([]);
+    expect((await summary()).props.alertsReadFailed).toBe(false);
   });
 
   it("hands the page only data, and the server actions that unpin and mark seen", async () => {

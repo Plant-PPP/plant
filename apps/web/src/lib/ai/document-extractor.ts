@@ -345,12 +345,13 @@ export function documentExtractor({
   record: (row: AiCostInsert) => Promise<void>;
   model?: ModelFactory;
 }): FileReader {
-  return async ({ bytes, mimeType, userId, lastAttempt }) => {
+  return async ({ bytes, mimeType, userId, importId, lastAttempt }) => {
     const read = async (modelId: PricedModelId, ask: string) => {
       const answer = await structuredCall({
         modelId,
         costType: "import_extraction",
         userId,
+        importId,
         record,
         model,
         system: SYSTEM,

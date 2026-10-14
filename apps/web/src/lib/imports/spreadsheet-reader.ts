@@ -53,6 +53,7 @@ export function spreadsheetReader({
   mapColumns: (input: {
     sheet: Sheet;
     userId: string;
+    importId: string;
   }) => Promise<ColumnMapping>;
   now?: () => Date;
 }): (input: SourceInput) => Promise<HoldingsReading> {
@@ -63,7 +64,7 @@ export function spreadsheetReader({
     );
     const mapping = stored.success
       ? stored.data
-      : await mapColumns({ sheet, userId });
+      : await mapColumns({ sheet, userId, importId });
     const reading = sheetToDraft(sheet, mapping, buenosAiresDate(now()));
     if (!stored.success && looksRight(reading)) {
       await mappings

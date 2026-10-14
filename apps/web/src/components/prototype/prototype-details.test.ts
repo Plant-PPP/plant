@@ -711,6 +711,18 @@ describe("the reading's misread row and suggestion", () => {
     },
   );
 
+  it("refuses a manual price in another currency than its instrument's", () => {
+    // AL30 is an ARS bond.
+    expect(
+      setPrice(state, {
+        symbol: "AL30",
+        price_date: TODAY,
+        price: "60",
+        currency: "USD",
+      }).result,
+    ).toEqual({ ok: false, code: "invalid" });
+  });
+
   it("suggests only a type the account holds in that same currency", () => {
     const ACCOUNT = "a9200000-0000-4000-8000-000000000001";
     // AL30 is an ARS bond; with a price it would pair the USD bond's type

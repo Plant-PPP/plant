@@ -121,6 +121,28 @@ const CHANGE_TEXT = {
   discarded: "Descartada",
 } as const;
 
+// What the reading left out, by what it read.
+function skippedLine({
+  origin,
+  skippedRows: count,
+}: Pick<ImportItem, "origin" | "skippedRows">) {
+  const one = count === 1;
+  switch (origin) {
+    case "sync":
+      return one
+        ? "Hay un saldo o tenencia que la sincronización no pudo traer: fijate que no falte ninguno."
+        : `Hay ${count} saldos o tenencias que la sincronización no pudo traer: fijate que no falte ninguno.`;
+    case "document":
+      return one
+        ? "Una tenencia del documento quedó afuera: fijate que no falte ninguna."
+        : `${count} tenencias del documento quedaron afuera: fijate que no falte ninguna.`;
+    case "sheet":
+      return one
+        ? "Una fila de la planilla no se pudo leer: fijate que no falte ninguna tenencia."
+        : `${count} filas de la planilla no se pudieron leer: fijate que no falte ninguna tenencia.`;
+  }
+}
+
 // What picking a row's instrument changes: a price, value or cost printed in
 // another currency no longer describes the row, so the user types the price.
 export function pickedInstrument(
@@ -392,11 +414,12 @@ export function ImportReview({
   // Prices are per unit here, whatever the instrument's quote basis.
   const issues = validateHoldings(
     finalRows.map((row) => ({
-      symbol: row.discarded
-        ? ""
-        : row.assetClass === "cash"
-          ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
-          : `${row.symbol}|${row.accountId ?? item.accountId}`,
+      symbol:
+        row.discarded || row.symbol === ""
+          ? ""
+          : row.assetClass === "cash"
+            ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
+            : `${row.symbol}|${row.accountId ?? item.accountId}`,
       quantity: row.quantity,
       price: row.discarded ? null : row.price,
       value: row.value ?? null,
@@ -486,9 +509,7 @@ export function ImportReview({
             aria-hidden
             className="size-4 shrink-0 text-amber-600"
           />
-          {item.skippedRows === 1
-            ? "Una fila de la planilla no se pudo leer: fijate que no falte ninguna tenencia."
-            : `${item.skippedRows} filas de la planilla no se pudieron leer: fijate que no falte ninguna tenencia.`}
+          {skippedLine(item)}
         </p>
       )}
 

@@ -673,6 +673,19 @@ describe("sheetToDraft", () => {
   });
 });
 
+it("counts holdings past the rows read, blank lines included, as skipped", () => {
+  const lines = Array.from({ length: 300 }, (_, i) => `S${i},1,1,ARS,\n`);
+  const { draft, skippedRows } = sheetToDraft(
+    readSheet(
+      csv(["Especie,Cantidad,Precio,Moneda,Fecha\n", ...lines].join("\n")),
+      "text/csv",
+    ),
+    mapping,
+    "2026-10-13",
+  );
+  expect(draft.rows.length === 300 || skippedRows > 0).toBe(true);
+});
+
 it("counts as skipped only rows with a quantity, not titles or totals", () => {
   const { skippedRows, draft } = sheetToDraft(
     {

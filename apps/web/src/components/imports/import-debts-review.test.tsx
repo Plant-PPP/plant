@@ -33,6 +33,7 @@ const item = (debts: ImportDebtRow[]): ImportItem => ({
   rows: [],
   debts,
   skippedRows: 0,
+  origin: "document",
   createdOn: "2026-10-14",
 });
 
@@ -73,4 +74,25 @@ it("updates the card debt in the same currency that reads the same", () => {
   // Updating one keeps its name: the name is not asked.
   expect(html).not.toContain("Nombre de la deuda 1");
   expect(html).toContain('aria-label="Saldo de la deuda 1"');
+});
+
+it("says how many debts the reading left out", () => {
+  const html = (skippedRows: number) =>
+    renderToStaticMarkup(
+      <ImportDebtsReview
+        item={{ ...item([debt()]), skippedRows }}
+        institution="Galicia"
+        cards={[]}
+        backHref="/import"
+        doneHref="/debts"
+        actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
+      />,
+    );
+  expect(html(0)).not.toContain("afuera");
+  expect(html(1)).toContain(
+    "Una deuda quedó afuera: revisala en el resumen antes de confirmar.",
+  );
+  expect(html(2)).toContain(
+    "2 deudas quedaron afuera: revisalas en el resumen antes de confirmar.",
+  );
 });

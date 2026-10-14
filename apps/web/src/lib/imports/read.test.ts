@@ -37,7 +37,11 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
           failure: null,
           document_date: null,
           created_at: "2026-10-01T02:00:00+00:00",
-          document: { file_name: "Resumen.pdf", source_connection_id: "a1" },
+          document: {
+            file_name: "Resumen.pdf",
+            mime_type: "application/pdf",
+            source_connection_id: "a1",
+          },
         },
       ],
       3,
@@ -56,6 +60,7 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
         documentDate: null,
         documentTotals: [],
         skippedRows: 0,
+        origin: "document",
         rows: [],
         createdOn: "2026-09-30",
       },
@@ -74,7 +79,11 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
           failure: "unsupported",
           document_date: null,
           created_at: "2026-10-12T15:00:00+00:00",
-          document: { file_name: "a.csv", source_connection_id: "a1" },
+          document: {
+            file_name: "a.csv",
+            mime_type: "text/csv",
+            source_connection_id: "a1",
+          },
         },
         {
           id: "i3",
@@ -82,7 +91,11 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
           failure: null,
           document_date: "2026-09-30",
           created_at: "2026-10-12T15:00:00+00:00",
-          document: { file_name: "b.pdf", source_connection_id: "a1" },
+          document: {
+            file_name: "b.pdf",
+            mime_type: "application/pdf",
+            source_connection_id: "a1",
+          },
         },
       ],
       2,
@@ -107,7 +120,11 @@ it("lists a sync by its provider and says why it failed in its own words", async
     provider: synced ? "binance" : null,
     document: synced
       ? null
-      : { file_name: "c.pdf", source_connection_id: "a1" },
+      : {
+          file_name: "c.pdf",
+          mime_type: "application/pdf",
+          source_connection_id: "a1",
+        },
   });
   const read = await readImports(
     clientOf(
@@ -147,7 +164,11 @@ describe("with 51 imports", () => {
     failure: null,
     document_date: null,
     created_at: "2026-10-12T15:00:00+00:00",
-    document: { file_name: "a.pdf", source_connection_id: "a1" },
+    document: {
+      file_name: "a.pdf",
+      mime_type: "application/pdf",
+      source_connection_id: "a1",
+    },
   }));
 
   it("lists the latest IMPORTS_LISTED and says the list was cut", async () => {
@@ -223,7 +244,11 @@ describe("readImportForReview", () => {
     printed_total_ars: "90000.00",
     printed_total_usd: null,
     skipped_rows: 0,
-    document: { file_name: "resumen.pdf", source_connection_id: "a1" },
+    document: {
+      file_name: "resumen.pdf",
+      mime_type: "application/pdf",
+      source_connection_id: "a1",
+    },
   };
   const item = (patch: Record<string, unknown>) => ({
     id: "r1",
