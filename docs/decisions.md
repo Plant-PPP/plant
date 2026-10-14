@@ -4,10 +4,10 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-14 · Charts with Vega-Lite (PLA-29)
 
-- **Every chart is a Vega-Lite spec built from figures the server computed**, by five templates in `lib/charts/templates.ts`: distribution, net worth over time, income per month, debts and the holdings ranking. A value only places a mark; every number a chart prints is the text the app formatted, so Vega rounds nothing.
+- **Every chart is a Vega-Lite spec built from figures the server computed**, by the templates in `lib/charts/templates.ts`: distribution, net worth over time, income per month, debts, the holdings ranking, and plain bars in the order given for any other figures. Two figures that share a label are told apart ("Tarjeta (2)") rather than stacked. A value only places a mark; every number a chart prints is the text the app formatted, so Vega rounds nothing.
 - **One renderer, `VegaChart`**, loads Vega and Vega-Lite on the first chart, runs them without eval (`ast: true`, so the CSP keeps no `unsafe-eval`), draws SVG, follows its box's width and the theme, and finalizes its view on unmount.
 - **The theme reads Plant's tokens**: the eight chart colors, the loss color, the muted text and the borders, resolved by the browser, since Vega paints SVG attributes and cannot read a CSS variable; a spec names a token as `var(--name)` and the renderer resolves it. Numbers use the mono font and the es-AR separators.
-- **The assistant's charts carry their template**; a chart kept from before carries none and is drawn by its kind. The image export still draws on a canvas.
+- **The assistant's charts carry their template**; a chart kept from before carries none and is drawn by its kind, bars in the order given. The chart's name is on the box around it and its figures in a list a screen reader reads; Vega describes no mark. The image export still draws on a canvas.
 - **"Vencimientos de deudas" is what is owed on each debt**: the assistant's figures are balances, and no reader gives a series by due date yet.
 
 ## 2026-10-14 · An account's icon from its site (PLA-102)

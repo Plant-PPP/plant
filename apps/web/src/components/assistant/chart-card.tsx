@@ -26,7 +26,7 @@ function ChartBody({ chart }: { chart: ChartPart }) {
     shown: formatAmount(point.value, chart.unit),
   }));
   const template =
-    chart.template ?? (chart.kind === "line" ? "net_worth" : "ranking");
+    chart.template ?? (chart.kind === "line" ? "net_worth" : "bars");
   return (
     <div className="grid gap-1">
       <VegaChart spec={templateSpec(template, data)} label={chart.title} />

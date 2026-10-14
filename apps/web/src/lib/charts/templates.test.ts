@@ -57,3 +57,13 @@ it("formats numbers the es-AR way", () => {
     thousands: ".",
   });
 });
+
+it("never stacks two figures that share a label", () => {
+  const twice: ChartDatum[] = [
+    { label: "Tarjeta", value: "10", shown: "$ 10,00" },
+    { label: "Tarjeta", value: "20", shown: "$ 20,00" },
+  ];
+  expect(
+    values(templateSpec("debts", twice)).map((each) => each.label),
+  ).toEqual(["Tarjeta", "Tarjeta (2)"]);
+});
