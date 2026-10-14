@@ -334,8 +334,8 @@ const firstDay = (
     .sort()
     .at(0) ?? today;
 
-// The quotes closes value holdings and debts at: every dollar kind and the
-// UVA, each instrument held and each instrument a debt is owed in.
+// The quotes closes value holdings and debts at: every dollar kind, the euro,
+// the UVA, each instrument held and each instrument a debt is owed in.
 export function closesNeed(state: ClosesState): QuoteNeed {
   const held = quotesNeeded(allRows(state).map((row) => row.holding));
   const owed = liabilityQuotesNeeded(state.liabilities);
