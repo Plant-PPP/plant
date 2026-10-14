@@ -357,14 +357,20 @@ const periodSchema = z
   );
 
 // The account's sync still in flight, if any: queued (its job may never have
-// started) or being read.
+// started) or being read, with the draft and the days it reads.
 async function syncInFlight(
   client: Client,
   accountId: string,
-): Promise<{ id: string; status: "queued" | "reading" } | null> {
+): Promise<{
+  id: string;
+  status: "queued" | "reading";
+  draft: string | null;
+  from: string | null;
+  to: string | null;
+} | null> {
   const result = await client
     .from("imports")
-    .select("id, status")
+    .select("id, status, sync_draft, sync_from, sync_to")
     .eq("source_connection_id", accountId)
     .in("status", ["queued", "reading"])
     .limit(1);
@@ -373,16 +379,22 @@ async function syncInFlight(
   }
   const [row] = result.data ?? [];
   return row && (row.status === "queued" || row.status === "reading")
-    ? { id: row.id, status: row.status }
+    ? {
+        id: row.id,
+        status: row.status,
+        draft: row.sync_draft,
+        from: row.sync_from,
+        to: row.sync_to,
+      }
     : null;
 }
 
 // Starts a sync of the account: an import of its holdings or its
 // operations that the import job reads with the account's credentials and
 // leaves ready to review in Cargar. The database refuses an account with no
-// key and one already syncing; a sync still queued is started again
-// instead, so a lost job never locks the account. A sync of operations reads
-// only the days of `period`, when one is given.
+// key and one already syncing; a sync still queued of the same draft and
+// days is started again instead, so a lost job never locks the account. A
+// sync of operations reads only the days of `period`, when one is given.
 export async function syncAccount(
   accountId: unknown,
   draft: unknown = "holdings",
@@ -426,7 +438,12 @@ export async function syncAccount(
     const resume = async (): Promise<SyncResult | null> => {
       const flying = await syncInFlight(client, id);
       if (!flying) return null;
-      if (flying.status === "reading") {
+      if (
+        flying.status === "reading" ||
+        flying.draft !== kind ||
+        flying.from !== (parsed.data.period?.from ?? null) ||
+        flying.to !== (parsed.data.period?.to ?? null)
+      ) {
         log(current, "in_progress");
         return { ok: false, code: "in_progress" };
       }
