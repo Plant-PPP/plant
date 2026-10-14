@@ -116,3 +116,30 @@ it("offers delete only on the rows a delete would go through for", () => {
   expect(html).not.toContain('aria-label="Borrar Principal"');
   expect(html).not.toContain('aria-label="Borrar Usada"');
 });
+
+it("links each active portfolio's name to its page once the server has it", () => {
+  const html = renderToStaticMarkup(
+    <PortfoliosCard
+      pending={false}
+      run={() => true}
+      view={listView({
+        active: [
+          { id: "p1", name: "Principal" },
+          { id: "new-1", name: "Nueva" },
+        ],
+        archived: [{ id: "p3", name: "Vieja" }],
+      })}
+      href={(id) => `/portfolios/${id}`}
+      actions={{
+        create: unused,
+        rename: unused,
+        archive: unused,
+        restore: unused,
+      }}
+      usedBy={() => []}
+    />,
+  );
+  expect(html).toMatch(/<a[^>]*href="\/portfolios\/p1"[^>]*>Principal<\/a>/);
+  expect(html).not.toContain('href="/portfolios/new-1"');
+  expect(html).not.toContain('href="/portfolios/p3"');
+});
