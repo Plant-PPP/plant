@@ -75,6 +75,10 @@ export type ImportRow = {
   // they are a transfer, not a purchase.
   portfolioId?: string;
   transferFrom?: string;
+  // The account a document listing several names the row under, as printed,
+  // and the user's account the review routes it to; the import's otherwise.
+  accountLabel?: string;
+  accountId?: string;
 };
 
 // The operations a document of operations may show.

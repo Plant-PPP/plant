@@ -25,6 +25,8 @@ export const draftRowSchema = z
     value: positiveDecimalSchema.nullable(),
     // The average cost per unit it prints, a bond's per 100 nominal.
     cost: positiveDecimalSchema.nullable().optional(),
+    // The account it lists the holding under, when it lists several.
+    account: z.string().trim().min(1).max(60).optional(),
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),

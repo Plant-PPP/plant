@@ -140,3 +140,40 @@ it("still asks for the price of units added to a holding already held", () => {
     /aria-label="Precio de la fila 1"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*aria-label="Precio de la fila 1"/,
   );
 });
+
+it("asks for the account of a row a document lists under one it cannot name", () => {
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        rows: [{ ...ITEM.rows[0]!, accountLabel: "BingX" }],
+      }}
+      institution="Cocos"
+      instruments={[
+        { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
+      ]}
+      held={new Map()}
+      accounts={[
+        {
+          id: "a2",
+          institution: "Cocos",
+          held: new Map(),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
+        {
+          id: "a3",
+          institution: "Nexo",
+          held: new Map(),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
+      ]}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).toContain("el documento dice &quot;BingX&quot;");
+  expect(html).toContain("Elegí una cuenta");
+});

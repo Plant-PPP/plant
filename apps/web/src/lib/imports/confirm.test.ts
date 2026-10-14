@@ -4,7 +4,7 @@ import {
   PORTFOLIO,
 } from "@/lib/ledger/ledger-fixture.test-support";
 
-import { heldOn, writeImport } from "./confirm";
+import { heldOn, writeImport, writeImportRouted } from "./confirm";
 
 const row = (symbol: string, quantity: string, price: string | null) => ({
   id: symbol,
@@ -198,4 +198,88 @@ it("adds units to a held position at the cost when no price was kept", () => {
     newId,
   );
   expect(topped.result).toEqual({ ok: true, id: "i1" });
+});
+
+describe("a document listing several accounts", () => {
+  const OTHER = "0a000000-0000-4000-8000-00000000000b";
+  const ledger = () => {
+    const base = emptyLedger();
+    return {
+      ...base,
+      accounts: [
+        ...base.accounts,
+        {
+          id: OTHER,
+          institution: "Nexo",
+          includeInTaxReport: true,
+          portfolio: base.accounts[0]!.portfolio,
+        },
+      ],
+    };
+  };
+
+  it("writes each group into the account it was routed to", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [
+        {
+          ...row("AAPL", "5", "18000"),
+          accountLabel: "IOL",
+          accountId: ACCOUNT,
+        },
+        {
+          ...row("AAPL", "2", "18000"),
+          accountLabel: "Nexo",
+          accountId: OTHER,
+        },
+      ],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(heldOn(written.state, ACCOUNT, "2026-09-15").get("AAPL")).toBe("5");
+    expect(heldOn(written.state, OTHER, "2026-09-15").get("AAPL")).toBe("2");
+  });
+
+  it("refuses a row the review routed to no account", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [{ ...row("AAPL", "5", "18000"), accountLabel: "BingX" }],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("refuses a transfer from an account the document lists", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [
+        {
+          ...row("AAPL", "5", "18000"),
+          accountLabel: "IOL",
+          accountId: ACCOUNT,
+        },
+        {
+          ...row("MSFT", "2", "18000"),
+          accountLabel: "Nexo",
+          accountId: OTHER,
+          transferFrom: ACCOUNT,
+        },
+      ],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("refuses an account that is not the user's", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [{ ...row("AAPL", "5", "18000"), accountLabel: "X", accountId: "nope" }],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "not_found" });
+  });
 });

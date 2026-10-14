@@ -138,6 +138,7 @@ export function ImportReview({
   institution,
   instruments,
   held,
+  accounts,
   routing,
   backHref,
   doneHref,
@@ -148,6 +149,19 @@ export function ImportReview({
   instruments: InstrumentRow[];
   // What the account holds of each instrument now.
   held: ReadonlyMap<string, string>;
+  // When the document lists several accounts: the user's accounts a row may
+  // go to, each with what it holds, its default portfolio and the user's
+  // other accounts holding each instrument.
+  accounts?: readonly {
+    id: string;
+    institution: string;
+    held: ReadonlyMap<string, string>;
+    defaultPortfolioId: string;
+    elsewhere: ReadonlyMap<
+      string,
+      readonly { id: string; institution: string }[]
+    >;
+  }[];
   // On a page that lets a row choose where its units go: the portfolios, the
   // account's default one, and the user's other accounts holding each
   // instrument, which the units may come from as a transfer.
@@ -188,17 +202,65 @@ export function ImportReview({
         : typedPrice(row.costText, types.get(row.symbol));
     return { row, quantity, price, cost };
   });
-  // A row that adds units to the account needs their price.
+  // What the account a row goes to holds: the import's, or the one the
+  // review routed it to.
+  const accountOf = (row: EditedRow) => row.accountId ?? item.accountId;
+  const heldFor = (row: EditedRow) =>
+    accountOf(row) === item.accountId
+      ? held
+      : (accounts?.find((each) => each.id === accountOf(row))?.held ??
+        new Map<string, string>());
+  // Where a row's units may go, from the account it goes to. When the
+  // document lists several accounts, none it lists is a transfer's source: it
+  // already gives that account's figure.
+  const routingFor = (
+    row: EditedRow,
+    base: NonNullable<typeof routing>,
+  ): NonNullable<typeof routing> => {
+    const other =
+      accountOf(row) === item.accountId
+        ? undefined
+        : accounts?.find((each) => each.id === accountOf(row));
+    const elsewhere = other?.elsewhere ?? base.elsewhere;
+    const listedAccounts = new Set([
+      item.accountId,
+      ...rows.filter((each) => !each.discarded).map(accountOf),
+    ]);
+    return {
+      ...base,
+      defaultPortfolioId: other?.defaultPortfolioId ?? base.defaultPortfolioId,
+      elsewhere: accounts
+        ? new Map(
+            [...elsewhere].map(([symbol, sources]) => [
+              symbol,
+              sources.filter((source) => !listedAccounts.has(source.id)),
+            ]),
+          )
+        : elsewhere,
+    };
+  };
   const addsUnits = (row: EditedRow, quantity: string | null) => {
     const effect = rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      held.get(row.symbol),
+      heldFor(row).get(row.symbol),
     );
     return effect.kind === "new" || effect.kind === "up";
   };
-  // Units that come from another account carry their cost, so need none.
+  // The account a row's units come from, while it still adds units and that
+  // account is still offered.
+  const transferOf = (row: EditedRow, quantity: string | null) =>
+    row.transferFrom !== undefined &&
+    routing &&
+    addsUnits(row, quantity) &&
+    (routingFor(row, routing).elsewhere.get(row.symbol) ?? []).some(
+      (source) => source.id === row.transferFrom,
+    )
+      ? row.transferFrom
+      : undefined;
+  // A row that adds units to the account needs their price, unless they come
+  // from another account, carrying their cost.
   const needsPrice = (row: EditedRow, quantity: string | null) =>
-    addsUnits(row, quantity) && row.transferFrom === undefined;
+    addsUnits(row, quantity) && transferOf(row, quantity) === undefined;
   // A cost kept is what a new holding comes in at, so its price is not
   // needed then; units added to one held come in at the price.
   const opensWithCost = (
@@ -209,7 +271,7 @@ export function ImportReview({
     cost !== null &&
     rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      held.get(row.symbol),
+      heldFor(row).get(row.symbol),
     ).kind === "new";
   const costInvalid = ({ row, cost }: (typeof parsed)[number]) =>
     !row.discarded &&
@@ -228,20 +290,31 @@ export function ImportReview({
       : exactOf(price).n === 0n &&
         needsPrice(row, quantity) &&
         !opensWithCost(row, quantity, cost));
-  // The instruments the rows kept already list: one row each.
-  const listed = (except: string) =>
-    new Set(
-      rows
-        .filter((row) => !row.discarded && row.id !== except)
-        .map((row) => row.symbol),
-    );
+  // The instruments the rows kept already list in each account: one row
+  // each.
+  const listedCount = new Map<string, number>();
+  for (const row of rows) {
+    if (row.discarded) continue;
+    const key = `${row.symbol}|${accountOf(row)}`;
+    listedCount.set(key, (listedCount.get(key) ?? 0) + 1);
+  }
+  // Whether another kept row lists the instrument in the row's account.
+  const listedElsewhere = (row: EditedRow, symbol: string) =>
+    (listedCount.get(`${symbol}|${accountOf(row)}`) ?? 0) -
+      (!row.discarded && row.symbol === symbol ? 1 : 0) >
+    0;
+  // A row a document lists under an account names none of the user's until
+  // the review picks one.
+  const unrouted = (row: EditedRow) =>
+    row.accountLabel !== undefined && row.accountId === undefined;
   const valid = parsed.every(
     (each) =>
       each.row.discarded ||
       (each.quantity !== null &&
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
-        !listed(each.row.id).has(each.row.symbol) &&
+        !unrouted(each.row) &&
+        !listedElsewhere(each.row, each.row.symbol) &&
         !priceInvalid(each) &&
         !costInvalid(each)),
   );
@@ -258,7 +331,11 @@ export function ImportReview({
       source: row.source,
       discarded: row.discarded,
       ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
-      ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
+      ...(row.accountLabel !== undefined && { accountLabel: row.accountLabel }),
+      ...(row.accountId !== undefined && { accountId: row.accountId }),
+      ...(transferOf(row, quantity) !== undefined && {
+        transferFrom: transferOf(row, quantity),
+      }),
     }),
   );
   const totals = readTotals(finalRows);
@@ -284,7 +361,9 @@ export function ImportReview({
   ).length;
   // What the account holds that no kept row lists: it stays as it is.
   const kept = new Set(
-    rows.filter((row) => !row.discarded).map((row) => row.symbol),
+    rows
+      .filter((row) => !row.discarded && accountOf(row) === item.accountId)
+      .map((row) => row.symbol),
   );
   const omitted = [...held.keys()].filter((symbol) => !kept.has(symbol));
 
@@ -296,7 +375,7 @@ export function ImportReview({
   function confirm() {
     if (!valid) {
       setAlert(
-        "Revisá las filas: cada una necesita un activo que no se repita, una cantidad mayor a 0 y, si suma unidades, su precio.",
+        "Revisá las filas: cada una necesita un activo que no se repita en su cuenta, una cantidad mayor a 0, su cuenta si el documento lista varias y, si suma unidades, su precio.",
       );
       return;
     }
@@ -470,7 +549,7 @@ export function ImportReview({
             const type = types.get(row.symbol);
             const effect = rowChange(
               { quantity: quantity ?? "0", discarded: row.discarded },
-              held.get(row.symbol),
+              heldFor(row).get(row.symbol),
             );
             const value =
               quantity && price
@@ -493,7 +572,7 @@ export function ImportReview({
                       id={`${pickerId}-${row.id}`}
                       aria-label={`Activo de la fila ${index + 1}`}
                       instruments={instruments.filter(
-                        (each) => !listed(row.id).has(each.symbol),
+                        (each) => !listedElsewhere(row, each.symbol),
                       )}
                       value={row.symbol}
                       onChange={(symbol) =>
@@ -528,6 +607,40 @@ export function ImportReview({
                     </span>
                   ))}
                 </div>
+                {row.accountLabel !== undefined && accounts && (
+                  <label className="grid gap-1 text-xs sm:col-span-4">
+                    <span className="text-muted-foreground">
+                      {`Cuenta · el documento dice "${row.accountLabel}"`}
+                    </span>
+                    <Select
+                      value={row.accountId ?? ""}
+                      disabled={row.discarded}
+                      onValueChange={(accountId) =>
+                        change(row.id, {
+                          accountId,
+                          portfolioId: undefined,
+                          transferFrom: undefined,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={`Cuenta de la fila ${index + 1}`}
+                        aria-invalid={
+                          (!row.discarded && unrouted(row)) || undefined
+                        }
+                      >
+                        <SelectValue placeholder="Elegí una cuenta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((each) => (
+                          <SelectItem key={each.id} value={each.id}>
+                            {each.institution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
                 <label className="grid gap-1 text-xs">
                   <span className="text-muted-foreground">Cantidad</span>
                   <Input
@@ -602,7 +715,7 @@ export function ImportReview({
                       index={index}
                       row={row}
                       isNew={effect.kind === "new"}
-                      routing={routing}
+                      routing={routingFor(row, routing)}
                       onChange={(patch) => change(row.id, patch)}
                     />
                   )}
@@ -671,7 +784,8 @@ function RowRouting({
   const sources = routing.elsewhere.get(row.symbol) ?? [];
   if (!isNew && sources.length === 0) return null;
   const portfolio = row.portfolioId ?? routing.defaultPortfolioId;
-  const origin = row.transferFrom ?? PURCHASE;
+  const origin =
+    sources.find((each) => each.id === row.transferFrom)?.id ?? PURCHASE;
   const originText = (value: string) =>
     value === PURCHASE
       ? "Compra o saldo propio"
