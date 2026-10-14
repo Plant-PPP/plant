@@ -70,11 +70,13 @@ const REFUSED: Record<Exclude<AlertWriteResult, "ok">, string> = {
 export function AlertsCard({
   alerts,
   instruments,
+  readFailed = false,
   onCreate,
   onDelete,
 }: {
   alerts: readonly PriceAlert[];
   instruments: readonly AlertInstrument[];
+  readFailed?: boolean;
   onCreate: (alert: NewAlert) => Promise<AlertWriteResult>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -124,6 +126,11 @@ export function AlertsCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         <AlertForm instruments={instruments} onCreate={create} />
+        {readFailed && (
+          <FormAlert>
+            No pudimos leer tus alertas. Recargá la página para verlas.
+          </FormAlert>
+        )}
         {shown.length > 0 && (
           <ul className="grid gap-2">
             {shown.map((alert) => (
