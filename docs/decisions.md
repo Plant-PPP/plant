@@ -53,6 +53,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A spreadsheet's holdings review speaks of the spreadsheet**: its totals, its account labels and what it does not list say "la planilla", never the document or the statement. A field the user cleared asks "Completá este dato"; only a field the import never brought blames it. Saving a sync's import names the account alone ("Guardaste 2 operaciones de InvertirOnline").
 - **A chat body the client aborts midway** answers 400 and logs `aborted` at warn, as the reports route treats an unreadable body.
 - **The assistant chat and syncs do not check the `ai_providers` consent**; only uploads check the terms. This stays while Plant has a single user (Tomas). Gating the assistant and syncs on the latest terms and the `ai_providers` consent is the step before opening Plant to other users.
+- **A sync of operations keeps the period before the row cap.** Adapters hand `defineConnection` every operation they read; it keeps those in the period (an undated one too), then the newest `DRAFT_ROW_LIMIT`, and counts as skipped only the ones in the period that did not fit. A provider whose API takes no period (IBKR, Wallbit) so still fills an older or narrower period.
+- **An XLSX whose table starts far down is marked truncated when its rows reach past the rows parsed**, even when the parse ends in a blank gap, since SheetJS then cuts `!ref` to its last parsed cell. A styled empty cell far below such a table marks it truncated too; a table that starts near the top keeps telling the two apart.
 
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 

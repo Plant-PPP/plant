@@ -194,6 +194,37 @@ describe("ibkr", () => {
   });
 });
 
+describe("ibkr's period", () => {
+  it("keeps the operations inside the period before taking the newest DRAFT_ROW_LIMIT", async () => {
+    const day = (index: number) =>
+      new Date(Date.UTC(2024, 0, 1) + index * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+    const trades = Array.from(
+      { length: 600 },
+      (_, index) =>
+        `<Trade currency="USD" symbol="AAPL" tradeDate="${day(index).replaceAll("-", "")}" quantity="1" tradePrice="100" proceeds="-100" ibCommission="0" buySell="BUY" tradeID="${index}" levelOfDetail="EXECUTION" />`,
+    ).join("\n");
+    fake.answer = (request) => ({
+      status: 200,
+      type: "xml",
+      body: request.path.endsWith("/SendRequest")
+        ? "<FlexStatementResponse><Status>Success</Status><ReferenceCode>1</ReferenceCode></FlexStatementResponse>"
+        : `<FlexQueryResponse><FlexStatements count="1"><FlexStatement toDate="20260101"><Trades>${trades}</Trades></FlexStatement></FlexStatements></FlexQueryResponse>`,
+    });
+    const reading = (await ibkrConnection({
+      ...deps(),
+      sleep: async () => undefined,
+    }).read(IBKR_CREDENTIALS, "operations", {
+      from: day(0),
+      to: day(99),
+    })) as OperationsReading;
+    expect(reading.operations).toHaveLength(100);
+    expect(reading.operations[0]!.date).toBe(day(99));
+    expect(reading.read.skippedRows).toBe(0);
+  });
+});
+
 describe("ibkr's budget", () => {
   it("stops waiting for a statement before the read's budget runs out", async () => {
     fake.answer = (request) => ({

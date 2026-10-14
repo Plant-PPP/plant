@@ -780,6 +780,19 @@ it("marks a table that starts so far down it reaches the rows parsed as truncate
   expect(readSheet(xlsxOf(sheet), XLSX_TYPE).truncated).toBe(true);
 });
 
+it("marks a table that starts far down as truncated when the rows parsed end in a gap", () => {
+  const block = (from: number, length: number) =>
+    Array.from({ length }, (_, i) => [`S${from + i}`, 1, 1, "ARS", ""]);
+  const sheet = XLSX.utils.sheet_add_aoa(
+    {},
+    [["Especie", "Cantidad", "Precio", "Moneda", "Fecha"], ...block(0, 299)],
+    { origin: "A1101" },
+  );
+  XLSX.utils.sheet_add_aoa(sheet, block(300, 101), { origin: "A1600" });
+  sheet["!ref"] = "A1101:E1700";
+  expect(readSheet(xlsxOf(sheet), XLSX_TYPE).truncated).toBe(true);
+});
+
 it("counts as skipped only rows with a quantity, not titles or totals", () => {
   const { skippedRows, draft } = sheetToDraft(
     {

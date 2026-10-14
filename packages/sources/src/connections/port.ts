@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { SourceError } from "../file-upload/draft";
+import { DRAFT_ROW_LIMIT, SourceError } from "../file-upload/draft";
 import type { HoldingsReading, OperationsReading } from "../port";
 
 // What a sync reads into its draft: the account's holdings, or the
@@ -16,6 +16,25 @@ export type ReadPeriod = { from: string | null; to: string | null };
 const inPeriod = (date: string | null, { from, to }: ReadPeriod): boolean =>
   date === null ||
   ((from === null || date >= from) && (to === null || date <= to));
+
+// The operations inside the period, newest first, at most DRAFT_ROW_LIMIT of
+// them; only those in the period that do not fit count as skipped.
+const periodReading = (
+  reading: OperationsReading,
+  period: ReadPeriod,
+): OperationsReading => {
+  const kept = reading.operations
+    .filter((each) => inPeriod(each.date, period))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  return {
+    operations: kept.slice(0, DRAFT_ROW_LIMIT),
+    read: {
+      ...reading.read,
+      skippedRows:
+        reading.read.skippedRows + Math.max(0, kept.length - DRAFT_ROW_LIMIT),
+    },
+  };
+};
 
 // How a provider's credential is known to only read: the provider says what
 // it may do and the adapter checks it (checked), the credential cannot do
@@ -104,14 +123,7 @@ export function defineConnection<
         throw new SourceError("unsupported", false);
       }
       const reading = await spec.read(parsed(raw), draft, period);
-      return "operations" in reading
-        ? {
-            ...reading,
-            operations: reading.operations.filter((each) =>
-              inPeriod(each.date, period),
-            ),
-          }
-        : reading;
+      return "operations" in reading ? periodReading(reading, period) : reading;
     },
   };
 }
