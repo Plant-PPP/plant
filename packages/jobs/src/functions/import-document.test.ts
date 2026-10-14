@@ -83,7 +83,7 @@ function setUp({
       mimeType: "application/pdf",
     }),
     download: jest.fn().mockResolvedValue(BYTES),
-    reading: jest.fn().mockResolvedValue(undefined),
+    reading: jest.fn().mockResolvedValue(true),
     institution: jest.fn().mockResolvedValue("IOL"),
     credentials: jest.fn().mockResolvedValue(CREDENTIALS),
     saveDraft: jest.fn().mockResolvedValue(true),
@@ -572,6 +572,79 @@ it.each([
     ]);
   },
 );
+
+describe("two runs of one import", () => {
+  // One import in memory: reading claims it only from queued.
+  function shared() {
+    const { deps, store, lines } = setUp();
+    let status = "queued";
+    store.load.mockImplementation(async () => ({
+      userId: USER,
+      status,
+      origin: "file",
+      path: PATH,
+      mimeType: "application/pdf",
+    }));
+    store.reading.mockImplementation(async () => {
+      if (status !== "queued") return false;
+      status = "reading";
+      return true;
+    });
+    store.saveDraft.mockImplementation(async () => {
+      if (status !== "reading") return false;
+      status = "ready";
+      return true;
+    });
+    const runOf = (step: ImportSteps, attempt = 0, runId = "first") =>
+      runImportDocument(deps, {
+        step,
+        runId,
+        attempt,
+        event: { data: { importId: IMPORT, userId: USER } },
+      });
+    return { deps, store, lines, runOf };
+  }
+
+  it("reads it once when a second run prepares it while the first reads", async () => {
+    const { deps, lines, runOf } = shared();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let atRead = () => {};
+    const reached = new Promise<void>((resolve) => (atRead = resolve));
+    const first = runOf({
+      run: async (id, fn) => {
+        if (id === "read") {
+          atRead();
+          await gate;
+        }
+        return fn();
+      },
+    });
+    await reached;
+    const second = await runOf({ run: async (_, fn) => fn() }, 0, "second");
+    release();
+    expect(await first).toEqual({ outcome: "ready", rows: 1 });
+    expect(second).toEqual({ outcome: "skipped" });
+    expect(deps.source.read).toHaveBeenCalledTimes(1);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        fields: expect.objectContaining({
+          "plant.import.skip_reason": "claimed",
+        }),
+      }),
+    );
+  });
+
+  it("reads it when its own prepare is retried after claiming it", async () => {
+    const { deps, store, runOf } = shared();
+    await store.reading(IMPORT, USER);
+    expect(await runOf({ run: async (_, fn) => fn() }, 1)).toEqual({
+      outcome: "ready",
+      rows: 1,
+    });
+    expect(deps.source.read).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("an import whose run died past its retries", () => {
   it("is marked failed when it is still being read", async () => {

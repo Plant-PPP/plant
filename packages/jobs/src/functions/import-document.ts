@@ -50,7 +50,8 @@ export interface ImportStorePort {
   // null when no file is at the path. Throws for a path outside the user's
   // `<userId>/imports/` folder.
   download(path: string, userId: string): Promise<Uint8Array | null>;
-  reading(importId: string, userId: string): Promise<void>;
+  // Moves a queued import to reading: true when this call moved it.
+  reading(importId: string, userId: string): Promise<boolean>;
   // The institution of the account the import's file was uploaded to; null
   // when the import was deleted meanwhile.
   institution(importId: string, userId: string): Promise<string | null>;
@@ -114,7 +115,7 @@ type Prepared =
       draft: ConnectionDraft;
       period: ReadPeriod;
     }
-  | { ok: false; reason: "missing" | "not_queued" | "path" };
+  | { ok: false; reason: "missing" | "not_queued" | "path" | "claimed" };
 type Read = {
   rows: number;
   draft: "holdings" | "operations" | "debts";
@@ -227,27 +228,34 @@ export async function runImportDocument(
     if (found.status !== "queued" && found.status !== "reading") {
       return { ok: false, reason: "not_queued" };
     }
-    if (found.origin === "connection") {
-      await deps.store.reading(importId, userId);
-      return {
-        ok: true,
-        origin: "connection",
-        accountId: found.accountId,
-        provider: found.provider,
-        draft: found.draft,
-        period: found.period,
-      };
-    }
-    if (!found.path.startsWith(`${userId}/imports/`)) {
+    if (
+      found.origin !== "connection" &&
+      !found.path.startsWith(`${userId}/imports/`)
+    ) {
       return { ok: false, reason: "path" };
     }
-    await deps.store.reading(importId, userId);
-    return {
-      ok: true,
-      origin: "file",
-      path: found.path,
-      mimeType: found.mimeType,
-    };
+    // Moving it to reading claims it, so a second run of the import (a
+    // retry event sent while it was queued) skips it rather than reading it
+    // again. A retried prepare goes on: the engine memoizes one that
+    // returned, so a retry is of this run's, which may have claimed it before
+    // failing. A second run whose own first prepare failed still reads it.
+    const claimed = await deps.store.reading(importId, userId);
+    if (!claimed && attempt === 0) return { ok: false, reason: "claimed" };
+    return found.origin === "connection"
+      ? {
+          ok: true,
+          origin: "connection",
+          accountId: found.accountId,
+          provider: found.provider,
+          draft: found.draft,
+          period: found.period,
+        }
+      : {
+          ok: true,
+          origin: "file",
+          path: found.path,
+          mimeType: found.mimeType,
+        };
   });
   if (!prepared.ok) {
     deps.log.warn("imports.read", {

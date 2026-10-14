@@ -108,17 +108,22 @@ export const uploadPath = (
   objectId: string,
 ): string => `${userId}/imports/${uploadId}/${objectId}`;
 
-// Why a path cannot be the file of `uploadId` for `userId`; null when it is.
+type PathProblem = "segments" | "owner" | "folder" | "upload" | "object";
+
+// Why a path cannot be the file of `uploadId` for `userId`, or of any of
+// `userId`'s uploads when `uploadId` is left out; null when it is.
 export function uploadPathProblem(
   path: string,
-  { userId, uploadId }: { userId: string; uploadId: string },
-): "segments" | "owner" | "folder" | "upload" | "object" | null {
+  { userId, uploadId }: { userId: string; uploadId?: string },
+): PathProblem | null {
   const parts = path.split("/");
   if (parts.length !== 4) return "segments";
   const [owner, folder, id, object] = parts as [string, string, string, string];
   if (owner !== userId) return "owner";
   if (folder !== "imports") return "folder";
-  if (id !== uploadId || !UUID.test(id)) return "upload";
+  if ((uploadId !== undefined && id !== uploadId) || !UUID.test(id)) {
+    return "upload";
+  }
   if (!UUID.test(object)) return "object";
   return null;
 }

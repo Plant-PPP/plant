@@ -8,7 +8,8 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { UPLOAD_BUCKET } from "@/lib/imports/upload";
+import { syncDraftOf } from "@/lib/connections/api-key";
+import { UPLOAD_BUCKET, uploadPathProblem } from "@/lib/imports/upload";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 type Client = SupabaseClient<Database>;
@@ -40,8 +41,7 @@ const BEING_READ: Database["public"]["Enums"]["import_status"][] = [
 ];
 
 // An import reads an uploaded document or, for a sync, its account at its
-// provider; the database holds it to one. A sync from before syncs of
-// operations read holdings.
+// provider; the database holds it to one.
 const loadedSchema = z.union([
   z.object({
     user_id: z.string(),
@@ -155,7 +155,7 @@ export function createImportStore(client: Client): ImportStorePort {
           origin: "connection",
           accountId: found.source_connection_id,
           provider: found.provider,
-          draft: found.sync_draft ?? "holdings",
+          draft: syncDraftOf(found.sync_draft),
           period: { from: found.sync_from, to: found.sync_to },
         };
       }
@@ -183,10 +183,7 @@ export function createImportStore(client: Client): ImportStorePort {
     // Storage answers a missing object with a 400 whose body's statusCode is
     // "404", or with a 404.
     async download(path, userId) {
-      if (
-        !path.startsWith(`${userId}/imports/`) ||
-        path.split("/").includes("..")
-      ) {
+      if (uploadPathProblem(path, { userId })) {
         throw new ImportStoreError("download", "path");
       }
       const { data, error } = await client.storage
@@ -200,16 +197,15 @@ export function createImportStore(client: Client): ImportStorePort {
     },
 
     async reading(importId, userId) {
-      checked(
-        "reading",
-        await client
-          .from("imports")
-          .update({ status: "reading" })
-          .eq("id", importId)
-          .eq("user_id", userId)
-          .in("status", BEING_READ),
-        204,
-      );
+      const claimed = await client
+        .from("imports")
+        .update({ status: "reading" })
+        .eq("id", importId)
+        .eq("user_id", userId)
+        .eq("status", "queued")
+        .select("id");
+      checked("reading", claimed, 200);
+      return (claimed.data ?? []).length === 1;
     },
 
     async institution(importId, userId) {
