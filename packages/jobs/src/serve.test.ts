@@ -119,6 +119,7 @@ describe("the jobs on a deployment", () => {
         quotes: built,
         imports: built,
         files: built,
+        orphans: built,
       });
       return {
         ids: options.functions.map((each) => each.id()),
@@ -138,8 +139,9 @@ describe("the jobs on a deployment", () => {
       "refresh-quotes",
       "import-document",
       "delete-expired-files",
+      "delete-orphan-files",
     ]);
-    expect(built).toBe(3);
+    expect(built).toBe(4);
     expect(origin).toBe(false);
   });
 });

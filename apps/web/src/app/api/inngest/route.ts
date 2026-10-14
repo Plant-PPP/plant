@@ -9,6 +9,7 @@ import {
   columnMappingsSink,
   fileDeletionSink,
   importSink,
+  orphanFileSink,
 } from "@/lib/imports/import-sink";
 import { readDocument } from "@/lib/imports/read-document";
 import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
@@ -43,5 +44,6 @@ export const { GET, POST, PUT } = serve(
       log: serverLog,
       now: () => new Date(),
     }),
+    orphans: () => ({ store: orphanFileSink(), log: serverLog }),
   }),
 );

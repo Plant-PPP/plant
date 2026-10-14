@@ -33,7 +33,8 @@
 -- - No extension is installed in either schema, anon can execute no function
 --   in them, authenticated only the RPCs (write_operation and confirm_import,
 --   which run as the caller with an empty search_path, and
---   imports_used_this_month), service_role none in private, the only
+--   imports_used_this_month), service_role none in private, only
+--   service_role orphan_import_files, which runs as the caller, the only
 --   SECURITY DEFINER
 --   functions are the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers
 --   and imports_used_this_month, and no trigger on public,
@@ -73,7 +74,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(52);
+SELECT plan(53);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -162,6 +163,17 @@ SELECT ok(
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure])),
   'the write RPCs run as the caller with an empty search_path'
+);
+
+-- The orphan files finder reads every user's objects, so only the job's role
+-- may ask, and it reads as that role.
+SELECT ok(
+  (SELECT NOT p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_path=""']
+   FROM pg_proc p WHERE p.oid = 'public.orphan_import_files(integer,uuid)'::regprocedure)
+    AND has_function_privilege('service_role', 'public.orphan_import_files(integer,uuid)', 'EXECUTE')
+    AND NOT has_function_privilege('authenticated', 'public.orphan_import_files(integer,uuid)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.orphan_import_files(integer,uuid)', 'EXECUTE'),
+  'orphan_import_files is a stable function only service_role executes, as the caller, with an empty search_path'
 );
 
 -- The quota's own count, private to the API roles, read only for the caller.
