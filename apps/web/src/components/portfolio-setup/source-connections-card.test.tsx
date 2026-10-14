@@ -128,9 +128,11 @@ it("offers delete only on the accounts a delete would go through for", () => {
       deletable={["c2", "c3"]}
     />,
   );
-  expect(markup).toContain('aria-label="Borrar Broker Dos"');
+  // An active account's three actions sit in its ⋯ menu; an archived one's
+  // two stay as icons.
+  expect(markup).toContain('aria-label="Acciones de Broker Dos"');
+  expect(markup).toContain('aria-label="Acciones de Banco Uno"');
   expect(markup).toContain('aria-label="Borrar Vieja"');
-  expect(markup).not.toContain('aria-label="Borrar Banco Uno"');
 });
 
 it("links each active account's name to its page once the server has it", () => {

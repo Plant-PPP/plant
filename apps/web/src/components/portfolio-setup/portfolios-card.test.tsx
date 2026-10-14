@@ -60,8 +60,10 @@ it("lists archived rows in their own table with only a restore button", () => {
 
 it("keeps the add button focusable while a write runs", () => {
   const html = render({}, true);
-  expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>.*Nueva cartera/);
-  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Nueva cartera/);
+  expect(html).toMatch(
+    /<button[^>]*aria-disabled="true"[^>]*>.*Agregar cartera/,
+  );
+  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Agregar cartera/);
 });
 
 it("fades a row the server has not confirmed yet", () => {
@@ -111,9 +113,10 @@ it("offers delete only on the rows a delete would go through for", () => {
       deletable={["p2", "p3"]}
     />,
   );
-  expect(html).toContain('aria-label="Borrar Largo plazo"');
+  // An active portfolio's actions sit in its ⋯ menu; an archived one's stay
+  // as icons.
+  expect(html).toContain('aria-label="Acciones de Largo plazo"');
   expect(html).toContain('aria-label="Borrar Vieja"');
-  expect(html).not.toContain('aria-label="Borrar Principal"');
   expect(html).not.toContain('aria-label="Borrar Usada"');
 });
 

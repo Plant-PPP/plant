@@ -34,14 +34,14 @@ type DialogState =
 const COPY = {
   title: "Carteras",
   description: "Agrupá tus inversiones como quieras",
-  addLabel: "Nueva cartera",
+  addLabel: "Agregar cartera",
   emptyText: "No tenés carteras activas",
   archivedLabel: "Archivadas",
   noMoreArchived: "No hay más carteras archivadas.",
   firstPageLabel: "Ver las más recientes",
   truncated: `Mostrando las ${PAGE_ROW_LIMIT} más recientes.`,
   createDialog: {
-    title: "Nueva cartera",
+    title: "Agregar cartera",
     description: "Elegí un nombre para la cartera.",
   },
   renameDialog: {
