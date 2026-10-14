@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Spreadsheets in US formats (PLA-138)
+
+- **Each figure column reads as its text cells show.** A cell only a US sheet writes ("1,234.56", "1,234,567", "230.50") makes the column US, where commas group thousands and the dot is the decimal point; a cell only an es-AR one writes ("12,5", "1.234,56", "1.234.567") keeps it es-AR, and wins over US evidence. A column whose cells tell nothing ("1,500", "1.234", "10") takes what the quantity, price and value columns show together, and es-AR when they tell nothing either. A cell that reads both ways ("1,500", "1.234") stays low confidence in either convention. A mostly es-AR sheet with a dot-decimal price column ("230.50") reads its quantity column's lone "1.234" as one and a fraction; it is low confidence, for the user to check.
+- **The rows skipped are counted, not stored.** `sheetToDraft` returns the draft and how many rows before the row limit made no holding; the job logs it as `plant.import.skipped_count` (the document reader reports 0). The draft contract and `import_items` stay as they are, so the count needs no migration, and the review does not show it yet.
+- **A column mapping is kept only when its reading looks right**: it reads more rows than it skips, and when rows have quantity, price and value, more than half agree within core's `validateHoldings` tolerance, at a price per unit or per 100 nominal. A mapping that fails is used for that reading and asked of the model again next time.
+- **A CSV that is not valid UTF-8 is decoded as Windows-1252**, which spreadsheet apps on Windows export.
+
 ## 2026-10-14 · An edit moved to another day goes last there (PLA-137)
 
 - **`write_operation` takes whether an edit goes last.** The app admits an edit that moves an operation to another day as the last of that day, as if entered again, and the database kept the operation's old place, so a valid edit could read as a sale before that day's purchase and be refused every time. A four-argument form takes `p_last`: when the app admitted the edit last, the operation and its movements take the next entry order. The three-argument form calls it with `false`, so `confirm_import` and new operations write as before. `authenticated` gets `UPDATE (entry_order)` on `operations`, since the function runs as the caller; a user can only reorder their own operations, which the stale and unit checks still bound.
