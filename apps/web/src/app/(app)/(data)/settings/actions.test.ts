@@ -31,6 +31,7 @@ jest.mock("@/lib/export/read", () => ({
 }));
 jest.mock("@/lib/debts/read", () => ({
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
+  readLiabilityEvents: async () => ({ byLiability: new Map(), cut: false }),
 }));
 jest.mock("@/lib/imports/read", () => ({
   readImports: (...args: unknown[]) => readImports(...args),

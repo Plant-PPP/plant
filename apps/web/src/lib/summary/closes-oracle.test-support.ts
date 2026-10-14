@@ -48,7 +48,11 @@ import {
   type MonthDetail,
   monthsBetween,
 } from "@/lib/summary/closes";
-import { type ClosesState, closesNeed } from "@/lib/summary/compute";
+import {
+  type ClosesState,
+  closesNeed,
+  debtsToday,
+} from "@/lib/summary/compute";
 
 type HoldingLedger = {
   row: HoldingRow;
@@ -226,10 +230,10 @@ export function closesOf(
     return { value: total.value, complete: total.complete, snapshot };
   };
   // Net worth: what is held less what is owed. A debt keeps today's balance
-  // on every past day, in its own unit, until debts have a history.
+  // on every past day, in its own unit, as cash does.
   const valueAt = (date: string) => {
     const held = valued(holdingsAt(state, ledgers, date), date);
-    const owed = valueLiabilities(state.liabilities, held.snapshot, {
+    const owed = valueLiabilities(debtsToday(state), held.snapshot, {
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });

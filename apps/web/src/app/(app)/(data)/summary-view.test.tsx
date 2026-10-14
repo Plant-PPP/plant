@@ -26,6 +26,7 @@ jest.mock("@/lib/ledger/read", () => ({
 jest.mock("@/lib/debts/read", () => ({
   ...jest.requireActual("@/lib/debts/read"),
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
+  readLiabilityEvents: async () => ({ byLiability: new Map(), cut: false }),
 }));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
@@ -101,6 +102,9 @@ const CASH: HoldingRow = {
     annual_rate: null,
     started_on: null,
     matures_on: null,
+    accrues: false,
+    opened_on: null,
+    anchored_on: "2026-01-01",
     valued_on: null,
     label: null,
   }),
@@ -123,6 +127,9 @@ const PERSONAL_LOAN = {
   installments_left: null,
   next_due_on: null,
   matures_on: null,
+  accrues: false,
+  opened_on: null,
+  anchored_on: "2026-01-01",
 };
 
 const debtsOf = (active: unknown[]) => ({

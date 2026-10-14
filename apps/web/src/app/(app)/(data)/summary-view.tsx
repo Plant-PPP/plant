@@ -85,6 +85,7 @@ const closesFields = ({
   "plant.closes.month_count": closes.length,
   "plant.ledger.truncated": read.ledgerTruncated,
   "plant.liability.truncated": read.debtsTruncated,
+  "plant.liability.events_truncated": read.debtEventsTruncated,
   "plant.assets.truncated": read.holdings.activeTruncated,
 });
 

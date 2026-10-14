@@ -1,4 +1,4 @@
-import { valueLiabilities } from "@plant/core";
+import { liabilitiesToday, valueLiabilities } from "@plant/core";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -27,12 +27,14 @@ const card = {
   installments_left: null,
   next_due_on: null,
   matures_on: null,
+  accrues: false,
+  opened_on: null,
 };
 
 it("values every fixture debt, the UVA one at the day's UVA", () => {
   const uva = fixtures.quotes.fxRates.filter((row) => row.kind === "uva");
   const valued = valueLiabilities(
-    fixtures.liabilities,
+    liabilitiesToday(fixtures.liabilities, new Map(), TODAY),
     {
       date: TODAY,
       fx: {

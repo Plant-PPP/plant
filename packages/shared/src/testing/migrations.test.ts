@@ -34,6 +34,20 @@ describe("migrations", () => {
     ).toBe("again");
   });
 
+  it("reads a public function with arguments and its drop", () => {
+    const create = (body: string) =>
+      `CREATE FUNCTION public.move_thing(p_id uuid, p_delta numeric)\n  RETURNS void\n  SET search_path = ''\n  AS $$${body}$$;`;
+    expect(
+      functionBodies([create("body")], /move_thing/).get("move_thing"),
+    ).toBe("body");
+    expect(
+      functionBodies(
+        [create("body"), "DROP FUNCTION public.move_thing(uuid, numeric);"],
+        /move_thing/,
+      ).size,
+    ).toBe(0);
+  });
+
   it("refuses a function it cannot read the body of", () => {
     const sql = [
       "CREATE OR REPLACE FUNCTION private.guard_thing_write()",
