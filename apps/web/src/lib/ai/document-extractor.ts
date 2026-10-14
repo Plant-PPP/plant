@@ -138,7 +138,6 @@ const answerSchema = z.object({
       }),
     )
     .max(DRAFT_ROW_LIMIT)
-    .default([])
     .describe(
       "The operations the document shows, only when it shows operations rather than positions.",
     ),
@@ -303,7 +302,27 @@ export function documentExtractor({
       );
       const survivor = [one, two].find((r) => r.status === "fulfilled");
       if (survivor?.status === "fulfilled" && (!passing || lastAttempt)) {
-        // One reading cannot agree with another on what the document is.
+        // One reading cannot agree with another on what the document is: a
+        // reading of operations stands as one, every row for the user to
+        // check.
+        if (
+          OPERATION_DOCUMENT_KINDS.includes(survivor.value.kind) &&
+          survivor.value.operations.length > 0
+        ) {
+          return {
+            operations: survivor.value.operations.map((operation) => ({
+              ...operation,
+              confidence: "low" as const,
+            })),
+            read: {
+              reader: "document",
+              mapping: "none",
+              skippedRows: 0,
+              disputes: 0,
+              documentKind: null,
+            },
+          };
+        }
         return {
           draft: unchecked(survivor.value.draft),
           read: {
@@ -327,11 +346,16 @@ export function documentExtractor({
         documentKind,
       },
     });
-    // A document both readers call one of operations is read as operations,
-    // with no tiebreak: a field they disagree on is left for the review.
-    const readersKind = agreedKind([one.value.kind, two.value.kind]);
-    if (readersKind && OPERATION_DOCUMENT_KINDS.includes(readersKind)) {
-      return operationsRead(readersKind);
+    // A document both readers call one of operations, a ticket or a list,
+    // is read as operations, with no tiebreak: a field they disagree on is
+    // left for the review.
+    if (
+      OPERATION_DOCUMENT_KINDS.includes(one.value.kind) &&
+      OPERATION_DOCUMENT_KINDS.includes(two.value.kind)
+    ) {
+      return operationsRead(
+        agreedKind([one.value.kind, two.value.kind]) ?? one.value.kind,
+      );
     }
     const first = one.value.draft;
     const second = two.value.draft;

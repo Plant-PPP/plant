@@ -89,6 +89,11 @@ BEGIN
     RAISE EXCEPTION 'an import has at most 500 operations' USING ERRCODE = '22023';
   END IF;
 
+  -- The user's lock first, as deleting an account takes it before the rows
+  -- it cascades to.
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('plant.portfolio_setup:' || v_user::text, 0));
+
   UPDATE public.imports i SET status = 'confirmed'
     WHERE i.user_id = v_user AND i.id = p_import_id AND i.status = 'ready';
   IF NOT FOUND THEN
@@ -97,6 +102,7 @@ BEGIN
 
   FOR v_operation IN SELECT value FROM jsonb_array_elements(p_operations) LOOP
     IF jsonb_typeof(v_operation -> 'parts') IS DISTINCT FROM 'array'
+       OR jsonb_array_length(v_operation -> 'parts') > 20
        OR jsonb_typeof(v_operation -> 'expected') IS DISTINCT FROM 'object' THEN
       RAISE EXCEPTION 'an operation has its parts and the holdings read' USING ERRCODE = '22023';
     END IF;
@@ -110,8 +116,6 @@ BEGIN
       FROM jsonb_array_elements(v_operation -> 'parts') part;
   END LOOP;
 
-  PERFORM pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended('plant.portfolio_setup:' || v_user::text, 0));
   SELECT COALESCE(jsonb_object_agg(h.id, h.movements_revision), '{}'::jsonb) INTO v_current
     FROM public.holdings h
     WHERE h.user_id = v_user AND h.asset_class = 'instrument'

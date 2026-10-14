@@ -294,7 +294,8 @@ describe("readImportForReview", () => {
           operation({
             id: "o3",
             symbol: "GD30D",
-            currency: "USD",
+            // Read as pesos: a dollar line is a dollar trade all the same.
+            currency: "ARS",
             price: "65",
           }),
         ],

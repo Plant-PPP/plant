@@ -7,7 +7,12 @@ import {
 import { z } from "zod";
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
-import { type Ledger, difference, writeOperation } from "@/lib/ledger/ledger";
+import {
+  allRows,
+  difference,
+  type Ledger,
+  writeOperation,
+} from "@/lib/ledger/ledger";
 
 import { holdingsOn, type ImportToWrite, type ImportWrite } from "./confirm";
 import type { ImportOperationRow } from "./review";
@@ -45,6 +50,32 @@ const reviewedSchema = z.union([
 // out, so a day's sale finds that day's purchase; across days the dates
 // order them, oldest first.
 const DAY_ORDER = { purchase: 0, dividend: 1, coupon: 1, sale: 2 } as const;
+
+// The portfolio of the account's holding of an instrument with the latest
+// movement on or before a day, open or closed; none when it never had one.
+function lastHeldIn(
+  state: Ledger,
+  accountId: string,
+  symbol: string,
+  date: string,
+): string | undefined {
+  let latest: { date: string; portfolioId: string } | undefined;
+  for (const row of allRows(state)) {
+    if (
+      row.account.id !== accountId ||
+      row.holding.asset_class !== "instrument" ||
+      row.holding.instrument_symbol !== symbol
+    ) {
+      continue;
+    }
+    for (const movement of state.movements.get(row.id) ?? []) {
+      if (movement.date <= date && (!latest || movement.date > latest.date)) {
+        latest = { date: movement.date, portfolioId: row.portfolio.id };
+      }
+    }
+  }
+  return latest?.portfolioId;
+}
 
 // Writes the reviewed operations of a document into its account, oldest
 // first, all or nothing. A purchase goes to the portfolio holding the most of
@@ -136,14 +167,16 @@ export function writeImportOperations<S extends Ledger>(
       }
       input = { kind, ...common, price, parts };
     } else {
-      const largest = held[0];
-      if (!largest) return refuse({ ok: false, code: "not_found" }, row.id);
+      // Paid after the units left, it goes to the holding that had them
+      // last.
+      const portfolioId =
+        held[0]?.row.portfolio.id ??
+        lastHeldIn(next, account.id, row.symbol, date);
+      if (!portfolioId) return refuse({ ok: false, code: "not_found" }, row.id);
       input = {
         kind,
         ...common,
-        parts: [
-          { portfolio_id: largest.row.portfolio.id, amount: row.amount! },
-        ],
+        parts: [{ portfolio_id: portfolioId, amount: row.amount! }],
       };
     }
     const operationId = newId();

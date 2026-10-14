@@ -1,5 +1,6 @@
 "use client";
 
+import { exactUnitPrice } from "@plant/core";
 import { buenosAiresDate, type Currency } from "@plant/shared";
 import { ArrowLeft, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
@@ -99,6 +100,39 @@ const finalOf = (row: EditedOperation): ImportOperationRow => ({
 });
 
 const MISSING = "Falta en el documento";
+const NOT_A_NUMBER = "Ingresá un número válido";
+
+type FigureField = "quantity" | "price" | "amount" | "charges";
+
+// The figures typed that do not read as a number, and a bond's price per 100
+// that a price per unit cannot hold exactly: they are asked again, never
+// dropped.
+function typedInvalid(
+  row: EditedOperation,
+  type: Parameters<typeof exactUnitPrice>[0] | undefined,
+): Set<FigureField> {
+  const invalid = new Set<FigureField>();
+  if (row.discarded) return invalid;
+  const texts: Record<FigureField, string> = {
+    quantity: row.quantityText,
+    price: row.priceText,
+    amount: row.amountText,
+    charges: row.chargesText,
+  };
+  for (const figure of Object.keys(texts) as FigureField[]) {
+    if (
+      texts[figure].trim() !== "" &&
+      parseAmountInput(texts[figure]) === null
+    ) {
+      invalid.add(figure);
+    }
+  }
+  const price = parseAmountInput(row.priceText);
+  if (price !== null && type && exactUnitPrice(type, price) === null) {
+    invalid.add("price");
+  }
+  return invalid;
+}
 
 // What the reading made of a document of operations, for the user to
 // complete before it goes into the account: every operation with what the
@@ -131,11 +165,19 @@ export function ImportOperationsReview({
 
   const finals = rows.map(finalOf);
   const missing = finals.map((row) => new Set(missingFields(row, today)));
-  const incomplete = missing.filter((each) => each.size > 0).length;
+  const invalidTyped = rows.map((row) =>
+    typedInvalid(row, types.get(row.symbol)),
+  );
+  const incomplete = missing.filter(
+    (each, index) => each.size > 0 || invalidTyped[index]!.size > 0,
+  ).length;
   const doubtful = rows.filter(
     (row) => !row.discarded && row.confidence === "low",
   ).length;
-  const complete = operationsComplete(finals, today);
+  const kept = finals.some((row) => !row.discarded);
+  const complete =
+    operationsComplete(finals, today) &&
+    invalidTyped.every((each) => each.size === 0);
 
   const change = (id: string, patch: Partial<EditedOperation>) => {
     setRefused(undefined);
@@ -163,16 +205,30 @@ export function ImportOperationsReview({
       }
       const at = rows.findIndex((row) => row.id === result.rowId);
       setRefused(result.rowId);
-      setAlert(
-        at === -1
-          ? MESSAGES[result.code]
-          : `En la operación ${at + 1}: ${MESSAGES[result.code]}`,
-      );
+      if (at === -1) {
+        // Refused before any operation: the import is no longer ready.
+        setAlert(
+          result.code === "not_found"
+            ? "Esta carga ya no está lista para confirmar. Volvé a Cargar."
+            : MOVEMENT_MESSAGES[result.code],
+        );
+        return;
+      }
+      setAlert(`En la operación ${at + 1}: ${MESSAGES[result.code]}`);
     });
   }
 
   const invalid = (index: number, field: MissingField) =>
     missing[index]!.has(field) || undefined;
+  // What a figure's field says is wrong with it, if anything.
+  const problem = (index: number, figure: FigureField) =>
+    rows[index]!.discarded
+      ? undefined
+      : invalidTyped[index]!.has(figure)
+        ? NOT_A_NUMBER
+        : figure !== "charges" && missing[index]!.has(figure)
+          ? MISSING
+          : undefined;
 
   return (
     <div className="grid gap-6">
@@ -350,9 +406,7 @@ export function ImportOperationsReview({
                           aria={`Cantidad de la operación ${index + 1}`}
                           value={row.quantityText}
                           disabled={row.discarded}
-                          missing={
-                            !row.discarded && missing[index]!.has("quantity")
-                          }
+                          problem={problem(index, "quantity")}
                           onChange={(quantityText) =>
                             change(row.id, { quantityText })
                           }
@@ -366,9 +420,7 @@ export function ImportOperationsReview({
                           aria={`Precio de la operación ${index + 1}`}
                           value={row.priceText}
                           disabled={row.discarded}
-                          missing={
-                            !row.discarded && missing[index]!.has("price")
-                          }
+                          problem={problem(index, "price")}
                           onChange={(priceText) =>
                             change(row.id, { priceText })
                           }
@@ -380,9 +432,7 @@ export function ImportOperationsReview({
                         aria={`Monto de la operación ${index + 1}`}
                         value={row.amountText}
                         disabled={row.discarded}
-                        missing={
-                          !row.discarded && missing[index]!.has("amount")
-                        }
+                        problem={problem(index, "amount")}
                         onChange={(amountText) =>
                           change(row.id, { amountText })
                         }
@@ -393,7 +443,7 @@ export function ImportOperationsReview({
                       aria={`Gastos de la operación ${index + 1}`}
                       value={row.chargesText}
                       disabled={row.discarded}
-                      missing={false}
+                      problem={problem(index, "charges")}
                       onChange={(chargesText) =>
                         change(row.id, { chargesText })
                       }
@@ -411,7 +461,9 @@ export function ImportOperationsReview({
       <div className="flex flex-wrap items-center justify-end gap-3">
         {!complete && (
           <span className="text-muted-foreground text-xs">
-            Completá los datos que faltan para confirmar.
+            {kept
+              ? "Completá los datos que faltan para confirmar."
+              : "Dejá al menos una operación."}
           </span>
         )}
         <Button asChild variant="ghost">
@@ -425,13 +477,17 @@ export function ImportOperationsReview({
   );
 }
 
-function MissingText() {
+function ProblemText({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
       <TriangleAlert aria-hidden className="size-3" />
-      {MISSING}
+      {text}
     </span>
   );
+}
+
+function MissingText() {
+  return <ProblemText text={MISSING} />;
 }
 
 function Figure({
@@ -439,14 +495,14 @@ function Figure({
   aria,
   value,
   disabled,
-  missing,
+  problem,
   onChange,
 }: {
   label: string;
   aria: string;
   value: string;
   disabled: boolean;
-  missing: boolean;
+  problem: string | undefined;
   onChange: (text: string) => void;
 }) {
   return (
@@ -457,10 +513,10 @@ function Figure({
         aria-label={aria}
         inputMode="decimal"
         disabled={disabled}
-        aria-invalid={missing || undefined}
+        aria-invalid={problem !== undefined || undefined}
         onChange={(event) => onChange(event.target.value)}
       />
-      {missing && <MissingText />}
+      {problem && <ProblemText text={problem} />}
     </label>
   );
 }

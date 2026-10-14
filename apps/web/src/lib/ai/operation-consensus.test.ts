@@ -62,3 +62,21 @@ it("matches an instrument's operations by occurrence, a missing name too", () =>
     ["2", "high"],
   ]);
 });
+
+it("pairs operations named differently by their number, else date, kind and units", () => {
+  expect(
+    mergeOperations(
+      [
+        operation({ symbol: "GGAL" }),
+        operation({ symbol: "YPFD", reference: null, quantity: "7" }),
+      ],
+      [
+        operation({ symbol: "GRUPO GALICIA" }),
+        operation({ symbol: "YPF", reference: null, quantity: "7" }),
+      ],
+    ).map((each) => [each.symbol, each.quantity, each.confidence]),
+  ).toEqual([
+    [null, "100", "low"],
+    [null, "7", "low"],
+  ]);
+});

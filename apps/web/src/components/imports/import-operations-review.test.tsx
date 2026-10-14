@@ -87,3 +87,14 @@ it("asks an income for its amount", () => {
   expect(html).not.toContain("Cantidad");
   expect(html).toContain("Falta en el documento");
 });
+
+it("asks again for charges typed that do not read as a number", () => {
+  const html = render([operation({ charges: "abc" })]);
+  expect(html).toContain("Ingresá un número válido");
+  expect(confirmButton(html)).toContain(' disabled=""');
+});
+
+it("says to keep one operation when every one is discarded", () => {
+  const html = render([operation({ discarded: true })]);
+  expect(html).toContain("Dejá al menos una operación.");
+});

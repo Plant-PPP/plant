@@ -43,10 +43,43 @@ export function mergeOperations(
 ): DraftOperation[] {
   const a = keyed(first);
   const b = keyed(second);
+  // Operations the readers named differently are paired by their number,
+  // else by date, kind and units, so one operation is not listed twice; the
+  // name they disagree on is left for the user to choose.
+  const leftA = [...a.keys()].filter((key) => !b.has(key));
+  const leftB = [...b.keys()].filter((key) => !a.has(key));
+  const pairs = new Map<string, string>();
+  const same = (
+    x: DraftOperation,
+    y: DraftOperation,
+    by: "reference" | "fields",
+  ) =>
+    by === "reference"
+      ? x.reference !== null && x.reference === y.reference
+      : x.date !== null &&
+        x.date === y.date &&
+        x.kind !== null &&
+        x.kind === y.kind &&
+        x.quantity !== null &&
+        sameDecimal(x.quantity, y.quantity);
+  for (const by of ["reference", "fields"] as const) {
+    for (const keyA of leftA) {
+      if (pairs.has(keyA)) continue;
+      const keyB = leftB.find(
+        (key) =>
+          ![...pairs.values()].includes(key) &&
+          same(a.get(keyA)!, b.get(key)!, by),
+      );
+      if (keyB) pairs.set(keyA, keyB);
+    }
+  }
+  const paired = new Set(pairs.values());
   const merged: DraftOperation[] = [];
   for (const key of new Set([...a.keys(), ...b.keys()])) {
+    if (paired.has(key)) continue;
     const x = a.get(key);
-    const y = b.get(key);
+    const y =
+      b.get(key) ?? (pairs.has(key) ? b.get(pairs.get(key)!) : undefined);
     if (!x || !y) {
       merged.push({ ...(x ?? y)!, confidence: "low" });
       continue;
@@ -66,10 +99,13 @@ export function mergeOperations(
         return [field, null];
       }),
     ) as Pick<DraftOperation, (typeof TEXTS)[number]>;
+    const symbol = x.symbol === y.symbol ? x.symbol : null;
+    if (symbol !== x.symbol) disputed = true;
     merged.push({
       ...x,
       ...decimals,
       ...texts,
+      symbol,
       confidence: disputed
         ? "low"
         : lowerConfidence(x.confidence, y.confidence),

@@ -1,5 +1,10 @@
 import "server-only";
-import { instrumentIndex, resolveSymbol, unitPrice } from "@plant/core";
+import {
+  normalizeSymbol,
+  instrumentIndex,
+  resolveSymbol,
+  unitPrice,
+} from "@plant/core";
 import { buenosAiresDate, Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -104,11 +109,17 @@ const operationSchema = z.object({
   source_page: z.number().nullable(),
 });
 
+// Whether the document names an instrument by its D (MEP) or C (cable) line.
+const isDollarLine = (printed: string, symbol: string) => {
+  const key = normalizeSymbol(printed.trim().replace(/\.BA$/i, ""));
+  return /[DC]$/.test(key) && key.slice(0, -1) === normalizeSymbol(symbol);
+};
+
 // An operation as the review completes it. An instrument Plant knows keeps
 // its symbol; one it does not, or none named, is left for the user to choose,
-// with what the document called it. The currency stays as printed: an
-// operation carries its own, so a dollar line of AL30 is a dollar trade of
-// AL30. The price stays as printed until the instrument is known.
+// with what the document called it. The currency is the operation's own: a
+// dollar line of AL30 (AL30D) is a dollar trade of AL30. The price stays as
+// printed until the instrument is known.
 function reviewOperation(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
@@ -131,8 +142,11 @@ function reviewOperation(
     price: row.price,
     amount: row.amount,
     charges: row.charges,
-    reference: row.reference,
-    currency: row.currency,
+    reference: row.reference?.trim() || null,
+    // A dollar line (AL30D, GD30C) is a dollar trade, whatever currency was
+    // read.
+    currency:
+      known && isDollarLine(row.symbol!, known.symbol) ? "USD" : row.currency,
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || "Del documento",
     discarded: false,

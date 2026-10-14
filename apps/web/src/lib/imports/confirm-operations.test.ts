@@ -166,3 +166,23 @@ it("skips discarded rows and refuses an incomplete one", () => {
     ).result,
   ).toEqual({ ok: false, code: "invalid" });
 });
+
+it("books an income paid after the units left on the holding that had them", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("buy"),
+      row("sale", { kind: "sale", date: "2026-09-16" }),
+      row("div", {
+        kind: "dividend",
+        quantity: null,
+        price: null,
+        amount: "10",
+        date: "2026-09-18",
+      }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+});

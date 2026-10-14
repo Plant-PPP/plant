@@ -93,6 +93,7 @@ it("reads the holdings and costs the call to the user", async () => {
           page: null,
         },
       ],
+      operations: [],
       totals: [
         { currency: "ARS", amount: " 90002.50 " },
         { currency: "USD", amount: "abc" },
@@ -160,6 +161,7 @@ it("drops a date that is not one", async () => {
           kind: "account_statement",
           documentDate: "30/09/2026",
           rows: [],
+          operations: [],
           totals: [],
         }),
       ),
@@ -176,6 +178,7 @@ it("keeps the totals the statement prints, one per currency", async () => {
           kind: "account_statement",
           documentDate: null,
           rows: [],
+          operations: [],
           totals: [
             { currency: "ARS", amount: "1500.25" },
             { currency: "USD", amount: "120" },
@@ -227,7 +230,7 @@ const reading = (
   rows: object[],
   documentDate = "2026-09-30",
   kind = "account_statement",
-) => JSON.stringify({ kind, documentDate, rows, totals: [] });
+) => JSON.stringify({ kind, documentDate, rows, operations: [], totals: [] });
 
 // One mock per model id, so each reader answers its own reading.
 const byModel = (answers: Record<string, string>) => {
@@ -500,12 +503,16 @@ it("reads a document both readers call a ticket as operations, with no tiebreak"
   const reading = await run();
   expect(reading.read.documentKind).toBe("trade_ticket");
   if (!("operations" in reading)) throw new Error("read as holdings");
-  // The readings disagree on the instrument's name, so each is its own row,
-  // and each is for the user to check.
-  expect(reading.operations).toHaveLength(2);
-  expect(reading.operations.every((each) => each.confidence === "low")).toBe(
-    true,
-  );
+  // The readings name the instrument differently and are paired by the
+  // operation's number: one operation, its name and units for the user.
+  expect(reading.operations).toEqual([
+    expect.objectContaining({
+      symbol: null,
+      quantity: null,
+      reference: "123",
+      confidence: "low",
+    }),
+  ]);
   expect(record).toHaveBeenCalledTimes(2);
 });
 
@@ -552,4 +559,26 @@ it("keeps what an operation's reading cannot parse as missing, not the row", asy
     date: null,
     symbol: "GGAL",
   });
+});
+
+it("reads operations when one reader calls the document a ticket and the other a list", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading([operation()], "trade_ticket"),
+    [READERS[1]]: operationsReading([operation()], "operations_list"),
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  expect(reading.operations).toHaveLength(1);
+});
+
+it("keeps a lone reader's operations, every one low, when the other fails", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading([operation()]),
+    [READERS[1]]: "not json",
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  expect(reading.operations).toEqual([
+    expect.objectContaining({ symbol: "GGAL", confidence: "low" }),
+  ]);
 });

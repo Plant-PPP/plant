@@ -246,7 +246,9 @@ export async function confirmImportOperations(
       } else {
         const typed = reviewed.data as unknown as ImportOperationRow[];
         const dates = typed.flatMap((row) =>
-          !row.discarded && typeof row.date === "string" ? [row.date] : [],
+          !row.discarded && z.iso.date().safeParse(row.date).success
+            ? [row.date!]
+            : [],
         );
         const { ledger, truncated, symbolOf } = await ledgerForDates(
           client,
