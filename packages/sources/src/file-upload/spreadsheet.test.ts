@@ -77,6 +77,7 @@ describe("readSheet", () => {
         "text/csv",
       ),
     ).toEqual({
+      rowsCut: 0,
       headers: ["Especie", "Moneda", "Cantidad"],
       rows: [
         ["AL30", "Dólares", "1.234"],
@@ -123,6 +124,30 @@ describe("readSheet", () => {
     );
     expect(rows.length).toBeGreaterThan(DRAFT_ROW_LIMIT);
     expect(rows.length).toBeLessThan(DRAFT_ROW_LIMIT + 20);
+  });
+
+  it("counts the rows past what it reads as left out", () => {
+    const lines = Array.from({ length: 2000 }, (_, i) => `S${i},1`);
+    const sheet = readSheet(
+      csv(["Especie,Cantidad", ...lines].join("\n")),
+      "text/csv",
+    );
+    expect(sheet.rows.length + 1 + (sheet.rowsCut ?? 0)).toBe(2001);
+    const { draft, skippedRows } = sheetToDraft(
+      sheet,
+      {
+        symbol: "Especie",
+        quantity: "Cantidad",
+        price: null,
+        value: null,
+        currency: null,
+        date: null,
+        currencyDefault: "ARS",
+      },
+      "2026-10-13",
+    );
+    expect(draft.rows).toHaveLength(DRAFT_ROW_LIMIT);
+    expect(skippedRows).toBe(2000 - DRAFT_ROW_LIMIT);
   });
 
   it.each([
@@ -394,6 +419,11 @@ describe("sheetToDraft", () => {
   it("counts the holdings it leaves out, not a total without a symbol", () => {
     // GD30 in euros and YPFD's negative quantity.
     expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);
+  });
+
+  it("counts every row with a quantity it cannot read, for the mapping", () => {
+    // The total without a symbol too.
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").unreadRows).toBe(3);
   });
 
   it("counts the holdings past the draft's row limit", () => {
