@@ -31,10 +31,12 @@
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
---   in them, authenticated only the RPCs (write_operation, confirm_import), which run as the
---   caller with an empty search_path, service_role none in private, the only
+--   in them, authenticated only the RPCs (write_operation and confirm_import,
+--   which run as the caller with an empty search_path, and
+--   imports_used_this_month), service_role none in private, the only
 --   SECURITY DEFINER
---   functions are the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers, and no trigger on public,
+--   functions are the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers
+--   and imports_used_this_month, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
@@ -71,7 +73,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
-SELECT plan(51);
+SELECT plan(52);
 
 -- Partitions are reached through their parent, like in the asserts below.
 CREATE TEMP VIEW reference_tables AS
@@ -145,7 +147,8 @@ SELECT is_empty(
             OR (has_function_privilege('authenticated', p.oid, 'EXECUTE')
                 AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
-                                       'public.confirm_import(uuid,jsonb)'::regprocedure]))
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure,
+                                       'public.imports_used_this_month()'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
   'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'
@@ -158,7 +161,15 @@ SELECT ok(
    WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure])),
-  'the RPCs run as the caller with an empty search_path'
+  'the write RPCs run as the caller with an empty search_path'
+);
+
+-- The quota's own count, private to the API roles, read only for the caller.
+SELECT ok(
+  (SELECT p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_path=""']
+          AND p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'private.import_requests'::regclass)
+   FROM pg_proc p WHERE p.oid = 'public.imports_used_this_month()'::regprocedure),
+  'imports_used_this_month is a stable definer owned by import_requests'' owner, with an empty search_path'
 );
 
 SELECT is_empty(
@@ -228,8 +239,9 @@ SELECT set_eq(
        AND p.prosecdef $$,
   ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
         'private.record_mfa_factor_event()', 'private.record_file_deletion()',
-        'private.record_conversation_deletion()', 'private.check_import_quota()'],
-  'the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers are the only SECURITY DEFINER functions'
+        'private.record_conversation_deletion()', 'private.check_import_quota()',
+        'public.imports_used_this_month()'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers and the quota count are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

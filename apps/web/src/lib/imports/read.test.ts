@@ -2,31 +2,26 @@ jest.mock("server-only", () => ({}), { virtual: true });
 
 import { readImportForReview, readImports } from "./read";
 
-const filters: unknown[][] = [];
-const clientOf = (list: unknown, count: number | null) => ({
+const rpcs: string[] = [];
+const clientOf = (list: unknown, used: number | null) => ({
   from: () => {
-    let head = false;
     const builder = {
-      select: (_: string, options?: { head?: boolean }) => {
-        head = options?.head === true;
-        return builder;
-      },
+      select: () => builder,
       order: () => builder,
       limit: () => builder,
-      gte: (...args: unknown[]) => (filters.push(args), builder),
       then: (resolve: (value: unknown) => unknown) =>
-        resolve(
-          head
-            ? { status: 200, count, data: null, error: null }
-            : { status: 200, data: list, error: null },
-        ),
+        resolve({ status: 200, data: list, error: null }),
     };
     return builder;
   },
+  rpc: async (name: string) => (
+    rpcs.push(name),
+    { status: 200, data: used, error: null }
+  ),
 });
 
 it("lists each import by its file and account, dated in Buenos Aires", async () => {
-  filters.length = 0;
+  rpcs.length = 0;
   const read = await readImports(
     clientOf(
       [
@@ -41,7 +36,6 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
       ],
       3,
     ) as never,
-    "2026-10-13",
   );
   expect(read).toEqual({
     used: 3,
@@ -59,7 +53,7 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
       },
     ],
   });
-  expect(filters).toEqual([["created_at", "2026-10-01T00:00:00-03:00"]]);
+  expect(rpcs).toEqual(["imports_used_this_month"]);
 });
 
 it("says why a failed import stopped, and keeps a read one's date", async () => {
@@ -85,7 +79,6 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
       ],
       2,
     ) as never,
-    "2026-10-13",
   );
   expect(
     read.items.map(({ error, documentDate }) => [error, documentDate]),
@@ -96,9 +89,9 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
 });
 
 it("throws when the count is missing", async () => {
-  await expect(
-    readImports(clientOf([], null) as never, "2026-10-13"),
-  ).rejects.toThrow("imports read failed");
+  await expect(readImports(clientOf([], null) as never)).rejects.toThrow(
+    "imports read failed",
+  );
 });
 
 describe("readImportForReview", () => {

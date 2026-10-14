@@ -1,11 +1,6 @@
 import "server-only";
 import { instrumentIndex, resolveSymbol, unitPrice } from "@plant/core";
-import {
-  buenosAiresDate,
-  buenosAiresMonthStart,
-  Constants,
-  type Database,
-} from "@plant/shared";
+import { buenosAiresDate, Constants, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -43,12 +38,10 @@ const rowSchema = z.object({
 });
 
 // The user's latest imports, as Cargar lists them, and how many they started
-// this month (in Buenos Aires).
+// this month (in Buenos Aires), deleted ones included.
 export async function readImports(
   client: Client,
-  today: string,
 ): Promise<{ items: ImportItem[]; used: number }> {
-  const monthStart = buenosAiresMonthStart(today);
   const [list, month] = await Promise.all([
     client
       .from("imports")
@@ -59,14 +52,11 @@ export async function readImports(
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(IMPORTS_LISTED),
-    client
-      .from("imports")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", monthStart),
+    client.rpc("imports_used_this_month"),
   ]);
   const failure =
     classifyPostgrestResult(list, 200) ?? classifyPostgrestResult(month, 200);
-  if (failure || !list.data || month.count === null) {
+  if (failure || !list.data || typeof month.data !== "number") {
     throw new ImportsReadError(failure?.code ?? "no_data");
   }
   const items = (list.data as unknown[]).map((data): ImportItem => {
@@ -83,7 +73,7 @@ export async function readImports(
       createdOn: buenosAiresDate(new Date(row.created_at)),
     };
   });
-  return { items, used: month.count };
+  return { items, used: month.data };
 }
 
 const itemSchema = z.object({

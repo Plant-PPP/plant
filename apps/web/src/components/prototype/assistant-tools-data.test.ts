@@ -298,7 +298,7 @@ it("reads everything through the session's client", async () => {
     expect.anything(),
     expect.anything(),
   );
-  expect(mockReadImports).toHaveBeenCalledWith(SESSION, TODAY);
+  expect(mockReadImports).toHaveBeenCalledWith(SESSION);
 });
 
 it("draws net worth as the history gives it, and caps every chart", async () => {
