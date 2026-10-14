@@ -34,11 +34,12 @@
 --   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
 --   which run as the caller with an empty search_path, and
 --   imports_used_this_month), service_role none in private, only
---   service_role orphan_import_files, which runs as the caller, and
---   account_credentials (account_api_keys_test.sql), the only SECURITY DEFINER
+--   service_role orphan_import_files, which runs as the caller,
+--   account_credentials (account_api_keys_test.sql) and meet_price_alerts
+--   (price_alerts_isolation_test.sql), the only SECURITY DEFINER
 --   functions are the signup, session, MFA factor, file deletion, conversation deletion,
 --   import quota and account credentials (into and out of Vault) triggers,
---   imports_used_this_month and account_credentials, and no trigger on public,
+--   imports_used_this_month, account_credentials and meet_price_alerts, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
