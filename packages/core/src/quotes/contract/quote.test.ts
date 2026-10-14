@@ -151,6 +151,27 @@ describe("quoteWindow", () => {
       "stale",
     ],
     [
+      "Friday's listed price on Saturday",
+      "listed",
+      FRIDAY,
+      "2026-10-10T18:05:00",
+      "closed",
+    ],
+    [
+      "Thursday's listed price on Friday",
+      "listed",
+      THURSDAY,
+      "2026-10-09T18:05:00",
+      "stale",
+    ],
+    [
+      "a listed price at 15:00",
+      "listed",
+      FRIDAY,
+      "2026-10-09T15:00:00",
+      "early",
+    ],
+    [
       "Saturday's UVA on Sunday at 09:00",
       "uva",
       SATURDAY,
@@ -587,7 +608,8 @@ describe("quoteFailureOf", () => {
 describe("feedErrorForStatus", () => {
   it.each([
     [400, "http_4xx", false],
-    [403, "http_4xx", false],
+    [401, "unauthorized", false],
+    [403, "unauthorized", false],
     [404, "http_4xx", false],
     [429, "http_429", true],
     [499, "http_4xx", false],

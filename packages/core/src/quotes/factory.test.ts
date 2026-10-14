@@ -281,8 +281,15 @@ describe("toQuoteFeed", () => {
 });
 
 describe("quoteFeeds", () => {
+  const TOKEN = { access_token: "made-up-access", expires_in: 899 };
+  const CREDENTIALS = { username: "plant-test", password: "made-up" };
+
   it("builds one port per quote source", () => {
-    const feeds = quoteFeeds({ getJson: async () => null });
+    const feeds = quoteFeeds({
+      getJson: async () => null,
+      postForm: async () => null,
+      iol: null,
+    });
     expect(feeds.map((feed) => feed.id).sort()).toEqual(
       [...Constants.public.Enums.quote_source].sort(),
     );
@@ -291,6 +298,13 @@ describe("quoteFeeds", () => {
   // Invented answers in each provider's shape, all dated today.
   const answer = (url: string): unknown => {
     const { hostname } = new URL(url);
+    if (hostname === "api.invertironline.com") {
+      return {
+        titulos: [
+          { simbolo: "AAPL", ultimoPrecio: 1, fecha: "2026-10-09T17:00:00" },
+        ],
+      };
+    }
     if (hostname === "dolarapi.com") {
       return { compra: 1, venta: 2, fechaActualizacion: NOW.toISOString() };
     }
@@ -306,6 +320,8 @@ describe("quoteFeeds", () => {
   ) => {
     const feed = quoteFeeds({
       getJson: async (url) => override(url) ?? answer(url),
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
     }).find((port) => port.id === id);
     if (!feed) throw new Error(`no feed ${id}`);
     return feed;
@@ -368,8 +384,24 @@ describe("quoteFeeds", () => {
     },
   );
 
+  it("fails the IOL feed unconfigured without credentials", async () => {
+    const feed = quoteFeeds({
+      getJson: async (url) => answer(url),
+      postForm: async () => TOKEN,
+      iol: null,
+    }).find((port) => port.id === "iol");
+    await expect(feed?.read(NOW)).rejects.toMatchObject({
+      code: "unconfigured",
+      retryable: false,
+    });
+  });
+
   it("stamps every row with the feed that read it and the read instant", async () => {
-    const feeds = quoteFeeds({ getJson: async (url) => answer(url) });
+    const feeds = quoteFeeds({
+      getJson: async (url) => answer(url),
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
+    });
     for (const feed of feeds) {
       const batch = await feed.read(NOW);
       const rows = [...batch.fxRates, ...batch.prices];
