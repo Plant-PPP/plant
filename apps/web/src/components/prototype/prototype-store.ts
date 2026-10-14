@@ -1,3 +1,4 @@
+import type { ChartPart } from "@/lib/assistant/chat";
 import {
   type Liability,
   placementFigures,
@@ -69,6 +70,9 @@ export type PrototypeState = Ledger & {
   conversations: Conversation[];
   // The day of each question asked, deleted conversations' included.
   askedOn: string[];
+  // The assistant's charts pinned to Resumen, as drawn: the prototype's data
+  // does not change under them. Oldest first.
+  pinnedCharts: { id: string; chart: ChartPart }[];
 };
 
 export type Write<R> = LedgerWrite<R, PrototypeState>;
@@ -188,6 +192,7 @@ export function initialState(
     uploadedOn: [],
     conversations: [],
     askedOn: [],
+    pinnedCharts: [],
   };
 }
 

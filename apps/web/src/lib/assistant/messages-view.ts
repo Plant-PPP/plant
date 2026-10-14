@@ -1,6 +1,8 @@
 import { CHART_TEMPLATES, type ChartTemplate } from "@/lib/charts/templates";
 import {
   CHART_KINDS,
+  CHART_TOPICS,
+  type ChartTopic,
   CHAT_UNITS,
   type ChartPart,
   type ChatMessage,
@@ -34,6 +36,15 @@ export const textOf = (parts: readonly unknown[]) =>
 
 const isText = (value: unknown): value is string => typeof value === "string";
 
+// Which of the assistant's charts a kept one is, when it says so.
+function sourceOf(value: unknown): Pick<ChartPart, "source"> {
+  if (typeof value !== "object" || value === null) return {};
+  const { topic, portfolioId } = value as Record<string, unknown>;
+  if (!CHART_TOPICS.includes(topic as ChartTopic)) return {};
+  if (portfolioId !== null && !isText(portfolioId)) return {};
+  return { source: { topic: topic as ChartTopic, portfolioId } };
+}
+
 // A chart as kept with an answer, or nothing when it is not one.
 const chartOf = (value: unknown): ChartPart[] => {
   if (typeof value !== "object" || value === null) return [];
@@ -52,6 +63,7 @@ const chartOf = (value: unknown): ChartPart[] => {
       ...(CHART_TEMPLATES.includes(chart.template as ChartTemplate) && {
         template: chart.template as ChartTemplate,
       }),
+      ...sourceOf(chart.source),
       unit: chart.unit as ChartPart["unit"],
       title: chart.title,
       points: points.slice(0, MAX_CHART_POINTS).flatMap((point) => {

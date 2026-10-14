@@ -2,7 +2,9 @@ import { referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
 
+import { pinChart } from "@/app/(app)/(data)/assistant/actions";
 import { AssistantChat } from "@/components/assistant/assistant-chat";
+import { SourcePinProvider } from "@/components/assistant/pin-context";
 import { PrototypeChat } from "@/components/prototype/prototype-chat";
 import {
   listConversations,
@@ -34,10 +36,12 @@ export default async function AssistantPage() {
     }),
   ]);
   return (
-    <AssistantChat
-      conversations={conversations}
-      used={used}
-      defaultUnit={referenceUnit(referenceDollar)}
-    />
+    <SourcePinProvider action={pinChart}>
+      <AssistantChat
+        conversations={conversations}
+        used={used}
+        defaultUnit={referenceUnit(referenceDollar)}
+      />
+    </SourcePinProvider>
   );
 }

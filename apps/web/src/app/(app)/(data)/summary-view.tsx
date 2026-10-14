@@ -1,3 +1,8 @@
+import { unpinChart } from "@/app/(app)/(data)/assistant/actions";
+import type { PinnedChart } from "@/components/summary/pinned-charts";
+import { CHAT_UNITS, type ChatUnit } from "@/lib/assistant/chat";
+import { type Pin, readPins } from "@/lib/assistant/pins";
+import { assistantData } from "@/lib/assistant/tools-data";
 import { referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import { notFound } from "next/navigation";
@@ -80,6 +85,55 @@ const closesFields = ({
   "plant.assets.truncated": read.holdings.activeTruncated,
 });
 
+// The charts the user pinned from the assistant, each drawn again from today's
+// data in Resumen's unit (the reference dollar's when the assistant has no
+// such unit). One that fails is shown as not drawn, never the page.
+async function pinnedCharts({
+  context,
+  unit,
+  reference,
+}: Awaited<ReturnType<typeof closesView>>): Promise<PinnedChart[]> {
+  const client = await createClient();
+  let pins: Pin[];
+  try {
+    pins = await readPins(client);
+  } catch (error) {
+    serverLog.error(
+      SUMMARY_VIEW_EVENT,
+      { ...contextFields(context), "plant.outcome": "pins_failed" },
+      error,
+    );
+    return [];
+  }
+  if (pins.length === 0) return [];
+  const today = buenosAiresDate(new Date());
+  const data = assistantData({
+    client,
+    context,
+    unit: CHAT_UNITS.includes(unit as ChatUnit)
+      ? (unit as ChatUnit)
+      : reference,
+    today,
+  });
+  return Promise.all(
+    pins.map(async (pin): Promise<PinnedChart> => {
+      try {
+        const drawn = await data.chart(pin.topic, pin.portfolioId ?? undefined);
+        return "error" in drawn
+          ? { id: pin.id, chart: null, asOf: today }
+          : { id: pin.id, chart: drawn.chart, asOf: drawn.asOf };
+      } catch (error) {
+        serverLog.error(
+          SUMMARY_VIEW_EVENT,
+          { ...contextFields(context), "plant.outcome": "pin_failed" },
+          error,
+        );
+        return { id: pin.id, chart: null, asOf: today };
+      }
+    }),
+  );
+}
+
 // Resumen: the net worth today, how it is split, and its closes; with
 // ?portfolio=, one portfolio's assets today.
 export async function SummaryView({ params }: { params: KeysetParams }) {
@@ -129,6 +183,8 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
       params={params}
       hrefs={SCOPE_HREFS}
       closesQuery={closesQuery(unit, reference)}
+      pinned={await pinnedCharts(view)}
+      onUnpin={unpinChart}
     />
   );
 }

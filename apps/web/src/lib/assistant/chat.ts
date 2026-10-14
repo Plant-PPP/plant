@@ -11,6 +11,19 @@ export const CHAT_UNITS = [
 ] as const satisfies readonly Denominator[];
 export type ChatUnit = (typeof CHAT_UNITS)[number];
 
+// What a chart can show, each from one of the assistant's tools.
+export const CHART_TOPICS = [
+  "net_worth",
+  "allocation",
+  "holdings",
+  "income",
+  "debts",
+] as const;
+export type ChartTopic = (typeof CHART_TOPICS)[number];
+
+// What pinning a chart to Resumen came to.
+export type PinResult = "pinned" | "already" | "full" | "failed";
+
 export const CHART_KINDS = ["bars", "line"] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
 
@@ -24,6 +37,9 @@ export type ChartPart = {
   points: { label: string; value: string }[];
   // How it is drawn, when the figures it shows have their own chart.
   template?: ChartTemplate;
+  // Which of the assistant's charts it is, when it is one: what Resumen draws
+  // again when it is pinned.
+  source?: { topic: ChartTopic; portfolioId: string | null };
 };
 
 export const barsOf = (
