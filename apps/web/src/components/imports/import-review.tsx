@@ -299,6 +299,21 @@ export function ImportReview({
         </div>
       </div>
 
+      {item.skippedRows > 0 && (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-amber-500/50 p-4 text-sm"
+        >
+          <TriangleAlert
+            aria-hidden
+            className="size-4 shrink-0 text-amber-600"
+          />
+          {item.skippedRows === 1
+            ? "Una fila de la planilla no se pudo leer: fijate que no falte ninguna tenencia."
+            : `${item.skippedRows} filas de la planilla no se pudieron leer: fijate que no falte ninguna tenencia.`}
+        </p>
+      )}
+
       <section
         className={cn(
           "grid gap-2 rounded-lg border p-4",

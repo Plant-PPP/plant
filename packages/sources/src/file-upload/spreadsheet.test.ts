@@ -391,8 +391,31 @@ describe("sheetToDraft", () => {
     ],
   };
 
-  it("counts the rows with a quantity that make no holding", () => {
-    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(3);
+  it("counts the holdings it leaves out, not a total without a symbol", () => {
+    // GD30 in euros and YPFD's negative quantity.
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);
+  });
+
+  it("counts every row with a quantity it cannot read, for the mapping", () => {
+    // The total without a symbol too.
+    expect(sheetToDraft(sheet, mapping, "2026-10-13").unreadRows).toBe(3);
+  });
+
+  it("counts the holdings past the draft's row limit", () => {
+    const rows = Array.from({ length: DRAFT_ROW_LIMIT + 3 }, (_, i) => [
+      `S${i}`,
+      "1",
+      "1",
+      "ARS",
+      "",
+    ]);
+    const { draft, skippedRows } = sheetToDraft(
+      { ...sheet, rows },
+      mapping,
+      "2026-10-13",
+    );
+    expect(draft.rows).toHaveLength(DRAFT_ROW_LIMIT);
+    expect(skippedRows).toBe(3);
   });
 
   it("reads a sheet in US formats", () => {

@@ -44,6 +44,7 @@ export function addImport(
     error: null,
     documentDate: null,
     documentTotals: [],
+    skippedRows: 0,
     rows: [],
     createdOn: state.today,
   };
@@ -169,6 +170,7 @@ export function finishReading(
     status: "ready",
     documentDate,
     documentTotals: readTotals(truth),
+    skippedRows: 0,
     rows,
   }));
 }

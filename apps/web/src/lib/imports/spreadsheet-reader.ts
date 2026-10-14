@@ -15,16 +15,16 @@ import { serverLog } from "@/lib/log/server-log";
 import type { ColumnMappingsPort } from "./column-mappings-store";
 
 // Whether a reading looks right enough to keep its mapping: it reads more rows
-// than it skips, and when the rows print quantity, price and value, most of
-// them agree, at a price per unit or per 100 nominal.
+// than rows with a quantity it cannot, and when the rows print quantity, price
+// and value, most of them agree, at a price per unit or per 100 nominal.
 function looksRight({
   draft,
-  skippedRows,
+  unreadRows,
 }: {
   draft: ImportDraft;
-  skippedRows: number;
+  unreadRows: number;
 }): boolean {
-  if (draft.rows.length <= skippedRows) return false;
+  if (draft.rows.length <= unreadRows) return false;
   const priced = draft.rows.filter(
     (row) => row.price !== null && row.value !== null,
   );

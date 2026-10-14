@@ -276,12 +276,16 @@ export type ColumnMapping = z.infer<ReturnType<typeof columnMappingFor>>;
 
 // The draft a mapped sheet yields: the first DRAFT_ROW_LIMIT rows that make a
 // valid holding, and the latest date of the date column up to `today`
-// (YYYY-MM-DD); and how many rows before that limit make none.
+// (YYYY-MM-DD). `skippedRows` are the holdings it leaves out, for the user:
+// rows with a symbol and a quantity that make none or come past the limit.
+// `unreadRows` are the rows
+// before the limit with a quantity that make no holding, symbol or not, for
+// telling whether a mapping reads the sheet.
 export function sheetToDraft(
   sheet: Sheet,
   mapping: ColumnMapping,
   today: string,
-): { draft: ImportDraft; skippedRows: number } {
+): { draft: ImportDraft; skippedRows: number; unreadRows: number } {
   const cellOf = (row: readonly SheetCell[], header: string | null) => {
     const index = header === null ? -1 : sheet.headers.indexOf(header);
     return index === -1 ? "" : (row[index] ?? "");
@@ -314,6 +318,7 @@ export function sheetToDraft(
 
   const rows: DraftRow[] = [];
   let skippedRows = 0;
+  let unreadRows = 0;
   let documentDate: string | null = null;
   for (const row of sheet.rows) {
     const date =
@@ -325,7 +330,15 @@ export function sheetToDraft(
     ) {
       documentDate = date;
     }
-    if (rows.length === DRAFT_ROW_LIMIT) continue;
+    // A row with a symbol and a quantity is a holding; one without either is
+    // a section's title or a total.
+    const holding =
+      String(cellOf(row, mapping.symbol)).trim() !== "" &&
+      String(cellOf(row, mapping.quantity)).trim() !== "";
+    if (rows.length === DRAFT_ROW_LIMIT) {
+      if (holding) skippedRows += 1;
+      continue;
+    }
     const figures = figureHeaders.map((header) => cellOf(row, header));
     const parsed = draftRowSchema.safeParse({
       symbol: String(cellOf(row, mapping.symbol)),
@@ -342,11 +355,14 @@ export function sheetToDraft(
       page: null,
     });
     if (parsed.success) rows.push(parsed.data);
-    // A row with a quantity that does not read is a holding left out; one
-    // without, a section's title or a total.
-    else if (String(cellOf(row, mapping.quantity)).trim() !== "") {
-      skippedRows += 1;
+    else {
+      if (holding) skippedRows += 1;
+      if (String(cellOf(row, mapping.quantity)).trim() !== "") unreadRows += 1;
     }
   }
-  return { draft: { documentDate, rows, totals: [] }, skippedRows };
+  return {
+    draft: { documentDate, rows, totals: [] },
+    skippedRows,
+    unreadRows,
+  };
 }

@@ -115,7 +115,7 @@ export function createImportStore(client: Client): ImportStorePort {
       return parsed.data.document.account.institution;
     },
 
-    async saveDraft(importId, userId, draft) {
+    async saveDraft(importId, userId, draft, skippedRows) {
       // A read retried after the import was confirmed or failed writes
       // nothing.
       const current = await client
@@ -161,6 +161,7 @@ export function createImportStore(client: Client): ImportStorePort {
           document_date: draft.documentDate,
           printed_total_ars: printed("ARS"),
           printed_total_usd: printed("USD"),
+          skipped_rows: skippedRows,
         })
         .eq("id", importId)
         .eq("user_id", userId)
