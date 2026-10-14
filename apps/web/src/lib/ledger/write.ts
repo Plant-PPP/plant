@@ -595,7 +595,11 @@ export async function deleteHoldingRow(
       .delete()
       .eq("id", parsed.data)
       .select("id");
-    if (classifyPostgrestResult(response, 200)) {
+    const refused = classifyPostgrestResult(response, 200);
+    // A transfer that arrived after the check is refused by the database.
+    if (refused && response.error?.hint === "holding_has_transfers") {
+      result = { ok: false, code: "holding_has_transfers" };
+    } else if (refused) {
       result = { ok: false, code: "failed" };
       failure = response.error;
     } else {

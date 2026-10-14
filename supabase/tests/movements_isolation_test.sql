@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(58);
+SELECT plan(59);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -560,6 +560,22 @@ SELECT lives_ok(
   'an operation can be moved last'
 );
 ROLLBACK TO SAVEPOINT goes_last;
+
+-- A holding with a transfer is not deleted.
+SAVEPOINT transfer_guard;
+SELECT set_config('plant.write_operation', 'on', true);
+INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date, currency,
+                              direction, quantity, rates)
+  SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'in', '1', '{}'
+  FROM public.movements m WHERE m.kind <> 'transfer' LIMIT 1;
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.holdings h
+     WHERE EXISTS (SELECT 1 FROM public.movements m
+                   WHERE m.holding_id = h.id AND m.kind = 'transfer') $$),
+  'PT409 holding_has_transfers',
+  'a holding with a transfer is not deleted'
+);
+ROLLBACK TO SAVEPOINT transfer_guard;
 
 RESET ROLE;
 

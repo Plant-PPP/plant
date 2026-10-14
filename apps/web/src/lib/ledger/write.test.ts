@@ -394,6 +394,22 @@ describe("deleting a holding", () => {
     expect(deleted).not.toHaveBeenCalled();
   });
 
+  it("refuses one a transfer reached after the check", async () => {
+    deleted.mockReturnValue({
+      data: null,
+      error: {
+        code: "PT409",
+        message: "a holding with transfers is not deleted",
+        hint: "holding_has_transfers",
+      },
+      status: 409,
+    });
+    expect(await deleteHoldingRow(HOLDING)).toEqual({
+      ok: false,
+      code: "holding_has_transfers",
+    });
+  });
+
   it("is not found when nothing was deleted", async () => {
     deleted.mockReturnValue({ data: [], error: null, status: 200 });
     expect(await deleteHoldingRow(HOLDING)).toEqual({
