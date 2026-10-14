@@ -7,6 +7,7 @@ import { SyncStatus } from "./api-key-card";
 const sync = (change: Partial<LastSync>): string =>
   renderToStaticMarkup(
     <SyncStatus
+      provider="Bitso"
       sync={{
         status: "ready",
         failure: null,
@@ -44,6 +45,6 @@ it("says why a sync failed, in the sync's own words", () => {
   expect(html).toContain(
     "La última sincronización falló (14/10/2026 a las 12:31).",
   );
-  expect(html).toContain("El proveedor rechazó la conexión.");
+  expect(html).toContain("Bitso rechazó la conexión.");
   expect(html).toContain("text-destructive");
 });

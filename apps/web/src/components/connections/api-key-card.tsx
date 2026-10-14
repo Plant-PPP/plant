@@ -179,7 +179,7 @@ export function ApiKeyCard({
         </p>
       )}
       {!synced && !connected && apiKey?.lastSync && (
-        <SyncStatus sync={apiKey.lastSync} />
+        <SyncStatus sync={apiKey.lastSync} provider={form.name} />
       )}
       {synced && (
         <p role="status" className="text-sm">
@@ -223,7 +223,13 @@ export function ApiKeyCard({
 
 // How the account's latest sync stands: read and waiting in Cargar (or
 // confirmed), still running, or failed and why.
-export function SyncStatus({ sync }: { sync: LastSync }) {
+export function SyncStatus({
+  sync,
+  provider,
+}: {
+  sync: LastSync;
+  provider: string;
+}) {
   const when = `${formatDate(sync.on)} a las ${sync.at}`;
   if (isBusy(sync.status)) {
     return (
@@ -239,7 +245,7 @@ export function SyncStatus({ sync }: { sync: LastSync }) {
         <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
         <span>
           La última sincronización falló ({when}).{" "}
-          {importFailureMessage(sync.failure ?? "extraction_failed", true)}
+          {importFailureMessage(sync.failure ?? "extraction_failed", provider)}
         </span>
       </p>
     );
