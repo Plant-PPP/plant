@@ -16,7 +16,8 @@ export type AssetsRead =
   | "valuation"
   | "ledger"
   | "debts"
-  | "api_key";
+  | "api_key"
+  | "taxes";
 
 // Logs one failure of the assets page and throws it as already logged, so the
 // (app) error page shows a retry.
