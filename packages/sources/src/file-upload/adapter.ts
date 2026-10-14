@@ -6,6 +6,7 @@ import type {
   SourceReading,
 } from "../port";
 import { SourceError } from "./draft";
+import { PDF_PAGE_LIMIT, pdfPageCount } from "./pdf";
 
 // Which reader takes each type Cargar uploads: a model reads documents and
 // pictures as they are; spreadsheets are parsed in code.
@@ -33,17 +34,26 @@ const FILE_UPLOAD_CAPABILITIES: SourceCapabilities = {
 const isFileUploadType = (type: string): type is FileUploadType =>
   Object.hasOwn(FILE_TYPE_READERS, type);
 
-// The file_upload source: hands each file to the reader for its type, and
-// refuses a type it does not take as unsupported.
+// The file_upload source: hands each file to the reader for its type,
+// refuses a type it does not take as unsupported, and a PDF longer than
+// PDF_PAGE_LIMIT before any reader sees it.
 export function fileUploadSource(
   readers: Record<SourceReadInfo["reader"], FileReader>,
 ): PortfolioSourcePort {
   return {
     kind: "file_upload",
     capabilities: () => FILE_UPLOAD_CAPABILITIES,
-    read: (input) =>
-      isFileUploadType(input.mimeType)
-        ? readers[FILE_TYPE_READERS[input.mimeType]](input)
-        : Promise.reject(new SourceError("unsupported", false)),
+    read: (input) => {
+      if (!isFileUploadType(input.mimeType)) {
+        return Promise.reject(new SourceError("unsupported", false));
+      }
+      if (
+        input.mimeType === "application/pdf" &&
+        (pdfPageCount(input.bytes) ?? 0) > PDF_PAGE_LIMIT
+      ) {
+        return Promise.reject(new SourceError("too_many_pages", false));
+      }
+      return readers[FILE_TYPE_READERS[input.mimeType]](input);
+    },
   };
 }
