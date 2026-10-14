@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · An icon read connects only to public addresses (PLA-153)
+
+- **The connection checks the address it resolves, not only the lookup before it.** An icon read fetches through an undici `Agent` whose `connect.lookup` resolves the host again and refuses any private address, so a host that answers the check with a public address and the connection with a private one (DNS rebinding) fails as `private`. This supersedes the "not stopped" sentence in the institution icon entry (PLA-102).
+
 ## 2026-10-14 · A close's real return (PLA-67)
 
 - **A close in pesos is set against inflation and the dollar.** Its detail adds a row: inflation over the period, read from the UVA (CER follows the consumer price index, about a month late, and its daily value is already stored), the real return as (1 + return) / (1 + inflation) - 1, the MEP dollar's move, and the return against it the same way. In a dollar unit the row is left out: the return already is one in dollars.

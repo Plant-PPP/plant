@@ -11,6 +11,7 @@ import {
   type FaviconFailure,
   FaviconError,
   fetchFavicon,
+  publicOnlyFetch,
   siteUrl,
 } from "./favicon";
 
@@ -19,6 +20,13 @@ export type IconResult =
   | { ok: false; reason: FaviconFailure | "failed" };
 
 const EVENT = "institutions.icon";
+
+const lookupAll = async (host: string) =>
+  (await lookup(host, { all: true, verbatim: true })).map(
+    (each) => each.address,
+  );
+
+const { fetch: publicFetch } = publicOnlyFetch(lookupAll);
 
 // Each read makes a few outbound requests, so a user gets ten a minute, and
 // an instance a hundred. In memory, per serverless instance.
@@ -41,11 +49,8 @@ export async function readInstitutionIcon(site: unknown): Promise<IconResult> {
   } else {
     try {
       const icon = await fetchFavicon(url.href, {
-        fetch,
-        lookup: async (host) =>
-          (await lookup(host, { all: true, verbatim: true })).map(
-            (each) => each.address,
-          ),
+        fetch: publicFetch,
+        lookup: lookupAll,
       });
       result = { ok: true, website: url.href, icon };
     } catch (error) {

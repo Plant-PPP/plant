@@ -1,10 +1,12 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
 import {
+  connectLookup,
   type FaviconDeps,
   FaviconError,
   fetchFavicon,
   iconLinks,
+  publicOnlyFetch,
   isPrivateAddress,
   siteUrl,
 } from "./favicon";
@@ -270,4 +272,46 @@ it("keeps only data URLs of images it shows", () => {
   expect(isStoredIcon(`data:image/jpeg;base64,${png}`)).toBe(false);
   expect(isStoredIcon(`data:image/svg+xml;base64,${png}`)).toBe(false);
   expect(isStoredIcon("https://brubank.com/fav.png")).toBe(false);
+});
+
+// A host that answers its first lookup with a public address and every later
+// one with a loopback address.
+function rebinding() {
+  let asked = 0;
+  return async () => (asked++ === 0 ? ["93.184.216.34"] : ["127.0.0.1"]);
+}
+
+it("refuses a host whose address changes to a private one at connection", async () => {
+  const resolve = rebinding();
+  const connection = publicOnlyFetch(resolve);
+  const deps: FaviconDeps = { lookup: resolve, fetch: connection.fetch };
+  try {
+    await expect(fetchFavicon("brubank.com", deps)).rejects.toEqual(
+      new FaviconError("private"),
+    );
+  } finally {
+    await connection.close();
+  }
+});
+
+it("connects to a host's public addresses, one or all", async () => {
+  const lookup = connectLookup(async () => ["93.184.216.34", "2606:2800::1"]);
+  const one = await new Promise((resolve) =>
+    lookup("brubank.com", {}, (error, address, family) =>
+      resolve({ error, address, family }),
+    ),
+  );
+  expect(one).toEqual({ error: null, address: "93.184.216.34", family: 4 });
+  const all = await new Promise((resolve) =>
+    lookup("brubank.com", { all: true }, (error, address) =>
+      resolve({ error, address }),
+    ),
+  );
+  expect(all).toEqual({
+    error: null,
+    address: [
+      { address: "93.184.216.34", family: 4 },
+      { address: "2606:2800::1", family: 6 },
+    ],
+  });
 });
