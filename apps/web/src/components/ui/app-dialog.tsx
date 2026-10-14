@@ -1,7 +1,8 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ function AppDialog({
   title,
   description,
   returnFocusTo,
+  icon: Icon,
   className,
   children,
 }: {
@@ -28,6 +30,8 @@ function AppDialog({
   // Where focus goes on close, given the element that opened the dialog when
   // it is still on the page.
   returnFocusTo?: (opener: HTMLElement | null) => HTMLElement | null;
+  // Shown before the title, naming what the dialog is about.
+  icon?: LucideIcon;
   // Classes over the default width, for content wider than a form.
   className?: string;
   children: React.ReactNode;
@@ -38,16 +42,18 @@ function AppDialog({
   const [opener] = useState(() =>
     typeof document === "undefined" ? null : document.activeElement,
   );
-  const content = useRef<HTMLDivElement>(null);
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
   useSubmitWhenValid(content);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        ref={content}
+        ref={setContent}
         data-slot="app-dialog"
         className={cn(
-          "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md",
+          // The overlay scale: labels and fields at text-xs from md, where a
+          // phone's 16px input font (which stops iOS zooming in) is not needed.
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md [&_[data-slot=label]]:text-xs [&_[data-slot=select-trigger]]:text-xs md:[&_input]:text-xs md:[&_textarea]:text-xs",
           className,
         )}
         onCloseAutoFocus={(event) => {
@@ -65,7 +71,10 @@ function AppDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            {Icon && <Icon aria-hidden className="size-4" />}
+            {title}
+          </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {children}

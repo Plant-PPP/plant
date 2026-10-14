@@ -1,14 +1,16 @@
 "use client";
 
-import { type RefObject, useEffect } from "react";
+import { useEffect } from "react";
 
 // The forms under `root` (or `root` itself, a form) skip the browser's own validation bubbles and keep
 // their submit buttons disabled until every required field is filled, so a
 // form can only be sent once it is complete. A field that appears later (a
 // branch of the form) counts as soon as it is there.
-export function useSubmitWhenValid(root: RefObject<HTMLElement | null>) {
+// Takes the element itself (from a callback ref into state), not a ref: a
+// dialog's content mounts a render after the dialog, when a ref's effect has
+// already run.
+export function useSubmitWhenValid(element: HTMLElement | null) {
   useEffect(() => {
-    const element = root.current;
     if (!element) return;
     const sync = () => {
       const forms =
@@ -35,5 +37,5 @@ export function useSubmitWhenValid(root: RefObject<HTMLElement | null>) {
       element.removeEventListener("change", sync);
       observer.disconnect();
     };
-  }, [root]);
+  }, [element]);
 }

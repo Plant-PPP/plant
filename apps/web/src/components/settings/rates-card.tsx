@@ -160,7 +160,7 @@ function RateDialog({
   onClose: () => void;
   onSubmit: (sell: string, date: string) => void;
 }) {
-  const form = useRef<HTMLFormElement>(null);
+  const [form, setForm] = useState<HTMLFormElement | null>(null);
   useSubmitWhenValid(form);
   const id = useId();
   const [sell, setSell] = useState(rate.sell ? amountInput(rate.sell) : "");
@@ -174,7 +174,7 @@ function RateDialog({
       returnFocusTo={returnFocusTo}
     >
       <form
-        ref={form}
+        ref={setForm}
         className="grid gap-4"
         noValidate
         onSubmit={(event) => {

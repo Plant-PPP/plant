@@ -3,7 +3,7 @@
 import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import type { Currency } from "@plant/shared";
 import { Trash2 } from "lucide-react";
-import { useId, useOptimistic, useState, useTransition, useRef } from "react";
+import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -174,7 +174,7 @@ function AlertForm({
   instruments: readonly AlertInstrument[];
   onCreate: (alert: NewAlert, pending: PriceAlert) => Promise<boolean>;
 }) {
-  const form = useRef<HTMLFormElement>(null);
+  const [form, setForm] = useState<HTMLFormElement | null>(null);
   useSubmitWhenValid(form);
   const id = useId();
   const [subject, setSubject] = useState<Subject>("mep");
@@ -255,7 +255,7 @@ function AlertForm({
 
   return (
     <form
-      ref={form}
+      ref={setForm}
       className="grid gap-3"
       noValidate
       onSubmit={(event) => {

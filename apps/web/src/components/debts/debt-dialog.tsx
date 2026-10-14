@@ -2,12 +2,12 @@
 
 import { LIABILITY_KINDS, liabilityInputSchema } from "@plant/core";
 import { Constants } from "@plant/shared";
+import { Info, Landmark } from "lucide-react";
 import { useId, useState } from "react";
 
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
+import { DialogActions, MoreFields } from "@/components/ui/dialog-actions";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CURRENCY_LABELS } from "@/lib/holdings/messages";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
@@ -107,6 +112,7 @@ export function DebtDialog({
       onClose={onClose}
       title={mode === "create" ? "Agregar deuda" : "Editar deuda"}
       description="Lo que debés hoy y cómo lo vas pagando."
+      icon={Landmark}
       returnFocusTo={focus.returnFocusTo}
     >
       <form
@@ -117,7 +123,7 @@ export function DebtDialog({
           submit();
         }}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
             <Label htmlFor={`${id}-kind`}>Tipo</Label>
             <Select
@@ -186,21 +192,33 @@ export function DebtDialog({
             </div>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {text("label", "Nombre", { placeholder: "Hipoteca, Visa…" })}
-          {text("lender", "Con quién (opcional)", {
-            placeholder: "Banco, persona…",
+        <div className="grid grid-cols-2 gap-4">
+          {text("label", "Nombre", {
+            placeholder: "Hipoteca, Visa…",
+            required: true,
+          })}
+          {text("balance", `Saldo (${unit})`, {
+            inputMode: "decimal",
+            required: true,
           })}
         </div>
         {canUva && (
           <div className="flex items-center justify-between gap-4">
-            <Label htmlFor={`${id}-uva`}>
-              En UVA
-              <span className="text-muted-foreground block text-xs font-normal">
-                El saldo y la cuota se cargan en UVA y se pasan a pesos con la
-                UVA del día.
-              </span>
-            </Label>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor={`${id}-uva`}>En UVA</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info
+                    aria-label="Qué es"
+                    className="text-muted-foreground size-3.5"
+                  />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  El saldo y la cuota se cargan en UVA y se pasan a pesos con la
+                  UVA del día.
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <Switch
               id={`${id}-uva`}
               checked={fields.uva}
@@ -208,30 +226,38 @@ export function DebtDialog({
             />
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          {text("balance", `Saldo (${unit})`, { inputMode: "decimal" })}
-          {text("installment", `Cuota (${unit}, opcional)`, {
-            inputMode: "decimal",
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {text("rate", "Tasa anual % (opcional)", { inputMode: "decimal" })}
-          {text("installmentsLeft", "Cuotas que quedan (opcional)", {
-            inputMode: "numeric",
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {text("nextDueOn", "Próximo vencimiento (opcional)", {
-            type: "date",
-          })}
-          {text("maturesOn", "Termina (opcional)", { type: "date" })}
-        </div>
+        <MoreFields
+          label="Con quién, cuota, tasa y vencimientos"
+          defaultOpen={(
+            [
+              "lender",
+              "installment",
+              "rate",
+              "installmentsLeft",
+              "nextDueOn",
+              "maturesOn",
+            ] as const
+          ).some((key) => initial[key] !== "")}
+        >
+          <div className="grid grid-cols-2 gap-4">
+            {text("lender", "Con quién", { placeholder: "Banco, persona…" })}
+            {text("installment", `Cuota (${unit})`, { inputMode: "decimal" })}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {text("rate", "Tasa anual %", { inputMode: "decimal" })}
+            {text("installmentsLeft", "Cuotas que quedan", {
+              inputMode: "numeric",
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {text("nextDueOn", "Próximo vencimiento", { type: "date" })}
+            {text("maturesOn", "Termina", { type: "date" })}
+          </div>
+        </MoreFields>
         {alert && <FormAlert id={`${id}-alert`}>{alert}</FormAlert>}
-        <DialogFooter>
-          <Button type="submit" size="sm">
-            {mode === "create" ? "Agregar" : "Guardar"}
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel={mode === "create" ? "Agregar" : "Guardar"}
+        />
       </form>
     </AppDialog>
   );
