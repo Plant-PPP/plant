@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Operations already loaded (PLA-150)
+
+- **An operation the account already has starts discarded**, marked "Ya está cargada", for the user to bring back if it is not the same. It is the same when an operation of the account carries its transaction number, or, with no number, when one of its instrument on its day, of its kind, has its units or its amount. Only the account the document was uploaded to is looked in.
+- **It is worked out when the review opens**, from the ledger the page already reads, and not stored: a confirmation in between is seen on the next visit.
+
 ## 2026-10-14 · Importing operations (PLA-149)
 
 - **A document both readers call a ticket or a list of operations is read as operations** (`trade_ticket`, the new `operations_list`), in the same two calls: each lists `operations` alongside `rows`. A statement that shows positions, even with the period's movements, is still read as holdings. This supersedes PLA-37's rule that a trade ticket yields nothing.
