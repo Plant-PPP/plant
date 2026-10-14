@@ -1,5 +1,10 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("next/cache", () => ({ revalidatePath: jest.fn() }));
+// Gain alerts' figures are worked out after each write; lib/alerts tests them.
+const syncGainAlerts = jest.fn(async () => 0);
+jest.mock("@/lib/alerts/read", () => ({
+  syncGainAlerts: (...args: unknown[]) => syncGainAlerts(...(args as [])),
+}));
 jest.mock("@/lib/auth/session-claims", () => ({
   getSessionClaims: async () => ({ sub: "u1" }),
 }));
@@ -76,6 +81,7 @@ const OPERATION = "0f000000-0000-4000-8000-00000000000f";
 let lines: Record<string, unknown>[];
 beforeEach(() => {
   lines = captureServerLog();
+  syncGainAlerts.mockClear();
   rpc.mockReset();
   filters.length = 0;
   manualPrices
@@ -106,6 +112,8 @@ it("admits a new operation and writes its parts with the revisions read", async 
     "plant.ledger.action": "create_operation",
     "plant.outcome": "ok",
   });
+  // The movements changed, so the gain alerts' figures are worked out again.
+  expect(syncGainAlerts).toHaveBeenCalledTimes(1);
 });
 
 it("refuses what core refuses without writing", async () => {
@@ -115,6 +123,7 @@ it("refuses what core refuses without writing", async () => {
   });
   expect(result.ok).toBe(false);
   expect(rpc).not.toHaveBeenCalled();
+  expect(syncGainAlerts).not.toHaveBeenCalled();
 });
 
 it("expects the revision of every holding of the instrument when rewriting", async () => {

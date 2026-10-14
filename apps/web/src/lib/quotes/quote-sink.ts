@@ -12,3 +12,17 @@ export function quoteSink(): QuoteStorePort {
   }
   return createQuoteWriter(client);
 }
+
+// Marks met every user's price alerts the latest quotes meet, through the
+// function only the service role may run; how many it marked.
+export function priceAlertsSink(): { meet(): Promise<number> } {
+  const client = createServiceRoleClient();
+  return {
+    meet: async () => {
+      if (!client) throw new Error("price alerts: unconfigured");
+      const { data, error } = await client.rpc("meet_price_alerts");
+      if (error) throw new Error(`price alerts: ${error.code}`);
+      return data;
+    },
+  };
+}

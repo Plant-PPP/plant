@@ -20,6 +20,8 @@ import {
   realEstateSheetSchema,
 } from "@/lib/real-estate/sheet";
 import type { Conversation } from "@/lib/assistant/chat";
+import type { PriceAlert } from "@/lib/alerts/alerts";
+
 import type { ApiKeyView } from "@/lib/connections/api-key";
 import type { ImportItem } from "@/lib/imports/review";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
@@ -74,6 +76,10 @@ export type PrototypeState = Ledger & {
   // The assistant's charts pinned to Resumen, as drawn: the prototype's data
   // does not change under them. Oldest first.
   pinnedCharts: { id: string; chart: ChartPart }[];
+  // The price alerts, newest first. One is checked against the prototype's
+  // quotes when it is set, since no job runs here.
+  priceAlerts: PriceAlert[];
+
   // Each exchange account's key, by account id, as its page shows it; the
   // prototype keeps no key or secret.
   apiKeys: ReadonlyMap<string, ApiKeyView>;
@@ -197,6 +203,8 @@ export function initialState(
     conversations: [],
     askedOn: [],
     pinnedCharts: [],
+    priceAlerts: [],
+
     apiKeys: new Map(),
   };
 }

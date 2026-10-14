@@ -18,9 +18,13 @@ import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
 
+// Marks met the price alerts the latest quotes meet, and says how many.
+export type PriceAlertsPort = { meet(): Promise<number> };
+
 export type QuoteJobDeps = {
   feeds: readonly QuoteFeedPort[];
   store: QuoteStorePort;
+  alerts?: PriceAlertsPort;
   log: Logger;
   now: () => Date;
 };
@@ -47,6 +51,7 @@ type StepOutcome =
 
 export type QuoteSteps = {
   run(id: string, fn: () => Promise<StepOutcome>): Promise<StepOutcome>;
+  run(id: string, fn: () => Promise<number>): Promise<number>;
 };
 
 type RunContext = { step: QuoteSteps; runId: string; attempt: number };
@@ -181,11 +186,39 @@ export async function runRefreshQuotes(
     results.push({ feed: feed.id, outcome });
   }
   const { fields, ...counts } = runLine(context.runId, results);
+  // The alerts step runs before any line is written, so a request that stops
+  // at it writes none and the run's lines come once, from the last request.
+  if (deps.alerts && counts.outcome !== "failed") {
+    await meetAlerts(deps.alerts, deps.log, context);
+  }
   deps.log[LEVEL[counts.outcome]]("quotes.refresh", fields);
   if (counts.outcome === "failed") {
     throw new NonRetriableError("quotes.refresh failed");
   }
   return counts;
+}
+
+// After the quotes are saved, the alerts they meet are marked; a failure is
+// logged and leaves them waiting for the next run.
+async function meetAlerts(
+  alerts: PriceAlertsPort,
+  log: Logger,
+  { step, runId }: RunContext,
+): Promise<void> {
+  try {
+    const met = await step.run("meet-alerts", () => alerts.meet());
+    log.info("quotes.alerts", {
+      "plant.inngest.run_id": runId,
+      "plant.outcome": "ok",
+      "plant.alerts.met_count": met,
+    });
+  } catch (error) {
+    log.error(
+      "quotes.alerts",
+      { "plant.inngest.run_id": runId, "plant.outcome": "failed" },
+      error,
+    );
+  }
 }
 
 export const refreshQuotes = (deps: QuoteJobDeps) =>
