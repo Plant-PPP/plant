@@ -20,6 +20,7 @@ import {
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
 import { normalizeName } from "@/lib/portfolio-setup/normalize-name";
+import { settle as settleCall } from "@/lib/server-action-call";
 import type {
   PortfolioRow,
   SourceConnectionRow,
@@ -129,6 +130,15 @@ export function offeredPortfolio(
   return portfolios.find((row) => row.id === id);
 }
 
+// The icon a site gives, a call that failed as a failed read.
+export async function readSiteIcon(
+  readIcon: (site: string) => Promise<IconResult>,
+  site: string,
+): Promise<IconResult> {
+  const read = await settleCall(readIcon(site));
+  return read === "rejected" ? { ok: false, reason: "failed" } : read;
+}
+
 // Creates, edits or restores an account, handing its fields to `onSubmit` as
 // it closes; a refused write opens it again with the fields and the alert.
 export function SourceConnectionDialog({
@@ -232,10 +242,7 @@ export function SourceConnectionDialog({
       return;
     }
     startReading(async () => {
-      const read = await readIcon(site).catch((): IconResult => ({
-        ok: false,
-        reason: "failed",
-      }));
+      const read = await readSiteIcon(readIcon, site);
       if (closed.current) return;
       if (!read.ok) {
         setAlert({ text: ICON_MESSAGES[read.reason], field: "website" });

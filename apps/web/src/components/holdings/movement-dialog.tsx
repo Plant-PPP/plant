@@ -47,6 +47,7 @@ import type {
   PortfolioRow,
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
+import { settle as settleCall } from "@/lib/server-action-call";
 
 import {
   type MovementField,
@@ -898,6 +899,14 @@ function RemoveButton({
   );
 }
 
+// The server's suggestion, none when the call failed.
+export async function suggestionAnswer(
+  asked: Promise<string | null>,
+): Promise<string | null> {
+  const value = await settleCall(asked);
+  return value === "rejected" ? null : value;
+}
+
 // A suggestion asked again only when what it reads changes. One the server
 // works out shows nothing until the answer to the latest question arrives.
 function useSuggestion(
@@ -909,18 +918,22 @@ function useSuggestion(
   const [answer, setAnswer] = useState<{
     to: Promise<string | null>;
     value: string | null;
+    // The redirect of an ended session, thrown in render for Next to follow.
+    error?: unknown;
   } | null>(null);
   useEffect(() => {
     if (!(asked instanceof Promise)) return;
     let current = true;
-    asked.then(
+    suggestionAnswer(asked).then(
       (value) => current && setAnswer({ to: asked, value }),
-      () => current && setAnswer({ to: asked, value: null }),
+      (error: unknown) =>
+        current && setAnswer({ to: asked, value: null, error }),
     );
     return () => {
       current = false;
     };
   }, [asked]);
+  if (answer && "error" in answer) throw answer.error;
   if (!(asked instanceof Promise)) return asked;
   return answer?.to === asked ? answer.value : null;
 }

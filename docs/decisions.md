@@ -23,7 +23,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Connecting an API key is rate limited**: at most 5 provider checks per user and 100 per instance a minute, in memory per serverless instance, so Plant is no oracle for someone else's credentials.
 - **A manual price is stated in its instrument's catalog currency**; another currency is refused as invalid.
 - **An import that stops being read before its draft is saved** (its account deleted meanwhile) is logged as skipped with `plant.import.skip_reason: "gone"`.
-- **A failed alerts read in Ajustes** shows a notice in the card instead of an empty list.
+- **A failed alerts read in Ajustes or Resumen** shows a notice (in Ajustes' card, in Resumen's met alerts) instead of an empty list.
+- **The review words what a reading left out by what it read**: a sync's balances or holdings it could not bring, a document's holdings left out, a spreadsheet's rows it could not read (`ImportItem.origin`, from the uploaded file's type).
 - **A provider's refusal of an AI call** is logged as `ai.call_failed` with its error type and HTTP status, never its message.
 - **Quote feeds declare whether they are listed** (`RawQuoteFeed.listed`). A listed feed's Friday price is the market's last on the weekend; shared code names no source.
 - **Indexes** on `uploaded_documents (delete_after) WHERE file_deleted_at IS NULL` for the file deletion job and on `uploaded_documents (storage_path)` for the orphan sweep.

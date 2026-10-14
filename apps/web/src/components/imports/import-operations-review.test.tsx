@@ -38,6 +38,7 @@ const item = (operations: ImportOperationRow[]): ImportItem => ({
   rows: [],
   operations,
   skippedRows: 0,
+  origin: "document",
   createdOn: "2026-10-12",
 });
 

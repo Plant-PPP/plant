@@ -31,6 +31,7 @@ const item = (status: ImportStatus): ImportItem => ({
   documentDate: null,
   documentTotals: [],
   skippedRows: 0,
+  origin: "document",
   rows: [],
   createdOn: "2026-10-13",
 });

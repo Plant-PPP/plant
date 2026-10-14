@@ -14,6 +14,10 @@ import {
 // user's review, refused with a reason, or confirmed into the account.
 export type ImportStatus = Database["public"]["Enums"]["import_status"];
 
+// What an import reads: an account's sync, a spreadsheet parsed in code, or a
+// document or picture the model reads.
+export type ImportOrigin = "sync" | "sheet" | "document";
+
 export const IMPORT_STATUS_LABELS: Record<ImportStatus, string> = {
   queued: "En cola",
   reading: "Leyendo",
@@ -180,6 +184,7 @@ export type ImportItem = {
   debts?: ImportDebtRow[];
   // Holdings, operations or debts the reading left out.
   skippedRows: number;
+  origin: ImportOrigin;
   createdOn: string;
 };
 

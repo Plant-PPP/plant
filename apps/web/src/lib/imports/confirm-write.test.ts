@@ -63,7 +63,11 @@ const ready = (
       id: IMPORT,
       status,
       document_date,
-      document: { source_connection_id: ACCOUNT, file_name: "resumen.pdf" },
+      document: {
+        source_connection_id: ACCOUNT,
+        file_name: "resumen.pdf",
+        mime_type: "application/pdf",
+      },
     },
   ],
 });

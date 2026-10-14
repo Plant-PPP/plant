@@ -88,22 +88,26 @@ const closesFields = ({
   "plant.assets.truncated": read.holdings.activeTruncated,
 });
 
-// The price alerts the quotes met that the user has not seen; none, logged,
-// when they could not be read.
+// The price alerts the quotes met that the user has not seen; none, logged
+// and flagged, when they could not be read.
 async function metAlerts({
   context,
-}: Awaited<ReturnType<typeof closesView>>): Promise<PriceAlert[]> {
+}: Awaited<ReturnType<typeof closesView>>): Promise<{
+  alerts: PriceAlert[];
+  readFailed: boolean;
+}> {
   try {
-    return (await readAlerts(await createClient())).filter(
+    const alerts = (await readAlerts(await createClient())).filter(
       (each) => each.metOn !== null && each.seenAt === null,
     );
+    return { alerts, readFailed: false };
   } catch (error) {
     serverLog.error(
       SUMMARY_VIEW_EVENT,
       { ...contextFields(context), "plant.outcome": "alerts_failed" },
       error,
     );
-    return [];
+    return { alerts: [], readFailed: true };
   }
 }
 
@@ -191,6 +195,7 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
     "plant.summary.portfolio": portfolio !== null,
   });
 
+  const met = await metAlerts(view);
   return (
     <SummaryPage
       closes={closes}
@@ -207,7 +212,8 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
       closesQuery={closesQuery(unit, reference)}
       pinned={await pinnedCharts(view)}
       onUnpin={unpinChart}
-      metAlerts={await metAlerts(view)}
+      metAlerts={met.alerts}
+      alertsReadFailed={met.readFailed}
       onAlertSeen={seePriceAlert}
     />
   );
