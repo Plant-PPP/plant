@@ -48,12 +48,18 @@ const csvText = (bytes: Uint8Array) => {
 
 export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const csv = mimeType === "text/csv";
+  const text = csv ? csvText(bytes) : null;
+  // SheetJS opens a CSV's text as a zip when it starts like one, after the
+  // decoder drops a byte-order mark; no real CSV does.
+  if (text !== null && isZip(new TextEncoder().encode(text.slice(0, 4)))) {
+    throw new SourceError("unreadable", false);
+  }
   if (!csv && isZip(bytes) && !zipFitsLimit(bytes)) {
     throw new SourceError("unreadable", false);
   }
   let workbook: XLSX.WorkBook;
   try {
-    workbook = XLSX.read(csv ? csvText(bytes) : bytes, {
+    workbook = XLSX.read(text ?? bytes, {
       type: csv ? "string" : "array",
       sheetRows: SHEET_ROW_LIMIT,
       dense: true,
