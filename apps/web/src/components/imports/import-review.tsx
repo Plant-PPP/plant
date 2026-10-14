@@ -199,7 +199,18 @@ export function ImportReview({
   // Units that come from another account carry their cost, so need none.
   const needsPrice = (row: EditedRow, quantity: string | null) =>
     addsUnits(row, quantity) && row.transferFrom === undefined;
-  // A cost kept is what units come in at, so the price is not needed then.
+  // A cost kept is what a new holding comes in at, so its price is not
+  // needed then; units added to one held come in at the price.
+  const opensWithCost = (
+    row: EditedRow,
+    quantity: string | null,
+    cost: string | null,
+  ) =>
+    cost !== null &&
+    rowChange(
+      { quantity: quantity ?? "0", discarded: row.discarded },
+      held.get(row.symbol),
+    ).kind === "new";
   const costInvalid = ({ row, cost }: (typeof parsed)[number]) =>
     !row.discarded &&
     row.costText.trim() !== "" &&
@@ -213,8 +224,10 @@ export function ImportReview({
     !row.discarded &&
     (price === null
       ? row.priceText.trim() !== "" ||
-        (needsPrice(row, quantity) && cost === null)
-      : exactOf(price).n === 0n && needsPrice(row, quantity) && cost === null);
+        (needsPrice(row, quantity) && !opensWithCost(row, quantity, cost))
+      : exactOf(price).n === 0n &&
+        needsPrice(row, quantity) &&
+        !opensWithCost(row, quantity, cost));
   // The instruments the rows kept already list: one row each.
   const listed = (except: string) =>
     new Set(

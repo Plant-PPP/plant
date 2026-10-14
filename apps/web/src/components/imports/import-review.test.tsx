@@ -118,3 +118,25 @@ it("shows the average cost a document printed, for the units to come in at", () 
   });
   expect(html).toContain("Costo promedio");
 });
+
+it("still asks for the price of units added to a holding already held", () => {
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        rows: [{ ...ITEM.rows[0]!, symbol: "GD30", price: null, cost: "60" }],
+      }}
+      institution="Cocos"
+      instruments={[
+        { symbol: "GD30", name: "Global 2030", currency: "USD", type: "bond" },
+      ]}
+      held={new Map([["GD30", "1"]])}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).toMatch(
+    /aria-label="Precio de la fila 1"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*aria-label="Precio de la fila 1"/,
+  );
+});
