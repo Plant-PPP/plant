@@ -3,4 +3,4 @@
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
-ALTER TYPE public.import_failure ADD VALUE IF NOT EXISTS 'too_many_pages';
+ALTER TYPE public.import_failure ADD VALUE IF NOT EXISTS 'too_many_pages' AFTER 'extraction_failed';
