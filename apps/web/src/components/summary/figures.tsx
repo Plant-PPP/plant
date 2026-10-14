@@ -1,7 +1,8 @@
 import type { Denominator } from "@plant/core";
 
 import { GainLossText } from "@/components/holdings/sum-text";
-import { percentOf } from "@/lib/format/amount";
+import { formatFraction, percentOf } from "@/lib/format/amount";
+import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format/date";
 import type { MonthClose } from "@/lib/summary/closes";
 
@@ -21,6 +22,29 @@ export function ResultText({
       gain={{ amount, percent: share === null ? null : percentOf(share) }}
       unit={unit}
     />
+  );
+}
+
+// A change or a return as a percent with its sign: coloured green or red when
+// `colored`, a dash when it could not be measured.
+export function ShareText({
+  share,
+  colored = false,
+}: {
+  share: string | null;
+  colored?: boolean;
+}) {
+  if (share === null) return <span className="text-muted-foreground">—</span>;
+  const sign = Math.sign(Number(percentOf(share)));
+  return (
+    <span
+      className={cn(
+        colored && sign > 0 && "text-emerald-700 dark:text-emerald-400",
+        colored && sign < 0 && "text-destructive",
+      )}
+    >
+      {`${sign > 0 ? "+" : ""}${formatFraction(share)}`}
+    </span>
   );
 }
 
