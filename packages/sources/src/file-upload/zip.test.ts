@@ -115,10 +115,27 @@ describe("zipFitsLimit", () => {
   });
 
   it("refuses entries that only together pass the limit", () => {
-    const half = WORKBOOK_UNZIPPED_LIMIT / 2 + 1;
-    const entry = { content: text(10), centralUsize: half, localUsize: half };
+    const entry = { content: text(WORKBOOK_UNZIPPED_LIMIT / 2 + 1) };
     expect(zipFitsLimit(zipOf([entry]))).toBe(true);
     expect(zipFitsLimit(zipOf([entry, entry]))).toBe(false);
+  });
+
+  it("refuses an entry that inflates past the size its headers declare", () => {
+    expect(
+      zipFitsLimit(
+        zipOf([{ content: text(5000), centralUsize: 100, localUsize: 100 }]),
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses two entries on one local header", () => {
+    const zip = zipOf([{ content: text(10) }, { content: text(10) }]);
+    const view = new DataView(zip.buffer);
+    const centrals = [...zip.keys()].filter(
+      (at) => at + 4 <= zip.length && view.getUint32(at, true) === 0x02014b50,
+    );
+    view.setUint32(centrals[1]! + 42, 0, true);
+    expect(zipFitsLimit(zip)).toBe(false);
   });
 
   it("refuses a local header that declares other than the central directory", () => {

@@ -36,8 +36,9 @@ const hasZip64Extra = (extra: Uint8Array) => {
 
 // Whether a zip unzips within the limit, as SheetJS 0.20.3 would unzip it: it
 // walks the central directory of the last end record, allocates each entry's
-// size as its local header declares it, and inflates without bound when that
-// size is 0, as a data descriptor leaves it. ZIP64 is refused.
+// size as its local header declares it, without bound when that size is 0 as
+// a data descriptor leaves it, and inflates every stream to its end whatever
+// the size. ZIP64 is refused.
 export function zipFitsLimit(bytes: Uint8Array): boolean {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const u16 = (at: number) => view.getUint16(at, true);
@@ -54,6 +55,7 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
 
   let compressed = 0;
   let unzipped = 0;
+  const offsets = new Set<number>();
   for (let entry = 0; entry < entries; entry += 1) {
     if (!within(at, 46) || u32(at) !== CENTRAL) return false;
     const size = u32(at + 20);
@@ -83,18 +85,29 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     ) {
       return false;
     }
+    // Two entries on one local header would make SheetJS inflate it twice.
+    if (offsets.has(offset)) return false;
+    offsets.add(offset);
     const localSize = u32(offset + 18);
     const localUsize = u32(offset + 22);
-    if (u16(offset + 8) === DEFLATE && localUsize === 0) {
+    const descriptor = localUsize === 0;
+    if (!descriptor && (localSize !== size || localUsize !== usize)) {
+      return false;
+    }
+    // SheetJS inflates a stream to its end whatever size the headers give,
+    // so every deflated entry is inflated here once, within its compressed
+    // bytes and its declared size: one that runs past either, or never ends,
+    // is refused.
+    if (u16(offset + 8) === DEFLATE) {
       try {
         const inflated = inflateRawSync(bytes.subarray(data, data + size), {
           maxOutputLength: Math.max(usize, 1),
         });
-        if (inflated.length > usize) return false;
+        if (inflated.length !== usize) return false;
       } catch {
         return false;
       }
-    } else if (localSize !== size || localUsize !== usize) {
+    } else if (descriptor && localSize !== size) {
       return false;
     }
     // SheetJS copies each entry's compressed bytes too.
