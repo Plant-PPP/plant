@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { alertLine, type PriceAlert } from "@/lib/alerts/alerts";
+import { settle } from "@/lib/server-action-call";
 
 // The price alerts the quotes met and the user has not seen yet; each leaves
 // at once when marked seen and comes back if the server refuses.
@@ -52,7 +53,7 @@ export function MetAlerts({
               onClick={() =>
                 startTransition(async () => {
                   hide(alert.id);
-                  if (!(await onSeen(alert.id).catch(() => false))) {
+                  if ((await settle(onSeen(alert.id))) !== true) {
                     toast.error("No pudimos marcar el aviso. Probá de nuevo.");
                   }
                 })

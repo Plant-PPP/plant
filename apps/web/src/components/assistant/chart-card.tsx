@@ -20,6 +20,7 @@ import { VegaChart } from "@/components/charts/vega-chart";
 import { usePin } from "./pin-context";
 import { templateSpec } from "@/lib/charts/templates";
 import { formatAmount } from "@/lib/format/amount";
+import { settle } from "@/lib/server-action-call";
 
 // The chart drawn by its template, or by its kind when it names none, with
 // each point's value in a list a screen reader reads.
@@ -107,15 +108,13 @@ export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
             !pinning &&
             action("Fijar en el Resumen", <Pin />, () => {
               setPinning(true);
-              void pin
-                .pin(chart)
-                .catch(() => "failed" as const)
-                .then((result) => {
-                  setPinning(false);
-                  if (result === "pinned" || result === "already") {
-                    toast.success(PIN_MESSAGES[result]);
-                  } else toast.error(PIN_MESSAGES[result]);
-                });
+              void settle(pin.pin(chart)).then((settled) => {
+                const result = settled === "rejected" ? "failed" : settled;
+                setPinning(false);
+                if (result === "pinned" || result === "already") {
+                  toast.success(PIN_MESSAGES[result]);
+                } else toast.error(PIN_MESSAGES[result]);
+              });
             })}
         </div>
       </div>

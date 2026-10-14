@@ -21,6 +21,7 @@ import {
   QUESTIONS_PER_MONTH,
 } from "@/lib/assistant/chat";
 import { textOf, toChatMessages } from "@/lib/assistant/messages-view";
+import { settle } from "@/lib/server-action-call";
 
 import { ChatLayout } from "./chat-layout";
 
@@ -146,10 +147,10 @@ export function AssistantChat({
       return;
     }
     setOpening(true);
-    const loaded = await loadConversation(conversationId).catch(() => null);
+    const loaded = await settle(loadConversation(conversationId));
     if (loading.current !== conversationId) return;
     setOpening(false);
-    if (loaded === null) {
+    if (loaded === "rejected" || loaded === null) {
       // The conversation on screen stays the open one.
       toast.error("No pudimos abrir la conversación. Probá de nuevo.");
       return;
@@ -164,17 +165,15 @@ export function AssistantChat({
       active={active}
       onOpen={(id) => void open(id)}
       onDelete={(id) => {
-        void deleteConversation(id)
-          .catch(() => false)
-          .then((deleted) => {
-            if (!deleted) {
-              toast.error("No pudimos borrar la conversación. Probá de nuevo.");
-              return;
-            }
-            toast.success("Borraste la conversación");
-            if (id === activeId) void open(null);
-            router.refresh();
-          });
+        void settle(deleteConversation(id)).then((deleted) => {
+          if (deleted !== true) {
+            toast.error("No pudimos borrar la conversación. Probá de nuevo.");
+            return;
+          }
+          toast.success("Borraste la conversación");
+          if (id === activeId) void open(null);
+          router.refresh();
+        });
       }}
       messages={shown}
       arrivedId={null}
