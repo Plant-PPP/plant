@@ -312,6 +312,7 @@ function OperationsDialog({
       onClose={onClose}
       returnFocusTo={returnFocusTo}
       title={`Traer operaciones de ${name}`}
+      icon={ListOrdered}
       description="Elegí desde y hasta qué día. Después revisás cada operación en Cargar y elegís cuáles importar; las que ya están en la cuenta aparecen marcadas."
     >
       <form
@@ -394,6 +395,7 @@ function ConnectDialog({
     <AppDialog
       onClose={onClose}
       title={`Conectar ${form.name}`}
+      icon={KeyRound}
       description={form.help}
     >
       <form

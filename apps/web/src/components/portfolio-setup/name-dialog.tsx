@@ -1,5 +1,6 @@
 "use client";
 
+import { FolderClosed } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { useId, useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
@@ -48,6 +49,7 @@ export function NameDialog({
     <AppDialog
       onClose={onClose}
       title={title}
+      icon={FolderClosed}
       description={description}
       returnFocusTo={focus.returnFocusTo}
     >

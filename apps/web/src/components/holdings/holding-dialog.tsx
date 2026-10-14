@@ -1,5 +1,6 @@
 "use client";
 
+import { Wallet } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import type { Currency } from "@plant/shared";
 import Link from "next/link";
@@ -242,6 +243,7 @@ export function HoldingDialog({
     <AppDialog
       onClose={onClose}
       title={mode === "create" ? "Agregar tenencia" : "Editar tenencia"}
+      icon={Wallet}
       description={
         mode === "create"
           ? "Contanos qué tenés y en qué cuenta."

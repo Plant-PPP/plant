@@ -1,5 +1,6 @@
 "use client";
 
+import { Tag } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { type InstrumentType, manualPriceSchema } from "@plant/core";
 import type { Currency } from "@plant/shared";
@@ -108,6 +109,7 @@ export function PriceDialog({
     <AppDialog
       onClose={onClose}
       title={overrides ? "Corregir precio" : "Cargar precio"}
+      icon={Tag}
       description={`${instrumentLabel(instrument.symbol, instrument.name)}. ${
         overrides
           ? "Le gana a la cotización de ese día y sigue hasta que llegue una más nueva."

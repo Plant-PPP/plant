@@ -1,5 +1,6 @@
 "use client";
 
+import { House } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import type { Denominator, RealEstateFigures } from "@plant/core";
 import { Constants, type Currency } from "@plant/shared";
@@ -186,6 +187,7 @@ export function RealEstateDialog({
     <AppDialog
       onClose={onClose}
       title="Ficha del inmueble"
+      icon={House}
       description={name}
       returnFocusTo={focus.returnFocusTo}
     >

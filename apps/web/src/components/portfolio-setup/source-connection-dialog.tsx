@@ -1,5 +1,6 @@
 "use client";
 
+import { Building2 } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { useId, useRef, useState, useTransition } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
@@ -265,6 +266,7 @@ export function SourceConnectionDialog({
         onClose();
       }}
       title={title}
+      icon={Building2}
       description={description}
       returnFocusTo={focus.returnFocusTo}
     >

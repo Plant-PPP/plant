@@ -8,7 +8,7 @@ import {
   type MovementKind,
 } from "@plant/core";
 import type { Currency } from "@plant/shared";
-import { Plus, X } from "lucide-react";
+import { ArrowLeftRight, Plus, X } from "lucide-react";
 import type * as React from "react";
 import { useEffect, useId, useMemo, useState } from "react";
 
@@ -291,6 +291,7 @@ export function MovementDialog({
     <AppDialog
       onClose={onClose}
       title={mode === "create" ? "Agregar movimiento" : "Editar movimiento"}
+      icon={ArrowLeftRight}
       description={
         fixed
           ? `${fixed.instrument} en ${fixed.account}`

@@ -1,5 +1,6 @@
 "use client";
 
+import { Coins } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import type { ManualRateKind } from "@plant/core";
@@ -170,6 +171,7 @@ function RateDialog({
     <AppDialog
       onClose={onClose}
       title={`Corregir el ${RATE_LABELS[rate.kind]}`}
+      icon={Coins}
       description="El valor de venta, en pesos por dólar."
       returnFocusTo={returnFocusTo}
     >

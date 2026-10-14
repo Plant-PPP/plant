@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { type Placement, placementFigures } from "@plant/core";
 import { addDays, daysBetween } from "@plant/shared";
@@ -133,6 +134,7 @@ export function RenewDialog({
     <AppDialog
       onClose={onClose}
       title="Renovar"
+      icon={RefreshCw}
       description={`${name}. Se coloca de nuevo con ${formatAmount(maturityAmount, placement.currency)}: el capital más el interés.`}
       returnFocusTo={focus.returnFocusTo}
     >
