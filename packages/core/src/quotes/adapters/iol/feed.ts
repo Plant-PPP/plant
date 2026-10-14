@@ -18,51 +18,47 @@ export type IolDeps = {
   getJson: GetJson;
   postForm: PostForm;
   credentials: IolCredentials | null;
+  // The catalog's instruments; the feed quotes the types IOL lists.
+  instruments: () => Promise<
+    readonly { symbol: string; type: InstrumentType; currency: Currency }[]
+  >;
 };
 
 const BASE_URL = "https://api.invertironline.com";
 const TOKEN_URL = `${BASE_URL}/token`;
 
-// One panel per instrument type, each read in one request.
-const PANELS = {
-  cedear: "cedears",
-  bond: "titulosPublicos",
-} as const satisfies Partial<Record<InstrumentType, string>>;
+// The panels each type is read from, each panel in one request.
+export const PANELS = {
+  cedear: ["cedears"],
+  stock: ["acciones"],
+  bond: ["titulosPublicos", "obligacionesNegociables", "letras"],
+} as const satisfies Partial<Record<InstrumentType, readonly string[]>>;
 type PanelType = keyof typeof PANELS;
+type Panel = (typeof PANELS)[PanelType][number];
+
+export const isIolType = (type: InstrumentType): type is PanelType =>
+  Object.hasOwn(PANELS, type);
 
 // A whole panel lists hundreds of lines, past the reader's default cap.
 const PANEL_MAX_BYTES = 8 * 1024 * 1024;
 
-const panelUrl = (panel: string) =>
+export const panelUrl = (panel: string) =>
   `${BASE_URL}/api/v2/Cotizaciones/${panel}/argentina/Todos` +
   `?cotizacionInstrumentoModel.instrumento=${panel}` +
   `&cotizacionInstrumentoModel.pais=argentina`;
 
-// The catalog's CEDEARs and bonds, each in the currency the catalog keeps it
+// A catalog instrument the feed quotes, in the currency the catalog keeps it
 // in. A dollar instrument is read from its MEP line (the symbol with D).
-export const IOL_INSTRUMENTS: readonly {
+export type IolInstrument = {
   symbol: string;
   type: PanelType;
   currency: Currency;
-}[] = [
-  { symbol: "AAPL", type: "cedear", currency: "ARS" },
-  { symbol: "KO", type: "cedear", currency: "ARS" },
-  { symbol: "MELI", type: "cedear", currency: "ARS" },
-  { symbol: "MSFT", type: "cedear", currency: "ARS" },
-  { symbol: "NVDA", type: "cedear", currency: "ARS" },
-  { symbol: "SPY", type: "cedear", currency: "ARS" },
-  { symbol: "TSLA", type: "cedear", currency: "ARS" },
-  { symbol: "AL30", type: "bond", currency: "ARS" },
-  { symbol: "GD30", type: "bond", currency: "USD" },
-  { symbol: "TX26", type: "bond", currency: "ARS" },
-];
-
-type IolInstrument = (typeof IOL_INSTRUMENTS)[number];
+};
 
 const lineSymbol = ({ symbol, currency }: IolInstrument) =>
   currency === "USD" ? `${symbol}D` : symbol;
 
-const MONEDA: Readonly<Record<string, Currency>> = {
+export const MONEDA: Readonly<Record<string, Currency>> = {
   peso_Argentino: "ARS",
   dolar_Estadounidense: "USD",
 };
@@ -115,6 +111,14 @@ const REFUSED = "";
 
 const DECIMAL = /^\d+(\.\d+)?$/;
 
+const simboloOf = (line: unknown): unknown =>
+  typeof line === "object" && line !== null && Object.hasOwn(line, "simbolo")
+    ? (line as { simbolo: unknown }).simbolo
+    : undefined;
+
+const listsLine = (titulos: readonly unknown[], instrument: IolInstrument) =>
+  titulos.some((line) => simboloOf(line) === lineSymbol(instrument));
+
 // The instrument's row from its line in a panel. A line missing, malformed,
 // in the other currency or with no traded price gets a price the schemas
 // refuse; a line dated another day is dated that day, and quoteWindow decides.
@@ -131,13 +135,7 @@ export function parseLine(
     currency: instrument.currency,
     quoted_at: now.toISOString(),
   };
-  const raw = titulos.find(
-    (line) =>
-      typeof line === "object" &&
-      line !== null &&
-      Object.hasOwn(line, "simbolo") &&
-      (line as { simbolo: unknown }).simbolo === wanted,
-  );
+  const raw = titulos.find((line) => simboloOf(line) === wanted);
   const line = lineSchema.safeParse(raw);
   if (!line.success) return refused;
   const { ultimoPrecio, fecha, moneda } = line.data;
@@ -173,10 +171,19 @@ export function parseLine(
 }
 
 type PanelRead =
-  | { ok: true; type: PanelType; titulos: unknown[] }
-  | { ok: false; type: PanelType; code: QuoteFeedCode };
+  | { ok: true; panel: Panel; titulos: unknown[] }
+  | { ok: false; panel: Panel; code: QuoteFeedCode };
 
-export function createIolFeed(deps: IolDeps): RawQuoteFeed {
+// Plant's IOL login, kept while its tokens live.
+export type IolSession = {
+  token(
+    at: number,
+    credentials: IolCredentials,
+  ): Promise<{ access: string; cached: boolean }>;
+  forget(): void;
+};
+
+export function createIolSession(deps: { postForm: PostForm }): IolSession {
   let session: Session | null = null;
 
   async function grant(
@@ -230,28 +237,47 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
     return { access: session.access, cached: false };
   }
 
-  async function readPanels(access: string): Promise<PanelRead[]> {
-    const headers = { Authorization: `Bearer ${access}` };
+  return {
+    token: tokenAt,
+    forget: () => {
+      session = null;
+    },
+  };
+}
+
+// One panel's lines, or the code it failed with.
+export async function readPanel(
+  getJson: GetJson,
+  access: string,
+  panel: string,
+): Promise<
+  { ok: true; titulos: unknown[] } | { ok: false; code: QuoteFeedCode }
+> {
+  try {
+    const json = await getJson(panelUrl(panel), {
+      headers: { Authorization: `Bearer ${access}` },
+      maxBytes: PANEL_MAX_BYTES,
+    });
+    return { ok: true, titulos: parseResponse(panelSchema, json).titulos };
+  } catch (error) {
+    const code = feedReadCode(error);
+    if (code === null) throw error;
+    return { ok: false, code };
+  }
+}
+
+export function createIolFeed(deps: IolDeps): RawQuoteFeed {
+  const login = createIolSession(deps);
+
+  async function readPanels(
+    access: string,
+    panels: readonly Panel[],
+  ): Promise<PanelRead[]> {
     return Promise.all(
-      (Object.keys(PANELS) as PanelType[]).map(
-        async (type): Promise<PanelRead> => {
-          try {
-            const json = await deps.getJson(panelUrl(PANELS[type]), {
-              headers,
-              maxBytes: PANEL_MAX_BYTES,
-            });
-            return {
-              ok: true,
-              type,
-              titulos: parseResponse(panelSchema, json).titulos,
-            };
-          } catch (error) {
-            const code = feedReadCode(error);
-            if (code === null) throw error;
-            return { ok: false, type, code };
-          }
-        },
-      ),
+      panels.map(async (panel) => ({
+        panel,
+        ...(await readPanel(deps.getJson, access, panel)),
+      })),
     );
   }
 
@@ -261,26 +287,44 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
     async readRaw(now) {
       const { credentials } = deps;
       if (!credentials) throw new QuoteFeedError("unconfigured");
+      const instruments = (await deps.instruments()).filter(
+        (instrument): instrument is IolInstrument => isIolType(instrument.type),
+      );
+      if (instruments.length === 0) return { fxRates: [], prices: [] };
+      const wanted = [
+        ...new Set(instruments.flatMap(({ type }) => PANELS[type])),
+      ];
       const at = now.getTime();
-      const token = await tokenAt(at, credentials);
-      let panels = await readPanels(token.access);
+      const token = await login.token(at, credentials);
+      let panels = await readPanels(token.access, wanted);
       // A cached token IOL refuses was revoked early: one more try with a
       // new one. Any other refusal fails its panel.
       if (
         token.cached &&
         panels.some((panel) => !panel.ok && panel.code === "unauthorized")
       ) {
-        session = null;
-        panels = await readPanels((await tokenAt(at, credentials)).access);
+        login.forget();
+        panels = await readPanels(
+          (await login.token(at, credentials)).access,
+          wanted,
+        );
       }
-      const byType = new Map(panels.map((panel) => [panel.type, panel]));
+      const byPanel = new Map(panels.map((read) => [read.panel, read]));
       const prices: RawPrice[] = [];
       const unread: { key: string; code: QuoteFeedCode }[] = [];
-      for (const instrument of IOL_INSTRUMENTS) {
-        const panel = byType.get(instrument.type);
-        if (!panel) continue;
-        if (panel.ok) prices.push(parseLine(instrument, panel.titulos, now));
-        else unread.push({ key: instrument.symbol, code: panel.code });
+      for (const instrument of instruments) {
+        const reads = PANELS[instrument.type].map(
+          (panel) => byPanel.get(panel) as PanelRead,
+        );
+        // A type's line is in one of its panels: the first that lists it,
+        // else unread when a panel that could list it failed.
+        const titulos = reads.flatMap((read) => (read.ok ? read.titulos : []));
+        const failed = reads.find((read) => !read.ok);
+        if (failed && !failed.ok && !listsLine(titulos, instrument)) {
+          unread.push({ key: instrument.symbol, code: failed.code });
+        } else {
+          prices.push(parseLine(instrument, titulos, now));
+        }
       }
       return { fxRates: [], prices, unread };
     },

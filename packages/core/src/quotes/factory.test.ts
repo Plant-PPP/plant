@@ -319,12 +319,18 @@ describe("toQuoteFeed", () => {
 describe("quoteFeeds", () => {
   const TOKEN = { access_token: "made-up-access", expires_in: 899 };
   const CREDENTIALS = { username: "plant-test", password: "made-up" };
+  const CATALOG = [
+    { symbol: "AAPL", type: "cedear", currency: "ARS" },
+    { symbol: "BTC", type: "crypto", currency: "USD" },
+  ] as const;
+  const instruments = async () => CATALOG;
 
   it("builds one port per quote source", () => {
     const feeds = quoteFeeds({
       getJson: async () => null,
       postForm: async () => null,
       iol: null,
+      instruments,
     });
     expect(feeds.map((feed) => feed.id).sort()).toEqual(
       [...Constants.public.Enums.quote_source].sort(),
@@ -358,6 +364,7 @@ describe("quoteFeeds", () => {
       getJson: async (url) => override(url) ?? answer(url),
       postForm: async () => TOKEN,
       iol: CREDENTIALS,
+      instruments,
     }).find((port) => port.id === id);
     if (!feed) throw new Error(`no feed ${id}`);
     return feed;
@@ -425,6 +432,7 @@ describe("quoteFeeds", () => {
       getJson: async (url) => answer(url),
       postForm: async () => TOKEN,
       iol: null,
+      instruments,
     }).find((port) => port.id === "iol");
     await expect(feed?.read(NOW)).rejects.toMatchObject({
       code: "unconfigured",
@@ -432,11 +440,27 @@ describe("quoteFeeds", () => {
     });
   });
 
+  it("reads the catalog once for every feed that quotes from it", async () => {
+    let reads = 0;
+    const feeds = quoteFeeds({
+      getJson: async (url) => answer(url),
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
+      instruments: async () => {
+        reads += 1;
+        return CATALOG;
+      },
+    });
+    for (const feed of feeds) await feed.read(NOW);
+    expect(reads).toBe(1);
+  });
+
   it("stamps every row with the feed that read it and the read instant", async () => {
     const feeds = quoteFeeds({
       getJson: async (url) => answer(url),
       postForm: async () => TOKEN,
       iol: CREDENTIALS,
+      instruments,
     });
     for (const feed of feeds) {
       const batch = await feed.read(NOW);

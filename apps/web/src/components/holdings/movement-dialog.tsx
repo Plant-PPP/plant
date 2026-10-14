@@ -61,6 +61,7 @@ import {
   withKind,
   withShownPrice,
 } from "./movement-fields";
+import { useCatalog } from "./instrument-market";
 import { InstrumentPicker } from "./instrument-picker";
 
 const DIRECTION_LABELS = { in: "Entran unidades", out: "Salen unidades" };
@@ -81,7 +82,7 @@ export function MovementDialog({
   mode,
   accounts,
   portfolios,
-  instruments,
+  instruments: givenInstruments,
   fixed,
   transfer,
   yields,
@@ -115,6 +116,7 @@ export function MovementDialog({
   // False when the write could not start; the dialog stays open.
   onSubmit: (fields: MovementFields) => boolean;
 }) {
+  const [instruments, addToCatalog] = useCatalog(givenInstruments);
   const id = useId();
   const fieldId = (field: MovementField) => `${id}-${field}`;
   const alertId = `${id}-alert`;
@@ -357,16 +359,19 @@ export function MovementDialog({
                   labelId={`${fieldId("instrument")}-label`}
                   instruments={instruments}
                   value={fields.instrument}
-                  onChange={pick("instrument", (value) => {
-                    const instrument = instruments.find(
-                      (each) => each.symbol === value,
-                    );
-                    setFields((current) => ({
-                      ...current,
-                      instrument: value,
-                      currency: instrument?.currency ?? current.currency,
-                    }));
-                  })}
+                  onAdded={addToCatalog}
+                  onChange={(symbol, added) =>
+                    pick("instrument", (value) => {
+                      const instrument =
+                        added ??
+                        instruments.find((each) => each.symbol === value);
+                      setFields((current) => ({
+                        ...current,
+                        instrument: value,
+                        currency: instrument?.currency ?? current.currency,
+                      }));
+                    })(symbol)
+                  }
                   placeholder="Elegí un instrumento"
                 />
               </div>

@@ -9,6 +9,7 @@ import {
   ALL_FENCED,
   asSelector,
   ASSISTANT_SINK,
+  CATALOG_SINK,
   COST_SINK,
   EXPORT_AUDIT_SINK,
   fenceExcept,
@@ -119,6 +120,28 @@ const EXPORTS_AUDITED_EXPORT_ONLY = [
 ].map((selector) => ({
   selector,
   message: `The export audit sink exports only ${AUDITED_EXPORT}.`,
+}));
+
+// The instrument catalog sink exports addListedInstrument alone, and the
+// instrument actions import nothing else from it, so no server action writes
+// a row the sink did not verify with its provider.
+const ADD_LISTED = "addListedInstrument";
+const CATALOG_SINK_SOURCE = `[source.value=${asSelector(CATALOG_SINK.regex)}]`;
+const ADD_LISTED_ONLY = [
+  `ImportDeclaration[importKind!="type"]${CATALOG_SINK_SOURCE} > ImportSpecifier[importKind!="type"]:matches([imported.name!="${ADD_LISTED}"], [local.name!="${ADD_LISTED}"])`,
+  `ImportDeclaration${CATALOG_SINK_SOURCE} > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
+  `ImportExpression${CATALOG_SINK_SOURCE}`,
+].map((selector) => ({
+  selector,
+  message: `Import only ${ADD_LISTED} from the instrument catalog sink.`,
+}));
+const EXPORTS_ADD_LISTED_ONLY = [
+  `ExportNamedDeclaration > FunctionDeclaration[id.name!="${ADD_LISTED}"]`,
+  "ExportNamedDeclaration > ClassDeclaration",
+  "ExportNamedDeclaration > VariableDeclaration",
+].map((selector) => ({
+  selector,
+  message: `The instrument catalog sink exports only ${ADD_LISTED}.`,
 }));
 
 // The prototype's directories, and what its files may not do: hold a server
@@ -267,6 +290,26 @@ export default defineConfig([
     rules: webRules({
       allow: [EXPORT_AUDIT_SINK],
       syntax: [...LIB_SYNTAX, ...AUDITED_EXPORT_ONLY],
+    }),
+  },
+  {
+    files: ["src/lib/instruments/instrument-catalog-sink.ts"],
+    rules: webRules({
+      allow: [SERVICE_ROLE],
+      syntax: [...SERVICE_WRITER_SYNTAX, ...EXPORTS_ADD_LISTED_ONLY],
+    }),
+  },
+  {
+    files: ["src/lib/instruments/instrument-catalog-sink.test.ts"],
+    rules: webRules({ allow: [CATALOG_SINK], syntax: LIB_SYNTAX }),
+  },
+  // A server action may hold this sink's addListedInstrument alone: it takes
+  // no user id and verifies every row with its provider itself.
+  {
+    files: ["src/app/(app)/(data)/assets/instrument-actions.ts"],
+    rules: webRules({
+      allow: [CATALOG_SINK],
+      syntax: [...LIB_SYNTAX, ...ADD_LISTED_ONLY],
     }),
   },
   {

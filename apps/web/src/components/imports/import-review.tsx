@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { useCatalog } from "@/components/holdings/instrument-market";
 import { InstrumentPicker } from "@/components/holdings/instrument-picker";
 import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import {
@@ -187,7 +188,7 @@ export type AccountCash = {
 export function ImportReview({
   item,
   institution,
-  instruments,
+  instruments: givenInstruments,
   held,
   cash,
   heldCash = [],
@@ -236,6 +237,7 @@ export function ImportReview({
   doneHref: string;
   actions: ReviewActions;
 }) {
+  const [instruments, addToCatalog] = useCatalog(givenInstruments);
   const router = useRouter();
   const pickerId = useId();
   const names = instrumentNames(instruments);
@@ -653,10 +655,15 @@ export function ImportReview({
                         (each) => !listedElsewhere(row, each.symbol),
                       )}
                       value={row.symbol}
-                      onChange={(symbol) =>
+                      onAdded={addToCatalog}
+                      onChange={(symbol, added) =>
                         change(
                           row.id,
-                          pickedInstrument(row.currency, symbol, instruments),
+                          pickedInstrument(
+                            row.currency,
+                            symbol,
+                            added ? [...instruments, added] : instruments,
+                          ),
                         )
                       }
                       placeholder="Elegí un activo"

@@ -1,5 +1,8 @@
 import { createArgentinadatosFeed } from "./adapters/argentinadatos/feed";
 import { createDolarapiFeed } from "./adapters/dolarapi/feed";
+import type { Currency } from "@plant/shared";
+
+import type { InstrumentType } from "../instruments";
 import { createIolFeed, type IolCredentials } from "./adapters/iol/feed";
 import { createKrakenFeed } from "./adapters/kraken/feed";
 import type {
@@ -37,21 +40,36 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
   };
 }
 
+export type QuotedInstrument = {
+  symbol: string;
+  type: InstrumentType;
+  currency: Currency;
+};
+
 // iol is null when Plant's IOL account is not configured: that feed fails
-// unconfigured and the others read as usual.
+// unconfigured and the others read as usual. instruments reads the catalog,
+// once for every feed that quotes from it.
 export function quoteFeeds(deps: {
   getJson: GetJson;
   postForm: PostForm;
   iol: IolCredentials | null;
+  instruments: () => Promise<readonly QuotedInstrument[]>;
 }): readonly QuoteFeedPort[] {
+  let catalog: Promise<readonly QuotedInstrument[]> | null = null;
+  const instruments = () => (catalog ??= deps.instruments());
   return [
     createDolarapiFeed(deps.getJson),
     createArgentinadatosFeed(deps.getJson),
-    createKrakenFeed(deps.getJson),
+    createKrakenFeed(deps.getJson, async () =>
+      (await instruments())
+        .filter(({ type, currency }) => type === "crypto" && currency === "USD")
+        .map(({ symbol }) => symbol),
+    ),
     createIolFeed({
       getJson: deps.getJson,
       postForm: deps.postForm,
       credentials: deps.iol,
+      instruments,
     }),
   ].map(toQuoteFeed);
 }

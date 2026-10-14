@@ -2,7 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   InstrumentPicker,
+  listingDetail,
   matchesInstrument,
+  newListings,
   searchKey,
   triggerKey,
 } from "./instrument-picker";
@@ -222,4 +224,31 @@ describe("keys the other cases leave unpinned", () => {
     expect(searchKey("Enter", 2, 2)).toEqual({ kind: "stay" });
     expect(searchKey("Enter", 1, 2)).toEqual({ kind: "choose", index: 1 });
   });
+});
+
+const GGAL = {
+  symbol: "GGAL",
+  name: "Grupo Financiero Galicia",
+  type: "stock",
+  currency: "ARS",
+  market: "byma",
+} as const;
+
+it("describes a market listing by type, currency and market", () => {
+  expect(listingDetail(GGAL)).toBe("Acción · ARS · BYMA");
+  expect(
+    listingDetail({
+      symbol: "BTC",
+      name: "Bitcoin",
+      type: "crypto",
+      currency: "USD",
+      market: "crypto",
+    }),
+  ).toBe("Cripto · USD · Cripto");
+});
+
+it("offers only the listings the catalog does not have", () => {
+  expect(newListings([GGAL, { ...GGAL, symbol: "GD30" }], [GD30, FCI])).toEqual(
+    [GGAL],
+  );
 });

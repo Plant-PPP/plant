@@ -23,6 +23,7 @@ export const INSTRUMENT_PRICING: Record<
 > = {
   crypto: { basis: 1 },
   cedear: { basis: 1 },
+  stock: { basis: 1 },
   bond: { basis: 100 },
   fci: { basis: 1 },
 };

@@ -36,7 +36,7 @@ export {
   type UpcomingIncome,
 } from "./income/upcoming";
 export type { IolCredentials } from "./quotes/adapters/iol/feed";
-export { quoteFeeds } from "./quotes/factory";
+export { type QuotedInstrument, quoteFeeds } from "./quotes/factory";
 export {
   QUOTE_CARRY_DAYS,
   readQuotesOn,
@@ -190,3 +190,10 @@ export {
   liabilitySchema,
   valueLiabilities,
 } from "./liabilities/liability";
+export {
+  type CatalogSearch,
+  createCatalogSearch,
+  LISTING_MARKETS,
+  type Listing,
+  type ListingMarket,
+} from "./catalog/listings";

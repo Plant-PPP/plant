@@ -1,7 +1,8 @@
-import { migrations } from "@plant/shared/testing";
-import { createKrakenFeed, parse } from "./feed";
+import { createKrakenFeed, krakenPair, parse } from "./feed";
 
 const NOW = new Date("2026-10-09T21:30:00.000Z");
+
+const SYMBOLS = ["BTC", "ETH", "SOL", "USDT", "USDC"];
 
 const ticker = (last: string) => ({ a: ["1", "1", "1"], c: [last, "0.001"] });
 
@@ -27,7 +28,7 @@ const PRICES = [
 
 describe("kraken parse", () => {
   it("maps each pair to a USD price dated today", () => {
-    const rows = parse(BODY, NOW);
+    const rows = parse(BODY, NOW, SYMBOLS);
     expect(rows.fxRates).toEqual([]);
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual(PRICES);
     expect(rows.prices[0]).toEqual({
@@ -42,7 +43,7 @@ describe("kraken parse", () => {
   it("leaves a pair missing from the answer with an empty price", () => {
     const result: Record<string, unknown> = { ...BODY.result };
     delete result.XETHZUSD;
-    const rows = parse({ error: [], result }, NOW);
+    const rows = parse({ error: [], result }, NOW, SYMBOLS);
     expect(rows.prices.find((row) => row.symbol === "ETH")?.price).toBe("");
   });
 
@@ -57,6 +58,7 @@ describe("kraken parse", () => {
         },
       },
       NOW,
+      SYMBOLS,
     );
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual([
       ["BTC", "100.5"],
@@ -71,18 +73,22 @@ describe("kraken parse", () => {
     const json: unknown = JSON.parse(
       '{"error":[],"result":{"__proto__":{"c":["9","9"],"XXBTZUSD":{"c":["9","9"]}}}}',
     );
-    const rows = parse(json, NOW);
+    const rows = parse(json, NOW, SYMBOLS);
     expect(rows.prices.map((row) => row.price)).toEqual(["", "", "", "", ""]);
     expect(Object.prototype).not.toHaveProperty("c");
   });
 
   it("leaves every price empty when the answer has no result", () => {
-    const rows = parse({ error: [] }, NOW);
+    const rows = parse({ error: [] }, NOW, SYMBOLS);
     expect(rows.prices.map((row) => row.price)).toEqual(["", "", "", "", ""]);
   });
 
   it("keeps the prices when Kraken sends only a warning", () => {
-    const rows = parse({ ...BODY, error: ["WGeneral:Deprecated"] }, NOW);
+    const rows = parse(
+      { ...BODY, error: ["WGeneral:Deprecated"] },
+      NOW,
+      SYMBOLS,
+    );
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual(PRICES);
   });
 
@@ -98,7 +104,7 @@ describe("kraken parse", () => {
     ["EGeneral:Invalid arguments", false],
     ["Unavailable", false],
   ])("throws on %s, retryable %s", (error, retryable) => {
-    expect(() => parse({ error: [error] }, NOW)).toThrow(
+    expect(() => parse({ error: [error] }, NOW, SYMBOLS)).toThrow(
       expect.objectContaining({
         code: retryable ? "provider_busy" : "provider_error",
         retryable,
@@ -111,7 +117,7 @@ describe("kraken parse", () => {
     [["WGeneral:Deprecated", "EService:Unavailable"], true],
     [["EQuery:Unknown asset pair EService:Unavailable"], false],
   ])("throws on %j, retryable %s", (error, retryable) => {
-    expect(() => parse({ error }, NOW)).toThrow(
+    expect(() => parse({ error }, NOW, SYMBOLS)).toThrow(
       expect.objectContaining({
         code: retryable ? "provider_busy" : "provider_error",
         retryable,
@@ -121,7 +127,7 @@ describe("kraken parse", () => {
 
   it("dates the prices by the Buenos Aires day", () => {
     const lateEvening = new Date("2026-10-10T01:00:00.000Z");
-    const rows = parse(BODY, lateEvening);
+    const rows = parse(BODY, lateEvening, SYMBOLS);
     expect(rows.prices.map((row) => row.price_date)).toEqual(
       Array(5).fill("2026-10-09"),
     );
@@ -136,45 +142,50 @@ describe("kraken parse", () => {
     ["no error list", { result: {} }],
     ["a non-string error", { error: [{ detail: "x" }] }],
   ])("throws bad_shape on %s", (_label, json) => {
-    expect(() => parse(json, NOW)).toThrow(
+    expect(() => parse(json, NOW, SYMBOLS)).toThrow(
       expect.objectContaining({ code: "bad_shape", retryable: false }),
     );
   });
 });
 
 describe("createKrakenFeed", () => {
-  it("asks for every pair in one request", async () => {
+  const feedOver = (symbols: readonly string[], urls: string[]) =>
+    createKrakenFeed(
+      async (url) => {
+        urls.push(url);
+        return BODY;
+      },
+      async () => symbols,
+    );
+
+  it("asks for every catalog crypto in one request", async () => {
     const urls: string[] = [];
-    const feed = createKrakenFeed(async (url) => {
-      urls.push(url);
-      return BODY;
-    });
-    await feed.readRaw(NOW);
+    const feed = feedOver(SYMBOLS, urls);
+    const rows = await feed.readRaw(NOW);
     expect(feed.id).toBe("kraken");
     expect(urls).toEqual([
-      "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,USDTUSD,USDCUSD",
+      "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,USDCUSD,USDTUSD",
     ]);
+    expect(rows.prices).toHaveLength(5);
+  });
+
+  it("asks Kraken nothing when the catalog has no crypto", async () => {
+    const urls: string[] = [];
+    const rows = await feedOver([], urls).readRaw(NOW);
+    expect([urls, rows]).toEqual([[], { fxRates: [], prices: [] }]);
   });
 });
 
-// Every symbol this feed prices is an instrument a user can hold, in the
-// currency the feed quotes it in.
-it("prices only instruments the migrations seed, in their currency", () => {
-  const seeded = new Map(
-    migrations().flatMap(({ sql }) =>
-      [
-        ...(sql.match(/INSERT INTO public\.instruments[^;]*;/g) ?? []).flatMap(
-          (insert) => [
-            ...insert.matchAll(/\('(\w+)', '[^']*', '\w+', '(\w+)'\)/g),
-          ],
-        ),
-      ].map(([, symbol, currency]) => [symbol, currency]),
-    ),
-  );
-  for (const row of parse(BODY, NOW).prices) {
-    expect([row.symbol, seeded.get(row.symbol)]).toEqual([
-      row.symbol,
-      row.currency,
-    ]);
-  }
+describe("krakenPair", () => {
+  it("names a pair as Kraken does and reads either answer key", () => {
+    expect(krakenPair("DOGE")).toEqual({
+      symbol: "DOGE",
+      pair: "XDGUSD",
+      resultKeys: ["XDGUSD", "XXDGZUSD", "XDGZUSD"],
+    });
+    expect(
+      parse({ error: [], result: { ADAUSD: ticker("0.5") } }, NOW, ["ADA"])
+        .prices[0]?.price,
+    ).toBe("0.5");
+  });
 });

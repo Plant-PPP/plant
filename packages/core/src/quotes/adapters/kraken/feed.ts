@@ -8,16 +8,31 @@ import {
   type RawQuoteRows,
 } from "../../contract/quote";
 
-// pair is what the request names; resultKey is how the answer names it.
-const PAIRS: readonly { symbol: string; pair: string; resultKey: string }[] = [
-  { symbol: "BTC", pair: "XBTUSD", resultKey: "XXBTZUSD" },
-  { symbol: "ETH", pair: "ETHUSD", resultKey: "XETHZUSD" },
-  { symbol: "SOL", pair: "SOLUSD", resultKey: "SOLUSD" },
-  { symbol: "USDT", pair: "USDTUSD", resultKey: "USDTZUSD" },
-  { symbol: "USDC", pair: "USDCUSD", resultKey: "USDCUSD" },
-];
+const TICKER_URL = "https://api.kraken.com/0/public/Ticker";
 
-const ENDPOINT = `https://api.kraken.com/0/public/Ticker?pair=${PAIRS.map((p) => p.pair).join(",")}`;
+// Kraken's own name for an asset, where it is not the symbol.
+const KRAKEN_ASSET: Readonly<Record<string, string>> = {
+  BTC: "XBT",
+  DOGE: "XDG",
+};
+
+// pair is what the request names; the answer names it either the same or,
+// for Kraken's older assets, X<asset>ZUSD (XXBTZUSD) or <asset>ZUSD
+// (USDTZUSD).
+export function krakenPair(symbol: string) {
+  const asset = Object.hasOwn(KRAKEN_ASSET, symbol)
+    ? KRAKEN_ASSET[symbol]
+    : symbol;
+  const pair = `${asset}USD`;
+  return {
+    symbol,
+    pair,
+    resultKeys: [pair, `X${asset}ZUSD`, `${asset}ZUSD`],
+  };
+}
+
+export const tickerUrl = (symbols: readonly string[]) =>
+  `${TICKER_URL}?pair=${symbols.map((symbol) => krakenPair(symbol).pair).join(",")}`;
 
 // c is the last trade: [price, lot volume], both decimal strings.
 const responseSchema = z.object({
@@ -33,7 +48,11 @@ const responseSchema = z.object({
 const TRANSIENT_ERROR =
   /^E(Service:|API:Rate limit|General:(Temporary|Internal error|Too many requests))/;
 
-export function parse(json: unknown, now: Date): RawQuoteRows {
+export function parse(
+  json: unknown,
+  now: Date,
+  symbols: readonly string[],
+): RawQuoteRows {
   const response = parseResponse(responseSchema, json);
   const errors = response.error.filter((entry) => !entry.startsWith("W"));
   if (errors.length > 0) {
@@ -50,22 +69,32 @@ export function parse(json: unknown, now: Date): RawQuoteRows {
     fxRates: [],
     // A pair missing from the answer gets an empty price, which the schemas
     // count as invalid.
-    prices: PAIRS.map(({ symbol, resultKey }) => ({
-      symbol,
-      price_date: today,
-      price: result[resultKey]?.c[0] ?? "",
-      currency: "USD",
-      quoted_at: instant,
-    })),
+    prices: symbols.map(krakenPair).map(({ symbol, resultKeys }) => {
+      const key = resultKeys.find((each) => Object.hasOwn(result, each));
+      return {
+        symbol,
+        price_date: today,
+        price: key === undefined ? "" : (result[key]?.c[0] ?? ""),
+        currency: "USD",
+        quoted_at: instant,
+      };
+    }),
   };
 }
 
-export function createKrakenFeed(getJson: GetJson): RawQuoteFeed {
+// symbols are the catalog's crypto, which the server adds only once Kraken
+// quotes it in dollars: one pair Kraken does not know fails the request.
+export function createKrakenFeed(
+  getJson: GetJson,
+  symbols: () => Promise<readonly string[]>,
+): RawQuoteFeed {
   return {
     id: "kraken",
     listed: false,
     async readRaw(now) {
-      return parse(await getJson(ENDPOINT), now);
+      const wanted = [...new Set(await symbols())].sort();
+      if (wanted.length === 0) return { fxRates: [], prices: [] };
+      return parse(await getJson(tickerUrl(wanted)), now, wanted);
     },
   };
 }

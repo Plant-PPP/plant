@@ -10,8 +10,9 @@
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
 -- - The reference tables, public tables with no user_id, are exactly fx_rates,
---   prices and instruments: market data every user reads; service_role holds
---   nothing on instruments, which migrations seed. Their permissive policies only
+--   prices and instruments: market data every user reads; service_role reads
+--   an instrument's symbol, type and currency and adds one a provider lists,
+--   never updating nor deleting one. Their permissive policies only
 --   let authenticated read every row, authenticated cannot write them,
 --   service_role cannot update or delete them, and they have no foreign key,
 --   since every user reads what a row points at.
@@ -218,18 +219,21 @@ SELECT ok(
 );
 
 SELECT ok(
-  NOT has_any_column_privilege('service_role', 'public.instruments', 'SELECT, INSERT, UPDATE')
+  NOT has_column_privilege('service_role', 'public.instruments', 'aliases', 'SELECT, INSERT')
+    AND NOT has_column_privilege('service_role', 'public.instruments', 'name', 'SELECT')
+    AND NOT has_any_column_privilege('service_role', 'public.instruments', 'UPDATE')
     AND NOT has_table_privilege('service_role', 'public.instruments', 'DELETE'),
-  'service_role holds nothing on instruments, which only migrations write'
+  'service_role adds instruments but never reads their names or aliases, updates nor deletes one'
 );
 
--- Mirrors QuoteTable in security-tests/src/reference-rows.ts, whose specs run
--- the service role's cases: the two change together.
+-- The quote tables mirror QuoteTable in security-tests/src/reference-rows.ts,
+-- whose specs run the service role's cases: the two change together. The
+-- service role also adds an instrument a provider lists, pinned above.
 SELECT set_eq(
   $$ SELECT relname::text FROM reference_tables r
      WHERE has_any_column_privilege('service_role', r.oid, 'INSERT') $$,
-  ARRAY['fx_rates', 'prices'],
-  'service_role inserts only into the quote tables'
+  ARRAY['fx_rates', 'prices', 'instruments'],
+  'service_role inserts only into the quote tables and the instruments catalog'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.

@@ -1,13 +1,24 @@
 "use client";
 
+import type { Listing } from "@plant/core";
 import { ChevronDownIcon } from "lucide-react";
 import { Popover } from "radix-ui";
-import { type KeyboardEvent, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { folded } from "@/lib/format/text";
+import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
 import type { InstrumentRow } from "@/lib/holdings/read";
+import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
+
+import { useInstrumentMarket } from "./instrument-market";
 
 type PickerInstrument = Pick<InstrumentRow, "symbol" | "name">;
 
@@ -23,6 +34,38 @@ export function matchesInstrument(
     folded(instrument.name).includes(wanted)
   );
 }
+
+// What a market listing shows besides its name: its type, currency and
+// market, as "Acción · ARS · BYMA".
+export const listingDetail = ({ type, currency, market }: Listing): string =>
+  [
+    HOLDING_CLASS_LABELS[type],
+    currency,
+    market === "byma" ? "BYMA" : "Cripto",
+  ].join(" · ");
+
+// The market listings the picker offers: those the catalog does not have yet.
+export const newListings = (
+  listings: readonly Listing[],
+  instruments: readonly PickerInstrument[],
+): Listing[] => {
+  const held = new Set(instruments.map(({ symbol }) => symbol));
+  return listings.filter(({ symbol }) => !held.has(symbol));
+};
+
+// The shortest text the market is searched for, and how long typing pauses
+// before it is.
+export const MARKET_QUERY_MIN = 2;
+const MARKET_DELAY_MS = 300;
+
+const MARKET_FAILURES: Record<string, string> = {
+  limited: "Buscaste muchas veces seguidas. Esperá un minuto.",
+  unavailable: "No pudimos buscar en el mercado. Probá de nuevo en un rato.",
+  invalid: "Escribí un símbolo o un nombre más corto.",
+  not_listed: "Ese instrumento ya no figura en el mercado.",
+  failed: "No pudimos agregarlo. Probá de nuevo más tarde.",
+  rejected: "No pudimos buscar en el mercado. Probá de nuevo en un rato.",
+};
 
 // What a key in the search does: move the active option (wrapping), pick it,
 // close the list, or nothing ("stay"), each with the key's default prevented;
@@ -84,7 +127,9 @@ type PickerName =
 // An instrument choice that searches by symbol or name. The trigger takes the
 // field's id, so its <Label htmlFor> and a refused submit's focus reach it;
 // its name is the label and the chosen instrument. What is typed only
-// filters: the value is always an instrument of the list.
+// filters: the value is always an instrument of the list. With onAdded, the
+// search also looks in the market, and picking a listing adds it to the
+// catalog first, where a page provides the market's actions.
 export function InstrumentPicker({
   id,
   labelId,
@@ -94,32 +139,78 @@ export function InstrumentPicker({
   onChange,
   placeholder,
   autoFocus,
+  onAdded,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: PickerName & {
   id: string;
   instruments: readonly PickerInstrument[];
   value: string;
-  onChange: (symbol: string) => void;
+  // added is the instrument a listing just added, which the page's list does
+  // not hold yet.
+  onChange: (symbol: string, added?: InstrumentRow) => void;
   placeholder: string;
   autoFocus?: boolean;
+  onAdded?: (instrument: InstrumentRow) => void;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const actions = useInstrumentMarket();
+  const searchMarket = onAdded && actions ? actions : null;
+  const [market, setMarket] = useState<{
+    query: string;
+    listings: Listing[];
+  } | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [adding, startAdding] = useTransition();
   const shown = open
     ? instruments.filter((each) => matchesInstrument(each, query))
     : [];
+  const marketShown =
+    open && searchMarket && market && market.query === query.trim()
+      ? newListings(market.listings, instruments)
+      : [];
+  const optionCount = shown.length + marketShown.length;
   const chosen = instruments.find((each) => each.symbol === value);
+
+  // The market is searched once typing pauses; an answer to an older text is
+  // dropped.
+  const wanted = query.trim();
+  useEffect(() => {
+    if (!open || !searchMarket || wanted.length < MARKET_QUERY_MIN) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      void settle(searchMarket.search(wanted)).then((result) => {
+        if (!current) return;
+        if (result === "rejected") {
+          setMarketError(MARKET_FAILURES.rejected!);
+        } else if (result.ok) {
+          setMarketError(null);
+          setMarket({ query: wanted, listings: result.listings });
+        } else {
+          setMarketError(MARKET_FAILURES[result.code] ?? null);
+        }
+      });
+    }, MARKET_DELAY_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [open, searchMarket, wanted]);
   const valueId = `${id}-value`;
   const nameId = labelId ?? `${id}-label`;
   const listId = `${id}-list`;
   const optionId = (symbol: string) => `${id}-${symbol}`;
-  const activeSymbol = shown[active]?.symbol;
+  const marketId = (symbol: string) => `${id}-market-${symbol}`;
   const activeId =
-    activeSymbol === undefined ? undefined : optionId(activeSymbol);
+    active < shown.length
+      ? optionId(shown[active]!.symbol)
+      : marketShown[active - shown.length]
+        ? marketId(marketShown[active - shown.length]!.symbol)
+        : undefined;
 
   const searchInput = useRef<HTMLInputElement>(null);
   // How the active option scrolls into view: to the top on opening, as Radix
@@ -148,15 +239,41 @@ export function InstrumentPicker({
     setOpen(false);
   }
 
+  function chooseListing(listing: Listing) {
+    if (!onAdded || !searchMarket || adding) return;
+    setMarketError(null);
+    startAdding(async () => {
+      const result = await settle(
+        searchMarket.add(listing.symbol, listing.market),
+      );
+      if (result === "rejected") {
+        setMarketError(MARKET_FAILURES.failed!);
+        return;
+      }
+      if (!result.ok) {
+        setMarketError(MARKET_FAILURES[result.code] ?? null);
+        return;
+      }
+      onAdded(result.instrument);
+      onChange(result.instrument.symbol, result.instrument);
+      setOpen(false);
+    });
+  }
+
+  function chooseAt(index: number) {
+    if (index < shown.length) choose(shown[index]!.symbol);
+    else chooseListing(marketShown[index - shown.length]!);
+  }
+
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    const action = searchKey(event.key, active, shown.length);
+    const action = searchKey(event.key, active, optionCount);
     if (!action) return;
     event.preventDefault();
     if (action.kind === "move") {
       followActive.current = "nearest";
       setActive(action.active);
     }
-    if (action.kind === "choose") choose(shown[action.index]!.symbol);
+    if (action.kind === "choose") chooseAt(action.index);
     if (action.kind === "close") setOpen(false);
   }
 
@@ -220,7 +337,11 @@ export function InstrumentPicker({
             aria-activedescendant={activeId}
             aria-autocomplete="list"
             aria-label="Buscar instrumento"
-            placeholder="Buscá por símbolo o nombre"
+            placeholder={
+              searchMarket
+                ? "Buscá por símbolo o nombre, también en el mercado"
+                : "Buscá por símbolo o nombre"
+            }
             autoComplete="off"
             value={query}
             onChange={(event) => {
@@ -236,12 +357,14 @@ export function InstrumentPicker({
           <p
             role="status"
             className={
-              shown.length === 0
+              optionCount === 0 || marketError || adding
                 ? "px-2 text-sm text-muted-foreground"
                 : "sr-only"
             }
           >
-            {shown.length === 0 ? "Sin resultados" : ""}
+            {adding
+              ? "Agregando…"
+              : (marketError ?? (optionCount === 0 ? "Sin resultados" : ""))}
           </p>
           <ul
             id={listId}
@@ -284,6 +407,38 @@ export function InstrumentPicker({
                 className="cursor-default truncate rounded-sm px-2 py-1.5 text-sm aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
               >
                 {instrumentLabel(each.symbol, each.name)}
+              </li>
+            ))}
+            {marketShown.length > 0 && (
+              <li
+                role="presentation"
+                className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground"
+              >
+                En el mercado
+              </li>
+            )}
+            {marketShown.map((listing, index) => (
+              <li
+                key={`market-${listing.symbol}`}
+                id={marketId(listing.symbol)}
+                role="option"
+                aria-selected={false}
+                aria-disabled={adding || undefined}
+                data-active={shown.length + index === active || undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseMove={() => {
+                  followActive.current = null;
+                  setActive(shown.length + index);
+                }}
+                onClick={() => chooseListing(listing)}
+                className="grid cursor-default rounded-sm px-2 py-1.5 text-sm data-active:bg-accent data-active:text-accent-foreground"
+              >
+                <span className="truncate">
+                  {instrumentLabel(listing.symbol, listing.name)}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {listingDetail(listing)}
+                </span>
               </li>
             ))}
           </ul>

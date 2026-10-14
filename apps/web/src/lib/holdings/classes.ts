@@ -8,6 +8,7 @@ export type HoldingClass = InstrumentType | Exclude<AssetClass, "instrument">;
 export const HOLDING_CLASS_LABELS: Record<HoldingClass, string> = {
   crypto: "Cripto",
   cedear: "CEDEAR",
+  stock: "Acción",
   bond: "Bono",
   fci: "FCI",
   cash: "Efectivo",
@@ -20,6 +21,7 @@ export const HOLDING_CLASS_LABELS: Record<HoldingClass, string> = {
 export const HOLDING_CLASS_GROUP_LABELS: Record<HoldingClass, string> = {
   ...HOLDING_CLASS_LABELS,
   cedear: "CEDEARs",
+  stock: "Acciones",
   bond: "Bonos",
   fci: "FCIs",
   real_estate: "Inmuebles",
