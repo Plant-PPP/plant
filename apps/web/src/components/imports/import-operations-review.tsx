@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { useCatalog } from "@/components/holdings/instrument-market";
 import { InstrumentPicker } from "@/components/holdings/instrument-picker";
 import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
@@ -158,7 +159,7 @@ function typedInvalid(
 export function ImportOperationsReview({
   item,
   institution,
-  instruments,
+  instruments: givenInstruments,
   backHref,
   doneHref,
   actions,
@@ -170,6 +171,7 @@ export function ImportOperationsReview({
   doneHref: string;
   actions: OperationsReviewActions;
 }) {
+  const [instruments, addToCatalog] = useCatalog(givenInstruments);
   const router = useRouter();
   const pickerId = useId();
   const today = buenosAiresDate(new Date());
@@ -423,6 +425,7 @@ export function ImportOperationsReview({
                         instruments={instruments}
                         value={row.symbol}
                         onChange={(symbol) => change(row.id, { symbol })}
+                        onAdded={addToCatalog}
                         placeholder="Elegí un activo"
                       />
                     ) : (

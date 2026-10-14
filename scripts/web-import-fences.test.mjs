@@ -475,6 +475,13 @@ const SINKS = [
     user: "src/app/(app)/(data)/settings/actions.ts",
     serverAction: true,
   },
+  {
+    name: "addListedInstrument",
+    spec: "@/lib/instruments/instrument-catalog-sink",
+    file: "src/lib/instruments/instrument-catalog-sink.ts",
+    user: "src/app/(app)/(data)/assets/instrument-actions.ts",
+    serverAction: true,
+  },
 ];
 const sinkParts = ({ spec, file }) => ({
   dir: file.slice(0, file.lastIndexOf("/")),
@@ -604,6 +611,29 @@ flagged.push(
     "src/app/(app)/(data)/settings/actions.ts",
     `"use server";\n${code}`,
   ]),
+  // Only the instrument actions may use the catalog sink, through
+  // addListedInstrument alone, and the sink exports nothing else.
+  ...[
+    "src/app/(app)/(data)/assets/actions.ts",
+    "src/app/api/inngest/route.ts",
+    "src/app/(app)/(data)/assets/page.tsx",
+  ].map((filePath) => [
+    filePath,
+    'import "@/lib/instruments/instrument-catalog-sink";',
+  ]),
+  ...[
+    'import { insertListed } from "@/lib/instruments/instrument-catalog-sink";\nexport const f = () => insertListed;',
+    'import { addListedInstrument as add } from "@/lib/instruments/instrument-catalog-sink";\nexport const f = () => add;',
+    'import * as sink from "@/lib/instruments/instrument-catalog-sink";\nexport const f = () => sink;',
+    'export const f = () => import("@/lib/instruments/instrument-catalog-sink");',
+  ].map((code) => [
+    "src/app/(app)/(data)/assets/instrument-actions.ts",
+    `"use server";\n${code}`,
+  ]),
+  ...[
+    "export async function insertListed() {}",
+    "export const insertListed = async () => {};",
+  ].map((code) => ["src/lib/instruments/instrument-catalog-sink.ts", code]),
   ...[
     "export async function recordExport() {}",
     "export const recordExport = async () => {};",
@@ -729,6 +759,18 @@ const allowed = [
     '"use server";\nimport { auditedExport } from "@/lib/export/export-audit-sink";\nexport async function f() {\n  return auditedExport(async () => ({ tables: [], truncated: false }));\n}',
   ],
   [
+    "src/lib/instruments/instrument-catalog-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";',
+  ],
+  [
+    "src/lib/instruments/instrument-catalog-sink.test.ts",
+    'import { addListedInstrument } from "./instrument-catalog-sink";\nexport const s = addListedInstrument;',
+  ],
+  [
+    "src/app/(app)/(data)/assets/instrument-actions.ts",
+    '"use server";\nimport { addListedInstrument } from "@/lib/instruments/instrument-catalog-sink";\nexport async function f() {\n  return addListedInstrument("GGAL", "byma");\n}',
+  ],
+  [
     "src/app/api/x/route.ts",
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nexport async function POST() {\n  aiCostSink();\n  return new Response();\n}',
   ],
@@ -848,6 +890,9 @@ const OVERRIDES = [
   ["src/lib/export/export-audit-sink.ts", []],
   ["src/lib/export/export-audit-sink.test.ts", []],
   ["src/app/(app)/(data)/settings/actions.ts", []],
+  ["src/lib/instruments/instrument-catalog-sink.ts", []],
+  ["src/lib/instruments/instrument-catalog-sink.test.ts", []],
+  ["src/app/(app)/(data)/assets/instrument-actions.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/app/api/inngest/route.ts", []],
@@ -882,6 +927,7 @@ const PROBES = {
   importSink: 'import "@/lib/imports/import-sink";',
   assistantSink: 'import "@/lib/assistant/assistant-sink";',
   exportAuditSink: 'import "@/lib/export/export-audit-sink";',
+  catalogSink: 'import "@/lib/instruments/instrument-catalog-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   testing: 'import "@plant/shared/testing";',
   prototype: 'import "@/lib/prototype/fixtures";',
@@ -939,8 +985,16 @@ for (const [filePath, exempt] of OVERRIDES) {
       continue;
     }
     if (
+      probe === "catalogSink" &&
+      /instrument-catalog-sink\.test\.ts$|^src\/app\/\(app\)\/\(data\)\/assets\/instrument-actions\.ts$/.test(
+        filePath,
+      )
+    ) {
+      continue;
+    }
+    if (
       probe === "service" &&
-      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts|assistant-sink\.ts|export-audit-sink\.ts/.test(
+      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts|assistant-sink\.ts|export-audit-sink\.ts|instrument-catalog-sink\.ts/.test(
         filePath,
       )
     ) {

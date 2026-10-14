@@ -30,6 +30,7 @@ import {
   ReportSwitch,
 } from "@/components/portfolio-setup/report-switch";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
+import { useCatalog } from "@/components/holdings/instrument-market";
 import {
   type HoldingOrigin,
   holdingName,
@@ -98,7 +99,7 @@ export function HoldingDialog({
   placement,
   accounts,
   portfolios,
-  instruments,
+  instruments: givenInstruments,
   initial,
   initialError,
   portfolioChosen = false,
@@ -130,6 +131,7 @@ export function HoldingDialog({
   // False when the write could not start; the dialog stays open.
   onSubmit: (fields: HoldingFields, chosen: ChosenHolding) => boolean;
 }) {
+  const [instruments, addToCatalog] = useCatalog(givenInstruments);
   const id = useId();
   const fieldId = (field: DialogField | "assetClass") => `${id}-${field}`;
   const alertId = `${id}-alert`;
@@ -372,6 +374,7 @@ export function HoldingDialog({
                 instruments={instruments}
                 value={fields.instrument}
                 onChange={pick("instrument", set("instrument"))}
+                onAdded={addToCatalog}
                 placeholder="Elegí un instrumento"
               />
             </div>

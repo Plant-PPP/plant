@@ -721,6 +721,13 @@ describe("refresh-quotes registration", () => {
 // tested there.
 const CREDENTIALS = { username: "plant-test-user", password: "made-up-secret" };
 const ACCESS_TOKEN = "made-up-access-token";
+// The catalog the feeds quote, made up for these tests.
+const CATALOG = [
+  { symbol: "AAPL", type: "cedear", currency: "ARS" },
+  { symbol: "GD30", type: "bond", currency: "USD" },
+  { symbol: "BTC", type: "crypto", currency: "USD" },
+] as const;
+const instruments = async () => CATALOG;
 
 describe("runRefreshQuotes over the factory's feeds", () => {
   const failing = (error: Error) => {
@@ -732,6 +739,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
       getJson: fail,
       postForm: fail,
       iol: CREDENTIALS,
+      instruments,
     }).map((feed): QuoteFeedPort => ({
       id: feed.id,
       read: (now) => {
@@ -845,6 +853,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
         getJson: async (url) => answer(url),
         postForm: async () => ({ access_token: ACCESS_TOKEN, expires_in: 899 }),
         iol: CREDENTIALS,
+        instruments,
       }),
     ]);
     await drive(d, memo);
@@ -872,6 +881,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
         getJson: async (url) => answer(url),
         postForm: async () => ({ access_token: ACCESS_TOKEN }),
         iol: null,
+        instruments,
       }),
     ]);
     const { result } = await drive(d);
