@@ -12,7 +12,7 @@ export function pdfPageCount(bytes: Uint8Array): number | null {
   const text = new TextDecoder("latin1").decode(bytes);
   let count = 0;
   for (const match of text.matchAll(
-    /\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g,
+    /\/Type\s{0,8}\/Pages\b[^>]{0,400}?\/Count\s{1,8}(\d{1,6})|\/Count\s{1,8}(\d{1,6})[^>]{0,400}?\/Type\s{0,8}\/Pages\b/g,
   )) {
     count = Math.max(count, Number(match[1] ?? match[2]));
   }

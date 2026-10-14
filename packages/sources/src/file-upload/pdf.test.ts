@@ -37,3 +37,12 @@ it("does not know the count of a PDF whose objects are compressed", () => {
     pdfPageCount(pdf("1 0 obj << /Type /ObjStm /N 12 >> stream x endstream")),
   ).toBeNull();
 });
+
+it("counts a PDF built to make the search backtrack, in linear time", () => {
+  const hostile = pdf(
+    `${"/Type /Pages /Count".repeat(50_000)} /Count 3 /Type /Pages`,
+  );
+  const started = performance.now();
+  pdfPageCount(hostile);
+  expect(performance.now() - started).toBeLessThan(1_000);
+});
