@@ -1,4 +1,8 @@
-import { benchmarksBetween, chainedChange } from "./benchmarks";
+import {
+  type Benchmarks,
+  benchmarksBetween,
+  chainedChange,
+} from "./benchmarks";
 import {
   type CashFlow,
   cashFlowsOf,
@@ -18,6 +22,7 @@ import {
   type StoredQuotes,
   snapshotOn,
   takesUnits,
+  UNIT_FX_KINDS,
   valueHoldings,
   valueLiabilities,
 } from "@plant/core";
@@ -599,4 +604,119 @@ export function monthDetail(
   }
   lines.sort((a, b) => compareMovements(b.movement, a.movement));
   return { close, lines };
+}
+
+// Where net worth's change over consecutive months came from, in one unit:
+// what was put in (or taken out), what prices did, what the dollar did and
+// what yields added, which add up to the change exactly. The dollar's part is
+// what the holdings and debts at each month's end were worth at its end quotes
+// less what they were worth with the dollar rates of its start and the same
+// prices; the prices' part is the rest of the market result, so a peso price
+// that follows the dollar (a CEDEAR) counts as price. Income paid out
+// (dividends, coupons and rents, without yields) and charges are listed
+// apart.
+export type ChangeBetween = {
+  from: string;
+  to: string;
+  months: number;
+  open: boolean;
+  startValue: string;
+  endValue: string;
+  contributed: string;
+  prices: string;
+  dollar: string;
+  yields: string;
+  income: string;
+  charges: string;
+  result: string;
+  realized: string | null;
+  share: string | null;
+  benchmarks: Benchmarks;
+  complete: boolean;
+};
+
+// The months from `from` to `to` (periods, "2026-09"), in either order; null
+// when no close falls between them.
+export function changeBetween(
+  state: ClosesState,
+  unit: Denominator,
+  from: string,
+  to: string,
+): ChangeBetween | null {
+  const [first, last] = from <= to ? [from, to] : [to, from];
+  const months = closesOf(state, unit).filter(
+    (each) => each.period >= first && each.period <= last,
+  );
+  if (months.length === 0) return null;
+  const ledgers = ledgersOf(state, unit);
+  const options = { denominator: unit, referenceDollar: state.referenceDollar };
+  const worthAt = (date: string, snapshot: QuoteSnapshot) => {
+    const held = valueHoldings(
+      holdingsAt(state, ledgers, date).map((row) => row.holding),
+      snapshot,
+      options,
+    );
+    const owed = valueLiabilities(state.liabilities, snapshot, options);
+    return {
+      value: exactOf(difference(held.total, owed.total)),
+      complete: held.complete && owed.complete,
+    };
+  };
+  let dollar = ZERO;
+  let yields = ZERO;
+  let known = true;
+  for (const month of months) {
+    const end = pricedAt(state, month.to);
+    const start = pricedAt(state, month.from);
+    const fx = { ...end.fx };
+    for (const kind of UNIT_FX_KINDS) {
+      const now = end.fx[kind];
+      const was = start.fx[kind];
+      if (now && was) fx[kind] = { ...now, sell: was.sell };
+      else if (now) known = false;
+    }
+    const atEnd = worthAt(month.to, end);
+    const atStartRates = worthAt(month.to, { ...end, fx });
+    if (!atEnd.complete || !atStartRates.complete) known = false;
+    dollar = plus(dollar, minus(atEnd.value, atStartRates.value));
+    const { startValue, endValue, contributed, market } = month.figures;
+    yields = plus(
+      yields,
+      minus(
+        minus(exactOf(endValue), exactOf(startValue)),
+        plus(exactOf(contributed), exactOf(market)),
+      ),
+    );
+  }
+  const sum = (
+    key: "contributed" | "market" | "income" | "charges" | "result",
+  ) => plus(...months.map((each) => exactOf(each.figures[key])));
+  // Over the months whose return could be measured and that started with
+  // something held, as a year's are.
+  const measured = months.flatMap((each) =>
+    each.figures.share === null || !each.benchmarks ? [] : [each.benchmarks],
+  );
+  return {
+    from: months[0]!.period,
+    to: months.at(-1)!.period,
+    months: months.length,
+    open: months.some((each) => each.open),
+    startValue: months[0]!.figures.startValue,
+    endValue: months.at(-1)!.figures.endValue,
+    contributed: stored(sum("contributed")),
+    prices: stored(minus(sum("market"), dollar)),
+    dollar: stored(dollar),
+    yields: stored(yields),
+    // What was paid out; what yields added is in `yields`, not here too.
+    income: stored(minus(sum("income"), yields)),
+    charges: stored(sum("charges")),
+    result: stored(sum("result")),
+    realized: sumOrNull(months.map((each) => each.realized)),
+    share: chainedShare(months.map((each) => each.figures.share)),
+    benchmarks: {
+      inflation: chainedChange(measured.map((each) => each.inflation)),
+      dollar: chainedChange(measured.map((each) => each.dollar)),
+    },
+    complete: known && months.every((each) => each.complete),
+  };
 }
