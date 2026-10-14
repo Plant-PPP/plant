@@ -1,5 +1,7 @@
 # Threat model: the import job
 
+> **Superseded by [2026-10-14-uploads-and-reading.md](2026-10-14-uploads-and-reading.md).** CSV and Excel are read in code (PLA-38), the quota is enforced (PLA-42) and the job runs on a deployment behind `PLANT_RUN_JOBS` (PLA-73).
+
 Branch `feat/pla-35-import-job` (PLA-35). The PR template requires it for a new use of an AI provider on user data, a service-role path and new grants: the job reads every user's uploaded statements past RLS and sends them to Gemini.
 
 ## Scope and assets
