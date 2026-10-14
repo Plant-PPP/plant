@@ -3,6 +3,7 @@ import {
   type Currency,
   currencySchema,
   decimalStringSchema,
+  neutralizePromptText,
   positiveDecimalSchema,
   withoutAccents,
 } from "@plant/shared";
@@ -29,6 +30,9 @@ const SHEET_ROW_LIMIT = DRAFT_ROW_LIMIT + 20;
 // The rows read past SHEET_ROW_LIMIT to tell a table that goes on from the
 // blank lines or styled empty cells spreadsheet apps leave under it.
 const SHEET_LOOKAHEAD_ROWS = SHEET_ROW_LIMIT;
+// SheetJS counts sheetRows from row 1, not from the used range, which may
+// start up to SHEET_ROW_LIMIT rows down and still be read whole.
+const SHEET_PARSE_ROWS = 2 * SHEET_ROW_LIMIT + SHEET_LOOKAHEAD_ROWS;
 
 export type SheetCell = string | number;
 
@@ -71,9 +75,7 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   try {
     workbook = XLSX.read(text ?? bytes, {
       type: csv ? "string" : "array",
-      // SheetJS counts these from row 1, not from the used range, which may
-      // start up to SHEET_ROW_LIMIT rows down and still be read whole.
-      sheetRows: 2 * SHEET_ROW_LIMIT + SHEET_LOOKAHEAD_ROWS,
+      sheetRows: SHEET_PARSE_ROWS,
       dense: true,
       raw: csv,
       cellFormula: false,
@@ -88,6 +90,11 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const ref = sheet?.["!ref"];
   if (!sheet || !ref) throw new SourceError("nothing_found", false);
   const range = XLSX.utils.decode_range(ref);
+  // SheetJS sets `!fullref` whenever the sheet claims rows past sheetRows,
+  // a styled empty cell far below included; only a parse that reached
+  // SHEET_PARSE_ROWS left rows unread.
+  const parseCapped =
+    sheet["!fullref"] !== undefined && range.e.r >= SHEET_PARSE_ROWS - 1;
   range.e.c = Math.min(range.e.c, range.s.c + SHEET_COLUMN_LIMIT - 1);
   range.e.r = Math.min(
     range.e.r,
@@ -109,15 +116,17 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const lookahead = read.slice(SHEET_ROW_LIMIT);
   const truncated =
     lookahead.some((row) => !isBlank(row)) ||
-    (sheet["!fullref"] !== undefined && lookahead.length === 0);
+    (parseCapped && lookahead.length === 0);
   const start = table.findIndex((row) => !isBlank(row));
   if (start === -1) throw new SourceError("nothing_found", false);
   const headers = table[start]!.map((cell) => String(cell).trim());
-  // Headers name columns: a long one or one across lines is not a table this
-  // reads, and the headers reach the model that maps them as they are.
+  // Headers name columns: a long one, or one across lines or with an angle
+  // bracket, is not a table this reads; the headers reach the model that maps
+  // them as they are, in its answer's schema too.
   if (
     headers.some(
-      (header) => header.length > HEADER_LIMIT || /[\r\n]/.test(header),
+      (header) =>
+        header.length > HEADER_LIMIT || neutralizePromptText(header) !== header,
     )
   ) {
     throw new SourceError("unreadable", false);

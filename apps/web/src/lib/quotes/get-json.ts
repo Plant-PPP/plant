@@ -41,7 +41,7 @@ async function readJson(
       cache: "no-store",
     });
     if (!response.ok) {
-      await response.body?.cancel();
+      await response.body?.cancel().catch(() => undefined);
       throw feedErrorForStatus(response.status);
     }
     text = await readCapped(response, maxBytes);

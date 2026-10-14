@@ -332,7 +332,7 @@ async function getPublic(
     }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      await response.body?.cancel();
+      await response.body?.cancel().catch(() => undefined);
       if (!location) throw new FaviconError("unreachable");
       try {
         url = new URL(location, url);
@@ -342,7 +342,7 @@ async function getPublic(
       continue;
     }
     if (!response.ok) {
-      await response.body?.cancel();
+      await response.body?.cancel().catch(() => undefined);
       throw new FaviconError("unreachable");
     }
     let bytes: Uint8Array | null;

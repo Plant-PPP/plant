@@ -29,3 +29,13 @@ it("leaves out any fiat Plant does not keep, and keeps pesos and dollars", () =>
   expect(balanceRow("USD", ["1000"])).toMatchObject({ assetClass: "cash" });
   expect(balanceRow("MNT", ["1000"])).toMatchObject({ symbol: "MNT" });
 });
+
+it.each(["SCR", "ERN", "RON", "TOP", "SOS"])(
+  "keeps %s, an ISO 4217 code exchanges list as a token",
+  (code) => {
+    expect(balanceRow(code, ["12.5"])).toMatchObject({
+      symbol: code,
+      quantity: "12.5",
+    });
+  },
+);

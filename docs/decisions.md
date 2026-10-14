@@ -46,7 +46,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A debt balance typed that is not a number** asks for a valid number, as the minimum payment does.
 - **`write_operation` clears its transaction mark before it returns.** The mark is local to the transaction, so left on it let whatever followed `write_operation` or `confirm_import` in the same transaction write operations, movements and instrument units by hand, and pg_graphql runs a whole request as one transaction. The mark now covers only `write_operation`'s own run. Plant reads and writes only through PostgREST, so GraphQL could also be turned off (`graphql_public` out of `api.schemas` in `supabase/config.toml` and the dashboard); that is left to a separate change.
 - **A sync period's days fall between 2000-01-01 and 9999-12-31**, and only a sync of operations carries one (`imports_sync_period`). `syncAccount`'s period schema holds the same bounds; its ISO dates have four-digit years.
-- **One capped body reader**: `readCappedBytes` in `@plant/shared` reads a response up to a cap, failing or cutting past it, and ignores a failed cancel. The quote feeds and the institution icons use it; `bodyText` in `packages/sources/src/connections/http.ts` should adopt it next.
+- **One capped body reader**: `readCappedBytes` in `@plant/shared` reads a response or a request up to a cap, failing or cutting past it, and ignores a failed cancel. The quote feeds, the institution icons and the request bodies `boundedText` reads use it; `bodyText` in `packages/sources/src/connections/http.ts` should adopt it next.
 
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 
@@ -295,7 +295,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-14 · The assistant's other five tools (PLA-81)
 
 - **`getIncomeEvents`, `getLiabilities`, `listTransactions`, `getAssetInfo` and `getImportStatus` read what the first five read.** The ledger, the debts and the quotes come from the same read of the turn (`readCloses`, through the session's client), valued with the closes' snapshot of today, so a debt or a price agrees with `getPortfolioSummary`. `getImportStatus` reads Cargar's list (`readImports`). No tool takes a user: RLS keeps every read to the session's rows.
-- **The income calendar is the prototype's, now in `lib/assistant/income.ts`.** Each holding's dividends and coupons are projected from what that holding paid before (core's `upcomingIncome`), since each account pays on its own day, and one instrument's payments on a day are summed. Placements that mature in the next 90 days add their capital and interest. The chart PLA-83 asks for waits for the chart tool (PLA-53).
+- **The income calendar is the prototype's, now in `lib/assistant/income.ts`.** Each holding's dividends and coupons are projected from what that holding paid before (core's `incomePattern` and `upcomingFrom`), since each account pays on its own day, and one instrument's payments on a day are summed. Placements that mature in the next 90 days add their capital and interest. The chart PLA-83 asks for waits for the chart tool (PLA-53).
 - **Movements keep their own currency, and prices their quote.** `listTransactions` answers each movement's price and amount as typed or imported, in its currency, rather than converting old trades at today's rate. A price goes as the market quotes it, a bond's per 100 nominal, with its basis, as every page shows it. The prompt tells the model which fields carry their own currency.
 - **An instrument is named by its symbol or its catalog name.** A name the catalog does not have answers `unknown_instrument` with the symbols the user holds, as an unknown portfolio does.
 
@@ -476,7 +476,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Every chart says what its data is**: "Datos al <day> en <unit>". It has three actions: see it larger, save it as a CSV, and save it as a PNG drawn on a canvas. A chart that fails to draw says so in its place, and the rest of the answer stays.
 - **"¿Cómo evolucionó mi patrimonio?" draws a line** of the last 12 month ends from the closes.
 - **"¿Qué cobro este mes?" shows the next 90 days**: this month's sum, the window's, a table of each payment and a chart by month.
-  - The dividends and coupons are an estimate from what each instrument paid before: the next payment comes one typical gap (the median between payments) after the last, at the last payment per unit times the units held today. `upcomingIncome` in `packages/core` does it.
+  - The dividends and coupons are an estimate from what each instrument paid before: the next payment comes one typical gap (the median between payments) after the last, at the last payment per unit times the units held today. `incomePattern` and `upcomingFrom` in `packages/core` do it, composed in `apps/web/src/lib/assistant/income.ts`.
   - An instrument that paid fewer than twice, or skipped two payments in a row, is expected to pay nothing.
   - A placement that matures in the window counts with its capital and interest.
   - The amounts are converted at today's rates, and the answer says it is an estimate.
