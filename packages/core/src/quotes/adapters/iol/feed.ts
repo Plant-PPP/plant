@@ -174,7 +174,16 @@ type PanelRead =
   | { ok: true; panel: Panel; titulos: unknown[] }
   | { ok: false; panel: Panel; code: QuoteFeedCode };
 
-export function createIolFeed(deps: IolDeps): RawQuoteFeed {
+// Plant's IOL login, kept while its tokens live.
+export type IolSession = {
+  token(
+    at: number,
+    credentials: IolCredentials,
+  ): Promise<{ access: string; cached: boolean }>;
+  forget(): void;
+};
+
+export function createIolSession(deps: { postForm: PostForm }): IolSession {
   let session: Session | null = null;
 
   async function grant(
@@ -228,29 +237,47 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
     return { access: session.access, cached: false };
   }
 
+  return {
+    token: tokenAt,
+    forget: () => {
+      session = null;
+    },
+  };
+}
+
+// One panel's lines, or the code it failed with.
+export async function readPanel(
+  getJson: GetJson,
+  access: string,
+  panel: string,
+): Promise<
+  { ok: true; titulos: unknown[] } | { ok: false; code: QuoteFeedCode }
+> {
+  try {
+    const json = await getJson(panelUrl(panel), {
+      headers: { Authorization: `Bearer ${access}` },
+      maxBytes: PANEL_MAX_BYTES,
+    });
+    return { ok: true, titulos: parseResponse(panelSchema, json).titulos };
+  } catch (error) {
+    const code = feedReadCode(error);
+    if (code === null) throw error;
+    return { ok: false, code };
+  }
+}
+
+export function createIolFeed(deps: IolDeps): RawQuoteFeed {
+  const login = createIolSession(deps);
+
   async function readPanels(
     access: string,
     panels: readonly Panel[],
   ): Promise<PanelRead[]> {
-    const headers = { Authorization: `Bearer ${access}` };
     return Promise.all(
-      panels.map(async (panel): Promise<PanelRead> => {
-        try {
-          const json = await deps.getJson(panelUrl(panel), {
-            headers,
-            maxBytes: PANEL_MAX_BYTES,
-          });
-          return {
-            ok: true,
-            panel,
-            titulos: parseResponse(panelSchema, json).titulos,
-          };
-        } catch (error) {
-          const code = feedReadCode(error);
-          if (code === null) throw error;
-          return { ok: false, panel, code };
-        }
-      }),
+      panels.map(async (panel) => ({
+        panel,
+        ...(await readPanel(deps.getJson, access, panel)),
+      })),
     );
   }
 
@@ -268,7 +295,7 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
         ...new Set(instruments.flatMap(({ type }) => PANELS[type])),
       ];
       const at = now.getTime();
-      const token = await tokenAt(at, credentials);
+      const token = await login.token(at, credentials);
       let panels = await readPanels(token.access, wanted);
       // A cached token IOL refuses was revoked early: one more try with a
       // new one. Any other refusal fails its panel.
@@ -276,9 +303,9 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
         token.cached &&
         panels.some((panel) => !panel.ok && panel.code === "unauthorized")
       ) {
-        session = null;
+        login.forget();
         panels = await readPanels(
-          (await tokenAt(at, credentials)).access,
+          (await login.token(at, credentials)).access,
           wanted,
         );
       }
