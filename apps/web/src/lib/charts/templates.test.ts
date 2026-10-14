@@ -58,6 +58,25 @@ it("formats numbers the es-AR way", () => {
   });
 });
 
+it("floats each part of a waterfall from where the last left off", () => {
+  const parts: ChartDatum[] = [
+    { label: "Al empezar", value: "100", shown: "$ 100,00" },
+    { label: "Lo que pusiste", value: "30", shown: "$ 30,00" },
+    { label: "Precios", value: "-50", shown: "-$ 50,00" },
+    { label: "Al terminar", value: "80", shown: "$ 80,00" },
+  ];
+  expect(
+    values(templateSpec("waterfall", parts)).map(
+      ({ base, top, peak, step }) => [base, top, peak, step],
+    ),
+  ).toEqual([
+    [0, 100, 100, "total"],
+    [100, 130, 130, "up"],
+    [130, 80, 130, "down"],
+    [0, 80, 80, "total"],
+  ]);
+});
+
 it("never stacks two figures that share a label", () => {
   const twice: ChartDatum[] = [
     { label: "Tarjeta", value: "10", shown: "$ 10,00" },

@@ -12,6 +12,7 @@ import {
   compareDecimals,
   type Database,
   exactOf,
+  minus,
   neutralizePromptText,
   plus,
   stored,
@@ -33,8 +34,8 @@ import { readImports } from "@/lib/imports/read";
 import { IMPORT_STATUS_LABELS, IMPORTS_PER_MONTH } from "@/lib/imports/review";
 import { allRows } from "@/lib/ledger/ledger";
 import type { ReadContext } from "@/lib/portfolio-setup/read";
-import { monthOf } from "@/lib/summary/closes";
-import { closesOf, yearsOfCloses } from "@/lib/summary/compute";
+import { monthName, monthOf } from "@/lib/summary/closes";
+import { changeBetween, closesOf, yearsOfCloses } from "@/lib/summary/compute";
 import { type ClosesRead, readCloses } from "@/lib/summary/read";
 import { pricedToday, summaryValuation } from "@/lib/summary/valuation";
 
@@ -46,6 +47,14 @@ import {
 } from "./chat";
 import { rateOf, SOURCES, worthOfAssets } from "./figures";
 import { CALENDAR_DAYS, incomeCalendar } from "./income";
+import { changeChart, changePeriod, lastClosed } from "./month-change";
+import {
+  assumptionsOf,
+  scenarioChart,
+  type ScenarioDollar,
+  scenarioOf,
+  type Shock,
+} from "./scenario";
 
 // The most holdings one answer lists.
 const HOLDINGS_LISTED = 30;
@@ -62,7 +71,12 @@ type Meta = AnswerMetadata & {
 };
 
 export type ToolFailure = {
-  error: "read_failed" | "unknown_portfolio" | "unknown_instrument";
+  error:
+    | "read_failed"
+    | "unknown_portfolio"
+    | "unknown_instrument"
+    | "unknown_month"
+    | "no_change";
 };
 
 // A name the user or a document wrote, before it reaches a model.
@@ -541,6 +555,121 @@ export function assistantData({
           quantity: row.holding.amount,
           value: valuation.values[row.id]?.value ?? null,
         })),
+      };
+    },
+
+    // Net worth today and under a hypothetical move of a dollar or of prices,
+    // computed here at today's quotes with only the named ones moved.
+    async scenario({
+      dollar,
+      dollarChange,
+      instrument,
+      priceChange,
+    }: {
+      dollar?: ScenarioDollar;
+      dollarChange?: string;
+      instrument?: string;
+      priceChange?: string;
+    }) {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const symbol = instrument ? symbolOf(read, instrument) : null;
+      if (symbol === null && instrument) return unknownInstrument(read);
+      const shock: Shock = {
+        ...(dollarChange !== undefined && {
+          dollar: { kind: dollar ?? "all", change: dollarChange },
+        }),
+        ...(priceChange !== undefined && {
+          price: { symbol, change: priceChange },
+        }),
+      };
+      if (!shock.dollar && !shock.price) return { error: "no_change" as const };
+      const name =
+        symbol === null
+          ? null
+          : read.state.instruments.find((each) => each.symbol === symbol)!.name;
+      const outcome = scenarioOf({
+        holdings: read.holdings.active.map((row) => row.holding),
+        liabilities: read.state.liabilities,
+        snapshot,
+        unit,
+        referenceDollar: read.state.referenceDollar,
+        shock,
+      });
+      return {
+        ...metaOf(
+          read,
+          snapshot,
+          [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
+          outcome.complete,
+        ),
+        unit,
+        hypothetical: true,
+        label: "Escenario hipotético",
+        assumptions: assumptionsOf(shock, name === null ? null : named(name)),
+        note: "Es un cálculo hipotético, no una predicción: mueve solo lo indicado y deja el resto de las cotizaciones y precios como están hoy (un CEDEAR en pesos no sigue al dólar).",
+        today: outcome.today,
+        scenario: outcome.scenario,
+        change: outcome.change,
+        share: outcome.share === null ? null : percentOf(outcome.share),
+        missingPrices: outcome.missing,
+        chart: scenarioChart(outcome, unit),
+      };
+    },
+
+    // A month's close, or several months' together, and where net worth's
+    // change came from: what was put in, prices, the dollar and yields.
+    async monthSummary({ from, to }: { from?: string; to?: string }) {
+      const read = await load();
+      const snapshot = pricedToday(read);
+      const closes = closesOf(read.state, unit);
+      const last = lastClosed(closes);
+      const first = from ?? to ?? last;
+      const change =
+        first === undefined
+          ? null
+          : changeBetween(read.state, unit, first, to ?? first);
+      if (change === null) {
+        return {
+          error: "unknown_month" as const,
+          firstMonth: closes[0] ? monthName(closes[0].period) : null,
+          lastMonth: closes.at(-1) ? monthName(closes.at(-1)!.period) : null,
+        };
+      }
+      const fraction = (value: string | null) =>
+        value === null ? null : percentOf(value);
+      return {
+        ...metaOf(
+          read,
+          snapshot,
+          [SOURCES.closes, SOURCES.movements, SOURCES.quotes],
+          change.complete,
+        ),
+        unit,
+        period: changePeriod(change),
+        months: change.months,
+        inProgress: change.open,
+        startValue: change.startValue,
+        endValue: change.endValue,
+        change: stored(
+          minus(exactOf(change.endValue), exactOf(change.startValue)),
+        ),
+        // The change, part by part: they add up to it.
+        breakdown: {
+          contributed: change.contributed,
+          prices: change.prices,
+          dollar: change.dollar,
+          yields: change.yields,
+        },
+        result: change.result,
+        income: change.income,
+        charges: change.charges,
+        realized: change.realized,
+        share: fraction(change.share),
+        inflation: fraction(change.benchmarks.inflation),
+        dollarMove: fraction(change.benchmarks.dollar),
+        note: "contributed es lo que puso neto (negativo si sacó); prices y dollar, lo que hicieron los precios y el dólar con lo que tenía; yields, lo que sumaron los rendimientos. income son los dividendos, cupones y rentas que cobró, y charges, comisiones e impuestos. share es el rendimiento sin contar lo que puso; inflation y dollarMove, cuánto subieron la inflación y el dólar MEP en el mismo período.",
+        chart: changeChart(change, unit),
       };
     },
 

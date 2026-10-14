@@ -28,7 +28,24 @@ import { instrumentSummary } from "@/lib/holdings/instrument-history";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import { monthName, monthOf } from "@/lib/summary/closes";
 
-import { closesOf, yearsOfCloses } from "@/lib/summary/compute";
+import {
+  changeBetween,
+  closesOf,
+  pricedToday,
+  yearsOfCloses,
+} from "@/lib/summary/compute";
+import {
+  changeChart,
+  changePeriod,
+  lastClosed,
+} from "@/lib/assistant/month-change";
+import {
+  assumptionsOf,
+  scenarioChart,
+  scenarioOf,
+  type Shock,
+  validChange,
+} from "@/lib/assistant/scenario";
 import {
   CALENDAR_DAYS,
   type IncomeEvent,
@@ -184,6 +201,133 @@ function calendarAnswer(
   };
 }
 
+// A hypothetical: "si el MEP sube 10 %", "¿y si Apple cae 20%?", "si el
+// dólar baja un 5 por ciento".
+const SCENARIO =
+  /\bsi\b.*?\b(sub|baj|ca[eiy]|aument|crec)\w*\s+(?:un\s+|el\s+)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:%|por ?ciento)/;
+
+// The shock a hypothetical question names, or none when it names no dollar,
+// instrument or prices it can move.
+function shockOf(
+  asked: string,
+  words: readonly string[],
+  instrument: { symbol: string } | undefined,
+): Shock | null {
+  const match = SCENARIO.exec(asked);
+  if (!match) return null;
+  const size = match[2]!.replace(",", ".");
+  const change = /^(baj|ca)/.test(match[1]!) ? `-${size}` : size;
+  if (!validChange(change)) return null;
+  const dollar = words.includes("mep")
+    ? "mep"
+    : words.includes("ccl")
+      ? "ccl"
+      : words.includes("oficial")
+        ? "official"
+        : words.includes("dolar")
+          ? "all"
+          : null;
+  if (dollar) return { dollar: { kind: dollar, change } };
+  if (instrument) return { price: { symbol: instrument.symbol, change } };
+  if (/precio|accion|mercado|todo/.test(asked)) {
+    return { price: { symbol: null, change } };
+  }
+  return null;
+}
+
+// At today's quotes as the closes value them, as the real tool does.
+function scenarioAnswer(
+  state: PrototypeState,
+  unit: ChatUnit,
+  shock: Shock,
+  base: Pick<Answer, "role" | "asOf" | "rate" | "table">,
+): Answer {
+  const name = shock.price?.symbol
+    ? (state.instruments.find((each) => each.symbol === shock.price!.symbol)
+        ?.name ?? null)
+    : null;
+  const outcome = scenarioOf({
+    holdings: holdingsView(state).active.map((row) => row.holding),
+    liabilities: state.liabilities,
+    snapshot: pricedToday(state),
+    unit,
+    referenceDollar: state.referenceDollar,
+    shock,
+  });
+  const share =
+    outcome.share === null || shownSign(outcome.change, unit) === 0
+      ? ""
+      : `, ${formatFraction(outcome.share)}`;
+  return {
+    ...base,
+    text: `Hipotético: si ${assumptionsOf(shock, name).join(" y ")}, tu patrimonio neto pasaría de ${formatAmount(outcome.today.netWorth, unit)} a ${formatAmount(outcome.scenario.netWorth, unit)}${outcome.complete ? "" : WITHOUT_PRICE}: ${signed(formatAmount(outcome.change, unit), shownAmount(outcome.change, unit))}${share}. Es un cálculo con las cotizaciones de hoy que mueve solo eso y deja igual el resto; no es una predicción.`,
+    charts: [scenarioChart(outcome, unit)],
+    sources: [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
+  };
+}
+
+// A question about the month: "¿por qué cambió mi patrimonio?", "resumen
+// del mes", "¿qué pasó el mes pasado?".
+const MONTH =
+  /por que (cambio|subio|bajo|vario|se movio|crecio|cayo)|resumen del mes|resumi\w* el mes|mes pasado|cierre del mes|ultimo cierre/;
+
+function monthAnswer(
+  state: PrototypeState,
+  unit: ChatUnit,
+  base: Pick<Answer, "role" | "asOf" | "rate" | "table">,
+): Answer | null {
+  const period = lastClosed(closesOf(state, unit));
+  const change = period && changeBetween(state, unit, period, period);
+  if (!change) return null;
+  const parts = [
+    bySign(change.contributed, unit, {
+      down: (size) => `sacaste ${size}`,
+      up: (size) => `pusiste ${size}`,
+      even: "no pusiste ni sacaste plata",
+    }),
+    bySign(change.prices, unit, {
+      down: (size) => `los precios restaron ${size}`,
+      up: (size) => `los precios sumaron ${size}`,
+      even: "los precios no movieron nada",
+    }),
+    bySign(change.dollar, unit, {
+      down: (size) => `el dólar restó ${size}`,
+      up: (size) => `el dólar sumó ${size}`,
+      even: "el dólar no movió nada",
+    }),
+    ...(shownSign(change.yields, unit) === 0
+      ? []
+      : [`los rendimientos sumaron ${formatAmount(change.yields, unit)}`]),
+  ];
+  const total = stored(
+    minus(exactOf(change.endValue), exactOf(change.startValue)),
+  );
+  return {
+    ...base,
+    text: `En ${changePeriod(change)} tu patrimonio pasó de ${formatAmount(change.startValue, unit)} a ${formatAmount(change.endValue, unit)} (${signed(formatAmount(total, unit), shownAmount(total, unit))}): ${parts.slice(0, -1).join(", ")} y ${parts.at(-1)}.${
+      shownSign(change.income, unit) === 0
+        ? ""
+        : ` Cobraste ${formatAmount(change.income, unit)} de dividendos, cupones y rentas.`
+    }${
+      change.share === null
+        ? ""
+        : ` ${byShare(change.share, {
+            down: (size) =>
+              `Sin contar lo que pusiste, lo que tenías perdió un ${size}`,
+            up: (size) =>
+              `Sin contar lo que pusiste, lo que tenías rindió un ${size}`,
+            even: "Sin contar lo que pusiste, lo que tenías no rindió ni perdió",
+          })}${
+            change.benchmarks.inflation === null
+              ? "."
+              : `; la inflación fue ${formatFraction(change.benchmarks.inflation)}.`
+          }`
+    }${change.complete ? "" : " Al mes le falta algún dato; mirá su cierre."}`,
+    charts: [changeChart(change, unit)],
+    sources: [SOURCES.closes, SOURCES.movements, SOURCES.quotes],
+  };
+}
+
 // What the assistant would answer, standing in for the model: it picks what
 // the question is about and builds the answer from the user's own data, its
 // figures and its chart computed here, never written by a model. A question
@@ -210,6 +354,8 @@ export function prototypeAnswer(
   const instrument = state.instruments.find(
     (each) => words.includes(folded(each.symbol)) || namesIn(words, each.name),
   );
+  const shock = shockOf(asked, words, instrument);
+  if (shock) return scenarioAnswer(state, unit, shock, base);
   if (instrument) {
     const { holdings, flows, value } = instrumentHoldings(
       state,
@@ -279,6 +425,11 @@ export function prototypeAnswer(
   const thisYear = years[0];
 
   if (CALENDAR.test(asked)) return calendarAnswer(state, snapshot, unit, base);
+
+  if (MONTH.test(asked)) {
+    const answer = monthAnswer(state, unit, base);
+    if (answer) return answer;
+  }
 
   if (
     /evoluc|historia|a lo largo|con el tiempo/.test(asked) &&
@@ -444,7 +595,7 @@ export function prototypeAnswer(
 
   return {
     ...base,
-    text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, cuánto cobraste, cuánto debés o cómo le fue a un activo puntual.",
+    text: "Te puedo contar cuánto vale tu patrimonio, cómo te fue en el año o en lo que va del mes, por qué cambió el mes pasado, cuánto cobraste, cuánto debés, cómo le fue a un activo puntual o qué pasaría si el dólar o un precio se moviera.",
     charts: [],
     sources: [],
   };
