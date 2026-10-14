@@ -50,6 +50,7 @@ export function MetAlerts({
               type="button"
               size="sm"
               variant="ghost"
+              aria-label={`Listo: ${alertLine(alert)}`}
               onClick={() =>
                 startTransition(async () => {
                   hide(alert.id);
