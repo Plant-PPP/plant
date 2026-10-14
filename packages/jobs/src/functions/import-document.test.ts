@@ -38,6 +38,7 @@ const READ = {
   mapping: "none",
   skippedRows: 0,
   disputes: 0,
+  documentKind: "account_statement",
 } as const;
 
 type Line = { level: string; event: string; fields: LogFields };
@@ -137,7 +138,13 @@ it("logs how many rows the reading skipped", async () => {
   const { lines, run } = setUp({
     read: jest.fn().mockResolvedValue({
       draft: DRAFT,
-      read: { reader: "sheet", mapping: "hit", skippedRows: 2, disputes: 0 },
+      read: {
+        reader: "sheet",
+        mapping: "hit",
+        skippedRows: 2,
+        disputes: 0,
+        documentKind: null,
+      },
     }),
   });
   await run();

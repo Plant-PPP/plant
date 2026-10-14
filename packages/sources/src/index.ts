@@ -9,6 +9,8 @@ export {
 } from "./file-upload/adapter";
 export {
   createSourceForConnection,
+  type DocumentKind,
+  documentKindSchema,
   type PortfolioSourcePort,
   type SourceAdapters,
   type SourceCapabilities,
