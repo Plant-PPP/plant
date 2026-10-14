@@ -10,6 +10,10 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Resumen saves as a PDF through the browser's print dialog**: print styles leave out the sidebar, the header and the controls, let the page run its full length, and print in the light theme. A server-rendered PDF would need a headless browser on Vercel, which this does not need.
 - **Alerts wait for their own change**: Plant has no channel to send them through yet.
 
+## 2026-10-14 · An icon read connects only to public addresses (PLA-153)
+
+- **The connection checks the address it resolves, not only the lookup before it.** An icon read fetches through an undici `Agent` whose `connect.lookup` resolves the host again and refuses any private address, so a host that answers the check with a public address and the connection with a private one (DNS rebinding) fails as `private`. This supersedes the "not stopped" sentence in the institution icon entry (PLA-102).
+
 ## 2026-10-14 · Pinned charts (PLA-69)
 
 - **A pin stores what the chart is about, not its numbers**: the topic and, for allocation and holdings, the portfolio. Resumen draws each pin again from today's data in its own unit (the reference dollar's when the assistant has no such unit), so a pinned chart never goes stale and its numbers still come from the server.

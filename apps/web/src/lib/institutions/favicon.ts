@@ -1,14 +1,17 @@
 import "server-only";
 import { isIP } from "node:net";
 
+import { Agent, fetch as undiciFetch } from "undici";
+
 import { ICON_MAX_BYTES, imageType } from "./icon-data";
 
 // A site's icon as a data URL, read by Plant's server so no outside service
 // learns which institutions a user has. Only https, only hosts that resolve
 // to public addresses, every redirect checked again, a short timeout and a
-// small cap, and only bytes that are an image. A host that answers one lookup
-// with a public address and the connection with a private one (DNS
-// rebinding) is not stopped here: fetch does not take the address checked.
+// small cap, and only bytes that are an image. The connection resolves the
+// host again through connectLookup, so a host that answers the check with a
+// public address and the connection with a private one (DNS rebinding) is
+// refused too.
 
 const PAGE_MAX_BYTES = 512 * 1024;
 const TIMEOUT_MS = 5_000;
@@ -31,6 +34,77 @@ export type FaviconDeps = {
   // Every address a host name resolves to.
   lookup: (host: string) => Promise<string[]>;
 };
+
+// The error a connection gets for a host that resolves to a private address.
+export class PrivateAddressError extends Error {
+  readonly code = "PLANT_PRIVATE_ADDRESS";
+  constructor() {
+    super("host resolves to a private address");
+  }
+}
+
+type LookupAddress = { address: string; family: number };
+type LookupCallback = (
+  error: Error | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
+
+// A dns.lookup-shaped resolver for the socket that fetches: it resolves the
+// host with `resolve` and connects only when every address is public.
+export function connectLookup(resolve: (host: string) => Promise<string[]>) {
+  return (
+    host: string,
+    options: { all?: boolean },
+    callback: LookupCallback,
+  ): void => {
+    const answer = (addresses: string[]): Parameters<LookupCallback> => {
+      if (addresses.length === 0) {
+        return [
+          Object.assign(new Error("no address"), { code: "ENOTFOUND" }),
+          "",
+        ];
+      }
+      if (addresses.some(isPrivateAddress)) {
+        return [new PrivateAddressError(), ""];
+      }
+      const found = addresses.map((address) => ({
+        address,
+        family: isIP(address.replace(/%.*$/, "")),
+      }));
+      return options.all
+        ? [null, found]
+        : [null, found[0]!.address, found[0]!.family];
+    };
+    // The callback runs outside the promise, so nothing it throws is lost.
+    void resolve(host)
+      .then(answer, (error: Error): Parameters<LookupCallback> => [error, ""])
+      .then((args) => process.nextTick(() => callback(...args)));
+  };
+}
+
+// A fetch whose sockets resolve hosts with `resolve` and connect only to
+// public addresses, and the way to close its connections.
+export function publicOnlyFetch(resolve: (host: string) => Promise<string[]>) {
+  const agent = new Agent({ connect: { lookup: connectLookup(resolve) } });
+  const fetch = (input: URL, init?: RequestInit) =>
+    undiciFetch(input, {
+      ...(init as Parameters<typeof undiciFetch>[1]),
+      dispatcher: agent,
+    });
+  return {
+    fetch: fetch as unknown as typeof globalThis.fetch,
+    close: () => agent.close(),
+  };
+}
+
+// Whether a fetch failed because its connection resolved to a private address.
+function refusedAsPrivate(error: unknown): boolean {
+  for (let at = error; at instanceof Error; at = at.cause) {
+    if (at instanceof PrivateAddressError) return true;
+  }
+  return false;
+}
 
 const ipv4 = (address: string) => address.split(".").map(Number);
 
@@ -286,8 +360,10 @@ async function getPublic(
         signal: AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), deadline]),
         headers: { accept: "image/*,text/html;q=0.9,*/*;q=0.5" },
       });
-    } catch {
-      throw new FaviconError("unreachable");
+    } catch (error) {
+      throw new FaviconError(
+        refusedAsPrivate(error) ? "private" : "unreachable",
+      );
     }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
