@@ -207,6 +207,7 @@ export async function confirmImportRows(
   await logConfirm({
     requestId,
     userId: claims.sub,
+    importId: id.success ? id.data : undefined,
     draft: "holdings",
     operations,
     started,
@@ -220,6 +221,7 @@ export async function confirmImportRows(
 async function logConfirm({
   requestId,
   userId,
+  importId,
   draft,
   operations,
   started,
@@ -228,6 +230,7 @@ async function logConfirm({
 }: {
   requestId: string | undefined;
   userId: string;
+  importId: string | undefined;
   draft: "holdings" | "operations" | "debts";
   operations: number;
   started: number;
@@ -238,6 +241,7 @@ async function logConfirm({
   const line = {
     [REQUEST_ID_FIELD]: requestId,
     "enduser.id": userId,
+    "plant.import.id": importId,
     "plant.import.draft": draft,
     "plant.import.operation_count": operations,
     "plant.import.duration_ms": Math.round(performance.now() - started),
@@ -325,6 +329,7 @@ export async function confirmImportOperations(
   await logConfirm({
     requestId,
     userId: claims.sub,
+    importId: id.success ? id.data : undefined,
     draft: "operations",
     operations,
     started,
@@ -418,6 +423,7 @@ export async function confirmImportDebts(
   await logConfirm({
     requestId,
     userId: claims.sub,
+    importId: id.success ? id.data : undefined,
     draft: "debts",
     operations: debts,
     started,

@@ -138,6 +138,7 @@ describe("cash", () => {
     ]);
     expect(lines.at(-1)).toMatchObject({
       "plant.outcome": "ok",
+      "plant.import.id": IMPORT,
       "plant.import.operation_count": 3,
     });
     expect(JSON.stringify(lines)).not.toContain("812.4");
@@ -261,6 +262,7 @@ it("confirms every operation with the import in one call", async () => {
   expect(lines.at(-1)).toMatchObject({
     event: "imports.confirm",
     "plant.outcome": "ok",
+    "plant.import.id": IMPORT,
     "plant.import.operation_count": 1,
   });
   expect(JSON.stringify(lines)).not.toContain("18000");

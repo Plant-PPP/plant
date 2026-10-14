@@ -81,10 +81,11 @@ type Line = {
   requestId: string | undefined;
   started: number;
   type?: UploadType | null;
+  importId?: string;
 };
 
 function log(
-  { step, userId, requestId, started, type }: Line,
+  { step, userId, requestId, started, type, importId }: Line,
   outcome: UploadCode | "ok",
   failure?: unknown,
 ) {
@@ -93,6 +94,7 @@ function log(
     "enduser.id": userId,
     "plant.import.step": step,
     "plant.import.type": type ?? undefined,
+    "plant.import.id": importId,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
@@ -290,7 +292,7 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
         : null;
     if (queued) {
       if (failed?.storage_path !== path) await bucket.remove([path]);
-      log(line, "ok");
+      log({ ...line, importId: queued.id }, "ok");
       await startJob(
         { ...line, step: "job", started: performance.now() },
         queued.id,
@@ -345,7 +347,7 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
       throw started.error ?? new Error("import not started");
     }
     const importId = started.data[0]!.id;
-    log(line, "ok");
+    log({ ...line, importId }, "ok");
     await startJob(
       { ...line, step: "job", started: performance.now() },
       importId,
@@ -371,9 +373,9 @@ async function startJob(
       userId: line.userId,
       ...(retry && { retry }),
     });
-    log(line, "ok");
+    log({ ...line, importId }, "ok");
   } catch (error) {
-    log(line, "failed", error);
+    log({ ...line, importId }, "failed", error);
   }
 }
 

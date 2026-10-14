@@ -242,6 +242,7 @@ describe("finishUpload", () => {
     expect(lines.at(-1)).toMatchObject({
       level: "error",
       "plant.import.step": "job",
+      "plant.import.id": "i1",
       "plant.outcome": "failed",
     });
   });
