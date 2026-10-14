@@ -1,4 +1,4 @@
-import { snapshotOn } from "@plant/core";
+import { quantityOn, snapshotOn } from "@plant/core";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -69,4 +69,49 @@ it("sums what two accounts holding an instrument pay on the same day", () => {
   );
   expect(twice.map(({ date }) => date)).toEqual(once.map(({ date }) => date));
   expect(Number(twice[0]!.value)).toBeCloseTo(2 * Number(once[0]!.value), 2);
+});
+
+it("projects an instrument whose units moved to another account", () => {
+  const apple = state.holdings.find(
+    ({ holding }) =>
+      holding.asset_class === "instrument" &&
+      holding.instrument_symbol === "AAPL",
+  )!;
+  const own = state.movements.get(apple.holding.id) ?? [];
+  const bought = own.find((each) => each.kind === "purchase")!;
+  // Every unit left for a new account, which has not been paid yet.
+  const moved = {
+    ...apple,
+    holding: { ...apple.holding, id: "moved" },
+  };
+  const state2 = {
+    ...state,
+    holdings: [
+      ...state.holdings.map((each) =>
+        each === apple ? { ...each, closed: true } : each,
+      ),
+      moved,
+    ],
+    movements: new Map([
+      ...state.movements,
+      [
+        "moved",
+        [
+          {
+            ...bought,
+            id: "moved-1",
+            holding_id: "moved",
+            date: TODAY,
+            quantity: quantityOn(own, TODAY),
+          },
+        ],
+      ],
+    ]),
+  };
+  const before = calendar.filter(({ name }) => name === "Apple");
+  const after = incomeCalendar(state2, snapshot, "usd_mep").filter(
+    ({ name }) => name === "Apple",
+  );
+  expect(before.length).toBeGreaterThan(0);
+  expect(after).toEqual(before);
 });

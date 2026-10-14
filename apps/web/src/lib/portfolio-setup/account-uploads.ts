@@ -10,8 +10,11 @@ import type { Refusal } from "./run-write";
 // user: the rows, their imports and drafts then go with the account through
 // their foreign keys, and nothing would find the files afterwards. An account
 // a holding sits in is refused here, before any file goes; the guard still
-// refuses one a holding reaches meanwhile, leaving rows whose file is gone,
-// which read as expired. A file that cannot be removed keeps the account.
+// refuses one a holding reaches meanwhile, leaving rows whose file is gone.
+// Storage leaves out of its answer a file already gone as well as one it
+// refused, so only its error keeps the account: a retry after such a refusal
+// finds the files gone, and any file left behind loses its row with the
+// account, which the orphan-file job then removes.
 export async function removeAccountUploads({
   client,
   userId,
@@ -53,11 +56,8 @@ export async function removeAccountUploads({
   }
   const paths = (documents.data ?? []).map((row) => row.storage_path);
   if (paths.length === 0) return null;
-  const { data, error } = await client.storage
-    .from(UPLOAD_BUCKET)
-    .remove(paths);
-  // Storage answers the files it removed; one it refused is left out.
-  if (error || (data ?? []).length < paths.length) {
+  const { error } = await client.storage.from(UPLOAD_BUCKET).remove(paths);
+  if (error) {
     return {
       refused: "failed",
       error: new PortfolioSetupError("storage_remove"),

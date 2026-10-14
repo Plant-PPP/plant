@@ -1,4 +1,4 @@
-import { deflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 import * as XLSX from "xlsx";
 
@@ -9,7 +9,15 @@ import {
   zipFitsLimit,
 } from "./zip";
 
+jest.mock("node:zlib", () => {
+  const actual = jest.requireActual<typeof import("node:zlib")>("node:zlib");
+  return { ...actual, inflateRawSync: jest.fn(actual.inflateRawSync) };
+});
+
 type Entry = {
+  // The first entry is an XLSX's [Content_Types].xml unless named.
+  name?: string;
+  localName?: string;
   content: Uint8Array;
   // What the central directory and the local header declare, when not the
   // content's own size; a data descriptor leaves the local sizes at 0.
@@ -24,10 +32,16 @@ const zipOf = (entries: readonly Entry[]) => {
   const centrals: Uint8Array[] = [];
   let offset = 0;
   entries.forEach((entry, index) => {
-    const name = new TextEncoder().encode(`xl/part${index}.xml`);
+    const name = new TextEncoder().encode(
+      entry.name ??
+        (index === 0 ? "[Content_Types].xml" : `xl/part${index}.xml`),
+    );
+    const localName = entry.localName
+      ? new TextEncoder().encode(entry.localName)
+      : name;
     const data = deflateRawSync(entry.content);
     const usize = entry.content.length;
-    const local = new Uint8Array(30 + name.length + data.length);
+    const local = new Uint8Array(30 + localName.length + data.length);
     const lv = new DataView(local.buffer);
     lv.setUint32(0, 0x04034b50, true);
     lv.setUint16(4, 20, true);
@@ -35,9 +49,9 @@ const zipOf = (entries: readonly Entry[]) => {
     lv.setUint16(8, 8, true);
     lv.setUint32(18, entry.descriptor ? 0 : data.length, true);
     lv.setUint32(22, entry.descriptor ? 0 : (entry.localUsize ?? usize), true);
-    lv.setUint16(26, name.length, true);
-    local.set(name, 30);
-    local.set(data, 30 + name.length);
+    lv.setUint16(26, localName.length, true);
+    local.set(localName, 30);
+    local.set(data, 30 + localName.length);
     const extra = entry.centralExtra ?? new Uint8Array();
     const central = new Uint8Array(46 + name.length + extra.length);
     const cv = new DataView(central.buffer);
@@ -114,6 +128,16 @@ describe("zipFitsLimit", () => {
     ).toBe(false);
   });
 
+  it("refuses an entry declaring more than the limit before inflating it", () => {
+    // A real bomb: zeros past the limit, deflated to a few kilobytes.
+    const bomb = zipOf([
+      { content: new Uint8Array(WORKBOOK_UNZIPPED_LIMIT + 1) },
+    ]);
+    jest.mocked(inflateRawSync).mockClear();
+    expect(zipFitsLimit(bomb)).toBe(false);
+    expect(inflateRawSync).not.toHaveBeenCalled();
+  });
+
   it("refuses entries that only together pass the limit", () => {
     const entry = { content: text(WORKBOOK_UNZIPPED_LIMIT / 2 + 1) };
     expect(zipFitsLimit(zipOf([entry]))).toBe(true);
@@ -151,6 +175,34 @@ describe("zipFitsLimit", () => {
     expect(
       zipFitsLimit(
         zipOf([{ content: text(5000), descriptor: true, centralUsize: 100 }]),
+      ),
+    ).toBe(false);
+  });
+
+  it.each(["Index/Document.IWA", "a/index.zip"])(
+    "refuses a zip with a %s entry",
+    (name) => {
+      expect(
+        zipFitsLimit(
+          zipOf([{ content: text(10) }, { name, content: text(10) }]),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("refuses a zip that is not an XLSX", () => {
+    expect(zipFitsLimit(zipOf([{ name: "a.xml", content: text(10) }]))).toBe(
+      false,
+    );
+  });
+
+  it("refuses an entry its local header names otherwise", () => {
+    expect(
+      zipFitsLimit(
+        zipOf([
+          { content: text(10) },
+          { content: text(10), localName: "Index/Document.iwa" },
+        ]),
       ),
     ).toBe(false);
   });

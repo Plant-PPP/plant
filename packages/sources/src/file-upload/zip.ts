@@ -8,6 +8,15 @@ export const WORKBOOK_UNZIPPED_LIMIT = 50 * 1024 * 1024;
 // A workbook has a few files per sheet.
 export const WORKBOOK_ENTRY_LIMIT = 1000;
 
+// Only an Office Open XML workbook (XLSX) is read. SheetJS opens other zips
+// too: a Numbers package (.iwa entries) through a Snappy decoder whose work
+// grows with the square of its output, and a nested Index.zip it unzips
+// without any bound.
+const WORKBOOK_MARKER = "[content_types].xml";
+const REFUSED_NAMES = [".iwa", "index.zip"];
+
+const latin1 = (bytes: Uint8Array) => String.fromCharCode(...bytes);
+
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
@@ -55,6 +64,7 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
 
   let compressed = 0;
   let unzipped = 0;
+  let workbook = false;
   const offsets = new Set<number>();
   for (let entry = 0; entry < entries; entry += 1) {
     if (!within(at, 46) || u32(at) !== CENTRAL) return false;
@@ -65,6 +75,7 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     const offset = u32(at + 42);
     const next = at + 46 + nameLength + extraLength + u16(at + 32);
     if (!within(at, next - at)) return false;
+    const centralName = bytes.subarray(at + 46, at + 46 + nameLength);
     const extra = bytes.subarray(
       at + 46 + nameLength,
       at + 46 + nameLength + extraLength,
@@ -78,13 +89,29 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
       return false;
     }
     const localExtraLength = u16(offset + 28);
-    const data = offset + 30 + u16(offset + 26) + localExtraLength;
+    const localNameLength = u16(offset + 26);
+    const data = offset + 30 + localNameLength + localExtraLength;
     if (
       !within(data, size) ||
       hasZip64Extra(bytes.subarray(data - localExtraLength, data))
     ) {
       return false;
     }
+    // SheetJS names each entry from its local header and picks the format by
+    // those names, so both headers must name it alike.
+    const localName = bytes.subarray(
+      offset + 30,
+      offset + 30 + localNameLength,
+    );
+    if (
+      localName.length !== centralName.length ||
+      localName.some((byte, index) => byte !== centralName[index])
+    ) {
+      return false;
+    }
+    const name = latin1(localName).toLowerCase();
+    if (name === WORKBOOK_MARKER) workbook = true;
+    if (REFUSED_NAMES.some((suffix) => name.endsWith(suffix))) return false;
     // Two entries on one local header would make SheetJS inflate it twice.
     if (offsets.has(offset)) return false;
     offsets.add(offset);
@@ -92,6 +119,14 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     const localUsize = u32(offset + 22);
     const descriptor = localUsize === 0;
     if (!descriptor && (localSize !== size || localUsize !== usize)) {
+      return false;
+    }
+    // The totals are checked before anything is inflated, so an entry that
+    // declares more than the limit is refused without inflating it.
+    // SheetJS copies each entry's compressed bytes too.
+    compressed += size;
+    unzipped += usize;
+    if (compressed > bytes.length || unzipped > WORKBOOK_UNZIPPED_LIMIT) {
       return false;
     }
     // SheetJS inflates a stream to its end whatever size the headers give,
@@ -110,13 +145,7 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     } else if (descriptor && localSize !== size) {
       return false;
     }
-    // SheetJS copies each entry's compressed bytes too.
-    compressed += size;
-    unzipped += usize;
-    if (compressed > bytes.length || unzipped > WORKBOOK_UNZIPPED_LIMIT) {
-      return false;
-    }
     at = next;
   }
-  return true;
+  return workbook;
 }
