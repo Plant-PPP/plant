@@ -1,6 +1,6 @@
 import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
-import { buenosAiresDate, type Database } from "@plant/shared";
+import { BUENOS_AIRES_TZ, buenosAiresDate, type Database } from "@plant/shared";
 import {
   type ConnectionAdapters,
   type ConnectionProvider,
@@ -20,6 +20,7 @@ import {
   type ConnectResult,
   type DisconnectResult,
   keyHintOf,
+  type LastSync,
   needsConfirmation,
   providerOf,
   type SyncCode,
@@ -187,6 +188,39 @@ export async function readApiKey(
     provider: provider.data,
     keyHint: row.key_hint,
     connectedOn: buenosAiresDate(new Date(row.created_at)),
+    lastSync: await readLastSync(client, accountId),
+  };
+}
+
+const BUENOS_AIRES_TIME = new Intl.DateTimeFormat("es-AR", {
+  timeZone: BUENOS_AIRES_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+// The account's latest sync, or null when it never synced.
+async function readLastSync(
+  client: Client,
+  accountId: string,
+): Promise<LastSync | null> {
+  const result = await client
+    .from("imports")
+    .select("status, failure, updated_at")
+    .eq("source_connection_id", accountId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (classifyPostgrestResult(result, 200) || !result.data) {
+    throw new Error("last sync read failed");
+  }
+  const [sync] = result.data;
+  if (!sync) return null;
+  const changed = new Date(sync.updated_at);
+  return {
+    status: sync.status,
+    failure: sync.failure,
+    on: buenosAiresDate(changed),
+    at: BUENOS_AIRES_TIME.format(changed),
   };
 }
 
@@ -283,11 +317,16 @@ export async function disconnectApiKey(
 }
 
 // Sends the job for a sync import. A failure to send leaves it queued, which
-// the next "Sincronizar" sends again: the event's id is the import's, so the
-// job runs once.
-async function startJob(userId: string, importId: string): Promise<void> {
+// the next "Sincronizar" sends again as a retry: a job that ended without
+// settling it (its failure handler could not write) leaves it queued too, and
+// the first event's id is spent.
+async function startJob(
+  userId: string,
+  importId: string,
+  retry?: string,
+): Promise<void> {
   try {
-    await inngestJobRunner().startImport({ importId, userId });
+    await inngestJobRunner().startImport({ importId, userId, retry });
   } catch (error) {
     serverLog.error(
       EVENT,
@@ -364,7 +403,7 @@ export async function syncAccount(
         log(current, "in_progress");
         return { ok: false, code: "in_progress" };
       }
-      await startJob(current.userId, flying.id);
+      await startJob(current.userId, flying.id, Date.now().toString(36));
       log(current, "ok");
       return { ok: true, importId: flying.id };
     };
