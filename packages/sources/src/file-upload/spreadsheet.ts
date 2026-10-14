@@ -48,7 +48,9 @@ const csvText = (bytes: Uint8Array) => {
 
 export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const csv = mimeType === "text/csv";
-  if (!csv && isZip(bytes) && !zipFitsLimit(bytes)) {
+  // A CSV's text reaches SheetJS too, which opens it as a zip when it starts
+  // like one.
+  if (isZip(bytes) && !zipFitsLimit(bytes)) {
     throw new SourceError("unreadable", false);
   }
   let workbook: XLSX.WorkBook;

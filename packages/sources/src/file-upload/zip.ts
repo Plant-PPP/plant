@@ -94,6 +94,14 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     if (!descriptor && (localSize !== size || localUsize !== usize)) {
       return false;
     }
+    // The totals are checked before anything is inflated, so an entry that
+    // declares more than the limit is refused without inflating it.
+    // SheetJS copies each entry's compressed bytes too.
+    compressed += size;
+    unzipped += usize;
+    if (compressed > bytes.length || unzipped > WORKBOOK_UNZIPPED_LIMIT) {
+      return false;
+    }
     // SheetJS inflates a stream to its end whatever size the headers give,
     // so every deflated entry is inflated here once, within its compressed
     // bytes and its declared size: one that runs past either, or never ends,
@@ -108,12 +116,6 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
         return false;
       }
     } else if (descriptor && localSize !== size) {
-      return false;
-    }
-    // SheetJS copies each entry's compressed bytes too.
-    compressed += size;
-    unzipped += usize;
-    if (compressed > bytes.length || unzipped > WORKBOOK_UNZIPPED_LIMIT) {
       return false;
     }
     at = next;

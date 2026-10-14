@@ -1,4 +1,4 @@
-import { deflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 import * as XLSX from "xlsx";
 
@@ -8,6 +8,11 @@ import {
   WORKBOOK_UNZIPPED_LIMIT,
   zipFitsLimit,
 } from "./zip";
+
+jest.mock("node:zlib", () => {
+  const actual = jest.requireActual<typeof import("node:zlib")>("node:zlib");
+  return { ...actual, inflateRawSync: jest.fn(actual.inflateRawSync) };
+});
 
 type Entry = {
   content: Uint8Array;
@@ -112,6 +117,16 @@ describe("zipFitsLimit", () => {
         ]),
       ),
     ).toBe(false);
+  });
+
+  it("refuses an entry declaring more than the limit before inflating it", () => {
+    // A real bomb: zeros past the limit, deflated to a few kilobytes.
+    const bomb = zipOf([
+      { content: new Uint8Array(WORKBOOK_UNZIPPED_LIMIT + 1) },
+    ]);
+    jest.mocked(inflateRawSync).mockClear();
+    expect(zipFitsLimit(bomb)).toBe(false);
+    expect(inflateRawSync).not.toHaveBeenCalled();
   });
 
   it("refuses entries that only together pass the limit", () => {
