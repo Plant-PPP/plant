@@ -11,6 +11,7 @@ import {
 } from "@plant/core";
 import {
   addDays,
+  daysBetween,
   buenosAiresDate,
   Constants,
   type Database,
@@ -104,16 +105,41 @@ const dateOf = z.object({ date: z.iso.date() });
 // The ledger with the stored dollar rates of the date an operation dated
 // `input.date` takes, when it has one.
 export async function ledgerFor(client: Client, input: unknown) {
-  const today = buenosAiresDate(new Date());
   const date = dateOf.safeParse(input);
+  return ledgerForDates(client, date.success ? [date.data.date] : []);
+}
+
+// The days one quote read covers: what the reader takes for the dollar kinds
+// a unit needs, less the week each day carries back.
+const QUOTE_STRETCH_DAYS = 300;
+
+// The user's ledger with the dollar rates operations on these days need,
+// from a week before each to it, up to today.
+export async function ledgerForDates(client: Client, dates: readonly string[]) {
+  const today = buenosAiresDate(new Date());
+  const past = [...new Set(dates)].filter((date) => date <= today).sort();
+  // One read per stretch of days the reader takes at once.
+  const stretches: { from: string; to: string }[] = [];
+  for (const date of past) {
+    const last = stretches.at(-1);
+    if (last && daysBetween(last.from, date) < QUOTE_STRETCH_DAYS) {
+      last.to = date;
+    } else {
+      stretches.push({ from: addDays(date, -QUOTE_CARRY_DAYS), to: date });
+    }
+  }
+  const reader = createQuoteReader(client);
+  const read = await Promise.all(
+    stretches.map((stretch) =>
+      reader.read({ ...stretch, fxKinds: [...UNIT_FX_KINDS], symbols: [] }),
+    ),
+  );
   const quotes =
-    date.success && date.data.date <= today
-      ? await createQuoteReader(client).read({
-          from: addDays(date.data.date, -QUOTE_CARRY_DAYS),
-          to: date.data.date,
-          fxKinds: [...UNIT_FX_KINDS],
-          symbols: [],
-        })
+    read.length > 0
+      ? {
+          fxRates: read.flatMap((each) => each.fxRates),
+          prices: read.flatMap((each) => each.prices),
+        }
       : undefined;
   return readLedger(client, {
     today,

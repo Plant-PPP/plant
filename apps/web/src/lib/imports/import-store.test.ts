@@ -112,17 +112,20 @@ it("replaces the draft, then marks the import ready at the document's date", asy
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
     "POST /rest/v1/import_items",
     "PATCH /rest/v1/imports",
   ]);
-  for (const call of [calls[0]!, calls[3]!]) {
+  for (const call of [calls[0]!, calls[4]!]) {
     expect(call.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
     expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
     expect(call.url.searchParams.get("status")).toBe("in.(queued,reading)");
   }
-  expect(calls[1]!.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
-  expect(calls[1]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
-  expect(calls[2]!.body).toEqual([
+  for (const call of [calls[1]!, calls[2]!]) {
+    expect(call.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
+    expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
+  }
+  expect(calls[3]!.body).toEqual([
     {
       user_id: USER,
       import_id: IMPORT,
@@ -136,12 +139,63 @@ it("replaces the draft, then marks the import ready at the document's date", asy
       source_page: 2,
     },
   ]);
-  expect(calls[3]!.body).toEqual({
+  expect(calls[4]!.body).toEqual({
     status: "ready",
     document_date: "2026-09-30",
     printed_total_ars: null,
     printed_total_usd: "120.5",
     skipped_rows: 2,
+  });
+});
+
+it("replaces any draft with the operations, then marks the import ready", async () => {
+  const { store, calls } = storeWith(draftAnswers());
+  await store.saveOperations(IMPORT, USER, [
+    {
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: null,
+      quantity: "100",
+      price: "5000",
+      amount: null,
+      charges: "25.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "low",
+      page: 1,
+    },
+  ]);
+  expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
+    "GET /rest/v1/imports",
+    "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
+    "POST /rest/v1/import_operations",
+    "PATCH /rest/v1/imports",
+  ]);
+  expect(calls[3]!.body).toEqual([
+    {
+      user_id: USER,
+      import_id: IMPORT,
+      position: 0,
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: null,
+      quantity: "100",
+      price: "5000",
+      amount: null,
+      charges: "25.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "low",
+      source_page: 1,
+    },
+  ]);
+  expect(calls[4]!.body).toEqual({
+    status: "ready",
+    document_date: null,
+    printed_total_ars: null,
+    printed_total_usd: null,
+    skipped_rows: 0,
   });
 });
 

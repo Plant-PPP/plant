@@ -2,7 +2,11 @@ import { buenosAiresDate } from "@plant/shared";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { confirmImport } from "@/app/(app)/(data)/import/actions";
+import {
+  confirmImport,
+  confirmImportOperations,
+} from "@/app/(app)/(data)/import/actions";
+import { ImportOperationsReview } from "@/components/imports/import-operations-review";
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
@@ -48,13 +52,28 @@ export async function ImportReviewView({ id }: { id: string }) {
   const account = ledger.accounts.find((each) => each.id === item.accountId);
   const state = { ...ledger, referenceDollar };
 
+  const lines = item.operations ?? item.rows;
   serverLog.info(IMPORTS_VIEW_EVENT, {
     ...contextFields(context),
     "plant.outcome": "ok",
-    "plant.import.row_count": item.rows.length,
-    "plant.import.unknown_count": item.rows.filter((row) => row.symbol === "")
+    "plant.import.draft": item.operations ? "operations" : "holdings",
+    "plant.import.row_count": lines.length,
+    "plant.import.unknown_count": lines.filter((row) => row.symbol === "")
       .length,
   });
+
+  if (item.operations) {
+    return (
+      <ImportOperationsReview
+        item={item}
+        institution={account?.institution ?? ""}
+        instruments={ledger.instruments}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: confirmImportOperations }}
+      />
+    );
+  }
 
   return (
     <ImportReview

@@ -26,6 +26,7 @@ export const OWNED_KEYS = {
   consents: "id",
   holdings: "id",
   import_items: "id",
+  import_operations: "id",
   imports: "id",
   liabilities: "id",
   manual_prices: "id",

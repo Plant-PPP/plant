@@ -65,6 +65,7 @@ import {
 import {
   createInstrumentHolding,
   deleteHoldingRow,
+  ledgerForDates,
   quoteOnDate,
   runOperation,
   suggestTransferCost,
@@ -526,5 +527,26 @@ describe("creating an instrument holding", () => {
       }),
     ).toEqual({ ok: false, code: "invalid" });
     expect(readLedger).not.toHaveBeenCalled();
+  });
+});
+
+describe("ledgerForDates", () => {
+  it("reads the rates of days far apart in stretches the reader takes", async () => {
+    quoteRead.mockClear();
+    quoteRead.mockResolvedValue({ fxRates: [], prices: [] });
+    readLedger.mockResolvedValue({ ledger: emptyLedger(), truncated: false });
+    const { createClient } = jest.requireMock("@/lib/supabase/server");
+    await ledgerForDates(await createClient(), [
+      "2025-01-10",
+      "2025-01-20",
+      "2026-03-01",
+      "2099-01-01",
+    ]);
+    expect(
+      quoteRead.mock.calls.map(([range]) => [range.from, range.to]),
+    ).toEqual([
+      ["2025-01-03", "2025-01-20"],
+      ["2026-02-22", "2026-03-01"],
+    ]);
   });
 });

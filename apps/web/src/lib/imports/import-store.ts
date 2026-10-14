@@ -52,6 +52,57 @@ function checked(
 // policies, so every call filters by the import's id and by its user, and the
 // job checks the import is its event's user's before it reads the file.
 export function createImportStore(client: Client): ImportStorePort {
+  // Whether the import is still being read, and if so clears any draft, of
+  // holdings or of operations, an earlier attempt wrote: a retried read may
+  // tell the document apart differently. A read retried after the import was
+  // confirmed or failed writes nothing.
+  const clearDraft = async (importId: string, userId: string) => {
+    const current = await client
+      .from("imports")
+      .select("id")
+      .eq("id", importId)
+      .eq("user_id", userId)
+      .in("status", BEING_READ)
+      .limit(1);
+    checked("draft", current, 200);
+    if ((current.data ?? []).length === 0) return false;
+    for (const table of ["import_items", "import_operations"] as const) {
+      checked(
+        "draft",
+        await client
+          .from(table)
+          .delete()
+          .eq("import_id", importId)
+          .eq("user_id", userId),
+        204,
+      );
+    }
+    return true;
+  };
+
+  const markReady = async (
+    importId: string,
+    userId: string,
+    fields: {
+      document_date: string | null;
+      printed_total_ars: number | null;
+      printed_total_usd: number | null;
+      skipped_rows: number;
+    },
+  ) => {
+    const marked = await client
+      .from("imports")
+      .update({ status: "ready", ...fields })
+      .eq("id", importId)
+      .eq("user_id", userId)
+      .in("status", BEING_READ)
+      .select("id");
+    checked("draft", marked, 200);
+    if ((marked.data ?? []).length === 0) {
+      throw new ImportStoreError("draft", "not_being_read");
+    }
+  };
+
   return {
     async load(importId, userId): Promise<ImportToRead | null> {
       const result = await client
@@ -116,27 +167,7 @@ export function createImportStore(client: Client): ImportStorePort {
     },
 
     async saveDraft(importId, userId, draft, skippedRows) {
-      // A read retried after the import was confirmed or failed writes
-      // nothing.
-      const current = await client
-        .from("imports")
-        .select("id")
-        .eq("id", importId)
-        .eq("user_id", userId)
-        .in("status", BEING_READ)
-        .limit(1);
-      checked("draft", current, 200);
-      if ((current.data ?? []).length === 0) return;
-      // A retried read replaces what an earlier attempt may have written.
-      checked(
-        "draft",
-        await client
-          .from("import_items")
-          .delete()
-          .eq("import_id", importId)
-          .eq("user_id", userId),
-        204,
-      );
+      if (!(await clearDraft(importId, userId))) return;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const rows = draft.rows.map((row, position) => ({
         user_id: userId,
@@ -154,23 +185,46 @@ export function createImportStore(client: Client): ImportStorePort {
       const printed = (currency: "ARS" | "USD") =>
         (draft.totals.find((total) => total.currency === currency)?.amount ??
           null) as unknown as number | null;
-      const marked = await client
-        .from("imports")
-        .update({
-          status: "ready",
-          document_date: draft.documentDate,
-          printed_total_ars: printed("ARS"),
-          printed_total_usd: printed("USD"),
-          skipped_rows: skippedRows,
-        })
-        .eq("id", importId)
-        .eq("user_id", userId)
-        .in("status", BEING_READ)
-        .select("id");
-      checked("draft", marked, 200);
-      if ((marked.data ?? []).length === 0) {
-        throw new ImportStoreError("draft", "not_being_read");
-      }
+      await markReady(importId, userId, {
+        document_date: draft.documentDate,
+        printed_total_ars: printed("ARS"),
+        printed_total_usd: printed("USD"),
+        skipped_rows: skippedRows,
+      });
+    },
+
+    async saveOperations(importId, userId, operations) {
+      if (!(await clearDraft(importId, userId))) return;
+      // Amounts stay decimal strings; the cast is only for the generated types.
+      const decimal = (value: string | null) =>
+        value as unknown as number | null;
+      const rows = operations.map((operation, position) => ({
+        user_id: userId,
+        import_id: importId,
+        position,
+        date: operation.date,
+        kind: operation.kind,
+        symbol: operation.symbol,
+        quantity: decimal(operation.quantity),
+        price: decimal(operation.price),
+        amount: decimal(operation.amount),
+        charges: decimal(operation.charges),
+        reference: operation.reference,
+        currency: operation.currency,
+        confidence: operation.confidence,
+        source_page: operation.page,
+      }));
+      checked(
+        "draft",
+        await client.from("import_operations").insert(rows),
+        201,
+      );
+      await markReady(importId, userId, {
+        document_date: null,
+        printed_total_ars: null,
+        printed_total_usd: null,
+        skipped_rows: 0,
+      });
     },
 
     async failed(importId, userId, failure) {

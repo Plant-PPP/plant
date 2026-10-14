@@ -52,7 +52,7 @@ export function heldOn(
 
 // The account's instrument holdings with units at the end of a day, with
 // how many, largest first.
-function holdingsOn(state: Ledger, accountId: string, date: string) {
+export function holdingsOn(state: Ledger, accountId: string, date: string) {
   return allRows(state)
     .flatMap((row) => {
       if (

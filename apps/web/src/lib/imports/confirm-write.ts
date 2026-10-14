@@ -8,14 +8,15 @@ import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import { type ImportToWrite, writeImport } from "@/lib/imports/confirm";
 import { ImportsReadError } from "@/lib/imports/read";
-import type { ImportRow } from "@/lib/imports/review";
+import { writeImportOperations } from "@/lib/imports/confirm-operations";
+import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
 import { LedgerReadError } from "@/lib/ledger/read";
 import {
   expectedRevisions,
   operationSymbols,
   rpcPartsOf,
 } from "@/lib/ledger/rpc-parts";
-import { ledgerFor, rpcFailure } from "@/lib/ledger/write";
+import { ledgerFor, ledgerForDates, rpcFailure } from "@/lib/ledger/write";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
@@ -72,6 +73,39 @@ async function readyImport(
   };
 }
 
+type LedgerRead = Awaited<ReturnType<typeof ledgerFor>>;
+
+// Sends the operations written to confirm_import, each with the revisions of
+// its instruments as the ledger was read: the database checks them once, and
+// writes them in turn, all or nothing.
+async function sendConfirm(
+  client: Client,
+  importId: string,
+  ledger: LedgerRead["ledger"],
+  symbolOf: LedgerRead["symbolOf"],
+  written: { state: LedgerRead["ledger"]; operations: string[] },
+): Promise<{ result: MovementResult; failure?: unknown }> {
+  const response = await client.rpc("confirm_import", {
+    p_import_id: importId,
+    p_operations: written.operations.map((operation) => ({
+      parts: rpcPartsOf(written.state, operation),
+      expected: expectedRevisions(
+        ledger.revisions,
+        symbolOf,
+        operationSymbols(written.state, operation),
+      ),
+    })),
+  });
+  if (!classifyPostgrestResult(response, 200)) {
+    return { result: { ok: true, id: importId } };
+  }
+  const code = rpcFailure(response.error ?? {});
+  return {
+    result: { ok: false, code },
+    ...(code === "failed" && { failure: response.error }),
+  };
+}
+
 // Writes the reviewed rows of a ready import into its account and marks it
 // confirmed, all in confirm_import's one transaction: admitted by the same
 // code the prototype runs against the user's ledger, then each operation
@@ -117,23 +151,13 @@ export async function confirmImportRows(
           result = written.result;
         } else {
           operations = written.operations.length;
-          const response = await client.rpc("confirm_import", {
-            p_import_id: item.id,
-            p_operations: written.operations.map((operation) => ({
-              parts: rpcPartsOf(written.state, operation),
-              expected: expectedRevisions(
-                ledger.revisions,
-                symbolOf,
-                operationSymbols(written.state, operation),
-              ),
-            })),
-          });
-          if (classifyPostgrestResult(response, 200)) {
-            result = { ok: false, code: rpcFailure(response.error ?? {}) };
-            if (result.code === "failed") failure = response.error;
-          } else {
-            result = { ok: true, id: item.id };
-          }
+          ({ result, failure } = await sendConfirm(
+            client,
+            item.id,
+            ledger,
+            symbolOf,
+            written,
+          ));
         }
       }
     } catch (error) {
@@ -142,10 +166,41 @@ export async function confirmImportRows(
     }
   }
 
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "holdings",
+    operations,
+    started,
+    result,
+    failure,
+  });
+  return result;
+}
+
+// One line per confirmation, and the pages it changes revalidated.
+function logConfirm({
+  requestId,
+  userId,
+  draft,
+  operations,
+  started,
+  result,
+  failure,
+}: {
+  requestId: string | undefined;
+  userId: string;
+  draft: "holdings" | "operations";
+  operations: number;
+  started: number;
+  result: MovementResult;
+  failure: unknown;
+}) {
   const outcome = result.ok ? "ok" : result.code;
   const line = {
     [REQUEST_ID_FIELD]: requestId,
-    "enduser.id": claims.sub,
+    "enduser.id": userId,
+    "plant.import.draft": draft,
     "plant.import.operation_count": operations,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
@@ -157,5 +212,82 @@ export async function confirmImportRows(
     revalidatePath("/import", "layout");
     revalidatePath("/assets", "layout");
   }
+}
+
+// Writes the reviewed operations of a ready import into its account and
+// marks it confirmed, in confirm_import's one transaction. A refusal names
+// the row it stopped at.
+export async function confirmImportOperations(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult & { rowId?: string }> {
+  // Outside any try: its redirect to /login or /auth/mfa must propagate.
+  const claims = await getSessionClaims();
+  const started = performance.now();
+  const requestId = await currentRequestId();
+
+  let result: MovementResult & { rowId?: string };
+  let failure: unknown;
+  let operations = 0;
+  const id = z.uuid().safeParse(importId);
+  const reviewed = z
+    .array(z.record(z.string(), z.unknown()))
+    .max(REVIEW_ROW_LIMIT)
+    .safeParse(rows);
+  if (!id.success || !reviewed.success) {
+    result = { ok: false, code: "invalid" };
+  } else {
+    try {
+      const client: Client = await createClient();
+      const today = buenosAiresDate(new Date());
+      const item = await readyImport(client, id.data, today);
+      if (!item) {
+        result = { ok: false, code: "not_found" };
+      } else {
+        const typed = reviewed.data as unknown as ImportOperationRow[];
+        const dates = typed.flatMap((row) =>
+          !row.discarded && z.iso.date().safeParse(row.date).success
+            ? [row.date!]
+            : [],
+        );
+        const { ledger, truncated, symbolOf } = await ledgerForDates(
+          client,
+          dates,
+        );
+        if (truncated) throw new LedgerReadError("movements", "truncated");
+        const written = writeImportOperations(ledger, item, typed, () =>
+          crypto.randomUUID(),
+        );
+        if (!written.result.ok) {
+          result = {
+            ...written.result,
+            ...(written.rowId && { rowId: written.rowId }),
+          };
+        } else {
+          operations = written.operations.length;
+          ({ result, failure } = await sendConfirm(
+            client,
+            item.id,
+            ledger,
+            symbolOf,
+            written,
+          ));
+        }
+      }
+    } catch (error) {
+      result = { ok: false, code: "failed" };
+      failure = error;
+    }
+  }
+
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "operations",
+    operations,
+    started,
+    result,
+    failure,
+  });
   return result;
 }

@@ -63,6 +63,7 @@ function setUp({
     reading: jest.fn().mockResolvedValue(undefined),
     institution: jest.fn().mockResolvedValue("IOL"),
     saveDraft: jest.fn().mockResolvedValue(undefined),
+    saveOperations: jest.fn().mockResolvedValue(undefined),
     failed: jest.fn().mockResolvedValue(undefined),
   };
   const deps: ImportJobDeps = {
@@ -97,6 +98,45 @@ function setUp({
     });
   return { deps, store, lines, ran, run };
 }
+
+it("saves a document of operations as operations", async () => {
+  const operations = [
+    {
+      date: null,
+      kind: "purchase" as const,
+      symbol: null,
+      quantity: "1",
+      price: null,
+      amount: null,
+      charges: null,
+      reference: null,
+      currency: "ARS" as const,
+      confidence: "low" as const,
+      page: null,
+    },
+  ];
+  const { store, lines, run } = setUp({
+    read: jest.fn().mockResolvedValue({
+      operations,
+      read: { ...READ, documentKind: "trade_ticket" },
+    }),
+  });
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, operations);
+  expect(store.saveDraft).not.toHaveBeenCalled();
+  expect(lines[0]!.fields).toMatchObject({
+    "plant.import.draft": "operations",
+    "plant.import.document_kind": "trade_ticket",
+  });
+});
+
+it("finds nothing in a document of no operations", async () => {
+  const { store, run } = setUp({
+    read: jest.fn().mockResolvedValue({ operations: [], read: READ }),
+  });
+  expect(await run()).toEqual({ outcome: "failed" });
+  expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "nothing_found");
+});
 
 it("reads the file into a draft and marks the import ready", async () => {
   const { store, deps, lines, ran, run } = setUp();

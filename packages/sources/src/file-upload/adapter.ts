@@ -26,7 +26,7 @@ export type FileReader = (input: SourceInput) => Promise<SourceReading>;
 
 const FILE_UPLOAD_CAPABILITIES: SourceCapabilities = {
   holdings: "native",
-  movements: "unsupported",
+  movements: "native",
   incremental: "unsupported",
 };
 

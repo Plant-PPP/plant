@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { ImportDraft } from "./file-upload/draft";
+import type { DraftOperation, ImportDraft } from "./file-upload/draft";
 
 // Where a connection's holdings come from: today only a file the user
 // uploads. A broker or exchange API arrives as another kind and adapter.
@@ -34,16 +34,23 @@ export type SourceInput = {
 };
 
 // What a document is, as its reading tells: an account's statement of
-// holdings, a trade ticket, a screenshot of holdings, a card statement, or
-// something else.
+// holdings, a trade ticket, a list of operations, a screenshot of holdings, a
+// card statement, or something else.
 export const documentKindSchema = z.enum([
   "account_statement",
   "trade_ticket",
+  "operations_list",
   "screenshot",
   "card_statement",
   "other",
 ]);
 export type DocumentKind = z.infer<typeof documentKindSchema>;
+
+// The kinds of document whose reading is operations, not holdings.
+export const OPERATION_DOCUMENT_KINDS: readonly DocumentKind[] = [
+  "trade_ticket",
+  "operations_list",
+];
 
 // How a file was read: by a model reading the document, or from a
 // spreadsheet's columns, whose mapping was saved already (hit), made now
@@ -60,7 +67,14 @@ export type SourceReadInfo = {
   documentKind: DocumentKind | null;
 };
 
-export type SourceReading = { draft: ImportDraft; read: SourceReadInfo };
+// What a read yields: the holdings a document lists, or the operations a
+// document of operations shows.
+export type HoldingsReading = { draft: ImportDraft; read: SourceReadInfo };
+export type OperationsReading = {
+  operations: DraftOperation[];
+  read: SourceReadInfo;
+};
+export type SourceReading = HoldingsReading | OperationsReading;
 
 // One way of reading a connection's holdings. `capabilities` is local and
 // never fails; `read` throws a SourceError when it cannot read.

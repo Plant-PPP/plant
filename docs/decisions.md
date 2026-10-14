@@ -2,11 +2,21 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Importing operations (PLA-149)
+
+- **A document both readers call a ticket or a list of operations is read as operations** (`trade_ticket`, the new `operations_list`), in the same two calls: each lists `operations` alongside `rows`. A statement that shows positions, even with the period's movements, is still read as holdings. This supersedes PLA-37's rule that a trade ticket yields nothing.
+- **Nothing is guessed.** An operation's date, kind, instrument, units, price, amount, charges and number are each null when the document does not print them or the two readings disagree; there is no tiebreak for operations. Operations are matched across readings by the instrument as printed (none counts as one name), currency and occurrence, so a disagreement on the date or kind asks the user instead of splitting one operation in two. One only a reading lists is kept, low.
+- **The draft has its own table**, `import_operations`, shaped like `import_items` with every figure nullable; a draft lives in one of the two, and saving either clears both, since a retried read may tell the document apart differently.
+- **The review asks for every missing field** and confirms nothing until each kept operation has a date no later than today, a kind, an instrument, and a trade's units and price or an income's amount. Charges may stay empty. The price is typed as printed, a bond's per 100 nominal, and turned into a price per unit on confirm.
+- **Operations are written oldest first, a day's purchases before its income and its sales**, so a list printed newest first still finds the units a sale takes; FIFO is the ledger's, as for any movement. A purchase goes to the portfolio holding the most of the instrument that day, else the account's default; a sale takes the largest holdings first; an income goes to the holding with the most units that day, and none refuses it. The charges are one "other" charge, "Gastos del comprobante".
+- **`confirm_import` checks the revisions once, then reads them live.** The operations of one import may touch one instrument more than once, which per-operation revisions read before the first could never pass: the function merges every operation's expected revisions (two that disagree refuse with `22023`), checks them under the user's lock, and passes each `write_operation` the revisions as they stand. Its signature is unchanged.
+- **Left for later:** a file spanning several accounts, cost from a holdings table, other currencies, statements with positions and movements read as both, transfers and splits, itemized charges, spotting operations already in the ledger, choosing a portfolio per operation, and the prototype's operations review.
+
 ## 2026-10-14 · What a document is (PLA-37)
 
 - **The two readings say what the document is**, in the same calls that list its holdings: an account's statement of holdings, a trade ticket, a screenshot of holdings, a card statement or other. A separate pre-analysis round would add a third round of calls to a step that already takes up to two 100 s rounds of the 300 s a function has.
 - **Two of the readings must agree** (the tiebreak counts when it ran); otherwise the kind is unknown. A single surviving reading cannot agree with another, so it leaves the kind unknown.
-- **A document the readings agree is a trade ticket or a card statement yields no holdings**: what they list from it is a trade or spending, so the import fails as `nothing_found`. Any other kind, or none agreed, keeps the holdings.
+- **A document the readings agree is a trade ticket or a card statement yields no holdings** (a trade ticket is read as operations since PLA-149): what they list from it is a trade or spending, so the import fails as `nothing_found`. Any other kind, or none agreed, keeps the holdings.
 - **The kind is logged** (`plant.import.document_kind`, a closed set) and not stored. Institution, period and useful pages are not asked: the account already names the institution, and per-type extraction (PLA-78) is what would use the rest.
 
 ## 2026-10-14 · The portfolio source port (PLA-32)

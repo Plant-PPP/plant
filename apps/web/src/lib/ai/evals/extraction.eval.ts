@@ -76,7 +76,7 @@ run("extraction", () => {
       const want = expectedReadingSchema.parse(
         JSON.parse(readFileSync(expected, "utf8")),
       );
-      const { draft, read } = await source.read({
+      const reading = await source.read({
         importId: name,
         bytes: new Uint8Array(readFileSync(path)),
         mimeType: type,
@@ -84,10 +84,15 @@ run("extraction", () => {
         institution: name.split(/[-_.]/)[0] ?? "eval",
         lastAttempt: true,
       });
+      // A document read as operations lists no holdings to score.
+      const draft =
+        "draft" in reading
+          ? reading.draft
+          : { documentDate: null, rows: [], totals: [] };
       scores.push({
         name,
         score: scoreReading(want, draft),
-        disputes: read.disputes,
+        disputes: reading.read.disputes,
       });
     },
     300_000,

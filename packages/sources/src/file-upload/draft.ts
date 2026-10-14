@@ -53,6 +53,36 @@ export const importDraftSchema = z
   })
   .strict();
 
+// The operations a document of operations may show.
+export const OPERATION_KINDS = [
+  "purchase",
+  "sale",
+  "dividend",
+  "coupon",
+] as const;
+
+// One operation as the document shows it. Whatever it does not print, or the
+// readings disagreed on, is null for the review to ask: the instrument as it
+// names it, the units, the price as printed (a bond's per 100 nominal), a
+// dividend's or coupon's amount or a trade's printed total, its charges added
+// up, and its transaction number.
+export const draftOperationSchema = z
+  .object({
+    date: z.iso.date().nullable(),
+    kind: z.enum(OPERATION_KINDS).nullable(),
+    symbol: z.string().trim().min(1).max(30).nullable(),
+    quantity: positiveDecimalSchema.nullable(),
+    price: positiveDecimalSchema.nullable(),
+    amount: positiveDecimalSchema.nullable(),
+    charges: nonNegativeDecimalSchema.nullable(),
+    reference: z.string().trim().min(1).max(40).nullable(),
+    currency: currencySchema,
+    confidence: importConfidenceSchema,
+    page: z.number().int().min(1).max(10000).nullable(),
+  })
+  .strict();
+
+export type DraftOperation = z.infer<typeof draftOperationSchema>;
 export type DraftRow = z.infer<typeof draftRowSchema>;
 export type ImportDraft = z.infer<typeof importDraftSchema>;
 

@@ -28,7 +28,7 @@ export const isBusy = (status: ImportStatus): boolean =>
 export const IMPORT_FAILURE_MESSAGES = {
   unsupported: "No leemos este tipo de archivo.",
   unreadable: "No pudimos leer el archivo. Probá con otra copia o una captura.",
-  nothing_found: "No encontramos tenencias en el archivo.",
+  nothing_found: "No encontramos tenencias ni operaciones en el archivo.",
   extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
 } as const;
 
@@ -74,6 +74,29 @@ export type ImportRow = {
   transferFrom?: string;
 };
 
+// The operations a document of operations may show.
+export type ImportOperationKind = "purchase" | "sale" | "dividend" | "coupon";
+
+// One operation as the document shows it, for the user to complete: every
+// null (an empty symbol for the instrument) is something the document does
+// not say or the readings disagreed on. The price is as printed, a bond's per
+// 100 nominal; the charges are the operation's, added up.
+export type ImportOperationRow = {
+  id: string;
+  date: string | null;
+  kind: ImportOperationKind | null;
+  symbol: string;
+  quantity: string | null;
+  price: string | null;
+  amount: string | null;
+  charges: string | null;
+  reference: string | null;
+  currency: Currency;
+  confidence: Confidence;
+  source: string;
+  discarded: boolean;
+};
+
 export type ImportItem = {
   id: string;
   fileName: string;
@@ -85,6 +108,8 @@ export type ImportItem = {
   documentDate: string | null;
   documentTotals: { currency: Currency; amount: string }[];
   rows: ImportRow[];
+  // A document of operations' draft, instead of rows of holdings.
+  operations?: ImportOperationRow[];
   // Holdings a spreadsheet lists that the reading left out.
   skippedRows: number;
   createdOn: string;
