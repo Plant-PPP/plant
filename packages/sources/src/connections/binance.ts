@@ -1,15 +1,12 @@
-import { fromScaled, toScaled } from "@plant/shared";
 import { z } from "zod";
 
-import type { DraftRow } from "../file-upload/draft";
 import {
+  balancesReading,
   call,
   hexOf,
   hmacSha256,
-  holdingsReading,
   jsonOf,
   notReadOnly,
-  positive,
   rejected,
   unavailable,
 } from "./http";
@@ -49,40 +46,8 @@ const accountSchema = z.object({
   ),
 });
 
-// An asset as Binance names it: capitals and digits.
-const ASSET = /^[A-Z0-9]{1,20}$/;
-
 const signature = async (secret: string, payload: string) =>
   hexOf(await hmacSha256(secret, payload));
-
-// One balance as a holding: what is free and what open orders hold, in
-// units. null when it is not a holding Plant can store: a name Binance does
-// not use, or more units than a quantity holds.
-function rowOf(balance: {
-  asset: string;
-  free: string;
-  locked: string;
-}): DraftRow | "empty" | null {
-  if (!ASSET.test(balance.asset)) return null;
-  let quantity: string;
-  try {
-    const units = toScaled(balance.free) + toScaled(balance.locked);
-    if (units <= 0n) return "empty";
-    quantity = fromScaled(units);
-  } catch {
-    return null;
-  }
-  if (!positive(quantity)) return null;
-  return {
-    symbol: balance.asset,
-    quantity,
-    price: null,
-    value: null,
-    currency: "USD",
-    confidence: "high",
-    page: null,
-  };
-}
 
 // Binance's spot account by API, read-only: it asks what the key may do and
 // the account's balances, each a signed GET, and never calls an endpoint
@@ -149,15 +114,13 @@ export function binanceConnection({
         ),
       );
       if (!account.success) throw unavailable();
-      const rows: DraftRow[] = [];
-      let skipped = 0;
-      for (const balance of account.data.balances) {
-        const row = rowOf(balance);
-        if (row === "empty") continue;
-        if (row === null) skipped += 1;
-        else rows.push(row);
-      }
-      return holdingsReading(rows, skipped, now());
+      return balancesReading(
+        account.data.balances.map(({ asset, free, locked }) => ({
+          code: asset,
+          parts: [free, locked],
+        })),
+        now(),
+      );
     },
   });
 }

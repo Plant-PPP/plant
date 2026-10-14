@@ -6,8 +6,8 @@ import type {
   ImportDraft,
 } from "./file-upload/draft";
 
-// Where a connection's holdings come from: today only a file the user
-// uploads. A broker or exchange API arrives as another kind and adapter.
+// How a file the user uploads is read. A broker's or an exchange's API is
+// read through its ConnectionProviderPort instead.
 export const sourceKindSchema = z.enum(["file_upload"]);
 export type SourceKind = z.infer<typeof sourceKindSchema>;
 

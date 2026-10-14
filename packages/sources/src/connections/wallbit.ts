@@ -4,8 +4,10 @@ import { z } from "zod";
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
 import {
   call,
+  cashRow,
   decimalOf,
   holdingsReading,
+  isZero,
   jsonOf,
   notReadOnly,
   operationsReading,
@@ -24,8 +26,10 @@ export const wallbitCredentialsSchema = z.object({
 });
 type WallbitCredentials = z.infer<typeof wallbitCredentialsSchema>;
 
-// The most pages of transactions a sync reads, 50 each: a draft holds 500.
+// The most pages of transactions a sync reads, and how many each holds: a
+// draft holds 500.
 const TRANSACTION_PAGES = 10;
+const TRANSACTION_PAGE_SIZE = 50;
 
 const checkingSchema = z.object({
   data: z.array(z.object({ currency: z.string(), balance: z.unknown() })),
@@ -49,6 +53,7 @@ const transactionsSchema = z.object({
       }),
     ),
     pages: z.number().int().nonnegative(),
+    count: z.number().int().nonnegative().optional(),
   }),
 });
 const forbiddenSchema = z.object({
@@ -78,15 +83,8 @@ const CURRENCIES = new Set([
   "CRC",
 ]);
 
-// The draft's currency for a cash balance Wallbit holds, or null for one
-// Plant does not keep (euros, other local currencies): stablecoins count as
-// dollars.
-const cashCurrency = (code: string): "ARS" | "USD" | null =>
-  code === "ARS"
-    ? "ARS"
-    : code === "USD" || code === "USDC" || code === "USDT"
-      ? "USD"
-      : null;
+// The stablecoins Wallbit holds, each a crypto instrument valued in dollars.
+const STABLECOINS = new Set(["USDC", "USDT"]);
 
 // Wallbit by API with a key the user made with the `read` permission only.
 // Wallbit does not say what a key may do unless a call needs more, so the
@@ -126,49 +124,52 @@ export function wallbitConnection({
       stocksSchema.safeParse(await read("/balance/stocks", credentials)),
     ];
     if (!checking.success || !stocks.success) throw unavailable();
-    // The same symbol in both accounts (dollars) adds up into one row.
-    const held = new Map<string, { units: bigint; currency: "ARS" | "USD" }>();
+    // The same symbol in both accounts (dollars) adds up into one row. Pesos
+    // and dollars are cash, stablecoins and assets instruments in dollars,
+    // any other currency one Plant does not keep.
+    const held = new Map<string, bigint>();
     let skipped = 0;
-    const add = (symbol: string, amount: unknown, currency: "ARS" | "USD") => {
+    const add = (symbol: string, amount: unknown) => {
       const quantity = decimalOf(amount);
-      if (!SYMBOL.test(symbol) || quantity === null) {
+      if (
+        !SYMBOL.test(symbol) ||
+        quantity === null ||
+        (CURRENCIES.has(symbol) &&
+          symbol !== "ARS" &&
+          symbol !== "USD" &&
+          !STABLECOINS.has(symbol))
+      ) {
         skipped += 1;
         return;
       }
-      if (!positive(quantity)) return;
-      const entry = held.get(symbol) ?? { units: 0n, currency };
+      if (isZero(quantity)) return;
       try {
-        entry.units += toScaled(quantity);
+        held.set(symbol, (held.get(symbol) ?? 0n) + toScaled(quantity));
       } catch {
         skipped += 1;
-        return;
       }
-      held.set(symbol, entry);
     };
     for (const { currency, balance } of checking.data.data) {
-      const kept = cashCurrency(currency);
-      if (kept === null) skipped += 1;
-      else add(kept, balance, kept);
+      add(currency, balance);
     }
-    for (const { symbol, shares } of stocks.data.data) {
-      add(symbol, shares, "USD");
-    }
+    for (const { symbol, shares } of stocks.data.data) add(symbol, shares);
     const rows: DraftRow[] = [];
-    for (const [symbol, { units, currency }] of held) {
+    for (const [symbol, units] of held) {
       const quantity = fromScaled(units);
-      if (!positive(quantity)) {
-        skipped += 1;
-        continue;
+      if (!positive(quantity)) skipped += 1;
+      else if (symbol === "ARS" || symbol === "USD") {
+        rows.push(cashRow(symbol, quantity, "high"));
+      } else {
+        rows.push({
+          symbol,
+          quantity,
+          price: null,
+          value: null,
+          currency: "USD",
+          confidence: "high",
+          page: null,
+        });
       }
-      rows.push({
-        symbol,
-        quantity,
-        price: null,
-        value: null,
-        currency,
-        confidence: "high",
-        page: null,
-      });
     }
     return holdingsReading(rows, skipped, now());
   };
@@ -216,7 +217,7 @@ export function wallbitConnection({
     for (let page = 1; page <= TRANSACTION_PAGES; page += 1) {
       const query = new URLSearchParams({
         page: String(page),
-        limit: "50",
+        limit: String(TRANSACTION_PAGE_SIZE),
         status: "COMPLETED",
         type: "TRADE",
       });
@@ -229,7 +230,17 @@ export function wallbitConnection({
         if (operation) found.push(operation);
         else skipped += 1;
       }
-      if (page >= parsed.data.data.pages) break;
+      const { pages, count } = parsed.data.data;
+      if (page >= pages) break;
+      // The trades on the pages a sync does not read are counted: all Wallbit
+      // says it has past the ones read, or else a full page each.
+      if (page === TRANSACTION_PAGES) {
+        const read = TRANSACTION_PAGES * TRANSACTION_PAGE_SIZE;
+        skipped +=
+          count !== undefined
+            ? Math.max(0, count - read)
+            : (pages - TRANSACTION_PAGES) * TRANSACTION_PAGE_SIZE;
+      }
     }
     return operationsReading(found, skipped);
   };

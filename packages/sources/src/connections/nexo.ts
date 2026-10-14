@@ -1,14 +1,11 @@
 import { z } from "zod";
 
-import type { DraftRow } from "../file-upload/draft";
 import {
+  balancesReading,
   base64Of,
   call,
-  decimalOf,
   hmacSha256,
-  holdingsReading,
   jsonOf,
-  positive,
   rejected,
   unavailable,
 } from "./http";
@@ -27,8 +24,6 @@ const summarySchema = z.object({
     z.object({ assetName: z.string(), totalBalance: z.unknown() }),
   ),
 });
-
-const ASSET = /^[A-Z0-9]{1,20}$/;
 
 const signature = async (secret: string, nonce: string) =>
   base64Of(await hmacSha256(secret, nonce));
@@ -86,28 +81,15 @@ export function nexoConnection({
       await summary(credentials);
     },
     async read(credentials) {
-      const rows: DraftRow[] = [];
-      let skipped = 0;
-      for (const { assetName, totalBalance } of (await summary(credentials))
-        .balances) {
-        const symbol = assetName.trim().toUpperCase();
-        const quantity = decimalOf(totalBalance);
-        if (quantity !== null && !positive(quantity)) continue;
-        if (!ASSET.test(symbol) || quantity === null) {
-          skipped += 1;
-          continue;
-        }
-        rows.push({
-          symbol,
-          quantity,
-          price: null,
-          value: null,
-          currency: "USD",
-          confidence: "high",
-          page: null,
-        });
-      }
-      return holdingsReading(rows, skipped, now());
+      return balancesReading(
+        (await summary(credentials)).balances.map(
+          ({ assetName, totalBalance }) => ({
+            code: assetName,
+            parts: [totalBalance],
+          }),
+        ),
+        now(),
+      );
     },
   });
 }
