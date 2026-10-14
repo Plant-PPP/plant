@@ -4,7 +4,18 @@
   "regions": ["gru1"],
   "git": {
     "deploymentEnabled": {
-      "claude/*": false
+      "claude/*": false,
+      "feat/*": false,
+      "fix/*": false,
+      "ci/*": false,
+      "chore/*": false,
+      "refactor/*": false,
+      "docs/*": false,
+      "perf/*": false,
+      "test/*": false,
+      "build/*": false,
+      "style/*": false,
+      "revert/*": false
     }
   },
   "buildCommand": "TURBO_TELEMETRY_DISABLED=1 pnpm exec turbo run build --filter=@plant/web",
