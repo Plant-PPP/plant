@@ -612,6 +612,11 @@ flagged.push(
     'import "../prototype/prototype-store.ts";',
   ],
   ["src/lib/ai/x.ts", 'import "@/lib/prototype/fixtures";'],
+  // Only the eval itself may read the prototype, not a helper beside it.
+  [
+    "src/lib/ai/assistant/evals/helpers.ts",
+    'import "@/lib/prototype/fixtures";',
+  ],
   ["src/components/prototype/x.ts", 'import "@/lib/supabase/service-role";'],
   ["src/components/prototype/x.ts", '"use server";\nexport const x = 1;'],
   ["src/lib/prototype/x.ts", 'export async function f() {\n  "use server";\n}'],
