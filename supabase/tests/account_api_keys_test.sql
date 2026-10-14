@@ -9,7 +9,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(37);
+SELECT plan(42);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -258,6 +258,57 @@ SELECT is(
                       VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations') $$),
   'PT409',
   'one sync at a time per account'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'reading'
+                      WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5' $$),
+  '42501',
+  'a user does not start reading a queued sync'
+);
+
+RESET ROLE;
+SELECT pg_temp.sign_in('b0000000-0000-4000-8000-00000000000b');
+SET LOCAL ROLE authenticated;
+UPDATE public.imports SET status = 'failed'
+WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5';
+RESET ROLE;
+SELECT pg_temp.sign_in('a0000000-0000-4000-8000-00000000000a');
+SET LOCAL ROLE authenticated;
+
+SELECT results_eq(
+  $$ SELECT status::text FROM public.imports
+     WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5' $$,
+  $$ VALUES ('queued') $$,
+  'another user cannot fail a user''s queued sync'
+);
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
+                      WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5'
+                        AND status = 'queued' $$),
+  NULL,
+  'a user fails their own queued sync'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider, sync_draft)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations') $$),
+  NULL,
+  'and then another sync starts on the account'
+);
+
+RESET ROLE;
+UPDATE public.imports SET status = 'reading'
+WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5' AND status = 'queued';
+SET LOCAL ROLE authenticated;
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
+                      WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5'
+                        AND status = 'reading' $$),
+  '42501',
+  'but not a sync being read'
 );
 
 SELECT is(

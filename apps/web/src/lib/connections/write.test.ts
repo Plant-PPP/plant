@@ -548,11 +548,15 @@ describe("syncAccount", () => {
     [
       "another period",
       "operations",
-      { from: "2026-01-01", to: null },
-      { sync_draft: "operations", sync_from: "2026-02-01" },
+      { from: "2026-02-01", to: "2026-02-28" },
+      {
+        sync_draft: "operations",
+        sync_from: "2026-01-01",
+        sync_to: "2026-01-31",
+      },
     ],
   ] as const)(
-    "leaves a queued sync of %s alone",
+    "fails a queued sync of %s and starts the one asked for, so a lost job never locks the account",
     async (_, draft, period, queued) => {
       answers.account_api_keys = answer(() => ({
         status: 200,
@@ -561,22 +565,121 @@ describe("syncAccount", () => {
       }));
       answers.imports = answer((verb) =>
         verb === "insert"
-          ? { status: 409, data: null, error: { code: "PT409" } }
-          : {
-              status: 200,
-              data: [
-                { id: "q1", status: "queued", ...HOLDINGS_SYNC, ...queued },
-              ],
-              error: null,
-            },
+          ? { status: 201, data: [{ id: "i1" }], error: null }
+          : verb === "update"
+            ? { status: 200, data: [{ id: "q1" }], error: null }
+            : {
+                status: 200,
+                data: [
+                  { id: "q1", status: "queued", ...HOLDINGS_SYNC, ...queued },
+                ],
+                error: null,
+              },
       );
       expect(await syncAccount(ACCOUNT, draft, period)).toEqual({
-        ok: false,
-        code: "in_progress",
+        ok: true,
+        importId: "i1",
       });
-      expect(startImport).not.toHaveBeenCalled();
+      const imports = writes.filter((each) => each.table === "imports");
+      expect(imports.map((each) => each.verb)).toEqual(["update", "insert"]);
+      expect(imports[0]).toMatchObject({
+        body: { status: "failed" },
+        filters: [
+          ["user_id", USER],
+          ["id", "q1"],
+          ["status", "queued"],
+        ],
+      });
+      expect(startImport).toHaveBeenCalledWith({
+        importId: "i1",
+        userId: USER,
+        retry: undefined,
+      });
     },
   );
+
+  it("answers in progress when the queued sync it would fail starts being read", async () => {
+    answers.imports = answer((verb) =>
+      verb === "update"
+        ? { status: 200, data: [], error: null }
+        : {
+            status: 200,
+            data: [
+              {
+                id: "q1",
+                status: "queued",
+                ...HOLDINGS_SYNC,
+                sync_draft: "operations",
+              },
+            ],
+            error: null,
+          },
+    );
+    expect(await syncAccount(ACCOUNT)).toEqual({
+      ok: false,
+      code: "in_progress",
+    });
+    expect(
+      writes.filter(
+        (each) => each.verb === "insert" && each.table === "imports",
+      ),
+    ).toEqual([]);
+    expect(startImport).not.toHaveBeenCalled();
+  });
+
+  it("reads a queued sync with no draft, from before syncs of operations, as one of holdings", async () => {
+    answers.imports = answer(() => ({
+      status: 200,
+      data: [
+        { id: "q1", status: "queued", ...HOLDINGS_SYNC, sync_draft: null },
+      ],
+      error: null,
+    }));
+    expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "q1" });
+    expect(startImport).toHaveBeenCalledWith({
+      importId: "q1",
+      userId: USER,
+      retry: expect.any(String),
+    });
+    expect(writes.filter((each) => each.table === "imports")).toEqual([]);
+  });
+
+  it("starts at most ten syncs a minute for a user", async () => {
+    for (let each = 0; each < 10; each += 1) {
+      expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
+    }
+    writes.length = 0;
+    expect(await syncAccount(ACCOUNT)).toEqual({
+      ok: false,
+      code: "limited",
+    });
+    expect(writes).toEqual([]);
+    clock += 60_000;
+    (Date.now as jest.Mock).mockReturnValue(clock);
+    expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
+  });
+
+  it("logs the import a sync started", async () => {
+    await syncAccount(ACCOUNT);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        "plant.connection.step": "sync",
+        "plant.outcome": "ok",
+        "plant.import.id": "i1",
+      }),
+    );
+  });
+
+  it("logs the import whose job could not be sent", async () => {
+    startImport.mockRejectedValue(new Error("inngest down"));
+    await syncAccount(ACCOUNT);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        "plant.connection.step": "job",
+        "plant.import.id": "i1",
+      }),
+    );
+  });
 
   it("leaves a sync being read alone", async () => {
     answers.imports = answer(() => ({

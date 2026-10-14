@@ -23,8 +23,10 @@ import {
   type LastSync,
   needsConfirmation,
   providerOf,
+  SYNC_PERIOD_START,
   type SyncCode,
   type SyncResult,
+  syncDraftOf,
 } from "@/lib/connections/api-key";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
@@ -74,10 +76,11 @@ type Line = {
   requestId: string | undefined;
   started: number;
   provider?: ConnectionProvider;
+  importId?: string;
 };
 
 function log(
-  { step, userId, requestId, started, provider }: Line,
+  { step, userId, requestId, started, provider, importId }: Line,
   outcome: ConnectCode | SyncCode | "ok",
   failure?: unknown,
 ) {
@@ -86,6 +89,7 @@ function log(
     "enduser.id": userId,
     "plant.connection.step": step,
     "plant.connection.provider": provider,
+    "plant.import.id": importId,
     "plant.connection.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
@@ -108,6 +112,9 @@ async function line(step: Line["step"]): Promise<Line> {
 // bound a user could test credentials against it through Plant. In memory,
 // per serverless instance.
 const limit = userLimiter({ perUser: 5 });
+
+// Each sync asks the provider for the account, from Plant's shared egress.
+const syncLimit = userLimiter({ perUser: 10 });
 
 const REFUSALS: Partial<Record<string, ConnectCode>> = {
   connection_rejected: "rejected",
@@ -340,7 +347,11 @@ async function startJob(
   } catch (error) {
     serverLog.error(
       EVENT,
-      { "enduser.id": userId, "plant.connection.step": "job" },
+      {
+        "enduser.id": userId,
+        "plant.connection.step": "job",
+        "plant.import.id": importId,
+      },
       error,
     );
   }
@@ -350,7 +361,7 @@ async function startJob(
 // imports_sync_period constraint holds the same bounds.
 const periodDay = z.iso
   .date()
-  .refine((day) => day >= "2000-01-01")
+  .refine((day) => day >= SYNC_PERIOD_START)
   .nullable();
 const periodSchema = z
   .object({ from: periodDay, to: periodDay })
@@ -365,7 +376,7 @@ async function syncInFlight(
 ): Promise<{
   id: string;
   status: "queued" | "reading";
-  draft: string | null;
+  draft: string;
   from: string | null;
   to: string | null;
 } | null> {
@@ -383,19 +394,40 @@ async function syncInFlight(
     ? {
         id: row.id,
         status: row.status,
-        draft: row.sync_draft,
+        draft: syncDraftOf(row.sync_draft),
         from: row.sync_from,
         to: row.sync_to,
       }
     : null;
 }
 
+// Fails a sync still queued, so another can start; false when its job
+// started reading it meanwhile.
+async function failQueued(
+  client: Client,
+  userId: string,
+  importId: string,
+): Promise<boolean> {
+  const result = await client
+    .from("imports")
+    .update({ status: "failed" })
+    .eq("user_id", userId)
+    .eq("id", importId)
+    .eq("status", "queued")
+    .select("id");
+  if (classifyPostgrestResult(result, 200)) {
+    throw new Error("queued sync not failed");
+  }
+  return (result.data ?? []).length === 1;
+}
+
 // Starts a sync of the account: an import of its holdings or its
 // operations that the import job reads with the account's credentials and
 // leaves ready to review in Cargar. The database refuses an account with no
-// key and one already syncing; a sync still queued of the same draft and
-// days is started again instead, so a lost job never locks the account. A
-// sync of operations reads only the days of `period`, when one is given.
+// key and one already syncing. A sync still queued may have lost its job, so
+// it never locks the account: one of the same draft and days is started
+// again, and one of another is failed for the new one. A sync of operations
+// reads only the days of `period`, when one is given.
 export async function syncAccount(
   accountId: unknown,
   draft: unknown = "holdings",
@@ -416,6 +448,10 @@ export async function syncAccount(
     return { ok: false, code: "invalid" };
   }
   const { accountId: id, draft: kind } = parsed.data;
+  if (!syncLimit(current.userId)) {
+    log(current, "limited");
+    return { ok: false, code: "limited" };
+  }
   try {
     const client: Client = await createClient();
     const keys = await client
@@ -436,23 +472,30 @@ export async function syncAccount(
       log(current, "invalid");
       return { ok: false, code: "invalid" };
     }
-    const resume = async (): Promise<SyncResult | null> => {
+    const from = parsed.data.period?.from ?? null;
+    const to = parsed.data.period?.to ?? null;
+    const inProgress = (): SyncResult => {
+      log(current, "in_progress");
+      return { ok: false, code: "in_progress" };
+    };
+    // The sync in flight, resumed when it is the one asked for; null when
+    // none is, or when `supersede` failed the queued one.
+    const resume = async (supersede: boolean): Promise<SyncResult | null> => {
       const flying = await syncInFlight(client, id);
       if (!flying) return null;
-      if (
-        flying.status === "reading" ||
-        flying.draft !== kind ||
-        flying.from !== (parsed.data.period?.from ?? null) ||
-        flying.to !== (parsed.data.period?.to ?? null)
-      ) {
-        log(current, "in_progress");
-        return { ok: false, code: "in_progress" };
+      if (flying.status === "reading") return inProgress();
+      if (flying.draft === kind && flying.from === from && flying.to === to) {
+        current.importId = flying.id;
+        await startJob(current.userId, flying.id, Date.now().toString(36));
+        log(current, "ok");
+        return { ok: true, importId: flying.id };
       }
-      await startJob(current.userId, flying.id, Date.now().toString(36));
-      log(current, "ok");
-      return { ok: true, importId: flying.id };
+      if (supersede && (await failQueued(client, current.userId, flying.id))) {
+        return null;
+      }
+      return inProgress();
     };
-    const resumed = await resume();
+    const resumed = await resume(true);
     if (resumed) return resumed;
     const started = await client
       .from("imports")
@@ -460,8 +503,8 @@ export async function syncAccount(
         source_connection_id: id,
         provider: provider.data,
         sync_draft: kind,
-        sync_from: parsed.data.period?.from ?? null,
-        sync_to: parsed.data.period?.to ?? null,
+        sync_from: from,
+        sync_to: to,
       })
       .select("id");
     const refused = classifyPostgrestResult(started, 201);
@@ -470,16 +513,14 @@ export async function syncAccount(
       return { ok: false, code: "not_connected" };
     }
     if (refused?.code === "PT409") {
-      // Another sync started in between.
-      const raced = await resume();
-      if (raced) return raced;
-      log(current, "in_progress");
-      return { ok: false, code: "in_progress" };
+      // Another sync started in between; it is never failed for this one.
+      return (await resume(false)) ?? inProgress();
     }
     if (refused || started.data?.length !== 1) {
       throw new Error(`sync not started: ${refused?.code ?? "no_row"}`);
     }
     const importId = started.data[0]!.id;
+    current.importId = importId;
     await startJob(current.userId, importId);
     log(current, "ok");
     revalidatePath("/import");
