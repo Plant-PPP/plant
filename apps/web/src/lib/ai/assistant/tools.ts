@@ -4,6 +4,12 @@ import { z } from "zod";
 
 import { CHAT_UNITS } from "@/lib/assistant/chat";
 import {
+  SCENARIO_CHANGE,
+  SCENARIO_DOLLARS,
+  pairedScenario,
+  validChange,
+} from "@/lib/assistant/scenario";
+import {
   type AssistantData,
   CHART_TOPICS,
   type ToolFailure,
@@ -23,6 +29,16 @@ const instrument = z
   .min(1)
   .max(60)
   .describe("El símbolo (AAPL, AL30, BTC) o el nombre de un instrumento.");
+
+const percent = z
+  .string()
+  .regex(SCENARIO_CHANGE)
+  .refine(validChange)
+  .describe(
+    "Cuánto se mueve, en porcentaje con punto decimal: 10 sube un 10 %, -15.5 baja un 15,5 %. Entre -99.99 y 1000.",
+  );
+
+const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
 // The assistant's read-only tools over one user's data. A read that fails
 // answers read_failed, and the turn goes on.
@@ -138,6 +154,42 @@ export function assistantTools(
       execute: guarded("renderChart", ({ kind, portfolio }) =>
         data.chart(kind, portfolio),
       ),
+    }),
+    simulateScenario: tool({
+      description:
+        'Un escenario hipotético: cuánto valdría hoy el patrimonio neto si un dólar o un precio se moviera un porcentaje ("si el MEP sube 10 %", "si Apple cae 20 %"). Mueve solo lo indicado y deja igual el resto. Es un cálculo, no una predicción.',
+      inputSchema: z
+        .object({
+          dollar: z
+            .enum(SCENARIO_DOLLARS)
+            .optional()
+            .describe(
+              "Qué dólar se mueve: mep, ccl, official o all (los tres). Sin él, all.",
+            ),
+          dollarChange: percent.optional(),
+          instrument: instrument
+            .optional()
+            .describe(
+              "El instrumento cuyo precio se mueve; sin él, todos los precios.",
+            ),
+          priceChange: percent.optional(),
+        })
+        .refine(pairedScenario, {
+          message:
+            "dollar va con dollarChange, instrument con priceChange, y hace falta al menos un cambio.",
+        }),
+      execute: guarded("simulateScenario", (input) => data.scenario(input)),
+    }),
+    getMonthSummary: tool({
+      description:
+        "El resumen de un mes cerrado, o de varios seguidos: cómo empezó y terminó el patrimonio neto, de dónde sale el cambio (lo que puso o sacó, los precios, el dólar y los rendimientos), el resultado, lo que cobró, los gastos y cómo le fue contra la inflación y el dólar. Muestra un gráfico de cascada. Sin meses, el último mes cerrado.",
+      inputSchema: z.object({
+        from: month.optional().describe("El primer mes: 2026-06."),
+        to: month
+          .optional()
+          .describe("El último mes; sin él, solo el primero."),
+      }),
+      execute: guarded("getMonthSummary", (input) => data.monthSummary(input)),
     }),
     getImportStatus: tool({
       description:

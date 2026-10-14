@@ -135,6 +135,8 @@ export const LIVE_SUGGESTED_QUESTIONS = [
   "¿Cuánto cobré de dividendos?",
   "¿Cuánto debo?",
   "¿Cómo evolucionó mi patrimonio?",
+  "¿Por qué cambió mi patrimonio el mes pasado?",
+  "¿Qué pasa si el MEP sube 10 %?",
 ];
 
 // The prototype also answers about one instrument and what comes in.
