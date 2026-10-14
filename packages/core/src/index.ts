@@ -36,7 +36,7 @@ export {
   type UpcomingIncome,
 } from "./income/upcoming";
 export type { IolCredentials } from "./quotes/adapters/iol/feed";
-export { quoteFeeds } from "./quotes/factory";
+export { type QuotedInstrument, quoteFeeds } from "./quotes/factory";
 export {
   QUOTE_CARRY_DAYS,
   readQuotesOn,

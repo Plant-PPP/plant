@@ -1,16 +1,28 @@
-import { migrations } from "@plant/shared/testing";
-
 import type { GetJson, GetJsonOptions, PostForm } from "../../contract/port";
 import { QuoteFeedError } from "../../contract/quote";
 import { toQuoteFeed } from "../../factory";
-import { createIolFeed, IOL_INSTRUMENTS, parseLine } from "./feed";
+import { createIolFeed, type IolInstrument, parseLine } from "./feed";
 
 // Friday 2026-10-09, 18:30 in Buenos Aires.
 const NOW = new Date("2026-10-09T21:30:00.000Z");
 const CREDENTIALS = { username: "plant-test", password: "made-up-password" };
 
+// The catalog's CEDEARs and bonds, made up for these tests.
+const CATALOG: readonly IolInstrument[] = [
+  { symbol: "AAPL", type: "cedear", currency: "ARS" },
+  { symbol: "KO", type: "cedear", currency: "ARS" },
+  { symbol: "MELI", type: "cedear", currency: "ARS" },
+  { symbol: "MSFT", type: "cedear", currency: "ARS" },
+  { symbol: "NVDA", type: "cedear", currency: "ARS" },
+  { symbol: "SPY", type: "cedear", currency: "ARS" },
+  { symbol: "TSLA", type: "cedear", currency: "ARS" },
+  { symbol: "AL30", type: "bond", currency: "ARS" },
+  { symbol: "GD30", type: "bond", currency: "USD" },
+  { symbol: "TX26", type: "bond", currency: "ARS" },
+];
+
 const instrument = (symbol: string) => {
-  const found = IOL_INSTRUMENTS.find((each) => each.symbol === symbol);
+  const found = CATALOG.find((each) => each.symbol === symbol);
   if (!found) throw new Error(`no instrument ${symbol}`);
   return found;
 };
@@ -74,7 +86,8 @@ function transport(
   const getJson: GetJson = async (url, sent) => {
     gets.push({ url, options: sent });
     if (options.panel) return options.panel(url, gets.length);
-    return url.includes("/cedears/") ? CEDEARS : BONDS;
+    if (url.includes("/cedears/")) return CEDEARS;
+    return url.includes("/titulosPublicos/") ? BONDS : { titulos: [] };
   };
   const postForm: PostForm = async (url, form) => {
     posts.push({ url, form });
@@ -83,11 +96,19 @@ function transport(
   return { getJson, postForm, gets, posts };
 }
 
-const feedWith = (t: ReturnType<typeof transport>) =>
+const feedWith = (
+  t: ReturnType<typeof transport>,
+  catalog: readonly {
+    symbol: string;
+    type: "crypto" | IolInstrument["type"];
+    currency: "ARS" | "USD";
+  }[] = CATALOG,
+) =>
   createIolFeed({
     getJson: t.getJson,
     postForm: t.postForm,
     credentials: CREDENTIALS,
+    instruments: async () => catalog,
   });
 
 const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
@@ -213,6 +234,14 @@ describe("createIolFeed", () => {
         url: "https://api.invertironline.com/api/v2/Cotizaciones/titulosPublicos/argentina/Todos?cotizacionInstrumentoModel.instrumento=titulosPublicos&cotizacionInstrumentoModel.pais=argentina",
         options: PANEL_OPTIONS,
       },
+      {
+        url: "https://api.invertironline.com/api/v2/Cotizaciones/obligacionesNegociables/argentina/Todos?cotizacionInstrumentoModel.instrumento=obligacionesNegociables&cotizacionInstrumentoModel.pais=argentina",
+        options: PANEL_OPTIONS,
+      },
+      {
+        url: "https://api.invertironline.com/api/v2/Cotizaciones/letras/argentina/Todos?cotizacionInstrumentoModel.instrumento=letras&cotizacionInstrumentoModel.pais=argentina",
+        options: PANEL_OPTIONS,
+      },
     ]);
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual([
       ["AAPL", "18250.5"],
@@ -312,7 +341,7 @@ describe("createIolFeed", () => {
     missing = true;
     const rows = await feed.readRaw(minutes(1));
     expect(t.posts).toHaveLength(1);
-    expect(t.gets).toHaveLength(4);
+    expect(t.gets).toHaveLength(8);
     expect(rows.unread).toEqual(
       ["AAPL", "KO", "MELI", "MSFT", "NVDA", "SPY", "TSLA"].map((key) => ({
         key,
@@ -378,6 +407,7 @@ describe("createIolFeed", () => {
       getJson: t.getJson,
       postForm: t.postForm,
       credentials: null,
+      instruments: async () => CATALOG,
     });
     await expect(feed.readRaw(NOW)).rejects.toMatchObject({
       name: "QuoteFeedError",
@@ -468,30 +498,51 @@ describe("iol through the factory", () => {
   });
 });
 
-// Every symbol this feed prices is an instrument a user can hold, of its type
-// and in the currency the feed quotes it in.
-it("prices only instruments the migrations seed, with their type and currency", () => {
-  const seeded = new Map(
-    migrations().flatMap(({ sql }) =>
-      [
-        ...(sql.match(/INSERT INTO public\.instruments[^;]*;/g) ?? []).flatMap(
-          (insert) => [
-            ...insert.matchAll(/\('(\w+)', '[^']*', '(\w+)', '(\w+)'\)/g),
-          ],
-        ),
-      ].map(([, symbol, type, currency]) => [symbol, `${type} ${currency}`]),
-    ),
-  );
-  for (const { symbol, type, currency } of IOL_INSTRUMENTS) {
-    expect([symbol, seeded.get(symbol)]).toEqual([
-      symbol,
-      `${type} ${currency}`,
-    ]);
-  }
-  const listed = [...seeded].filter(([, kind]) =>
-    /^(cedear|bond) /.test(kind ?? ""),
-  );
-  expect(listed.map(([symbol]) => symbol).sort()).toEqual(
-    IOL_INSTRUMENTS.map(({ symbol }) => symbol).sort(),
-  );
+describe("iol over the catalog", () => {
+  it("reads only the panels of the catalog's types, skipping the others", async () => {
+    const t = transport();
+    const rows = await feedWith(t, [
+      { symbol: "KO", type: "cedear", currency: "ARS" },
+      { symbol: "BTC", type: "crypto", currency: "USD" },
+    ]).readRaw(NOW);
+    expect(t.gets.map(({ url }) => url.split("/")[6])).toEqual(["cedears"]);
+    expect(rows.prices.map(({ symbol }) => symbol)).toEqual(["KO"]);
+  });
+
+  it("asks IOL nothing when the catalog has none of its types", async () => {
+    const t = transport();
+    const rows = await feedWith(t, [
+      { symbol: "BTC", type: "crypto", currency: "USD" },
+    ]).readRaw(NOW);
+    expect(rows).toEqual({ fxRates: [], prices: [] });
+    expect([t.gets, t.posts]).toEqual([[], []]);
+  });
+
+  it("finds a bond in any of its panels", async () => {
+    const t = transport({
+      panel: (url) =>
+        url.includes("/obligacionesNegociables/")
+          ? { titulos: [line("YCA6O", 102.5)] }
+          : { titulos: [] },
+    });
+    const rows = await feedWith(t, [
+      { symbol: "YCA6O", type: "bond", currency: "ARS" },
+    ]).readRaw(NOW);
+    expect(rows.prices.map(({ price }) => price)).toEqual(["1.025"]);
+  });
+
+  it("prices a line another panel of its type listed though one failed", async () => {
+    const t = transport({
+      panel: (url) => {
+        if (url.includes("/letras/")) throw new QuoteFeedError("http_5xx");
+        return url.includes("/titulosPublicos/") ? BONDS : { titulos: [] };
+      },
+    });
+    const rows = await feedWith(t, [
+      { symbol: "AL30", type: "bond", currency: "ARS" },
+      { symbol: "S31O6", type: "bond", currency: "ARS" },
+    ]).readRaw(NOW);
+    expect(rows.prices.map(({ symbol }) => symbol)).toEqual(["AL30"]);
+    expect(rows.unread).toEqual([{ key: "S31O6", code: "http_5xx" }]);
+  });
 });
