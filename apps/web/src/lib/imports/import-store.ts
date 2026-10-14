@@ -1,9 +1,14 @@
 import "server-only";
 import type { ImportStorePort, ImportToRead } from "@plant/jobs";
 import { Constants, type Database } from "@plant/shared";
+import {
+  exchangeCredentialsSchema,
+  exchangeProviderSchema,
+} from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { open, sealContext } from "@/lib/connections/secret-box";
 import { UPLOAD_BUCKET } from "@/lib/imports/upload";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
@@ -11,12 +16,18 @@ type Client = SupabaseClient<Database>;
 
 // A store that failed: the step retries it, and past its retries the import
 // fails as extraction_failed. Only the step and the code are kept, never the
-// error's details, which may carry a row.
+// error's details, which may carry a row or a key.
 export class ImportStoreError extends Error {
   override readonly name = "ImportStoreError";
   constructor(
     readonly step:
-      "load" | "download" | "reading" | "institution" | "draft" | "failed",
+      | "load"
+      | "download"
+      | "reading"
+      | "institution"
+      | "credentials"
+      | "draft"
+      | "failed",
     readonly code: string,
   ) {
     super(`import store ${step} failed: ${code}`);
@@ -29,11 +40,22 @@ const BEING_READ: Database["public"]["Enums"]["import_status"][] = [
   "reading",
 ];
 
-const loadedSchema = z.object({
-  user_id: z.string(),
-  status: z.enum(Constants.public.Enums.import_status),
-  document: z.object({ storage_path: z.string(), mime_type: z.string() }),
-});
+// An import reads an uploaded document or, for a sync, its account's
+// exchange; the database holds it to one.
+const loadedSchema = z.union([
+  z.object({
+    user_id: z.string(),
+    status: z.enum(Constants.public.Enums.import_status),
+    document: z.object({ storage_path: z.string(), mime_type: z.string() }),
+  }),
+  z.object({
+    user_id: z.string(),
+    status: z.enum(Constants.public.Enums.import_status),
+    document: z.null(),
+    source_connection_id: z.string(),
+    provider: exchangeProviderSchema,
+  }),
+]);
 
 const institutionSchema = z.object({
   document: z.object({ account: z.object({ institution: z.string() }) }),
@@ -50,8 +72,13 @@ function checked(
 
 // The job's store over a service-role client: it bypasses RLS and Storage's
 // policies, so every call filters by the import's id and by its user, and the
-// job checks the import is its event's user's before it reads the file.
-export function createImportStore(client: Client): ImportStorePort {
+// job checks the import is its event's user's before it reads the file or the
+// key. `secretsKey` opens an account's sealed key; null where the deployment
+// has none.
+export function createImportStore(
+  client: Client,
+  secretsKey: Buffer | null,
+): ImportStorePort {
   // Whether the import is still being read, and if so clears any draft, of
   // holdings or of operations, an earlier attempt wrote: a retried read may
   // tell the document apart differently. A read retried after the import was
@@ -112,7 +139,7 @@ export function createImportStore(client: Client): ImportStorePort {
       const result = await client
         .from("imports")
         .select(
-          "user_id, status, " +
+          "user_id, status, source_connection_id, provider, " +
             "document:uploaded_documents!imports_user_id_document_id_fkey(storage_path, mime_type)",
         )
         .eq("id", importId)
@@ -121,13 +148,57 @@ export function createImportStore(client: Client): ImportStorePort {
       checked("load", result, 200);
       const [row] = (result.data ?? []) as unknown[];
       if (row === undefined) return null;
-      const { user_id, status, document } = loadedSchema.parse(row);
+      const found = loadedSchema.parse(row);
+      if (found.document === null) {
+        return {
+          userId: found.user_id,
+          status: found.status,
+          origin: "exchange",
+          accountId: found.source_connection_id,
+          provider: found.provider,
+        };
+      }
       return {
-        userId: user_id,
-        status,
-        path: document.storage_path,
-        mimeType: document.mime_type,
+        userId: found.user_id,
+        status: found.status,
+        origin: "file",
+        path: found.document.storage_path,
+        mimeType: found.document.mime_type,
       };
+    },
+
+    // The sealed key is bound to its user, account and exchange: one that
+    // was copied to another row does not open.
+    async credentials(userId, accountId, provider) {
+      if (!secretsKey)
+        throw new ImportStoreError("credentials", "unconfigured");
+      const result = await client
+        .from("account_api_keys")
+        .select("secret_ciphertext")
+        .eq("user_id", userId)
+        .eq("source_connection_id", accountId)
+        .eq("provider", provider)
+        .limit(1);
+      checked("credentials", result, 200);
+      const [row] = result.data ?? [];
+      if (row === undefined) return null;
+      let plain: unknown;
+      try {
+        plain = JSON.parse(
+          open(
+            row.secret_ciphertext,
+            sealContext(userId, accountId, provider),
+            secretsKey,
+          ),
+        );
+      } catch {
+        throw new ImportStoreError("credentials", "unopened");
+      }
+      const credentials = exchangeCredentialsSchema.safeParse(plain);
+      if (!credentials.success) {
+        throw new ImportStoreError("credentials", "malformed");
+      }
+      return credentials.data;
     },
 
     async download(path) {

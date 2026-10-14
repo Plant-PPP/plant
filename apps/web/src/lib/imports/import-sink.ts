@@ -5,6 +5,7 @@ import type {
   OrphanFileStorePort,
 } from "@plant/jobs";
 
+import { secretsKey } from "@/lib/connections/secret-box";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 import {
@@ -22,8 +23,9 @@ import {
   OrphanFileStoreError,
 } from "./orphan-file-store";
 
-// Reads any user's import and file and writes its draft, past RLS and
-// Storage's policies: only the Inngest route may import it.
+// Reads any user's import and file, or the sealed key of the account a sync
+// reads, and writes its draft, past RLS and Storage's policies: only the
+// Inngest route may import it.
 export function importSink(): ImportStorePort {
   const client = createServiceRoleClient();
   if (!client) {
@@ -34,13 +36,14 @@ export function importSink(): ImportStorePort {
       download: unconfigured,
       reading: unconfigured,
       institution: unconfigured,
+      credentials: unconfigured,
       saveDraft: unconfigured,
       saveOperations: unconfigured,
       saveDebts: unconfigured,
       failed: unconfigured,
     };
   }
-  return createImportStore(client);
+  return createImportStore(client, secretsKey());
 }
 
 // Reads and adds any user's spreadsheet column mappings, past RLS.

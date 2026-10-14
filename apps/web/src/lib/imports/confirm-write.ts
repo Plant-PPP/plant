@@ -13,6 +13,11 @@ import { z } from "zod";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
+import {
+  IMPORT_ORIGIN_COLUMNS,
+  importOrigin,
+  importOriginSchema,
+} from "@/lib/imports/origin";
 import { ImportsReadError } from "@/lib/imports/read";
 import { writeImportOperations } from "@/lib/imports/confirm-operations";
 import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
@@ -41,14 +46,10 @@ const EVENT = "imports.confirm";
 // The most rows one review confirms; the draft holds at most this many.
 const REVIEW_ROW_LIMIT = 500;
 
-const importSchema = z.object({
+const importSchema = importOriginSchema.extend({
   id: z.string(),
   status: z.enum(Constants.public.Enums.import_status),
   document_date: z.string().nullable(),
-  document: z.object({
-    source_connection_id: z.string(),
-    file_name: z.string(),
-  }),
 });
 
 // The user's import, when it is ready to confirm: its account, the date its
@@ -61,10 +62,7 @@ async function readyImport(
 ): Promise<ImportToWrite | null> {
   const result = await client
     .from("imports")
-    .select(
-      "id, status, document_date, " +
-        "document:uploaded_documents!imports_user_id_document_id_fkey(source_connection_id, file_name)",
-    )
+    .select(`id, status, document_date, ${IMPORT_ORIGIN_COLUMNS}`)
     .eq("id", id)
     .limit(1);
   const failure = classifyPostgrestResult(result, 200);
@@ -76,11 +74,12 @@ async function readyImport(
   const found = importSchema.parse(row);
   if (found.status !== "ready") return null;
   const printed = found.document_date;
+  const { accountId, fileName } = importOrigin(found);
   return {
     id: found.id,
-    accountId: found.document.source_connection_id,
+    accountId,
     date: printed !== null && printed <= today ? printed : today,
-    fileName: found.document.file_name,
+    fileName,
   };
 }
 
