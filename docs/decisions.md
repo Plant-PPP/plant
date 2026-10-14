@@ -4,7 +4,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-14 · Findings from a full-repository review
 
-- **Imported cash is a cash holding.** A provider's or a sheet's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`). The review shows it as "Efectivo en pesos/dólares" with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the amounts the review saw:
+- **Imported cash is a cash holding.** A provider's or a sheet's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`). The review shows it as "Efectivo en pesos/dólares" with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the cash holdings the review read, which it sends back with the rows, so cash edited in between is refused as stale:
   - with no cash holding it opens one in the account's default portfolio;
   - with one it sets its amount;
   - with several it refuses the row, and the review says to update them by hand.
@@ -15,7 +15,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Provider bodies are capped**: 2 MB of JSON, 20 MB for an IBKR statement and 5 MB for a Mercado Pago report. Past the cap the read fails for good.
 - **No cause crosses a job step.** Steps rethrow failures without their cause, and `SourceError` is never built with one, so the model's raw answer or a request's URL never reaches the run history. A store failure past retries logs at error level with `plant.import.store_step` and `plant.import.store_code`, carried in the error's message because Inngest drops custom error fields.
 - **The export asks for a recent sign-in and is audited.** `exportData` refuses a stale session (signing out, then `/login?next=/settings`, like turning TOTP off) and writes `data.exported` through `public.record_data_export`, a SECURITY DEFINER RPC that takes the user from the session. Its outcomes are `denied`, `failure` and `success`. The tables are handed over only once the success row is written. Imports export up to `MAX_ROWS - 1`, and any table cut marks the file partial, which the card says.
-- **Ledger reads**: the holdings' revisions are read before the movements, and movements are paged by keyset on `(date, rank, id)`, so a write during the read leaves a stale revision that `write_operation` refuses. Holdings are still paged by offset; past 1000 instrument holdings a repeat only shows twice.
+- **Ledger reads**: the holdings' revisions are read before the movements, and movements are paged by keyset on `(date, rank, id)`, each page bounded by `date >=` the last row's for the index, so a write during the read leaves a stale revision that `write_operation` refuses. Holdings are still paged by offset; past 1000 instrument holdings a repeat only shows twice.
 - **Span scrubbing** runs `scrubSensitiveText` and the Flex token mask over every span name and URL attribute (`http.url`, `url.full`, `http.target`, `url.query`, `next.span_name`), wherever the URL sits in the text.
 - **An instrument holding's units are written only inside `write_operation`**: inserting one, or updating its amount, raises 42501 for `authenticated` without the transaction mark PLA-147 uses for movements.
 - **Pinned charts are capped at 12 by a trigger** (hint `pinned_charts_full`), the same number as `MAX_PINS`.
