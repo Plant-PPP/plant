@@ -104,13 +104,23 @@ const dateOf = z.object({ date: z.iso.date() });
 // The ledger with the stored dollar rates of the date an operation dated
 // `input.date` takes, when it has one.
 export async function ledgerFor(client: Client, input: unknown) {
-  const today = buenosAiresDate(new Date());
   const date = dateOf.safeParse(input);
+  return ledgerForDates(client, date.success ? [date.data.date] : []);
+}
+
+// The user's ledger with the dollar rates operations on these days need,
+// from a week before the first to the last, up to today.
+export async function ledgerForDates(
+  client: Client,
+  dates: readonly string[],
+) {
+  const today = buenosAiresDate(new Date());
+  const past = [...dates].filter((date) => date <= today).sort();
   const quotes =
-    date.success && date.data.date <= today
+    past.length > 0
       ? await createQuoteReader(client).read({
-          from: addDays(date.data.date, -QUOTE_CARRY_DAYS),
-          to: date.data.date,
+          from: addDays(past[0]!, -QUOTE_CARRY_DAYS),
+          to: past.at(-1)!,
           fxKinds: [...UNIT_FX_KINDS],
           symbols: [],
         })
