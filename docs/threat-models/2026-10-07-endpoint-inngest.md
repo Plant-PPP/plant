@@ -15,7 +15,7 @@ Anyone on the internet can send GET, POST or PUT to `/api/inngest` (HEAD goes to
 1. An event reaches Inngest (deployed, only `plant/ping`; under `next dev` also `plant/quotes.refresh` and the hourly cron).
 2. Inngest sends a signed POST to `/api/inngest` on Vercel (`apps/web/src/app/api/inngest/route.ts`).
 3. The SDK verifies the signature and runs the function from `packages/jobs`.
-4. To sync, the dashboard or the Vercel integration sends a signed PUT (in-band).
+4. To sync, the dashboard or the Vercel integration sends a signed PUT (in-band), and `promote-to-production.yml` a signed out-of-band PUT to the production domain.
 
 ## Where it is enforced
 

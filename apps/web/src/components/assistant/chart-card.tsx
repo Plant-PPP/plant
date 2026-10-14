@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, ImageDown, Maximize2 } from "lucide-react";
+import { Download, ImageDown, Maximize2, Pin } from "lucide-react";
 import { Component, type ReactNode, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,8 @@ import {
 } from "@/lib/assistant/chart-files";
 import { csvBlob, saveFile } from "@/lib/export/download";
 import { VegaChart } from "@/components/charts/vega-chart";
+
+import { usePin } from "./pin-context";
 import { templateSpec } from "@/lib/charts/templates";
 import { formatAmount } from "@/lib/format/amount";
 
@@ -51,10 +54,19 @@ function savePng(chart: ChartPart, caption: string) {
   }, "image/png");
 }
 
+const PIN_MESSAGES = {
+  pinned: "Fijaste el gráfico en el Resumen.",
+  already: "Ese gráfico ya está fijado en el Resumen.",
+  full: "Ya fijaste el máximo de gráficos. Soltá alguno en el Resumen.",
+  failed: "No pudimos fijar el gráfico. Probá de nuevo.",
+} as const;
+
 // An answer's chart: its title, the day and unit of its data, and actions to
-// see it larger or save it as a CSV or an image.
+// see it larger, save it as a CSV or an image, or pin it to Resumen.
 export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
   const [expanded, setExpanded] = useState(false);
+  const pin = usePin();
+  const [pinning, setPinning] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
   const caption = chartCaption(chart, asOf);
   const action = (
@@ -91,6 +103,20 @@ export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
           {action("Descargar imagen", <ImageDown />, () =>
             savePng(chart, caption),
           )}
+          {pin?.pins(chart) &&
+            !pinning &&
+            action("Fijar en el Resumen", <Pin />, () => {
+              setPinning(true);
+              void pin
+                .pin(chart)
+                .catch(() => "failed" as const)
+                .then((result) => {
+                  setPinning(false);
+                  if (result === "pinned" || result === "already") {
+                    toast.success(PIN_MESSAGES[result]);
+                  } else toast.error(PIN_MESSAGES[result]);
+                });
+            })}
         </div>
       </div>
       <ChartBody chart={chart} />
