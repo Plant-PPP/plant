@@ -211,7 +211,9 @@ export function ImportReview({
       ? held
       : (accounts?.find((each) => each.id === accountOf(row))?.held ??
         new Map<string, string>());
-  // Where a row's units may go, from the account it goes to.
+  // Where a row's units may go, from the account it goes to. When the
+  // document lists several accounts, none it lists is a transfer's source: it
+  // already gives that account's figure.
   const routingFor = (
     row: EditedRow,
     base: NonNullable<typeof routing>,
@@ -220,13 +222,23 @@ export function ImportReview({
       accountOf(row) === item.accountId
         ? undefined
         : accounts?.find((each) => each.id === accountOf(row));
-    return other
-      ? {
-          ...base,
-          defaultPortfolioId: other.defaultPortfolioId,
-          elsewhere: other.elsewhere,
-        }
-      : base;
+    const elsewhere = other?.elsewhere ?? base.elsewhere;
+    const listedAccounts = new Set([
+      item.accountId,
+      ...rows.filter((each) => !each.discarded).map(accountOf),
+    ]);
+    return {
+      ...base,
+      defaultPortfolioId: other?.defaultPortfolioId ?? base.defaultPortfolioId,
+      elsewhere: accounts
+        ? new Map(
+            [...elsewhere].map(([symbol, sources]) => [
+              symbol,
+              sources.filter((source) => !listedAccounts.has(source.id)),
+            ]),
+          )
+        : elsewhere,
+    };
   };
   const addsUnits = (row: EditedRow, quantity: string | null) => {
     const effect = rowChange(

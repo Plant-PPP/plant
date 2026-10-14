@@ -251,6 +251,28 @@ describe("a document listing several accounts", () => {
     expect(written.result).toEqual({ ok: false, code: "invalid" });
   });
 
+  it("refuses a transfer from an account the document lists", () => {
+    const written = writeImportRouted(
+      ledger(),
+      ITEM,
+      [
+        {
+          ...row("AAPL", "5", "18000"),
+          accountLabel: "IOL",
+          accountId: ACCOUNT,
+        },
+        {
+          ...row("MSFT", "2", "18000"),
+          accountLabel: "Nexo",
+          accountId: OTHER,
+          transferFrom: ACCOUNT,
+        },
+      ],
+      newId,
+    );
+    expect(written.result).toEqual({ ok: false, code: "invalid" });
+  });
+
   it("refuses an account that is not the user's", () => {
     const written = writeImportRouted(
       ledger(),

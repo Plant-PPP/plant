@@ -331,7 +331,8 @@ export function writeImport<S extends Ledger>(
 // The reviewed rows of a document that lists several accounts, each group
 // written into the account the review routed it to, the import's first, all
 // or nothing. A row a document lists under an account the review routed to
-// none is refused.
+// none is refused, and so is a transfer from an account the document lists,
+// whose figure the document already gives.
 export function writeImportRouted<S extends Ledger>(
   state: S,
   item: ImportToWrite,
@@ -350,6 +351,14 @@ export function writeImportRouted<S extends Ledger>(
   for (const row of kept) {
     const accountId = row.accountId ?? item.accountId;
     groups.set(accountId, [...(groups.get(accountId) ?? []), row]);
+  }
+  if (
+    groups.size > 1 &&
+    kept.some(
+      (row) => row.transferFrom !== undefined && groups.has(row.transferFrom),
+    )
+  ) {
+    return { state, result: { ok: false, code: "invalid" }, operations: [] };
   }
   let next = state;
   const operations: string[] = [];
