@@ -118,7 +118,10 @@ async function sendConfirm(
   if (!classifyPostgrestResult(response, 200)) {
     return { result: { ok: true, id: importId } };
   }
-  const code = rpcFailure(response.error ?? {});
+  const code =
+    response.error?.hint === "stale"
+      ? "stale"
+      : rpcFailure(response.error ?? {});
   return {
     result: { ok: false, code },
     ...(code === "failed" && { failure: response.error }),
@@ -240,7 +243,7 @@ async function logConfirm({
   if (outcome === "failed") serverLog.error(EVENT, line, failure);
   else if (outcome === "ok") serverLog.info(EVENT, line);
   else serverLog.warn(EVENT, line);
-  if (result.ok || outcome === "failed") {
+  if (result.ok || outcome === "failed" || outcome === "stale") {
     revalidatePath("/import", "layout");
     revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
   }

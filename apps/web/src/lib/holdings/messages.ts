@@ -131,6 +131,8 @@ export const MOVEMENT_MESSAGES: Record<
     "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
   opens_later:
     "El resumen es anterior a un saldo que ya tenés de ese instrumento en esta cuenta (otro resumen o un saldo inicial). Descartá esa fila, o cargá los resúmenes del más viejo al más nuevo.",
+  stale:
+    "Cambió el efectivo o las tenencias de la cuenta. Revisá y confirmá de nuevo.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

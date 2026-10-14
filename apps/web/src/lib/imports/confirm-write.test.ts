@@ -159,7 +159,7 @@ describe("cash", () => {
         [cash("ARS", "125000.5")],
         [held("h1", "ARS", "100.00000000")],
       ),
-    ).toEqual({ ok: false, code: "failed" });
+    ).toEqual({ ok: false, code: "stale" });
     const [, args] = rpc.mock.calls[0]!;
     expect(args.p_operations).toEqual([
       {
@@ -295,7 +295,7 @@ it.each([
   });
 });
 
-it("reads a race the database refused as a failure to retry", async () => {
+it("reads a race the database refused as stale, for the user to review again", async () => {
   rpc.mockResolvedValue({
     status: 409,
     data: null,
@@ -303,9 +303,12 @@ it("reads a race the database refused as a failure to retry", async () => {
   });
   expect(await confirmImportRows(IMPORT, [row("AAPL", "5")])).toEqual({
     ok: false,
-    code: "failed",
+    code: "stale",
   });
-  expect(lines.at(-1)).toMatchObject({ level: "error" });
+  expect(lines.at(-1)).toMatchObject({
+    level: "warn",
+    "plant.outcome": "stale",
+  });
 });
 
 it("books a document dated later than today on today", async () => {
