@@ -440,11 +440,6 @@ export async function setManualPrice(input: unknown): Promise<PriceResult> {
     log("set_manual_price", { ...fields, outcome: "invalid" });
     return { ok: false, code: "invalid" };
   }
-  const admitted = admitManualPrice(parsed.data, buenosAiresDate(new Date()));
-  if (!admitted.ok) {
-    log("set_manual_price", { ...fields, outcome: admitted.code });
-    return admitted;
-  }
   const { symbol, price_date, price, currency } = parsed.data;
   const client: Client = await createClient();
   const instrument = await client
@@ -457,11 +452,14 @@ export async function setManualPrice(input: unknown): Promise<PriceResult> {
     log("set_manual_price", { ...fields, outcome: "failed" }, instrument.error);
     return { ok: false, code: "failed" };
   }
-  // A price in another currency than its instrument's would value its
-  // holdings in the wrong one.
-  if (instrument.data[0]?.currency !== currency) {
-    log("set_manual_price", { ...fields, outcome: "invalid" });
-    return { ok: false, code: "invalid" };
+  const admitted = admitManualPrice(
+    parsed.data,
+    buenosAiresDate(new Date()),
+    instrument.data[0]?.currency,
+  );
+  if (!admitted.ok) {
+    log("set_manual_price", { ...fields, outcome: admitted.code });
+    return admitted;
   }
   // Amounts stay decimal strings; the casts are only for the generated types.
   const inserted = await client.from("manual_prices").insert({
