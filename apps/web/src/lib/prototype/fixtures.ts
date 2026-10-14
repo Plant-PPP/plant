@@ -99,6 +99,8 @@ const currencyOf = (symbol: string) =>
 const mepCents = (day: number) => 90_000 + day * 45 + (day % 5) * 150;
 const cclCents = (day: number) => mepCents(day) + 4_000 + day * 2;
 const officialCents = (day: number) => mepCents(day) - 15_000 - day * 3;
+// The official euro, a little above the official dollar.
+const eurCents = (day: number) => Math.round((officialCents(day) * 108) / 100);
 // The UVA climbs every day, with inflation.
 const uvaCents = (day: number) => 120_000 + day * 55;
 
@@ -205,6 +207,7 @@ function quotesFor(today: string): StoredQuotes {
       { kind: "mep", rate_date: date, sell: decimal(mepCents(day)) },
       { kind: "ccl", rate_date: date, sell: decimal(cclCents(day)) },
       { kind: "official", rate_date: date, sell: decimal(officialCents(day)) },
+      { kind: "eur", rate_date: date, sell: decimal(eurCents(day)) },
       { kind: "uva", rate_date: date, sell: decimal(uvaCents(day)) },
     );
     for (const symbol of FED) {
@@ -545,6 +548,11 @@ const OTHER_HOLDINGS: [id: string, columns: Record<string, unknown>, Placed][] =
     [
       "c2000000-0000-4000-8000-000000000002",
       { asset_class: "cash", currency: "USD", amount: "2500", label: null },
+      at(ACCOUNTS.cocos, PORTFOLIOS.principal),
+    ],
+    [
+      "c2000000-0000-4000-8000-000000000006",
+      { asset_class: "cash", currency: "EUR", amount: "1200", label: null },
       at(ACCOUNTS.cocos, PORTFOLIOS.principal),
     ],
     [

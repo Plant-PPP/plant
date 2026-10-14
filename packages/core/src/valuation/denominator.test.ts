@@ -181,7 +181,7 @@ describe("held euros", () => {
   );
 
   it("names the euro rate when it misses", () => {
-    const { eur: _eur, ...fx } = SNAPSHOT.fx;
+    const fx = { ...SNAPSHOT.fx, eur: undefined };
     expect(
       express(eur("1"), SNAPSHOT.date, "ars", { ...SNAPSHOT, fx }, "mep"),
     ).toEqual({ missing: "eur" });

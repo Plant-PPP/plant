@@ -1,13 +1,13 @@
 import "server-only";
 import {
   admitManualPrice,
-  isDenominator,
   manualPriceSchema,
   type MovementCursor,
   type ManualPrice,
   QUOTE_CARRY_DAYS,
+  isViewUnit,
   type ReferenceDollar,
-  UNIT_FX_KINDS,
+  VALUED_FX_KINDS,
 } from "@plant/core";
 import {
   addDays,
@@ -30,7 +30,7 @@ import type {
 import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
 import type { PriceResult } from "@/lib/holdings/price-input";
 import { serverLog } from "@/lib/log/server-log";
-import { createQuoteReader } from "@/lib/quotes/quote-reader";
+import { createQuoteReader, MAX_ROWS } from "@/lib/quotes/quote-reader";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
@@ -110,9 +110,9 @@ export async function ledgerFor(client: Client, input: unknown) {
   return ledgerForDates(client, date.success ? [date.data.date] : []);
 }
 
-// The days one quote read covers: what the reader takes for the dollar kinds
-// a unit needs, less the week each day carries back.
-const QUOTE_STRETCH_DAYS = 300;
+// The days one quote read covers: what the reader takes for every rate kind a
+// held amount needs.
+export const QUOTE_STRETCH_DAYS = Math.floor(MAX_ROWS / VALUED_FX_KINDS.length);
 
 // The user's ledger with the dollar rates operations on these days need,
 // from a week before each to it, up to today.
@@ -132,7 +132,7 @@ export async function ledgerForDates(client: Client, dates: readonly string[]) {
   const reader = createQuoteReader(client);
   const read = await Promise.all(
     stretches.map((stretch) =>
-      reader.read({ ...stretch, fxKinds: [...UNIT_FX_KINDS], symbols: [] }),
+      reader.read({ ...stretch, fxKinds: [...VALUED_FX_KINDS], symbols: [] }),
     ),
   );
   const quotes =
@@ -309,7 +309,7 @@ export async function loadMovementsPage(
     !parsedScope.success ||
     !parsedCursor.success ||
     typeof unit !== "string" ||
-    !isDenominator(unit)
+    !isViewUnit(unit)
   ) {
     log("load_movements", { ...fields, outcome: "invalid" });
     return { ok: false, code: "failed" };
@@ -558,7 +558,7 @@ export async function createInstrumentHolding(
     const quotes = await createQuoteReader(client).read({
       from: addDays(today, -QUOTE_CARRY_DAYS),
       to: today,
-      fxKinds: [...UNIT_FX_KINDS],
+      fxKinds: [...VALUED_FX_KINDS],
       symbols: [holding.instrument_symbol],
     });
     const { ledger, truncated, symbolOf } = await readLedger(client, {

@@ -25,7 +25,7 @@ import {
   type StoredQuotes,
   snapshotOn,
   takesUnits,
-  UNIT_FX_KINDS,
+  VALUED_FX_KINDS,
   valueHoldings,
   valueLiabilities,
 } from "@plant/core";
@@ -678,7 +678,7 @@ export function changeBetween(
     const end = pricedAt(state, month.to);
     const start = pricedAt(state, month.from);
     const fx = { ...end.fx };
-    for (const kind of UNIT_FX_KINDS) {
+    for (const kind of VALUED_FX_KINDS) {
       const now = end.fx[kind];
       const was = start.fx[kind];
       if (now && was) fx[kind] = { ...now, sell: was.sell };

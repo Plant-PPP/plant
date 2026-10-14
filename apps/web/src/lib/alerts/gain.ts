@@ -15,10 +15,14 @@ import { allRows, type Ledger, positionsOf } from "@/lib/ledger/ledger";
 
 import type { PriceAlert } from "./alerts";
 
-// The unit a cost in a currency is worked out in: pesos as pesos, dollars at
-// face value in the reference dollar's unit.
+// The unit a cost in a currency is worked out in: pesos as pesos, euros as
+// euros, dollars at face value in the reference dollar's unit.
 const unitOf = (currency: Currency, ledger: Ledger): Denominator =>
-  currency === "ARS" ? "ars" : referenceUnit(ledger.referenceDollar);
+  currency === "ARS"
+    ? "ars"
+    : currency === "EUR"
+      ? "eur"
+      : referenceUnit(ledger.referenceDollar);
 
 // The average cost per unit of what the user holds of an instrument, in a
 // currency, from its open lots (FIFO); null when they hold none or a lot's
@@ -44,10 +48,10 @@ export function averageCost(
 }
 
 // The instruments the user holds, by symbol, each with the currency it is
-// quoted in: what an instrument's alert can watch.
+// quoted in: what an instrument's alert can watch, in pesos or dollars.
 export function heldInstruments(
   ledger: Ledger,
-): { symbol: string; currency: Currency }[] {
+): { symbol: string; currency: "ARS" | "USD" }[] {
   const closed = new Set(
     ledger.holdings
       .filter((each) => each.closed)
@@ -63,8 +67,9 @@ export function heldInstruments(
     ),
   );
   return ledger.instruments
-    .filter((each) => symbols.has(each.symbol))
-    .map(({ symbol, currency }) => ({ symbol, currency }))
+    .flatMap(({ symbol, currency }) =>
+      symbols.has(symbol) && currency !== "EUR" ? [{ symbol, currency }] : [],
+    )
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 

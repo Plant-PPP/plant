@@ -1,6 +1,5 @@
 "use client";
 
-import type { Currency } from "@plant/shared";
 import { Trash2 } from "lucide-react";
 import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -39,7 +38,7 @@ import { settle } from "@/lib/server-action-call";
 
 // An instrument the user holds, which an alert can watch, and the currency
 // it is quoted in.
-export type AlertInstrument = { symbol: string; currency: Currency };
+export type AlertInstrument = { symbol: string; currency: "ARS" | "USD" };
 
 const PRICE = "price";
 const GAIN = "gain";
