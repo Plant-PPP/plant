@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(52);
+SELECT plan(58);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -492,6 +492,52 @@ SELECT is(
   'a buy cannot reopen a sold-out holding in an archived account'
 );
 ROLLBACK TO SAVEPOINT sold_out;
+
+-- Outside write_operation a user writes no operation or movement. Every
+-- earlier write_operation call marked this transaction, so the mark is
+-- cleared first, as a new request starts without it.
+SAVEPOINT direct;
+SELECT set_config('plant.write_operation', '', true);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
+                                                    currency, quantity, price, rates)
+     SELECT m.holding_id, m.operation_id, 9, 'purchase', '2026-02-03', 'ARS', '1', '5', '{}'
+     FROM public.movements m LIMIT 1 $$),
+  '42501 -',
+  'a movement cannot be inserted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.movements $$),
+  '42501 -',
+  'a movement cannot be deleted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.operations (entry_order)
+     SELECT max(o.entry_order) + 1 FROM public.operations o $$),
+  '42501 -',
+  'an operation cannot be inserted outside write_operation'
+);
+
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.operations $$),
+  '42501 -',
+  'an operation cannot be deleted outside write_operation'
+);
+
+SELECT lives_ok(
+  $$ DELETE FROM public.holdings WHERE instrument_symbol = 'AAPL' $$,
+  'deleting a holding still takes its movements with it'
+);
+
+SELECT lives_ok(
+  $$ SELECT public.write_operation(
+       NULL, jsonb_build_array(pg_temp.trade('purchase', '1', '2026-04-02')), pg_temp.revisions('AAPL')) $$,
+  'write_operation still writes them'
+);
+ROLLBACK TO SAVEPOINT direct;
 
 -- A user moves an operation only to the last place, never past it.
 SELECT is(
