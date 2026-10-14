@@ -20,11 +20,11 @@ function keyed(debts: readonly DraftDebt[]) {
 // debt both list keeps each figure and date they agree on and leaves null,
 // marked low, any they do not; the card's name and bank are the first
 // reading's, the second's where the first has none. A debt only one reading
-// lists is kept, low.
+// lists is kept, low. `cut` counts the debts past DRAFT_DEBT_LIMIT left out.
 export function mergeDebts(
   first: readonly DraftDebt[],
   second: readonly DraftDebt[],
-): DraftDebt[] {
+): { rows: DraftDebt[]; cut: number } {
   const a = keyed(first);
   const b = keyed(second);
   const merged: DraftDebt[] = [];
@@ -66,5 +66,8 @@ export function mergeDebts(
   for (const [key, two] of b) {
     if (!a.has(key)) merged.push({ ...two, confidence: "low" });
   }
-  return merged.slice(0, DRAFT_DEBT_LIMIT);
+  return {
+    rows: merged.slice(0, DRAFT_DEBT_LIMIT),
+    cut: Math.max(merged.length - DRAFT_DEBT_LIMIT, 0),
+  };
 }

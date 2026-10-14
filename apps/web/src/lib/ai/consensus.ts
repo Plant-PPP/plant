@@ -123,13 +123,13 @@ function majority<T>(values: readonly T[], same: (a: T, b: T) => boolean) {
 // readings list it; each figure takes the value two share, and a figure none
 // share takes the tiebreak's, the row marked low for the user to check. The
 // tiebreak only had to read the disputed parts, so a row it leaves out is a
-// vote against it.
+// vote against it. `cut` counts the rows past DRAFT_ROW_LIMIT left out.
 export function settle(
   first: ImportDraft,
   second: ImportDraft,
   tiebreak: ImportDraft | null,
   { agreed, disputes }: ReturnType<typeof compareReadings>,
-): ImportDraft {
+): { draft: ImportDraft; cut: number } {
   const readings = [
     keyed(first.rows),
     keyed(second.rows),
@@ -218,7 +218,10 @@ export function settle(
     return amount ? [{ currency, amount }] : [];
   });
 
-  return { documentDate, rows: rows.slice(0, DRAFT_ROW_LIMIT), totals };
+  return {
+    draft: { documentDate, rows: rows.slice(0, DRAFT_ROW_LIMIT), totals },
+    cut: Math.max(rows.length - DRAFT_ROW_LIMIT, 0),
+  };
 }
 
 // The draft two agreeing readings make: the first's rows, each with the lower

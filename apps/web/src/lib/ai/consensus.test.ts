@@ -1,4 +1,8 @@
-import type { DraftRow, ImportDraft } from "@plant/sources";
+import {
+  DRAFT_ROW_LIMIT,
+  type DraftRow,
+  type ImportDraft,
+} from "@plant/sources";
 
 import {
   agreedDraft,
@@ -92,7 +96,7 @@ describe("settle", () => {
       row("BTC", "2"),
     ]);
     const tiebreak = draft([row("GGAL", "100"), row("BTC", "2")]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -111,7 +115,7 @@ describe("settle", () => {
     const first = draft([row("GGAL", "100")]);
     const second = draft([row("GGAL", "1000")]);
     const tiebreak = draft([row("GGAL", "10")]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -123,7 +127,7 @@ describe("settle", () => {
   it("keeps a disputed row the tiebreak leaves out when both readers list it", () => {
     const first = draft([row("GGAL", "100", { price: "5" })]);
     const second = draft([row("GGAL", "100", { price: "6" })]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       draft([]),
@@ -140,7 +144,7 @@ describe("settle", () => {
     const compared = compareReadings(first, second);
     expect(compared.disputes.rows).toEqual(["AL30|ARS#0", "AL30|ARS#1"]);
     // The tiebreak lists every line of it, so its lines line up.
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       draft([row("AL30", "10"), row("AL30", "20")]),
@@ -155,7 +159,12 @@ describe("settle", () => {
   it("keeps a row one reader lists, low, when the tiebreak could not answer", () => {
     const first = draft([row("AAPL", "5"), row("GGAL", "100")]);
     const second = draft([row("AAPL", "5")], { documentDate: null });
-    const settled = settle(first, second, null, compareReadings(first, second));
+    const { draft: settled } = settle(
+      first,
+      second,
+      null,
+      compareReadings(first, second),
+    );
     expect(settled.rows).toEqual([
       row("AAPL", "5"),
       row("GGAL", "100", { confidence: "low" }),
@@ -168,7 +177,7 @@ describe("settle", () => {
     const first = draft([row("GGAL", "100")]);
     const second = draft([row("GRUPO GALICIA", "100")]);
     const tiebreak = draft([row("GGAL", "100"), row("GRUPO GALICIA", "100")]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -181,7 +190,7 @@ describe("settle", () => {
     const first = draft([row("AAPL", "10", { price: "2", value: "20" })]);
     const second = draft([row("AAPL", "10", { price: "2", value: "60" })]);
     const tiebreak = draft([row("AAPL", "30", { price: "2", value: "60" })]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -198,7 +207,7 @@ describe("settle", () => {
     const first = draft(many(400, "A"));
     const second = draft(many(400, "B"));
     const tiebreak = draft([...many(400, "A"), ...many(400, "B")]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -228,7 +237,7 @@ describe("settle", () => {
       documentDate: "2026-09-29",
       totals: [{ currency: "ARS", amount: "12" }],
     });
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       tiebreak,
@@ -259,14 +268,33 @@ describe("a holding's cost", () => {
   it("stands on a disputed row only when two readings print it alike", () => {
     const first = draft([row("GGAL", "100", { cost: "50" })]);
     const second = draft([row("GGAL", "1000", { cost: "60" })]);
-    const settled = settle(
+    const { draft: settled } = settle(
       first,
       second,
       draft([row("GGAL", "100", { cost: "50" })]),
       compareReadings(first, second),
     );
     expect(settled.rows[0]).toMatchObject({ quantity: "100", cost: "50" });
-    const lone = settle(first, second, null, compareReadings(first, second));
+    const { draft: lone } = settle(
+      first,
+      second,
+      null,
+      compareReadings(first, second),
+    );
     expect(lone.rows[0]).not.toHaveProperty("cost");
   });
+});
+
+it("counts the rows past the limit the readings make together as cut", () => {
+  const of = (prefix: string) =>
+    draft(
+      Array.from({ length: DRAFT_ROW_LIMIT }, (_, i) =>
+        row(`${prefix}${i}`, "1"),
+      ),
+    );
+  const first = of("A");
+  const second = of("B");
+  const settled = settle(first, second, null, compareReadings(first, second));
+  expect(settled.draft.rows).toHaveLength(DRAFT_ROW_LIMIT);
+  expect(settled.cut).toBe(DRAFT_ROW_LIMIT);
 });

@@ -450,28 +450,35 @@ export function documentExtractor({
       }
       throw passing ?? errors.find((e) => e !== null);
     }
-    const operationsRead = (documentKind: DocumentKind | null) => ({
-      operations: mergeOperations(one.value.operations, two.value.operations),
-      read: {
-        reader: "document" as const,
-        mapping: "none" as const,
-        skippedRows: 0,
-        disputes: 0,
-        documentKind,
-      },
-    });
+    const operationsRead = (documentKind: DocumentKind | null) => {
+      const merged = mergeOperations(
+        one.value.operations,
+        two.value.operations,
+      );
+      return {
+        operations: merged.rows,
+        read: {
+          reader: "document" as const,
+          mapping: "none" as const,
+          skippedRows: merged.cut,
+          disputes: 0,
+          documentKind,
+        },
+      };
+    };
     // A document both readers call a card statement is read as its debts,
     // with no tiebreak: a figure they disagree on is left for the review.
     if (
       DEBT_DOCUMENT_KINDS.includes(one.value.kind) &&
       DEBT_DOCUMENT_KINDS.includes(two.value.kind)
     ) {
+      const merged = mergeDebts(one.value.debts, two.value.debts);
       return {
-        debts: mergeDebts(one.value.debts, two.value.debts),
+        debts: merged.rows,
         read: {
           reader: "document",
           mapping: "none",
-          skippedRows: 0,
+          skippedRows: merged.cut,
           disputes: 0,
           documentKind: one.value.kind,
         },
@@ -494,6 +501,7 @@ export function documentExtractor({
     const compared = compareReadings(first, second);
     const disputed = disputeCount(compared.disputes);
     let draft = agreedDraft(first, compared);
+    let cut = 0;
     if (disputed > 0) {
       // A tiebreak the provider may answer later fails the reading for the
       // step to retry, unless no retry follows; otherwise it settles on the
@@ -508,7 +516,12 @@ export function documentExtractor({
         return null;
       });
       if (tiebreak) kinds.push(tiebreak.kind);
-      draft = settle(first, second, tiebreak?.draft ?? null, compared);
+      ({ draft, cut } = settle(
+        first,
+        second,
+        tiebreak?.draft ?? null,
+        compared,
+      ));
     }
     const documentKind = agreedKind(kinds);
     if (documentKind && OPERATION_DOCUMENT_KINDS.includes(documentKind)) {
@@ -519,7 +532,7 @@ export function documentExtractor({
       read: {
         reader: "document",
         mapping: "none",
-        skippedRows: 0,
+        skippedRows: cut,
         disputes: disputed,
         documentKind,
       },

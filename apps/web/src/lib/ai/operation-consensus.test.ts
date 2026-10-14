@@ -1,4 +1,4 @@
-import type { DraftOperation } from "@plant/sources";
+import { DRAFT_ROW_LIMIT, type DraftOperation } from "@plant/sources";
 
 import { mergeOperations } from "./operation-consensus";
 
@@ -22,7 +22,7 @@ it("keeps what two readings agree on, however written, at the lower confidence",
     mergeOperations(
       [operation({ quantity: "100.0" })],
       [operation({ charges: "25.50", confidence: "medium" })],
-    ),
+    ).rows,
   ).toEqual([operation({ quantity: "100.0", confidence: "medium" })]);
 });
 
@@ -31,7 +31,7 @@ it("leaves each field the readings disagree on for the review", () => {
     mergeOperations(
       [operation()],
       [operation({ date: "2026-09-02", kind: "sale", price: "5100" })],
-    ),
+    ).rows,
   ).toEqual([
     operation({ date: null, kind: null, price: null, confidence: "low" }),
   ]);
@@ -39,10 +39,8 @@ it("leaves each field the readings disagree on for the review", () => {
 
 it("keeps an operation only one reading lists, for the user to check", () => {
   expect(
-    mergeOperations(
-      [operation(), operation({ symbol: "YPFD" })],
-      [operation()],
-    ),
+    mergeOperations([operation(), operation({ symbol: "YPFD" })], [operation()])
+      .rows,
   ).toEqual([operation(), operation({ symbol: "YPFD", confidence: "low" })]);
 });
 
@@ -56,7 +54,7 @@ it("matches an instrument's operations by occurrence, a missing name too", () =>
       operation({ symbol: null, quantity: "1" }),
       operation({ symbol: null, quantity: "2" }),
     ],
-  );
+  ).rows;
   expect(merged.map((each) => [each.quantity, each.confidence])).toEqual([
     ["1", "high"],
     ["2", "high"],
@@ -74,7 +72,7 @@ it("pairs operations named differently by their number, else date, kind and unit
         operation({ symbol: "GRUPO GALICIA" }),
         operation({ symbol: "YPF", reference: null, quantity: "7" }),
       ],
-    ).map((each) => [each.symbol, each.quantity, each.confidence]),
+    ).rows.map((each) => [each.symbol, each.quantity, each.confidence]),
   ).toEqual([
     [null, "100", "low"],
     [null, "7", "low"],
@@ -83,6 +81,20 @@ it("pairs operations named differently by their number, else date, kind and unit
 
 it("marks low an operation the readers read in different currencies", () => {
   expect(
-    mergeOperations([operation()], [operation({ currency: "USD" })]),
+    mergeOperations([operation()], [operation({ currency: "USD" })]).rows,
   ).toEqual([operation({ confidence: "low" })]);
+});
+
+it("counts the operations past the limit the two readings make together as cut", () => {
+  const of = (prefix: string, from: number) =>
+    Array.from({ length: DRAFT_ROW_LIMIT }, (_, i) =>
+      operation({
+        reference: `${prefix}${i}`,
+        symbol: `${prefix}${i}`,
+        quantity: String(from + i),
+      }),
+    );
+  const merged = mergeOperations(of("A", 1), of("B", 1001));
+  expect(merged.rows).toHaveLength(DRAFT_ROW_LIMIT);
+  expect(merged.cut).toBe(DRAFT_ROW_LIMIT);
 });
