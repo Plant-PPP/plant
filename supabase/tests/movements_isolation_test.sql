@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(47);
+SELECT plan(49);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -334,6 +334,30 @@ SELECT is(
      FROM public.movements m LIMIT 1 $$),
   '23514 -',
   'units transferred out carry their own cost'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
+                                                    currency, direction, quantity, charges, rates)
+     SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'in', '1',
+            '[{"kind": "commission", "label": null, "amount": "5"}]', '{}'
+     FROM public.movements m LIMIT 1 $$),
+  '23514 -',
+  'units transferred in carry no fee'
+);
+
+-- The insert is rolled back by the exception its block raises after it.
+SELECT is(
+  pg_temp.error_of($$ DO $d$ BEGIN
+       INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date, currency,
+                                     direction, quantity, charges, rates)
+       SELECT m.holding_id, m.operation_id, 9, 'transfer', '2026-02-03', 'ARS', 'out', '1',
+              '[{"kind": "commission", "label": null, "amount": "5"}]', '{}'
+       FROM public.movements m LIMIT 1;
+       RAISE EXCEPTION 'inserted' USING HINT = 'inserted';
+     END $d$ $$),
+  'P0001 inserted',
+  'units transferred out carry the transfer''s fee'
 );
 
 SELECT is(

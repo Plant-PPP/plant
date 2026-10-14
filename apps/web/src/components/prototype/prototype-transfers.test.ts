@@ -2,6 +2,7 @@ import { type Denominator, referenceUnit } from "@plant/core";
 import { exactOf, over, plus, stored, times } from "@plant/shared";
 
 import { buildFixtures } from "@/lib/prototype/fixtures";
+import { closesOf } from "@/lib/summary/compute";
 
 import { archivePortfolio, createPortfolio } from "./prototype-accounts-store";
 import {
@@ -229,6 +230,53 @@ describe("a transfer between portfolios", () => {
   });
 });
 
+describe("a transfer with a fee", () => {
+  const FEE = [{ kind: "commission", label: null, amount: "150" }];
+  const plain = written(transfer("2"));
+  const charged = written({ ...transfer("2"), charges: FEE });
+  const sides = (s: PrototypeState) =>
+    [PRINCIPAL, LARGO].map((portfolio) =>
+      s.movements
+        .get(appleIn(s, portfolio)!.holding.id)!
+        .find((movement) => movement.operation_id === TRANSFER)!,
+    );
+
+  it("charges the side the units leave, whole", () => {
+    const [out, arriving] = sides(charged);
+    expect(out!.charges).toEqual(FEE);
+    expect(arriving!.charges).toEqual([]);
+  });
+
+  it("leaves the units' cost as it was, and makes no result", () => {
+    expect(positionIn(charged, LARGO)!.money!.cost).toBe(
+      positionIn(plain, LARGO)!.money!.cost,
+    );
+    expect(positionIn(charged, PRINCIPAL)!.money).toEqual({
+      ...positionIn(plain, PRINCIPAL)!.money!,
+      charges: stored(
+        plus(exactOf(positionIn(plain, PRINCIPAL)!.money!.charges), {
+          n: 150n,
+          d: 1n,
+        }),
+      ),
+    });
+  });
+
+  it("is an expense of the transfer's month", () => {
+    const month = (s: PrototypeState) => closesOf(s, "ars").at(-1)!;
+    const [withFee, withoutFee] = [month(charged), month(plain)];
+    expect(withFee.period).toBe(TODAY.slice(0, 7));
+    const less = (a: string, b: string) =>
+      stored(plus(exactOf(a), exactOf(`-${b}`)));
+    expect(less(withoutFee.figures.result, withFee.figures.result)).toBe("150");
+    expect(less(withFee.figures.charges, withoutFee.figures.charges)).toBe(
+      "150",
+    );
+    expect(withFee.figures.market).toBe(withoutFee.figures.market);
+    expect(withFee.realized).toBe(withoutFee.realized);
+  });
+});
+
 describe("the tables a transfer reloads", () => {
   const moved = written(transfer("2"));
   const largo = appleIn(moved, LARGO)!.holding.id;
@@ -320,7 +368,13 @@ describe("a refused transfer", () => {
         ],
       },
     ],
-    ["invalid", { ...transfer("2"), charges: [] }],
+    [
+      "invalid",
+      {
+        ...transfer("2"),
+        charges: [{ kind: "commission", label: null, amount: "0" }],
+      },
+    ],
     ["invalid", transfer("abc")],
     ["invalid", transfer("1234567890123")],
   ])("refuses with %s and changes nothing", (code, input) => {

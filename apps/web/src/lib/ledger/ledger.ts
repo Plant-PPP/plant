@@ -913,10 +913,11 @@ export const holdingIn = (
 // Records an operation (`replacing` none) or an edit of one: each part becomes
 // a movement of its portfolio's holding, which a part that can start one
 // creates when missing; the charges split across the parts by quantity (or
-// amount). Every touched holding is admitted again, or nothing changes. A new
-// operation comes from `origin`, and an edit keeps where its operation came
-// from; a holding it creates takes that origin, and one sold to zero and
-// opened again keeps its own.
+// amount), and a transfer's go whole to the side its units leave. Every
+// touched holding is admitted again, or nothing changes. A new operation
+// comes from `origin`, and an edit keeps where its operation came from; a
+// holding it creates takes that origin, and one sold to zero and opened again
+// keeps its own.
 export function writeOperation<S extends Ledger>(
   state: S,
   input: unknown,
@@ -1037,10 +1038,13 @@ export function writeOperation<S extends Ledger>(
   const sizes = parts.map(({ part }) =>
     "quantity" in part ? part.quantity : part.amount,
   );
-  const charges = splitCharges(
-    "charges" in operation ? operation.charges : [],
-    sizes,
-  );
+  const charged = "charges" in operation ? operation.charges : [];
+  const charges =
+    operation.kind === "transfer"
+      ? parts.map(({ part }) =>
+          "direction" in part && part.direction === "out" ? charged : [],
+        )
+      : splitCharges(charged, sizes);
   const writeAt = (entryOrder: number): Write<MovementResult, S> => {
     let next = state;
     const touched = new Map(without);

@@ -167,9 +167,16 @@ describe("a transfer", () => {
     ).toMatchObject({ price: "400" });
   });
 
+  it("reads a fee on the side units leave", () => {
+    const charges = [{ kind: "commission", label: null, amount: "3" }];
+    expect(
+      movementSchema.parse({ ...leg, direction: "out", charges }),
+    ).toMatchObject({ charges });
+  });
+
   it.each([
     [
-      "charges",
+      "charges on the side units arrive in",
       { direction: "in", charges: [{ kind: "tax", label: null, amount: "1" }] },
     ],
     ["a negative cost", { direction: "in", price: "-1" }],

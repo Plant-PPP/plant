@@ -23,7 +23,7 @@ const ONE: Exact = { n: 1n, d: 1n };
 // - proceeds: sales before charges, and adjustments out;
 // - income: dividends and coupons before withholding, and what yields earned
 //   or lost;
-// - charges: commissions, fees, taxes and withholding;
+// - charges: commissions, fees (a transfer's too), taxes and withholding;
 // - contributed: paidIn less proceeds, what the user put in net;
 // - market: the change in value not explained by what was put in or taken
 //   out or by what yields brought, from prices and the dollar alone;

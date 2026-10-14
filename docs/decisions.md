@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · A transfer's fee (PLA-140)
+
+- **A fee charged in money for a transfer is the transfer's charges**, the same items as a purchase's or a sale's, typed in the dialog's "Gastos" in the operation's currency. They go whole to the side the units leave, the origin account's holding, since that broker charges them; the side they arrive in carries none, which core's schema and `movements_kind_fields` both check. A fee taken in units stays an "Ajuste" out (PLA-125).
+- **The fee never enters the cost**: the units arrive with the cost of the lots that left (FIFO), or the one the user set, and the transfer realizes nothing. It is an expense of its date, like a sale's commission: its cash flow is a sale of nothing less its charges (minus the fee), so the month's paid in and proceeds stay as they were, its charges grow by the fee and its result falls by it. In the holding's own returns it is money paid in.
+
 ## 2026-10-14 · Closes value each day once (PLA-139)
 
 - **Each day's quotes are built once per state and shared by every unit.** The stored rows are indexed by day, so a snapshot reads only the eight days it covers, and each instrument's last trade prices are one timeline per symbol, built once and searched by date. Within one unit, a month's end is the next one's start, so each day's net worth is valued once, with core's `valueHoldings` total instead of the whole assets-page valuation. A holding's quantity on a day is found by binary search, which relies on a holding's movements being sorted oldest first, as `Ledger` already requires. The output is the same: `closes-compute.test.ts` checks it against the previous implementation, kept verbatim in `closes-oracle.test-support.ts`, over the prototype and a made-up ledger, and against a digest of that implementation's output over 20,000 movements across ten years, where one unit went from about 19 s to about 1 s.
@@ -267,7 +272,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A "Traspaso" can go to another of the user's accounts.** Its arriving side names that account; the destination portfolio starts at the account's default one and can be changed, and a transfer within the account works as before. The units keep the cost they left with and make no result, as between portfolios. The operation belongs to the account the units leave: an edit keeps it, and the dialog asks "Hacia la cuenta" only when the user has more than one account.
 - **Every holding of an instrument, across accounts and portfolios, replays together**, so the lots a transfer carries keep their dates and costs in the other account. A portfolio appears once per account in an operation, so the same portfolio in two accounts is two holdings.
 - **Each line names the other side by account and portfolio when the accounts differ** ("Traspaso a Cocos · Principal"), and by portfolio as before when they do not.
-- **A withdrawal or network fee taken in units is an "Ajuste" out in the account the units reach**: the transfer itself moves one quantity, and the units lost show as what they are, with no new kind of movement. A fee charged in money waits for transfers to take charges.
+- **A withdrawal or network fee taken in units is an "Ajuste" out in the account the units reach**: the transfer itself moves one quantity, and the units lost show as what they are, with no new kind of movement. A fee charged in money is the transfer's charges (PLA-140).
 
 ## 2026-10-13 · Export and deleting the account (PLA-58, PLA-84, prototype)
 
@@ -336,7 +341,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-12 · Transfers between portfolios (PLA-118)
 
 - **A value the app computes or fetches (a cost, a price, a market value) shows as a suggestion the user can change.** Left as suggested it follows the data; changed, it is the user's.
-- **A "Traspaso" moves units of an instrument from one portfolio's holding to another portfolio's holding of it in the same account**: one operation with a side out and a side in, of one quantity, with no charges. It is no money in or out (a flow of 0 in closes and returns) and makes no result.
+- **A "Traspaso" moves units of an instrument from one portfolio's holding to another portfolio's holding of it in the same account**: one operation with a side out and a side in, of one quantity, with no charges (a fee since PLA-140). It is no money in or out (a flow of 0 in closes and returns) and makes no result.
 - **The units arriving carry the cost the units leaving took**, worked out when the holdings are replayed, so an edit to the first portfolio's earlier history reaches the second, in every unit. The dialog shows that cost per unit as "Sugerido", worked out by running the write and throwing it away, so it is what saving carries; a cost the user types instead is fixed, and the difference shows as unrealized until those units are sold, then in that sale's result.
 - **One account's holdings of an instrument replay together** (every account's since PLA-125), in date and entry order, a transfer's side out before its side in, and a write reloads all of them. A holding's history is not resumed from a stored step, since a transfer's cost comes from another holding.
 - **A holding with a transfer cannot be deleted** ("Tiene traspasos con otra cartera…"); the transfer is deleted first, from its movements, with both sides. An edit to the first portfolio still reaches a second one that is closed or archived. A write to an archived account or portfolio, or one that would leave units open in one, is refused with the restore message the holding dialog uses. When movements persist (PLA-103), the holding-to-movements cascade becomes a guard for transfer sides and `holding_has_transfers` joins the setup guard's hints.
