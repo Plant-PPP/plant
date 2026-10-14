@@ -526,9 +526,6 @@ isOneToOne: false
               "id": string,"name": string
             }[]
                            },
-"record_data_export":
-{ Args: { "p_outcome": string,"p_request_id"?: string }; Returns: undefined
-                           },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
                            } |

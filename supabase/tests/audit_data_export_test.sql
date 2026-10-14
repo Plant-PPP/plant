@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(10);
+SELECT plan(9);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -41,11 +41,10 @@ SELECT ok(
   'audit_data_export is a definer owned by audit_log''s owner, with an empty search_path'
 );
 
-SELECT ok(
-  NOT has_function_privilege('anon', 'public.record_data_export(text,text)', 'EXECUTE')
-    AND NOT has_function_privilege('authenticated', 'public.record_data_export(text,text)', 'EXECUTE')
-    AND NOT has_function_privilege('service_role', 'public.record_data_export(text,text)', 'EXECUTE'),
-  'nobody executes record_data_export, which let a session write any outcome'
+SELECT is(
+  to_regprocedure('public.record_data_export(text,text)'),
+  NULL,
+  'record_data_export, which let a session write any outcome, is gone'
 );
 
 SELECT set_config('request.jwt.claims',
@@ -54,14 +53,9 @@ SELECT set_config('request.jwt.claims',
 SET LOCAL ROLE authenticated;
 
 SELECT is(
-  pg_temp.error_of($$ SELECT public.record_data_export('success', 'req-export-forged') $$),
-  '42501',
-  'a session cannot write its own export row'
-);
-SELECT is(
   pg_temp.error_of($$ SELECT public.audit_data_export('a0000000-0000-4000-8000-00000000000a', 'success', 'req-export-forged') $$),
   '42501',
-  'nor through the server''s function'
+  'a session cannot write its own export row through the server''s function'
 );
 
 RESET ROLE;
