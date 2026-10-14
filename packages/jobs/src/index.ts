@@ -6,6 +6,10 @@ import {
   type FileDeletionJobDeps,
 } from "./functions/delete-expired-files";
 import {
+  deleteOrphanFiles,
+  type OrphanFileJobDeps,
+} from "./functions/delete-orphan-files";
+import {
   type ImportJobDeps,
   importDocument,
 } from "./functions/import-document";
@@ -17,6 +21,11 @@ export type {
   FileDeletionJobDeps,
   FileDeletionStorePort,
 } from "./functions/delete-expired-files";
+export type {
+  OrphanFile,
+  OrphanFileJobDeps,
+  OrphanFileStorePort,
+} from "./functions/delete-orphan-files";
 export type {
   ImportJobDeps,
   ImportRead,
@@ -36,15 +45,16 @@ const RUNS_JOBS = DEV_SERVER_MODE || process.env.PLANT_RUN_JOBS === "1";
 // Vercel integration are signed, so they keep working. `satisfies` makes a
 // misspelled option a type error instead of a silent default.
 //
-// refresh-quotes, import-document and delete-expired-files register in
-// dev-server mode, and on a deployment only where PLANT_RUN_JOBS is "1" (the
-// one environment whose Supabase they may write); only then are their
-// dependencies built. Dev mode checks no signature, so its registered URL is
+// refresh-quotes, import-document, delete-expired-files and
+// delete-orphan-files register in dev-server mode, and on a deployment only
+// where PLANT_RUN_JOBS is "1" (the one environment whose Supabase they may
+// write); only then are their dependencies built. Dev mode checks no signature, so its registered URL is
 // the loopback `next dev` binds, never the request's Host.
 export function createServeOptions(opts: {
   quotes?: () => QuoteJobDeps;
   imports?: () => ImportJobDeps;
   files?: () => FileDeletionJobDeps;
+  orphans?: () => OrphanFileJobDeps;
 }) {
   return {
     client: inngest,
@@ -54,6 +64,7 @@ export function createServeOptions(opts: {
           ...(opts.quotes ? [refreshQuotes(opts.quotes())] : []),
           ...(opts.imports ? [importDocument(opts.imports())] : []),
           ...(opts.files ? [deleteExpiredFiles(opts.files())] : []),
+          ...(opts.orphans ? [deleteOrphanFiles(opts.orphans())] : []),
         ]
       : [ping],
     enableUnauthedSync: false,
