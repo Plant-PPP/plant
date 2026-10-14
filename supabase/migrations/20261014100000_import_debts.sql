@@ -53,8 +53,9 @@ CREATE POLICY "Requires two-factor authentication" ON public.import_debts
   WITH CHECK ((SELECT auth.jwt() ->> 'aal') = 'aal2' OR (SELECT auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb);
 
 -- Marks a ready import of the caller's confirmed and writes each debt the
--- review kept: a new credit card debt, or the balance, minimum payment and
--- due date of one of the caller's card debts in the same currency. Each debt
+-- review kept: a new credit card debt, or the balance of one of the caller's
+-- card debts in the same currency, with the minimum payment and due date the
+-- statement gives, keeping the debt's own where it gives none. Each debt
 -- is { "liability_id", "label", "lender", "currency", "balance",
 -- "installment", "next_due_on" }; all or nothing, as the caller, under RLS.
 CREATE FUNCTION public.confirm_import_debts(p_import_id uuid, p_debts jsonb)
@@ -93,8 +94,8 @@ BEGIN
     IF v_debt ->> 'liability_id' IS NOT NULL THEN
       UPDATE public.liabilities l
         SET balance = (v_debt ->> 'balance')::numeric,
-            installment = (v_debt ->> 'installment')::numeric,
-            next_due_on = (v_debt ->> 'next_due_on')::date
+            installment = COALESCE((v_debt ->> 'installment')::numeric, l.installment),
+            next_due_on = COALESCE((v_debt ->> 'next_due_on')::date, l.next_due_on)
         WHERE l.user_id = v_user
           AND l.id = (v_debt ->> 'liability_id')::uuid
           AND l.kind = 'credit_card'

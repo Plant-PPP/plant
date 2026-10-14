@@ -29,6 +29,12 @@ it("leaves a figure or date the readings disagree on for the review, low", () =>
   ).toEqual([debt({ balance: null, dueDate: null, confidence: "low" })]);
 });
 
+it("marks low a figure only one reading printed", () => {
+  expect(mergeDebts([debt({ dueDate: null })], [debt()])).toEqual([
+    debt({ dueDate: null, confidence: "low" }),
+  ]);
+});
+
 it("pairs debts by currency and keeps one only a reading lists, low", () => {
   const usd = debt({ currency: "USD", balance: "120", minimumPayment: null });
   expect(mergeDebts([debt()], [usd, debt()])).toEqual([

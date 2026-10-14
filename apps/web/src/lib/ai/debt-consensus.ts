@@ -34,15 +34,16 @@ export function mergeDebts(
       merged.push({ ...one, confidence: "low" });
       continue;
     }
-    const balance = sameDecimal(one.balance, two.balance) ? one.balance : null;
-    const minimumPayment = sameDecimal(one.minimumPayment, two.minimumPayment)
-      ? one.minimumPayment
-      : null;
-    const dueDate = one.dueDate === two.dueDate ? one.dueDate : null;
-    const disputed =
-      balance !== one.balance ||
-      minimumPayment !== one.minimumPayment ||
-      dueDate !== one.dueDate;
+    const agree = {
+      balance: sameDecimal(one.balance, two.balance),
+      minimumPayment: sameDecimal(one.minimumPayment, two.minimumPayment),
+      dueDate: one.dueDate === two.dueDate,
+    };
+    const balance = agree.balance ? one.balance : null;
+    const minimumPayment = agree.minimumPayment ? one.minimumPayment : null;
+    const dueDate = agree.dueDate ? one.dueDate : null;
+    // A figure only one reading printed is a disagreement too.
+    const disputed = Object.values(agree).some((each) => !each);
     const order = ["low", "medium", "high"] as const;
     merged.push({
       label: one.label ?? two.label,

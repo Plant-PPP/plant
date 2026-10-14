@@ -70,15 +70,22 @@ export function ImportDebtsReview({
 }) {
   const router = useRouter();
   const listId = useId();
-  const [rows, setRows] = useState<EditedDebt[]>(() =>
-    (item.debts ?? []).map((debt) => ({
-      ...debt,
-      liabilityId: cardFor(debt, cards),
-      balanceText: debt.balance === null ? "" : amountInput(debt.balance),
-      minimumText:
-        debt.minimumPayment === null ? "" : amountInput(debt.minimumPayment),
-    })),
-  );
+  const [rows, setRows] = useState<EditedDebt[]>(() => {
+    // Each card debt is proposed for one debt of the statement at most.
+    const proposed = new Set<string>();
+    return (item.debts ?? []).map((debt) => {
+      const card = cardFor(debt, cards);
+      const liabilityId = card !== null && !proposed.has(card) ? card : null;
+      if (liabilityId) proposed.add(liabilityId);
+      return {
+        ...debt,
+        liabilityId,
+        balanceText: debt.balance === null ? "" : amountInput(debt.balance),
+        minimumText:
+          debt.minimumPayment === null ? "" : amountInput(debt.minimumPayment),
+      };
+    });
+  });
   const [alert, setAlert] = useState<string>();
   const [pending, startTransition] = useTransition();
 
@@ -99,8 +106,14 @@ export function ImportDebtsReview({
       parseAmountInput(row.minimumText) === null,
   );
   const kept = finals.some((row) => !row.discarded);
+  // The card debts the kept debts update: one debt each.
+  const updated = finals.flatMap((row) =>
+    row.discarded || row.liabilityId === null ? [] : [row.liabilityId],
+  );
   const complete =
-    debtsComplete(finals) && minimumInvalid.every((each) => !each);
+    debtsComplete(finals) &&
+    minimumInvalid.every((each) => !each) &&
+    new Set(updated).size === updated.length;
 
   const change = (id: string, patch: Partial<EditedDebt>) =>
     setRows((current) =>
@@ -157,7 +170,9 @@ export function ImportDebtsReview({
         <ul className="grid gap-2">
           {rows.map((row, index) => {
             const options = cards.filter(
-              (card) => card.currency === row.currency,
+              (card) =>
+                card.currency === row.currency &&
+                (card.id === row.liabilityId || !updated.includes(card.id)),
             );
             const problem = (field: "label" | "balance") =>
               !row.discarded && missing[index]!.has(field);

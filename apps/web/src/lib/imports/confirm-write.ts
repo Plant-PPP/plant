@@ -334,6 +334,13 @@ export async function confirmImportDebts(
     .safeParse(rows);
   const reviewed = z
     .array(reviewedDebtSchema)
+    // Two debts of one statement never update the same card debt.
+    .refine((debts) => {
+      const updated = debts.flatMap((debt) =>
+        debt.liabilityId === null ? [] : [debt.liabilityId],
+      );
+      return new Set(updated).size === updated.length;
+    })
     .safeParse((kept.data ?? []).filter((row) => !row.discarded));
   if (!id.success || !kept.success || !reviewed.success) {
     result = { ok: false, code: "invalid" };

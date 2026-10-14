@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(16);
+SELECT plan(18);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -50,7 +50,7 @@ FROM public.portfolios
 WHERE user_id IN ('a0000000-0000-4000-8000-00000000000a', 'b0000000-0000-4000-8000-00000000000b');
 ALTER TABLE public.source_connections ENABLE TRIGGER portfolio_setup_1_lock;
 
--- Ana has two card statements ready to review; Beto has one.
+-- Ana has three card statements ready to review; Beto has one.
 INSERT INTO public.uploaded_documents (id, user_id, source_connection_id, storage_path,
                                        file_name, mime_type, size_bytes, sha256)
 SELECT id, owner, connection, owner || '/imports/' || id || '/' || id,
@@ -60,6 +60,8 @@ FROM (VALUES
    'a5000000-0000-4000-8000-0000000000a5'::uuid, '1'),
   ('a8000000-0000-4000-8000-0000000000a2'::uuid, 'a0000000-0000-4000-8000-00000000000a'::uuid,
    'a5000000-0000-4000-8000-0000000000a5'::uuid, '2'),
+  ('a8000000-0000-4000-8000-0000000000a3'::uuid, 'a0000000-0000-4000-8000-00000000000a'::uuid,
+   'a5000000-0000-4000-8000-0000000000a5'::uuid, '4'),
   ('b8000000-0000-4000-8000-0000000000b1'::uuid, 'b0000000-0000-4000-8000-00000000000b'::uuid,
    'b5000000-0000-4000-8000-0000000000b5'::uuid, '3')) AS docs (id, owner, connection, digit);
 INSERT INTO public.imports (id, user_id, document_id, status) VALUES
@@ -67,6 +69,8 @@ INSERT INTO public.imports (id, user_id, document_id, status) VALUES
    'a8000000-0000-4000-8000-0000000000a1', 'ready'),
   ('a9000000-0000-4000-8000-0000000000a2', 'a0000000-0000-4000-8000-00000000000a',
    'a8000000-0000-4000-8000-0000000000a2', 'ready'),
+  ('a9000000-0000-4000-8000-0000000000a3', 'a0000000-0000-4000-8000-00000000000a',
+   'a8000000-0000-4000-8000-0000000000a3', 'ready'),
   ('b9000000-0000-4000-8000-0000000000b1', 'b0000000-0000-4000-8000-00000000000b',
    'b8000000-0000-4000-8000-0000000000b1', 'ready');
 
@@ -219,6 +223,21 @@ SELECT results_eq(
   $$ SELECT label, balance::text, installment::text, next_due_on::text FROM public.liabilities $$,
   $$ VALUES ('Visa', '300000.00000000', '30000.00000000', '2026-11-20') $$,
   'its balance, minimum payment and due date, keeping its name'
+);
+
+-- A statement that gives no minimum payment or due date keeps the debt's own.
+SELECT lives_ok(
+  $$ SELECT public.confirm_import_debts('a9000000-0000-4000-8000-0000000000a3',
+       jsonb_build_array(jsonb_build_object(
+         'liability_id', (SELECT id FROM public.liabilities), 'currency', 'ARS',
+         'balance', '310000', 'installment', NULL, 'next_due_on', NULL))) $$,
+  'a statement with no minimum payment or due date updates a card debt'
+);
+
+SELECT results_eq(
+  $$ SELECT balance::text, installment::text, next_due_on::text FROM public.liabilities $$,
+  $$ VALUES ('310000.00000000', '30000.00000000', '2026-11-20') $$,
+  'keeping the minimum payment and due date it had'
 );
 
 SELECT * FROM finish();

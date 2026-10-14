@@ -6,7 +6,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **A document both readers call a card statement is read as its debts**: one per currency it bills in, with the card's name, its bank, the statement's balance, the minimum payment and the due date, in a new `import_debts` draft. A figure or date the two readings disagree on is left null and the debt marked low, with no tiebreak; a debt only one lists is kept, low. Its holdings, if a reader listed any, are dropped.
 - **The review asks for the balance, and a name for a new debt**; the minimum payment and the due date may stay empty.
-- **Each debt is a new card debt, or updates the user's card debt in its currency whose name or bank reads the same**, when exactly one does; the user may pick another or a new one. Updating sets the balance, minimum payment and due date from the statement and keeps the debt's name, an empty minimum or date included: last month's no longer holds.
+- **Each debt is a new card debt, or updates the user's card debt in its currency whose name or bank reads the same**, when exactly one does and no other debt of the statement takes it; the user may pick another or a new one. Updating sets the balance from the statement, and its minimum payment and due date where it gives them, keeping the debt's name and its own minimum and date otherwise. Two debts of one statement never update the same card debt.
 - **`confirm_import_debts` marks the import confirmed and writes every debt as the caller, under RLS, all or nothing**; a debt that is not the caller's card debt in that currency refuses the whole import.
 
 ## 2026-10-14 · A file listing several accounts (PLA-151)
