@@ -13,7 +13,7 @@ States the fixtures do not reach (met price alerts, pinned charts, a failed read
 3. **Notices have no component.** One MEP disclaimer, three amber boxes built three ways, a green success box, red `FormAlert` text used for failed reads, and an asterisk footnote that Resumen uses without ever explaining it.
 4. **The same thing is built 3–5 ways:** year switchers, page titles, back navigation, section headings, status badges, row actions, footnotes and empty states (table below).
 5. **The type and spacing scale in `docs/ui.md` is not followed:** pages stack at `gap-6`, sections at `gap-3`, section titles are `text-base` (the doc says `text-lg`), and `gap-3` appears 85 times.
-6. **No semantic colour tokens for warning, info or success.** Pages reach for `amber-*` and `emerald-*` (32 hits) even though `--gain` exists.
+6. **Semantic colour tokens go unused.** `--gain`, `--loss` and `--warn` exist in `globals.css`, yet pages reach for `amber-*` and `emerald-*` (32 hits).
 
 ## Resumen
 
@@ -223,7 +223,7 @@ Counts over `apps/web/src/{app,components}/**/*.tsx`, leaving out tests and `com
 
 ## What phase 2 needs
 
-- **Tokens** in `globals.css`, light and dark, checked for AA: `--warning` / `--warning-foreground`, `--info` (the primary hue or a chart blue), `--success` (aliasing `--gain`), and `--loss` (aliasing `--destructive` for figures). Without them every `Notice` variant would fall back to raw Tailwind colours.
+- **Tokens**: use the existing `--warn`, `--gain` and `--destructive` for notices and badges, with `--primary` for info, keeping text in the foreground colour so contrast does not depend on the variant.
 - **`Notice`** (`info` / `warning` / `error` / `success`): an icon, an optional title, text and an optional action, on a faint tint of the token with a hairline border. `role="status"` by default, `role="alert"` for `error` raised by an action. Inline in a section, or as a page banner above the content.
 - **`EmptyState`**: an icon, one line and one action.
 - **`PageHeader`**: back link, title (`text-xl`), description, and a slot for filters and one action plus `⋯`. It replaces 10 hand-built headers and fixes the empty breadcrumbs.
