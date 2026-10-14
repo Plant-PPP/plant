@@ -35,6 +35,9 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Operations and debts carry their skipped rows** to `imports.skipped_rows`, and their reviews say how many were left out, as the holdings review does.
 - **An import deleted after the job prepared it** (no row for its institution, or no file to download) is skipped as `gone` before any model call, never retried as a store failure.
 - **Uploading again a file whose import is still queued** starts its job as a retry, under a new event id, as a sync does.
+- **`write_operation` clears its transaction mark before it returns.** The mark is local to the transaction, so left on it let whatever followed `write_operation` or `confirm_import` in the same transaction write operations, movements and instrument units by hand, and pg_graphql runs a whole request as one transaction. The mark now covers only `write_operation`'s own run. Plant reads and writes only through PostgREST, so GraphQL could also be turned off (`graphql_public` out of `api.schemas` in `supabase/config.toml` and the dashboard); that is left to a separate change.
+- **A sync period's days fall between 2000-01-01 and 9999-12-31**, and only a sync of operations carries one (`imports_sync_period`). `syncAccount`'s period schema holds the same bounds; its ISO dates have four-digit years.
+- **One capped body reader**: `readCappedBytes` in `@plant/shared` reads a response up to a cap, failing or cutting past it, and ignores a failed cancel. The quote feeds and the institution icons use it; `bodyText` in `packages/sources/src/connections/http.ts` should adopt it next.
 
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 
