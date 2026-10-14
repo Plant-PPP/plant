@@ -11,10 +11,13 @@ import {
 
 import {
   alertQuote,
+  type AlertWriteResult,
   MAX_ALERTS,
   meets,
   type NewAlert,
+  type PriceAlert,
 } from "@/lib/alerts/alerts";
+import { withGainFigures } from "@/lib/alerts/gain";
 import type {
   AssistantActions,
   ChartPart,
@@ -94,7 +97,7 @@ type Prototype = {
       unpin: (id: string) => Promise<boolean>;
     };
     alerts: {
-      create: (alert: NewAlert) => Promise<boolean>;
+      create: (alert: NewAlert) => Promise<AlertWriteResult>;
       delete: (id: string) => Promise<boolean>;
       seen: (id: string) => Promise<boolean>;
     };
@@ -271,28 +274,60 @@ export function PrototypeProvider({
       create: (alert) =>
         write((s) => {
           if (s.priceAlerts.length >= MAX_ALERTS) {
-            return { state: s, result: false };
+            return { state: s, result: "full" as const };
+          }
+          let added: PriceAlert;
+          if (alert.subjectKind === "gain") {
+            const instrument = s.instruments.find(
+              (each) => each.symbol === alert.subject,
+            );
+            if (!instrument) {
+              return { state: s, result: "unknown_instrument" as const };
+            }
+            [added] = withGainFigures(s, [
+              {
+                id: crypto.randomUUID(),
+                subjectKind: "instrument",
+                subject: alert.subject,
+                direction: alert.direction,
+                threshold: null,
+                currency: instrument.currency,
+                gainPercent: alert.percent,
+                costPrice: null,
+                metOn: null,
+                metPrice: null,
+                seenAt: null,
+              },
+            ]) as [PriceAlert];
+          } else {
+            added = {
+              ...alert,
+              id: crypto.randomUUID(),
+              gainPercent: null,
+              costPrice: null,
+              metOn: null,
+              metPrice: null,
+              seenAt: null,
+            };
           }
           const quote = alertQuote(
-            alert,
+            added,
             pricedSnapshotOf(s, snapshot).snapshot,
           );
-          const met = quote !== null && meets(alert, quote.price);
+          const met = quote !== null && meets(added, quote.price);
           return {
             state: {
               ...s,
               priceAlerts: [
                 {
-                  ...alert,
-                  id: crypto.randomUUID(),
+                  ...added,
                   metOn: met ? quote.date : null,
                   metPrice: met ? quote.price : null,
-                  seenAt: null,
                 },
                 ...s.priceAlerts,
               ],
             },
-            result: true,
+            result: "ok" as const,
           };
         }),
       delete: (id) =>

@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(13);
+SELECT plan(15);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -47,8 +47,9 @@ VALUES ('b0000000-0000-4000-8000-00000000000b', 'instrument', 'PGTAPX', 'below',
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.price_alerts', 'authenticated') $$,
   ARRAY['(table):SELECT', '(table):DELETE', 'subject_kind:INSERT', 'subject:INSERT',
-        'direction:INSERT', 'threshold:INSERT', 'currency:INSERT', 'seen_at:UPDATE'],
-  'a user reads, deletes, sets and marks seen an alert, never its owner or when it was met'
+        'direction:INSERT', 'threshold:INSERT', 'currency:INSERT', 'gain_percent:INSERT',
+        'cost_price:INSERT', 'seen_at:UPDATE', 'threshold:UPDATE', 'cost_price:UPDATE'],
+  'a user reads, deletes, sets, refigures and marks seen an alert, never its owner or when it was met'
 );
 
 SELECT is_empty(
@@ -74,12 +75,23 @@ SELECT set_config('request.jwt.claims',
 SET LOCAL ROLE authenticated;
 
 INSERT INTO public.price_alerts (subject_kind, subject, direction, threshold, currency)
-VALUES ('instrument', 'PGTAPX', 'above', 90, 'USD'), ('dollar', 'mep', 'above', 99999999, 'ARS');
+VALUES ('instrument', 'PGTAPX', 'above', 90, 'USD'), ('dollar', 'mep', 'above', 99999999, 'ARS'),
+       ('instrument', 'BTC', 'below', 1, 'USD');
+-- A gain alert whose cost the app has not worked out yet.
+INSERT INTO public.price_alerts (subject_kind, subject, direction, currency, gain_percent)
+VALUES ('instrument', 'BTC', 'above', 'USD', 20);
 
-SELECT results_eq(
-  $$ SELECT subject, direction FROM public.price_alerts ORDER BY subject_kind $$,
-  $$ VALUES ('mep', 'above'), ('PGTAPX', 'above') $$,
+SELECT is(
+  (SELECT count(*)::int FROM public.price_alerts),
+  4,
   'a user sets alerts and reads only their own'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.price_alerts (subject_kind, subject, direction, threshold, currency, gain_percent)
+                      VALUES ('instrument', 'BTC', 'above', 10, 'USD', 20) $$),
+  '23514',
+  'a gain alert''s figure comes with the cost it follows'
 );
 
 SELECT is(
@@ -107,21 +119,35 @@ SELECT is(
   'a user does not run the check'
 );
 
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.price_alerts (subject_kind, subject, direction, threshold, currency)
+                      SELECT 'dollar', 'mep', 'above', n, 'ARS' FROM generate_series(1, 47) n $$),
+  'P0001',
+  'a user keeps at most 50 alerts'
+);
+
 -- ── The quotes job ──────────────────────────────────────────────────────────
 RESET ROLE;
 INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
 VALUES ('PGTAPX', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 100, 'USD',
         'kraken', now(), now());
+-- Ana's own BTC price, today: it wins over any feed price of an earlier day.
+INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency)
+VALUES ('a0000000-0000-4000-8000-00000000000a', 'BTC',
+        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 0.5, 'USD');
 SET LOCAL ROLE service_role;
 
-SELECT is(public.meet_price_alerts(), 1, 'the check marks met the one alert the latest quote meets');
+SELECT is(public.meet_price_alerts(), 2,
+  'the check marks met the alerts the latest quote meets, the user''s own price included, and not a gain alert with no figure');
 SELECT is(public.meet_price_alerts(), 0, 'an alert is met once');
 
 RESET ROLE;
 SELECT results_eq(
-  $$ SELECT user_id::text, met_price FROM public.price_alerts WHERE met_on IS NOT NULL $$,
-  $$ VALUES ('a0000000-0000-4000-8000-00000000000a', 100::numeric) $$,
-  'the met alert keeps the quote it was met at'
+  $$ SELECT user_id::text, met_price, met_on = (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+     FROM public.price_alerts WHERE met_on IS NOT NULL ORDER BY met_price $$,
+  $$ VALUES ('a0000000-0000-4000-8000-00000000000a', 0.5::numeric, true),
+            ('a0000000-0000-4000-8000-00000000000a', 100::numeric, true) $$,
+  'each met alert keeps the quote and the day it was met at'
 );
 
 -- ── Ana again ───────────────────────────────────────────────────────────────

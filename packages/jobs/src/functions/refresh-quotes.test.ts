@@ -631,6 +631,8 @@ describe("price alerts after the quotes", () => {
     const { result } = await drive(d);
     expect(result).toMatchObject({ outcome: "ok" });
     expect(meet).toHaveBeenCalledTimes(1);
+    // Once, though the alerts step runs in a request of its own.
+    expect(runLines(d.lines)).toHaveLength(1);
     expect(alertLines(d.lines)).toEqual([
       {
         level: "info",

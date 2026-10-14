@@ -15,6 +15,8 @@ const waiting = (overrides: Partial<PriceAlert> = {}): PriceAlert => ({
   direction: "above",
   threshold: "1400",
   currency: "ARS",
+  gainPercent: null,
+  costPrice: null,
   metOn: null,
   metPrice: null,
   seenAt: null,
@@ -86,4 +88,52 @@ it("takes a new alert only as the form sends it", () => {
   ]) {
     expect(newAlertSchema.safeParse(bad).success).toBe(false);
   }
+});
+
+it("says what a gain alert waits for and what met it", () => {
+  const gain = waiting({
+    subjectKind: "instrument",
+    subject: "BTC",
+    currency: "USD",
+    threshold: "60000",
+    gainPercent: "20",
+    costPrice: "50000",
+  });
+  expect(alertLine(gain)).toBe(
+    "Cuando BTC gane un 20 % sobre tu costo promedio de US$ 50.000,00 (a US$ 60.000,00)",
+  );
+  expect(alertLine({ ...gain, threshold: null, costPrice: null })).toBe(
+    "Cuando BTC gane un 20 % sobre tu costo promedio, cuando lo podamos calcular con tus movimientos",
+  );
+  expect(alertLine({ ...gain, metOn: "2026-10-14", metPrice: "61000" })).toBe(
+    "BTC llegó a US$ 61.000,00 el 14/10/2026: gana un 22,0 % sobre tu costo promedio de US$ 50.000,00 (tu alerta: +20 %)",
+  );
+});
+
+it("takes a gain alert with a percent, and a loss under 100 %", () => {
+  const gain = {
+    subjectKind: "gain",
+    subject: "BTC",
+    direction: "above",
+    percent: "250",
+  };
+  expect(newAlertSchema.safeParse(gain).success).toBe(true);
+  expect(
+    newAlertSchema.safeParse({ ...gain, direction: "below", percent: "30" })
+      .success,
+  ).toBe(true);
+  expect(
+    newAlertSchema.safeParse({ ...gain, direction: "below", percent: "100" })
+      .success,
+  ).toBe(false);
+  expect(newAlertSchema.safeParse({ ...gain, percent: "0" }).success).toBe(
+    false,
+  );
+  expect(newAlertSchema.safeParse({ ...gain, threshold: "1" }).success).toBe(
+    false,
+  );
+});
+
+it("never meets an alert with no figure yet", () => {
+  expect(meets(waiting({ threshold: null }), "999999")).toBe(false);
 });

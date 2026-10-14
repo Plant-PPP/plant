@@ -1,5 +1,6 @@
 "use client";
 
+import type { Currency } from "@plant/shared";
 import { Trash2 } from "lucide-react";
 import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -27,28 +28,55 @@ import {
   ALERT_DOLLARS,
   type AlertDollar,
   alertLine,
+  type AlertWriteResult,
   MAX_ALERTS,
   type NewAlert,
+  newAlertSchema,
   type PriceAlert,
 } from "@/lib/alerts/alerts";
 import { parseAmountInput } from "@/lib/format/amount";
 
-const INSTRUMENT = "instrument";
-const DIRECTION_LABELS = { above: "Sube a", below: "Baja a" } as const;
+// An instrument the user holds, which an alert can watch, and the currency
+// it is quoted in.
+export type AlertInstrument = { symbol: string; currency: Currency };
+
+const PRICE = "price";
+const GAIN = "gain";
+type Subject = AlertDollar | typeof PRICE | typeof GAIN;
+
+const SUBJECT_LABELS: Record<typeof PRICE | typeof GAIN, string> = {
+  price: "Precio de un activo",
+  gain: "Ganancia de un activo",
+};
+const DIRECTION_LABELS = {
+  price: { above: "Sube a", below: "Baja a" },
+  gain: { above: "Gana", below: "Pierde" },
+} as const;
 const INVALID_PRICE =
   "Ingresá un precio mayor a cero, con coma para los decimales.";
-const INVALID_SYMBOL = "Ingresá el ticker del activo, como AL30 o BTC.";
+const INVALID_PERCENT =
+  "Ingresá un porcentaje mayor a cero, con coma para los decimales; una pérdida, menor a 100.";
+const REFUSED: Record<Exclude<AlertWriteResult, "ok">, string> = {
+  invalid: "Revisá los datos de la alerta.",
+  full: `Ya tenés ${MAX_ALERTS} alertas. Borrá alguna para crear otra.`,
+  unknown_instrument: "No encontramos ese activo.",
+  failed: "No pudimos crear la alerta. Probá de nuevo.",
+};
 
-// The user's price alerts: each one waiting or met, a form to set another,
-// and the way to delete one. Both change the list at once and come back if
-// the server refuses.
+const symbolLabel = (currency: Currency) => (currency === "USD" ? "US$" : "$");
+
+// The user's alerts: each one waiting or met, a form to set another, and the
+// way to delete one. Both change the list at once and come back if the
+// server refuses.
 export function AlertsCard({
   alerts,
+  instruments,
   onCreate,
   onDelete,
 }: {
   alerts: readonly PriceAlert[];
-  onCreate: (alert: NewAlert) => Promise<boolean>;
+  instruments: readonly AlertInstrument[];
+  onCreate: (alert: NewAlert) => Promise<AlertWriteResult>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
   const [shown, change] = useOptimistic(
@@ -63,27 +91,16 @@ export function AlertsCard({
   );
   const [, startTransition] = useTransition();
 
-  const create = (alert: NewAlert) =>
-    startTransition(async () => {
-      change({
-        add: {
-          ...alert,
-          id: `pending-${crypto.randomUUID()}`,
-          metOn: null,
-          metPrice: null,
-          seenAt: null,
-        },
-      });
-      if (await onCreate(alert).catch(() => false)) {
-        toast.success("Creaste la alerta.");
-      } else {
-        toast.error(
-          shown.length >= MAX_ALERTS
-            ? `Ya tenés ${MAX_ALERTS} alertas. Borrá alguna para crear otra.`
-            : "No pudimos crear la alerta. Probá de nuevo.",
-        );
-      }
-    });
+  const create = (alert: NewAlert, pending: PriceAlert) =>
+    new Promise<boolean>((resolve) =>
+      startTransition(async () => {
+        change({ add: pending });
+        const result = await onCreate(alert).catch(() => "failed" as const);
+        if (result === "ok") toast.success("Creaste la alerta.");
+        else toast.error(REFUSED[result]);
+        resolve(result === "ok");
+      }),
+    );
 
   const remove = (id: string) =>
     startTransition(async () => {
@@ -99,12 +116,14 @@ export function AlertsCard({
         <CardTitle>Alertas de precio</CardTitle>
         <CardDescription>
           Te avisamos en el Resumen cuando un dólar o un activo llegue al precio
-          que elijas. Miramos las cotizaciones cada hora desde el cierre del
-          mercado.
+          que elijas, o cuando un activo que tenés gane o pierda un porcentaje
+          sobre tu costo promedio. Miramos las cotizaciones cada hora desde el
+          cierre del mercado; un activo sin cotización automática, como un bono
+          o un CEDEAR, usa el último precio que cargues a mano.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <AlertForm onCreate={create} />
+        <AlertForm instruments={instruments} onCreate={create} />
         {shown.length > 0 && (
           <ul className="grid gap-2">
             {shown.map((alert) => (
@@ -122,7 +141,7 @@ export function AlertsCard({
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="size-7"
+                  className="size-7 shrink-0"
                   aria-label={`Borrar la alerta: ${alertLine(alert)}`}
                   disabled={alert.id.startsWith("pending-")}
                   onClick={() => remove(alert.id)}
@@ -138,17 +157,82 @@ export function AlertsCard({
   );
 }
 
-// A dollar or an instrument, which way and at what price.
-function AlertForm({ onCreate }: { onCreate: (alert: NewAlert) => void }) {
+// A dollar's or an instrument's price, which way and at what figure; or an
+// instrument's gain or loss over its cost, in percent.
+function AlertForm({
+  instruments,
+  onCreate,
+}: {
+  instruments: readonly AlertInstrument[];
+  onCreate: (alert: NewAlert, pending: PriceAlert) => Promise<boolean>;
+}) {
   const id = useId();
-  const [subject, setSubject] = useState<AlertDollar | typeof INSTRUMENT>(
-    "mep",
-  );
-  const [symbol, setSymbol] = useState("");
-  const [currency, setCurrency] = useState<"ARS" | "USD">("USD");
+  const [subject, setSubject] = useState<Subject>("mep");
+  const [symbol, setSymbol] = useState(instruments[0]?.symbol ?? "");
   const [direction, setDirection] = useState<"above" | "below">("above");
-  const [price, setPrice] = useState("");
+  const [figure, setFigure] = useState("");
   const [alert, setAlert] = useState<string | null>(null);
+  const onInstrument = subject === PRICE || subject === GAIN;
+  const instrument = instruments.find((each) => each.symbol === symbol);
+  const directions =
+    subject === GAIN ? DIRECTION_LABELS.gain : DIRECTION_LABELS.price;
+
+  const submit = async () => {
+    const value = parseAmountInput(figure);
+    const pending = (
+      fields: Pick<PriceAlert, "subjectKind" | "subject" | "currency"> &
+        Partial<PriceAlert>,
+    ): PriceAlert => ({
+      id: `pending-${crypto.randomUUID()}`,
+      direction,
+      threshold: null,
+      gainPercent: null,
+      costPrice: null,
+      metOn: null,
+      metPrice: null,
+      seenAt: null,
+      ...fields,
+    });
+    let input: NewAlert;
+    let shown: PriceAlert;
+    if (subject === GAIN) {
+      input = {
+        subjectKind: "gain",
+        subject: symbol,
+        direction,
+        percent: value ?? "",
+      };
+      shown = pending({
+        subjectKind: "instrument",
+        subject: symbol,
+        currency: instrument!.currency,
+        gainPercent: value,
+      });
+    } else if (subject === PRICE) {
+      input = {
+        subjectKind: "instrument",
+        subject: symbol,
+        direction,
+        threshold: value ?? "",
+        currency: instrument!.currency,
+      };
+      shown = pending({ ...input, threshold: value });
+    } else {
+      input = {
+        subjectKind: "dollar",
+        subject,
+        direction,
+        threshold: value ?? "",
+        currency: "ARS",
+      };
+      shown = pending({ ...input, threshold: value });
+    }
+    if (value === null || !newAlertSchema.safeParse(input).success) {
+      return setAlert(subject === GAIN ? INVALID_PERCENT : INVALID_PRICE);
+    }
+    setAlert(null);
+    if (await onCreate(input, shown)) setFigure("");
+  };
 
   return (
     <form
@@ -156,33 +240,7 @@ function AlertForm({ onCreate }: { onCreate: (alert: NewAlert) => void }) {
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        const threshold = parseAmountInput(price);
-        if (threshold === null || threshold === "0") {
-          return setAlert(INVALID_PRICE);
-        }
-        const ticker = symbol.trim().toUpperCase();
-        if (subject === INSTRUMENT && !/^[A-Z0-9]{1,15}$/.test(ticker)) {
-          return setAlert(INVALID_SYMBOL);
-        }
-        setAlert(null);
-        setPrice("");
-        onCreate(
-          subject === INSTRUMENT
-            ? {
-                subjectKind: "instrument",
-                subject: ticker,
-                direction,
-                threshold,
-                currency,
-              }
-            : {
-                subjectKind: "dollar",
-                subject,
-                direction,
-                threshold,
-                currency: "ARS",
-              },
-        );
+        void submit();
       }}
     >
       <div className="grid gap-3 sm:grid-cols-4">
@@ -190,12 +248,12 @@ function AlertForm({ onCreate }: { onCreate: (alert: NewAlert) => void }) {
           <Label htmlFor={`${id}-subject`}>Qué mirar</Label>
           <Select
             value={subject}
-            onValueChange={(value) => setSubject(value as typeof subject)}
+            onValueChange={(value) => setSubject(value as Subject)}
           >
             <SelectTrigger id={`${id}-subject`} className="w-full">
               <SelectValue>
-                {subject === INSTRUMENT
-                  ? "Un activo"
+                {subject === PRICE || subject === GAIN
+                  ? SUBJECT_LABELS[subject]
                   : ALERT_DOLLAR_LABELS[subject]}
               </SelectValue>
             </SelectTrigger>
@@ -205,21 +263,30 @@ function AlertForm({ onCreate }: { onCreate: (alert: NewAlert) => void }) {
                   {ALERT_DOLLAR_LABELS[each]}
                 </SelectItem>
               ))}
-              <SelectItem value={INSTRUMENT}>Un activo</SelectItem>
+              {instruments.length > 0 && (
+                <>
+                  <SelectItem value={PRICE}>{SUBJECT_LABELS.price}</SelectItem>
+                  <SelectItem value={GAIN}>{SUBJECT_LABELS.gain}</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
-        {subject === INSTRUMENT && (
+        {onInstrument && (
           <div className="grid gap-2">
-            <Label htmlFor={`${id}-symbol`}>Ticker</Label>
-            <Input
-              id={`${id}-symbol`}
-              autoComplete="off"
-              placeholder="AL30"
-              aria-invalid={alert === INVALID_SYMBOL || undefined}
-              value={symbol}
-              onChange={(event) => setSymbol(event.target.value)}
-            />
+            <Label htmlFor={`${id}-symbol`}>Activo</Label>
+            <Select value={symbol} onValueChange={setSymbol}>
+              <SelectTrigger id={`${id}-symbol`} className="w-full">
+                <SelectValue>{symbol}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {instruments.map((each) => (
+                  <SelectItem key={each.symbol} value={each.symbol}>
+                    {each.symbol}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         <div className="grid gap-2">
@@ -229,45 +296,31 @@ function AlertForm({ onCreate }: { onCreate: (alert: NewAlert) => void }) {
             onValueChange={(value) => setDirection(value as typeof direction)}
           >
             <SelectTrigger id={`${id}-direction`} className="w-full">
-              <SelectValue>{DIRECTION_LABELS[direction]}</SelectValue>
+              <SelectValue>{directions[direction]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="above">{DIRECTION_LABELS.above}</SelectItem>
-              <SelectItem value="below">{DIRECTION_LABELS.below}</SelectItem>
+              <SelectItem value="above">{directions.above}</SelectItem>
+              <SelectItem value="below">{directions.below}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor={`${id}-price`}>
-            {subject === INSTRUMENT ? "Precio" : "Precio en pesos"}
+          <Label htmlFor={`${id}-figure`}>
+            {subject === GAIN
+              ? "Porcentaje"
+              : subject === PRICE
+                ? `Precio en ${symbolLabel(instrument?.currency ?? "ARS")}`
+                : "Precio en $"}
           </Label>
-          <div className="flex gap-2">
-            {subject === INSTRUMENT && (
-              <Select
-                value={currency}
-                onValueChange={(value) => setCurrency(value as typeof currency)}
-              >
-                <SelectTrigger
-                  aria-label="Moneda del precio"
-                  className="w-20 shrink-0"
-                >
-                  <SelectValue>{currency === "USD" ? "US$" : "$"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">US$</SelectItem>
-                  <SelectItem value="ARS">$</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            <Input
-              id={`${id}-price`}
-              inputMode="decimal"
-              autoComplete="off"
-              aria-invalid={alert === INVALID_PRICE || undefined}
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-            />
-          </div>
+          <Input
+            id={`${id}-figure`}
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder={subject === GAIN ? "20" : undefined}
+            aria-invalid={alert !== null || undefined}
+            value={figure}
+            onChange={(event) => setFigure(event.target.value)}
+          />
         </div>
       </div>
       {alert && <FormAlert>{alert}</FormAlert>}

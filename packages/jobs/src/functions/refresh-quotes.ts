@@ -186,11 +186,15 @@ export async function runRefreshQuotes(
     results.push({ feed: feed.id, outcome });
   }
   const { fields, ...counts } = runLine(context.runId, results);
+  // The alerts step runs before any line is written, so a request that stops
+  // at it writes none and the run's lines come once, from the last request.
+  if (deps.alerts && counts.outcome !== "failed") {
+    await meetAlerts(deps.alerts, deps.log, context);
+  }
   deps.log[LEVEL[counts.outcome]]("quotes.refresh", fields);
   if (counts.outcome === "failed") {
     throw new NonRetriableError("quotes.refresh failed");
   }
-  if (deps.alerts) await meetAlerts(deps.alerts, deps.log, context);
   return counts;
 }
 

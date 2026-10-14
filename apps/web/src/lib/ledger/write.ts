@@ -20,6 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { syncGainAlerts } from "@/lib/alerts/read";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type {
   MovementResult,
@@ -148,6 +149,25 @@ export async function ledgerForDates(client: Client, dates: readonly string[]) {
   });
 }
 
+// Works the user's gain alerts' figures out again after their movements
+// changed; a failure is logged and leaves the old figures until the next
+// write.
+export async function refreshGainAlerts(userId: string): Promise<void> {
+  try {
+    const client: Client = await createClient();
+    await syncGainAlerts(
+      client,
+      async (dates) => (await ledgerForDates(client, dates)).ledger,
+    );
+  } catch (error) {
+    serverLog.error(
+      "alerts.gain_sync",
+      { "enduser.id": userId, "plant.outcome": "failed" },
+      error,
+    );
+  }
+}
+
 // Whether the operation as written takes the next entry order, as a new one
 // would: an edit that moved to another day and went last on it.
 function goesLast(
@@ -252,6 +272,7 @@ export async function runOperation(
     failure = error;
   }
   log(action, { ...fields, outcome: result.ok ? "ok" : result.code }, failure);
+  if (result.ok) await refreshGainAlerts(fields.userId);
   // Anything but a malformed request may mean the page is out of date.
   if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
@@ -579,6 +600,7 @@ export async function createInstrumentHolding(
     failure = error;
   }
   log(action, { ...fields, outcome: result.ok ? "ok" : result.code }, failure);
+  if (result.ok) await refreshGainAlerts(fields.userId);
   if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");
   return result;
@@ -640,6 +662,7 @@ export async function deleteHoldingRow(
     { ...fields, outcome: result.ok ? "ok" : result.code },
     failure,
   );
+  if (result.ok) await refreshGainAlerts(fields.userId);
   // Anything but a malformed request may mean the page is out of date.
   if (result.ok || result.code !== "invalid")
     revalidatePath("/assets", "layout");

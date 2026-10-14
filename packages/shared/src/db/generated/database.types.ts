@@ -365,14 +365,14 @@ isOneToOne: false
                   ]
                 },"price_alerts": {
                   Row: {
-                    "created_at": string,"currency": Database["public"]['Enums']["currency"],"direction": string,"id": string,"met_on": string | null,"met_price": number | null,"seen_at": string | null,"subject": string,"subject_kind": string,"threshold": number,"user_id": string
+                    "cost_price": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"direction": string,"gain_percent": number | null,"id": string,"met_on": string | null,"met_price": number | null,"seen_at": string | null,"subject": string,"subject_kind": string,"threshold": number | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"currency": Database["public"]['Enums']["currency"],"direction": string,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject": string,"subject_kind": string,"threshold": number,"user_id"?: string
+                    "cost_price"?: number | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"direction": string,"gain_percent"?: number | null,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject": string,"subject_kind": string,"threshold"?: number | null,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"direction"?: string,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject"?: string,"subject_kind"?: string,"threshold"?: number,"user_id"?: string
+                    "cost_price"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"direction"?: string,"gain_percent"?: number | null,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject"?: string,"subject_kind"?: string,"threshold"?: number | null,"user_id"?: string
                   }
                   Relationships: [
                     
