@@ -31,8 +31,8 @@ import {
 import {
   CONFIDENCE_LABELS,
   type ImportItem,
+  lackingField,
   lackingFigure,
-  missingText,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
@@ -269,7 +269,12 @@ export function ImportDebtsReview({
                           }
                         />
                         {problem("label") && (
-                          <Problem text={missingText(item.origin)} />
+                          <Problem
+                            text={lackingField(
+                              item.debts?.[index]?.label ?? null,
+                              item.origin,
+                            )}
+                          />
                         )}
                       </label>
                       <label className="grid gap-1 text-xs">

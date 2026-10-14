@@ -280,6 +280,7 @@ it("asks for the account of a row a document lists under one it cannot name", ()
     <ImportReview
       item={{
         ...ITEM,
+        origin: "document",
         rows: [{ ...ITEM.rows[0]!, accountLabel: "BingX" }],
       }}
       institution="Cocos"
@@ -349,4 +350,45 @@ it("asks a sync's invalid rows to be fixed without naming a document", () => {
   expect(invalidRowsAlert("document")).toContain(
     "su cuenta si el documento lista varias",
   );
+});
+
+it("words a spreadsheet's review by the spreadsheet, never a document", () => {
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        rows: [{ ...ITEM.rows[0]!, accountLabel: "BingX" }],
+      }}
+      institution="Cocos"
+      instruments={[
+        { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
+      ]}
+      held={new Map([["GD30", "10"]])}
+      accounts={[
+        {
+          id: "a2",
+          institution: "Cocos",
+          held: new Map([["GD30", "10"]]),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
+        {
+          id: "a3",
+          institution: "Nexo",
+          held: new Map(),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
+      ]}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).toContain("La planilla no muestra un total para comparar");
+  expect(html).toContain("Sin total en la planilla");
+  expect(html).toContain("la planilla dice &quot;BingX&quot;");
+  expect(html).toContain("No figuran en la planilla");
+  expect(html).toContain("la planilla no los lista");
+  expect(html).not.toMatch(/documento|resumen/i);
 });
