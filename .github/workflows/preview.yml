@@ -40,8 +40,8 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: team_iclEIP54nv2uC5nZE6AJZrHr
-          VERCEL_PROJECT_ID: prj_j02L9pEidnuTOsf2NdudyIvufNAo
+          VERCEL_ORG_ID: team_iSCRuTEvENjbffVzhuXeRy91
+          VERCEL_PROJECT_ID: prj_bz4FeAwk7vvhR7NPijAoeRKbE1Va
         run: |
           set -euo pipefail
           if [ -z "$VERCEL_TOKEN" ]; then
