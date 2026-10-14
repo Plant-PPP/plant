@@ -34,8 +34,8 @@ Branch `feat/pla-155-connector-port` (PLA-155, PLA-156, PLA-157, PLA-158, PLA-16
 | **S** | A user stores credentials on, or syncs, another user's account | The trigger authorizes from `auth.uid()` and the account's owner; composite keys; pgTAP `account_api_keys_test.sql`, pentest `account-api-keys.pentest.test.ts` |
 | **T** | A user points their row at another user's Vault secret | `vault_secret` is granted to nobody and the trigger keeps it on update |
 | **R** | Credentials stored or a sync started with no trace | `connections.api_key` and `imports.read` log lines with user, provider and outcome, never a credential |
-| **I** | Credentials read back by a user, kept in the row, logged or in a step's output | No grant on the columns or on Vault (pgTAP), `credentials` always null (check), `account_credentials` only for service_role (pentest `account-credentials.pentest.test.ts`); adapters keep secrets out of URLs and errors (contract tests), except IBKR's token, which Flex takes in the query string |
-| **D** | A slow provider or a never-ready IBKR statement holds the job | Timeouts per request, a bounded wait for IBKR, one import at a time per user |
+| **I** | Credentials read back by a user, kept in the row, logged or in a step's output | No grant on the columns or on Vault (pgTAP), `credentials` always null (check), `account_credentials` only for service_role (pentest `account-credentials.pentest.test.ts`); adapters keep secrets out of URLs and errors (contract tests), except IBKR's token, which Flex takes in the query string: the fetch instrumentation does not trace Flex URLs and a span processor masks `t=` in any span that names one (`instrumentation.ts`) |
+| **D** | A slow provider or a never-ready IBKR statement holds the job | Timeouts per request; an IBKR read stops within a 30 s budget, waits included, and fails for the job's retry; one import at a time per user |
 | **E** | Plant trading with credentials that can | Adapters call only GETs (and IOL's token POST), proved by the contract tests; Binance refuses keys that can do more; Wallbit refuses a key it lists `trade` for |
 
 ## Controls as built
@@ -49,5 +49,5 @@ Branch `feat/pla-155-connector-port` (PLA-155, PLA-156, PLA-157, PLA-158, PLA-16
 
 - Whoever controls the database (or service_role) can read every credential, IOL's password included, which can trade. Accepted by Tomas for IOL; the card says so.
 - Wallbit and Nexo Pro cannot be asked what a key may do; a key made with more than reading is stored on the user's word. Plant never calls a trading endpoint either way.
-- IBKR's token travels in the URL to IBKR, as Flex requires; it can only run reports.
+- IBKR's token travels in the URL to IBKR, as Flex requires; it can only run reports. Traces skip and mask it; IBKR's and any proxy's own logs are out of Plant's reach.
 - The providers' shapes for Wallbit trades, Nexo Pro balances and IOL's account state are taken from their documentation and an unofficial client, not from real accounts.

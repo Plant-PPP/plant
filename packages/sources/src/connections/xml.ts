@@ -1,3 +1,5 @@
+import { SourceError } from "../file-upload/draft";
+
 // Just enough XML for the reports providers send: the attributes of every
 // element of a name, and the text of the first element of a name. Elements
 // are matched by name only; no entity besides the five XML defines and
@@ -11,14 +13,19 @@ const ENTITIES: Record<string, string> = {
   apos: "'",
 };
 
+// A numeric reference to no code point is a report no retry reads.
+function codePoint(digits: string, radix: number): string {
+  try {
+    return String.fromCodePoint(Number.parseInt(digits, radix));
+  } catch {
+    throw new SourceError("extraction_failed", false);
+  }
+}
+
 function decoded(text: string): string {
   return text.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-z]+);/g, (whole, name) => {
-    if (name.startsWith("#x")) {
-      return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
-    }
-    if (name.startsWith("#")) {
-      return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
-    }
+    if (name.startsWith("#x")) return codePoint(name.slice(2), 16);
+    if (name.startsWith("#")) return codePoint(name.slice(1), 10);
     return ENTITIES[name] ?? whole;
   });
 }

@@ -103,5 +103,9 @@ export type ConnectionDeps = {
   fetch?: typeof fetch;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  // One request's timeout, and the most wall time one read takes where an
+  // adapter waits on the provider; `clock` measures it in milliseconds.
   timeoutMs?: number;
+  budgetMs?: number;
+  clock?: () => number;
 };

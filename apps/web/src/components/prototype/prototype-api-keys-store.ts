@@ -18,6 +18,13 @@ import { priceToday, type PrototypeState, type Write } from "./prototype-store";
 // trade, so the prototype shows the refusal where the provider would tell.
 const TRADES = /trade/i;
 
+// The providers that tell Plant a key can trade: Binance when asked, Wallbit
+// when it answers that a key holds `trade`.
+const TELLS_TRADING: ReadonlySet<ConnectionProvider> = new Set([
+  "binance",
+  "wallbit",
+]);
+
 // What each made-up account holds, in units, of instruments the prototype
 // knows.
 const BALANCES: Record<
@@ -67,7 +74,7 @@ export function connectApiKey(
     return refuse("unconfirmed");
   }
   if (
-    adapter.readOnly === "checked" &&
+    TELLS_TRADING.has(input.provider) &&
     Object.values(credentials).some((value) => TRADES.test(value))
   ) {
     return refuse("not_read_only");

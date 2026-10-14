@@ -61,6 +61,32 @@ it("refuses a key that can trade, one that does not parse, and another provider'
   });
 });
 
+it("refuses a Wallbit key that can trade, as Wallbit would tell", () => {
+  const withWallbit = {
+    ...state,
+    accounts: state.accounts.map((each) =>
+      each.id === BINANCE.id ? { ...each, institution: "Wallbit" } : each,
+    ),
+  };
+  const input = {
+    accountId: BINANCE.id,
+    provider: "wallbit" as const,
+    confirmedReadOnly: true,
+  };
+  expect(
+    connectApiKey(withWallbit, {
+      ...input,
+      credentials: { apiKey: "wb_trade_000000000001" },
+    }).result,
+  ).toEqual({ ok: false, code: "not_read_only" });
+  expect(
+    connectApiKey(withWallbit, {
+      ...input,
+      credentials: { apiKey: "wb_read_0000000000001" },
+    }).result,
+  ).toEqual({ ok: true });
+});
+
 it("asks IOL's user to confirm it only reads", () => {
   const input = {
     accountId: IOL.id,

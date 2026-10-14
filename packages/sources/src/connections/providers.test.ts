@@ -185,6 +185,35 @@ describe("ibkr", () => {
   });
 });
 
+describe("ibkr's budget", () => {
+  it("stops waiting for a statement before the read's budget runs out", async () => {
+    fake.answer = (request) => ({
+      status: 200,
+      type: "xml",
+      body: request.path.endsWith("/SendRequest")
+        ? "<FlexStatementResponse><Status>Success</Status><ReferenceCode>1</ReferenceCode></FlexStatementResponse>"
+        : "<FlexStatementResponse><Status>Warn</Status><ErrorCode>1019</ErrorCode></FlexStatementResponse>",
+    });
+    let now = 0;
+    const sleep = jest.fn(async (ms: number) => {
+      now += ms;
+    });
+    const port = ibkrConnection({
+      ...deps(),
+      sleep,
+      clock: () => now,
+      budgetMs: 10_000,
+    });
+    expect(await failure(port.read(IBKR_CREDENTIALS, "holdings"))).toEqual({
+      code: "extraction_failed",
+      retryable: true,
+    });
+    // 2 s and 3 s fit in 10 s; the next 5 s would leave nothing to ask with.
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([2000, 3000]);
+    expect(now).toBeLessThan(10_000);
+  });
+});
+
 describe("nexo", () => {
   it("reads each balance held, signing the request with the time as its nonce", async () => {
     fake.answer = PROVIDER_FIXTURES.nexo.ok;

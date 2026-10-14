@@ -5,7 +5,12 @@ jest.mock("@vercel/otel", () => ({
 }));
 
 import { AuthUnavailableError } from "@/lib/auth/session-state";
-import { onRequestError, register } from "./instrumentation";
+import {
+  onRequestError,
+  register,
+  SECRET_QUERY_URLS,
+  scrubSecretQuery,
+} from "./instrumentation";
 
 const ENDPOINTS = [
   "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -48,12 +53,59 @@ describe("register", () => {
       process.env.VERCEL_GIT_COMMIT_SHA = "abc123";
       await register();
       expect(registerOTel).toHaveBeenCalledTimes(1);
-      expect(registerOTel).toHaveBeenCalledWith({
-        serviceName: "plant-web",
-        attributes: { "service.version": "abc123" },
-      });
+      expect(registerOTel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serviceName: "plant-web",
+          attributes: { "service.version": "abc123" },
+          instrumentationConfig: { fetch: { ignoreUrls: SECRET_QUERY_URLS } },
+        }),
+      );
     },
   );
+
+  it("masks the Flex token in a span that names its URL, as the span starts", async () => {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.example";
+    await register();
+    const [scrub] = (
+      registerOTel.mock.calls[0][0] as {
+        spanProcessors: {
+          onStart: (span: unknown) => void;
+        }[];
+      }
+    ).spanProcessors;
+    const url =
+      "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=123456789012&q=987654&v=3";
+    const span = {
+      name: `GET ${url}`,
+      attributes: { "http.url": url, "url.full": url, other: url },
+      updateName: jest.fn(),
+      setAttribute: jest.fn(),
+    };
+    scrub!.onStart(span);
+    const masked =
+      "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=<masked>&q=987654&v=3";
+    expect(span.updateName).toHaveBeenCalledWith(`GET ${masked}`);
+    expect(span.setAttribute.mock.calls).toEqual([
+      ["http.url", masked],
+      ["url.full", masked],
+    ]);
+  });
+
+  it.each([
+    "https://api.binance.com/api/v3/account?timestamp=1&t=2",
+    "https://example.com/AccountManagement/FlexWebService/SendRequest?t=1",
+  ])("leaves %s as it is", (url) => {
+    expect(scrubSecretQuery(url)).toBe(url);
+  });
+
+  it.each([
+    [
+      "https://www.interactivebrokers.com/AccountManagement/FlexWebService/GetStatement?q=1&t=999&v=3",
+      "https://www.interactivebrokers.com/AccountManagement/FlexWebService/GetStatement?q=1&t=<masked>&v=3",
+    ],
+  ])("masks the token of %s", (url, masked) => {
+    expect(scrubSecretQuery(url)).toBe(masked);
+  });
 
   it("logs a failed registration instead of rejecting", async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.example";

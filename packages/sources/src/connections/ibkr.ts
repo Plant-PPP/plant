@@ -29,8 +29,13 @@ type IbkrCredentials = z.infer<typeof ibkrCredentialsSchema>;
 const REJECTED_CODES = new Set(["1012", "1013", "1014", "1015", "1020"]);
 
 // How long a statement may take to be generated: IBKR answers 1019 while it
-// is, and Plant asks again after a wait that grows.
-const STATEMENT_WAITS_MS = [2000, 3000, 5000, 5000, 10000, 10000];
+// is, and Plant asks again after a wait that grows, within the read's budget.
+const STATEMENT_WAITS_MS = [2000, 3000, 5000, 5000, 10000];
+
+// The most wall time one read takes, requests and waits included, well
+// under the function's limit: past it the read fails for a later attempt,
+// which the job retries with its own backoff.
+export const IBKR_READ_BUDGET_MS = 30_000;
 
 // The draft's currency, or null for one Plant does not keep.
 const currencyOf = (code: string | undefined): "ARS" | "USD" | null =>
@@ -63,14 +68,21 @@ export function ibkrConnection({
   fetch: get = fetch,
   now = () => new Date(),
   sleep = defaultSleep,
-  timeoutMs = 20_000,
+  timeoutMs = 10_000,
+  budgetMs = IBKR_READ_BUDGET_MS,
+  clock = () => performance.now(),
 }: ConnectionDeps = {}) {
+  // Each request gets what is left of the read's budget, at most timeoutMs.
+  let deadline = Number.POSITIVE_INFINITY;
+  const left = () => deadline - clock();
   const flex = async (path: string, query: Record<string, string>) => {
+    const budget = Math.min(timeoutMs, left());
+    if (budget <= 0) throw unavailable();
     const response = await call(
       get,
       `${baseUrl}/${path}?${new URLSearchParams({ ...query, v: "3" })}`,
       { headers: { "User-Agent": "Plant/1.0", Accept: "application/xml" } },
-      timeoutMs,
+      budget,
     );
     if (!response.ok) throw unavailable();
     return response.text().catch((cause: unknown) => {
@@ -92,8 +104,11 @@ export function ibkrConnection({
   };
 
   const statement = async (credentials: IbkrCredentials) => {
+    deadline = clock() + budgetMs;
     const reference = await request(credentials);
     for (const wait of [0, ...STATEMENT_WAITS_MS]) {
+      // A wait that would leave no time to ask again ends the read.
+      if (wait >= left()) break;
       if (wait > 0) await sleep(wait);
       const xml = await flex("GetStatement", {
         t: credentials.token,
@@ -224,6 +239,7 @@ export function ibkrConnection({
     drafts: ["holdings", "operations"],
     // A statement requested proves the token runs the query.
     check: async (credentials) => {
+      deadline = clock() + budgetMs;
       await request(credentials);
     },
     async read(credentials, draft) {
