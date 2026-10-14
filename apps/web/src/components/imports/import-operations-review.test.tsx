@@ -167,3 +167,36 @@ it("never brings back an operation the account holds under its number", () => {
     /<button[^>]*disabled=""[^>]*aria-label="Recuperar la operación 1"/,
   );
 });
+
+it("words what a sync did not bring by the sync, never a document", () => {
+  const html = renderToStaticMarkup(
+    <ImportOperationsReview
+      item={{
+        ...item([operation({ price: null, source: "De la sincronización" })]),
+        origin: "sync",
+        fileName: "Operaciones de IOL",
+      }}
+      institution="IOL"
+      instruments={[
+        { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
+      ]}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
+    />,
+  );
+  expect(html).toContain("No vino en la sincronización");
+  expect(html).not.toMatch(/documento/);
+});
+
+it("asks for figures above 0 when the reading has a 0", () => {
+  const trade = render([operation({ quantity: "0", price: "0" })]);
+  expect(trade).toContain("Ingresá una cantidad mayor a 0");
+  expect(trade).toContain("Ingresá un precio mayor a 0");
+  expect(trade).not.toContain("Falta en el documento");
+  const income = render([
+    operation({ kind: "dividend", quantity: null, price: null, amount: "0" }),
+  ]);
+  expect(income).toContain("Ingresá un monto mayor a 0");
+  expect(income).not.toContain("Falta en el documento");
+});

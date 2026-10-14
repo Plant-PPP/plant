@@ -24,6 +24,11 @@ it("refuses a longer body whatever length it claims", async () => {
   expect(await boundedText(request, 4)).toBeNull();
 });
 
+it("refuses unread a body that claims more than the limit", async () => {
+  const request = streamed(["ab"], { "content-length": "5" });
+  expect(await boundedText(request, 4)).toBeNull();
+});
+
 it("reads no body as empty", async () => {
   expect(await boundedText(new Request("http://localhost/"), 4)).toBe("");
 });

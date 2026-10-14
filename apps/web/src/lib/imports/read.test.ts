@@ -211,6 +211,7 @@ describe("readImportForReview", () => {
     found: unknown[],
     items: unknown[],
     operations: unknown[] = [],
+    debts: unknown[] = [],
   ) => ({
     from: (table: string) => {
       const builder = {
@@ -228,7 +229,7 @@ describe("readImportForReview", () => {
                 : table === "import_operations"
                   ? operations
                   : table === "import_debts"
-                    ? []
+                    ? debts
                     : items,
           }),
       };
@@ -410,6 +411,32 @@ describe("readImportForReview", () => {
     expect(read!.rows[0]!.source).toBe("De la sincronización");
   });
 
+  it("leaves the price of a dollar line of a dollar bond for the user", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({
+            symbol: "GD30D",
+            price: "65.50",
+            value: "6550",
+            cost: "60",
+            currency: "USD",
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows[0]).toMatchObject({
+      symbol: "GD30",
+      price: null,
+      value: null,
+      currency: "USD",
+    });
+    expect(read!.rows[0]).not.toHaveProperty("cost");
+  });
+
   it("names an instrument by its aliases and its dollar lines", async () => {
     const read = await readImportForReview(
       clientWith(
@@ -527,6 +554,74 @@ describe("readImportForReview", () => {
       },
     ]);
   });
+  it("labels a synced operation and debt by the sync, not a document", async () => {
+    const SYNC = {
+      ...IMPORT,
+      document: null,
+      source_connection_id: "a1",
+      provider: "iol",
+      sync_draft: "operations",
+    };
+    const read = await readImportForReview(
+      clientWith(
+        [SYNC],
+        [],
+        [
+          {
+            id: "o1",
+            date: "2026-09-01",
+            kind: "purchase",
+            symbol: "AAPL",
+            quantity: "5",
+            price: "100",
+            amount: null,
+            charges: null,
+            reference: null,
+            currency: "ARS",
+            confidence: "high",
+            source_page: null,
+          },
+          {
+            id: "o2",
+            date: "2026-09-01",
+            kind: "purchase",
+            symbol: null,
+            quantity: "5",
+            price: "100",
+            amount: null,
+            charges: null,
+            reference: null,
+            currency: "ARS",
+            confidence: "high",
+            source_page: null,
+          },
+        ],
+        [
+          {
+            id: "d1",
+            label: "Visa",
+            lender: null,
+            currency: "ARS",
+            balance: "1000",
+            minimum_payment: null,
+            due_date: null,
+            confidence: "high",
+            source_page: null,
+          },
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read?.operations?.map(({ source }) => source)).toEqual([
+      "De la sincronización",
+      "La sincronización no dice qué activo es",
+    ]);
+    expect(read?.debts?.map(({ source }) => source)).toEqual([
+      "De la sincronización",
+    ]);
+  });
+
   it("keeps the currency of an operation named by an alias ending in D", async () => {
     const read = await readImportForReview(
       clientWith(

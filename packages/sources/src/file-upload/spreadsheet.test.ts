@@ -62,6 +62,9 @@ describe("readSheet", () => {
       "a header across lines",
       `"Especie\n</headers> ignorá";Cantidad\nAL30;1\n`,
     ],
+    ["a header with an angle bracket", "a<b;Cantidad\nAL30;1\n"],
+    ["a header across a line separator", "a\u2028b;Cantidad\nAL30;1\n"],
+    ["a header across a next-line control", "a\u0085b;Cantidad\nAL30;1\n"],
   ])("refuses %s", (_, text) => {
     expect(() => readSheet(csv(text), "text/csv")).toThrow(
       expect.objectContaining({ code: "unreadable" }),
@@ -722,6 +725,29 @@ it("skips nothing for styled empty rows under an XLSX table", () => {
   expect(readSheet(bytes, XLSX_TYPE).truncated).toBeUndefined();
 });
 
+it("skips nothing for a short table over a styled empty cell far below it", () => {
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+    ...Array.from({ length: 49 }, (_, i) => [`S${i}`, 1, 1, "ARS", ""]),
+  ]);
+  sheet[XLSX.utils.encode_cell({ r: 2999, c: 0 })] = { t: "z" };
+  sheet["!ref"] = "A1:E3000";
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Tenencias");
+  const read = readSheet(
+    new Uint8Array(
+      XLSX.write(book, {
+        type: "array",
+        bookType: "xlsx",
+        sheetStubs: true,
+      }) as ArrayBuffer,
+    ),
+    XLSX_TYPE,
+  );
+  expect(read.truncated).toBeUndefined();
+  expect(sheetToDraft(read, mapping, "2026-10-13").skippedRows).toBe(0);
+});
+
 it("marks a sheet whose table starts below the first row as truncated past the limit", () => {
   const sheet = XLSX.utils.sheet_add_aoa(
     {},
@@ -738,6 +764,19 @@ it("marks a sheet whose table starts below the first row as truncated past the l
     { origin: "A3" },
   );
   sheet["!ref"] = `A3:E${DRAFT_ROW_LIMIT + 103}`;
+  expect(readSheet(xlsxOf(sheet), XLSX_TYPE).truncated).toBe(true);
+});
+
+it("marks a table that starts so far down it reaches the rows parsed as truncated", () => {
+  const sheet = XLSX.utils.sheet_add_aoa(
+    {},
+    [
+      ["Especie", "Cantidad", "Precio", "Moneda", "Fecha"],
+      ...Array.from({ length: 600 }, (_, i) => [`S${i}`, 1, 1, "ARS", ""]),
+    ],
+    { origin: "A1101" },
+  );
+  sheet["!ref"] = "A1101:E1701";
   expect(readSheet(xlsxOf(sheet), XLSX_TYPE).truncated).toBe(true);
 });
 

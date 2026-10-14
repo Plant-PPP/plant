@@ -54,12 +54,22 @@ export type ConnectResult = { ok: true } | { ok: false; code: ConnectCode };
 
 // Why a sync did not start: input that does not parse (or a draft the
 // provider does not read), an account with no key (or archived), one
-// syncing already, or a failure.
-export type SyncCode = "invalid" | "not_connected" | "in_progress" | "failed";
+// syncing already, too many syncs in a minute, or a failure.
+export type SyncCode =
+  "invalid" | "not_connected" | "in_progress" | "limited" | "failed";
 export type SyncResult =
   { ok: true; importId: string } | { ok: false; code: SyncCode };
 
 export type DisconnectResult = { ok: boolean };
+
+// The first day a sync of operations reads; the imports_sync_period
+// constraint holds the same bound.
+export const SYNC_PERIOD_START = "2000-01-01";
+
+// What a sync reads: one from before syncs of operations has no draft and
+// read holdings.
+export const syncDraftOf = <Draft extends string>(draft: Draft | null) =>
+  draft ?? "holdings";
 
 export type ApiKeyActions = {
   connect: (input: ApiKeyInput) => Promise<ConnectResult>;
@@ -221,5 +231,7 @@ export const SYNC_MESSAGES: Record<SyncCode, string> = {
   invalid: "No encontramos esa cuenta.",
   not_connected: "La cuenta no tiene una conexión.",
   in_progress: "Ya estamos sincronizando esta cuenta.",
+  limited:
+    "Sincronizaste muchas veces seguidas. Esperá un minuto y volvé a intentar.",
   failed: "No pudimos sincronizar. Probá de nuevo más tarde.",
 };

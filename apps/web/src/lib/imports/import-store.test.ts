@@ -35,6 +35,7 @@ function storeWith(answer: (call: Call) => { status: number; body?: unknown }) {
 const IMPORT = "a1000000-0000-4000-8000-0000000000a1";
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const ACCOUNT = "a2000000-0000-4000-8000-0000000000a2";
+const PATH = `${USER}/imports/a9000000-0000-4000-8000-0000000000a9/a7000000-0000-4000-8000-0000000000a7`;
 // Made up.
 const CREDENTIALS = {
   apiKey: "MadeUpKey0000001",
@@ -165,7 +166,7 @@ it("downloads no file where none is any more", async () => {
       message: "Object not found",
     },
   }));
-  expect(await store.download(`${USER}/imports/p`, USER)).toBeNull();
+  expect(await store.download(PATH, USER)).toBeNull();
 });
 
 it("throws a store error when a download fails otherwise", async () => {
@@ -173,9 +174,7 @@ it("throws a store error when a download fails otherwise", async () => {
     status: 500,
     body: { statusCode: "500", error: "internal", message: "boom" },
   }));
-  const error = await store
-    .download(`${USER}/imports/p`, USER)
-    .catch((e: unknown) => e);
+  const error = await store.download(PATH, USER).catch((e: unknown) => e);
   expect(error).toMatchObject({ step: "download" });
 });
 
@@ -185,6 +184,8 @@ it("downloads no file outside the user's imports", async () => {
     `a0000000-0000-4000-8000-00000000000b/imports/p`,
     `${USER}/other/p`,
     `${USER}/imports/../../a0000000-0000-4000-8000-00000000000b/imports/p`,
+    `${USER}/imports/a/b/c/d`,
+    `${PATH}/more`,
   ]) {
     const error = await store.download(path, USER).catch((e: unknown) => e);
     expect(error).toMatchObject({ step: "download", code: "path" });
@@ -365,12 +366,20 @@ it("throws when the import stopped being read before it was marked ready", async
   expect(error).toMatchObject({ step: "draft", code: "not_being_read" });
 });
 
-it("marks an import reading only from queued or reading", async () => {
-  const { store, calls } = storeWith(() => ({ status: 204 }));
-  await store.reading(IMPORT, USER);
+it("claims an import for reading only from queued", async () => {
+  const { store, calls } = storeWith(() => ({
+    status: 200,
+    body: [{ id: IMPORT }],
+  }));
+  expect(await store.reading(IMPORT, USER)).toBe(true);
   expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
-  expect(calls[0]!.url.searchParams.get("status")).toBe("in.(queued,reading)");
+  expect(calls[0]!.url.searchParams.get("status")).toBe("eq.queued");
   expect(calls[0]!.body).toEqual({ status: "reading" });
+});
+
+it("does not claim an import another run claimed", async () => {
+  const { store } = storeWith(() => ({ status: 200, body: [] }));
+  expect(await store.reading(IMPORT, USER)).toBe(false);
 });
 
 it("marks an import failed with its reason, only while it is being read", async () => {

@@ -30,6 +30,7 @@ import {
   connectMessages,
   type DisconnectResult,
   SYNC_MESSAGES,
+  SYNC_PERIOD_START,
   type SyncResult,
 } from "@/lib/connections/api-key";
 import { formatDate } from "@/lib/format/date";
@@ -333,7 +334,7 @@ function OperationsDialog({
               id={`${id}-from`}
               type="date"
               required
-              min={PERIOD_START}
+              min={SYNC_PERIOD_START}
               max={today}
               value={from}
               onChange={(event) => setFrom(event.target.value)}
@@ -345,7 +346,7 @@ function OperationsDialog({
               id={`${id}-to`}
               type="date"
               required
-              min={PERIOD_START}
+              min={SYNC_PERIOD_START}
               max={today}
               value={to}
               onChange={(event) => setTo(event.target.value)}
@@ -366,8 +367,6 @@ function OperationsDialog({
   );
 }
 
-const PERIOD_START = "2000-01-01";
-
 // Why the period cannot be read, in the user's words; null when it can.
 export function periodFailure(
   from: string,
@@ -376,7 +375,7 @@ export function periodFailure(
 ): string | null {
   const day = /^\d{4}-\d{2}-\d{2}$/;
   if (!day.test(from) || !day.test(to)) return "Elegí las dos fechas.";
-  if (from < PERIOD_START) return "Elegí una fecha desde el año 2000.";
+  if (from < SYNC_PERIOD_START) return "Elegí una fecha desde el año 2000.";
   if (from > to)
     return "La fecha de inicio tiene que ser anterior a la de fin.";
   if (to > today) return "La fecha de fin no puede ser posterior a hoy.";

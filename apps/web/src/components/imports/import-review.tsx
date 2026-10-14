@@ -122,6 +122,15 @@ const CHANGE_TEXT = {
   discarded: "Descartada",
 } as const;
 
+// What the review asks of its rows when one is not ready, by what it read.
+export function invalidRowsAlert(origin: ImportItem["origin"]): string {
+  const account =
+    origin === "sync"
+      ? ""
+      : `, su cuenta si ${origin === "sheet" ? "la planilla" : "el documento"} lista varias`;
+  return `Revisá las filas: cada una necesita un activo que no se repita en su cuenta, una cantidad mayor a 0${account} y, si suma unidades, su precio.`;
+}
+
 // What the reading left out, by what it read.
 function skippedLine({
   origin,
@@ -451,9 +460,7 @@ export function ImportReview({
 
   function confirm() {
     if (!valid) {
-      setAlert(
-        "Revisá las filas: cada una necesita un activo que no se repita en su cuenta, una cantidad mayor a 0, su cuenta si el documento lista varias y, si suma unidades, su precio.",
-      );
+      setAlert(invalidRowsAlert(item.origin));
       return;
     }
     setAlert(undefined);

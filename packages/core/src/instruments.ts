@@ -89,8 +89,9 @@ export function instrumentIndex(
 }
 
 // `currency` is what the document's line is in, `instrumentCurrency` what the
-// instrument is quoted in: they differ on a D (MEP) or C (cable) line, the
-// one case `dollarLine` is true.
+// instrument is quoted in. `dollarLine` is true for a D (MEP) or C (cable)
+// line of a bond or CEDEAR; `currency` is then USD, which may equal
+// `instrumentCurrency` (GD30D, a dollar bond).
 export type ResolvedSymbol = {
   symbol: string;
   type: InstrumentType;

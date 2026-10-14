@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { CONNECTION_PROVIDERS, connectionAdapters } from "@plant/sources";
 
 import {
@@ -7,7 +10,24 @@ import {
   keyHintOf,
   PROVIDERS,
   providerOf,
+  SYNC_PERIOD_START,
 } from "./api-key";
+
+const MIGRATIONS = join(__dirname, "../../../../../supabase/migrations");
+
+// The first day the newest migration that adds imports_sync_period allows.
+function databasePeriodStart() {
+  const sql = readdirSync(MIGRATIONS)
+    .sort()
+    .map((file) => readFileSync(join(MIGRATIONS, file), "utf8"))
+    .filter((text) => /ADD CONSTRAINT imports_sync_period\b/.test(text))
+    .at(-1);
+  return sql?.match(/sync_from BETWEEN '(\d{4}-\d{2}-\d{2})'/)?.[1];
+}
+
+test("SYNC_PERIOD_START matches the first day the database allows", () => {
+  expect(databasePeriodStart()).toBe(SYNC_PERIOD_START);
+});
 
 describe("the provider registry", () => {
   it.each(CONNECTION_PROVIDERS)(
