@@ -202,7 +202,6 @@ export function ImportReview({
         : typedPrice(row.costText, types.get(row.symbol));
     return { row, quantity, price, cost };
   });
-  // A row that adds units to the account needs their price.
   // What the account a row goes to holds: the import's, or the one the
   // review routed it to.
   const accountOf = (row: EditedRow) => row.accountId ?? item.accountId;
@@ -247,9 +246,21 @@ export function ImportReview({
     );
     return effect.kind === "new" || effect.kind === "up";
   };
-  // Units that come from another account carry their cost, so need none.
+  // The account a row's units come from, while it still adds units and that
+  // account is still offered.
+  const transferOf = (row: EditedRow, quantity: string | null) =>
+    row.transferFrom !== undefined &&
+    routing &&
+    addsUnits(row, quantity) &&
+    (routingFor(row, routing).elsewhere.get(row.symbol) ?? []).some(
+      (source) => source.id === row.transferFrom,
+    )
+      ? row.transferFrom
+      : undefined;
+  // A row that adds units to the account needs their price, unless they come
+  // from another account, carrying their cost.
   const needsPrice = (row: EditedRow, quantity: string | null) =>
-    addsUnits(row, quantity) && row.transferFrom === undefined;
+    addsUnits(row, quantity) && transferOf(row, quantity) === undefined;
   // A cost kept is what a new holding comes in at, so its price is not
   // needed then; units added to one held come in at the price.
   const opensWithCost = (
@@ -324,7 +335,9 @@ export function ImportReview({
       ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
       ...(row.accountLabel !== undefined && { accountLabel: row.accountLabel }),
       ...(row.accountId !== undefined && { accountId: row.accountId }),
-      ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
+      ...(transferOf(row, quantity) !== undefined && {
+        transferFrom: transferOf(row, quantity),
+      }),
     }),
   );
   const totals = readTotals(finalRows);
@@ -774,7 +787,8 @@ function RowRouting({
   const sources = routing.elsewhere.get(row.symbol) ?? [];
   if (!isNew && sources.length === 0) return null;
   const portfolio = row.portfolioId ?? routing.defaultPortfolioId;
-  const origin = row.transferFrom ?? PURCHASE;
+  const origin =
+    sources.find((each) => each.id === row.transferFrom)?.id ?? PURCHASE;
   const originText = (value: string) =>
     value === PURCHASE
       ? "Compra o saldo propio"
