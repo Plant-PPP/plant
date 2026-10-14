@@ -188,3 +188,25 @@
     cursor: pointer;
   }
 }
+
+/* Printing (Resumen's "Guardar en PDF"): the page alone, at its full length,
+   without the app's chrome or controls. */
+@media print {
+  [data-slot="sidebar"],
+  [data-slot="sidebar-gap"],
+  [data-print="hidden"] {
+    display: none !important;
+  }
+
+  [data-slot="sidebar-wrapper"],
+  [data-slot="sidebar-inset"] {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  [data-slot="sidebar-inset"] {
+    margin: 0 !important;
+    border: 0 !important;
+  }
+}

@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 
 import { ClosesTable } from "./closes-table";
 import { CurrenciesBreakdown } from "./currencies-breakdown";
+import { PrintButton } from "./print-button";
 import { CloseStatus, ResultText } from "./figures";
 import { NetWorthChart } from "./net-worth-chart";
 
@@ -105,7 +106,10 @@ export function SummaryPage({
               : "Tu patrimonio neto y cómo se movió mes a mes"}
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+        <div
+          className="flex w-full flex-wrap items-end gap-2 sm:w-auto"
+          data-print="hidden"
+        >
           <FilterSelect
             id={`${id}-portfolio`}
             label="Cartera"
@@ -127,6 +131,7 @@ export function SummaryPage({
             pending={false}
             onChange={(param) => url.set("unit", param)}
           />
+          <PrintButton />
         </div>
       </div>
       <MepNotice unit={unit} />

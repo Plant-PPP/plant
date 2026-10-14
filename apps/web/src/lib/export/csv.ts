@@ -1,6 +1,11 @@
-// One file of an export: its name, what the page calls it, and its CSV,
-// built when the user asks for it.
-export type ExportFile = { name: string; label: string; csv: () => string };
+// One table of an export: its file name without extension, what the page
+// calls it, its header and its rows.
+export type ExportTable = {
+  name: string;
+  label: string;
+  header: readonly string[];
+  rows: readonly (readonly (string | null)[])[];
+};
 
 // A table as CSV (RFC 4180): comma-separated, CRLF lines, a field quoted when
 // it holds a comma, a quote or a line break, its quotes doubled. A text field
