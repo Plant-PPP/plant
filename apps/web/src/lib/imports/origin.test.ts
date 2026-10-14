@@ -14,7 +14,7 @@ it("names an uploaded document's import by its file", () => {
   ).toEqual({ fileName: "resumen.pdf", accountId: ACCOUNT });
 });
 
-it("names a sync by its exchange", () => {
+it("names a sync by its provider and what it read", () => {
   expect(
     importOrigin(
       importOriginSchema.parse({
@@ -24,6 +24,16 @@ it("names a sync by its exchange", () => {
       }),
     ),
   ).toEqual({ fileName: "Sincronización con Binance", accountId: ACCOUNT });
+  expect(
+    importOrigin(
+      importOriginSchema.parse({
+        source_connection_id: ACCOUNT,
+        provider: "wallbit",
+        sync_draft: "operations",
+        document: null,
+      }),
+    ).fileName,
+  ).toBe("Operaciones de Wallbit");
 });
 
 it("refuses an import that reads neither", () => {

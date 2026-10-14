@@ -1,25 +1,51 @@
-import { exchangeCredentialsSchema } from "@plant/sources";
+import { type ConnectionProvider, connectionAdapters } from "@plant/sources";
 
-import type {
-  ApiKeyInput,
-  ConnectResult,
-  SyncResult,
+import {
+  type ApiKeyInput,
+  type ConnectResult,
+  keyHintOf,
+  needsConfirmation,
+  PROVIDERS,
+  providerOf,
+  type SyncResult,
 } from "@/lib/connections/api-key";
-import { SYNC_NAMES } from "@/lib/imports/origin";
+import { importOrigin } from "@/lib/imports/origin";
 import type { ImportItem, ImportRow } from "@/lib/imports/review";
 
 import { priceToday, type PrototypeState, type Write } from "./prototype-store";
 
-// A made-up key that stands for one that can trade: any key with "TRADE" in
-// it, so the prototype shows the refusal.
+// Made-up credentials with "TRADE" in any field stand for ones that can
+// trade, so the prototype shows the refusal where the provider would tell.
 const TRADES = /trade/i;
 
-// What a made-up Binance account holds, in units.
-const BALANCES: readonly { symbol: string; quantity: string }[] = [
-  { symbol: "BTC", quantity: "0.0125" },
-  { symbol: "ETH", quantity: "0.85" },
-  { symbol: "SOL", quantity: "12.4" },
-];
+// What each made-up account holds, in units, of instruments the prototype
+// knows.
+const BALANCES: Record<
+  ConnectionProvider,
+  readonly { symbol: string; quantity: string }[]
+> = {
+  binance: [
+    { symbol: "BTC", quantity: "0.0125" },
+    { symbol: "ETH", quantity: "0.85" },
+    { symbol: "SOL", quantity: "12.4" },
+  ],
+  wallbit: [
+    { symbol: "AAPL", quantity: "10.5" },
+    { symbol: "MSFT", quantity: "3" },
+  ],
+  ibkr: [
+    { symbol: "SPY", quantity: "2.5" },
+    { symbol: "NVDA", quantity: "8" },
+  ],
+  nexo: [
+    { symbol: "BTC", quantity: "0.05" },
+    { symbol: "ETH", quantity: "1.2" },
+  ],
+  iol: [
+    { symbol: "AL30", quantity: "1500" },
+    { symbol: "MELI", quantity: "4" },
+  ],
+};
 
 export function connectApiKey(
   state: PrototypeState,
@@ -29,19 +55,27 @@ export function connectApiKey(
     state,
     result: { ok: false as const, code },
   });
-  if (!state.accounts.some((each) => each.id === input.accountId)) {
-    return refuse("not_found");
+  const account = state.accounts.find((each) => each.id === input.accountId);
+  if (!account) return refuse("not_found");
+  if (providerOf(account.institution) !== input.provider) {
+    return refuse("unsupported");
   }
-  const credentials = exchangeCredentialsSchema.safeParse({
-    apiKey: input.apiKey,
-    apiSecret: input.apiSecret,
-  });
-  if (!credentials.success) return refuse("invalid");
-  if (TRADES.test(input.apiKey)) return refuse("not_read_only");
+  const adapter = connectionAdapters()[input.provider]();
+  const credentials = adapter.parse(input.credentials);
+  if (!credentials) return refuse("invalid");
+  if (needsConfirmation(adapter.readOnly) && !input.confirmedReadOnly) {
+    return refuse("unconfirmed");
+  }
+  if (
+    adapter.readOnly === "checked" &&
+    Object.values(credentials).some((value) => TRADES.test(value))
+  ) {
+    return refuse("not_read_only");
+  }
   const apiKeys = new Map(state.apiKeys);
   apiKeys.set(input.accountId, {
     provider: input.provider,
-    keyHint: input.apiKey.slice(-4),
+    keyHint: keyHintOf(credentials[adapter.hintField] ?? ""),
     connectedOn: state.today,
   });
   return { state: { ...state, apiKeys }, result: { ok: true } };
@@ -56,8 +90,16 @@ export function disconnectApiKey(
   return { state: ok ? { ...state, apiKeys } : state, result: { ok } };
 }
 
-// Queues a sync of the account, as the real one inserts its import; it
-// counts against no month's uploads.
+const syncName = (provider: ConnectionProvider) =>
+  importOrigin({
+    source_connection_id: "-",
+    provider,
+    sync_draft: "holdings",
+    document: null,
+  }).fileName;
+
+// Queues a sync of the account's holdings, as the real one inserts its
+// import; it counts against no month's uploads.
 export function addSync(
   state: PrototypeState,
   { id, accountId }: { id: string; accountId: string },
@@ -69,13 +111,13 @@ export function addSync(
   const syncing = state.imports.some(
     (each) =>
       each.accountId === accountId &&
-      each.fileName === SYNC_NAMES[key.provider] &&
+      each.fileName === syncName(key.provider) &&
       (each.status === "queued" || each.status === "reading"),
   );
   if (syncing) return { state, result: { ok: false, code: "in_progress" } };
   const item: ImportItem = {
     id,
-    fileName: SYNC_NAMES[key.provider],
+    fileName: syncName(key.provider),
     accountId,
     status: "queued",
     error: null,
@@ -91,35 +133,37 @@ export function addSync(
   };
 }
 
-// What the sync reads, standing in for Binance: the made-up balances of the
-// instruments Plant knows, at today's price.
+// What the sync reads, standing in for the provider: the made-up holdings of
+// the instruments Plant knows, at today's price.
 export function finishSync(state: PrototypeState, id: string): PrototypeState {
-  const rows: ImportRow[] = BALANCES.flatMap(({ symbol, quantity }, index) => {
-    const instrument = state.instruments.find((each) => each.symbol === symbol);
-    if (!instrument) return [];
-    return [
-      {
-        id: `${id}-${index}`,
-        symbol,
-        quantity,
-        price: priceToday(state, instrument),
-        currency: instrument.currency,
-        confidence: "high" as const,
-        source: "Binance",
-        discarded: false,
-      },
-    ];
-  });
+  const item = state.imports.find((each) => each.id === id);
+  const provider = item && state.apiKeys.get(item.accountId)?.provider;
+  if (!item || !provider) return state;
+  const rows: ImportRow[] = BALANCES[provider].flatMap(
+    ({ symbol, quantity }, index) => {
+      const instrument = state.instruments.find(
+        (each) => each.symbol === symbol,
+      );
+      if (!instrument) return [];
+      return [
+        {
+          id: `${id}-${index}`,
+          symbol,
+          quantity,
+          price: priceToday(state, instrument),
+          currency: instrument.currency,
+          confidence: "high" as const,
+          source: PROVIDERS[provider].name,
+          discarded: false,
+        },
+      ];
+    },
+  );
   return {
     ...state,
     imports: state.imports.map((each) =>
       each.id === id
-        ? {
-            ...each,
-            status: "ready",
-            documentDate: state.today,
-            rows,
-          }
+        ? { ...each, status: "ready", documentDate: state.today, rows }
         : each,
     ),
   };

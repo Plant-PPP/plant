@@ -1,6 +1,7 @@
 "use client";
 
-import { KeyRound, RefreshCw } from "lucide-react";
+import type { ConnectionDraft } from "@plant/sources";
+import { KeyRound, ListOrdered, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState, useTransition } from "react";
 
@@ -16,50 +17,49 @@ import {
   type ApiKeyActions,
   type ApiKeyView,
   CONNECT_MESSAGES,
-  EXCHANGE_NAMES,
+  type ConnectionForm,
   SYNC_MESSAGES,
 } from "@/lib/connections/api-key";
-import type { ExchangeProvider } from "@plant/sources";
 import { formatDate } from "@/lib/format/date";
 
-// An exchange account's connection by API: connect a read-only key, sync its
-// balances into an import to review in Cargar, or disconnect the key. The
-// key and its secret leave the browser once, to be sealed; the page only
-// ever shows the key's last four characters.
+// An account's connection by API with its broker or exchange: connect its
+// credentials, sync its holdings (or its operations, where the provider
+// gives them) into an import to review in Cargar, or disconnect. The
+// credentials leave the browser once, to be kept in Vault; the page only
+// ever shows the last characters of the field they are named by.
 export function ApiKeyCard({
   accountId,
-  provider,
+  form,
   apiKey,
   actions,
 }: {
   accountId: string;
-  provider: ExchangeProvider;
+  form: ConnectionForm;
   apiKey: ApiKeyView | null;
   actions: ApiKeyActions;
 }) {
   const headingId = useId();
-  const name = EXCHANGE_NAMES[provider];
   const opener = useRef<HTMLButtonElement>(null);
   const [dialog, setDialog] = useState<"connect" | "disconnect" | null>(null);
-  const [synced, setSynced] = useState(false);
+  const [synced, setSynced] = useState<ConnectionDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const sync = () =>
+  const sync = (draft: ConnectionDraft) =>
     startTransition(async () => {
       setError(null);
-      setSynced(false);
-      const result = await actions.sync(accountId);
-      if (result.ok) setSynced(true);
+      setSynced(null);
+      const result = await actions.sync(accountId, draft);
+      if (result.ok) setSynced(draft);
       else setError(SYNC_MESSAGES[result.code]);
     });
 
   const disconnect = () =>
     startTransition(async () => {
       setError(null);
-      setSynced(false);
+      setSynced(null);
       const result = await actions.disconnect(accountId);
-      if (!result.ok) setError("No pudimos desconectar la clave.");
+      if (!result.ok) setError("No pudimos desconectar la cuenta.");
     });
 
   return (
@@ -74,12 +74,12 @@ export function ApiKeyCard({
             className="flex items-center gap-2 text-base font-semibold"
           >
             <KeyRound aria-hidden className="size-4" />
-            Conexión con {name}
+            Conexión con {form.name}
           </h2>
           <p className="text-muted-foreground text-sm">
             {apiKey
-              ? `Clave terminada en ${apiKey.keyHint}, conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee tus saldos: nunca opera ni retira.`
-              : `Conectá una clave de solo lectura de ${name} para traer tus saldos sin subir archivos. Plant nunca opera ni retira.`}
+              ? `${form.hint}: …${apiKey.keyHint} · conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee: nunca opera ni retira.`
+              : `Conectá tu cuenta de ${form.name} para traer tus tenencias sin subir archivos. Plant solo lee: nunca opera ni retira.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -89,11 +89,23 @@ export function ApiKeyCard({
                 type="button"
                 size="sm"
                 pending={pending}
-                onClick={sync}
+                onClick={() => sync("holdings")}
               >
                 <RefreshCw aria-hidden />
                 Sincronizar
               </PendingButton>
+              {form.drafts.includes("operations") && (
+                <PendingButton
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  pending={pending}
+                  onClick={() => sync("operations")}
+                >
+                  <ListOrdered aria-hidden />
+                  Traer operaciones
+                </PendingButton>
+              )}
               <Button
                 ref={opener}
                 type="button"
@@ -111,14 +123,17 @@ export function ApiKeyCard({
               size="sm"
               onClick={() => setDialog("connect")}
             >
-              Conectar {name}
+              Conectar {form.name}
             </Button>
           )}
         </div>
       </div>
       {synced && (
         <p role="status" className="text-sm">
-          Estamos leyendo tus saldos. Cuando estén, revisalos y confirmalos en{" "}
+          {synced === "operations"
+            ? "Estamos leyendo tus operaciones."
+            : "Estamos leyendo tus tenencias."}{" "}
+          Cuando estén, revisalas y confirmalas en{" "}
           <Link href="/import" className="underline underline-offset-4">
             Cargar
           </Link>
@@ -129,15 +144,15 @@ export function ApiKeyCard({
       {dialog === "connect" && (
         <ConnectDialog
           accountId={accountId}
-          provider={provider}
+          form={form}
           connect={actions.connect}
           onClose={() => setDialog(null)}
         />
       )}
       {dialog === "disconnect" && (
         <ConfirmDialog
-          title={`Desconectar ${name}`}
-          description="Borramos la clave de Plant. Lo que ya confirmaste queda en la cuenta. Para dejar de usarla del todo, borrala también en el exchange."
+          title={`Desconectar ${form.name}`}
+          description={`Borramos de Plant los datos de acceso. Lo que ya confirmaste queda en la cuenta. Para dejar de usarlos del todo, revocalos también en ${form.name}.`}
           confirmLabel="Desconectar"
           returnFocusTo={() => opener.current}
           onClose={() => setDialog(null)}
@@ -150,73 +165,83 @@ export function ApiKeyCard({
 
 function ConnectDialog({
   accountId,
-  provider,
+  form,
   connect,
   onClose,
 }: {
   accountId: string;
-  provider: ExchangeProvider;
+  form: ConnectionForm;
   connect: ApiKeyActions["connect"];
   onClose: () => void;
 }) {
-  const name = EXCHANGE_NAMES[provider];
-  const keyId = useId();
-  const secretId = useId();
-  const alertId = useId();
+  const id = useId();
+  const alertId = `${id}-alert`;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const described = error ? alertId : undefined;
 
   return (
     <AppDialog
       onClose={onClose}
-      title={`Conectar ${name}`}
-      description={`En ${name}, creá una clave de API con solo "Habilitar lectura". Si la clave puede operar, retirar o transferir, no la aceptamos.`}
+      title={`Conectar ${form.name}`}
+      description={form.help}
     >
       <form
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          const form = new FormData(event.currentTarget);
-          const apiKey = String(form.get("apiKey") ?? "").trim();
-          const apiSecret = String(form.get("apiSecret") ?? "").trim();
+          const data = new FormData(event.currentTarget);
+          const credentials = Object.fromEntries(
+            form.fields.map((field) => {
+              const value = String(data.get(field.name) ?? "");
+              // A password is taken as typed; a key or an id without the
+              // spaces a copy and paste adds.
+              return [
+                field.name,
+                field.name === "password" ? value : value.trim(),
+              ];
+            }),
+          );
+          const confirmedReadOnly = data.get("confirmedReadOnly") === "on";
           startTransition(async () => {
             setError(null);
             const result = await connect({
               accountId,
-              provider,
-              apiKey,
-              apiSecret,
+              provider: form.provider,
+              credentials,
+              confirmedReadOnly,
             });
             if (result.ok) onClose();
             else setError(CONNECT_MESSAGES[result.code]);
           });
         }}
       >
-        <div className="grid gap-2">
-          <Label htmlFor={keyId}>Clave de API</Label>
-          <Input
-            id={keyId}
-            name="apiKey"
-            autoComplete="off"
-            spellCheck={false}
-            required
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? alertId : undefined}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor={secretId}>Clave secreta</Label>
-          <Input
-            id={secretId}
-            name="apiSecret"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            required
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? alertId : undefined}
-          />
-        </div>
+        {form.fields.map((field) => (
+          <div key={field.name} className="grid gap-2">
+            <Label htmlFor={`${id}-${field.name}`}>{field.label}</Label>
+            <Input
+              id={`${id}-${field.name}`}
+              name={field.name}
+              type={field.secret ? "password" : "text"}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              aria-invalid={error ? true : undefined}
+              aria-describedby={described}
+            />
+          </div>
+        ))}
+        {form.confirm && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="confirmedReadOnly"
+              required
+              className="mt-0.5 size-4"
+            />
+            <span>{form.confirm}</span>
+          </label>
+        )}
         {error && <FormAlert id={alertId}>{error}</FormAlert>}
         <DialogFooter>
           <Button type="button" size="sm" variant="outline" onClick={onClose}>

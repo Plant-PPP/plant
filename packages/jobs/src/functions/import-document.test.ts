@@ -1,5 +1,7 @@
 import {
-  type ExchangeSourcePort,
+  CONNECTION_PROVIDERS,
+  type ConnectionAdapters,
+  type ConnectionProviderPort,
   type ImportDraft,
   type PortfolioSourcePort,
   SourceError,
@@ -27,7 +29,8 @@ const CREDENTIALS = {
 const SYNC = {
   userId: USER,
   status: "queued",
-  origin: "exchange",
+  origin: "connection",
+  draft: "holdings",
   accountId: ACCOUNT,
   provider: "binance",
 } as const;
@@ -63,9 +66,9 @@ function setUp({
     .fn()
     .mockResolvedValue({ draft: DRAFT, read: { ...READ, reader: "api" } }),
   ...overrides
-}: Partial<Omit<ImportJobDeps, "source" | "exchanges">> & {
+}: Partial<Omit<ImportJobDeps, "source" | "connections">> & {
   read?: PortfolioSourcePort["read"];
-  exchangeRead?: ExchangeSourcePort["read"];
+  exchangeRead?: ConnectionProviderPort["read"];
 } = {}) {
   const lines: Line[] = [];
   const log = (level: string) => (event: string, fields: LogFields) =>
@@ -98,13 +101,21 @@ function setUp({
       }),
       read,
     },
-    exchanges: {
-      binance: () => ({
-        provider: "binance",
-        checkReadOnly: jest.fn(),
-        read: exchangeRead,
-      }),
-    },
+    connections: Object.fromEntries(
+      CONNECTION_PROVIDERS.map((provider) => [
+        provider,
+        () => ({
+          provider,
+          fields: [],
+          hintField: "apiKey",
+          readOnly: "checked",
+          drafts: ["holdings", "operations"],
+          parse: (raw: unknown) => raw as Record<string, string>,
+          check: jest.fn(),
+          read: exchangeRead,
+        }),
+      ]),
+    ) as unknown as ConnectionAdapters,
     log: { info: log("info"), warn: log("warn"), error: log("error") },
     ...overrides,
   };
@@ -438,7 +449,7 @@ describe("a sync", () => {
     expect(await run()).toEqual({ outcome: "ready", rows: 1 });
     expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
     expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "binance");
-    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS);
+    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "holdings");
     expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
     expect(store.download).not.toHaveBeenCalled();
     expect(store.institution).not.toHaveBeenCalled();
@@ -504,6 +515,37 @@ describe("a sync", () => {
     store.load.mockResolvedValue(SYNC);
     expect(await run()).toEqual({ outcome: "failed" });
     expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "nothing_found");
+  });
+
+  it("reads a sync of operations into a draft of operations", async () => {
+    const operations = [
+      {
+        date: "2026-10-01",
+        kind: "purchase" as const,
+        symbol: "AAPL",
+        quantity: "1",
+        price: null,
+        amount: "100",
+        charges: null,
+        reference: null,
+        currency: "USD" as const,
+        confidence: "medium" as const,
+        page: null,
+      },
+    ];
+    const exchangeRead = jest
+      .fn()
+      .mockResolvedValue({ operations, read: { ...READ, reader: "api" } });
+    const { store, run } = setUp({ exchangeRead });
+    store.load.mockResolvedValue({
+      ...SYNC,
+      provider: "wallbit",
+      draft: "operations",
+    });
+    expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "operations");
+    expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "wallbit");
+    expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, operations);
   });
 
   it("skips another user's sync without reading a key", async () => {

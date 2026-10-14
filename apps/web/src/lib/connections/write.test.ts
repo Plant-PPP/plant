@@ -60,34 +60,42 @@ jest.mock("@/lib/supabase/server", () => ({
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const ACCOUNT = "a5000000-0000-4000-8000-0000000000a5";
 
-import { randomBytes } from "node:crypto";
-
-import { type ExchangeAdapters, SourceError } from "@plant/sources";
+import {
+  type ConnectionAdapters,
+  connectionAdapters,
+  SourceError,
+} from "@plant/sources";
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
-import { open, sealContext } from "./secret-box";
 import { connectApiKey, disconnectApiKey, syncAccount } from "./write";
 
-const KEY = randomBytes(32);
 // Made up.
-const INPUT = {
-  accountId: ACCOUNT,
-  provider: "binance",
+const CREDENTIALS = {
   apiKey: "MadeUpApiKey00000000WXYZ",
   apiSecret: "MadeUpSecret0000000000001",
 };
-
-const checkReadOnly = jest.fn();
-const adapters: ExchangeAdapters = {
-  binance: () => ({ provider: "binance", checkReadOnly, read: jest.fn() }),
+const INPUT = {
+  accountId: ACCOUNT,
+  provider: "binance",
+  credentials: CREDENTIALS,
+  confirmedReadOnly: false,
 };
+
+// The real adapters' metadata and parsing, with their calls faked.
+const checkReadOnly = jest.fn();
+const real = connectionAdapters();
+const adapters = Object.fromEntries(
+  Object.entries(real).map(([provider, make]) => [
+    provider,
+    () => ({ ...make(), check: checkReadOnly, read: jest.fn() }),
+  ]),
+) as unknown as ConnectionAdapters;
 
 let lines: Record<string, unknown>[];
 beforeEach(() => {
   lines = captureServerLog();
   writes.length = 0;
-  process.env.CONNECTION_SECRETS_KEY = KEY.toString("base64");
   checkReadOnly.mockReset().mockResolvedValue(undefined);
   startImport.mockReset().mockResolvedValue(undefined);
   answers.source_connections = answer(() => ({
@@ -117,19 +125,15 @@ const keyWrites = () =>
   writes.filter((each) => each.table === "account_api_keys");
 
 afterEach(() => {
-  delete process.env.CONNECTION_SECRETS_KEY;
   jest.restoreAllMocks();
 });
 
 const logged = () => JSON.stringify(lines);
 
 describe("connectApiKey", () => {
-  it("asks the exchange first, then stores the key sealed for this user's account", async () => {
+  it("asks the provider first, then hands the credentials to the database for Vault", async () => {
     expect(await connectApiKey(INPUT, adapters)).toEqual({ ok: true });
-    expect(checkReadOnly).toHaveBeenCalledWith({
-      apiKey: INPUT.apiKey,
-      apiSecret: INPUT.apiSecret,
-    });
+    expect(checkReadOnly).toHaveBeenCalledWith(CREDENTIALS);
     const insert = writes.find(
       (each) => each.table === "account_api_keys" && each.verb === "insert",
     );
@@ -140,26 +144,16 @@ describe("connectApiKey", () => {
       key_hint: "WXYZ",
     });
     expect(Object.keys(body).sort()).toEqual([
+      "credentials",
       "key_hint",
       "provider",
-      "secret_ciphertext",
       "source_connection_id",
     ]);
-    expect(body.secret_ciphertext).not.toContain(INPUT.apiSecret);
-    expect(body.secret_ciphertext).not.toContain(INPUT.apiKey);
-    expect(
-      JSON.parse(
-        open(
-          body.secret_ciphertext!,
-          sealContext(USER, ACCOUNT, "binance"),
-          KEY,
-        ),
-      ),
-    ).toEqual({ apiKey: INPUT.apiKey, apiSecret: INPUT.apiSecret });
+    expect(body.credentials).toEqual(CREDENTIALS);
     // With no key to replace, it inserts; nothing is ever deleted.
     expect(keyWrites().map((each) => each.verb)).toEqual(["update", "insert"]);
-    expect(logged()).not.toContain(INPUT.apiSecret);
-    expect(logged()).not.toContain(INPUT.apiKey);
+    expect(logged()).not.toContain(CREDENTIALS.apiSecret);
+    expect(logged()).not.toContain(CREDENTIALS.apiKey);
   });
 
   it("replaces the account's key in one write, only the user's on that account", async () => {
@@ -179,9 +173,9 @@ describe("connectApiKey", () => {
       ],
     });
     expect(Object.keys(replaced!.body as object).sort()).toEqual([
+      "credentials",
       "key_hint",
       "provider",
-      "secret_ciphertext",
     ]);
   });
 
@@ -242,14 +236,20 @@ describe("connectApiKey", () => {
       );
       expect(await connectApiKey(INPUT, adapters)).toEqual({ ok: false, code });
       expect(writes).toEqual([]);
-      expect(logged()).not.toContain(INPUT.apiSecret);
+      expect(logged()).not.toContain(CREDENTIALS.apiSecret);
     },
   );
 
   it.each([
-    { ...INPUT, apiSecret: "short" },
-    { ...INPUT, apiKey: "with spaces in it 0000" },
+    { ...INPUT, credentials: { ...CREDENTIALS, apiSecret: "short" } },
+    {
+      ...INPUT,
+      credentials: { ...CREDENTIALS, apiKey: "with spaces 0000000" },
+    },
+    { ...INPUT, credentials: { apiKey: CREDENTIALS.apiKey } },
+    { ...INPUT, credentials: { ...CREDENTIALS, extra: "x" } },
     { ...INPUT, provider: "other" },
+    { ...INPUT, confirmedReadOnly: undefined },
     { ...INPUT, accountId: "not-a-uuid" },
     { ...INPUT, extra: true },
   ])("refuses input that does not parse, asking nobody", async (input) => {
@@ -273,28 +273,86 @@ describe("connectApiKey", () => {
     expect(checkReadOnly).not.toHaveBeenCalled();
   });
 
-  it("stores nothing where the deployment has no server key", async () => {
-    delete process.env.CONNECTION_SECRETS_KEY;
+  it("asks the user to confirm read-only where the provider does not say", async () => {
+    answers.source_connections = answer(() => ({
+      status: 200,
+      data: [{ institution: "Wallbit" }],
+      error: null,
+    }));
+    const wallbit = {
+      accountId: ACCOUNT,
+      provider: "wallbit",
+      credentials: { apiKey: "wb_test_0000000000000001" },
+    };
+    expect(
+      await connectApiKey({ ...wallbit, confirmedReadOnly: false }, adapters),
+    ).toEqual({ ok: false, code: "unconfirmed" });
+    expect(checkReadOnly).not.toHaveBeenCalled();
+    expect(
+      await connectApiKey({ ...wallbit, confirmedReadOnly: true }, adapters),
+    ).toEqual({ ok: true });
+    const insert = keyWrites().find((each) => each.verb === "insert");
+    expect(insert!.body).toMatchObject({
+      provider: "wallbit",
+      key_hint: "0001",
+    });
+  });
+
+  it("answers not found when the database refuses the account", async () => {
+    answers.account_api_keys!.mockImplementation((verb) =>
+      verb === "update"
+        ? { status: 200, data: [], error: null }
+        : { status: 403, error: { code: "42501" } },
+    );
     expect(await connectApiKey(INPUT, adapters)).toEqual({
       ok: false,
-      code: "unconfigured",
+      code: "not_found",
     });
-    expect(checkReadOnly).not.toHaveBeenCalled();
-    expect(writes).toEqual([]);
   });
 });
 
 describe("syncAccount", () => {
-  it("starts an import of the account's exchange and its job", async () => {
+  it("starts an import of the account's holdings and its job", async () => {
     expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
     expect(writes).toContainEqual(
       expect.objectContaining({
         table: "imports",
         verb: "insert",
-        body: { source_connection_id: ACCOUNT, provider: "binance" },
+        body: {
+          source_connection_id: ACCOUNT,
+          provider: "binance",
+          sync_draft: "holdings",
+        },
       }),
     );
     expect(startImport).toHaveBeenCalledWith({ importId: "i1", userId: USER });
+  });
+
+  it("starts a sync of operations only where the provider gives them", async () => {
+    expect(await syncAccount(ACCOUNT, "operations")).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(writes).toEqual([]);
+    answers.account_api_keys = answer(() => ({
+      status: 200,
+      data: [{ provider: "wallbit" }],
+      error: null,
+    }));
+    expect(await syncAccount(ACCOUNT, "operations")).toEqual({
+      ok: true,
+      importId: "i1",
+    });
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        table: "imports",
+        body: {
+          source_connection_id: ACCOUNT,
+          provider: "wallbit",
+          sync_draft: "operations",
+        },
+      }),
+    );
   });
 
   it.each([

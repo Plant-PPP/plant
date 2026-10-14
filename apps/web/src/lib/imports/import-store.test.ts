@@ -1,10 +1,6 @@
-import { randomBytes } from "node:crypto";
-
 import { createClient } from "@supabase/supabase-js";
 
 jest.mock("server-only", () => ({}), { virtual: true });
-
-import { seal, sealContext } from "@/lib/connections/secret-box";
 
 import { createImportStore, ImportStoreError } from "./import-store";
 
@@ -33,13 +29,12 @@ function storeWith(answer: (call: Call) => { status: number; body?: unknown }) {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch },
   });
-  return { store: createImportStore(client as never, SECRETS_KEY), calls };
+  return { store: createImportStore(client as never), calls };
 }
 
 const IMPORT = "a1000000-0000-4000-8000-0000000000a1";
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const ACCOUNT = "a2000000-0000-4000-8000-0000000000a2";
-const SECRETS_KEY = randomBytes(32);
 // Made up.
 const CREDENTIALS = {
   apiKey: "MadeUpKey0000001",
@@ -70,7 +65,7 @@ it("loads an import with its owner, status and file", async () => {
   expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
 });
 
-it("loads a sync with its account and exchange", async () => {
+it("loads a sync with its account, provider and draft", async () => {
   const { store } = storeWith(() => ({
     status: 200,
     body: [
@@ -78,7 +73,8 @@ it("loads a sync with its account and exchange", async () => {
         user_id: USER,
         status: "queued",
         source_connection_id: ACCOUNT,
-        provider: "binance",
+        provider: "wallbit",
+        sync_draft: "operations",
         document: null,
       },
     ],
@@ -86,49 +82,44 @@ it("loads a sync with its account and exchange", async () => {
   expect(await store.load(IMPORT, USER)).toEqual({
     userId: USER,
     status: "queued",
-    origin: "exchange",
+    origin: "connection",
     accountId: ACCOUNT,
-    provider: "binance",
+    provider: "wallbit",
+    draft: "operations",
   });
 });
 
-describe("an account's key", () => {
-  const sealedFor = (userId: string, accountId: string) =>
-    seal(
-      JSON.stringify(CREDENTIALS),
-      sealContext(userId, accountId, "binance"),
-      SECRETS_KEY,
-    );
-
-  it("is read for that user's account and exchange only, and opened", async () => {
+describe("an account's credentials", () => {
+  it("are read out of Vault by the database, for that user's account and provider only", async () => {
     const { store, calls } = storeWith(() => ({
       status: 200,
-      body: [{ secret_ciphertext: sealedFor(USER, ACCOUNT) }],
+      body: CREDENTIALS,
     }));
     expect(await store.credentials(USER, ACCOUNT, "binance")).toEqual(
       CREDENTIALS,
     );
-    const params = calls[0]!.url.searchParams;
-    expect(calls[0]!.url.pathname).toBe("/rest/v1/account_api_keys");
-    expect(params.get("user_id")).toBe(`eq.${USER}`);
-    expect(params.get("source_connection_id")).toBe(`eq.${ACCOUNT}`);
-    expect(params.get("provider")).toBe("eq.binance");
+    expect(calls[0]!.url.pathname).toBe("/rest/v1/rpc/account_credentials");
+    expect(calls[0]!.body).toEqual({
+      p_user_id: USER,
+      p_source_connection_id: ACCOUNT,
+      p_provider: "binance",
+    });
   });
 
-  it("is null when the account holds none", async () => {
-    const { store } = storeWith(() => ({ status: 200, body: [] }));
+  it("are null when the account holds none", async () => {
+    const { store } = storeWith(() => ({ status: 200, body: null }));
     expect(await store.credentials(USER, ACCOUNT, "binance")).toBeNull();
   });
 
-  it("does not open when it was sealed for another user's account", async () => {
+  it("fail the step when the database does not answer, keeping no detail", async () => {
     const { store } = storeWith(() => ({
-      status: 200,
-      body: [{ secret_ciphertext: sealedFor("b0", ACCOUNT) }],
+      status: 500,
+      body: { code: "XX000", message: "boom", details: CREDENTIALS.apiSecret },
     }));
     const error = await store
       .credentials(USER, ACCOUNT, "binance")
       .catch((e: unknown) => e);
-    expect(error).toMatchObject({ step: "credentials", code: "unopened" });
+    expect(error).toMatchObject({ step: "credentials", code: "XX000" });
     expect(String(error)).not.toContain(CREDENTIALS.apiSecret);
   });
 });

@@ -33,18 +33,19 @@ export const IMPORT_FAILURE_MESSAGES = {
   extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
   too_many_pages: `El PDF tiene más de ${PDF_PAGE_LIMIT} páginas. Subí solo las del resumen.`,
   connection_rejected:
-    "El exchange rechazó la clave. Revisá que siga activa o conectá otra.",
+    "El proveedor rechazó la conexión. Revisá que siga activa o conectala de nuevo.",
   connection_not_read_only:
     "La clave puede operar, retirar o transferir. Conectá una de solo lectura.",
 } as const;
 
-// A sync reads an exchange, not a file: its own words where they differ.
+// A sync reads a connected account, not a file: its own words where they
+// differ.
 const SYNC_FAILURE_MESSAGES: Partial<
   Record<keyof typeof IMPORT_FAILURE_MESSAGES, string>
 > = {
-  nothing_found: "No encontramos saldos en tu cuenta del exchange.",
+  nothing_found: "No encontramos saldos ni operaciones en la cuenta conectada.",
   extraction_failed:
-    "No pudimos leer tu cuenta del exchange. Probá de nuevo más tarde.",
+    "No pudimos leer la cuenta conectada. Probá de nuevo más tarde.",
 };
 
 // Why a failed import stopped, in the user's words: a sync's (`sync`) as

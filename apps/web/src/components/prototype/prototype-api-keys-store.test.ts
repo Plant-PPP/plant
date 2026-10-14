@@ -1,4 +1,4 @@
-import { exchangeOf } from "@/lib/connections/api-key";
+import { connectionForm, providerOf } from "@/lib/connections/api-key";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
 import {
@@ -13,23 +13,24 @@ import { initialState } from "./prototype-store";
 const TODAY = "2026-10-14";
 const state = initialState(buildFixtures(TODAY), TODAY);
 const BINANCE = state.accounts.find((row) => row.institution === "Binance")!;
+const IOL = state.accounts.find((row) => row.institution === "IOL")!;
 // Made up.
 const INPUT = {
   accountId: BINANCE.id,
   provider: "binance" as const,
-  apiKey: "MadeUpApiKey00000000WXYZ",
-  apiSecret: "MadeUpSecret0000000000001",
+  credentials: {
+    apiKey: "MadeUpApiKey00000000WXYZ",
+    apiSecret: "MadeUpSecret0000000000001",
+  },
+  confirmedReadOnly: false,
 };
 
 const connected = connectApiKey(state, INPUT).state;
 
-it("offers a key on the exchange account only", () => {
-  expect(exchangeOf(BINANCE.institution)).toBe("binance");
-  expect(
-    state.accounts
-      .filter((row) => row.id !== BINANCE.id)
-      .map((row) => exchangeOf(row.institution)),
-  ).toEqual(state.accounts.slice(1).map(() => null));
+it("offers a connection on the accounts of a provider only", () => {
+  expect(providerOf(BINANCE.institution)).toBe("binance");
+  expect(providerOf(IOL.institution)).toBe("iol");
+  expect(providerOf("Balanz")).toBeNull();
 });
 
 it("keeps the key's last four characters and nothing of the secret", () => {
@@ -41,14 +42,43 @@ it("keeps the key's last four characters and nothing of the secret", () => {
   expect(JSON.stringify([...connected.apiKeys])).not.toContain("MadeUpSecret");
 });
 
-it("refuses a key that can trade, and one that does not parse", () => {
+it("refuses a key that can trade, one that does not parse, and another provider's", () => {
   expect(
-    connectApiKey(state, { ...INPUT, apiKey: "TradeKey0000000000001" }).result,
+    connectApiKey(state, {
+      ...INPUT,
+      credentials: { ...INPUT.credentials, apiKey: "TradeKey0000000000001" },
+    }).result,
   ).toEqual({ ok: false, code: "not_read_only" });
-  expect(connectApiKey(state, { ...INPUT, apiSecret: "x" }).result).toEqual({
+  expect(
+    connectApiKey(state, {
+      ...INPUT,
+      credentials: { ...INPUT.credentials, apiSecret: "x" },
+    }).result,
+  ).toEqual({ ok: false, code: "invalid" });
+  expect(connectApiKey(state, { ...INPUT, accountId: IOL.id }).result).toEqual({
     ok: false,
-    code: "invalid",
+    code: "unsupported",
   });
+});
+
+it("asks IOL's user to confirm it only reads", () => {
+  const input = {
+    accountId: IOL.id,
+    provider: "iol" as const,
+    credentials: { username: "ana.test", password: "MadeUp!1" },
+    confirmedReadOnly: false,
+  };
+  expect(connectionForm("iol").confirm).not.toBeNull();
+  expect(connectApiKey(state, input).result).toEqual({
+    ok: false,
+    code: "unconfirmed",
+  });
+  expect(
+    connectApiKey(state, {
+      ...input,
+      confirmedReadOnly: true,
+    }).state.apiKeys.get(IOL.id),
+  ).toMatchObject({ provider: "iol", keyHint: "test" });
 });
 
 it("syncs into an import to review, one at a time, counting no upload", () => {

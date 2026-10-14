@@ -3,8 +3,9 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { SourceError } from "../file-upload/draft";
-import { exchangeAdapters } from "./adapters";
-import { binanceSource } from "./binance";
+import type { HoldingsReading } from "../port";
+import { connectionAdapters } from "./adapters";
+import { binanceConnection } from "./binance";
 
 // Made-up credentials; the fake answers only requests they sign.
 const CREDENTIALS = {
@@ -93,7 +94,7 @@ beforeEach(() => {
   };
 });
 
-const source = () => binanceSource({ baseUrl: fake.url, now: () => NOW });
+const source = () => binanceConnection({ baseUrl: fake.url, now: () => NOW });
 
 const failure = async (promise: Promise<unknown>) => {
   const error = await promise.then(
@@ -105,9 +106,12 @@ const failure = async (promise: Promise<unknown>) => {
   return { code, retryable };
 };
 
-describe("binanceSource", () => {
+describe("binanceConnection", () => {
   it("reads the balances held as a draft of holdings, free and locked added up", async () => {
-    const reading = await source().read(CREDENTIALS);
+    const reading = (await source().read(
+      CREDENTIALS,
+      "holdings",
+    )) as HoldingsReading;
     expect(reading.draft).toEqual({
       documentDate: "2026-10-14",
       rows: ["BTC", "ETH", "USDT"].map((symbol) =>
@@ -134,7 +138,7 @@ describe("binanceSource", () => {
   });
 
   it("signs every request with the key's secret, sends the key in its header and only reads", async () => {
-    await source().read(CREDENTIALS);
+    await source().read(CREDENTIALS, "holdings");
     expect(fake.requests.map((each) => each.path)).toEqual([
       "/sapi/v1/account/apiRestrictions",
       "/api/v3/account",
@@ -163,7 +167,7 @@ describe("binanceSource", () => {
       status: 200,
       body: { ...READ_ONLY, [permission]: true },
     };
-    expect(await failure(source().read(CREDENTIALS))).toEqual({
+    expect(await failure(source().read(CREDENTIALS, "holdings"))).toEqual({
       code: "connection_not_read_only",
       retryable: false,
     });
@@ -182,7 +186,7 @@ describe("binanceSource", () => {
         tradingAuthorityExpirationTime: 1800000000000,
       },
     };
-    await expect(source().checkReadOnly(CREDENTIALS)).resolves.toBeUndefined();
+    await expect(source().check(CREDENTIALS)).resolves.toBeUndefined();
   });
 
   it.each([
@@ -196,7 +200,7 @@ describe("binanceSource", () => {
       status: 200,
       body: { ...READ_ONLY, ...extra },
     };
-    expect(await failure(source().checkReadOnly(CREDENTIALS))).toEqual({
+    expect(await failure(source().check(CREDENTIALS))).toEqual({
       code: "connection_not_read_only",
       retryable: false,
     });
@@ -206,9 +210,9 @@ describe("binanceSource", () => {
     const get = jest.fn(async () => {
       throw new Error("offline");
     });
-    const adapter = exchangeAdapters({ fetch: get as never }).binance();
+    const adapter = connectionAdapters({ fetch: get as never }).binance();
     expect(adapter.provider).toBe("binance");
-    await adapter.checkReadOnly(CREDENTIALS).catch(() => undefined);
+    await adapter.check(CREDENTIALS).catch(() => undefined);
     expect(String((get.mock.calls[0] as unknown[])[0])).toMatch(
       /^https:\/\/api\.binance\.com\/sapi\/v1\/account\/apiRestrictions\?/,
     );
@@ -217,7 +221,7 @@ describe("binanceSource", () => {
   it("refuses a key Binance does not take, and one that cannot read", async () => {
     expect(
       await failure(
-        source().checkReadOnly({
+        source().check({
           ...CREDENTIALS,
           apiSecret: "Wrong0000000000000000",
         }),
@@ -227,7 +231,7 @@ describe("binanceSource", () => {
       status: 200,
       body: { ...READ_ONLY, enableReading: false },
     };
-    expect(await failure(source().checkReadOnly(CREDENTIALS))).toEqual({
+    expect(await failure(source().check(CREDENTIALS))).toEqual({
       code: "connection_rejected",
       retryable: false,
     });
@@ -241,7 +245,7 @@ describe("binanceSource", () => {
       { status: 200, body: { balances: "none" } },
     ]) {
       fake.replies["/api/v3/account"] = reply;
-      expect(await failure(source().read(CREDENTIALS))).toEqual({
+      expect(await failure(source().read(CREDENTIALS, "holdings"))).toEqual({
         code: "extraction_failed",
         retryable: true,
       });
@@ -249,12 +253,12 @@ describe("binanceSource", () => {
   });
 
   it("fails for a later attempt when Binance cannot be reached", async () => {
-    const down = binanceSource({
+    const down = binanceConnection({
       baseUrl: "http://127.0.0.1:1",
       now: () => NOW,
       timeoutMs: 2000,
     });
-    expect(await failure(down.checkReadOnly(CREDENTIALS))).toEqual({
+    expect(await failure(down.check(CREDENTIALS))).toEqual({
       code: "extraction_failed",
       retryable: true,
     });
