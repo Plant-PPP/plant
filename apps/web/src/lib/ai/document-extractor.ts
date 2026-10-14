@@ -46,7 +46,7 @@ const currency = z.enum(Constants.public.Enums.currency);
 // draft's schema afterwards, and a row that fails it is left out.
 const answerSchema = z.object({
   kind: documentKindSchema.describe(
-    "What the document is: an account's statement of holdings, a trade ticket (boleto), a screenshot of holdings, a card statement, or other.",
+    "What the document is. account_statement: shows positions or balances, even if it also lists the period's movements or card spending. trade_ticket: a confirmation (boleto) of one or a few operations, with no positions. screenshot: a capture of an app or site showing positions. card_statement: a credit card's spending statement only, with no account balances. other: anything else.",
   ),
   documentDate: z
     .string()
