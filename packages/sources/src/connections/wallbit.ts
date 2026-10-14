@@ -11,7 +11,6 @@ import {
   jsonOf,
   notReadOnly,
   operationsReading,
-  OTHER_FIAT,
   positive,
   rejected,
   unavailable,
@@ -78,7 +77,19 @@ const KEPT_CURRENCIES: ReadonlySet<string> = new Set([
 // exchange, never an asset.
 const CURRENCIES: ReadonlySet<string> = new Set([
   ...KEPT_CURRENCIES,
-  ...OTHER_FIAT,
+  "MXN",
+  "BRL",
+  "COP",
+  "CLP",
+  "PEN",
+  "UYU",
+  "EUR",
+  "BOB",
+  "DOP",
+  "PHP",
+  "GTQ",
+  "PAB",
+  "CRC",
 ]);
 
 // Wallbit by API with a key the user made with the `read` permission only.

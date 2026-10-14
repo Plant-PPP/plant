@@ -203,23 +203,22 @@ export const hexOf = (bytes: Uint8Array) =>
 export const base64Of = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes));
 
-// The fiat currencies exchanges and wallets in the region hold that Plant
-// does not keep.
-export const OTHER_FIAT: ReadonlySet<string> = new Set([
-  "MXN",
-  "BRL",
-  "COP",
-  "CLP",
-  "PEN",
-  "UYU",
-  "EUR",
-  "BOB",
-  "DOP",
-  "PHP",
-  "GTQ",
-  "PAB",
-  "CRC",
-]);
+// The ISO 4217 fiat currencies Plant does not keep: all but pesos and
+// dollars, and the Mongolian tugrik, whose MNT exchanges list as Mantle.
+export const OTHER_FIAT: ReadonlySet<string> = new Set(
+  `
+AED AFN ALL AMD ANG AOA AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL
+BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD
+EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR
+ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR
+LRD LSL LYD MAD MDL MGA MKD MMK MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK
+NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK
+SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS
+UAH UGX UYU UZS VED VES VND VUV WST XAF XCD XCG XOF XPF YER ZAR ZMW ZWG ZWL
+`
+    .split(/\s+/)
+    .filter(Boolean),
+);
 
 // A currency or an asset as an exchange names it, in capitals.
 const ASSET = /^[A-Z0-9]{1,20}$/;
