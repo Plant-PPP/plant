@@ -307,6 +307,9 @@ export function ImportOperationsReview({
                       <span>{row.source}</span>
                       <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
                       {row.reference && <span>{`N° ${row.reference}`}</span>}
+                      {row.loaded && (
+                        <span className="text-foreground">Ya está cargada</span>
+                      )}
                     </span>
                     {!row.discarded && missing[index]!.has("symbol") && (
                       <MissingText />
