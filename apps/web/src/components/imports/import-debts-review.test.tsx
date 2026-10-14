@@ -103,3 +103,9 @@ it("says how many debts the reading left out", () => {
     "2 deudas quedaron afuera: revisalas en el resumen antes de confirmar.",
   );
 });
+
+it("asks for a balance above 0 when the statement has a 0", () => {
+  const html = render([debt({ balance: "0" })]);
+  expect(html).toContain("Ingresá un monto mayor a 0");
+  expect(html).not.toContain("Falta en el documento");
+});

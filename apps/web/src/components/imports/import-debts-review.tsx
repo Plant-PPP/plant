@@ -28,7 +28,12 @@ import {
   missingDebtFields,
   type ReviewedDebt,
 } from "@/lib/imports/debts-review";
-import { CONFIDENCE_LABELS, type ImportItem } from "@/lib/imports/review";
+import {
+  CONFIDENCE_LABELS,
+  type ImportItem,
+  lackingFigure,
+  missingText,
+} from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
 
@@ -263,7 +268,9 @@ export function ImportDebtsReview({
                             change(row.id, { label: event.target.value })
                           }
                         />
-                        {problem("label") && <Missing />}
+                        {problem("label") && (
+                          <Problem text={missingText(item.origin)} />
+                        )}
                       </label>
                       <label className="grid gap-1 text-xs">
                         <span className="text-muted-foreground">
@@ -298,7 +305,16 @@ export function ImportDebtsReview({
                     {balanceInvalid[index] ? (
                       <Problem text={NOT_A_NUMBER} />
                     ) : (
-                      problem("balance") && <Missing />
+                      problem("balance") && (
+                        <Problem
+                          text={lackingFigure(
+                            row.balanceText,
+                            row.balance,
+                            item.origin,
+                            "amount",
+                          )}
+                        />
+                      )
                     )}
                   </label>
                   <label className="grid gap-1 text-xs">
@@ -368,8 +384,4 @@ function Problem({ text }: { text: string }) {
       {text}
     </span>
   );
-}
-
-function Missing() {
-  return <Problem text="Falta en el documento" />;
 }

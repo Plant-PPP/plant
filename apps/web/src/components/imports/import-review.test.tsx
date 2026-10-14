@@ -6,7 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ImportItem } from "@/lib/imports/review";
 
-import { ImportReview, pickedInstrument } from "./import-review";
+import {
+  ImportReview,
+  invalidRowsAlert,
+  pickedInstrument,
+} from "./import-review";
 
 const ITEM: ImportItem = {
   id: "r1",
@@ -338,4 +342,11 @@ it("takes the same instrument routed to two accounts as two holdings", () => {
     />,
   );
   expect(html).not.toContain("aparece más de una vez");
+});
+
+it("asks a sync's invalid rows to be fixed without naming a document", () => {
+  expect(invalidRowsAlert("sync")).not.toMatch(/documento/);
+  expect(invalidRowsAlert("document")).toContain(
+    "su cuenta si el documento lista varias",
+  );
 });

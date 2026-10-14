@@ -41,6 +41,8 @@ import {
   type ImportItem,
   type ImportOperationKind,
   type ImportOperationRow,
+  lackingFigure,
+  missingText,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
@@ -105,10 +107,16 @@ const finalOf = (row: EditedOperation): ImportOperationRow => ({
 const isLocked = (row: ImportOperationRow) =>
   row.loaded === true && row.reference !== null;
 
-const MISSING = "Falta en el documento";
 const NOT_A_NUMBER = "Ingresá un número válido";
 
 type FigureField = "quantity" | "price" | "amount" | "charges";
+
+const FIGURE_TEXT = {
+  quantity: "quantityText",
+  price: "priceText",
+  amount: "amountText",
+  charges: "chargesText",
+} as const satisfies Record<FigureField, keyof EditedOperation>;
 
 // The figures typed that do not read as a number, and a bond's price per 100
 // that a price per unit cannot hold exactly: they are asked again, never
@@ -123,16 +131,14 @@ function typedInvalid(
   // amount, and the charges.
   const trade = row.kind === "purchase" || row.kind === "sale";
   const income = row.kind === "dividend" || row.kind === "coupon";
-  const texts: Partial<Record<FigureField, string>> = {
-    ...(trade && { quantity: row.quantityText, price: row.priceText }),
-    ...(income && { amount: row.amountText }),
-    charges: row.chargesText,
-  };
-  for (const figure of Object.keys(texts) as FigureField[]) {
-    if (
-      texts[figure]!.trim() !== "" &&
-      parseAmountInput(texts[figure]!) === null
-    ) {
+  const figures: FigureField[] = [
+    ...(trade ? (["quantity", "price"] as const) : []),
+    ...(income ? (["amount"] as const) : []),
+    "charges",
+  ];
+  for (const figure of figures) {
+    const text = row[FIGURE_TEXT[figure]];
+    if (text.trim() !== "" && parseAmountInput(text) === null) {
       invalid.add(figure);
     }
   }
@@ -255,15 +261,20 @@ export function ImportOperationsReview({
 
   const invalid = (index: number, field: MissingField) =>
     missing[index]!.has(field) || undefined;
+  const missingCopy = missingText(item.origin);
   // What a figure's field says is wrong with it, if anything.
-  const problem = (index: number, figure: FigureField) =>
-    rows[index]!.discarded
-      ? undefined
-      : invalidTyped[index]!.has(figure)
-        ? NOT_A_NUMBER
-        : figure !== "charges" && missing[index]!.has(figure)
-          ? MISSING
-          : undefined;
+  const problem = (index: number, figure: FigureField) => {
+    const row = rows[index]!;
+    if (row.discarded) return undefined;
+    if (invalidTyped[index]!.has(figure)) return NOT_A_NUMBER;
+    if (figure === "charges" || !missing[index]!.has(figure)) return undefined;
+    return lackingFigure(
+      row[FIGURE_TEXT[figure]],
+      row[figure],
+      item.origin,
+      figure,
+    );
+  };
 
   return (
     <div className="grid gap-6">
@@ -422,7 +433,7 @@ export function ImportOperationsReview({
                       )}
                     </span>
                     {!row.discarded && missing[index]!.has("symbol") && (
-                      <MissingText />
+                      <ProblemText text={missingCopy} />
                     )}
                   </div>
                   <Button
@@ -464,7 +475,7 @@ export function ImportOperationsReview({
                       </SelectContent>
                     </Select>
                     {!row.discarded && missing[index]!.has("kind") && (
-                      <MissingText />
+                      <ProblemText text={missingCopy} />
                     )}
                   </label>
                   <label className="grid gap-1 text-xs">
@@ -481,7 +492,7 @@ export function ImportOperationsReview({
                       }
                     />
                     {!row.discarded && missing[index]!.has("date") && (
-                      <MissingText />
+                      <ProblemText text={missingCopy} />
                     )}
                   </label>
                   <label className="grid gap-1 text-xs">
@@ -601,10 +612,6 @@ function ProblemText({ text }: { text: string }) {
       {text}
     </span>
   );
-}
-
-function MissingText() {
-  return <ProblemText text={MISSING} />;
 }
 
 function Figure({
