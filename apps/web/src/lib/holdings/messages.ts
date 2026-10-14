@@ -128,7 +128,7 @@ export const MOVEMENT_MESSAGES: Record<
   oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
   opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
-  no_rate: "No hay cotización del dólar para esa fecha.",
+  no_rate: "No hay cotización para esa fecha.",
   same_balance:
     "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
   opens_later:
