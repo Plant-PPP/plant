@@ -39,7 +39,10 @@ test("deleting the account in Ajustes leaves a new user's Resumen", async ({
   ).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 
-  await page.getByRole("link", { name: "Activos" }).click();
-  await expect(page.getByRole("tab", { name: "Tenencias 0" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Cuentas 0" })).toBeVisible();
+  await page.getByRole("link", { name: "Activos", exact: true }).click();
+  // A new user has no account yet, so Activos asks for one first.
+  await expect(page.getByText("Primero, una cuenta")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Agregar una cuenta" }),
+  ).toBeVisible();
 });

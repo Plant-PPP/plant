@@ -102,10 +102,12 @@ test("/login hydrates and talks to Supabase with no CSP violation", async ({
 
   await page.getByPlaceholder("nombre@ejemplo.com").fill("e2e@plantia.io");
   await page.getByRole("button", { name: "Recibir código" }).click();
-  // Hydrated, the form calls Supabase, which is not running; unhydrated, it
-  // would submit natively and show no error.
+  // Hydrated, the form calls Supabase, which is not running, and toasts the
+  // error; unhydrated, it would submit natively and show none.
   await expect(
-    page.getByRole("alert").filter({ hasText: loginErrorMessage("generic")! }),
+    page
+      .locator("[data-sonner-toast]")
+      .filter({ hasText: loginErrorMessage("generic")! }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
 

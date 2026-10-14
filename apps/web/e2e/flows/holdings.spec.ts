@@ -4,7 +4,7 @@ import { signIn } from "./sign-in";
 
 test("a holding added by hand shows in Activos", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("link", { name: "Activos" }).click();
+  await page.getByRole("link", { name: "Activos", exact: true }).click();
   await expect(page).toHaveURL(/\/assets$/);
 
   await page.getByRole("button", { name: "Agregar tenencia" }).click();
