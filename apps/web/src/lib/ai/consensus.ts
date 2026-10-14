@@ -124,20 +124,22 @@ function majority<T>(values: readonly T[], same: (a: T, b: T) => boolean) {
 export function settle(
   first: ImportDraft,
   second: ImportDraft,
-  tiebreak: ImportDraft,
+  tiebreak: ImportDraft | null,
   { agreed, disputes }: ReturnType<typeof compareReadings>,
 ): ImportDraft {
   const readings = [
     keyed(first.rows),
     keyed(second.rows),
-    keyed(tiebreak.rows),
+    keyed(tiebreak?.rows ?? []),
   ];
   const settled = new Map(agreed);
   for (const key of disputes.rows) {
     const listed = readings
       .map((reading) => reading.get(key))
       .filter((row): row is DraftRow => row !== undefined);
-    if (listed.length < 2) continue;
+    // Without a tiebreak a row one reader lists is kept for the user to check.
+    if (listed.length < (tiebreak ? 2 : 1)) continue;
+    const bothReaders = readings[0]!.has(key) && readings[1]!.has(key);
     const base = readings[2]!.get(key) ?? listed[0]!;
     let unsure = false;
     const figures = Object.fromEntries(
@@ -155,9 +157,12 @@ export function settle(
       ...base,
       ...figures,
       quantity: figures.quantity,
-      confidence: unsure
-        ? "low"
-        : listed.map((row) => row.confidence).reduce(lowerConfidence),
+      // A row one reader missed may be another's line under a different
+      // name, so it is for the user to check too.
+      confidence:
+        unsure || !bothReaders
+          ? "low"
+          : listed.map((row) => row.confidence).reduce(lowerConfidence),
       page: listed.find((row) => row.page !== null)?.page ?? null,
     });
   }
@@ -173,14 +178,19 @@ export function settle(
     return row ? [row] : [];
   });
 
-  const documentDate = disputes.documentDate
-    ? (majority(
-        [first.documentDate, second.documentDate, tiebreak.documentDate],
-        (x, y) => x === y,
-      )?.value ?? tiebreak.documentDate)
-    : first.documentDate;
+  const documentDate = !disputes.documentDate
+    ? first.documentDate
+    : tiebreak
+      ? (majority(
+          [first.documentDate, second.documentDate, tiebreak.documentDate],
+          (x, y) => x === y,
+        )?.value ?? tiebreak.documentDate)
+      : (first.documentDate ?? second.documentDate);
 
-  const totalsOf = [first, second, tiebreak].map(totalsByCurrency);
+  // A disputed total with no tiebreak to settle it is left out.
+  const totalsOf = [first, second, tiebreak ?? { ...first, totals: [] }].map(
+    totalsByCurrency,
+  );
   const currencies = new Set(totalsOf.flatMap((t) => [...t.keys()]));
   const totals = [...currencies].flatMap((currency) => {
     const values = totalsOf.map((t) => t.get(currency) ?? null);

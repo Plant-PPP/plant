@@ -288,3 +288,40 @@ it("fails the reading when both readers fail", async () => {
   });
   await expect(run()).rejects.toMatchObject({ code: "unreadable" });
 });
+
+it("lets the step retry when the tiebreak's provider is down", async () => {
+  const [lite35, lite31] = READERS;
+  let calls = 0;
+  const shared = new MockLanguageModelV3({
+    doGenerate: async () => {
+      if (calls++ === 0) {
+        return {
+          content: [{ type: "text", text: reading([row("GGAL", "100")]) }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      }
+      throw new APICallError({
+        message: "overloaded",
+        url: "https://x",
+        requestBodyValues: {},
+        statusCode: 503,
+        isRetryable: true,
+      });
+    },
+  });
+  expect(TIEBREAK_MODEL).toBe(lite35);
+  const second = answering(reading([row("GGAL", "1000")]));
+  const error = await documentExtractor({
+    record,
+    model: (id) => (id === lite31 ? second : shared),
+  })({
+    bytes: BYTES,
+    mimeType: "application/pdf",
+    userId: USER,
+    importId: "i1",
+    institution: "IOL",
+  }).catch((e: unknown) => e);
+  expect(error).toMatchObject({ code: "extraction_failed", retryable: true });
+});
