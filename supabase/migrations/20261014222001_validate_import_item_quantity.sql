@@ -1,4 +1,4 @@
--- Validates the check 20261014215000 added NOT VALID.
+-- Validates the check 20261014222000 added NOT VALID.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 

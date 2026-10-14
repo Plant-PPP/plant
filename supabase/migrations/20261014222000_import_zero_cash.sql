@@ -1,6 +1,6 @@
 -- Cash at zero in an import's draft: a provider listing a currency at zero
 -- brings the account's cash in it to zero. Only cash rows may be at zero;
--- 20261014215001 validates the check. A cash holding is never at zero, so
+-- 20261014222001 validates the check. A cash holding is never at zero, so
 -- confirm_import archives the one it would bring there, as the user would.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
