@@ -336,6 +336,7 @@ export function InstrumentHistory({
               referenceUnit={referenceUnit}
               pending={pending}
               onChange={(param) => url.set("unit", param)}
+              triggerClassName="w-auto"
             />
           </div>
         )}

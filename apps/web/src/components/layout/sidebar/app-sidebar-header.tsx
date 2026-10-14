@@ -41,7 +41,10 @@ export function AppSidebarHeader() {
               <BreadcrumbList className="text-xs">
                 {trail.map((crumb, index) => (
                   <Fragment key={`${index}-${crumb.label}`}>
-                    {index > 0 && <BreadcrumbSeparator />}
+                    {index > 0 && (
+                      // Only the page's own crumb shows on a phone.
+                      <BreadcrumbSeparator className="hidden md:block" />
+                    )}
                     <BreadcrumbItem
                       className={
                         index < trail.length - 1 ? "hidden md:inline-flex" : ""

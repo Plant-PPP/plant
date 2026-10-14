@@ -82,6 +82,7 @@ export function UnitSelect({
   pending,
   shownLabel,
   onChange,
+  triggerClassName,
 }: {
   id: string;
   unit: Denominator;
@@ -90,6 +91,7 @@ export function UnitSelect({
   pending: boolean;
   shownLabel?: boolean;
   onChange: (param: string | null) => void;
+  triggerClassName?: string;
 }) {
   return (
     <FilterSelect
@@ -100,6 +102,7 @@ export function UnitSelect({
       pending={pending}
       options={units.map((each) => [each, UNIT_LABELS[each]] as const)}
       onChange={(value) => onChange(unitParam(value, referenceUnit))}
+      triggerClassName={triggerClassName}
     />
   );
 }
