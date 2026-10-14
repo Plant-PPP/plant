@@ -91,6 +91,7 @@ SELECT set_eq(
         'imports.printed_total_usd:UPDATE', 'imports.skipped_rows:UPDATE',
         'imports.source_connection_id:SELECT', 'imports.provider:SELECT',
         'imports.sync_draft:SELECT', 'imports.sync_from:SELECT', 'imports.sync_to:SELECT',
+        'imports.read_run_id:SELECT', 'imports.read_run_id:UPDATE',
         'uploaded_documents.id:SELECT', 'uploaded_documents.user_id:SELECT',
         'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT',
         'uploaded_documents.delete_after:SELECT', 'uploaded_documents.file_deleted_at:SELECT',
