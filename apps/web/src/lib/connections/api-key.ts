@@ -183,18 +183,19 @@ export function connectionForm(provider: ConnectionProvider): ConnectionForm {
 export const keyHintOf = (value: string) =>
   value.replace(/[^A-Za-z0-9]/g, "").slice(-4) || "0";
 
-export const CONNECT_MESSAGES: Record<ConnectCode, string> = {
+// What the user reads when connecting to the provider named `name` is
+// refused.
+export const connectMessages = (name: string): Record<ConnectCode, string> => ({
   invalid: "Revisá los datos: falta alguno o tiene caracteres que no van.",
   not_found: "No encontramos esa cuenta.",
-  unsupported: "Esta cuenta no es de ese proveedor.",
+  unsupported: `Esta cuenta no es de ${name}.`,
   unconfirmed: "Confirmá que el acceso es de solo lectura para conectarlo.",
-  rejected:
-    "El proveedor rechazó los datos. Revisá que los copiaste bien y que sigan activos.",
+  rejected: `${name} rechazó los datos. Revisá que los copiaste bien y que sigan activos.`,
   not_read_only:
     "La clave puede operar, retirar o transferir. Creá una de solo lectura.",
-  unavailable: "El proveedor no respondió. Probá de nuevo en unos minutos.",
+  unavailable: `${name} no respondió. Probá de nuevo en unos minutos.`,
   failed: "No pudimos guardar la conexión. Probá de nuevo más tarde.",
-};
+});
 
 export const SYNC_MESSAGES: Record<SyncCode, string> = {
   invalid: "No encontramos esa cuenta.",
