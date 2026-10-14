@@ -1,4 +1,5 @@
 import "server-only";
+import { LIABILITY_LABEL_MAX, REFERENCE_MAX } from "@plant/core";
 import {
   type AiCostInsert,
   Constants,
@@ -273,7 +274,8 @@ const toOperations = (answer: z.infer<typeof answerSchema>): DraftOperation[] =>
       return schema.safeParse(text).success ? text : null;
     };
     const symbol = operation.symbol?.trim().slice(0, 30) || null;
-    const reference = operation.reference?.trim().slice(0, 40) || null;
+    const reference =
+      operation.reference?.trim().slice(0, REFERENCE_MAX) || null;
     const parsed = draftOperationSchema.safeParse({
       date: z.iso.date().safeParse(operation.date).success
         ? operation.date
@@ -316,8 +318,8 @@ const toDebts = (answer: z.infer<typeof answerSchema>): DraftDebt[] =>
       return positiveDecimalSchema.safeParse(text).success ? text : null;
     };
     const parsed = draftDebtSchema.safeParse({
-      label: debt.label?.trim().slice(0, 60) || null,
-      lender: debt.lender?.trim().slice(0, 60) || null,
+      label: debt.label?.trim().slice(0, LIABILITY_LABEL_MAX) || null,
+      lender: debt.lender?.trim().slice(0, LIABILITY_LABEL_MAX) || null,
       currency: debt.currency,
       balance: decimal(debt.balance),
       minimumPayment: decimal(debt.minimumPayment),

@@ -7,6 +7,7 @@ import {
   type Database,
   positiveDecimalSchema,
 } from "@plant/shared";
+import { DRAFT_DEBT_LIMIT } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -365,7 +366,7 @@ export async function confirmImportDebts(
   const id = z.uuid().safeParse(importId);
   const kept = z
     .array(z.object({ discarded: z.boolean() }).loose())
-    .max(10)
+    .max(DRAFT_DEBT_LIMIT)
     .safeParse(rows);
   const reviewed = z
     .array(reviewedDebtSchema)
