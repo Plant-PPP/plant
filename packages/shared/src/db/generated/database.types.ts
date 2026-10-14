@@ -143,14 +143,14 @@ isOneToOne: false
                   ]
                 },"import_items": {
                   Row: {
-                    "confidence": Database["public"]['Enums']["import_confidence"],"created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"import_id": string,"position": number,"price": number | null,"quantity": number,"source_page": number | null,"symbol": string,"user_id": string,"value": number | null
+                    "confidence": Database["public"]['Enums']["import_confidence"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"import_id": string,"position": number,"price": number | null,"quantity": number,"source_page": number | null,"symbol": string,"user_id": string,"value": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "confidence": Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"id"?: string,"import_id": string,"position": number,"price"?: number | null,"quantity": number,"source_page"?: number | null,"symbol": string,"user_id": string,"value"?: number | null
+                    "confidence": Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"id"?: string,"import_id": string,"position": number,"price"?: number | null,"quantity": number,"source_page"?: number | null,"symbol": string,"user_id": string,"value"?: number | null
                   }
                   Update: {
-                    "confidence"?: Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"id"?: string,"import_id"?: string,"position"?: number,"price"?: number | null,"quantity"?: number,"source_page"?: number | null,"symbol"?: string,"user_id"?: string,"value"?: number | null
+                    "confidence"?: Database["public"]['Enums']["import_confidence"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"id"?: string,"import_id"?: string,"position"?: number,"price"?: number | null,"quantity"?: number,"source_page"?: number | null,"symbol"?: string,"user_id"?: string,"value"?: number | null
                   }
                   Relationships: [
                     {
