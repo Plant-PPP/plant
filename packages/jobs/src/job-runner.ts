@@ -7,8 +7,7 @@ export interface JobRunner {
   // no-op: the event's id is the import's. A `retry` names a later start of
   // an import still queued, whose first job may have ended without settling
   // it, which the engine would otherwise drop as that same event. The job
-  // skips an import that settled meanwhile, and a second reading replaces
-  // the first's draft.
+  // skips an import another run already claimed or that settled meanwhile.
   startImport(input: {
     importId: string;
     userId: string;
