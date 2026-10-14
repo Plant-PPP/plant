@@ -18,7 +18,7 @@ const MAX_REDIRECTS = 3;
 const MAX_CANDIDATES = 4;
 
 export type FaviconFailure =
-  "url" | "private" | "unreachable" | "not_image" | "too_large";
+  "url" | "private" | "unreachable" | "not_image" | "too_large" | "limited";
 
 export class FaviconError extends Error {
   constructor(readonly reason: FaviconFailure) {
@@ -52,6 +52,7 @@ const PRIVATE_V4: readonly [string, number][] = [
   ["172.16.0.0", 12],
   ["192.0.0.0", 24],
   ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
   ["192.168.0.0", 16],
   ["198.18.0.0", 15],
   ["198.51.100.0", 24],
@@ -117,6 +118,23 @@ export function isPrivateAddress(address: string): boolean {
     return isPrivateAddress(embedded);
   }
   const first = bytes[0]!;
+  // 64:ff9b:1::/48, the local-use NAT64 prefix.
+  if (
+    first === 0x00 &&
+    bytes[1] === 0x64 &&
+    bytes[2] === 0xff &&
+    bytes[3] === 0x9b &&
+    bytes[4] === 0x00 &&
+    bytes[5] === 0x01
+  ) {
+    return true;
+  }
+  // 2002::/16 (6to4) carries an IPv4 address in its next four bytes.
+  if (first === 0x20 && bytes[1] === 0x02) {
+    return isPrivateAddress(bytes.slice(2, 6).join("."));
+  }
+  // 2001::/32 (Teredo) tunnels to an address it hides.
+  if (first === 0x20 && bytes[1] === 0x01 && zeroes(2, 4)) return true;
   if ((first & 0xfe) === 0xfc) return true; // fc00::/7 unique local
   if (first === 0xfe && (bytes[1]! & 0xc0) === 0x80) return true; // fe80::/10
   if (first === 0xff) return true; // multicast
