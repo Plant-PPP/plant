@@ -1,4 +1,5 @@
 import {
+  type ExchangeSourcePort,
   type ImportDraft,
   type PortfolioSourcePort,
   SourceError,
@@ -17,6 +18,19 @@ const USER = "a0000000-0000-4000-8000-00000000000a";
 const IMPORT = "a1000000-0000-4000-8000-0000000000a1";
 const PATH = `${USER}/imports/a9000000-0000-4000-8000-0000000000a9/a7000000-0000-4000-8000-0000000000a7`;
 const BYTES = new TextEncoder().encode("%PDF-1.7");
+const ACCOUNT = "a2000000-0000-4000-8000-0000000000a2";
+// Made up.
+const CREDENTIALS = {
+  apiKey: "KeyKeyKeyKey0001",
+  apiSecret: "SecretSecret0001",
+};
+const SYNC = {
+  userId: USER,
+  status: "queued",
+  origin: "exchange",
+  accountId: ACCOUNT,
+  provider: "binance",
+} as const;
 
 const DRAFT: ImportDraft = {
   documentDate: "2026-09-30",
@@ -45,9 +59,13 @@ type Line = { level: string; event: string; fields: LogFields };
 
 function setUp({
   read = jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
+  exchangeRead = jest
+    .fn()
+    .mockResolvedValue({ draft: DRAFT, read: { ...READ, reader: "api" } }),
   ...overrides
-}: Partial<Omit<ImportJobDeps, "source">> & {
+}: Partial<Omit<ImportJobDeps, "source" | "exchanges">> & {
   read?: PortfolioSourcePort["read"];
+  exchangeRead?: ExchangeSourcePort["read"];
 } = {}) {
   const lines: Line[] = [];
   const log = (level: string) => (event: string, fields: LogFields) =>
@@ -56,12 +74,14 @@ function setUp({
     load: jest.fn().mockResolvedValue({
       userId: USER,
       status: "queued",
+      origin: "file",
       path: PATH,
       mimeType: "application/pdf",
     }),
     download: jest.fn().mockResolvedValue(BYTES),
     reading: jest.fn().mockResolvedValue(undefined),
     institution: jest.fn().mockResolvedValue("IOL"),
+    credentials: jest.fn().mockResolvedValue(CREDENTIALS),
     saveDraft: jest.fn().mockResolvedValue(undefined),
     saveOperations: jest.fn().mockResolvedValue(undefined),
     saveDebts: jest.fn().mockResolvedValue(undefined),
@@ -77,6 +97,13 @@ function setUp({
         incremental: "unsupported",
       }),
       read,
+    },
+    exchanges: {
+      binance: () => ({
+        provider: "binance",
+        checkReadOnly: jest.fn(),
+        read: exchangeRead,
+      }),
     },
     log: { info: log("info"), warn: log("warn"), error: log("error") },
     ...overrides,
@@ -398,5 +425,91 @@ describe("an import whose run died past its retries", () => {
     await failAbandonedImport(deps, {});
     expect(store.load).not.toHaveBeenCalled();
     expect(lines[0]!.fields["plant.import.skip_reason"]).toBe("no_import");
+  });
+});
+
+describe("a sync", () => {
+  it("reads the account's balances with its key into a draft and never touches a file", async () => {
+    const exchangeRead = jest
+      .fn()
+      .mockResolvedValue({ draft: DRAFT, read: { ...READ, reader: "api" } });
+    const { store, lines, ran, run } = setUp({ exchangeRead });
+    store.load.mockResolvedValue(SYNC);
+    expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+    expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
+    expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "binance");
+    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS);
+    expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
+    expect(store.download).not.toHaveBeenCalled();
+    expect(store.institution).not.toHaveBeenCalled();
+    expect(ran).toEqual(["prepare", "read"]);
+    expect(lines[0]!.fields["plant.import.reader"]).toBe("api");
+  });
+
+  it("keeps the key out of every step's output and every log line", async () => {
+    const { deps, store, lines } = setUp();
+    store.load.mockResolvedValue(SYNC);
+    const outputs: unknown[] = [];
+    await runImportDocument(deps, {
+      step: {
+        run: async (_, fn) => {
+          const output = await fn();
+          outputs.push(output);
+          return output;
+        },
+      },
+      runId: "01M8Z3K4567890QWERTYXABCDE",
+      attempt: 0,
+      event: { data: { importId: IMPORT, userId: USER } },
+    });
+    const seen = JSON.stringify([outputs, lines]);
+    expect(seen).not.toContain(CREDENTIALS.apiKey);
+    expect(seen).not.toContain(CREDENTIALS.apiSecret);
+  });
+
+  it.each([
+    ["the key can trade", "connection_not_read_only"],
+    ["the exchange refuses the key", "connection_rejected"],
+  ] as const)("fails when %s, without retrying", async (_, code) => {
+    const { store, run } = setUp({
+      exchangeRead: jest.fn().mockRejectedValue(new SourceError(code, false)),
+    });
+    store.load.mockResolvedValue(SYNC);
+    expect(await run()).toEqual({ outcome: "failed" });
+    expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, code);
+    expect(store.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it("fails as rejected when the account holds no key any more", async () => {
+    const exchangeRead = jest.fn();
+    const { store, run } = setUp({ exchangeRead });
+    store.load.mockResolvedValue(SYNC);
+    store.credentials.mockResolvedValue(null);
+    expect(await run()).toEqual({ outcome: "failed" });
+    expect(exchangeRead).not.toHaveBeenCalled();
+    expect(store.failed).toHaveBeenCalledWith(
+      IMPORT,
+      USER,
+      "connection_rejected",
+    );
+  });
+
+  it("finds nothing in an account with no balances", async () => {
+    const { store, run } = setUp({
+      exchangeRead: jest.fn().mockResolvedValue({
+        draft: { documentDate: "2026-10-14", rows: [], totals: [] },
+        read: { ...READ, reader: "api" },
+      }),
+    });
+    store.load.mockResolvedValue(SYNC);
+    expect(await run()).toEqual({ outcome: "failed" });
+    expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "nothing_found");
+  });
+
+  it("skips another user's sync without reading a key", async () => {
+    const { store, run } = setUp();
+    store.load.mockResolvedValue({ ...SYNC, userId: "b0" });
+    expect(await run()).toEqual({ outcome: "skipped" });
+    expect(store.credentials).not.toHaveBeenCalled();
   });
 });

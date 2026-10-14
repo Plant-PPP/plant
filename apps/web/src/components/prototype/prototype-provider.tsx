@@ -17,6 +17,7 @@ import type {
 import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
+import type { ApiKeyActions } from "@/lib/connections/api-key";
 import type { ReviewActions } from "@/components/imports/import-review";
 import type { Preferences } from "@/components/settings/preferences-card";
 import type { RealEstateSheet } from "@/lib/real-estate/sheet";
@@ -58,6 +59,7 @@ import {
 import * as accounts from "./prototype-accounts-store";
 import * as debts from "./prototype-debts-store";
 import * as imports from "./prototype-imports-store";
+import * as apiKeys from "./prototype-api-keys-store";
 import * as assistant from "./prototype-assistant";
 import { markRecalculated } from "./prototype-closes";
 import { usePrototypeStore } from "./use-prototype-store";
@@ -82,6 +84,7 @@ type Prototype = {
     portfolios: PortfolioActions;
     debts: DebtActions;
     imports: ImportActions & ReviewActions;
+    apiKeys: ApiKeyActions;
     assistant: AssistantActions;
     pins: {
       pin: (chart: ChartPart) => Promise<PinResult>;
@@ -319,6 +322,38 @@ export function PrototypeProvider({
         write((s) =>
           imports.confirmImport(s, id, rows, () => crypto.randomUUID()),
         ),
+    },
+    // A sync is queued, read a moment later and ready after that, as the
+    // real job's status would arrive.
+    apiKeys: {
+      connect: (input) => write((s) => apiKeys.connectApiKey(s, input)),
+      disconnect: (accountId) =>
+        write((s) => apiKeys.disconnectApiKey(s, accountId)),
+      sync: async (accountId) => {
+        const id = crypto.randomUUID();
+        const result = await write((s) =>
+          apiKeys.addSync(s, { id, accountId }),
+        );
+        if (result.ok) {
+          later(
+            () =>
+              void write((s) => ({
+                state: imports.startReading(s, id),
+                result: null,
+              })),
+            700,
+          );
+          later(
+            () =>
+              void write((s) => ({
+                state: apiKeys.finishSync(s, id),
+                result: null,
+              })),
+            2000,
+          );
+        }
+        return result;
+      },
     },
     debts: {
       create: (input) =>

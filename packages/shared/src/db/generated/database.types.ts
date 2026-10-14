@@ -5,7 +5,27 @@ export type Database = {
   
   "public": {
           Tables: {
-            "ai_conversations": {
+            "account_api_keys": {
+                  Row: {
+                    "created_at": string,"id": string,"key_hint": string,"provider": string,"secret_ciphertext": string,"source_connection_id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"key_hint": string,"provider": string,"secret_ciphertext": string,"source_connection_id": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"key_hint"?: string,"provider"?: string,"secret_ciphertext"?: string,"source_connection_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "account_api_keys_user_id_source_connection_id_fkey"
+      columns: ["user_id","source_connection_id"]
+isOneToOne: true
+      referencedRelation: "source_connections"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"ai_conversations": {
                   Row: {
                     "created_at": string,"id": string,"questions": number,"title": string,"unit": Database["public"]['Enums']["chat_unit"],"updated_at": string,"user_id": string
                   }
@@ -203,14 +223,14 @@ isOneToOne: false
                   ]
                 },"imports": {
                   Row: {
-                    "created_at": string,"document_date": string | null,"document_id": string,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"skipped_rows": number,"status": Database["public"]['Enums']["import_status"],"updated_at": string,"user_id": string
+                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id": string,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"skipped_rows"?: number,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"skipped_rows"?: number,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -218,6 +238,12 @@ isOneToOne: false
       columns: ["user_id","document_id"]
 isOneToOne: true
       referencedRelation: "uploaded_documents"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "imports_user_id_source_connection_id_fkey"
+      columns: ["user_id","source_connection_id"]
+isOneToOne: false
+      referencedRelation: "source_connections"
       referencedColumns: ["user_id","id"]
     }
                   ]
@@ -484,7 +510,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages"|"connection_rejected"|"connection_not_read_only","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -600,7 +626,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages", "connection_rejected", "connection_not_read_only"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

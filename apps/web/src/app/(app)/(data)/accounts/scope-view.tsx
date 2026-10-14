@@ -3,9 +3,17 @@ import { buenosAiresDate } from "@plant/shared";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import {
+  connectApiKey,
+  disconnectApiKey,
+  syncAccount,
+} from "@/app/(app)/(data)/accounts/api-key-actions";
 import { loadMovements } from "@/app/(app)/(data)/assets/movement-actions";
+import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { exchangeOf } from "@/lib/connections/api-key";
+import { readApiKey } from "@/lib/connections/write";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
 import { instrumentNames } from "@/lib/holdings/holding-name";
@@ -74,6 +82,17 @@ export async function ScopeView({
         : null;
   if (!scope) notFound();
 
+  // An exchange account offers its key; any account that holds one shows it.
+  const apiKey =
+    scope.kind === "account"
+      ? await readApiKey(client, id).catch((error: unknown) =>
+          assetsViewFailure(context, "api_key", error),
+        )
+      : null;
+  const provider =
+    apiKey?.provider ??
+    (scope.kind === "account" ? exchangeOf(scope.institution) : null);
+
   const inScope = (row: HoldingRow) =>
     kind === "account" ? row.account.id === id : row.portfolio.id === id;
   const rows = holdings.active.filter(inScope);
@@ -141,6 +160,20 @@ export async function ScopeView({
         .map((row) => ledger.revisions.get(row.id) ?? 0)
         .join(".")}
       loadMovements={loadMovements}
+      connection={
+        provider && (
+          <ApiKeyCard
+            accountId={id}
+            provider={provider}
+            apiKey={apiKey}
+            actions={{
+              connect: connectApiKey,
+              disconnect: disconnectApiKey,
+              sync: syncAccount,
+            }}
+          />
+        )
+      }
     />
   );
 }

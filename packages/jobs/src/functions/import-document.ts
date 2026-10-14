@@ -1,11 +1,15 @@
 import {
   type DraftDebt,
   type DraftOperation,
+  type ExchangeAdapters,
+  type ExchangeCredentials,
+  type ExchangeProvider,
   type ImportDraft,
   type PortfolioSourcePort,
   SourceError,
   type SourceErrorCode,
   type SourceReadInfo,
+  type SourceReading,
 } from "@plant/sources";
 import { Constants, type Database, type Logger } from "@plant/shared";
 import { NonRetriableError } from "inngest";
@@ -17,13 +21,15 @@ export const IMPORT_RETRIES = 3;
 
 export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
 
-// An import as the job reads it: whose it is, where it stands, and its file.
+// An import as the job reads it: whose it is, where it stands, and what it
+// reads: an uploaded file, or an account's balances at its exchange (a sync).
 export type ImportToRead = {
   userId: string;
   status: Database["public"]["Enums"]["import_status"];
-  path: string;
-  mimeType: string;
-};
+} & (
+  | { origin: "file"; path: string; mimeType: string }
+  | { origin: "exchange"; accountId: string; provider: ExchangeProvider }
+);
 
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
@@ -35,6 +41,13 @@ export interface ImportStorePort {
   reading(importId: string, userId: string): Promise<void>;
   // The institution of the account the import's file was uploaded to.
   institution(importId: string, userId: string): Promise<string>;
+  // The key of that exchange the user's account holds, unsealed; null when
+  // it holds none any more.
+  credentials(
+    userId: string,
+    accountId: string,
+    provider: ExchangeProvider,
+  ): Promise<ExchangeCredentials | null>;
   // `skippedRows` are the holdings the reading left out, for the review to
   // say.
   saveDraft(
@@ -65,14 +78,22 @@ export type ImportJobDeps = {
   // The connection's source reads a file's holdings, throwing a
   // SourceError when it cannot.
   source: PortfolioSourcePort;
+  // Each exchange's source reads a sync's balances with the account's key.
+  exchanges: ExchangeAdapters;
   log: Logger;
 };
 
-// What a step returns: ids, counts and codes only. The file and the draft
-// never cross a step boundary, because memoized step output is what the
-// caller sends back when signatures are off.
+// What a step returns: ids, counts and codes only. The file, the key and the
+// draft never cross a step boundary, because memoized step output is what
+// the caller sends back when signatures are off.
 type Prepared =
-  | { ok: true; path: string; mimeType: string }
+  | { ok: true; origin: "file"; path: string; mimeType: string }
+  | {
+      ok: true;
+      origin: "exchange";
+      accountId: string;
+      provider: ExchangeProvider;
+    }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
 type Read = {
   rows: number;
@@ -120,9 +141,10 @@ export function failureOf(error: unknown): SourceErrorCode {
   return "extraction_failed";
 }
 
-// Reads one queued import's file into its draft. The event names the import
-// and its user; the job trusts neither: the import must be that user's,
-// queued, with its file under that user's folder. A step's id never changes:
+// Reads one queued import's file, or its account's exchange, into its draft.
+// The event names the import and its user; the job trusts neither: the import
+// must be that user's, queued, with its file under that user's folder, and a
+// sync reads only that user's key of that account. A step's id never changes:
 // an import in flight may resume on newer code.
 export async function runImportDocument(
   deps: ImportJobDeps,
@@ -143,11 +165,25 @@ export async function runImportDocument(
     if (found.status !== "queued" && found.status !== "reading") {
       return { ok: false, reason: "not_queued" };
     }
+    if (found.origin === "exchange") {
+      await deps.store.reading(importId, userId);
+      return {
+        ok: true,
+        origin: "exchange",
+        accountId: found.accountId,
+        provider: found.provider,
+      };
+    }
     if (!found.path.startsWith(`${userId}/imports/`)) {
       return { ok: false, reason: "path" };
     }
     await deps.store.reading(importId, userId);
-    return { ok: true, path: found.path, mimeType: found.mimeType };
+    return {
+      ok: true,
+      origin: "file",
+      path: found.path,
+      mimeType: found.mimeType,
+    };
   });
   if (!prepared.ok) {
     deps.log.warn("imports.read", {
@@ -162,15 +198,27 @@ export async function runImportDocument(
   try {
     read = await step.run("read", async (): Promise<Read> => {
       try {
-        const bytes = await deps.store.download(prepared.path);
-        const reading = await deps.source.read({
-          importId,
-          bytes,
-          mimeType: prepared.mimeType,
-          userId,
-          institution: await deps.store.institution(importId, userId),
-          lastAttempt: attempt >= IMPORT_RETRIES,
-        });
+        let reading: SourceReading;
+        if (prepared.origin === "exchange") {
+          const credentials = await deps.store.credentials(
+            userId,
+            prepared.accountId,
+            prepared.provider,
+          );
+          // The user disconnected the key after the sync started.
+          if (!credentials) throw new SourceError("connection_rejected", false);
+          reading = await deps.exchanges[prepared.provider]().read(credentials);
+        } else {
+          const bytes = await deps.store.download(prepared.path);
+          reading = await deps.source.read({
+            importId,
+            bytes,
+            mimeType: prepared.mimeType,
+            userId,
+            institution: await deps.store.institution(importId, userId),
+            lastAttempt: attempt >= IMPORT_RETRIES,
+          });
+        }
         const rows =
           "operations" in reading
             ? reading.operations.length

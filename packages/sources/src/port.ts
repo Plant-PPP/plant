@@ -59,18 +59,18 @@ export const OPERATION_DOCUMENT_KINDS: readonly DocumentKind[] = [
 // The kinds of document whose reading is debts.
 export const DEBT_DOCUMENT_KINDS: readonly DocumentKind[] = ["card_statement"];
 
-// How a file was read: by a model reading the document, or from a
+// How a source was read: by a model reading the document, from a
 // spreadsheet's columns, whose mapping was saved already (hit), made now
-// (miss) or not needed (none); how many of its rows made no holding; and how
-// many rows and figures the document's two readings disagreed on, which a
-// third settled (0 for a spreadsheet).
+// (miss) or not needed (none), or from an exchange's API; how many of its
+// rows made no holding; and how many rows and figures the document's two
+// readings disagreed on, which a third settled (0 for the others).
 export type SourceReadInfo = {
-  reader: "document" | "sheet";
+  reader: "document" | "sheet" | "api";
   mapping: "none" | "hit" | "miss";
   skippedRows: number;
   disputes: number;
-  // What the document's readings agreed it is; null for a spreadsheet or
-  // when they did not agree.
+  // What the document's readings agreed it is; null for a spreadsheet, an
+  // API, or when they did not agree.
   documentKind: DocumentKind | null;
 };
 
