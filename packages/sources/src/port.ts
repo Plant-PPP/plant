@@ -31,7 +31,8 @@ export type SourceInput = {
   bytes: Uint8Array;
   mimeType: string;
   userId: string;
-  institution: string;
+  // The institution of the account the file was uploaded to; null for none.
+  institution: string | null;
   // No retry follows this attempt, so a reader settles for what it has
   // rather than failing on a provider that may answer later.
   lastAttempt: boolean;

@@ -23,16 +23,17 @@ export const importOriginSchema = z.object({
     .object({
       file_name: z.string(),
       mime_type: z.string(),
-      source_connection_id: z.string(),
+      source_connection_id: z.string().nullable(),
     })
     .nullable(),
 });
 
-// The import's name as Cargar lists it, its account and what it reads: a file
-// by its name, a sync by its provider and what it read.
+// The import's name as Cargar lists it, its account (none for a file uploaded
+// to no account) and what it reads: a file by its name, a sync by its
+// provider and what it read.
 export function importOrigin(row: z.infer<typeof importOriginSchema>): {
   fileName: string;
-  accountId: string;
+  accountId: string | null;
   origin: ImportOrigin;
 } {
   if (row.document) {

@@ -233,7 +233,8 @@ export type ImportDebtRow = {
 export type ImportItem = {
   id: string;
   fileName: string;
-  accountId: string;
+  // None for a file uploaded to no account, until its review sets one.
+  accountId: string | null;
   status: ImportStatus;
   // Why a failed import was refused, in the user's words.
   error: string | null;

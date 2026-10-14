@@ -68,8 +68,9 @@ VALUES ('imports',
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.uploaded_documents') $$,
   ARRAY['(table):SELECT', '(table):DELETE', 'source_connection_id:INSERT', 'storage_path:INSERT',
-        'file_name:INSERT', 'mime_type:INSERT', 'size_bytes:INSERT', 'sha256:INSERT'],
-  'a user reads, deletes and adds their files, never a file''s owner, id or deletion date'
+        'file_name:INSERT', 'mime_type:INSERT', 'size_bytes:INSERT', 'sha256:INSERT',
+        'source_connection_id:UPDATE'],
+  'a user reads, deletes and adds their files, never a file''s owner, id or deletion date, and sets a file''s account once (uploads_without_account_test.sql)'
 );
 
 SELECT set_eq(
