@@ -9,7 +9,6 @@ import {
   PANELS,
   readPanel,
 } from "../quotes/adapters/iol/feed";
-import { krakenPair, tickerUrl } from "../quotes/adapters/kraken/feed";
 import type { GetJson, PostForm } from "../quotes/contract/port";
 import { parseResponse, QuoteFeedError } from "../quotes/contract/quote";
 
@@ -122,7 +121,8 @@ export function coinGeckoListings(json: unknown): Listing[] {
   return listings;
 }
 
-// The listings whose symbol or name holds the query, an exact symbol first,
+// The listings whose symbol or name holds the query, an exact symbol (or
+// the CEDEAR or bond whose dollar line it names) first,
 // then symbols that start with it, then the rest, each in the providers'
 // order.
 export function matchListings(
@@ -132,9 +132,12 @@ export function matchListings(
 ): Listing[] {
   const wanted = normalizeSymbol(query);
   if (wanted === "") return [];
-  const rank = ({ symbol, name }: Listing) => {
+  // GOOGLD and GOOGLC are GOOGL's dollar lines: the same CEDEAR or bond.
+  const base = /[DC]$/.test(wanted) ? wanted.slice(0, -1) : null;
+  const rank = ({ symbol, name, type }: Listing) => {
     const key = normalizeSymbol(symbol);
     if (key === wanted) return 0;
+    if (key === base && (type === "cedear" || type === "bond")) return 0;
     if (key.startsWith(wanted)) return 1;
     if (normalizeSymbol(name).startsWith(wanted)) return 2;
     return key.includes(wanted) || normalizeSymbol(name).includes(wanted)
@@ -152,7 +155,37 @@ export function matchListings(
 }
 
 const COINGECKO_SEARCH = "https://api.coingecko.com/api/v3/search?query=";
-const PANEL_TTL_MS = 6 * 60 * 60_000;
+const ASSET_PAIRS_URL = "https://api.kraken.com/0/public/AssetPairs";
+const CACHE_TTL_MS = 6 * 60 * 60_000;
+
+// Kraken's own asset names, as the catalog names them.
+const CATALOG_ASSET: Readonly<Record<string, string>> = {
+  XBT: "BTC",
+  XDG: "DOGE",
+};
+
+const assetPairsSchema = z.object({
+  error: z.array(z.string()),
+  result: z.record(z.string(), z.object({ wsname: z.string().optional() })),
+});
+
+// The assets Kraken trades against the dollar, by their catalog symbol, from
+// each pair's "BASE/USD" name.
+export function krakenUsdAssets(json: unknown): ReadonlySet<string> {
+  const { error, result } = parseResponse(assetPairsSchema, json);
+  if (error.some((entry) => entry.startsWith("E"))) {
+    throw new QuoteFeedError("provider_error");
+  }
+  const assets = new Set<string>();
+  for (const { wsname } of Object.values(result)) {
+    const [base, quote] = (wsname ?? "").split("/");
+    if (!base || quote !== "USD") continue;
+    assets.add(
+      Object.hasOwn(CATALOG_ASSET, base) ? CATALOG_ASSET[base]! : base,
+    );
+  }
+  return assets;
+}
 
 export type CatalogSearchDeps = {
   getJson: GetJson;
@@ -161,20 +194,30 @@ export type CatalogSearchDeps = {
   now?: () => number;
 };
 
+// What a search found, and the markets whose provider did not answer.
+export type SearchFound = { listings: Listing[]; failed: ListingMarket[] };
+
 export type CatalogSearch = {
-  // What the providers list for the query; a provider that fails is left out.
-  search(query: string, limit: number): Promise<Listing[]>;
+  // What the providers of the given markets list for the query.
+  search(
+    query: string,
+    limit: number,
+    markets?: readonly ListingMarket[],
+  ): Promise<SearchFound>;
   // The provider's own listing for a symbol, checked again: a BYMA line IOL
   // lists, or a crypto CoinGecko names that Kraken quotes in dollars.
   verify(symbol: string, market: ListingMarket): Promise<Listing | null>;
 };
 
-// The BYMA panels are read whole and kept a few hours per instance; the
-// crypto search asks CoinGecko each time.
+// The BYMA panels and Kraken's dollar pairs are read whole and kept a few
+// hours per instance; the crypto search asks CoinGecko each time and keeps
+// only the coins Kraken quotes in dollars, so the quotes job can price them.
 export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
   const now = deps.now ?? Date.now;
   const login = createIolSession(deps);
   let byma: { at: number; listings: Promise<Listing[]> } | null = null;
+  let kraken: { at: number; assets: Promise<ReadonlySet<string>> } | null =
+    null;
 
   async function readByma(): Promise<Listing[]> {
     if (!deps.iol) throw new QuoteFeedError("unconfigured");
@@ -197,70 +240,69 @@ export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
     });
   }
 
-  function bymaListings(): Promise<Listing[]> {
+  // A read kept a few hours; a failed one is asked again on the next call.
+  function kept<T>(
+    slot: { at: number; value: Promise<T> } | null,
+    read: () => Promise<T>,
+    keep: (next: { at: number; value: Promise<T> } | null) => void,
+  ): Promise<T> {
     const at = now();
-    if (!byma || at - byma.at >= PANEL_TTL_MS) {
-      const listings = readByma();
-      byma = { at, listings };
-      // A failed read is asked again on the next search.
-      listings.catch(() => {
-        if (byma?.listings === listings) byma = null;
-      });
-    }
-    return byma.listings;
+    if (slot && at - slot.at < CACHE_TTL_MS) return slot.value;
+    const value = read();
+    const next = { at, value };
+    keep(next);
+    value.catch(() => keep(null));
+    return value;
   }
+
+  const bymaListings = () =>
+    kept(byma && { at: byma.at, value: byma.listings }, readByma, (next) => {
+      byma = next && { at: next.at, listings: next.value };
+    });
+
+  const krakenAssets = () =>
+    kept(
+      kraken && { at: kraken.at, value: kraken.assets },
+      async () => krakenUsdAssets(await deps.getJson(ASSET_PAIRS_URL)),
+      (next) => {
+        kraken = next && { at: next.at, assets: next.value };
+      },
+    );
 
   async function crypto(query: string): Promise<Listing[]> {
-    const json = await deps.getJson(
-      `${COINGECKO_SEARCH}${encodeURIComponent(query)}`,
-    );
-    return coinGeckoListings(json);
+    const [json, assets] = await Promise.all([
+      deps.getJson(`${COINGECKO_SEARCH}${encodeURIComponent(query)}`),
+      krakenAssets(),
+    ]);
+    return coinGeckoListings(json).filter(({ symbol }) => assets.has(symbol));
   }
 
-  async function quotedByKraken(symbol: string): Promise<boolean> {
-    const json = await deps.getJson(tickerUrl([symbol]));
-    const answer = z
-      .object({
-        error: z.array(z.string()),
-        result: z.record(z.string(), z.unknown()).optional(),
-      })
-      .safeParse(json);
-    if (!answer.success || answer.data.error.length > 0) return false;
-    const result = answer.data.result ?? {};
-    return krakenPair(symbol).resultKeys.some((key) =>
-      Object.hasOwn(result, key),
-    );
-  }
+  const readers: Record<ListingMarket, (query: string) => Promise<Listing[]>> =
+    { byma: () => bymaListings(), crypto };
 
   return {
-    async search(query, limit) {
+    async search(query, limit, markets = LISTING_MARKETS) {
       const text = query.trim();
-      if (normalizeSymbol(text) === "") return [];
-      const [fromByma, fromCrypto] = await Promise.allSettled([
-        bymaListings(),
-        crypto(text),
-      ]);
-      const listed = [
-        ...(fromByma.status === "fulfilled" ? fromByma.value : []),
-        ...(fromCrypto.status === "fulfilled" ? fromCrypto.value : []),
-      ];
-      if (fromByma.status === "rejected" && fromCrypto.status === "rejected") {
-        throw fromByma.reason;
+      if (normalizeSymbol(text) === "") return { listings: [], failed: [] };
+      const asked = [...new Set(markets)];
+      const read = await Promise.allSettled(
+        asked.map((market) => readers[market](text)),
+      );
+      const failed = asked.filter((_, i) => read[i]!.status === "rejected");
+      if (failed.length === asked.length && asked.length > 0) {
+        throw (read[0] as PromiseRejectedResult).reason;
       }
-      return matchListings(listed, text, limit);
+      const listed = read.flatMap((each) =>
+        each.status === "fulfilled" ? each.value : [],
+      );
+      return { listings: matchListings(listed, text, limit), failed };
     },
 
     async verify(symbol, market) {
       if (!SYMBOL_FORMAT.test(symbol)) return null;
-      if (market === "byma") {
-        const listings = await bymaListings();
-        return listings.find((listing) => listing.symbol === symbol) ?? null;
-      }
-      const named = (await crypto(symbol)).find(
-        (listing) => listing.symbol === symbol,
-      );
-      if (!named) return null;
-      return (await quotedByKraken(symbol)) ? named : null;
+      const listings =
+        market === "byma" ? await bymaListings() : await crypto(symbol);
+      return listings.find((listing) => listing.symbol === symbol) ?? null;
     },
   };
 }

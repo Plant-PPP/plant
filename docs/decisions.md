@@ -78,6 +78,13 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **IOL's operations**: executed buys and sells from `/api/v2/operaciones` (`filtro.estado=terminadas`), what IOL executed over what was ordered, the currency from the order or else its market; any other kind of order is skipped. Read at medium confidence: the fields come from IOL's documentation, not from an account that had operations.
 - **A provider's institution**: Binance, Wallbit, Interactive Brokers (or IBKR), Nexo, and IOL (or InvertirOnline) by the account's name; the server refuses credentials for an account of another institution.
 
+## 2026-10-14 · The market search by account, dollar lines and Kraken's pairs
+
+- **An account's institution picks the markets searched**: a crypto exchange (Binance, Nexo, Bitso, Ripio and the like) searches crypto, an Argentine broker (IOL, PPI, Balanz, Cocos and the like) BYMA, any other institution both (`lib/instruments/markets.ts`). A market whose provider did not answer is named under the results ("No pudimos buscar en BYMA") instead of leaving it out in silence.
+- **A crypto is offered only when Kraken trades it against the dollar**, read from Kraken's `AssetPairs` (kept six hours per instance), so CoinGecko's tokenized stocks and look-alike coins are left out and every crypto offered is one the quotes job can price.
+- **Where the line sets the currency, a CEDEAR or bond in pesos is offered on its dollar lines too**: AAPL, AAPLD (MEP) and AAPLC (cable), each the same instrument. An operation or an imported row picked on a dollar line is in dollars; MEP and cable both read as dollars, so a row in dollars shows as the MEP line. A new holding offers the instrument alone: its units are the same on every line. Typing a dollar line (GOOGLD) finds its instrument.
+- **Kraken asks each pair alone when it refuses the batch** with an error that is not transient (a pair it no longer lists), so one delisted coin leaves only itself unread.
+
 ## 2026-10-14 · Searching the market for instruments
 
 - **An instrument picker also searches the market**, once typing pauses, for at least two letters: BYMA through IOL's panels (`cedears` as CEDEARs, `acciones` as stocks, `titulosPublicos`, `obligacionesNegociables` and `letras` as bonds) and crypto through CoinGecko's keyless `/api/v3/search`. A listing the catalog does not have shows under "En el mercado" with its type, currency and market; picking it adds it to the catalog every user reads, and the picker chooses it. Only the real app searches the market; the prototype's pickers search its made-up catalog.
