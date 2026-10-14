@@ -22,6 +22,7 @@ import { z } from "zod";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
   IMPORT_FAILURE_MESSAGES,
+  type ImportDebtRow,
   type ImportItem,
   type ImportOperationRow,
   type ImportRow,
@@ -120,6 +121,35 @@ const operationSchema = z.object({
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
 });
+
+const debtSchema = z.object({
+  id: z.string(),
+  label: z.string().nullable(),
+  lender: z.string().nullable(),
+  currency: z.enum(Constants.public.Enums.currency),
+  balance: z.string().nullable(),
+  minimum_payment: z.string().nullable(),
+  due_date: z.string().nullable(),
+  confidence: z.enum(Constants.public.Enums.import_confidence),
+  source_page: z.number().nullable(),
+});
+
+function reviewDebt(data: unknown): ImportDebtRow {
+  const row = debtSchema.parse(data);
+  return {
+    id: row.id,
+    label: row.label,
+    lender: row.lender,
+    currency: row.currency,
+    balance: row.balance,
+    minimumPayment: row.minimum_payment,
+    dueDate: row.due_date,
+    confidence: row.confidence,
+    source:
+      row.source_page === null ? "Del documento" : `Página ${row.source_page}`,
+    discarded: false,
+  };
+}
 
 // Whether the document names an instrument by its D (MEP) or C (cable) line.
 const isDollarLine = (printed: string, symbol: string) => {
@@ -252,7 +282,7 @@ export async function readImportForReview(
   id: string,
   instruments: readonly InstrumentRow[],
 ): Promise<ImportItem | null> {
-  const [found, items, operations] = await Promise.all([
+  const [found, items, operations, debts] = await Promise.all([
     client
       .from("imports")
       .select(
@@ -279,12 +309,27 @@ export async function readImportForReview(
       )
       .eq("import_id", id)
       .order("position"),
+    client
+      .from("import_debts")
+      .select(
+        "id, label, lender, currency, balance:balance::text, " +
+          "minimum_payment:minimum_payment::text, due_date, confidence, source_page",
+      )
+      .eq("import_id", id)
+      .order("position"),
   ]);
   const failure =
     classifyPostgrestResult(found, 200) ??
     classifyPostgrestResult(items, 200) ??
-    classifyPostgrestResult(operations, 200);
-  if (failure || !found.data || !items.data || !operations.data) {
+    classifyPostgrestResult(operations, 200) ??
+    classifyPostgrestResult(debts, 200);
+  if (
+    failure ||
+    !found.data ||
+    !items.data ||
+    !operations.data ||
+    !debts.data
+  ) {
     throw new ImportsReadError(failure?.code ?? "no_data");
   }
   const [data] = found.data as unknown[];
@@ -312,6 +357,9 @@ export async function readImportForReview(
       operations: (operations.data as unknown[]).map((each) =>
         reviewOperation(each, index),
       ),
+    }),
+    ...(debts.data.length > 0 && {
+      debts: (debts.data as unknown[]).map(reviewDebt),
     }),
     skippedRows: printed.skipped_rows,
     createdOn: buenosAiresDate(new Date(row.created_at)),

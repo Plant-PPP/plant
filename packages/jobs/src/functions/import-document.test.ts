@@ -64,6 +64,7 @@ function setUp({
     institution: jest.fn().mockResolvedValue("IOL"),
     saveDraft: jest.fn().mockResolvedValue(undefined),
     saveOperations: jest.fn().mockResolvedValue(undefined),
+    saveDebts: jest.fn().mockResolvedValue(undefined),
     failed: jest.fn().mockResolvedValue(undefined),
   };
   const deps: ImportJobDeps = {
@@ -127,6 +128,34 @@ it("saves a document of operations as operations", async () => {
   expect(lines[0]!.fields).toMatchObject({
     "plant.import.draft": "operations",
     "plant.import.document_kind": "trade_ticket",
+  });
+});
+
+it("saves a card statement as debts", async () => {
+  const debts = [
+    {
+      label: "Visa",
+      lender: null,
+      currency: "ARS" as const,
+      balance: "1000",
+      minimumPayment: null,
+      dueDate: null,
+      confidence: "high" as const,
+      page: 1,
+    },
+  ];
+  const { store, lines, run } = setUp({
+    read: jest.fn().mockResolvedValue({
+      debts,
+      read: { ...READ, documentKind: "card_statement" },
+    }),
+  });
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, debts);
+  expect(store.saveDraft).not.toHaveBeenCalled();
+  expect(lines[0]!.fields).toMatchObject({
+    "plant.import.draft": "debts",
+    "plant.import.document_kind": "card_statement",
   });
 });
 

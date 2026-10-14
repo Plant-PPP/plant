@@ -31,7 +31,7 @@
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
---   in them, authenticated only the RPCs (write_operation and confirm_import,
+--   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
 --   which run as the caller with an empty search_path, and
 --   imports_used_this_month), service_role none in private, only
 --   service_role orphan_import_files, which runs as the caller, the only
@@ -149,6 +149,7 @@ SELECT is_empty(
                 AND p.oid <> ALL (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure,
+                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
                                        'public.imports_used_this_month()'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
@@ -161,7 +162,8 @@ SELECT ok(
    FROM pg_proc p
    WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
-                                       'public.confirm_import(uuid,jsonb)'::regprocedure])),
+                                       'public.confirm_import(uuid,jsonb)'::regprocedure,
+                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure])),
   'the write RPCs run as the caller with an empty search_path'
 );
 

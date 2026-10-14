@@ -86,6 +86,27 @@ export const draftOperationSchema = z
   })
   .strict();
 
+// What a card statement says is owed in one currency. Whatever it does not
+// print, or the readings disagreed on, is null for the review to ask: the
+// card's name, the bank that issued it, the statement's balance, its minimum
+// payment and its due date.
+export const draftDebtSchema = z
+  .object({
+    label: z.string().trim().min(1).max(60).nullable(),
+    lender: z.string().trim().min(1).max(60).nullable(),
+    currency: currencySchema,
+    balance: positiveDecimalSchema.nullable(),
+    minimumPayment: positiveDecimalSchema.nullable(),
+    dueDate: z.iso.date().nullable(),
+    confidence: importConfidenceSchema,
+    page: z.number().int().min(1).max(10000).nullable(),
+  })
+  .strict();
+
+// A card statement owes at most one balance per currency it bills in.
+export const DRAFT_DEBT_LIMIT = 10;
+
+export type DraftDebt = z.infer<typeof draftDebtSchema>;
 export type DraftOperation = z.infer<typeof draftOperationSchema>;
 export type DraftRow = z.infer<typeof draftRowSchema>;
 export type ImportDraft = z.infer<typeof importDraftSchema>;

@@ -1,4 +1,5 @@
 import {
+  type DraftDebt,
   type DraftOperation,
   type ImportDraft,
   type PortfolioSourcePort,
@@ -47,6 +48,11 @@ export interface ImportStorePort {
     userId: string,
     operations: DraftOperation[],
   ): Promise<void>;
+  saveDebts(
+    importId: string,
+    userId: string,
+    debts: DraftDebt[],
+  ): Promise<void>;
   failed(
     importId: string,
     userId: string,
@@ -68,7 +74,10 @@ export type ImportJobDeps = {
 type Prepared =
   | { ok: true; path: string; mimeType: string }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
-type Read = { rows: number; draft: "holdings" | "operations" } & SourceReadInfo;
+type Read = {
+  rows: number;
+  draft: "holdings" | "operations" | "debts";
+} & SourceReadInfo;
 
 export type ImportSteps = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -165,10 +174,14 @@ export async function runImportDocument(
         const rows =
           "operations" in reading
             ? reading.operations.length
-            : reading.draft.rows.length;
+            : "debts" in reading
+              ? reading.debts.length
+              : reading.draft.rows.length;
         if (rows === 0) throw new SourceError("nothing_found", false);
         if ("operations" in reading) {
           await deps.store.saveOperations(importId, userId, reading.operations);
+        } else if ("debts" in reading) {
+          await deps.store.saveDebts(importId, userId, reading.debts);
         } else {
           await deps.store.saveDraft(
             importId,
@@ -179,7 +192,12 @@ export async function runImportDocument(
         }
         return {
           rows,
-          draft: "operations" in reading ? "operations" : "holdings",
+          draft:
+            "operations" in reading
+              ? "operations"
+              : "debts" in reading
+                ? "debts"
+                : "holdings",
           ...reading.read,
         };
       } catch (error) {

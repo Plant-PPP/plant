@@ -141,6 +141,26 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"import_debts": {
+                  Row: {
+                    "balance": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at": string,"currency": Database["public"]['Enums']["currency"],"due_date": string | null,"id": string,"import_id": string,"label": string | null,"lender": string | null,"minimum_payment": number | null,"position": number,"source_page": number | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "balance"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"due_date"?: string | null,"id"?: string,"import_id": string,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"position": number,"source_page"?: number | null,"user_id": string
+                  }
+                  Update: {
+                    "balance"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"due_date"?: string | null,"id"?: string,"import_id"?: string,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"position"?: number,"source_page"?: number | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "import_debts_user_id_import_id_fkey"
+      columns: ["user_id","import_id"]
+isOneToOne: false
+      referencedRelation: "imports"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"import_items": {
                   Row: {
                     "account": string | null,"confidence": Database["public"]['Enums']["import_confidence"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"import_id": string,"position": number,"price": number | null,"quantity": number,"source_page": number | null,"symbol": string,"user_id": string,"value": number | null
@@ -425,6 +445,9 @@ isOneToOne: false
           Functions: {
             "confirm_import":
 { Args: { "p_import_id": string,"p_operations": Json }; Returns: string
+                           },
+"confirm_import_debts":
+{ Args: { "p_debts": Json,"p_import_id": string }; Returns: string
                            },
 "imports_used_this_month":
 { Args: Record<PropertyKey, never>; Returns: number

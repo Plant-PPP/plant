@@ -449,14 +449,59 @@ it("lets the step retry when one reader's provider is down", async () => {
   ]);
 });
 
-it("reads no holdings from a document both readers call a card statement", async () => {
-  const { run } = byModel({
-    [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
-    [READERS[1]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
+const cardStatement = (balance: string) =>
+  JSON.stringify({
+    kind: "card_statement",
+    documentDate: null,
+    rows: [row("AAPL", "5")],
+    operations: [],
+    totals: [],
+    debts: [
+      {
+        label: " Visa ",
+        lender: "Galicia",
+        currency: "ARS",
+        balance,
+        minimumPayment: "25000",
+        dueDate: "2026-10-20",
+        confidence: "high",
+        page: 1,
+      },
+      {
+        label: "Visa",
+        lender: null,
+        currency: "USD",
+        balance: "not a number",
+        minimumPayment: null,
+        dueDate: "20/10/2026",
+        confidence: "high",
+        page: 1,
+      },
+    ],
   });
-  const { draft, read } = holdings(await run());
-  expect(read.documentKind).toBe("card_statement");
-  expect(draft.rows).toEqual([]);
+
+it("reads a document both readers call a card statement as its debts", async () => {
+  const { run } = byModel({
+    [READERS[0]]: cardStatement("250000.50"),
+    [READERS[1]]: cardStatement("205000.50"),
+  });
+  const reading = await run();
+  expect(reading.read.documentKind).toBe("card_statement");
+  if (!("debts" in reading)) throw new Error("not read as debts");
+  // A balance they disagree on is left for the review; a debt with nothing
+  // that reads is left out.
+  expect(reading.debts).toEqual([
+    {
+      label: "Visa",
+      lender: "Galicia",
+      currency: "ARS",
+      balance: null,
+      minimumPayment: "25000",
+      dueDate: "2026-10-20",
+      confidence: "low",
+      page: 1,
+    },
+  ]);
 });
 
 it("keeps the holdings when the readers disagree on what the document is", async () => {

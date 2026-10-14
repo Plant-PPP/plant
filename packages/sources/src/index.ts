@@ -9,6 +9,8 @@ export {
 } from "./file-upload/adapter";
 export {
   createSourceForConnection,
+  DEBT_DOCUMENT_KINDS,
+  type DebtsReading,
   type HoldingsReading,
   type OperationsReading,
   OPERATION_DOCUMENT_KINDS,
@@ -26,7 +28,10 @@ export {
   supportSchema,
 } from "./port";
 export {
+  DRAFT_DEBT_LIMIT,
   DRAFT_ROW_LIMIT,
+  type DraftDebt,
+  draftDebtSchema,
   type DraftOperation,
   draftOperationSchema,
   OPERATION_KINDS,

@@ -106,6 +106,21 @@ export type ImportOperationRow = {
   loaded?: boolean;
 };
 
+// What a card statement says is owed in one currency, as the review shows
+// it: null where the statement does not print it or the readings disagreed.
+export type ImportDebtRow = {
+  id: string;
+  label: string | null;
+  lender: string | null;
+  currency: Currency;
+  balance: string | null;
+  minimumPayment: string | null;
+  dueDate: string | null;
+  confidence: Confidence;
+  source: string;
+  discarded: boolean;
+};
+
 export type ImportItem = {
   id: string;
   fileName: string;
@@ -119,6 +134,8 @@ export type ImportItem = {
   rows: ImportRow[];
   // A document of operations' draft, instead of rows of holdings.
   operations?: ImportOperationRow[];
+  // A card statement's draft, when it is one.
+  debts?: ImportDebtRow[];
   // Holdings a spreadsheet lists that the reading left out.
   skippedRows: number;
   createdOn: string;

@@ -36,6 +36,7 @@ export function importSink(): ImportStorePort {
       institution: unconfigured,
       saveDraft: unconfigured,
       saveOperations: unconfigured,
+      saveDebts: unconfigured,
       failed: unconfigured,
     };
   }
