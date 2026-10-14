@@ -10,8 +10,9 @@
 --   authenticated only. A table that needs another policy changes this test in
 --   its own PR.
 -- - The reference tables, public tables with no user_id, are exactly fx_rates,
---   prices and instruments: market data every user reads; service_role holds
---   nothing on instruments, which migrations seed. Their permissive policies only
+--   prices and instruments: market data every user reads; service_role reads
+--   an instrument's symbol, type and currency and adds one a provider lists,
+--   never updating nor deleting one. Their permissive policies only
 --   let authenticated read every row, authenticated cannot write them,
 --   service_role cannot update or delete them, and they have no foreign key,
 --   since every user reads what a row points at.
@@ -218,9 +219,11 @@ SELECT ok(
 );
 
 SELECT ok(
-  NOT has_any_column_privilege('service_role', 'public.instruments', 'SELECT, INSERT, UPDATE')
+  NOT has_column_privilege('service_role', 'public.instruments', 'aliases', 'SELECT, INSERT')
+    AND NOT has_column_privilege('service_role', 'public.instruments', 'name', 'SELECT')
+    AND NOT has_any_column_privilege('service_role', 'public.instruments', 'UPDATE')
     AND NOT has_table_privilege('service_role', 'public.instruments', 'DELETE'),
-  'service_role holds nothing on instruments, which only migrations write'
+  'service_role adds instruments but never reads their names or aliases, updates nor deletes one'
 );
 
 -- Mirrors QuoteTable in security-tests/src/reference-rows.ts, whose specs run

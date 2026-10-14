@@ -5,6 +5,7 @@ import type { GainsKind, TaxReport } from "./report";
 
 export const GAINS_LABELS: Record<GainsKind, string> = {
   sale_cedear: "Venta de CEDEARs",
+  sale_stock: "Venta de acciones",
   sale_bond: "Venta de bonos y ONs",
   sale_fci: "Rescate de FCIs",
   sale_crypto: "Venta de cripto",

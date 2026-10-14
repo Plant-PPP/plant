@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(96);
+SELECT plan(97);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -113,8 +113,20 @@ SELECT is_empty(
      UNION ALL
      SELECT acl.grantee::regrole::text FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
      WHERE a.attrelid IN ('public.holdings'::regclass, 'public.instruments'::regclass)
-       AND acl.grantee IN ('anon'::regrole, 'service_role'::regrole, 0) $$,
-  'anon, the service role and PUBLIC hold nothing on either table or its columns'
+       AND acl.grantee IN ('anon'::regrole, 0)
+     UNION ALL
+     SELECT acl.grantee::regrole::text FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.holdings'::regclass AND acl.grantee = 'service_role'::regrole $$,
+  'anon and PUBLIC hold nothing on either table, and the service role nothing on holdings'
+);
+
+SELECT set_eq(
+  $$ SELECT a.attname || ':' || acl.privilege_type
+     FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+     WHERE a.attrelid = 'public.instruments'::regclass AND acl.grantee = 'service_role'::regrole $$,
+  ARRAY['symbol:SELECT', 'type:SELECT', 'currency:SELECT',
+        'symbol:INSERT', 'name:INSERT', 'type:INSERT', 'currency:INSERT'],
+  'the service role reads what it quotes and adds an instrument a provider lists, never its aliases'
 );
 
 -- ── Shape ───────────────────────────────────────────────────────────────────
