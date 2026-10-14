@@ -136,6 +136,25 @@ it("falls back to /favicon.ico", async () => {
   );
 });
 
+it("falls back to /favicon.ico when a failed page's body stream errors", async () => {
+  const deps = web({ "https://brubank.com/favicon.ico": { body: ICO } });
+  const fetchPage = deps.fetch;
+  deps.fetch = (async (input: URL, init?: RequestInit) =>
+    input.href === "https://brubank.com/"
+      ? new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error("stream failed"));
+            },
+          }),
+          { status: 500 },
+        )
+      : fetchPage(input, init)) as typeof fetch;
+  expect(await fetchFavicon("https://brubank.com", deps)).toMatch(
+    /^data:image\/x-icon;base64,/,
+  );
+});
+
 it("reads the icon links at the start of a page too long to read whole", async () => {
   const deps = web({
     "https://nexo.com/": {

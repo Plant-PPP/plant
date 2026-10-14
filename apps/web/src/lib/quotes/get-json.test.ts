@@ -94,6 +94,18 @@ it("refuses a redirect by its status, so it is not retried", async () => {
   });
 });
 
+it("answers an error status by its code when its body stream errors", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error("stream failed"));
+    },
+  });
+  answer(new Response(body, { status: 404 }));
+  await expect(failure(getJson(URL))).resolves.toMatchObject({
+    code: feedErrorForStatus(404).code,
+  });
+});
+
 it("refuses a body whose length is over the cap before reading it", async () => {
   const cancel = jest.fn();
   const body = stream([new Uint8Array(1)], cancel);

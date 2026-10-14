@@ -1,10 +1,10 @@
-// A response's body read at most `cap` bytes far, so a server that sends no
-// length or a wrong one cannot fill memory. Past the cap, "fail" gives null
-// (a body that declares a larger length is refused unread) and "cut" keeps
-// the first `cap` bytes. A failed read rejects; a failed cancel of the rest
-// is ignored, so it never hides that the body was too large.
+// A response's or request's body read at most `cap` bytes far, so a peer that
+// sends no length or a wrong one cannot fill memory. Past the cap, "fail"
+// gives null (a body that declares a larger length is refused unread) and
+// "cut" keeps the first `cap` bytes. A failed read rejects; a failed cancel of
+// the rest is ignored, so it never hides that the body was too large.
 export async function readCappedBytes(
-  response: Response,
+  response: Pick<Response, "headers" | "body">,
   cap: number,
   { over }: { over: "cut" | "fail" },
 ): Promise<Uint8Array | null> {
