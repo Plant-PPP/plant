@@ -99,12 +99,22 @@ export async function jsonOf(
   }
 }
 
-// A provider's figure as a decimal string, exact for a string and to eight
-// decimals for a JSON number; null when it is neither.
+// A decimal with more decimals than Plant stores.
+const LONG_DECIMAL = /^(-?)(0|[1-9]\d*)\.(\d{8})(\d+)$/;
+
+// A provider's figure as a decimal string, to eight decimals, half away from
+// zero; null when it is neither a decimal string nor a JSON number.
 export function decimalOf(value: unknown): string | null {
   let text: string | null = null;
-  if (typeof value === "string") text = value.trim();
-  else if (typeof value === "number" && Number.isFinite(value)) {
+  if (typeof value === "string") {
+    text = value.trim();
+    const long = LONG_DECIMAL.exec(text);
+    if (long) {
+      const [, sign = "", whole = "0", kept = "", rest = ""] = long;
+      const units = BigInt(`${whole}${kept}`) + (rest >= "5" ? 1n : 0n);
+      text = units === 0n ? "0" : `${sign}${fromScaled(units)}`;
+    }
+  } else if (typeof value === "number" && Number.isFinite(value)) {
     text = value.toFixed(8).replace(/\.?0+$/, "");
     if (text === "-0") text = "0";
   }
@@ -193,8 +203,23 @@ export const hexOf = (bytes: Uint8Array) =>
 export const base64Of = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes));
 
-// The fiat currencies exchanges in the region hold that Plant does not keep.
-const OTHER_FIAT = new Set(["MXN", "BRL", "COP", "CLP", "PEN", "UYU", "EUR"]);
+// The fiat currencies exchanges and wallets in the region hold that Plant
+// does not keep.
+export const OTHER_FIAT: ReadonlySet<string> = new Set([
+  "MXN",
+  "BRL",
+  "COP",
+  "CLP",
+  "PEN",
+  "UYU",
+  "EUR",
+  "BOB",
+  "DOP",
+  "PHP",
+  "GTQ",
+  "PAB",
+  "CRC",
+]);
 
 // A currency or an asset as an exchange names it, in capitals.
 const ASSET = /^[A-Z0-9]{1,20}$/;
@@ -215,17 +240,34 @@ export const cashRow = (
   page: null,
 });
 
-// An exchange's balance of one currency as a holding, from the parts it is
-// held in (what is free and what open orders hold): pesos and dollars as
-// cash, a crypto asset in units valued in dollars. "empty" when nothing is
-// held, null when the balance is not one Plant can store: below zero, or in
-// a fiat Plant does not keep.
-export function balanceRow(
-  code: string,
+// Cash held in several balances of one currency, one row per currency with
+// their sum, and how many sums Plant cannot store (below zero).
+export function summedCashRows(
+  balances: readonly { currency: Currency; amount: string }[],
+  confidence: DraftRow["confidence"],
+): { rows: DraftRow[]; skipped: number } {
+  const sums = new Map<Currency, bigint>();
+  for (const { currency, amount } of balances) {
+    sums.set(currency, (sums.get(currency) ?? 0n) + toScaled(amount));
+  }
+  const rows: DraftRow[] = [];
+  let skipped = 0;
+  for (const [currency, units] of sums) {
+    if (units === 0n) continue;
+    const quantity = fromScaled(units);
+    if (positive(quantity)) rows.push(cashRow(currency, quantity, confidence));
+    else skipped += 1;
+  }
+  return { rows, skipped };
+}
+
+// A balance of one symbol as a holding, from the parts it is held in: pesos
+// and dollars as cash, anything else in units valued in dollars. "empty"
+// when nothing is held, null when the balance is not one Plant can store.
+export function heldRow(
+  symbol: string,
   parts: readonly unknown[],
 ): DraftRow | "empty" | null {
-  const symbol = code.trim().toUpperCase();
-  if (!ASSET.test(symbol)) return null;
   let quantity: string;
   try {
     let units = 0n;
@@ -235,7 +277,6 @@ export function balanceRow(
       units += toScaled(decimal);
     }
     if (units === 0n) return "empty";
-    if (units < 0n || OTHER_FIAT.has(symbol)) return null;
     quantity = fromScaled(units);
   } catch {
     return null;
@@ -253,6 +294,19 @@ export function balanceRow(
     confidence: "high",
     page: null,
   };
+}
+
+// An exchange's balance of one currency as a holding, from the parts it is
+// held in (what is free and what open orders hold), as heldRow reads it;
+// null too in a fiat Plant does not keep.
+export function balanceRow(
+  code: string,
+  parts: readonly unknown[],
+): DraftRow | "empty" | null {
+  const symbol = code.trim().toUpperCase();
+  if (!ASSET.test(symbol)) return null;
+  const row = heldRow(symbol, parts);
+  return row !== "empty" && OTHER_FIAT.has(symbol) ? null : row;
 }
 
 // Holdings from an exchange's balances, each as balanceRow takes it.

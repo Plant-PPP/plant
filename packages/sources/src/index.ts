@@ -54,6 +54,7 @@ export {
   draftOperationSchema,
   OPERATION_KINDS,
   type DraftRow,
+  draftAssetClassSchema,
   draftRowSchema,
   importConfidenceSchema,
   type ImportDraft,

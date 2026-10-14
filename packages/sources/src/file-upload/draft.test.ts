@@ -1,4 +1,4 @@
-import { importDraftSchema, SourceError } from "./draft";
+import { draftAssetClassSchema, importDraftSchema, SourceError } from "./draft";
 
 const row = {
   symbol: "AAPL",
@@ -79,4 +79,8 @@ describe("SourceError", () => {
       message: "source failed: extraction_failed",
     });
   });
+});
+
+it("takes a draft row as an instrument or as cash, as the database names them", () => {
+  expect(draftAssetClassSchema.options).toEqual(["instrument", "cash"]);
 });

@@ -16,6 +16,7 @@ import {
   over,
   stored,
 } from "@plant/shared";
+import { draftAssetClassSchema } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -106,7 +107,7 @@ const itemSchema = z.object({
   value: z.string().nullable(),
   cost: z.string().nullable().optional(),
   account: z.string().nullable().optional(),
-  asset_class: z.enum(["instrument", "cash"]).optional(),
+  asset_class: draftAssetClassSchema.optional(),
   currency: z.enum(Constants.public.Enums.currency),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),

@@ -1,9 +1,10 @@
+import type { Currency } from "@plant/shared";
 import { z } from "zod";
 
 import type { DraftRow } from "../file-upload/draft";
 import {
   call,
-  cashRow,
+  summedCashRows,
   decimalOf,
   holdingsReading,
   isZero,
@@ -145,18 +146,21 @@ export function iolConnection({
           page: null,
         });
       }
-      // Each account's cash in its currency.
+      // The cash of every account in a currency, added up.
+      const cash: { currency: Currency; amount: string }[] = [];
       for (const { moneda, saldo } of state.data.cuentas) {
         const currency = currencyOf(moneda);
-        const quantity = decimalOf(saldo);
-        if (isZero(quantity)) continue;
-        if (currency === null || !positive(quantity)) {
+        const amount = decimalOf(saldo);
+        if (isZero(amount)) continue;
+        if (currency === null || amount === null) {
           skipped += 1;
           continue;
         }
-        rows.push(cashRow(currency, quantity, "medium"));
+        cash.push({ currency, amount });
       }
-      return holdingsReading(rows, skipped, now());
+      const summed = summedCashRows(cash, "medium");
+      rows.push(...summed.rows);
+      return holdingsReading(rows, skipped + summed.skipped, now());
     },
   });
 }

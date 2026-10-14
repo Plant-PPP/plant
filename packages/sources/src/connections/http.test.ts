@@ -1,4 +1,4 @@
-import { call } from "./http";
+import { balanceRow, call } from "./http";
 
 it("fails as unavailable without the network error, which may name the request", async () => {
   const get = jest
@@ -11,4 +11,12 @@ it("fails as unavailable without the network error, which may name the request",
   );
   expect(failed).toMatchObject({ code: "extraction_failed", retryable: true });
   expect((failed as Error).cause).toBeUndefined();
+});
+
+it("rounds a figure given as a string to eight decimals, as it does a number", () => {
+  expect(balanceRow("ETH", ["0.123456789"])).toMatchObject({
+    symbol: "ETH",
+    quantity: "0.12345679",
+  });
+  expect(balanceRow("SOL", ["0.000000000"])).toBe("empty");
 });

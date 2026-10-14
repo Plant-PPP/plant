@@ -11,6 +11,11 @@ export const importConfidenceSchema = z.enum(
   Constants.public.Enums.import_confidence,
 );
 
+// What a draft row holds: an instrument or cash, as the database names them.
+export const draftAssetClassSchema = z
+  .enum(Constants.public.Enums.asset_class)
+  .extract(["instrument", "cash"]);
+
 // The most rows one document yields; past it the document is not a statement.
 export const DRAFT_ROW_LIMIT = 500;
 
@@ -29,7 +34,7 @@ export const draftRowSchema = z
     account: z.string().trim().min(1).max(60).optional(),
     // Cash is a balance in `currency`, its quantity the amount and its symbol
     // the currency's code; a row without it is an instrument.
-    assetClass: z.enum(["instrument", "cash"]).optional(),
+    assetClass: draftAssetClassSchema.optional(),
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),

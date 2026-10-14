@@ -149,6 +149,21 @@ describe("readSheet", () => {
     expect(XLSX.read).not.toHaveBeenCalled();
   });
 
+  it("refuses a file SheetJS cannot open without its error as the cause", () => {
+    jest.mocked(XLSX.read).mockImplementationOnce(() => {
+      throw new Error("inner detail");
+    });
+    let caught: unknown;
+    try {
+      readSheet(new Uint8Array([1, 2, 3]), XLSX_TYPE);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(SourceError);
+    expect((caught as SourceError).code).toBe("unreadable");
+    expect((caught as SourceError).cause).toBeUndefined();
+  });
+
   it("refuses a file it cannot open", () => {
     expectSourceError(
       () => readSheet(new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3]), XLSX_TYPE),

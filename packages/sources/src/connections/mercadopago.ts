@@ -108,12 +108,8 @@ function amountOf(text: string, separator: string): string | null {
 
 // The account's available balance in pesos at the report's end: the balance
 // on the last peso line that prints one, or null when there is none or that
-// one does not read (never an earlier line's); and how many peso lines print
-// a balance that does not read.
-export function balanceOf(csv: string): {
-  balance: string | null;
-  unreadable: number;
-} {
+// one does not read (never an earlier line's).
+export function balanceOf(csv: string): string | null {
   const text = csv.replace(/^﻿/, "");
   const header = text.slice(0, text.search(/\r?\n|$/));
   const separator =
@@ -123,16 +119,14 @@ export function balanceOf(csv: string): {
   const balanceAt = names.indexOf("BALANCE_AMOUNT");
   const currencyAt = names.indexOf("CURRENCY");
   let balance: string | null = null;
-  let unreadable = 0;
-  if (balanceAt < 0) return { balance, unreadable };
+  if (balanceAt < 0) return balance;
   for (const fields of lines) {
     const currency = currencyAt < 0 ? "" : (fields[currencyAt] ?? "");
     const printed = fields[balanceAt] ?? "";
     if ((currency !== "ARS" && currency !== "") || printed === "") continue;
     balance = amountOf(printed, separator);
-    if (balance === null) unreadable += 1;
   }
-  return { balance, unreadable };
+  return balance;
 }
 
 // Mercado Pago by the user's own production access token, which Mercado Pago
@@ -258,13 +252,13 @@ export function mercadoPagoConnection({
     },
     async read(credentials) {
       const { csv, end } = await report(credentials);
-      const { balance, unreadable } = balanceOf(csv);
+      const balance = balanceOf(csv);
       // Which line closes the report is read from its documentation, so the
       // review asks the user to look.
       const rows = positive(balance) ? [cashRow("ARS", balance, "medium")] : [];
       // A balance missing, unreadable, zero or below is counted, so the
       // review says a line was left out rather than showing nothing.
-      const skipped = Math.max(unreadable, rows.length === 0 ? 1 : 0);
+      const skipped = rows.length === 0 ? 1 : 0;
       const reading = holdingsReading(rows, skipped, now());
       reading.draft.documentDate = buenosAiresDate(end);
       return reading;
