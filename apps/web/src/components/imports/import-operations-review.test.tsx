@@ -80,6 +80,13 @@ it("asks for what the document does not say, and holds the confirm", () => {
   expect(confirmButton(html)).toContain(' disabled=""');
 });
 
+it("says a date later than today is, rather than missing", () => {
+  const html = render([operation({ date: "2999-01-01" })]);
+  expect(html).toContain("La fecha es posterior a hoy");
+  expect(html).not.toContain("Falta en el documento");
+  expect(confirmButton(html)).toContain(' disabled=""');
+});
+
 it("asks an income for its amount", () => {
   const html = render([
     operation({ kind: "dividend", quantity: null, price: null }),
