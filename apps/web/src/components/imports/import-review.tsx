@@ -69,6 +69,7 @@ import {
   type ImportRow,
   issueLabel,
   readTotals,
+  type RowChange,
   rowChange,
   savedToast,
   totalsMatch,
@@ -280,6 +281,23 @@ export function ImportReview({
     isCash(row)
       ? cashFor(row)?.held.get(row.currency)
       : heldFor(row).get(row.symbol);
+  // Only cash may be at zero: a balance at zero brings the account's cash in
+  // its currency to zero, and changes nothing where it holds none.
+  const quantityInvalid = (row: EditedRow, quantity: string | null) =>
+    quantity === null ||
+    exactOf(quantity).n < 0n ||
+    (exactOf(quantity).n === 0n && !isCash(row));
+  const changeOf = (row: EditedRow, quantity: string | null): RowChange =>
+    isCash(row) &&
+    !row.discarded &&
+    heldOf(row) === undefined &&
+    quantity !== null &&
+    exactOf(quantity).n === 0n
+      ? { kind: "same" }
+      : rowChange(
+          { quantity: quantity ?? "0", discarded: row.discarded },
+          heldOf(row),
+        );
   // Cash the account holds in several holdings of the row's currency.
   const severalCash = (row: EditedRow) =>
     isCash(row) && (cashFor(row)?.several.has(row.currency) ?? false);
@@ -388,8 +406,7 @@ export function ImportReview({
   const valid = parsed.every(
     (each) =>
       each.row.discarded ||
-      (each.quantity !== null &&
-        exactOf(each.quantity).n > 0n &&
+      (!quantityInvalid(each.row, each.quantity) &&
         each.row.symbol !== "" &&
         !unrouted(each.row) &&
         !severalCash(each.row) &&
@@ -625,10 +642,7 @@ export function ImportReview({
           {rows.map((row, index) => {
             const { quantity, price } = parsed[index]!;
             const type = types.get(row.symbol);
-            const effect = rowChange(
-              { quantity: quantity ?? "0", discarded: row.discarded },
-              heldOf(row),
-            );
+            const effect = changeOf(row, quantity);
             const value =
               quantity && price
                 ? toDecimal(times(exactOf(quantity), exactOf(price)), 2)
@@ -738,8 +752,7 @@ export function ImportReview({
                     inputMode="decimal"
                     disabled={row.discarded}
                     aria-invalid={
-                      !row.discarded &&
-                      (quantity === null || exactOf(quantity).n <= 0n)
+                      !row.discarded && quantityInvalid(row, quantity)
                     }
                     onChange={(event) =>
                       change(row.id, { quantityText: event.target.value })

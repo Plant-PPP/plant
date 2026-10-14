@@ -178,6 +178,35 @@ describe("cash", () => {
     ]);
   });
 
+  it("confirms a balance at zero against the cash the review read, which confirm_import archives", async () => {
+    expect(
+      await confirmImportRows(
+        IMPORT,
+        [cash("ARS", "0.00000000"), cash("USD", "0")],
+        [held("h1", "ARS", "100.00000000")],
+      ),
+    ).toEqual({ ok: true, id: IMPORT });
+    const [, args] = rpc.mock.calls[0]!;
+    expect(args.p_operations).toEqual([
+      {
+        cash: {
+          source_connection_id: ACCOUNT,
+          currency: "ARS",
+          amount: "0.00000000",
+          expected: { h1: "100.00000000" },
+        },
+      },
+      {
+        cash: {
+          source_connection_id: ACCOUNT,
+          currency: "USD",
+          amount: "0",
+          expected: {},
+        },
+      },
+    ]);
+  });
+
   it("leaves out a cash balance the review discarded", async () => {
     await confirmImportRows(IMPORT, [
       { ...cash("USD", "812.4"), discarded: true },
@@ -188,7 +217,7 @@ describe("cash", () => {
 
   it.each([
     ["two balances in one currency", [cash("USD", "1"), cash("USD", "2")]],
-    ["a balance that is not above zero", [cash("USD", "0")]],
+    ["a balance below zero", [cash("USD", "-1")]],
     [
       "a balance in an account the review did not route",
       [{ ...cash("USD", "1"), accountLabel: "Caja de ahorro" }],
