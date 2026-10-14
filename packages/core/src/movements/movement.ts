@@ -1,4 +1,5 @@
 import {
+  Constants,
   currencySchema as currency,
   type Exact,
   exactOf,
@@ -23,16 +24,7 @@ import { holdingDateSchema } from "../valuation/holding";
 // A yield is units a holding earned or lost without money in or out (staking,
 // earn, trading): their value that day is the holding's return. It never
 // starts a holding.
-export const MOVEMENT_KINDS = [
-  "opening_balance",
-  "purchase",
-  "sale",
-  "dividend",
-  "coupon",
-  "adjustment",
-  "transfer",
-  "yield",
-] as const;
+export const MOVEMENT_KINDS = Constants.public.Enums.movement_kind;
 export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 
 const INCOME_KINDS: readonly MovementKind[] = ["dividend", "coupon"];
@@ -91,7 +83,7 @@ const trade = {
 };
 // Units moved in or out without a trade.
 const moved = {
-  direction: z.enum(["in", "out"]),
+  direction: z.enum(Constants.public.Enums.movement_direction),
   quantity: positiveDecimalSchema,
 };
 const KIND_FIELDS = {

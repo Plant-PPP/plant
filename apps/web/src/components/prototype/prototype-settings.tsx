@@ -45,7 +45,9 @@ export function PrototypeSettings() {
         onCreate={actions.alerts.create}
         onDelete={actions.alerts.delete}
       />
-      <ExportCard load={async () => exportTables(state)} />
+      <ExportCard
+        load={async () => ({ tables: exportTables(state), truncated: false })}
+      />
       <DeleteAccountCard
         onDelete={() => {
           actions.deleteAccount();

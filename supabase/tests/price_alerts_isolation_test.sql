@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(15);
+SELECT plan(16);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -39,9 +39,12 @@ VALUES
   ('b0000000-0000-4000-8000-00000000000b', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'beto@pgtap.invalid', '', now(), '{}', '{}', now(), now());
 
--- Beto waits for PGTAPX to drop below 50 dollars.
+-- Beto waits for PGTAPX to drop below 50 dollars, and for BTC and the MEP to
+-- cross the figures Ana's own price and rate cross: those are hers, not his.
 INSERT INTO public.price_alerts (user_id, subject_kind, subject, direction, threshold, currency)
-VALUES ('b0000000-0000-4000-8000-00000000000b', 'instrument', 'PGTAPX', 'below', 50, 'USD');
+VALUES ('b0000000-0000-4000-8000-00000000000b', 'instrument', 'PGTAPX', 'below', 50, 'USD'),
+       ('b0000000-0000-4000-8000-00000000000b', 'instrument', 'BTC', 'below', 1, 'USD'),
+       ('b0000000-0000-4000-8000-00000000000b', 'dollar', 'mep', 'above', 99999999, 'ARS');
 
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
@@ -76,14 +79,14 @@ SET LOCAL ROLE authenticated;
 
 INSERT INTO public.price_alerts (subject_kind, subject, direction, threshold, currency)
 VALUES ('instrument', 'PGTAPX', 'above', 90, 'USD'), ('dollar', 'mep', 'above', 99999999, 'ARS'),
-       ('instrument', 'BTC', 'below', 1, 'USD');
+       ('instrument', 'BTC', 'below', 1, 'USD'), ('instrument', 'PGTAPY', 'above', 50, 'USD');
 -- A gain alert whose cost the app has not worked out yet.
 INSERT INTO public.price_alerts (subject_kind, subject, direction, currency, gain_percent)
 VALUES ('instrument', 'BTC', 'above', 'USD', 20);
 
 SELECT is(
   (SELECT count(*)::int FROM public.price_alerts),
-  4,
+  5,
   'a user sets alerts and reads only their own'
 );
 
@@ -141,10 +144,20 @@ VALUES ('a0000000-0000-4000-8000-00000000000a', 'BTC',
 INSERT INTO public.manual_rates (user_id, kind, rate_date, sell)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'mep',
         (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 100000000);
+-- Ana's own PGTAPY price today is in pesos: it says nothing of her dollar
+-- alert, which the feed's dollar price of the same day meets.
+INSERT INTO public.instruments (symbol, name, type, currency)
+VALUES ('PGTAPY', 'PGTAP Y', 'crypto', 'USD');
+INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
+VALUES ('PGTAPY', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 120, 'USD',
+        'kraken', now(), now());
+INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency)
+VALUES ('a0000000-0000-4000-8000-00000000000a', 'PGTAPY',
+        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 10, 'ARS');
 SET LOCAL ROLE service_role;
 
-SELECT is(public.meet_price_alerts(), 3,
-  'the check marks met the alerts the latest quote meets, the user''s own price and rate up to today included, and not a gain alert with no figure');
+SELECT is(public.meet_price_alerts(), 4,
+  'the check marks met the alerts the latest quote meets, the user''s own price and rate up to today included, in the alert''s currency, and not a gain alert with no figure');
 SELECT is(public.meet_price_alerts(), 0, 'an alert is met once');
 
 RESET ROLE;
@@ -153,8 +166,15 @@ SELECT results_eq(
      FROM public.price_alerts WHERE met_on IS NOT NULL ORDER BY met_price $$,
   $$ VALUES ('a0000000-0000-4000-8000-00000000000a', 0.5::numeric, true),
             ('a0000000-0000-4000-8000-00000000000a', 100::numeric, true),
+            ('a0000000-0000-4000-8000-00000000000a', 120::numeric, true),
             ('a0000000-0000-4000-8000-00000000000a', 100000000::numeric, true) $$,
   'each met alert keeps the quote and the day it was met at'
+);
+
+SELECT is_empty(
+  $$ SELECT subject FROM public.price_alerts
+     WHERE user_id = 'b0000000-0000-4000-8000-00000000000b' AND met_on IS NOT NULL $$,
+  'one user''s own price or rate never meets another user''s alert'
 );
 
 -- ── Ana again ───────────────────────────────────────────────────────────────
@@ -164,8 +184,10 @@ DELETE FROM public.price_alerts;
 RESET ROLE;
 
 SELECT results_eq(
-  $$ SELECT user_id::text, subject FROM public.price_alerts $$,
-  $$ VALUES ('b0000000-0000-4000-8000-00000000000b', 'PGTAPX') $$,
+  $$ SELECT user_id::text, subject FROM public.price_alerts ORDER BY subject COLLATE "C" $$,
+  $$ VALUES ('b0000000-0000-4000-8000-00000000000b', 'BTC'),
+            ('b0000000-0000-4000-8000-00000000000b', 'PGTAPX'),
+            ('b0000000-0000-4000-8000-00000000000b', 'mep') $$,
   'deleting removes only the user''s own'
 );
 

@@ -15,9 +15,12 @@ export interface QuoteFeedPort {
   read(now: Date): Promise<QuoteBatch>;
 }
 
-// What an adapter hands the factory, before any row is checked.
+// What an adapter hands the factory, before any row is checked. listed: its
+// prices are of instruments listed on BYMA, so on the weekend Friday's are the
+// market's last.
 export interface RawQuoteFeed {
   readonly id: QuoteSource;
+  readonly listed: boolean;
   readRaw(now: Date): Promise<RawQuoteRows>;
 }
 

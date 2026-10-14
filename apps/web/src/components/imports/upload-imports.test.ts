@@ -57,3 +57,16 @@ it("answers why the server refused the file it got", async () => {
   const put = jest.fn().mockResolvedValue({ error: null });
   expect(await uploadOne(file, "a1", each, put)).toBe("duplicate");
 });
+
+it("reads a start or a finish that failed as a failed upload", async () => {
+  const each = actions();
+  each.start.mockRejectedValue(new Error("network"));
+  const put = jest.fn();
+  expect(await uploadOne(file, "a1", each, put)).toBe("failed");
+  expect(put).not.toHaveBeenCalled();
+
+  const other = actions();
+  other.finish.mockRejectedValue(new Error("network"));
+  const putOk = jest.fn().mockResolvedValue({ error: null });
+  expect(await uploadOne(file, "a1", other, putOk)).toBe("failed");
+});

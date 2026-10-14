@@ -2,10 +2,14 @@ import { z } from "zod";
 
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
 import {
+  bodyText,
+  budgetedRead,
   call,
+  cashRow,
   decimalOf,
   defaultSleep,
   holdingsReading,
+  isZero,
   operationsReading,
   positive,
   rejected,
@@ -36,6 +40,10 @@ const STATEMENT_WAITS_MS = [2000, 3000, 5000, 5000, 10000];
 // under the function's limit: past it the read fails for a later attempt,
 // which the job retries with its own backoff.
 export const IBKR_READ_BUDGET_MS = 30_000;
+
+// The largest statement Plant downloads: a year of a retail account's
+// positions and trades is far smaller.
+const STATEMENT_MAX_BYTES = 20_000_000;
 
 // The draft's currency, or null for one Plant does not keep.
 const currencyOf = (code: string | undefined): "ARS" | "USD" | null =>
@@ -72,22 +80,16 @@ export function ibkrConnection({
   budgetMs = IBKR_READ_BUDGET_MS,
   clock = () => performance.now(),
 }: ConnectionDeps = {}) {
-  // Each request gets what is left of the read's budget, at most timeoutMs.
-  let deadline = Number.POSITIVE_INFINITY;
-  const left = () => deadline - clock();
+  const budget = budgetedRead({ timeoutMs, budgetMs, clock, sleep });
   const flex = async (path: string, query: Record<string, string>) => {
-    const budget = Math.min(timeoutMs, left());
-    if (budget <= 0) throw unavailable();
     const response = await call(
       get,
       `${baseUrl}/${path}?${new URLSearchParams({ ...query, v: "3" })}`,
       { headers: { "User-Agent": "Plant/1.0", Accept: "application/xml" } },
-      budget,
+      budget.requestTimeout(),
     );
     if (!response.ok) throw unavailable();
-    return response.text().catch((cause: unknown) => {
-      throw unavailable(cause);
-    });
+    return bodyText(response, STATEMENT_MAX_BYTES);
   };
 
   const failureOf = (xml: string) => {
@@ -104,22 +106,21 @@ export function ibkrConnection({
   };
 
   const statement = async (credentials: IbkrCredentials) => {
-    deadline = clock() + budgetMs;
+    budget.start();
     const reference = await request(credentials);
-    for (const wait of [0, ...STATEMENT_WAITS_MS]) {
-      // A wait that would leave no time to ask again ends the read.
-      if (wait >= left()) break;
-      if (wait > 0) await sleep(wait);
-      const xml = await flex("GetStatement", {
+    const xml = await budget.poll([0, ...STATEMENT_WAITS_MS], async () => {
+      const answer = await flex("GetStatement", {
         t: credentials.token,
         q: reference,
       });
-      if (xml.includes("<FlexQueryResponse")) return xml;
+      if (answer.includes("<FlexQueryResponse")) return answer;
       // 1019: still generating; 1018: too many requests for now.
-      const code = textOf(xml, "ErrorCode");
-      if (code !== "1019" && code !== "1018") throw failureOf(xml);
-    }
-    throw unavailable();
+      const code = textOf(answer, "ErrorCode");
+      if (code !== "1019" && code !== "1018") throw failureOf(answer);
+      return undefined;
+    });
+    if (xml === undefined) throw unavailable();
+    return xml;
   };
 
   const holdings = (xml: string) => {
@@ -148,20 +149,18 @@ export function ibkrConnection({
         page: null,
       });
     }
-    // Cash by currency, at the statement's end.
+    // Cash by currency, at the statement's end; the base currency's summary
+    // repeats the others.
     for (const each of elements(xml, "CashReportCurrency")) {
+      if (each.currency === "BASE_SUMMARY") continue;
       const currency = currencyOf(each.currency);
       const quantity = decimalOf(each.endingCash);
-      if (currency === null || !positive(quantity)) continue;
-      rows.push({
-        symbol: currency,
-        quantity,
-        price: null,
-        value: null,
-        currency,
-        confidence: "high",
-        page: null,
-      });
+      if (isZero(quantity)) continue;
+      if (currency === null || !positive(quantity)) {
+        skipped += 1;
+        continue;
+      }
+      rows.push(cashRow(currency, quantity, "high"));
     }
     const reading = holdingsReading(rows, skipped, now());
     const toDate = isoDate(elements(xml, "FlexStatement")[0]?.toDate);
@@ -239,7 +238,7 @@ export function ibkrConnection({
     drafts: ["holdings", "operations"],
     // A statement requested proves the token runs the query.
     check: async (credentials) => {
-      deadline = clock() + budgetMs;
+      budget.start();
       await request(credentials);
     },
     async read(credentials, draft) {

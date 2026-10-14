@@ -2,6 +2,10 @@ const requestHeaders = new Headers();
 const requireSensitiveSession = jest.fn();
 const unenrollForSession = jest.fn();
 const createClient = jest.fn();
+const readLedger = jest.fn();
+const readOtherHoldings = jest.fn();
+const readLiabilities = jest.fn();
+const readImports = jest.fn();
 
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("next/headers", () => ({ headers: async () => requestHeaders }));
@@ -14,13 +18,30 @@ jest.mock("@/lib/auth/session-claims", () => ({
 jest.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
+jest.mock("@/lib/ledger/read", () => ({
+  readLedger: (...args: unknown[]) => readLedger(...args),
+}));
+jest.mock("@/lib/export/read", () => ({
+  ...jest.requireActual("@/lib/export/read"),
+  readOtherHoldings: (...args: unknown[]) => readOtherHoldings(...args),
+}));
+jest.mock("@/lib/debts/read", () => ({
+  readLiabilities: (...args: unknown[]) => readLiabilities(...args),
+}));
+jest.mock("@/lib/imports/read", () => ({
+  readImports: (...args: unknown[]) => readImports(...args),
+}));
+jest.mock("@/lib/export/tables", () => ({
+  exportTables: () => [{ name: "cargas", header: ["Archivo"], rows: [["a"]] }],
+}));
 jest.mock("@/lib/auth/mfa-disable", () => ({
   ...jest.requireActual("@/lib/auth/mfa-disable"),
   unenrollForSession: (args: unknown) => unenrollForSession(args),
 }));
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
-import { disableTotp } from "./actions";
+import { EXPORT_IMPORTS_LIMIT } from "@/lib/export/read";
+import { disableTotp, exportData } from "./actions";
 
 const REQUEST_ID = "12345678-aaaa-4bbb-8ccc-dddddddddddd";
 
@@ -83,5 +104,97 @@ it("hands the gate's proof, the claims and the client to the unenroll", async ()
     client,
     factorId: "f",
     requestId: REQUEST_ID,
+  });
+});
+
+describe("exportData", () => {
+  const rpc = jest.fn();
+
+  function readsSucceed({ importsCut = false } = {}) {
+    requireSensitiveSession.mockResolvedValue({
+      ok: true,
+      session: { userId: "user-1" },
+    });
+    readLedger.mockResolvedValue({ ledger: {}, truncated: false });
+    readOtherHoldings.mockResolvedValue({ rows: [], truncated: false });
+    readLiabilities.mockResolvedValue({ active: [], activeTruncated: false });
+    readImports.mockResolvedValue({
+      items: [],
+      truncated: importsCut,
+      used: 0,
+    });
+  }
+
+  beforeEach(() => {
+    rpc.mockResolvedValue({ data: null, error: null, status: 204 });
+    createClient.mockResolvedValue({ rpc });
+  });
+
+  it("asks to sign in again on stale amr claims, reading nothing, and audits the denial", async () => {
+    requireSensitiveSession.mockResolvedValue({
+      ok: false,
+      stepUp: "sign_in_again",
+    });
+    await expect(exportData()).resolves.toEqual({ stepUp: "sign_in_again" });
+    expect(requireSensitiveSession).toHaveBeenCalledWith("export");
+    expect(readLedger).not.toHaveBeenCalled();
+    expect(readOtherHoldings).not.toHaveBeenCalled();
+    expect(readLiabilities).not.toHaveBeenCalled();
+    expect(readImports).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+      p_outcome: "denied",
+      p_request_id: REQUEST_ID,
+    });
+  });
+
+  it("hands over the tables and audits the export after the read", async () => {
+    readsSucceed();
+    await expect(exportData()).resolves.toEqual({
+      tables: [{ name: "cargas", header: ["Archivo"], rows: [["a"]] }],
+      truncated: false,
+    });
+    expect(readImports).toHaveBeenCalledWith(expect.anything(), {
+      limit: EXPORT_IMPORTS_LIMIT,
+    });
+    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+      p_outcome: "success",
+      p_request_id: REQUEST_ID,
+    });
+    expect(lines.at(-1)).toMatchObject({
+      event: "settings.export",
+      "plant.outcome": "ok",
+      "plant.export.truncated": false,
+    });
+  });
+
+  it("says the file is partial when the imports were cut", async () => {
+    readsSucceed({ importsCut: true });
+    await expect(exportData()).resolves.toMatchObject({ truncated: true });
+    expect(lines.at(-1)).toMatchObject({ "plant.export.truncated": true });
+  });
+
+  it("hands over nothing when the audit row cannot be written", async () => {
+    readsSucceed();
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "42501", message: "denied" },
+      status: 403,
+    });
+    await expect(exportData()).resolves.toBeNull();
+    expect(lines.at(-1)).toMatchObject({
+      level: "error",
+      event: "settings.export",
+      "plant.outcome": "failed",
+    });
+  });
+
+  it("audits a failed read", async () => {
+    readsSucceed();
+    readLedger.mockRejectedValue(new Error("down"));
+    await expect(exportData()).resolves.toBeNull();
+    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+      p_outcome: "failure",
+      p_request_id: REQUEST_ID,
+    });
   });
 });

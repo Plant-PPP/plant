@@ -55,11 +55,14 @@ const rowSchema = importOriginSchema.extend({
   created_at: z.string(),
 });
 
-// The user's latest imports, as Cargar lists them, and how many they started
-// this month (in Buenos Aires), deleted ones included.
+// The user's latest `limit` imports, newest first, whether there were more,
+// and how many they started this month (in Buenos Aires), deleted ones
+// included. `limit` stays below MAX_ROWS, so one response holds the row past
+// it.
 export async function readImports(
   client: Client,
-): Promise<{ items: ImportItem[]; used: number }> {
+  { limit = IMPORTS_LISTED }: { limit?: number } = {},
+): Promise<{ items: ImportItem[]; truncated: boolean; used: number }> {
   const [list, month] = await Promise.all([
     client
       .from("imports")
@@ -68,7 +71,7 @@ export async function readImports(
       )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(IMPORTS_LISTED),
+      .limit(limit + 1),
     client.rpc("imports_used_this_month"),
   ]);
   const failure =
@@ -76,7 +79,8 @@ export async function readImports(
   if (failure || !list.data || typeof month.data !== "number") {
     throw new ImportsReadError(failure?.code ?? "no_data");
   }
-  const items = (list.data as unknown[]).map((data): ImportItem => {
+  const rows = list.data as unknown[];
+  const items = rows.slice(0, limit).map((data): ImportItem => {
     const row = rowSchema.parse(data);
     return {
       id: row.id,
@@ -91,7 +95,7 @@ export async function readImports(
       createdOn: buenosAiresDate(new Date(row.created_at)),
     };
   });
-  return { items, used: month.data };
+  return { items, truncated: rows.length > limit, used: month.data };
 }
 
 const itemSchema = z.object({
@@ -102,6 +106,7 @@ const itemSchema = z.object({
   value: z.string().nullable(),
   cost: z.string().nullable().optional(),
   account: z.string().nullable().optional(),
+  asset_class: z.enum(["instrument", "cash"]).optional(),
   currency: z.enum(Constants.public.Enums.currency),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
@@ -230,7 +235,8 @@ function isUnitCost(
   );
 }
 
-// A draft row as the review edits it. An instrument Plant knows keeps its
+// A draft row as the review edits it. Cash stays a balance in its currency.
+// An instrument Plant knows keeps its
 // symbol and its price per unit (a bond's document prints it per 100); one it
 // does not know is left for the user to choose, with what the document named.
 // A line in another currency than the instrument's (AL30D, a dollar line of
@@ -241,8 +247,23 @@ function reviewRow(
   index: ReturnType<typeof instrumentIndex>,
 ): ImportRow {
   const row = itemSchema.parse(data);
-  const known = resolveSymbol(row.symbol, index);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
+  if (row.asset_class === "cash") {
+    return {
+      id: row.id,
+      assetClass: "cash",
+      symbol: row.currency,
+      quantity: row.quantity,
+      price: null,
+      value: null,
+      ...(row.account != null && { accountLabel: row.account }),
+      currency: row.currency,
+      confidence: row.confidence,
+      source: page ?? "Del documento",
+      discarded: false,
+    };
+  }
+  const known = resolveSymbol(row.symbol, index);
   const named =
     known && known.symbol === row.symbol.trim().toUpperCase()
       ? null
@@ -296,7 +317,7 @@ export async function readImportForReview(
       .from("import_items")
       .select(
         "id, symbol, quantity:quantity::text, price:price::text, value:value::text, cost:cost::text, account, " +
-          "currency, confidence, source_page",
+          "asset_class, currency, confidence, source_page",
       )
       .eq("import_id", id)
       .order("position"),

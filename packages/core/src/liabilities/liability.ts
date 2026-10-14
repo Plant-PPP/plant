@@ -1,4 +1,5 @@
 import {
+  Constants,
   currencySchema,
   type Exact,
   exactOf,
@@ -27,13 +28,7 @@ import type { Missing } from "../valuation/snapshot";
 
 // What a user owes. A mortgage or personal loan may be in UVA, owed in pesos
 // at the UVA of the day; a crypto loan is owed in units of an instrument.
-export const LIABILITY_KINDS = [
-  "personal_loan",
-  "mortgage",
-  "credit_card",
-  "usd_debt",
-  "crypto_loan",
-] as const;
+export const LIABILITY_KINDS = Constants.public.Enums.liability_kind;
 export type LiabilityKind = (typeof LIABILITY_KINDS)[number];
 
 export const LIABILITY_LABEL_MAX = 60;

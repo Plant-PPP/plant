@@ -27,6 +27,9 @@ export const draftRowSchema = z
     cost: positiveDecimalSchema.nullable().optional(),
     // The account it lists the holding under, when it lists several.
     account: z.string().trim().min(1).max(60).optional(),
+    // Cash is a balance in `currency`, its quantity the amount and its symbol
+    // the currency's code; a row without it is an instrument.
+    assetClass: z.enum(["instrument", "cash"]).optional(),
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),

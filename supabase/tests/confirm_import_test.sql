@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(18);
+SELECT plan(26);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -30,8 +30,21 @@ CREATE FUNCTION pg_temp.opening(symbol text, quantity text) RETURNS jsonb LANGUA
                  FROM public.holdings h WHERE h.instrument_symbol = symbol))
 $f$;
 
+-- One cash balance of Ana's import in her IOL account, with her cash
+-- holdings in that currency as she sees them.
+CREATE FUNCTION pg_temp.cash(p_currency text, p_amount text) RETURNS jsonb LANGUAGE sql AS $f$
+  SELECT jsonb_build_object('cash', jsonb_build_object(
+    'source_connection_id', 'a5000000-0000-4000-8000-0000000000a5',
+    'currency', p_currency, 'amount', p_amount,
+    'expected', (SELECT COALESCE(jsonb_object_agg(h.id, h.amount::text), '{}'::jsonb)
+                 FROM public.holdings h
+                 WHERE h.asset_class = 'cash' AND h.archived_at IS NULL
+                   AND h.currency::text = p_currency)))
+$f$;
+
 GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION pg_temp.opening(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.cash(text, text) TO authenticated;
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -56,7 +69,17 @@ SELECT id, 'a0000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-0000
        'resumen.pdf', 'application/pdf', 1024, repeat(digit, 64)
 FROM (VALUES ('a8000000-0000-4000-8000-0000000000a1'::uuid, '1'),
              ('a8000000-0000-4000-8000-0000000000a2'::uuid, '2'),
-             ('a8000000-0000-4000-8000-0000000000a3'::uuid, '3')) AS docs (id, digit);
+             ('a8000000-0000-4000-8000-0000000000a3'::uuid, '3'),
+             ('a8000000-0000-4000-8000-0000000000a4'::uuid, '4'),
+             ('a8000000-0000-4000-8000-0000000000a5'::uuid, '5'),
+             ('a8000000-0000-4000-8000-0000000000a6'::uuid, '6')) AS docs (id, digit);
+-- And three statements of cash, ready to review.
+INSERT INTO public.imports (id, user_id, document_id, status)
+SELECT id, 'a0000000-0000-4000-8000-00000000000a', document_id, 'ready'
+FROM (VALUES ('a9000000-0000-4000-8000-0000000000a4'::uuid, 'a8000000-0000-4000-8000-0000000000a4'::uuid),
+             ('a9000000-0000-4000-8000-0000000000a5'::uuid, 'a8000000-0000-4000-8000-0000000000a5'::uuid),
+             ('a9000000-0000-4000-8000-0000000000a6'::uuid, 'a8000000-0000-4000-8000-0000000000a6'::uuid))
+  AS ready (id, document_id);
 INSERT INTO public.imports (id, user_id, document_id, status) VALUES
   ('a9000000-0000-4000-8000-0000000000a1', 'a0000000-0000-4000-8000-00000000000a',
    'a8000000-0000-4000-8000-0000000000a1', 'ready'),
@@ -182,6 +205,72 @@ SELECT is(
                       WHERE id = 'a9000000-0000-4000-8000-0000000000a3' $$),
   '42501',
   'nor confirms one still being read'
+);
+
+-- ── Cash ────────────────────────────────────────────────────────────────────
+SELECT is(
+  public.confirm_import('a9000000-0000-4000-8000-0000000000a4',
+    jsonb_build_array(pg_temp.cash('ARS', '125000.5'))),
+  'a9000000-0000-4000-8000-0000000000a4'::uuid,
+  'a cash balance goes in with its import'
+);
+
+SELECT results_eq(
+  $$ SELECT asset_class::text, currency::text, amount::text, portfolio_id, label
+     FROM public.holdings WHERE asset_class = 'cash' $$,
+  $$ VALUES ('cash', 'ARS', '125000.50000000', 'a1000000-0000-4000-8000-0000000000a1'::uuid,
+             NULL::text) $$,
+  'opening the account''s cash in that currency, in its default portfolio'
+);
+
+UPDATE public.holdings SET label = 'Caja' WHERE asset_class = 'cash';
+
+-- A stale read of that cash refuses the whole import.
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a5',
+                        jsonb_build_array(jsonb_set(pg_temp.cash('ARS', '1'), '{cash,expected}', '{}'))) $$),
+  'PT409',
+  'a cash balance read before the cash changed is refused'
+);
+
+SELECT is(
+  public.confirm_import('a9000000-0000-4000-8000-0000000000a5',
+    jsonb_build_array(pg_temp.cash('ARS', '90000'), pg_temp.opening('GD30', '4'))),
+  'a9000000-0000-4000-8000-0000000000a5'::uuid,
+  'a cash balance goes in beside operations'
+);
+
+SELECT results_eq(
+  $$ SELECT amount::text, label, (SELECT count(*)::int FROM public.holdings WHERE asset_class = 'cash')
+     FROM public.holdings WHERE asset_class = 'cash' $$,
+  $$ VALUES ('90000.00000000', 'Caja', 1) $$,
+  'as the amount of the one cash holding the account has in that currency'
+);
+
+INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, label)
+VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'ARS', '10', 'Otra caja');
+
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a6',
+                        jsonb_build_array(pg_temp.cash('ARS', '5'))) $$),
+  '22023',
+  'a cash balance is refused where the account holds several in that currency'
+);
+
+SELECT isnt(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a6',
+                        jsonb_build_array(jsonb_set(pg_temp.cash('USD', '5'), '{cash,source_connection_id}',
+                                                    '"b5000000-0000-4000-8000-0000000000b5"'))) $$),
+  NULL,
+  'and never goes into an account that is not the user''s'
+);
+
+SELECT results_eq(
+  $$ SELECT (SELECT status::text FROM public.imports WHERE id = 'a9000000-0000-4000-8000-0000000000a6'),
+            (SELECT string_agg(amount::text, ',' ORDER BY amount) FROM public.holdings
+             WHERE asset_class = 'cash') $$,
+  $$ VALUES ('ready', '10.00000000,90000.00000000') $$,
+  'leaving the import ready and the cash as it was'
 );
 
 -- ── Enrolled in MFA but signed in at aal1 ───────────────────────────────────

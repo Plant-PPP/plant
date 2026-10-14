@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   checkBatch,
   feedErrorForStatus,
+  feedReadCode,
   isDailyIndex,
   parseResponse,
   QUOTE_FEED_CODES,
@@ -536,6 +537,23 @@ describe("the quote errors", () => {
       ]);
     },
   );
+});
+
+describe("feedReadCode", () => {
+  it("reads the code of a feed error, by name and message", () => {
+    expect(feedReadCode(new QuoteFeedError("http_4xx"))).toBe("http_4xx");
+    expect(
+      feedReadCode({ name: QUOTE_FEED_ERROR_NAME, message: "timeout" }),
+    ).toBe("timeout");
+  });
+
+  it("reads nothing from a store error or any other error", () => {
+    expect(feedReadCode(new QuoteStoreError("timeout"))).toBeNull();
+    expect(feedReadCode(new Error("http_4xx"))).toBeNull();
+    expect(
+      feedReadCode({ name: QUOTE_FEED_ERROR_NAME, message: "nope" }),
+    ).toBeNull();
+  });
 });
 
 describe("quoteFailureOf", () => {

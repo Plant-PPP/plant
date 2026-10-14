@@ -12,8 +12,9 @@ import type {
   UploadCode,
 } from "@/lib/imports/write";
 import type { SourceConnectionRow } from "@/lib/portfolio-setup/read";
-import { createClient } from "@/lib/supabase/client";
 import { UPLOAD_BUCKET } from "@/lib/imports/upload";
+import { settle } from "@/lib/server-action-call";
+import { createClient } from "@/lib/supabase/client";
 
 import { ImportPage } from "./import-page";
 
@@ -36,7 +37,8 @@ export type UploadActions = {
 };
 
 // Sends one file: asks for a signed URL, puts the file there straight from the
-// browser, and has the server check it and start its import.
+// browser, and has the server check it and start its import. A call that
+// fails reads as "failed".
 export async function uploadOne(
   file: File,
   accountId: string,
@@ -48,20 +50,22 @@ export async function uploadOne(
     type: string,
   ) => Promise<{ error: unknown }>,
 ): Promise<UploadCode | null> {
-  const started = await actions.start({
-    fileName: file.name,
-    size: file.size,
-    accountId,
-  });
+  const started = await settle(
+    actions.start({ fileName: file.name, size: file.size, accountId }),
+  );
+  if (started === "rejected") return "failed";
   if (!started.ok) return started.code;
   const { error } = await put(started.path, started.token, file, started.type);
   if (error) return "failed";
-  const finished = await actions.finish({
-    uploadId: started.uploadId,
-    path: started.path,
-    fileName: file.name,
-    accountId,
-  });
+  const finished = await settle(
+    actions.finish({
+      uploadId: started.uploadId,
+      path: started.path,
+      fileName: file.name,
+      accountId,
+    }),
+  );
+  if (finished === "rejected") return "failed";
   return finished.ok ? null : finished.code;
 }
 
@@ -140,8 +144,9 @@ export function UploadImports({
 
   function accept() {
     startTransition(async () => {
-      const { ok } = await actions.acceptTerms();
-      if (!ok) toast.error("No pudimos guardar tu aceptación. Probá de nuevo.");
+      const result = await settle(actions.acceptTerms());
+      if (result === "rejected" || !result.ok)
+        toast.error("No pudimos guardar tu aceptación. Probá de nuevo.");
       router.refresh();
     });
   }

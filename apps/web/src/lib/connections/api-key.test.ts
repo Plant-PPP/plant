@@ -1,6 +1,13 @@
 import { CONNECTION_PROVIDERS, connectionAdapters } from "@plant/sources";
 
-import { connectionForm, keyHintOf, PROVIDERS, providerOf } from "./api-key";
+import {
+  type ConnectCode,
+  connectionForm,
+  connectMessages,
+  keyHintOf,
+  PROVIDERS,
+  providerOf,
+} from "./api-key";
 
 describe("the provider registry", () => {
   it.each(CONNECTION_PROVIDERS)(
@@ -47,4 +54,13 @@ describe("the provider registry", () => {
     expect(keyHintOf("a.b")).toBe("ab");
     expect(keyHintOf("...")).toBe("0");
   });
+});
+
+it("names the provider when it refuses or does not answer", () => {
+  const messages = connectMessages("Bitso");
+  for (const message of Object.values(messages)) {
+    expect(message).not.toMatch(/proveedor/i);
+  }
+  const named: ConnectCode[] = ["unsupported", "rejected", "unavailable"];
+  for (const code of named) expect(messages[code]).toContain("Bitso");
 });

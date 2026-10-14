@@ -7,6 +7,7 @@ import {
 import { errorDigest } from "@/lib/log/error-type";
 import { isLoggedError } from "@/lib/log/logged-error";
 import { serverLog } from "@/lib/log/server-log";
+import { MASK, scrubSensitiveText } from "@/lib/security/credential-scrub";
 import {
   REQUEST_ID_FIELD,
   REQUEST_ID_HEADER,
@@ -20,19 +21,32 @@ export const SECRET_QUERY_URLS: readonly RegExp[] = [
 ];
 
 const SECRET_QUERY_PARAM = /([?&]t=)[^&#\s]*/g;
+const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g;
 
-// A URL, or a span name holding one, with the credential of a URL in
-// SECRET_QUERY_URLS masked; anything else as it came.
+// Text with the credential of every URL in SECRET_QUERY_URLS masked, wherever
+// the URL sits in it (Next names its fetch spans `fetch GET <url>`), then
+// scrubbed like a log line, which masks Auth's `?code=` and tokens.
 export function scrubSecretQuery(text: string): string {
-  return SECRET_QUERY_URLS.some((url) => url.test(text.replace(/^\w+ /, "")))
-    ? text.replace(SECRET_QUERY_PARAM, "$1<masked>")
-    : text;
+  const flexMasked = text.replace(URL_IN_TEXT, (url) =>
+    SECRET_QUERY_URLS.some((secret) => secret.test(url))
+      ? url.replace(SECRET_QUERY_PARAM, `$1${MASK}`)
+      : url,
+  );
+  return scrubSensitiveText(flexMasked);
 }
 
-const URL_ATTRIBUTES = ["http.url", "url.full", "http.target", "url.query"];
+// Where Next and the fetch instrumentation put a URL with its query.
+const URL_ATTRIBUTES = [
+  "http.url",
+  "url.full",
+  "http.target",
+  "url.query",
+  "next.span_name",
+];
 
-// Masks the credential in an outbound span's name and URL attributes as the
-// span starts, where Next and the fetch instrumentation set them.
+// Scrubs a span's name and URL attributes as it starts: Next names its request
+// span `GET <path and query>` and its fetch spans `fetch GET <url>`, and sets
+// those attributes, when it starts them.
 const secretQueryScrub = {
   onStart(span: {
     name?: string;
@@ -58,11 +72,10 @@ const secretQueryScrub = {
 
 // Traces go to OTEL_EXPORTER_OTLP_ENDPOINT or _TRACES_ENDPOINT (Dash0 from
 // PLA-73). Without one nothing is registered and the OpenTelemetry API stays
-// a no-op. Before an endpoint is set, a span processor must scrub the query
-// from `http.target`, `http.url` and fetch span names: /auth/callback's
-// carries the PKCE code. Outbound calls whose URL carries a credential
-// (SECRET_QUERY_URLS) are not traced by the fetch instrumentation, and any
-// other span naming one has it masked.
+// a no-op. With one, the fetch instrumentation skips SECRET_QUERY_URLS, and
+// secretQueryScrub masks their credential and Auth's (/auth/callback's PKCE
+// code) in Next's own spans, which it does not skip. An attribute set after a
+// span starts is not scrubbed.
 export async function register() {
   if (
     !process.env.OTEL_EXPORTER_OTLP_ENDPOINT &&

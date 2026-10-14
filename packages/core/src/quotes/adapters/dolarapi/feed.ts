@@ -6,7 +6,7 @@ import {
   type FxRateKind,
   parseResponse,
   type QuoteFeedCode,
-  quoteFailureOf,
+  feedReadCode,
   type RawFxRate,
 } from "../../contract/quote";
 
@@ -52,6 +52,7 @@ type HouseRead =
 export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
   return {
     id: "dolarapi",
+    listed: false,
     async readRaw() {
       const results = await Promise.all(
         HOUSES.map(async ({ house, kind }): Promise<HouseRead> => {
@@ -59,13 +60,9 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
             const json = await getJson(`${BASE_URL}/${house}`);
             return { ok: true, row: parse(json, kind) };
           } catch (error) {
-            // By name and code, so a house error raised by another copy of
-            // core still counts.
-            const { known, stage, code } = quoteFailureOf(error);
-            if (known && stage === "read") {
-              return { ok: false, kind, code: code as QuoteFeedCode };
-            }
-            throw error;
+            const code = feedReadCode(error);
+            if (code === null) throw error;
+            return { ok: false, kind, code };
           }
         }),
       );

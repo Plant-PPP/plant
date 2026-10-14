@@ -62,6 +62,7 @@ export function PinnedCharts({
               variant="ghost"
               size="sm"
               className="justify-self-end"
+              aria-label={`Soltar: ${each.chart?.title ?? "gráfico"}`}
               onClick={() => unpin(each.id)}
             >
               <PinOff />

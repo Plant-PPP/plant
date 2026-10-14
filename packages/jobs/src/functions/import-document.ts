@@ -40,7 +40,9 @@ export type ImportToRead = {
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
 // the import's id and its user, and saving a draft of holdings or of
-// operations replaces any draft, of either, a failed attempt left.
+// operations replaces any draft, of either, a failed attempt left. A call
+// that fails throws an error named ImportStoreError with the `step` and the
+// `code` that failed, the only parts of it the job keeps.
 export interface ImportStorePort {
   load(importId: string, userId: string): Promise<ImportToRead | null>;
   download(path: string): Promise<Uint8Array>;
@@ -90,9 +92,10 @@ export type ImportJobDeps = {
   log: Logger;
 };
 
-// What a step returns: ids, counts and codes only. The file, the key and the
-// draft never cross a step boundary, because memoized step output is what
-// the caller sends back when signatures are off.
+// What a step returns or throws: ids, counts and codes only. The file, the
+// key and the draft never cross a step boundary, because memoized step output
+// is what the caller sends back when signatures are off, and a step's error
+// lands in the run history with its causes.
 type Prepared =
   | { ok: true; origin: "file"; path: string; mimeType: string }
   | {
@@ -147,6 +150,48 @@ export function failureOf(error: unknown): SourceErrorCode {
     current = cause;
   }
   return "extraction_failed";
+}
+
+const STORE_FAILURE = /^import store (\S+) failed: (\S+)$/;
+
+// The error a step throws in place of the one it caught. Inngest serializes a
+// step's error five causes deep into the run history, and the AI SDK's errors
+// under a SourceError carry the model's raw answer, so no cause goes along.
+function bare(error: unknown): Error {
+  if (error instanceof SourceError) {
+    return error.retryable
+      ? new SourceError(error.code, true)
+      : new NonRetriableError(error.code);
+  }
+  const { name, message, step, code } = (error ?? {}) as {
+    name?: unknown;
+    message?: unknown;
+    step?: unknown;
+    code?: unknown;
+  };
+  const bared = new Error(
+    name === "ImportStoreError" &&
+      typeof step === "string" &&
+      typeof code === "string"
+      ? `import store ${step} failed: ${code}`
+      : typeof message === "string"
+        ? message
+        : "step failed",
+  );
+  bared.name = typeof name === "string" ? name : "Error";
+  return bared;
+}
+
+// The step and code of a store that failed, from the message `bare` gave it,
+// which is all the engine keeps of it.
+function storeFailureOf(error: unknown) {
+  const { name, message } = (error ?? {}) as {
+    name?: unknown;
+    message?: unknown;
+  };
+  if (name !== "ImportStoreError" || typeof message !== "string") return null;
+  const [, step, code] = STORE_FAILURE.exec(message) ?? [];
+  return step && code ? { step, code } : null;
 }
 
 // Reads one queued import's file, or its account's provider, into its draft.
@@ -263,20 +308,28 @@ export async function runImportDocument(
           ...reading.read,
         };
       } catch (error) {
-        if (error instanceof SourceError && !error.retryable) {
-          throw new NonRetriableError(error.code, { cause: error });
-        }
-        throw error;
+        throw bare(error);
       }
     });
   } catch (error) {
     const failure = failureOf(error);
     await step.run("fail", () => deps.store.failed(importId, userId, failure));
-    deps.log.warn("imports.read", {
-      ...fields,
-      "plant.outcome": "failed",
-      "error.type": failure,
-    });
+    const store = storeFailureOf(error);
+    if (store) {
+      deps.log.error("imports.read", {
+        ...fields,
+        "plant.outcome": "failed",
+        "error.type": failure,
+        "plant.import.store_step": store.step,
+        "plant.import.store_code": store.code,
+      });
+    } else {
+      deps.log.warn("imports.read", {
+        ...fields,
+        "plant.outcome": "failed",
+        "error.type": failure,
+      });
+    }
     return { outcome: "failed" };
   }
 
