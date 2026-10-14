@@ -55,11 +55,14 @@ const rowSchema = importOriginSchema.extend({
   created_at: z.string(),
 });
 
-// The user's latest imports, as Cargar lists them, and how many they started
-// this month (in Buenos Aires), deleted ones included.
+// The user's latest `limit` imports, newest first, whether there were more,
+// and how many they started this month (in Buenos Aires), deleted ones
+// included. `limit` stays below MAX_ROWS, so one response holds the row past
+// it.
 export async function readImports(
   client: Client,
-): Promise<{ items: ImportItem[]; used: number }> {
+  { limit = IMPORTS_LISTED }: { limit?: number } = {},
+): Promise<{ items: ImportItem[]; truncated: boolean; used: number }> {
   const [list, month] = await Promise.all([
     client
       .from("imports")
@@ -68,7 +71,7 @@ export async function readImports(
       )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(IMPORTS_LISTED),
+      .limit(limit + 1),
     client.rpc("imports_used_this_month"),
   ]);
   const failure =
@@ -76,7 +79,8 @@ export async function readImports(
   if (failure || !list.data || typeof month.data !== "number") {
     throw new ImportsReadError(failure?.code ?? "no_data");
   }
-  const items = (list.data as unknown[]).map((data): ImportItem => {
+  const rows = list.data as unknown[];
+  const items = rows.slice(0, limit).map((data): ImportItem => {
     const row = rowSchema.parse(data);
     return {
       id: row.id,
@@ -91,7 +95,7 @@ export async function readImports(
       createdOn: buenosAiresDate(new Date(row.created_at)),
     };
   });
-  return { items, used: month.data };
+  return { items, truncated: rows.length > limit, used: month.data };
 }
 
 const itemSchema = z.object({

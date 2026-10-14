@@ -7,11 +7,16 @@ import {
   type HoldingRow,
   holdingRowOf,
 } from "@/lib/holdings/read";
+import { MAX_ROWS } from "@/lib/quotes/quote-reader";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 const PAGE = 1000;
 // The most rows an export reads of these holdings.
 export const OTHER_HOLDINGS_LIMIT = 20_000;
+
+// The most imports an export reads: one response holds them and the one past
+// them, which says the export was cut.
+export const EXPORT_IMPORTS_LIMIT = MAX_ROWS - 1;
 
 export class ExportReadError extends Error {
   constructor(readonly code: string) {

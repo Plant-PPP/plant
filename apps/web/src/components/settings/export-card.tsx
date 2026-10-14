@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileSpreadsheet } from "lucide-react";
+import { Download, FileSpreadsheet, LogIn } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -13,32 +13,49 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import { loginPath } from "@/lib/auth/routes";
+import { SIGN_OUT_FAILED, signOutAndConfirm } from "@/lib/auth/sign-out";
 import { type ExportTable, toCsv } from "@/lib/export/csv";
 import { csvBlob, saveFile } from "@/lib/export/download";
-import { EXPORT_KINDS } from "@/lib/export/tables";
+import { EXPORT_KINDS, type ExportAnswer } from "@/lib/export/tables";
 import { xlsxBlob } from "@/lib/export/xlsx";
+import { SETTINGS_ITEM } from "@/lib/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+import { EXPORT_FAILED, exportOutcome } from "./export-status";
 
 // Everything the user loaded: one CSV per kind of row, or all of them as one
-// Excel workbook. The tables are read only when the user asks for a file;
-// null when they could not be.
-export function ExportCard({
-  load,
-}: {
-  load: () => Promise<readonly ExportTable[] | null>;
-}) {
+// Excel workbook. The tables are read only when the user asks for a file, and
+// only after a recent sign-in; the step-up signs out and comes back here.
+export function ExportCard({ load }: { load: () => Promise<ExportAnswer> }) {
   const [busy, setBusy] = useState(false);
+  const [stepUp, setStepUp] = useState(false);
 
   async function save(file: (tables: readonly ExportTable[]) => Promise<void>) {
     setBusy(true);
     try {
-      const tables = await load().catch(() => null);
-      if (tables) await file(tables);
-      else toast.error("No pudimos armar el archivo. Probá de nuevo.");
+      const outcome = exportOutcome(await load().catch(() => null));
+      if (outcome.kind === "step_up") setStepUp(true);
+      else if (outcome.kind === "failed") toast.error(outcome.notice);
+      else {
+        await file(outcome.tables);
+        if (outcome.notice) toast.warning(outcome.notice);
+      }
     } catch {
-      toast.error("No pudimos armar el archivo. Probá de nuevo.");
+      toast.error(EXPORT_FAILED);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function signInAgain() {
+    setBusy(true);
+    if (await signOutAndConfirm(createClient().auth)) {
+      window.location.assign(loginPath(SETTINGS_ITEM.href));
+      return;
+    }
+    setBusy(false);
+    toast.error(SIGN_OUT_FAILED);
   }
 
   return (
@@ -46,47 +63,64 @@ export function ExportCard({
       <CardHeader>
         <CardTitle>Tus datos</CardTitle>
         <CardDescription>
-          Bajá todo lo que cargaste en un Excel, o en archivos CSV que abre
-          cualquier planilla.
+          {stepUp
+            ? "Por seguridad, volvé a ingresar para bajar tus datos. Vamos a cerrar tu sesión en este dispositivo."
+            : "Bajá todo lo que cargaste en un Excel, o en archivos CSV que abre cualquier planilla."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={busy}
-          onClick={() =>
-            void save(async (tables) =>
-              saveFile("plant.xlsx", await xlsxBlob(tables)),
-            )
-          }
-        >
-          <FileSpreadsheet />
-          Todo en Excel
-        </Button>
-        {EXPORT_KINDS.map((kind) => (
+        {stepUp ? (
           <Button
-            key={kind.name}
             type="button"
-            variant="outline"
             size="sm"
             disabled={busy}
-            onClick={() =>
-              void save(async (tables) => {
-                const table = tables.find((each) => each.name === kind.name);
-                if (table) {
-                  saveFile(
-                    `${table.name}.csv`,
-                    csvBlob(toCsv(table.header, table.rows)),
-                  );
-                }
-              })
-            }
+            onClick={() => void signInAgain()}
           >
-            <Download />
-            {kind.label}
+            <LogIn />
+            Volver a ingresar
           </Button>
-        ))}
+        ) : (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void save(async (tables) =>
+                  saveFile("plant.xlsx", await xlsxBlob(tables)),
+                )
+              }
+            >
+              <FileSpreadsheet />
+              Todo en Excel
+            </Button>
+            {EXPORT_KINDS.map((kind) => (
+              <Button
+                key={kind.name}
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  void save(async (tables) => {
+                    const table = tables.find(
+                      (each) => each.name === kind.name,
+                    );
+                    if (table) {
+                      saveFile(
+                        `${table.name}.csv`,
+                        csvBlob(toCsv(table.header, table.rows)),
+                      );
+                    }
+                  })
+                }
+              >
+                <Download />
+                {kind.label}
+              </Button>
+            ))}
+          </>
+        )}
       </CardContent>
     </Card>
   );

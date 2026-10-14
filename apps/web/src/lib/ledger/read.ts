@@ -68,6 +68,39 @@ async function allRows<T>(
   }
 }
 
+// Every movement in core's order (date, rank, id), each page after the last
+// row read: a write committed between two pages cannot repeat or skip a row
+// the way an offset would. Past `limit` rows the read stops and says it was
+// cut.
+async function allMovements(
+  client: Client,
+  limit: number,
+): Promise<{ rows: Record<string, unknown>[]; cut: boolean }> {
+  const rows: Record<string, unknown>[] = [];
+  let last: Record<string, unknown> | undefined;
+  for (;;) {
+    let query = client.from("movements").select(`${MOVEMENT_COLUMNS}, rank`);
+    if (last) {
+      const { date, rank, id } = last as {
+        date: string;
+        rank: number;
+        id: string;
+      };
+      query = query.or(
+        `date.gt.${date},and(date.eq.${date},rank.gt.${rank}),and(date.eq.${date},rank.eq.${rank},id.gt.${id})`,
+      );
+    }
+    const data = checked(
+      "movements",
+      await query.order("date").order("rank").order("id").limit(MAX_ROWS),
+    ) as unknown as Record<string, unknown>[];
+    rows.push(...data);
+    if (rows.length > limit) return { rows: rows.slice(0, limit), cut: true };
+    if (data.length < MAX_ROWS) return { rows, cut: false };
+    last = data.at(-1);
+  }
+}
+
 function checked<T>(
   step: LedgerStep,
   result: { data: T | null; error: unknown; status: number },
@@ -173,6 +206,25 @@ export async function readLedger(
     quotes = { fxRates: [], prices: [] },
   }: { today: string; referenceDollar: ReferenceDollar; quotes?: StoredQuotes },
 ): Promise<LedgerRead> {
+  // The revisions are read before the movements: a write committed in
+  // between leaves a revision behind, and write_operation refuses it, where
+  // the other order would admit a write against a history read without it.
+  const holdingsRead = allRows(
+    "holdings",
+    (from, to) =>
+      client
+        .from("holdings")
+        .select(
+          "id, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
+            "amount:amount::text, currency, annual_rate, started_on, matures_on, valued_on, " +
+            "label, movements_revision, archived_at",
+        )
+        .eq("asset_class", "instrument")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    LEDGER_MOVEMENT_LIMIT,
+  );
   const [
     accountsResult,
     portfoliosResult,
@@ -193,34 +245,8 @@ export async function readLedger(
       .from("portfolios")
       .select("id, name, archived_at")
       .order("created_at"),
-    allRows(
-      "holdings",
-      (from, to) =>
-        client
-          .from("holdings")
-          .select(
-            "id, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
-              "amount:amount::text, currency, annual_rate, started_on, matures_on, valued_on, " +
-              "label, movements_revision, archived_at",
-          )
-          .eq("asset_class", "instrument")
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false })
-          .range(from, to),
-      LEDGER_MOVEMENT_LIMIT,
-    ),
-    allRows(
-      "movements",
-      (from, to) =>
-        client
-          .from("movements")
-          .select(MOVEMENT_COLUMNS)
-          .order("date")
-          .order("rank")
-          .order("id")
-          .range(from, to),
-      LEDGER_MOVEMENT_LIMIT,
-    ),
+    holdingsRead,
+    holdingsRead.then(() => allMovements(client, LEDGER_MOVEMENT_LIMIT)),
     client
       .from("instruments")
       .select("symbol, name, currency, type, aliases")
