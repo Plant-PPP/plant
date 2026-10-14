@@ -2,7 +2,9 @@
 
 import { notFound } from "next/navigation";
 
+import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
+import { exchangeOf } from "@/lib/connections/api-key";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
@@ -29,7 +31,7 @@ export function PrototypeScope({
   id: string;
   params: KeysetParams;
 }) {
-  const { state, latest, snapshot } = usePrototype();
+  const { state, latest, snapshot, actions } = usePrototype();
   const account = state.accounts.find((each) => each.id === id);
   const portfolio = state.portfolios.find((each) => each.id === id);
   const scope: Scope | null =
@@ -52,6 +54,9 @@ export function PrototypeScope({
     salesYears: [],
   });
   const unit = chosen ?? reference;
+  const apiKey = (kind === "account" && state.apiKeys.get(id)) || null;
+  const provider =
+    apiKey?.provider ?? (account ? exchangeOf(account.institution) : null);
   return (
     <ScopePage
       scope={scope}
@@ -75,6 +80,17 @@ export function PrototypeScope({
       backHref="/assets"
       revision={rows.map((row) => state.revisions.get(row.id) ?? 0).join(".")}
       loadMovements={prototypeMovementsInput(latest).loadMovements}
+      connection={
+        kind === "account" &&
+        provider && (
+          <ApiKeyCard
+            accountId={id}
+            provider={provider}
+            apiKey={apiKey}
+            actions={actions.apiKeys}
+          />
+        )
+      }
     />
   );
 }

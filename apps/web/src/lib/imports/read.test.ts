@@ -89,6 +89,50 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
   ]);
 });
 
+it("lists a sync by its exchange and says why it failed in its own words", async () => {
+  const failed = (failure: string, id: string, synced: boolean) => ({
+    id,
+    status: "failed",
+    failure,
+    document_date: null,
+    created_at: "2026-10-12T15:00:00+00:00",
+    source_connection_id: synced ? "a1" : null,
+    provider: synced ? "binance" : null,
+    document: synced
+      ? null
+      : { file_name: "c.pdf", source_connection_id: "a1" },
+  });
+  const read = await readImports(
+    clientOf(
+      [
+        failed("nothing_found", "s1", true),
+        failed("extraction_failed", "s2", true),
+        failed("nothing_found", "f1", false),
+      ],
+      0,
+    ) as never,
+  );
+  expect(
+    read.items.map(({ fileName, accountId, error }) => [
+      fileName,
+      accountId,
+      error,
+    ]),
+  ).toEqual([
+    [
+      "Sincronización con Binance",
+      "a1",
+      "No encontramos saldos en tu cuenta del exchange.",
+    ],
+    [
+      "Sincronización con Binance",
+      "a1",
+      "No pudimos leer tu cuenta del exchange. Probá de nuevo más tarde.",
+    ],
+    ["c.pdf", "a1", "No encontramos tenencias ni operaciones en el archivo."],
+  ]);
+});
+
 it("throws when the count is missing", async () => {
   await expect(readImports(clientOf([], null) as never)).rejects.toThrow(
     "imports read failed",

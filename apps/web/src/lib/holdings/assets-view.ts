@@ -16,6 +16,7 @@ export type AssetsRead =
   | "valuation"
   | "ledger"
   | "debts"
+  | "api_key"
   | "taxes";
 
 // Logs one failure of the assets page and throws it as already logged, so the

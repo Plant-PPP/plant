@@ -28,6 +28,9 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 jest.mock("@/components/holdings/scope-page", () => ({
   ScopePage: () => null,
 }));
+jest.mock("@/lib/connections/write", () => ({
+  readApiKey: async () => null,
+}));
 
 import type * as React from "react";
 
