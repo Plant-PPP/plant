@@ -19,6 +19,7 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 import { MAX_ROWS } from "@/lib/quotes/quote-reader";
+import { keysetFilter, readAllByKeyset } from "@/lib/supabase/keyset";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 import { type Ledger, MANUAL, type StoredHolding } from "./ledger";
@@ -211,21 +212,31 @@ export async function readLedger(
   // The revisions are read before the movements: a write committed in
   // between leaves a revision behind, and write_operation refuses it, where
   // the other order would admit a write against a history read without it.
-  const holdingsRead = allRows(
-    "holdings",
-    (from, to) =>
-      client
+  const holdingsRead = readAllByKeyset(
+    async (after) => {
+      let query = client
         .from("holdings")
         .select(
-          "id, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
+          "id, created_at, source_connection_id, portfolio_id, asset_class, instrument_symbol, " +
             "amount:amount::text, currency, annual_rate, started_on, matures_on, valued_on, " +
             "label, movements_revision, archived_at",
         )
-        .eq("asset_class", "instrument")
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(from, to),
-    LEDGER_MOVEMENT_LIMIT,
+        .eq("asset_class", "instrument");
+      if (after) {
+        query = query
+          .lte("created_at", after.at)
+          .or(keysetFilter("created_at", after));
+      }
+      return checked(
+        "holdings",
+        await query
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(MAX_ROWS),
+      ) as unknown as Record<string, unknown>[];
+    },
+    (row) => ({ at: String(row.created_at), id: String(row.id) }),
+    { pageSize: MAX_ROWS, limit: LEDGER_MOVEMENT_LIMIT },
   );
   const [
     accountsResult,
@@ -289,10 +300,7 @@ export async function readLedger(
       }),
     )
     .parse(checked("portfolios", portfoliosResult));
-  const holdingRows = holdingsResult.rows as unknown as Record<
-    string,
-    unknown
-  >[];
+  const holdingRows = holdingsResult.rows;
   const movementRows = movementsResult.rows as unknown as Record<
     string,
     unknown

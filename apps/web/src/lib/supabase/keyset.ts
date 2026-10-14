@@ -38,6 +38,27 @@ export function keysetFilter(column: string, { at, id }: Keyset): string {
   return `${column}.lt."${at}",and(${column}.eq."${at}",id.lt.${id})`;
 }
 
+// Every row of a list ordered by (timestamp desc, id desc), each page read
+// after the last row of the one before, so a write committed between two
+// pages cannot repeat or skip a row the way an offset would. `page` reads up
+// to `pageSize` rows after the cursor, or from the start when it is null.
+// Past `limit` rows the read stops and says it was cut.
+export async function readAllByKeyset<T>(
+  page: (after: Keyset | null) => PromiseLike<T[]>,
+  keyOf: (row: T) => Keyset,
+  { pageSize, limit }: { pageSize: number; limit: number },
+): Promise<{ rows: T[]; cut: boolean }> {
+  const rows: T[] = [];
+  let after: Keyset | null = null;
+  for (;;) {
+    const data = await page(after);
+    rows.push(...data);
+    if (rows.length > limit) return { rows: rows.slice(0, limit), cut: true };
+    if (data.length < pageSize) return { rows, cut: false };
+    after = keyOf(data.at(-1)!);
+  }
+}
+
 // A page's search params.
 export type KeysetParams = Record<string, string | string[] | undefined>;
 
