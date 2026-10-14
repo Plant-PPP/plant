@@ -85,6 +85,8 @@ export type ImportItem = {
   documentDate: string | null;
   documentTotals: { currency: Currency; amount: string }[];
   rows: ImportRow[];
+  // Holdings a spreadsheet lists that the reading left out.
+  skippedRows: number;
   createdOn: string;
 };
 

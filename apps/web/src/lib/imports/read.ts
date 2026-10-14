@@ -70,6 +70,7 @@ export async function readImports(
       documentDate: row.document_date,
       documentTotals: [],
       rows: [],
+      skippedRows: 0,
       createdOn: buenosAiresDate(new Date(row.created_at)),
     };
   });
@@ -90,6 +91,7 @@ const itemSchema = z.object({
 const totalsSchema = z.object({
   printed_total_ars: z.string().nullable(),
   printed_total_usd: z.string().nullable(),
+  skipped_rows: z.number().int().nonnegative(),
 });
 
 // A draft row as the review edits it. An instrument Plant knows keeps its
@@ -143,7 +145,7 @@ export async function readImportForReview(
       .from("imports")
       .select(
         "id, status, failure, document_date, created_at, " +
-          "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, " +
+          "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, skipped_rows, " +
           "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, source_connection_id)",
       )
       .eq("id", id)
@@ -183,6 +185,7 @@ export async function readImportForReview(
       amount === null ? [] : [{ currency, amount }],
     ),
     rows: (items.data as unknown[]).map((each) => reviewRow(each, index)),
+    skippedRows: printed.skipped_rows,
     createdOn: buenosAiresDate(new Date(row.created_at)),
   };
 }

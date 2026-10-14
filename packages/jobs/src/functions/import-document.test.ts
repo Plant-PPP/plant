@@ -113,7 +113,7 @@ it("reads the file into a draft and marks the import ready", async () => {
     institution: "IOL",
     lastAttempt: false,
   });
-  expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT);
+  expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
   expect(lines).toEqual([
     {
       level: "info",

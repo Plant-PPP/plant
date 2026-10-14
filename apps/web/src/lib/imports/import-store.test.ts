@@ -108,7 +108,7 @@ const draftAnswers =
 
 it("replaces the draft, then marks the import ready at the document's date", async () => {
   const { store, calls } = storeWith(draftAnswers());
-  await store.saveDraft(IMPORT, USER, DRAFT);
+  await store.saveDraft(IMPORT, USER, DRAFT, 2);
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
@@ -141,19 +141,20 @@ it("replaces the draft, then marks the import ready at the document's date", asy
     document_date: "2026-09-30",
     printed_total_ars: null,
     printed_total_usd: "120.5",
+    skipped_rows: 2,
   });
 });
 
 it("writes no draft for an import no longer being read", async () => {
   const { store, calls } = storeWith(draftAnswers({ beingRead: false }));
-  await store.saveDraft(IMPORT, USER, DRAFT);
+  await store.saveDraft(IMPORT, USER, DRAFT, 0);
   expect(calls.map(({ method }) => method)).toEqual(["GET"]);
 });
 
 it("throws when the import stopped being read before it was marked ready", async () => {
   const { store } = storeWith(draftAnswers({ marked: false }));
   const error = await store
-    .saveDraft(IMPORT, USER, DRAFT)
+    .saveDraft(IMPORT, USER, DRAFT, 0)
     .catch((e: unknown) => e);
   expect(error).toMatchObject({ step: "draft", code: "not_being_read" });
 });

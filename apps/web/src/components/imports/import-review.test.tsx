@@ -16,6 +16,7 @@ const ITEM: ImportItem = {
   error: null,
   documentDate: "2026-10-12",
   documentTotals: [],
+  skippedRows: 0,
   createdOn: "2026-10-12",
   rows: [
     {
@@ -41,10 +42,13 @@ const ITEM: ImportItem = {
   ],
 };
 
-const render = (routing?: Parameters<typeof ImportReview>[0]["routing"]) =>
+const render = (
+  routing?: Parameters<typeof ImportReview>[0]["routing"],
+  item: ImportItem = ITEM,
+) =>
   renderToStaticMarkup(
     <ImportReview
-      item={ITEM}
+      item={item}
       institution="Cocos"
       instruments={[
         { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
@@ -95,4 +99,12 @@ it("asks neither on a page that does not route the rows", () => {
   const html = render();
   expect(html).not.toContain("Cartera de la fila");
   expect(html).not.toContain("¿Es un traspaso?");
+});
+
+it("says how many holdings of a spreadsheet were left out", () => {
+  const html = (skippedRows: number) =>
+    render(undefined, { ...ITEM, skippedRows });
+  expect(html(0)).not.toContain("no se pud");
+  expect(html(1)).toContain("Una fila de la planilla no se pudo leer");
+  expect(html(3)).toContain("3 filas de la planilla no se pudieron leer");
 });
