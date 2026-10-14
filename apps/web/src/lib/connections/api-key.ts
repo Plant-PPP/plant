@@ -56,7 +56,7 @@ export type ConnectResult = { ok: true } | { ok: false; code: ConnectCode };
 // provider does not read), an account with no key (or archived), one
 // syncing already, too many syncs in a minute, or a failure.
 export type SyncCode =
-  "invalid" | "not_connected" | "in_progress" | "limited" | "failed";
+  "invalid" | "terms" | "not_connected" | "in_progress" | "limited" | "failed";
 export type SyncResult =
   { ok: true; importId: string } | { ok: false; code: SyncCode };
 
@@ -229,6 +229,7 @@ export const connectMessages = (name: string): Record<ConnectCode, string> => ({
 
 export const SYNC_MESSAGES: Record<SyncCode, string> = {
   invalid: "No encontramos esa cuenta.",
+  terms: "Para sincronizar, aceptá los términos en Cargar.",
   not_connected: "La cuenta no tiene una conexión.",
   in_progress: "Ya estamos sincronizando esta cuenta.",
   limited:

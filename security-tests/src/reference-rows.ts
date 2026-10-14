@@ -73,6 +73,10 @@ export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
 const READABLE_COLUMNS: Partial<Record<OwnedTable, string>> = {
   account_api_keys:
     "id,user_id,source_connection_id,provider,key_hint,created_at",
+  imports:
+    "id,user_id,document_id,status,created_at,updated_at,failure,document_date," +
+    "printed_total_ars,printed_total_usd,skipped_rows,source_connection_id," +
+    "provider,sync_draft,sync_from,sync_to",
 };
 
 // The `select=` a GET of the table's rows sends, with its trailing `&`, or

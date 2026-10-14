@@ -223,14 +223,14 @@ isOneToOne: false
                   ]
                 },"imports": {
                   Row: {
-                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"sync_draft": string | null,"sync_from": string | null,"sync_to": string | null,"updated_at": string,"user_id": string
+                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"read_run_id": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"sync_draft": string | null,"sync_from": string | null,"sync_to": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"read_run_id"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"read_run_id"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -530,6 +530,9 @@ isOneToOne: false
 { Args: { "p_before": string,"p_fx_kinds": (Database["public"]['Enums']["fx_rate_kind"])[],"p_symbols": (string)[] }; Returns: {
               "amount": string,"currency": Database["public"]['Enums']["currency"],"kind": Database["public"]['Enums']["fx_rate_kind"],"quote_date": string,"symbol": string
             }[]
+                           },
+"supersede_queued_sync":
+{ Args: { "p_provider": string,"p_queued_id": string,"p_source_connection_id": string,"p_sync_draft": string,"p_sync_from"?: string,"p_sync_to"?: string }; Returns: string
                            },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string

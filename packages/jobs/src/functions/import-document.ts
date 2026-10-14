@@ -50,8 +50,9 @@ export interface ImportStorePort {
   // null when no file is at the path. Throws for a path outside the user's
   // `<userId>/imports/` folder.
   download(path: string, userId: string): Promise<Uint8Array | null>;
-  // Moves a queued import to reading: true when this call moved it.
-  reading(importId: string, userId: string): Promise<boolean>;
+  // Moves a queued import to reading, claimed by the run: true when this
+  // call moved it, or when that run claimed it already.
+  reading(importId: string, userId: string, runId: string): Promise<boolean>;
   // The institution of the account the import's file was uploaded to; null
   // when the import was deleted meanwhile.
   institution(importId: string, userId: string): Promise<string | null>;
@@ -234,13 +235,13 @@ export async function runImportDocument(
     ) {
       return { ok: false, reason: "path" };
     }
-    // Moving it to reading claims it, so a second run of the import (a
-    // retry event sent while it was queued) skips it rather than reading it
-    // again. A retried prepare goes on: the engine memoizes one that
-    // returned, so a retry is of this run's, which may have claimed it before
-    // failing. A second run whose own first prepare failed still reads it.
-    const claimed = await deps.store.reading(importId, userId);
-    if (!claimed && attempt === 0) return { ok: false, reason: "claimed" };
+    // Moving it to reading claims it for this run, so a second run of the
+    // import (a retry event sent while it was queued) skips it rather than
+    // reading it again, while a retried prepare of this run, which may have
+    // claimed it before failing, goes on.
+    if (!(await deps.store.reading(importId, userId, runId))) {
+      return { ok: false, reason: "claimed" };
+    }
     return found.origin === "connection"
       ? {
           ok: true,

@@ -19,6 +19,7 @@ import {
 import { IMPORTS_PER_MONTH } from "@/lib/imports/review";
 import { serverLog } from "@/lib/log/server-log";
 import { CONSENT_VERSION } from "@/lib/consent";
+import { AI_CONSENTS, consentsGiven } from "@/lib/consent-given";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
@@ -103,21 +104,9 @@ function log(
   else serverLog.warn(EVENT, line);
 }
 
-// Whether the user accepted the terms in force; the terms row is written
-// with the privacy and AI provider ones.
-export async function termsAccepted(client: Client): Promise<boolean> {
-  const result = await client
-    .from("consents")
-    .select("version, granted")
-    .eq("kind", "terms")
-    .order("accepted_at", { ascending: false })
-    .limit(1);
-  if (classifyPostgrestResult(result, 200) || !result.data) {
-    throw new Error("consents read failed");
-  }
-  const [latest] = result.data;
-  return latest?.granted === true && latest.version === CONSENT_VERSION;
-}
+// Whether the user gave what Cargar needs to send their files to the AI.
+export const termsAccepted = (client: Client) =>
+  consentsGiven(client, AI_CONSENTS);
 
 // Whether the account is one of the user's open ones.
 async function accountOpen(client: Client, id: string): Promise<boolean> {

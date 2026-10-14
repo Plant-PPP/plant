@@ -31,9 +31,9 @@
 --   platform's own objects, with no rule or trigger.
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
---   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
---   which run as the caller with an empty search_path, imports_used_this_month
---   and quotes_before (quotes_before_test.sql)), service_role none in private, only
+--   in them, authenticated only the RPCs (write_operation, confirm_import, confirm_import_debts
+--   and supersede_queued_sync, which run as the caller with an empty search_path,
+--   imports_used_this_month and quotes_before (quotes_before_test.sql)), service_role none in private, only
 --   service_role orphan_import_files, which runs as the caller,
 --   account_credentials (account_api_keys_test.sql), meet_price_alerts
 --   (price_alerts_isolation_test.sql) and audit_data_export
@@ -153,6 +153,7 @@ SELECT is_empty(
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure,
                                        'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
+                                       'public.supersede_queued_sync(uuid,uuid,text,text,date,date)'::regprocedure,
                                        'public.imports_used_this_month()'::regprocedure,
                                        'public.quotes_before(date,public.fx_rate_kind[],text[])'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
@@ -167,7 +168,8 @@ SELECT ok(
    WHERE p.oid = ANY (ARRAY['public.write_operation(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure,
-                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure])),
+                                       'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
+                                       'public.supersede_queued_sync(uuid,uuid,text,text,date,date)'::regprocedure])),
   'the write RPCs run as the caller with an empty search_path'
 );
 

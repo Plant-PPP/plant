@@ -74,10 +74,15 @@ SELECT set_eq(
 
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.imports') $$,
-  ARRAY['(table):SELECT', 'document_id:INSERT', 'source_connection_id:INSERT',
+  ARRAY['id:SELECT', 'user_id:SELECT', 'document_id:SELECT', 'status:SELECT',
+        'created_at:SELECT', 'updated_at:SELECT', 'failure:SELECT', 'document_date:SELECT',
+        'printed_total_ars:SELECT', 'printed_total_usd:SELECT', 'skipped_rows:SELECT',
+        'source_connection_id:SELECT', 'provider:SELECT', 'sync_draft:SELECT',
+        'sync_from:SELECT', 'sync_to:SELECT',
+        'document_id:INSERT', 'source_connection_id:INSERT',
         'provider:INSERT', 'sync_draft:INSERT', 'sync_from:INSERT', 'sync_to:INSERT',
         'status:UPDATE'],
-  'a user reads their imports, starts one of a file or a sync (account_api_keys_test.sql) and moves its status only as confirm_import_test.sql pins'
+  'a user reads their imports but for the run reading one (import_read_run_test.sql), starts one of a file or a sync (account_api_keys_test.sql) and moves its status only as confirm_import_test.sql pins'
 );
 
 SELECT is_empty(

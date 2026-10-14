@@ -28,6 +28,7 @@ import {
   type SyncResult,
   syncDraftOf,
 } from "@/lib/connections/api-key";
+import { consentsGiven } from "@/lib/consent-given";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -401,32 +402,13 @@ async function syncInFlight(
     : null;
 }
 
-// Fails a sync still queued, so another can start; false when its job
-// started reading it meanwhile.
-async function failQueued(
-  client: Client,
-  userId: string,
-  importId: string,
-): Promise<boolean> {
-  const result = await client
-    .from("imports")
-    .update({ status: "failed" })
-    .eq("user_id", userId)
-    .eq("id", importId)
-    .eq("status", "queued")
-    .select("id");
-  if (classifyPostgrestResult(result, 200)) {
-    throw new Error("queued sync not failed");
-  }
-  return (result.data ?? []).length === 1;
-}
-
 // Starts a sync of the account: an import of its holdings or its
 // operations that the import job reads with the account's credentials and
 // leaves ready to review in Cargar. The database refuses an account with no
 // key and one already syncing. A sync still queued may have lost its job, so
 // it never locks the account: one of the same draft and days is started
-// again, and one of another is failed for the new one. A sync of operations
+// again, and one of another is failed for the new one, in the same
+// transaction as the new one starts. A sync of operations
 // reads only the days of `period`, when one is given.
 export async function syncAccount(
   accountId: unknown,
@@ -454,6 +436,11 @@ export async function syncAccount(
   }
   try {
     const client: Client = await createClient();
+    // A sync reads the account at its provider, never through the AI.
+    if (!(await consentsGiven(client, ["terms"]))) {
+      log(current, "terms");
+      return { ok: false, code: "terms" };
+    }
     const keys = await client
       .from("account_api_keys")
       .select("provider")
@@ -478,9 +465,26 @@ export async function syncAccount(
       log(current, "in_progress");
       return { ok: false, code: "in_progress" };
     };
-    let superseded: string | undefined;
-    // The sync in flight, resumed when it is the one asked for; null when
-    // none is, or when `supersede` failed the queued one.
+    const started = async (importId: string): Promise<SyncResult> => {
+      current.importId = importId;
+      await startJob(current.userId, importId);
+      log(current, "ok");
+      revalidatePath("/import");
+      return { ok: true, importId };
+    };
+    // The database refused to start the sync.
+    const refusal = async (code: string): Promise<SyncResult> => {
+      if (code === "PT404") {
+        log(current, "not_connected");
+        return { ok: false, code: "not_connected" };
+      }
+      // Another sync started in between; it is never failed for this one.
+      if (code === "PT409") return (await resume(false)) ?? inProgress();
+      throw new Error(`sync not started: ${code}`);
+    };
+    // The sync in flight: resumed when it is the one asked for, else, when
+    // `supersede`, failed for the one asked for, which starts in its place.
+    // Null when none is in flight.
     const resume = async (supersede: boolean): Promise<SyncResult | null> => {
       const flying = await syncInFlight(client, id);
       if (!flying) return null;
@@ -491,23 +495,32 @@ export async function syncAccount(
         log(current, "ok");
         return { ok: true, importId: flying.id };
       }
-      if (supersede && (await failQueued(client, current.userId, flying.id))) {
-        superseded = flying.id;
-        serverLog.info(EVENT, {
-          [REQUEST_ID_FIELD]: current.requestId,
-          "enduser.id": current.userId,
-          "plant.connection.step": "sync",
-          "plant.connection.provider": current.provider,
-          "plant.import.id": flying.id,
-          "plant.outcome": "superseded",
-        });
-        return null;
-      }
-      return inProgress();
+      if (!supersede) return inProgress();
+      const replaced = await client.rpc("supersede_queued_sync", {
+        p_queued_id: flying.id,
+        p_source_connection_id: id,
+        p_provider: provider.data,
+        p_sync_draft: kind,
+        ...(from !== null && { p_sync_from: from }),
+        ...(to !== null && { p_sync_to: to }),
+      });
+      const refused = classifyPostgrestResult(replaced, 200);
+      if (refused) return refusal(refused.code);
+      // Its job started reading it meanwhile.
+      if (typeof replaced.data !== "string") return inProgress();
+      serverLog.info(EVENT, {
+        [REQUEST_ID_FIELD]: current.requestId,
+        "enduser.id": current.userId,
+        "plant.connection.step": "sync",
+        "plant.connection.provider": current.provider,
+        "plant.import.id": flying.id,
+        "plant.outcome": "superseded",
+      });
+      return started(replaced.data);
     };
     const resumed = await resume(true);
     if (resumed) return resumed;
-    const started = await client
+    const inserted = await client
       .from("imports")
       .insert({
         source_connection_id: id,
@@ -517,37 +530,11 @@ export async function syncAccount(
         sync_to: to,
       })
       .select("id");
-    const refused = classifyPostgrestResult(started, 201);
-    if (refused?.code === "PT404") {
-      log(current, "not_connected");
-      return { ok: false, code: "not_connected" };
-    }
-    if (refused?.code === "PT409") {
-      // Another sync started in between; it is never failed for this one.
-      return (await resume(false)) ?? inProgress();
-    }
-    if (refused || started.data?.length !== 1) {
-      // The queued sync stays failed with no sync in its place; the next
-      // "Sincronizar" starts one.
-      if (superseded) {
-        serverLog.warn(EVENT, {
-          [REQUEST_ID_FIELD]: current.requestId,
-          "enduser.id": current.userId,
-          "plant.connection.step": "sync",
-          "plant.connection.provider": current.provider,
-          "plant.import.id": superseded,
-          "plant.source_connection.id": id,
-          "plant.outcome": "superseded_not_replaced",
-        });
-      }
-      throw new Error(`sync not started: ${refused?.code ?? "no_row"}`);
-    }
-    const importId = started.data[0]!.id;
-    current.importId = importId;
-    await startJob(current.userId, importId);
-    log(current, "ok");
-    revalidatePath("/import");
-    return { ok: true, importId };
+    const refused = classifyPostgrestResult(inserted, 201);
+    if (refused) return await refusal(refused.code);
+    if (inserted.data?.length !== 1)
+      throw new Error("sync not started: no_row");
+    return await started(inserted.data[0]!.id);
   } catch (error) {
     log(current, "failed", error);
     return { ok: false, code: "failed" };

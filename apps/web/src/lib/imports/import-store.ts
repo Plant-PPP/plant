@@ -196,16 +196,26 @@ export function createImportStore(client: Client): ImportStorePort {
       return new Uint8Array(await data.arrayBuffer());
     },
 
-    async reading(importId, userId) {
+    async reading(importId, userId, runId) {
       const claimed = await client
         .from("imports")
-        .update({ status: "reading" })
+        .update({ status: "reading", read_run_id: runId })
         .eq("id", importId)
         .eq("user_id", userId)
         .eq("status", "queued")
         .select("id");
       checked("reading", claimed, 200);
-      return (claimed.data ?? []).length === 1;
+      if ((claimed.data ?? []).length === 1) return true;
+      const own = await client
+        .from("imports")
+        .select("id")
+        .eq("id", importId)
+        .eq("user_id", userId)
+        .eq("status", "reading")
+        .eq("read_run_id", runId)
+        .limit(1);
+      checked("reading", own, 200);
+      return (own.data ?? []).length === 1;
     },
 
     async institution(importId, userId) {

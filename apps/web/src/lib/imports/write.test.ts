@@ -16,7 +16,8 @@ type Answer = {
   error?: unknown;
   status: number;
 };
-const answers: Record<string, jest.Mock<Answer, [string]>> = {};
+type Filters = Record<string, unknown>;
+const answers: Record<string, jest.Mock<Answer>> = {};
 const writes: { table: string; verb: string; body?: unknown }[] = [];
 const storage = {
   createSignedUploadUrl: jest.fn(),
@@ -31,6 +32,7 @@ jest.mock("@/lib/supabase/server", () => ({
       name === "imports_used_this_month" ? used() : { status: 404 },
     from: (table: string) => {
       let verb = "select";
+      const filters: Filters = {};
       const builder = {
         select: () => builder,
         insert: (body: unknown) => {
@@ -43,12 +45,15 @@ jest.mock("@/lib/supabase/server", () => ({
           writes.push({ table, verb });
           return builder;
         },
-        eq: () => builder,
+        eq: (column: string, value: unknown) => {
+          filters[column] = value;
+          return builder;
+        },
         is: () => builder,
         order: () => builder,
         limit: () => builder,
         then: (resolve: (value: unknown) => unknown) =>
-          resolve(answers[table]!(verb)),
+          resolve(answers[table]!(verb, filters)),
       };
       return builder;
     },
@@ -169,6 +174,23 @@ describe("startUpload", () => {
       error: null,
     });
     expect(await start()).toEqual({ ok: false, code: "terms" });
+  });
+
+  it("waits for the AI providers when the user withdrew them after accepting the terms", async () => {
+    answers.consents!.mockImplementation((_: string, filters: Filters) => ({
+      status: 200,
+      data: [
+        {
+          version: CONSENT_VERSION,
+          granted: filters.kind !== "ai_providers",
+        },
+      ],
+      error: null,
+    }));
+    expect(await start()).toEqual({ ok: false, code: "terms" });
+    expect(await finish()).toEqual({ ok: false, code: "terms" });
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
+    expect(storage.download).not.toHaveBeenCalled();
   });
 
   it("refuses an account the user does not have open", async () => {
