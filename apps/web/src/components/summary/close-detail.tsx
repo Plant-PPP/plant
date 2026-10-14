@@ -24,8 +24,10 @@ import {
   type YearClose,
 } from "@/lib/summary/closes";
 
+import { type Benchmarks, beyond } from "@/lib/summary/benchmarks";
+
 import { ClosesTable } from "./closes-table";
-import { CloseStatus, ResultText } from "./figures";
+import { CloseStatus, ResultText, ShareText } from "./figures";
 
 type Figures = YearClose["totals"];
 
@@ -60,11 +62,13 @@ function CloseFigures({
   figures,
   unit,
   complete,
+  benchmarks,
   year = false,
 }: {
   figures: Figures;
   unit: Denominator;
   complete: boolean;
+  benchmarks?: Benchmarks;
   // A year's return also leaves out a month whose own could not be measured.
   year?: boolean;
 }) {
@@ -114,6 +118,36 @@ function CloseFigures({
           <AmountText amount={figures.charges} unit={unit} />
         </SummaryTile>
       </dl>
+      {/* A return in pesos set against prices and the dollar; in dollars it
+          already is one. */}
+      {unit === "ars" && benchmarks && (
+        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SummaryTile label="Inflación" note="Según la UVA, que sigue al IPC">
+            <ShareText share={benchmarks.inflation} />
+          </SummaryTile>
+          <SummaryTile
+            label="Rendimiento real"
+            note="Lo que ganaste por encima de la inflación"
+          >
+            <ShareText
+              share={beyond(figures.share, benchmarks.inflation)}
+              colored
+            />
+          </SummaryTile>
+          <SummaryTile label="Dólar MEP">
+            <ShareText share={benchmarks.dollar} />
+          </SummaryTile>
+          <SummaryTile
+            label="Contra el dólar"
+            note="Lo que ganaste por encima del dólar MEP"
+          >
+            <ShareText
+              share={beyond(figures.share, benchmarks.dollar)}
+              colored
+            />
+          </SummaryTile>
+        </dl>
+      )}
       {!complete && (
         <p className="text-muted-foreground text-xs">
           Faltó algún dato: la cotización de un activo o una deuda al inicio o
@@ -211,6 +245,7 @@ export function MonthCloseDetail({
         figures={{ ...close.figures, realized: close.realized }}
         unit={unit}
         complete={close.complete}
+        benchmarks={close.benchmarks}
       />
       <section className="grid gap-3">
         <h2 className="text-base font-semibold">Movimientos del mes</h2>
@@ -277,6 +312,7 @@ export function YearCloseDetail({
         figures={year.totals}
         unit={unit}
         complete={year.complete}
+        benchmarks={year.benchmarks}
         year
       />
       <section className="grid gap-3">

@@ -30,14 +30,23 @@ const canonical = (value: unknown): string =>
       : each,
   );
 
+// The closes without what they are set against (PLA-67), which the oracle,
+// written before it, never computed.
+const unbenchmarked = <T>(value: T): T =>
+  JSON.parse(
+    JSON.stringify(value, (key, each: unknown) =>
+      key === "benchmarks" ? undefined : each,
+    ),
+  ) as T;
+
 function expectOracle(state: ClosesState, units: readonly Denominator[]) {
   expect(pricedToday(state)).toEqual(oracle.pricedToday(state));
   for (const unit of units) {
     const was = oracle.closesOf(state, unit);
     const closes = closesOf(state, unit);
-    expect(closes).toEqual(was.closes);
+    expect(unbenchmarked(closes)).toEqual(was.closes);
     for (const { period } of closes) {
-      expect(monthDetail(state, unit, period)).toEqual(
+      expect(unbenchmarked(monthDetail(state, unit, period))).toEqual(
         oracle.monthDetail(state, unit, period, was),
       );
     }
@@ -77,7 +86,7 @@ it(
     const elapsed = performance.now() - started;
     const closes = CLOSE_UNITS.map((unit) => closesOf(state, unit));
     const digest = createHash("sha256")
-      .update(canonical([closes, pricedToday(state)]))
+      .update(canonical([unbenchmarked(closes), pricedToday(state)]))
       .digest("hex");
     expect(digest).toBe(LARGE_DIGEST);
     expect(elapsed).toBeLessThan(5_000);

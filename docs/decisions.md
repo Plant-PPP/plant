@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · A close's real return (PLA-67)
+
+- **A close in pesos is set against inflation and the dollar.** Its detail adds a row: inflation over the period, read from the UVA (CER follows the consumer price index, about a month late, and its daily value is already stored), the real return as (1 + return) / (1 + inflation) - 1, the MEP dollar's move, and the return against it the same way. In a dollar unit the row is left out: the return already is one in dollars.
+- **Each month's change is read from the UVA and the MEP at its two ends**, with the same quotes the close values its holdings at; a year chains its months and shows nothing when any month lacks a quote, rather than a figure for part of it. The rates stored start the day the quotes job did, so earlier months show a dash until a history backfill.
+
 ## 2026-10-14 · A PDF's page cap (PLA-152)
 
 - **A PDF of more than 30 pages fails as `too_many_pages` before any model reads it**, so an import's cost stays bounded: the file_upload source counts its pages in code (the root `/Pages` node's `/Count`, or else its `/Page` objects) and Cargar asks for only the statement's pages.

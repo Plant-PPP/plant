@@ -1,3 +1,4 @@
+import { benchmarksBetween, chainedChange } from "./benchmarks";
 import {
   type CashFlow,
   cashFlowsOf,
@@ -474,6 +475,10 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       complete: start.complete && end.complete && known,
       endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
+      benchmarks: benchmarksBetween(
+        pricedAt(state, month.from),
+        pricedAt(state, month.to),
+      ),
     };
   });
   byUnit.set(unit, closes);
@@ -522,6 +527,14 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
           (each) => each.complete && each.figures.share !== null,
         ),
         open: months.some((each) => each.open),
+        benchmarks: {
+          inflation: chainedChange(
+            months.map((each) => each.benchmarks?.inflation ?? null),
+          ),
+          dollar: chainedChange(
+            months.map((each) => each.benchmarks?.dollar ?? null),
+          ),
+        },
       };
     })
     .reverse();
