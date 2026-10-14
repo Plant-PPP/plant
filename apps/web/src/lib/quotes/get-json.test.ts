@@ -107,6 +107,19 @@ it("refuses a body whose length is over the cap before reading it", async () => 
   expect(cancel).toHaveBeenCalled();
 });
 
+it("refuses a body over the cap as too large when cancelling it fails", async () => {
+  const body = stream([new Uint8Array(1)], () => {
+    throw new Error("cancel failed");
+  });
+  answer(
+    new Response(body, {
+      status: 200,
+      headers: { "content-length": String(MAX_BYTES + 1) },
+    }),
+  );
+  await expect(getJson(URL)).rejects.toMatchObject({ code: "too_large" });
+});
+
 it("stops reading a body that grows past the cap with no length", async () => {
   const chunk = new Uint8Array(512 * 1024).fill(32);
   const cancel = jest.fn();

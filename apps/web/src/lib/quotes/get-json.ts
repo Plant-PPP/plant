@@ -5,6 +5,7 @@ import {
   type PostForm,
   QuoteFeedError,
 } from "@plant/core";
+import { readCappedBytes } from "@plant/shared";
 
 const TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
@@ -17,32 +18,13 @@ const isTimeout = (error: unknown) =>
   "name" in error &&
   error.name === "TimeoutError";
 
-// Reads the body chunk by chunk and stops past maxBytes, so a source that
-// sends no length or a wrong one cannot fill memory.
 async function readCapped(
   response: Response,
   maxBytes: number,
 ): Promise<string> {
-  const length = Number(response.headers.get("content-length"));
-  if (length > maxBytes) {
-    await response.body?.cancel();
-    throw new QuoteFeedError("too_large");
-  }
-  const reader = response.body?.getReader();
-  if (!reader) return "";
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > maxBytes) {
-      await reader.cancel();
-      throw new QuoteFeedError("too_large");
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  const bytes = await readCappedBytes(response, maxBytes, { over: "fail" });
+  if (bytes === null) throw new QuoteFeedError("too_large");
+  return new TextDecoder().decode(bytes);
 }
 
 async function readJson(
