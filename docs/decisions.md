@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Export to Excel and PDF (PLA-71)
+
+- **Ajustes exports everything the user loaded as one Excel workbook**, one sheet per kind of row, beside the CSVs it already offered. The real app reads the data only when the user asks for a file, through a server action under RLS: every holding and movement, the debts Deudas lists and the latest imports Cargar lists.
+- **A decimal that a double holds exactly is an Excel number**, so the sheet adds up; one with more than 15 significant digits, or with leading zeros as a reference has, stays text. No cell is ever a formula.
+- **SheetJS is built in the browser and loaded only on the click**, so the page carries none of it until then.
+- **Resumen saves as a PDF through the browser's print dialog**: print styles leave out the sidebar, the header and the controls, let the page run its full length, and print in the light theme. A server-rendered PDF would need a headless browser on Vercel, which this does not need.
+- **Alerts wait for their own change**: Plant has no channel to send them through yet.
+
 ## 2026-10-14 · An icon read connects only to public addresses (PLA-153)
 
 - **The connection checks the address it resolves, not only the lookup before it.** An icon read fetches through an undici `Agent` whose `connect.lookup` resolves the host again and refuses any private address, so a host that answers the check with a public address and the connection with a private one (DNS rebinding) fails as `private`. This supersedes the "not stopped" sentence in the institution icon entry (PLA-102).

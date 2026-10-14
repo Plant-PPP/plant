@@ -18,7 +18,10 @@ export function AppSidebarHeader() {
   return (
     // Sticky over the scrolling canvas, with the canvas card's surface and
     // hairline so it reads as part of the card.
-    <header className="sticky top-0 z-20 shrink-0 border-b-[0.5px] border-canvas-border bg-canvas p-4">
+    <header
+      className="sticky top-0 z-20 shrink-0 border-b-[0.5px] border-canvas-border bg-canvas p-4"
+      data-print="hidden"
+    >
       <div className="flex h-7 w-full items-center justify-between">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="-ml-1" />

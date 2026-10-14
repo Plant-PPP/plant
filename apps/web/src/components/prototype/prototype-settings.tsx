@@ -8,8 +8,8 @@ import { DeleteAccountCard } from "@/components/settings/delete-account-card";
 import { ExportCard } from "@/components/settings/export-card";
 import { PreferencesCard } from "@/components/settings/preferences-card";
 import { RatesCard } from "@/components/settings/rates-card";
+import { exportTables } from "@/lib/export/tables";
 
-import { exportFiles } from "./prototype-export";
 import { usePrototype } from "./prototype-provider";
 
 // Ajustes' cards over the prototype's store. Deleting the account leaves it
@@ -37,7 +37,7 @@ export function PrototypeSettings() {
         onSet={actions.rates.set}
         onRevert={actions.rates.revert}
       />
-      <ExportCard files={exportFiles(state)} />
+      <ExportCard load={async () => exportTables(state)} />
       <DeleteAccountCard
         onDelete={() => {
           actions.deleteAccount();
