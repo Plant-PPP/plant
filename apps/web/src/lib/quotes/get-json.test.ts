@@ -122,6 +122,28 @@ it("reads a body of exactly the cap", async () => {
   await expect(getJson(URL)).resolves.toHaveLength(MAX_BYTES - 2);
 });
 
+it("reads past the default cap up to a caller's own cap", async () => {
+  const text = `"${"a".repeat(MAX_BYTES)}"`;
+  answer(new Response(text, { status: 200 }));
+  await expect(getJson(URL, { maxBytes: 4 * MAX_BYTES })).resolves.toHaveLength(
+    MAX_BYTES,
+  );
+  answer(new Response(text, { status: 200 }));
+  await expect(getJson(URL)).rejects.toMatchObject({ code: "too_large" });
+});
+
+it("refuses a body past a caller's own cap", async () => {
+  answer(
+    new Response("{}", {
+      status: 200,
+      headers: { "content-length": String(4 * MAX_BYTES + 1) },
+    }),
+  );
+  await expect(getJson(URL, { maxBytes: 4 * MAX_BYTES })).rejects.toMatchObject(
+    { code: "too_large" },
+  );
+});
+
 it("throws bad_json with no part of the body", async () => {
   answer(new Response("<html>secret provider text", { status: 200 }));
   const error = await failure(getJson(URL));
@@ -167,7 +189,7 @@ it("maps a timeout while reading the body to timeout", async () => {
 
 it("sends the headers it is given", async () => {
   answer(new Response("{}", { status: 200 }));
-  await getJson(URL, { Authorization: "Bearer made-up" });
+  await getJson(URL, { headers: { Authorization: "Bearer made-up" } });
   expect(fetchMock).toHaveBeenCalledWith(
     URL,
     expect.objectContaining({ headers: { Authorization: "Bearer made-up" } }),

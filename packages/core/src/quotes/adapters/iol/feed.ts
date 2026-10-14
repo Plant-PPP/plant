@@ -30,6 +30,9 @@ const PANELS = {
 } as const satisfies Partial<Record<InstrumentType, string>>;
 type PanelType = keyof typeof PANELS;
 
+// A whole panel lists hundreds of lines, past the reader's default cap.
+const PANEL_MAX_BYTES = 8 * 1024 * 1024;
+
 const panelUrl = (panel: string) =>
   `${BASE_URL}/api/v2/Cotizaciones/${panel}/argentina/Todos` +
   `?cotizacionInstrumentoModel.instrumento=${panel}` +
@@ -145,11 +148,22 @@ export function parseLine(
     price_date: buenosAiresDate(stamp),
     quoted_at: stamp.toISOString(),
   };
+  // A moneda IOL sends must be one Plant knows and the instrument's; a dollar
+  // line is priced only when IOL says it is in dollars.
   const currency =
     typeof moneda === "string" && Object.hasOwn(MONEDA, moneda)
       ? MONEDA[moneda]
       : undefined;
-  if (currency !== undefined && currency !== instrument.currency) return dated;
+  if (moneda !== undefined && moneda !== null && currency === undefined) {
+    return dated;
+  }
+  if (
+    currency === undefined
+      ? instrument.currency === "USD"
+      : currency !== instrument.currency
+  ) {
+    return dated;
+  }
   const quoted = String(ultimoPrecio);
   if (!(ultimoPrecio > 0) || !DECIMAL.test(quoted)) return dated;
   return {
@@ -206,7 +220,8 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
           at,
         );
       } catch (error) {
-        if (readCode(error) !== "http_4xx") throw error;
+        const code = readCode(error);
+        if (code !== "http_4xx" && code !== "unauthorized") throw error;
       }
     }
     session ??= await grant(
@@ -226,7 +241,10 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
       (Object.keys(PANELS) as PanelType[]).map(
         async (type): Promise<PanelRead> => {
           try {
-            const json = await deps.getJson(panelUrl(PANELS[type]), headers);
+            const json = await deps.getJson(panelUrl(PANELS[type]), {
+              headers,
+              maxBytes: PANEL_MAX_BYTES,
+            });
             return {
               ok: true,
               type,
@@ -251,10 +269,10 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
       const token = await tokenAt(at, credentials);
       let panels = await readPanels(token.access);
       // A cached token IOL refuses was revoked early: one more try with a
-      // new one.
+      // new one. Any other refusal fails its panel.
       if (
         token.cached &&
-        panels.some((panel) => !panel.ok && panel.code === "http_4xx")
+        panels.some((panel) => !panel.ok && panel.code === "unauthorized")
       ) {
         session = null;
         panels = await readPanels((await tokenAt(at, credentials)).access);

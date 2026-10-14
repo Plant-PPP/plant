@@ -1,5 +1,6 @@
 export type {
   GetJson,
+  GetJsonOptions,
   PostForm,
   QuoteFeedPort,
   QuoteRange,

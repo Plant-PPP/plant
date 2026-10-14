@@ -1,6 +1,6 @@
 import { migrations } from "@plant/shared/testing";
 
-import type { GetJson, PostForm } from "../../contract/port";
+import type { GetJson, GetJsonOptions, PostForm } from "../../contract/port";
 import { QuoteFeedError } from "../../contract/quote";
 import { toQuoteFeed } from "../../factory";
 import { createIolFeed, IOL_INSTRUMENTS, parseLine } from "./feed";
@@ -55,7 +55,12 @@ const TOKEN = {
   ".refreshexpires": "Fri, 09 Oct 2026 22:00:00 GMT",
 };
 
-type Call = { url: string; headers?: Readonly<Record<string, string>> };
+type Call = { url: string; options?: GetJsonOptions };
+
+const PANEL_OPTIONS = {
+  headers: { Authorization: "Bearer made-up-access" },
+  maxBytes: 8 * 1024 * 1024,
+};
 type Form = Readonly<Record<string, string>>;
 
 function transport(
@@ -66,8 +71,8 @@ function transport(
 ) {
   const gets: Call[] = [];
   const posts: { url: string; form: Form }[] = [];
-  const getJson: GetJson = async (url, headers) => {
-    gets.push({ url, headers });
+  const getJson: GetJson = async (url, sent) => {
+    gets.push({ url, options: sent });
     if (options.panel) return options.panel(url, gets.length);
     return url.includes("/cedears/") ? CEDEARS : BONDS;
   };
@@ -109,6 +114,29 @@ describe("iol parseLine", () => {
       symbol: "GD30",
       price: "0.812",
       currency: "USD",
+    });
+  });
+
+  it.each([
+    ["an unknown moneda", "AAPL", { moneda: "peso" }],
+    ["a numeric moneda", "AAPL", { moneda: 1 }],
+    ["an unknown moneda on a dollar line", "GD30", { moneda: "usd" }],
+    ["no moneda on a dollar line", "GD30", { moneda: undefined }],
+    ["a null moneda on a dollar line", "GD30", { moneda: null }],
+  ])("refuses a line with %s", (_label, symbol, extra) => {
+    const titulos = [line(symbol === "GD30" ? "GD30D" : symbol, 81.2, extra)];
+    const row = parseLine(instrument(symbol), titulos, NOW);
+    expect([row.price, row.price_date]).toEqual(["", "2026-10-09"]);
+  });
+
+  it.each([
+    ["no moneda", { moneda: undefined }],
+    ["a null moneda", { moneda: null }],
+  ])("prices a peso line with %s in pesos", (_label, extra) => {
+    const titulos = [line("KO", 21480, extra)];
+    expect(parseLine(instrument("KO"), titulos, NOW)).toMatchObject({
+      price: "21480",
+      currency: "ARS",
     });
   });
 
@@ -174,11 +202,11 @@ describe("createIolFeed", () => {
     expect(t.gets).toEqual([
       {
         url: "https://api.invertironline.com/api/v2/Cotizaciones/cedears/argentina/Todos?cotizacionInstrumentoModel.instrumento=cedears&cotizacionInstrumentoModel.pais=argentina",
-        headers: { Authorization: "Bearer made-up-access" },
+        options: PANEL_OPTIONS,
       },
       {
         url: "https://api.invertironline.com/api/v2/Cotizaciones/titulosPublicos/argentina/Todos?cotizacionInstrumentoModel.instrumento=titulosPublicos&cotizacionInstrumentoModel.pais=argentina",
-        headers: { Authorization: "Bearer made-up-access" },
+        options: PANEL_OPTIONS,
       },
     ]);
     expect(rows.prices.map((row) => [row.symbol, row.price])).toEqual([
@@ -251,7 +279,7 @@ describe("createIolFeed", () => {
       panel: (url) => {
         if (refuse) {
           refuse = false;
-          throw new QuoteFeedError("http_4xx");
+          throw new QuoteFeedError("unauthorized");
         }
         return url.includes("/cedears/") ? CEDEARS : BONDS;
       },
@@ -262,6 +290,30 @@ describe("createIolFeed", () => {
     const rows = await feed.readRaw(minutes(1));
     expect(t.posts).toHaveLength(2);
     expect(rows.unread).toEqual([]);
+  });
+
+  it("fails a panel IOL does not find, without logging in again", async () => {
+    let missing = false;
+    const t = transport({
+      panel: (url) => {
+        if (missing && url.includes("/cedears/")) {
+          throw new QuoteFeedError("http_4xx");
+        }
+        return url.includes("/cedears/") ? CEDEARS : BONDS;
+      },
+    });
+    const feed = feedWith(t);
+    await feed.readRaw(NOW);
+    missing = true;
+    const rows = await feed.readRaw(minutes(1));
+    expect(t.posts).toHaveLength(1);
+    expect(t.gets).toHaveLength(4);
+    expect(rows.unread).toEqual(
+      ["AAPL", "KO", "MELI", "MSFT", "NVDA", "SPY", "TSLA"].map((key) => ({
+        key,
+        code: "http_4xx",
+      })),
+    );
   });
 
   it("lists every instrument of a panel that failed as unread", async () => {

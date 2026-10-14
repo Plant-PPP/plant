@@ -7,7 +7,7 @@ import {
 } from "@plant/core";
 
 const TIMEOUT_MS = 10_000;
-const MAX_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 
 // Read by name: the DOMException fetch rejects with can come from another
 // realm than this module's Error.
@@ -17,11 +17,14 @@ const isTimeout = (error: unknown) =>
   "name" in error &&
   error.name === "TimeoutError";
 
-// Reads the body chunk by chunk and stops past MAX_BYTES, so a source that
+// Reads the body chunk by chunk and stops past maxBytes, so a source that
 // sends no length or a wrong one cannot fill memory.
-async function readCapped(response: Response): Promise<string> {
+async function readCapped(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
   const length = Number(response.headers.get("content-length"));
-  if (length > MAX_BYTES) {
+  if (length > maxBytes) {
     await response.body?.cancel();
     throw new QuoteFeedError("too_large");
   }
@@ -33,7 +36,7 @@ async function readCapped(response: Response): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BYTES) {
+    if (size > maxBytes) {
       await reader.cancel();
       throw new QuoteFeedError("too_large");
     }
@@ -42,7 +45,11 @@ async function readCapped(response: Response): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function readJson(url: string, init: RequestInit): Promise<unknown> {
+async function readJson(
+  url: string,
+  init: RequestInit,
+  maxBytes = DEFAULT_MAX_BYTES,
+): Promise<unknown> {
   let text: string;
   try {
     const response = await fetch(url, {
@@ -55,7 +62,7 @@ async function readJson(url: string, init: RequestInit): Promise<unknown> {
       await response.body?.cancel();
       throw feedErrorForStatus(response.status);
     }
-    text = await readCapped(response);
+    text = await readCapped(response, maxBytes);
   } catch (error) {
     if (error instanceof QuoteFeedError) throw error;
     throw new QuoteFeedError(isTimeout(error) ? "timeout" : "fetch_error");
@@ -71,8 +78,8 @@ async function readJson(url: string, init: RequestInit): Promise<unknown> {
 // none carries the body, the headers, the form or the parser's message.
 // Inngest retries the step when the code is retryable. A redirect is answered
 // by its status (`http_4xx`, not retried).
-export const getJson: GetJson = (url, headers) =>
-  readJson(url, headers ? { headers } : {});
+export const getJson: GetJson = (url, { headers, maxBytes } = {}) =>
+  readJson(url, headers ? { headers: { ...headers } } : {}, maxBytes);
 
 export const postForm: PostForm = (url, form) =>
   readJson(url, {

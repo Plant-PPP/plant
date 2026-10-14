@@ -774,6 +774,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
             simbolo: "GD30D",
             ultimoPrecio: 81.2,
             fecha: "2026-10-09T17:00:00",
+            moneda: "dolar_Estadounidense",
           },
         ],
       };

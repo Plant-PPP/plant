@@ -137,6 +137,7 @@ export const QUOTE_FEED_CODES = {
   provider_busy: true,
   empty: true,
   http_4xx: false,
+  unauthorized: false,
   too_large: false,
   bad_json: false,
   bad_shape: false,
@@ -236,9 +237,12 @@ export function quoteFailureOf(error: unknown): {
 }
 
 // The contract's code table applied to an HTTP status, for the reader the
-// composition root injects.
+// composition root injects. 401 and 403 are a refused credential.
 export function feedErrorForStatus(status: number): QuoteFeedError {
   if (status === 429) return new QuoteFeedError("http_429");
+  if (status === 401 || status === 403) {
+    return new QuoteFeedError("unauthorized");
+  }
   return new QuoteFeedError(status >= 500 ? "http_5xx" : "http_4xx");
 }
 

@@ -608,7 +608,8 @@ describe("quoteFailureOf", () => {
 describe("feedErrorForStatus", () => {
   it.each([
     [400, "http_4xx", false],
-    [403, "http_4xx", false],
+    [401, "unauthorized", false],
+    [403, "unauthorized", false],
     [404, "http_4xx", false],
     [429, "http_429", true],
     [499, "http_4xx", false],
