@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(28);
+SELECT plan(30);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -141,6 +141,20 @@ SELECT results_eq(
             (SELECT count(*)::int FROM public.operations) $$,
   $$ VALUES ('confirmed', 'AAPL:5.00000000,KO:3.00000000', 2) $$,
   'with every operation, one each, and the import marked confirmed'
+);
+
+-- A GraphQL request runs as one transaction: what confirm_import let
+-- write_operation write ends with it.
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.holdings SET amount = 99 WHERE instrument_symbol = 'AAPL' $$),
+  '42501',
+  'after a confirm, its transaction never sets an instrument''s units by hand'
+);
+
+SELECT is(
+  pg_temp.error_of($$ DELETE FROM public.operations $$),
+  '42501',
+  'nor deletes an operation past write_operation'
 );
 
 SELECT is(
