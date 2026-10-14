@@ -9,7 +9,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(42);
+SELECT plan(43);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -310,6 +310,32 @@ SELECT is(
   '42501',
   'but not a sync being read'
 );
+
+-- Beto's: Ana's file imports would count against her month's quota below.
+RESET ROLE;
+INSERT INTO public.uploaded_documents (id, user_id, source_connection_id, storage_path,
+                                       file_name, mime_type, size_bytes, sha256)
+VALUES ('b8000000-0000-4000-8000-0000000000f1', 'b0000000-0000-4000-8000-00000000000b',
+        'b5000000-0000-4000-8000-0000000000b5',
+        'b0000000-0000-4000-8000-00000000000b/imports/b8000000-0000-4000-8000-0000000000f1/b8000000-0000-4000-8000-0000000000f1',
+        'resumen.pdf', 'application/pdf', 1024, repeat('f', 64));
+INSERT INTO public.imports (id, user_id, document_id)
+VALUES ('b9000000-0000-4000-8000-0000000000f1', 'b0000000-0000-4000-8000-00000000000b',
+        'b8000000-0000-4000-8000-0000000000f1');
+SELECT pg_temp.sign_in('b0000000-0000-4000-8000-00000000000b');
+SET LOCAL ROLE authenticated;
+
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
+                      WHERE id = 'b9000000-0000-4000-8000-0000000000f1'
+                        AND status = 'queued' $$),
+  '42501',
+  'nor their own queued file import'
+);
+
+RESET ROLE;
+SELECT pg_temp.sign_in('a0000000-0000-4000-8000-00000000000a');
+SET LOCAL ROLE authenticated;
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider)
