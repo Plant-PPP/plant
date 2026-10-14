@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -162,6 +163,14 @@ export function ImportDebtsReview({
           </p>
         </div>
       </div>
+
+      {item.skippedRows > 0 && (
+        <LeftOutNotice>
+          {item.skippedRows === 1
+            ? "Una deuda quedó afuera: revisala en el resumen antes de confirmar."
+            : `${item.skippedRows} deudas quedaron afuera: revisalas en el resumen antes de confirmar.`}
+        </LeftOutNotice>
+      )}
 
       <section className="grid gap-3" aria-labelledby={`${listId}-list`}>
         <h2 id={`${listId}-list`} className="text-base font-semibold">

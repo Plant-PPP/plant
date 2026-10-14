@@ -140,9 +140,38 @@ it("reads the institution of the import's account, as that import's user", async
 });
 
 it("refuses an import with no account to read the institution of", async () => {
-  const { store } = storeWith(() => ({ status: 200, body: [] }));
+  const { store } = storeWith(() => ({
+    status: 200,
+    body: [{ document: null }],
+  }));
   const error = await store.institution(IMPORT, USER).catch((e: unknown) => e);
   expect(error).toMatchObject({ step: "institution", code: "no_data" });
+});
+
+it("reads no institution for an import deleted meanwhile", async () => {
+  const { store } = storeWith(() => ({ status: 200, body: [] }));
+  expect(await store.institution(IMPORT, USER)).toBeNull();
+});
+
+it("downloads no file where none is any more", async () => {
+  const { store } = storeWith(() => ({
+    status: 400,
+    body: {
+      statusCode: "404",
+      error: "not_found",
+      message: "Object not found",
+    },
+  }));
+  expect(await store.download("p")).toBeNull();
+});
+
+it("throws a store error when a download fails otherwise", async () => {
+  const { store } = storeWith(() => ({
+    status: 500,
+    body: { statusCode: "500", error: "internal", message: "boom" },
+  }));
+  const error = await store.download("p").catch((e: unknown) => e);
+  expect(error).toMatchObject({ step: "download" });
 });
 
 const DRAFT = {
@@ -247,21 +276,26 @@ it("replaces the draft, then marks the import ready at the document's date", asy
 
 it("replaces any draft with the operations, then marks the import ready", async () => {
   const { store, calls } = storeWith(draftAnswers());
-  await store.saveOperations(IMPORT, USER, [
-    {
-      date: "2026-09-01",
-      kind: "purchase",
-      symbol: null,
-      quantity: "100",
-      price: "5000",
-      amount: null,
-      charges: "25.5",
-      reference: "123",
-      currency: "ARS",
-      confidence: "low",
-      page: 1,
-    },
-  ]);
+  await store.saveOperations(
+    IMPORT,
+    USER,
+    [
+      {
+        date: "2026-09-01",
+        kind: "purchase",
+        symbol: null,
+        quantity: "100",
+        price: "5000",
+        amount: null,
+        charges: "25.5",
+        reference: "123",
+        currency: "ARS",
+        confidence: "low",
+        page: 1,
+      },
+    ],
+    3,
+  );
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
@@ -293,15 +327,15 @@ it("replaces any draft with the operations, then marks the import ready", async 
     document_date: null,
     printed_total_ars: null,
     printed_total_usd: null,
-    skipped_rows: 0,
+    skipped_rows: 3,
   });
 });
 
 it("writes no draft for an import no longer being read", async () => {
   const { store, calls } = storeWith(draftAnswers({ beingRead: false }));
   expect(await store.saveDraft(IMPORT, USER, DRAFT, 0)).toBe(false);
-  expect(await store.saveOperations(IMPORT, USER, [])).toBe(false);
-  expect(await store.saveDebts(IMPORT, USER, [])).toBe(false);
+  expect(await store.saveOperations(IMPORT, USER, [], 0)).toBe(false);
+  expect(await store.saveDebts(IMPORT, USER, [], 0)).toBe(false);
   expect(calls.map(({ method }) => method)).toEqual(["GET", "GET", "GET"]);
 });
 
@@ -345,18 +379,23 @@ it("throws a store error with only the step and code", async () => {
 
 it("replaces any draft with a card statement's debts, then marks the import ready", async () => {
   const { store, calls } = storeWith(draftAnswers());
-  await store.saveDebts(IMPORT, USER, [
-    {
-      label: "Visa",
-      lender: null,
-      currency: "ARS",
-      balance: "250000.5",
-      minimumPayment: null,
-      dueDate: "2026-10-20",
-      confidence: "high",
-      page: 1,
-    },
-  ]);
+  await store.saveDebts(
+    IMPORT,
+    USER,
+    [
+      {
+        label: "Visa",
+        lender: null,
+        currency: "ARS",
+        balance: "250000.5",
+        minimumPayment: null,
+        dueDate: "2026-10-20",
+        confidence: "high",
+        page: 1,
+      },
+    ],
+    2,
+  );
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
@@ -380,4 +419,5 @@ it("replaces any draft with a card statement's debts, then marks the import read
       source_page: 1,
     },
   ]);
+  expect(calls[5]!.body).toMatchObject({ skipped_rows: 2 });
 });

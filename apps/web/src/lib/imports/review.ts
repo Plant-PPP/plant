@@ -178,7 +178,7 @@ export type ImportItem = {
   operations?: ImportOperationRow[];
   // A card statement's draft, when it is one.
   debts?: ImportDebtRow[];
-  // Holdings a spreadsheet lists that the reading left out.
+  // Holdings, operations or debts the reading left out.
   skippedRows: number;
   createdOn: string;
 };

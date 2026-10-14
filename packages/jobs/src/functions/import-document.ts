@@ -45,10 +45,12 @@ export type ImportToRead = {
 // `code` that failed, the only parts of it the job keeps.
 export interface ImportStorePort {
   load(importId: string, userId: string): Promise<ImportToRead | null>;
-  download(path: string): Promise<Uint8Array>;
+  // null when no file is at the path: the import was deleted meanwhile.
+  download(path: string): Promise<Uint8Array | null>;
   reading(importId: string, userId: string): Promise<void>;
-  // The institution of the account the import's file was uploaded to.
-  institution(importId: string, userId: string): Promise<string>;
+  // The institution of the account the import's file was uploaded to; null
+  // when the import was deleted meanwhile.
+  institution(importId: string, userId: string): Promise<string | null>;
   // The credentials of that provider the user's account holds, out of
   // Vault, as stored (the provider's adapter parses them); null when
   // it holds none any more.
@@ -57,8 +59,8 @@ export interface ImportStorePort {
     accountId: string,
     provider: ConnectionProvider,
   ): Promise<unknown>;
-  // `skippedRows` are the holdings the reading left out, for the review to
-  // say. Each save* answers false, writing nothing, for an import no longer
+  // `skippedRows` are the holdings, operations or debts the reading left
+  // out, for the review to say. Each save* answers false, writing nothing, for an import no longer
   // being read (confirmed, failed or deleted meanwhile).
   saveDraft(
     importId: string,
@@ -70,11 +72,13 @@ export interface ImportStorePort {
     importId: string,
     userId: string,
     operations: DraftOperation[],
+    skippedRows: number,
   ): Promise<boolean>;
   saveDebts(
     importId: string,
     userId: string,
     debts: DraftDebt[],
+    skippedRows: number,
   ): Promise<boolean>;
   failed(
     importId: string,
@@ -269,13 +273,16 @@ export async function runImportDocument(
             prepared.draft,
           );
         } else {
+          const institution = await deps.store.institution(importId, userId);
+          if (institution === null) return { gone: true };
           const bytes = await deps.store.download(prepared.path);
+          if (bytes === null) return { gone: true };
           reading = await deps.source.read({
             importId,
             bytes,
             mimeType: prepared.mimeType,
             userId,
-            institution: await deps.store.institution(importId, userId),
+            institution,
             lastAttempt: attempt >= IMPORT_RETRIES,
           });
         }
@@ -292,9 +299,15 @@ export async function runImportDocument(
                 importId,
                 userId,
                 reading.operations,
+                reading.read.skippedRows,
               )
             : "debts" in reading
-              ? await deps.store.saveDebts(importId, userId, reading.debts)
+              ? await deps.store.saveDebts(
+                  importId,
+                  userId,
+                  reading.debts,
+                  reading.read.skippedRows,
+                )
               : await deps.store.saveDraft(
                   importId,
                   userId,

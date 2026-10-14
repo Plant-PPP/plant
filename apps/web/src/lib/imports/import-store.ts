@@ -177,10 +177,13 @@ export function createImportStore(client: Client): ImportStorePort {
       return result.data ?? null;
     },
 
+    // Storage answers a missing object with a 400 whose body's statusCode is
+    // "404", or with a 404.
     async download(path) {
       const { data, error } = await client.storage
         .from(UPLOAD_BUCKET)
         .download(path);
+      if (error?.status === 404 || error?.statusCode === "404") return null;
       if (error || !data) {
         throw new ImportStoreError("download", error?.name ?? "no_data");
       }
@@ -212,6 +215,7 @@ export function createImportStore(client: Client): ImportStorePort {
         .limit(1);
       checked("institution", result, 200);
       const [row] = (result.data ?? []) as unknown[];
+      if (row === undefined) return null;
       const parsed = institutionSchema.safeParse(row);
       if (!parsed.success) throw new ImportStoreError("institution", "no_data");
       return parsed.data.document.account.institution;
@@ -248,7 +252,7 @@ export function createImportStore(client: Client): ImportStorePort {
       return true;
     },
 
-    async saveOperations(importId, userId, operations) {
+    async saveOperations(importId, userId, operations, skippedRows) {
       if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const decimal = (value: string | null) =>
@@ -278,12 +282,12 @@ export function createImportStore(client: Client): ImportStorePort {
         document_date: null,
         printed_total_ars: null,
         printed_total_usd: null,
-        skipped_rows: 0,
+        skipped_rows: skippedRows,
       });
       return true;
     },
 
-    async saveDebts(importId, userId, debts) {
+    async saveDebts(importId, userId, debts, skippedRows) {
       if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const decimal = (value: string | null) =>
@@ -306,7 +310,7 @@ export function createImportStore(client: Client): ImportStorePort {
         document_date: null,
         printed_total_ars: null,
         printed_total_usd: null,
-        skipped_rows: 0,
+        skipped_rows: skippedRows,
       });
       return true;
     },

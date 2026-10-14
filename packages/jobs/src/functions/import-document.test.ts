@@ -161,7 +161,12 @@ it("saves a document of operations as operations", async () => {
     }),
   });
   expect(await run()).toEqual({ outcome: "ready", rows: 1 });
-  expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, operations);
+  expect(store.saveOperations).toHaveBeenCalledWith(
+    IMPORT,
+    USER,
+    operations,
+    0,
+  );
   expect(store.saveDraft).not.toHaveBeenCalled();
   expect(lines[0]!.fields).toMatchObject({
     "plant.import.draft": "operations",
@@ -189,7 +194,7 @@ it("saves a card statement as debts", async () => {
     }),
   });
   expect(await run()).toEqual({ outcome: "ready", rows: 1 });
-  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, debts);
+  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, debts, 0);
   expect(store.saveDraft).not.toHaveBeenCalled();
   expect(lines[0]!.fields).toMatchObject({
     "plant.import.draft": "debts",
@@ -220,6 +225,41 @@ it.each(["saveDraft", "saveOperations", "saveDebts"] as const)(
           "plant.outcome": "skipped",
           "plant.import.skip_reason": "gone",
           "plant.import.id": IMPORT,
+        }),
+      },
+    ]);
+  },
+);
+
+it("passes the operations and debts a reading left out to the store", async () => {
+  const skipped = { ...READ, skippedRows: 3 };
+  const { store, run } = setUp({
+    read: jest
+      .fn()
+      .mockResolvedValueOnce({ operations: [{}], read: skipped })
+      .mockResolvedValueOnce({ debts: [{}], read: skipped }),
+  });
+  await run();
+  await run();
+  expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, [{}], 3);
+  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, [{}], 3);
+});
+
+it.each(["institution", "download"] as const)(
+  "skips, before reading the file, an import whose %s is gone",
+  async (gone) => {
+    const { deps, store, lines, run } = setUp();
+    store[gone].mockResolvedValue(null);
+    expect(await run()).toEqual({ outcome: "skipped" });
+    expect(deps.source.read).not.toHaveBeenCalled();
+    expect(store.failed).not.toHaveBeenCalled();
+    expect(lines).toEqual([
+      {
+        level: "warn",
+        event: "imports.read",
+        fields: expect.objectContaining({
+          "plant.outcome": "skipped",
+          "plant.import.skip_reason": "gone",
         }),
       },
     ]);
@@ -670,7 +710,12 @@ describe("a sync", () => {
     expect(await run()).toEqual({ outcome: "ready", rows: 1 });
     expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "operations");
     expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "wallbit");
-    expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, operations);
+    expect(store.saveOperations).toHaveBeenCalledWith(
+      IMPORT,
+      USER,
+      operations,
+      0,
+    );
   });
 
   it("skips another user's sync without reading a key", async () => {
