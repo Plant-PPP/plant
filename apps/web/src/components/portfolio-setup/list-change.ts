@@ -27,11 +27,20 @@ export type SetupChange =
   | { list: "portfolios"; change: ListChange<PortfolioRow> };
 
 let lastId = 0;
+const TEMPORARY_PREFIX = "new-";
 
 // The id of a row created on the page, until the server's row replaces it.
 export function temporaryId(): string {
   lastId += 1;
-  return `new-${lastId}`;
+  return `${TEMPORARY_PREFIX}${lastId}`;
+}
+
+// The page a row's name opens, once the server has the row.
+export function savedRowHref(
+  href: ((id: string) => string) | undefined,
+  id: string,
+): string | undefined {
+  return href && !id.startsWith(TEMPORARY_PREFIX) ? href(id) : undefined;
 }
 
 // Prepends to the active rows, newest first like the server, within its cap.

@@ -5,6 +5,7 @@ import type {
   PortfoliosView,
   SourceConnectionsView,
 } from "@/lib/portfolio-setup/read";
+import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import { accountsUsing } from "./accounts-using";
 import { type PortfolioActions, PortfoliosCard } from "./portfolios-card";
 import { useSetupActions } from "./setup-actions";
@@ -21,6 +22,7 @@ export function AccountsSetup({
   portfolios,
   actions,
   deletable,
+  hrefs,
 }: {
   sourceConnections: SourceConnectionsView;
   portfolios: PortfoliosView;
@@ -30,6 +32,7 @@ export function AccountsSetup({
   };
   // The rows a delete would go through for, when the page deletes.
   deletable?: Deletable;
+  hrefs?: ScopeHrefs;
 }) {
   const { lists, pending, run } = useSetupActions({
     sourceConnections,
@@ -51,6 +54,7 @@ export function AccountsSetup({
         actions={actions.sourceConnections}
         deletable={deletable?.sourceConnections}
         deletesUploads={deletable?.deletesUploads}
+        href={scopeLink(hrefs, "account")}
       />
       <PortfoliosCard
         view={lists.portfolios}
@@ -59,6 +63,7 @@ export function AccountsSetup({
         usedBy={usedBy}
         actions={actions.portfolios}
         deletable={deletable?.portfolios}
+        href={scopeLink(hrefs, "portfolio")}
       />
     </div>
   );
