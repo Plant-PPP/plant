@@ -30,6 +30,11 @@ jest.mock("@/lib/debts/read", () => ({
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
 }));
+// No pins: Resumen draws none, so it reads no chart.
+jest.mock("@/lib/assistant/pins", () => ({ readPins: async () => [] }));
+// The server action Resumen hands the page to unpin a chart.
+const unpinChart = async () => true;
+jest.mock("@/app/(app)/(data)/assistant/actions", () => ({ unpinChart }));
 jest.mock("@/components/summary/summary-page", () => ({
   SummaryPage: () => null,
 }));
@@ -212,8 +217,8 @@ describe("Resumen", () => {
     expect((await summary({ unit: "btc" })).props.unit).toBe("usd_ccl");
   });
 
-  it("hands the page only data", async () => {
-    expect(functionsIn((await summary()).props)).toEqual([]);
+  it("hands the page only data, and the server action that unpins", async () => {
+    expect(functionsIn((await summary()).props)).toEqual([unpinChart]);
   });
 });
 

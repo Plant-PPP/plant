@@ -37,7 +37,7 @@ const summaryHome = (state: PrototypeState) =>
 
 // Resumen over the prototype's store.
 export function PrototypeSummary({ params }: { params: KeysetParams }) {
-  const { state, snapshot } = usePrototype();
+  const { state, snapshot, actions } = usePrototype();
   const reference = summaryHome(state);
   const unit = closeUnitOf(params, reference);
   const closes = closesOf(state, unit);
@@ -81,6 +81,11 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
       params={params}
       hrefs={SCOPE_HREFS}
       closesQuery={closesQuery(unit, reference)}
+      pinned={state.pinnedCharts.map((each) => ({
+        ...each,
+        asOf: state.today,
+      }))}
+      onUnpin={actions.pins.unpin}
     />
   );
 }

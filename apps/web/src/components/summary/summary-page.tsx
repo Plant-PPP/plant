@@ -1,5 +1,6 @@
 "use client";
 
+import { type PinnedChart, PinnedCharts } from "./pinned-charts";
 import type { Denominator } from "@plant/core";
 import { exactOf, plus, stored } from "@plant/shared";
 import Link from "next/link";
@@ -68,6 +69,8 @@ export function SummaryPage({
   params,
   hrefs,
   closesQuery,
+  pinned = [],
+  onUnpin,
 }: {
   // Every month, oldest first, the last one in progress.
   closes: MonthClose[];
@@ -88,6 +91,10 @@ export function SummaryPage({
   hrefs?: Pick<ScopeHrefs, "account" | "portfolio">;
   // The query a close's page keeps, from closesQuery.
   closesQuery: string;
+  // The assistant's charts the user pinned, drawn again, and the way to let
+  // one go.
+  pinned?: readonly PinnedChart[];
+  onUnpin?: (id: string) => Promise<boolean>;
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
@@ -213,6 +220,8 @@ export function SummaryPage({
         )}
 
         <NetWorthChart points={points.slice(-CHART_MONTHS)} unit={unit} />
+
+        {onUnpin && <PinnedCharts pinned={pinned} onUnpin={onUnpin} />}
 
         <section className="grid gap-3" aria-labelledby={`${id}-split`}>
           <h2 id={`${id}-split`} className="text-base font-semibold">

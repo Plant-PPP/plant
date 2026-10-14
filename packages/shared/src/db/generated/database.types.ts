@@ -329,6 +329,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"pinned_charts": {
+                  Row: {
+                    "created_at": string,"id": string,"portfolio_id": string | null,"topic": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"portfolio_id"?: string | null,"topic": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"portfolio_id"?: string | null,"topic"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pinned_charts_user_id_portfolio_id_fkey"
+      columns: ["user_id","portfolio_id"]
+isOneToOne: false
+      referencedRelation: "portfolios"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"portfolios": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"id": string,"name": string,"updated_at": string,"user_id": string

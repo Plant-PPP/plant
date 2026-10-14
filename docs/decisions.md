@@ -10,6 +10,12 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Resumen saves as a PDF through the browser's print dialog**: print styles leave out the sidebar, the header and the controls, let the page run its full length, and print in the light theme. A server-rendered PDF would need a headless browser on Vercel, which this does not need.
 - **Alerts wait for their own change**: Plant has no channel to send them through yet.
 
+## 2026-10-14 · Pinned charts (PLA-69)
+
+- **A pin stores what the chart is about, not its numbers**: the topic and, for allocation and holdings, the portfolio. Resumen draws each pin again from today's data in its own unit (the reference dollar's when the assistant has no such unit), so a pinned chart never goes stale and its numbers still come from the server.
+- **One pin per topic and portfolio, twelve at most**, oldest first. A pin whose portfolio is deleted goes with it; one that cannot be drawn shows as such, never breaking Resumen.
+- **Unpinning is optimistic** and comes back with a toast if the server refuses.
+
 ## 2026-10-14 · A close's real return (PLA-67)
 
 - **A close in pesos is set against inflation and the dollar.** Its detail adds a row: inflation over the period, read from the UVA (CER follows the consumer price index, about a month late, and its daily value is already stored), the real return as (1 + return) / (1 + inflation) - 1, the MEP dollar's move, and the return against it the same way. In a dollar unit the row is left out: the return already is one in dollars.
@@ -19,14 +25,11 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **Staging serves the real app**, as production does: `isProductionDeployment()` is true on Vercel's production and on the preview of the `staging` branch, the one Tomas tests on `plant-staging`'s real data. Every other preview and `next dev` still serve the prototype, which the e2e flows rely on; `pnpm dev:up:real` runs the real app locally against local Supabase. For staging this supersedes "Outside production, the data pages show made-up data" (PLA-109) and the real chat being production only (PLA-47).
 - **Only `staging` deploys on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns off every branch prefix a PR uses (`feat/*`, `fix/*`, `ci/*`, `chore/*` and the rest), so PR branches stop spending Vercel Hobby's 100 deployments a day and staging always gets one. `claude/*` PRs still get a preview on request (`preview.yml`); the required checks are `ci` and `forbidden-words`, so no PR waits on a Vercel check. Staging's jobs and keys are the Preview variables scoped to the `staging` branch (see "The jobs on a deployment"), so a `claude/*` preview never runs a job.
-  \=======
 
 ## 2026-10-14 · A PDF's page cap (PLA-152)
 
 - **A PDF of more than 30 pages fails as `too_many_pages` before any model reads it**, so an import's cost stays bounded: the file_upload source counts its pages in code (the root `/Pages` node's `/Count`, or else its `/Page` objects) and Cargar asks for only the statement's pages.
 - **A PDF whose page count is not in plain sight**, as one with compressed object streams, is read as before rather than refused for a count nobody could take.
-
-> > > > > > > origin/staging
 
 ## 2026-10-14 · Security review fixes (PLA-62)
 
@@ -225,6 +228,18 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **30 questions a month, counted in `ai_questions` before the model runs**, under a lock (`check_assistant_quota`). A question counts once asked, even if its answer fails or its conversation is deleted.
 - **Under each answer: the day, the dollar and what it read.** These come from the tools' results; the transcript shows them once the answer has finished. Charts wait for PLA-53, and the suggested questions are the ones the tools answer.
 - **Stopping an answer** stops the screen; the server finishes and keeps it.
+## 2026-10-13 · Promote to production (PLA-13)
+
+- **`.github/workflows/promote-to-production.yml`, run by hand from `staging`**, promotes staging HEAD or the full SHA it is given (an earlier one rolls back): `detect-changes` → `approve` → `supabase` → `vercel` → `inngest` → `smoke-test` → `tag`. It refuses a dispatch from another branch and a SHA that is not on `staging`.
+- **Only a SHA that passed CI and whose migrations are applied.** `detect-changes` reads the Actions API, as `ci.yml` does: it needs a `ci.yml` push run on `staging` for exactly that SHA with `ci`, `database` and `e2e` green (whatever the run's own conclusion, which a cancelled or pending deploy-migrations job turns to cancelled or pending), and the newest successful "Deploy migrations to plant-staging" among the last 100 staging push runs at or after that SHA, or with the same `supabase/migrations/`. Otherwise it fails before the approval and says why; the step summary shows both results.
+- **One run at a time.** `concurrency` with no cancel: a run waiting for approval holds the slot, a second dispatch queues behind it, and a third replaces the queued one, which GitHub cancels. Reject or finish the pending run before dispatching again.
+- **One approval, two environments.** `approve` enters `production-gate`, whose only required reviewer is Tomas and which holds no secrets. Every other deploy job enters `production`, which holds the secrets and no reviewers, so the run asks once. `.github/scripts/check-production-jobs-gated.py` fails CI when a job enters `production` without `approve` in its `needs`, or picks its environment with an expression; `check_production_jobs_gated_test.py` is its self-test. It also fails a `production` job whose `if:` uses `always()`, `failure()` or `!cancelled()`, which would run it after a failed or rejected approval, and it reads environment names case-insensitively, as GitHub does. The gate is only as strong as the two environments: `production` must stay limited to the `staging` branch and `production-gate` must keep Tomas as required reviewer. Never relax either, since any branch's workflow file could otherwise reach the secrets. Both run in the `ci` job on every PR and push, next to the checkout-credentials gate.
+- **`supabase` always runs first and, until the beta, applies nothing.** Production shares `plant-staging`, which `ci.yml` already migrated, so `production` has no `SUPABASE_PROJECT_REF` and the job exits with a notice. With a production database, `SUPABASE_PROJECT_REF` and `SUPABASE_DB_URL` (Session pooler, like `supabase-staging`) turn on `supabase db push`, and the job refuses a URL whose user or host is not that project's. Migrations never roll back: on a rollback (the SHA is an ancestor of `production-latest`) the job skips `db push` with a notice, because the database already holds every migration of the older SHA, and the push would fail on the newer ones it does not know.
+- **Vercel builds the promoted commit with production variables**: `vercel pull --environment=production`, `vercel build --prod` and `vercel deploy --prebuilt --prod`, CLI pinned like `preview.yml`. The project's Production Branch is `production`, a frozen branch that only exists for Vercel, so nothing else reaches production. On Hobby, promoting a preview rebuilds it with production variables anyway, so production runs the same commit as staging, not the same build. The job installs dependencies with no cache, since a cache is shared with other workflows' runs.
+- **`inngest` syncs the app with a signed out-of-band `PUT /api/inngest`** at `PRODUCTION_URL`, signed with the production `INNGEST_SIGNING_KEY` the way the SDK signs (HMAC-SHA256 of the empty body plus the timestamp, keyed with the key minus `signkey-<env>-`). The app registers at the URL the request reached, so it is the production domain, never a deployment URL. `enableUnauthedSync` stays off. With the Inngest Vercel integration installed this sync is redundant and harmless.
+- **The smoke test** loads `/login` and expects 401 from an unsigned `GET /api/inngest` (500 is a missing signing key, 200 dev mode). No worker job: jobs run on Inngest.
+- **`production-latest` moves only after the smoke test passes**, through the API (`contents: write` on that job alone), to the exact SHA that was deployed. `detect-changes` diffs against it, so a promotion lists every commit since the last good one and says whether it carries migrations.
+- **What the workflow reads.** Environment `production`: secrets `VERCEL_TOKEN`, `INNGEST_SIGNING_KEY`, and later `SUPABASE_PROJECT_REF` and `SUPABASE_DB_URL`; variable `PRODUCTION_URL` (`https://<host>`, no path). The Vercel team and project ids are not secret and sit in the workflow, as in `preview.yml`. None of them goes in `.env.example`: the app does not read them.
 
 ## 2026-10-13 · Asistente as a page like the reference chat (PLA-136)
 

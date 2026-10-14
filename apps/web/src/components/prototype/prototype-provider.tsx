@@ -9,7 +9,11 @@ import {
   useRef,
 } from "react";
 
-import type { AssistantActions } from "@/lib/assistant/chat";
+import type {
+  AssistantActions,
+  ChartPart,
+  PinResult,
+} from "@/lib/assistant/chat";
 import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
@@ -79,6 +83,10 @@ type Prototype = {
     debts: DebtActions;
     imports: ImportActions & ReviewActions;
     assistant: AssistantActions;
+    pins: {
+      pin: (chart: ChartPart) => Promise<PinResult>;
+      unpin: (id: string) => Promise<boolean>;
+    };
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
     rates: {
       set: (rate: {
@@ -247,6 +255,38 @@ export function PrototypeProvider({
           unit,
           pricedSnapshotOf(latest.current, snapshot).snapshot,
         ).sources,
+    },
+    pins: {
+      // A chart is pinned once: by which chart it is when it says, as the
+      // real app does, or else by what it shows.
+      pin: (chart) =>
+        write((s) => {
+          const key = (each: ChartPart) => JSON.stringify(each.source ?? each);
+          if (s.pinnedCharts.some((each) => key(each.chart) === key(chart))) {
+            return { state: s, result: "already" as const };
+          }
+          if (s.pinnedCharts.length >= 12) {
+            return { state: s, result: "full" as const };
+          }
+          return {
+            state: {
+              ...s,
+              pinnedCharts: [
+                ...s.pinnedCharts,
+                { id: crypto.randomUUID(), chart },
+              ],
+            },
+            result: "pinned" as const,
+          };
+        }),
+      unpin: (id) =>
+        write((s) => ({
+          state: {
+            ...s,
+            pinnedCharts: s.pinnedCharts.filter((each) => each.id !== id),
+          },
+          result: s.pinnedCharts.some((each) => each.id === id),
+        })),
     },
     imports: {
       // Each file is queued, read a moment later and ready after that, as
