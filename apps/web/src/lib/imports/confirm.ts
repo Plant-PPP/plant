@@ -151,6 +151,7 @@ const reviewedRowSchema = z.union([
     symbol: z.string().min(1),
     quantity: positiveDecimalSchema,
     price: nonNegativeDecimalSchema.nullable(),
+    cost: positiveDecimalSchema.nullable().optional(),
     portfolioId: z.string().min(1).optional(),
     transferFrom: z.string().min(1).optional(),
   }),
@@ -269,9 +270,6 @@ export function writeImport<S extends Ledger>(
     }
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
-      if (row.price === null || compareDecimals(row.price, "0") <= 0) {
-        return refuse({ ok: false, code: "invalid" });
-      }
       parts = [{ portfolio_id: destination, quantity: diff }];
     } else {
       let left = difference("0", diff);
@@ -290,6 +288,15 @@ export function writeImport<S extends Ledger>(
       order > 0 &&
       holdingIn(next, account.id, row.symbol, parts[0]!.portfolio_id) ===
         undefined;
+    // A holding that opens comes in at the average cost the review kept, the
+    // whole position's; units added to one already held come in at the price,
+    // as the average of the whole is not theirs, and at the cost only when no
+    // price was kept.
+    const entry =
+      (opens ? (row.cost ?? row.price) : (row.price ?? row.cost)) ?? null;
+    if (order > 0 && (entry === null || compareDecimals(entry, "0") <= 0)) {
+      return refuse({ ok: false, code: "invalid" });
+    }
     const operationId = newId();
     const written = writeOperation(
       next,
@@ -300,7 +307,7 @@ export function writeImport<S extends Ledger>(
         instrument_symbol: row.symbol,
         date,
         currency: instrument.currency,
-        price: order > 0 ? row.price : "0",
+        price: order > 0 ? entry : "0",
         parts,
         charges: [],
         reference: null,

@@ -75,6 +75,9 @@ export type ReviewActions = {
 type EditedRow = ImportRow & {
   quantityText: string;
   priceText: string;
+  // The cost the document printed, as typed; shown only when it printed one.
+  costText: string;
+  printsCost: boolean;
   added: boolean;
 };
 
@@ -88,6 +91,8 @@ const edited = (
   ...row,
   quantityText: amountInput(row.quantity),
   priceText: row.price === null ? "" : quotedInput(row.price, type),
+  costText: row.cost == null ? "" : quotedInput(row.cost, type),
+  printsCost: row.cost != null,
   added,
 });
 
@@ -104,7 +109,7 @@ const CHANGE_TEXT = {
   discarded: "Descartada",
 } as const;
 
-// What picking a row's instrument changes: a price or value printed in
+// What picking a row's instrument changes: a price, value or cost printed in
 // another currency no longer describes the row, so the user types the price.
 export function pickedInstrument(
   printed: ImportRow["currency"],
@@ -115,7 +120,12 @@ export function pickedInstrument(
   return {
     symbol,
     currency,
-    ...(currency !== printed && { value: null, priceText: "" }),
+    ...(currency !== printed && {
+      value: null,
+      priceText: "",
+      costText: "",
+      printsCost: false,
+    }),
   };
 }
 
@@ -172,7 +182,11 @@ export function ImportReview({
       row.priceText.trim() === ""
         ? null
         : typedPrice(row.priceText, types.get(row.symbol));
-    return { row, quantity, price };
+    const cost =
+      row.costText.trim() === ""
+        ? null
+        : typedPrice(row.costText, types.get(row.symbol));
+    return { row, quantity, price, cost };
   });
   // A row that adds units to the account needs their price.
   const addsUnits = (row: EditedRow, quantity: string | null) => {
@@ -185,11 +199,35 @@ export function ImportReview({
   // Units that come from another account carry their cost, so need none.
   const needsPrice = (row: EditedRow, quantity: string | null) =>
     addsUnits(row, quantity) && row.transferFrom === undefined;
-  const priceInvalid = ({ row, quantity, price }: (typeof parsed)[number]) =>
+  // A cost kept is what a new holding comes in at, so its price is not
+  // needed then; units added to one held come in at the price.
+  const opensWithCost = (
+    row: EditedRow,
+    quantity: string | null,
+    cost: string | null,
+  ) =>
+    cost !== null &&
+    rowChange(
+      { quantity: quantity ?? "0", discarded: row.discarded },
+      held.get(row.symbol),
+    ).kind === "new";
+  const costInvalid = ({ row, cost }: (typeof parsed)[number]) =>
+    !row.discarded &&
+    row.costText.trim() !== "" &&
+    (cost === null || exactOf(cost).n === 0n);
+  const priceInvalid = ({
+    row,
+    quantity,
+    price,
+    cost,
+  }: (typeof parsed)[number]) =>
     !row.discarded &&
     (price === null
-      ? row.priceText.trim() !== "" || needsPrice(row, quantity)
-      : exactOf(price).n === 0n && needsPrice(row, quantity));
+      ? row.priceText.trim() !== "" ||
+        (needsPrice(row, quantity) && !opensWithCost(row, quantity, cost))
+      : exactOf(price).n === 0n &&
+        needsPrice(row, quantity) &&
+        !opensWithCost(row, quantity, cost));
   // The instruments the rows kept already list: one row each.
   const listed = (except: string) =>
     new Set(
@@ -204,21 +242,25 @@ export function ImportReview({
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
         !listed(each.row.id).has(each.row.symbol) &&
-        !priceInvalid(each)),
+        !priceInvalid(each) &&
+        !costInvalid(each)),
   );
-  const finalRows: ImportRow[] = parsed.map(({ row, quantity, price }) => ({
-    id: row.id,
-    symbol: row.symbol,
-    quantity: quantity ?? "0",
-    price,
-    value: row.value ?? null,
-    currency: row.currency,
-    confidence: row.confidence,
-    source: row.source,
-    discarded: row.discarded,
-    ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
-    ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
-  }));
+  const finalRows: ImportRow[] = parsed.map(
+    ({ row, quantity, price, cost }) => ({
+      id: row.id,
+      symbol: row.symbol,
+      quantity: quantity ?? "0",
+      price,
+      cost,
+      value: row.value ?? null,
+      currency: row.currency,
+      confidence: row.confidence,
+      source: row.source,
+      discarded: row.discarded,
+      ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
+      ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
+    }),
+  );
   const totals = readTotals(finalRows);
   const matches = totalsMatch(totals, item.documentTotals);
   // What the kept rows' figures fail, as they stand: a corrected row clears.
@@ -524,6 +566,25 @@ export function ImportReview({
                     }
                   />
                 </label>
+                {row.printsCost && (
+                  <label className="grid gap-1 text-xs sm:col-start-3">
+                    <span className="text-muted-foreground">
+                      {type
+                        ? `Costo promedio ${priceBasisLabel(type)} (${row.currency})`
+                        : `Costo promedio (${row.currency})`}
+                    </span>
+                    <Input
+                      value={row.costText}
+                      aria-label={`Costo promedio de la fila ${index + 1}`}
+                      aria-invalid={costInvalid(parsed[index]!) || undefined}
+                      inputMode="decimal"
+                      disabled={row.discarded}
+                      onChange={(event) =>
+                        change(row.id, { costText: event.target.value })
+                      }
+                    />
+                  </label>
+                )}
                 <Button
                   type="button"
                   size="sm"

@@ -146,3 +146,56 @@ it("refuses a statement older than a holding the account already has", () => {
   expect(written.operations).toEqual([]);
   expect(written.state).toBe(opened);
 });
+
+it("opens a holding at the cost the review kept, else at the price", () => {
+  const written = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", "18000"), cost: "12000" }],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const [movement] = [...written.state.movements.values()].flat();
+  expect(movement).toMatchObject({ kind: "opening_balance", price: "12000" });
+  const withoutPrice = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", null), cost: "12000" }],
+    newId,
+  );
+  expect(withoutPrice.result).toEqual({ ok: true, id: "i1" });
+});
+
+it("adds units to a holding already held at the price, not the position's cost", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", "20000"), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+  const last = [...topped.state.movements.values()].flat().at(-1);
+  expect(last).toMatchObject({ kind: "adjustment", price: "20000" });
+});
+
+it("adds units to a held position at the cost when no price was kept", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", null), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+});

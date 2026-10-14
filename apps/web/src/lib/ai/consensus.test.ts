@@ -254,3 +254,19 @@ describe("tiebreakBrief", () => {
     expect(brief).not.toContain("totals");
   });
 });
+
+describe("a holding's cost", () => {
+  it("stands on a disputed row only when two readings print it alike", () => {
+    const first = draft([row("GGAL", "100", { cost: "50" })]);
+    const second = draft([row("GGAL", "1000", { cost: "60" })]);
+    const settled = settle(
+      first,
+      second,
+      draft([row("GGAL", "100", { cost: "50" })]),
+      compareReadings(first, second),
+    );
+    expect(settled.rows[0]).toMatchObject({ quantity: "100", cost: "50" });
+    const lone = settle(first, second, null, compareReadings(first, second));
+    expect(lone.rows[0]).not.toHaveProperty("cost");
+  });
+});

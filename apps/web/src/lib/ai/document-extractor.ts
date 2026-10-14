@@ -79,6 +79,13 @@ const answerSchema = z.object({
           .describe(
             "The row's total value as printed, as a plain decimal with a dot, or null.",
           ),
+        cost: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "The average cost per unit as printed (costo promedio, PPC; a bond's per 100 nominal), as a plain decimal with a dot, or null.",
+          ),
         currency,
         confidence: z.enum(["high", "medium", "low"]),
         page: z.number().int().nullable().describe("1-based page, or null."),
@@ -184,11 +191,14 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
       // A printed value that is not a positive amount is left out, never the
       // row it is on.
       const value = row.value?.trim() || null;
+      const cost = row.cost?.trim() || null;
       const parsed = draftRowSchema.safeParse({
         ...row,
         quantity: row.quantity.trim(),
         price: row.price?.trim() || null,
         value: positiveDecimalSchema.safeParse(value).success ? value : null,
+        ...(cost !== null &&
+          positiveDecimalSchema.safeParse(cost).success && { cost }),
         page: row.page !== null && row.page >= 1 ? row.page : null,
       });
       return parsed.success ? [parsed.data] : [];

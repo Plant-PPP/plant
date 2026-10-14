@@ -78,7 +78,7 @@ it("asks where a new instrument goes, and whether it comes from another account"
   expect(html).not.toContain('aria-label="Cartera de la fila 2"');
 });
 
-it("clears a price printed in another currency when the row's instrument is picked", () => {
+it("clears a price and cost printed in another currency when the row's instrument is picked", () => {
   const instruments = [
     { symbol: "AAPL", currency: "ARS" as const },
     { symbol: "BTC", currency: "USD" as const },
@@ -88,6 +88,8 @@ it("clears a price printed in another currency when the row's instrument is pick
     currency: "ARS",
     value: null,
     priceText: "",
+    costText: "",
+    printsCost: false,
   });
   expect(pickedInstrument("USD", "BTC", instruments)).toEqual({
     symbol: "BTC",
@@ -107,4 +109,34 @@ it("says how many holdings of a spreadsheet were left out", () => {
   expect(html(0)).not.toContain("no se pud");
   expect(html(1)).toContain("Una fila de la planilla no se pudo leer");
   expect(html(3)).toContain("3 filas de la planilla no se pudieron leer");
+});
+
+it("shows the average cost a document printed, for the units to come in at", () => {
+  const html = render(undefined, {
+    ...ITEM,
+    rows: [{ ...ITEM.rows[0]!, cost: "12000" }],
+  });
+  expect(html).toContain("Costo promedio");
+});
+
+it("still asks for the price of units added to a holding already held", () => {
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        rows: [{ ...ITEM.rows[0]!, symbol: "GD30", price: null, cost: "60" }],
+      }}
+      institution="Cocos"
+      instruments={[
+        { symbol: "GD30", name: "Global 2030", currency: "USD", type: "bond" },
+      ]}
+      held={new Map([["GD30", "1"]])}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).toMatch(
+    /aria-label="Precio de la fila 1"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*aria-label="Precio de la fila 1"/,
+  );
 });

@@ -81,10 +81,13 @@ export function compareReadings(
     const x = a.get(key);
     const y = b.get(key);
     if (x && y && !unsettled.has(instrumentOf(key))) {
+      // A cost the readings differ on is left out, not voted on.
+      const { cost, ...rest } = x;
       agreed.set(key, {
-        ...x,
+        ...rest,
         confidence: lowerConfidence(x.confidence, y.confidence),
         page: x.page ?? y.page,
+        ...(cost != null && sameDecimal(cost, y.cost ?? null) && { cost }),
       });
     } else {
       rows.push(key);
@@ -160,9 +163,17 @@ export function settle(
       }),
     ) as Pick<DraftRow, Figure>;
     if (figures.quantity === null) continue;
+    // A cost stands only when two readings print the same one.
+    const cost = majority(
+      listed.flatMap((row) => (row.cost != null ? [row.cost] : [])),
+      sameDecimal,
+    )?.value;
+    const baseFields = { ...base };
+    delete baseFields.cost;
     settled.set(key, {
-      ...base,
+      ...baseFields,
       ...figures,
+      ...(cost !== undefined && { cost }),
       quantity: figures.quantity,
       // A row one reader missed may be another's line under a different
       // name, so it is for the user to check too.

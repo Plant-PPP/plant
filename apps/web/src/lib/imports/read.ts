@@ -1,11 +1,21 @@
 import "server-only";
 import {
+  type InstrumentType,
+  quotedPrice,
   normalizeSymbol,
   instrumentIndex,
   resolveSymbol,
   unitPrice,
 } from "@plant/core";
-import { buenosAiresDate, Constants, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  compareExact,
+  Constants,
+  type Database,
+  exactOf,
+  over,
+  stored,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -89,6 +99,7 @@ const itemSchema = z.object({
   quantity: z.string(),
   price: z.string().nullable(),
   value: z.string().nullable(),
+  cost: z.string().nullable().optional(),
   currency: z.enum(Constants.public.Enums.currency),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
@@ -159,6 +170,35 @@ const totalsSchema = z.object({
   skipped_rows: z.number().int().nonnegative(),
 });
 
+// Whether a printed cost reads as one unit's: within ten times either way of
+// the price or of the value per unit, when the row prints either. A column
+// of total costs taken for unit costs is left out rather than proposed.
+function isUnitCost(
+  row: z.infer<typeof itemSchema>,
+  type: InstrumentType | undefined,
+): boolean {
+  const cost = exactOf(row.cost!);
+  // The printed cost and price are on the quote's basis (a bond's per 100);
+  // the value per unit is on one unit's.
+  const perUnit =
+    row.price !== null
+      ? exactOf(row.price)
+      : row.value !== null
+        ? exactOf(
+            quotedPrice(
+              type ?? "cedear",
+              stored(over(exactOf(row.value), exactOf(row.quantity))),
+            ),
+          )
+        : null;
+  if (perUnit === null) return true;
+  const ratio = over(cost, perUnit);
+  return (
+    compareExact(ratio, exactOf("0.1")) >= 0 &&
+    compareExact(ratio, exactOf("10")) <= 0
+  );
+}
+
 // A draft row as the review edits it. An instrument Plant knows keeps its
 // symbol and its price per unit (a bond's document prints it per 100); one it
 // does not know is left for the user to choose, with what the document named.
@@ -191,6 +231,11 @@ function reviewRow(
           ? unitPrice(known.type, row.price)
           : row.price,
     value: sameCurrency ? row.value : null,
+    ...(row.cost != null &&
+      sameCurrency &&
+      isUnitCost(row, known?.type) && {
+        cost: known ? unitPrice(known.type, row.cost) : row.cost,
+      }),
     currency: known?.instrumentCurrency ?? row.currency,
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || "Del documento",
@@ -218,7 +263,7 @@ export async function readImportForReview(
     client
       .from("import_items")
       .select(
-        "id, symbol, quantity:quantity::text, price:price::text, value:value::text, " +
+        "id, symbol, quantity:quantity::text, price:price::text, value:value::text, cost:cost::text, " +
           "currency, confidence, source_page",
       )
       .eq("import_id", id)
