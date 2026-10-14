@@ -177,6 +177,8 @@ function accountRow(
     institution: parsed.data.institution,
     includeInTaxReport: parsed.data.includeInTaxReport,
     portfolio: { ...portfolio, archived: false },
+    ...(parsed.data.website != null && { website: parsed.data.website }),
+    ...(parsed.data.icon != null && { icon: parsed.data.icon }),
   };
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { AccountsSetup } from "@/components/portfolio-setup/accounts-setup";
+import type { IconResult } from "@/lib/institutions/read-icon";
 import type { ListView } from "@/lib/portfolio-setup/read";
 
 import { deletableRows } from "./prototype-accounts-store";
@@ -15,14 +16,20 @@ const view = <Row,>(active: Row[], archived: Row[]): ListView<Row> => ({
   archivedNextHref: null,
 });
 
-export function PrototypeAccounts() {
+// `readIcon` is the real reading: an icon comes from the site, not the
+// prototype.
+export function PrototypeAccounts({
+  readIcon,
+}: {
+  readIcon?: (site: string) => Promise<IconResult>;
+}) {
   const { state, actions } = usePrototype();
   return (
     <AccountsSetup
       sourceConnections={view(state.accounts, state.archivedAccounts)}
       portfolios={view(state.portfolios, state.archivedPortfolios)}
       actions={{
-        sourceConnections: actions.sourceConnections,
+        sourceConnections: { ...actions.sourceConnections, readIcon },
         portfolios: actions.portfolios,
       }}
       deletable={deletableRows(state)}

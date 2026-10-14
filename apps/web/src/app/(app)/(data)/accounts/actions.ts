@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  type IconResult,
+  readInstitutionIcon as readIcon,
+} from "@/lib/institutions/read-icon";
 import { removeAccountUploads } from "@/lib/portfolio-setup/account-uploads";
 import {
   activeWrite,
@@ -103,7 +107,14 @@ function sourceConnectionRow(input: SourceConnectionInput) {
     institution: input.institution,
     include_in_tax_report: input.includeInTaxReport,
     default_portfolio_id: input.defaultPortfolioId,
+    ...(input.website !== undefined && { website: input.website }),
+    ...(input.icon !== undefined && { icon: input.icon }),
   };
+}
+
+// The icon of the site the user gives for an account's institution.
+export async function readInstitutionIcon(site: unknown): Promise<IconResult> {
+  return readIcon(site);
 }
 
 export async function createSourceConnection(

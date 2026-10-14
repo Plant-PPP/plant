@@ -162,6 +162,42 @@ describe("sourceConnectionInputSchema", () => {
     ).not.toHaveProperty("holder");
   });
 
+  // The first bytes of a PNG, base64.
+  const PNG_ICON = "data:image/png;base64,iVBORw0KGgoAAAAN";
+
+  test("keeps a site and the image icon read from it", () => {
+    const parsed = sourceConnectionInputSchema.parse({
+      ...valid,
+      website: "https://bancouno.com.ar/",
+      icon: PNG_ICON,
+    });
+    expect(parsed.website).toBe("https://bancouno.com.ar/");
+    expect(parsed.icon).toBe(PNG_ICON);
+  });
+
+  test.each([
+    ["a site that is not https", { website: "http://bancouno.com.ar/" }],
+    ["an icon with no site", { icon: PNG_ICON }],
+    [
+      "an icon that is not an image Plant shows",
+      {
+        website: "https://bancouno.com.ar/",
+        icon: "data:image/svg+xml;base64,PHN2Zz4=",
+      },
+    ],
+    [
+      "an icon whose bytes are not the image it names",
+      {
+        website: "https://bancouno.com.ar/",
+        icon: "data:image/png;base64,PHN2Zz4=",
+      },
+    ],
+  ])("refuses %s", (_name, extra) => {
+    expect(
+      sourceConnectionInputSchema.safeParse({ ...valid, ...extra }).success,
+    ).toBe(false);
+  });
+
   test.each([
     ["no portfolio", { defaultPortfolioId: undefined }],
     ["a portfolio that is not an id", { defaultPortfolioId: "Principal" }],

@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · An account's icon from its site (PLA-102)
+
+- **An institution the app ships no icon of may take its site**, an optional "Sitio web" under "Otra". Plant's server reads the site's icon once, as the account is saved, so no outside service learns which institutions a user has; with no site, or none read, the account shows its initial.
+- **The icon is stored with the account, as a data URL of at most 64 KiB in `source_connections.icon`, not in Storage**: the page already reads the account, the CSP already admits `data:` images, and no bucket, service role or serving route is needed. The CHECK holds its shape and the server checks its bytes are the image it names; SVG is never kept, as it may carry script.
+- **The read is fenced against SSRF**: https only, every address the host resolves to public (private, loopback, link-local, shared, documentation, multicast and reserved ranges, IPv4 mapped into IPv6 included), the default port only, at most three redirects each checked again, 5 seconds per request and 15 for the whole read, a page cut at 512 KiB and an icon refused past 64 KiB, and only bytes that start as PNG, ICO, JPEG, GIF or WebP. A host that answers the check with a public address and the connection with a private one (DNS rebinding) is not stopped: fetch does not take the address checked.
+- **A site that is private or gives no image refuses the save** with why, and the dialog stays open; the same site again keeps the icon read before.
+
 ## 2026-10-14 · Debts from a card statement (PLA-78)
 
 - **A document both readers call a card statement is read as its debts**: one per currency it bills in, with the card's name, its bank, the statement's balance, the minimum payment and the due date, in a new `import_debts` draft. A figure or date the two readings disagree on is left null and the debt marked low, with no tiebreak; a debt only one lists is kept, low. Its holdings, if a reader listed any, are dropped.

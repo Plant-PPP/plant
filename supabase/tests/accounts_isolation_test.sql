@@ -92,9 +92,10 @@ SELECT set_eq(
   $$ SELECT pg_temp.acl('public.source_connections') $$,
   ARRAY['(table):SELECT', '(table):DELETE',
         'institution:INSERT', 'include_in_tax_report:INSERT',
-        'default_portfolio_id:INSERT',
+        'default_portfolio_id:INSERT', 'website:INSERT', 'icon:INSERT',
         'institution:UPDATE', 'include_in_tax_report:UPDATE',
-        'default_portfolio_id:UPDATE', 'archived_at:UPDATE'],
+        'default_portfolio_id:UPDATE', 'archived_at:UPDATE',
+        'website:UPDATE', 'icon:UPDATE'],
   'a user reads and deletes accounts and writes only their fields and the archive flag'
 );
 
@@ -152,8 +153,10 @@ SELECT set_eq(
        AND contype IN ('c', 'u', 'f') AND conname NOT LIKE '%user_id_fkey' $$,
   ARRAY['source_connections CHECK ((((char_length(institution) >= 1) AND (char_length(institution) <= 60)) AND (institution = btrim(institution))))',
         'source_connections UNIQUE (user_id, id)',
-        'source_connections FOREIGN KEY (user_id, default_portfolio_id) REFERENCES portfolios(user_id, id)'],
-  'an institution is bounded with no outer spaces, and an account points only at its user''s portfolio'
+        'source_connections FOREIGN KEY (user_id, default_portfolio_id) REFERENCES portfolios(user_id, id)',
+        'source_connections CHECK ((((char_length(website) >= 9) AND (char_length(website) <= 200)) AND (website ~ ''^https://[^\s]+$''::text)))',
+        'source_connections CHECK (((char_length(icon) <= 87500) AND (icon ~ ''^data:image/(png|x-icon|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$''::text)))'],
+  'an institution is bounded with no outer spaces, a site is https, an icon is an image''s data URL, and an account points only at its user''s portfolio'
 );
 
 -- ── The lock ────────────────────────────────────────────────────────────────

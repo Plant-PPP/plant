@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { isStoredIcon } from "@/lib/institutions/icon-data";
 import { NAME_LIMITS } from "./limits";
 import { normalizeName } from "./normalize-name";
 
@@ -50,10 +52,28 @@ export const idSchema = z.uuid();
 // The input of a write that takes none, such as an archive.
 export const noInput = z.object({});
 
-export const sourceConnectionInputSchema = z.object({
-  institution: trimmedName(NAME_LIMITS.source_connections.institution),
-  includeInTaxReport: z.boolean(),
-  defaultPortfolioId: idSchema,
-});
+// An account's site, https only, and its icon as Plant's server read it; both
+// null for an institution the app ships an icon of. Left out, neither changes.
+export const sourceConnectionInputSchema = z
+  .object({
+    institution: trimmedName(NAME_LIMITS.source_connections.institution),
+    includeInTaxReport: z.boolean(),
+    defaultPortfolioId: idSchema,
+    website: z
+      .string()
+      .max(NAME_LIMITS.source_connections.website)
+      .regex(/^https:\/\/\S+$/)
+      .nullable()
+      .optional(),
+    icon: z
+      .string()
+      .max(NAME_LIMITS.source_connections.icon)
+      .refine(isStoredIcon)
+      .nullable()
+      .optional(),
+  })
+  .refine((input) => input.icon == null || input.website != null, {
+    path: ["icon"],
+  });
 
 export type SourceConnectionInput = z.infer<typeof sourceConnectionInputSchema>;

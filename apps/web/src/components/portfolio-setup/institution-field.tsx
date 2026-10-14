@@ -170,8 +170,27 @@ export function InstitutionField({
   );
 }
 
-// A listed institution's icon, or its initial for any other name.
-export function InstitutionIcon({ name }: { name: string }) {
+// A listed institution's icon, the icon read from the site the user gave for
+// any other, or else its initial.
+export function InstitutionIcon({
+  name,
+  icon,
+}: {
+  name: string;
+  icon?: string | null;
+}) {
+  if (!isInstitution(name) && icon) {
+    return (
+      <Image
+        src={icon}
+        alt=""
+        width={16}
+        height={16}
+        unoptimized
+        className="size-4 shrink-0 rounded-sm object-contain"
+      />
+    );
+  }
   if (isInstitution(name)) {
     return (
       <Image

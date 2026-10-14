@@ -271,7 +271,7 @@ it("reads accounts with their portfolio", async () => {
   });
   expect(calls[0]![0]).toEqual([
     "select",
-    "id, institution, include_in_tax_report, " +
+    "id, institution, include_in_tax_report, website, icon, " +
       "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
   ]);
   expect(view.active).toEqual([

@@ -1,10 +1,10 @@
 import type { RouteHref } from "@/lib/navigation";
 
-// The longest name each table's CHECK accepts, pinned to the migrations by
-// limits.test.ts.
+// The longest text each table's CHECK accepts, pinned to the migrations by
+// limits.test.ts: names, an account's site and its icon's data URL.
 export const NAME_LIMITS = {
   portfolios: { name: 40 },
-  source_connections: { institution: 60 },
+  source_connections: { institution: 60, website: 200, icon: 87500 },
   holdings: { label: 80 },
 } as const;
 
