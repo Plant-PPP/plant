@@ -1,6 +1,7 @@
 import "server-only";
 import { isIP } from "node:net";
 
+import { readCappedBytes } from "@plant/shared";
 import { Agent, fetch as undiciFetch } from "undici";
 
 import { ICON_MAX_BYTES, imageType } from "./icon-data";
@@ -266,43 +267,6 @@ export function iconLinks(html: string, base: URL): URL[] {
   return links;
 }
 
-// The body up to `cap` bytes: past it, a page is cut there, since its icon
-// links come first, and an icon fails.
-async function readCapped(
-  response: Response,
-  cap: number,
-  over: "cut" | "fail",
-): Promise<Uint8Array> {
-  const declared = Number(response.headers.get("content-length"));
-  if (over === "fail" && Number.isFinite(declared) && declared > cap) {
-    throw new FaviconError("too_large");
-  }
-  if (!response.body) return new Uint8Array();
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (size + value.byteLength > cap) {
-      await reader.cancel();
-      if (over === "fail") throw new FaviconError("too_large");
-      chunks.push(value.subarray(0, cap - size));
-      size = cap;
-      break;
-    }
-    size += value.byteLength;
-    chunks.push(value);
-  }
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.byteLength;
-  }
-  return out;
-}
-
 // A promise that rejects once the read's deadline passes.
 function beforeDeadline<T>(promise: Promise<T>, deadline: AbortSignal) {
   return new Promise<T>((resolve, reject) => {
@@ -341,7 +305,8 @@ async function checkHost(url: URL, deps: FaviconDeps, deadline: AbortSignal) {
 }
 
 // A GET of a public https URL, following up to MAX_REDIRECTS redirects, each
-// checked again; the body read up to `cap` bytes.
+// checked again; the body read up to `cap` bytes. Past it, a page is cut
+// there, since its icon links come first, and an icon fails.
 async function getPublic(
   start: URL,
   cap: number,
@@ -380,13 +345,13 @@ async function getPublic(
       await response.body?.cancel();
       throw new FaviconError("unreachable");
     }
-    let bytes: Uint8Array;
+    let bytes: Uint8Array | null;
     try {
-      bytes = await readCapped(response, cap, over);
-    } catch (error) {
-      if (error instanceof FaviconError) throw error;
+      bytes = await readCappedBytes(response, cap, { over });
+    } catch {
       throw new FaviconError("unreachable");
     }
+    if (bytes === null) throw new FaviconError("too_large");
     return {
       url,
       type: response.headers.get("content-type") ?? "",

@@ -346,15 +346,16 @@ async function startJob(
   }
 }
 
-// The days a sync of operations reads; a null end leaves it open.
+// The days a sync of operations reads; a null end leaves it open. The
+// imports_sync_period constraint holds the same bounds.
+const periodDay = z.iso
+  .date()
+  .refine((day) => day >= "2000-01-01")
+  .nullable();
 const periodSchema = z
-  .object({ from: z.iso.date().nullable(), to: z.iso.date().nullable() })
+  .object({ from: periodDay, to: periodDay })
   .strict()
-  .refine(
-    ({ from, to }) =>
-      (from === null || from >= "2000-01-01") &&
-      (from === null || to === null || from <= to),
-  );
+  .refine(({ from, to }) => from === null || to === null || from <= to);
 
 // The account's sync still in flight, if any: queued (its job may never have
 // started) or being read, with the draft and the days it reads.

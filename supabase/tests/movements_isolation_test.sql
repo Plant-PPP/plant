@@ -318,6 +318,10 @@ SELECT is(
 INSERT INTO ops VALUES ('own', public.write_operation(
   NULL, jsonb_build_array(pg_temp.trade('purchase', '3', '2026-02-02')), '{}'::jsonb));
 
+-- Checked as write_operation's inserts meet them.
+SAVEPOINT table_rules;
+SELECT set_config('plant.write_operation', 'on', true);
+
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
                                                     currency, quantity, amount, rates)
@@ -378,6 +382,7 @@ SELECT is(
   '23503 -',
   'a movement cannot go into another user''s holding'
 );
+ROLLBACK TO SAVEPOINT table_rules;
 
 SELECT results_eq(
   $$ SELECT DISTINCT user_id FROM public.movements
@@ -506,11 +511,10 @@ SELECT is(
 );
 ROLLBACK TO SAVEPOINT sold_out;
 
--- Outside write_operation a user writes no operation or movement. Every
--- earlier write_operation call marked this transaction, so the mark is
--- cleared first, as a new request starts without it.
+-- Outside write_operation a user writes no operation or movement, even in
+-- the transaction of earlier write_operation calls (a GraphQL request runs
+-- as one).
 SAVEPOINT direct;
-SELECT set_config('plant.write_operation', '', true);
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.movements (holding_id, operation_id, entry_order, kind, date,
@@ -566,6 +570,7 @@ SELECT is(
 );
 
 SAVEPOINT goes_last;
+SELECT set_config('plant.write_operation', 'on', true);
 SELECT lives_ok(
   $$ UPDATE public.operations
      SET entry_order = (SELECT max(o.entry_order) + 1 FROM public.operations o)
