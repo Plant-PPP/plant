@@ -1050,20 +1050,16 @@ export function AssetsSetup({
                 : "Todavía no cargaste tenencias"
             }
             actions={
-              accounts.length === 0 ? (
+              accounts.length === 0 && (
                 <PageButton asChild variant="default">
                   <Link href="/accounts">Agregar una cuenta</Link>
-                </PageButton>
-              ) : (
-                <PageButton asChild>
-                  <Link href="/import">Cargar un resumen</Link>
                 </PageButton>
               )
             }
           >
             {accounts.length === 0
               ? "Tus tenencias viven en las cuentas de tus brokers y bancos. Agregá la primera para empezar."
-              : "Subí el resumen de tu broker y las armamos solas, o agregalas a mano."}
+              : "Agregá tu primera tenencia, o subí el resumen de tu broker en Cargar y las armamos solas."}
           </EmptyState>
         ) : (
           <>

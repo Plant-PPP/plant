@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   type Denominator,
   type LiabilitiesValue,
@@ -57,7 +56,6 @@ import {
   toLiabilityInput,
   unitOf,
 } from "./debt-fields";
-import { PageButton } from "@/components/ui/page-button";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 export type DebtActions = {
@@ -305,12 +303,7 @@ export function DebtsSetup({
           view={shown}
           title="Deudas"
           emptyText="Todavía no cargaste deudas"
-          emptyDescription="Préstamos, hipotecas, tarjetas o lo que le debas a alguien: subí el resumen o agregalas a mano."
-          emptyActions={
-            <PageButton asChild>
-              <Link href="/import">Cargar un resumen</Link>
-            </PageButton>
-          }
+          emptyDescription="Agregá tu primera deuda: un préstamo, una hipoteca, una tarjeta o lo que le debas a alguien."
           truncatedText=""
           columns={columns}
         />
