@@ -33,10 +33,13 @@ export interface ImportStorePort {
   reading(importId: string, userId: string): Promise<void>;
   // The institution of the account the import's file was uploaded to.
   institution(importId: string, userId: string): Promise<string>;
+  // `skippedRows` are the holdings the reading left out, for the review to
+  // say.
   saveDraft(
     importId: string,
     userId: string,
     draft: ImportDraft,
+    skippedRows: number,
   ): Promise<void>;
   failed(
     importId: string,
@@ -156,7 +159,7 @@ export async function runImportDocument(
         if (draft.rows.length === 0) {
           throw new SourceError("nothing_found", false);
         }
-        await deps.store.saveDraft(importId, userId, draft);
+        await deps.store.saveDraft(importId, userId, draft, read.skippedRows);
         return { rows: draft.rows.length, ...read };
       } catch (error) {
         if (error instanceof SourceError && !error.retryable) {

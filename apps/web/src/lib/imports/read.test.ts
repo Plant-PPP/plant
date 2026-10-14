@@ -48,6 +48,7 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
         error: null,
         documentDate: null,
         documentTotals: [],
+        skippedRows: 0,
         rows: [],
         createdOn: "2026-09-30",
       },
@@ -134,6 +135,7 @@ describe("readImportForReview", () => {
     created_at: "2026-10-12T15:00:00+00:00",
     printed_total_ars: "90000.00",
     printed_total_usd: null,
+    skipped_rows: 0,
     document: { file_name: "resumen.pdf", source_connection_id: "a1" },
   };
   const item = (patch: Record<string, unknown>) => ({

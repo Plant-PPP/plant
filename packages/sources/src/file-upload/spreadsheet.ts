@@ -325,7 +325,15 @@ export function sheetToDraft(
     ) {
       documentDate = date;
     }
-    if (rows.length === DRAFT_ROW_LIMIT) continue;
+    // A row with a symbol and a quantity is a holding; one without either is
+    // a section's title or a total.
+    const holding =
+      String(cellOf(row, mapping.symbol)).trim() !== "" &&
+      String(cellOf(row, mapping.quantity)).trim() !== "";
+    if (rows.length === DRAFT_ROW_LIMIT) {
+      if (holding) skippedRows += 1;
+      continue;
+    }
     const figures = figureHeaders.map((header) => cellOf(row, header));
     const parsed = draftRowSchema.safeParse({
       symbol: String(cellOf(row, mapping.symbol)),
@@ -342,11 +350,7 @@ export function sheetToDraft(
       page: null,
     });
     if (parsed.success) rows.push(parsed.data);
-    // A row with a quantity that does not read is a holding left out; one
-    // without, a section's title or a total.
-    else if (String(cellOf(row, mapping.quantity)).trim() !== "") {
-      skippedRows += 1;
-    }
+    else if (holding) skippedRows += 1;
   }
   return { draft: { documentDate, rows, totals: [] }, skippedRows };
 }

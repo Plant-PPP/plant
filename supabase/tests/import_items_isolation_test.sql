@@ -87,7 +87,7 @@ SELECT set_eq(
         'imports.id:SELECT', 'imports.user_id:SELECT', 'imports.document_id:SELECT',
         'imports.status:SELECT', 'imports.status:UPDATE', 'imports.failure:UPDATE',
         'imports.document_date:UPDATE', 'imports.printed_total_ars:UPDATE',
-        'imports.printed_total_usd:UPDATE',
+        'imports.printed_total_usd:UPDATE', 'imports.skipped_rows:UPDATE',
         'uploaded_documents.id:SELECT', 'uploaded_documents.user_id:SELECT',
         'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT',
         'uploaded_documents.delete_after:SELECT', 'uploaded_documents.file_deleted_at:SELECT',
