@@ -94,7 +94,9 @@ it("fades an account the server has not confirmed yet", () => {
   expect(unsaved).toMatch(
     /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="c1"[^>]*aria-busy="true"/,
   );
-  expect(unsaved).toMatch(/<tr[^>]*class="border-b" data-row-id="c2">/);
+  expect(unsaved).toMatch(
+    /<tr[^>]*class="[^"]*border-b[^"]*" data-row-id="c2">/,
+  );
 });
 
 it("passes the page's pending to its archived list", () => {

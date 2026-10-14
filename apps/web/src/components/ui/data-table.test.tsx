@@ -102,10 +102,10 @@ it("fades an unsaved row and marks it busy", () => {
     [{ id: "n", name: "Nueva", unsaved: true }, rows[0]!],
   );
   expect(html).toContain(
-    '<tr data-slot="table-row" class="border-b opacity-60" data-row-id="n" aria-busy="true">',
+    '<tr data-slot="table-row" class="hover:bg-muted/50 border-b transition-colors opacity-60" data-row-id="n" aria-busy="true">',
   );
   expect(html).toContain(
-    '<tr data-slot="table-row" class="border-b" data-row-id="a">',
+    '<tr data-slot="table-row" class="hover:bg-muted/50 border-b transition-colors" data-row-id="a">',
   );
 });
 

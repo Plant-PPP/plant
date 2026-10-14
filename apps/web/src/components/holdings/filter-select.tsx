@@ -44,7 +44,7 @@ export function FilterSelect({
       <Select disabled={pending} value={value} onValueChange={choose(onChange)}>
         <SelectTrigger
           id={id}
-          size="sm"
+          size="xs"
           className={cn("w-[calc(50%-0.25rem)] sm:w-auto", triggerClassName)}
         >
           {shownLabel && (

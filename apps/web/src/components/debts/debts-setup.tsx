@@ -11,12 +11,10 @@ import { useId, useState } from "react";
 
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { UnitSelect } from "@/components/holdings/filter-select";
-import { MepNotice } from "@/components/holdings/mep-notice";
 import {
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
-  SummaryTile,
   VALUE_CELL,
 } from "@/components/holdings/sum-text";
 import {
@@ -58,6 +56,7 @@ import {
   toLiabilityInput,
   unitOf,
 } from "./debt-fields";
+import { StatTile } from "@/components/ui/stat-tile";
 
 export type DebtActions = {
   create: (input: unknown) => Promise<WriteResult>;
@@ -255,9 +254,8 @@ export function DebtsSetup({
           onChange={(param) => url.set("unit", param)}
         />
       </div>
-      <MepNotice unit={unit} />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile
+        <StatTile
           label="Total"
           note={
             valued.complete ? undefined : "Alguna deuda no tiene cotización"
@@ -266,12 +264,12 @@ export function DebtsSetup({
           <span className={pending ? "opacity-60" : undefined}>
             {formatAmount(valued.total, unit)}
           </span>
-        </SummaryTile>
-        <SummaryTile label="Deudas">{shown.active.length}</SummaryTile>
-        <SummaryTile label="Con cuota" note="Pagás cuota todos los meses">
+        </StatTile>
+        <StatTile label="Deudas">{shown.active.length}</StatTile>
+        <StatTile label="Con cuota" note="Pagás cuota todos los meses">
           {monthly.length}
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Próximo vencimiento"
           note={
             shown.active
@@ -287,7 +285,7 @@ export function DebtsSetup({
               .sort()[0];
             return next ? formatDate(next) : <MissingFigure text="Ninguno" />;
           })()}
-        </SummaryTile>
+        </StatTile>
       </dl>
       <SetupCard
         heading={card.heading}

@@ -13,7 +13,8 @@ import type {
 } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
-import { PendingSum, ShareText, SummaryTile } from "./sum-text";
+import { PendingSum, ShareText } from "./sum-text";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 const KINDS: { kind: HoldingKind | "total"; label: string }[] = [
   { kind: "total", label: "Total" },
@@ -45,10 +46,13 @@ export function AssetsSummary({
   valuation: { kinds, classes },
   unit,
   pending,
+  totalLabel = "Total",
 }: {
   valuation: Pick<HoldingsValuation, "kinds" | "classes">;
   unit: Denominator;
   pending: boolean;
+  // The total tile's label: "Activos" where a net worth is shown beside it.
+  totalLabel?: string;
 }) {
   const parts = (Object.keys(CLASS_COLORS) as HoldingClass[])
     .flatMap((holdingClass) => {
@@ -68,11 +72,11 @@ export function AssetsSummary({
 
   return (
     <div className="grid gap-4">
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatGrid>
         {KINDS.map(({ kind, label }) => (
-          <SummaryTile
+          <StatTile
             key={kind}
-            label={label}
+            label={kind === "total" ? totalLabel : label}
             note={
               kind === "total" ? (
                 `Valuado en ${unitName(unit)}${
@@ -89,9 +93,9 @@ export function AssetsSummary({
             }
           >
             <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
-          </SummaryTile>
+          </StatTile>
         ))}
-      </dl>
+      </StatGrid>
       {parts.length > 0 && (
         <figure className="m-0 grid gap-2">
           <div

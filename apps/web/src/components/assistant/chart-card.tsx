@@ -63,8 +63,17 @@ const PIN_MESSAGES = {
 } as const;
 
 // An answer's chart: its title, the day and unit of its data, and actions to
-// see it larger, save it as a CSV or an image, or pin it to Resumen.
-export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
+// see it larger, save it as a CSV or an image, or pin it to Resumen, followed
+// by any the caller adds (Resumen's unpin).
+export function ChartCard({
+  chart,
+  asOf,
+  actions,
+}: {
+  chart: ChartPart;
+  asOf: string;
+  actions?: ReactNode;
+}) {
   const [expanded, setExpanded] = useState(false);
   const pin = usePin();
   const [pinning, setPinning] = useState(false);
@@ -116,6 +125,7 @@ export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
                 } else toast.error(PIN_MESSAGES[result]);
               });
             })}
+          {actions}
         </div>
       </div>
       <ChartBody chart={chart} />

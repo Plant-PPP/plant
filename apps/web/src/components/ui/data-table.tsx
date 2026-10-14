@@ -89,7 +89,10 @@ function DataTable<T extends DataTableRow>({
       : "collapse border-b-0!";
 
   return (
-    <div data-slot="data-table" className="@container rounded-md border">
+    <div
+      data-slot="data-table"
+      className="@container overflow-hidden rounded-lg border"
+    >
       <Table className="table-fixed">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>

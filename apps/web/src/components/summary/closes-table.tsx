@@ -9,6 +9,7 @@ import {
   NUMBER_CELL,
   VALUE_CELL,
 } from "@/components/holdings/sum-text";
+import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { type MonthClose, monthOf, type YearClose } from "@/lib/summary/closes";
@@ -19,11 +20,7 @@ type Row = MonthClose & { id: string };
 
 // A close that left something out, as its detail explains.
 function PartialMark() {
-  return (
-    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
-      Parcial
-    </span>
-  );
+  return <Badge>Parcial</Badge>;
 }
 
 // A year's monthly closes, newest first, with the year's sum as the footer.

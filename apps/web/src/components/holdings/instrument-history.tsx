@@ -70,8 +70,8 @@ import {
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
-  SummaryTile,
 } from "./sum-text";
+import { StatTile } from "@/components/ui/stat-tile";
 
 type Row = ShownInstrumentHolding & { id: string };
 
@@ -372,13 +372,13 @@ export function InstrumentHistory({
             aria-busy={pending || undefined}
           >
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <SummaryTile
+              <StatTile
                 label="Valor actual"
                 note={`${formatQuantity(summary.quantity)} ${instrument.symbol}`}
               >
                 {money(summary.value, unit)}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="Resultado total"
                 note={
                   returns?.share == null
@@ -394,8 +394,8 @@ export function InstrumentHistory({
                 ) : (
                   <MissingFigure text="Sin resultado" />
                 )}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="Rendimiento anual (TIR)"
                 note={
                   returns && returns.annual === null
@@ -408,27 +408,25 @@ export function InstrumentHistory({
                 ) : (
                   <MissingFigure text="Sin rendimiento anual" />
                 )}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="G/P no realizada"
                 note="De lo que tenés hoy, sobre su costo"
               >
                 <GainLossText gain={summary.unrealized} unit={unit} />
-              </SummaryTile>
+              </StatTile>
             </dl>
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <SummaryTile label="Costo de lo que tenés">
+              <StatTile label="Costo de lo que tenés">
                 {money(summary.cost, unit)}
-              </SummaryTile>
-              <SummaryTile label="Resultado realizado">
+              </StatTile>
+              <StatTile label="Resultado realizado">
                 {money(summary.realized, unit)}
-              </SummaryTile>
-              <SummaryTile label="Dividendos, cupones y rendimientos">
+              </StatTile>
+              <StatTile label="Dividendos, cupones y rendimientos">
                 {money(summary.income, unit)}
-              </SummaryTile>
-              <SummaryTile label="Gastos">
-                {money(summary.charges, unit)}
-              </SummaryTile>
+              </StatTile>
+              <StatTile label="Gastos">{money(summary.charges, unit)}</StatTile>
             </dl>
             {returns && (
               <p className="text-muted-foreground text-xs">

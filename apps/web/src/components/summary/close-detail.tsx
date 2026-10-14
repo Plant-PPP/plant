@@ -6,11 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import {
-  AmountText,
-  NUMBER_CELL,
-  SummaryTile,
-} from "@/components/holdings/sum-text";
+import { AmountText, NUMBER_CELL } from "@/components/holdings/sum-text";
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -28,6 +24,7 @@ import { type Benchmarks, beyond } from "@/lib/summary/benchmarks";
 
 import { ClosesTable } from "./closes-table";
 import { CloseStatus, ResultText, ShareText } from "./figures";
+import { StatTile } from "@/components/ui/stat-tile";
 
 type Figures = YearClose["totals"];
 
@@ -75,13 +72,13 @@ function CloseFigures({
   return (
     <div className="grid gap-3">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Patrimonio neto al inicio">
+        <StatTile label="Patrimonio neto al inicio">
           <AmountText amount={figures.startValue} unit={unit} />
-        </SummaryTile>
-        <SummaryTile label="Patrimonio neto al final">
+        </StatTile>
+        <StatTile label="Patrimonio neto al final">
           <AmountText amount={figures.endValue} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Resultado"
           note="Mercado más rentas menos gastos; el % no cuenta lo que pusiste"
         >
@@ -90,42 +87,42 @@ function CloseFigures({
             share={figures.share}
             unit={unit}
           />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Aportes netos"
           note={`Entró ${formatAmount(figures.paidIn, unit)} y salió ${formatAmount(figures.proceeds, unit)}`}
         >
           <AmountText amount={figures.contributed} unit={unit} />
-        </SummaryTile>
+        </StatTile>
       </dl>
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Resultado de mercado" note="Precios y dólar">
+        <StatTile label="Resultado de mercado" note="Precios y dólar">
           <ResultText amount={figures.market} share={null} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Dividendos, cupones y rendimientos"
           note="Antes de retenciones"
         >
           <AmountText amount={figures.income} unit={unit} />
-        </SummaryTile>
-        <SummaryTile label="Resultado realizado">
+        </StatTile>
+        <StatTile label="Resultado realizado">
           <AmountText amount={figures.realized} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Gastos"
           note="Comisiones, derechos, impuestos y retenciones"
         >
           <AmountText amount={figures.charges} unit={unit} />
-        </SummaryTile>
+        </StatTile>
       </dl>
       {/* A return in pesos set against prices and the dollar; in dollars it
           already is one. */}
       {unit === "ars" && benchmarks && (
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryTile label="Inflación" note="Según la UVA, que sigue al IPC">
+          <StatTile label="Inflación" note="Según la UVA, que sigue al IPC">
             <ShareText share={benchmarks.inflation} />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Rendimiento real"
             note="Lo que ganaste por encima de la inflación"
           >
@@ -133,11 +130,11 @@ function CloseFigures({
               share={beyond(figures.share, benchmarks.inflation)}
               colored
             />
-          </SummaryTile>
-          <SummaryTile label="Dólar MEP">
+          </StatTile>
+          <StatTile label="Dólar MEP">
             <ShareText share={benchmarks.dollar} />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Contra el dólar"
             note="Lo que ganaste por encima del dólar MEP"
           >
@@ -145,7 +142,7 @@ function CloseFigures({
               share={beyond(figures.share, benchmarks.dollar)}
               colored
             />
-          </SummaryTile>
+          </StatTile>
         </dl>
       )}
       {unit === "ars" && !benchmarks && (

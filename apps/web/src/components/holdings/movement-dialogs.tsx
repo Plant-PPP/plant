@@ -136,7 +136,8 @@ export function useMovementDialogs({
 
   // A new operation's fields: today, in the holding's account, instrument and
   // portfolio when opened from one (its amount as an opening balance), else
-  // the preset's or the first account's, and that account's portfolio. A
+  // the preset's or the first account's, and that account's portfolio, with
+  // no instrument until the user picks one. A
   // holding without movements starts on an opening balance, so one opened
   // from a holding needs the page's positions.
   function newOperationFields(
@@ -148,7 +149,7 @@ export function useMovementDialogs({
       preset.instrument ??
       (row?.holding.asset_class === "instrument"
         ? row.holding.instrument_symbol
-        : (instruments[0]?.symbol ?? ""));
+        : "");
     const accountId = preset.accountId ?? row?.account.id ?? accounts[0]?.id;
     const account = accounts.find((each) => each.id === accountId);
     const hasMovements = row ? (positions?.has(row.id) ?? false) : true;

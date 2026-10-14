@@ -2,19 +2,33 @@
 
 import { type PinnedChart, PinnedCharts } from "./pinned-charts";
 import type { Denominator } from "@plant/core";
-import { exactOf, plus, stored } from "@plant/shared";
+import { compareDecimals, exactOf, plus, stored } from "@plant/shared";
+import {
+  CalendarCheck,
+  ChartPie,
+  Printer,
+  TrendingUp,
+  Upload,
+} from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { AccountsBreakdown } from "@/components/holdings/accounts-breakdown";
 import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import { AssetsSummary } from "@/components/holdings/assets-summary";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { FilterSelect, UnitSelect } from "@/components/holdings/filter-select";
-import { MepNotice } from "@/components/holdings/mep-notice";
 import { PortfoliosBreakdown } from "@/components/holdings/portfolios-breakdown";
-import { AmountText, SummaryTile } from "@/components/holdings/sum-text";
+import { AmountText, missingQuotesText } from "@/components/holdings/sum-text";
+import { EmptyState } from "@/components/ui/empty-state";
+import { IconButton } from "@/components/ui/icon-button";
+import { PageButton } from "@/components/ui/page-button";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
+import { Segmented } from "@/components/ui/segmented";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 import type { PriceAlert } from "@/lib/alerts/alerts";
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
@@ -26,13 +40,11 @@ import {
   type YearClose,
 } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
-import { cn } from "@/lib/utils";
 
 import { ClosesTable } from "./closes-table";
 import { CurrenciesBreakdown } from "./currencies-breakdown";
 import { MetAlerts } from "./met-alerts";
-import { PrintButton } from "./print-button";
-import { CloseStatus, ResultText } from "./figures";
+import { ResultText } from "./figures";
 import { NetWorthChart } from "./net-worth-chart";
 
 // The portfolio select's value for every portfolio.
@@ -40,6 +52,14 @@ const ALL = "all";
 
 // The months the chart shows, back from the one in progress.
 const CHART_MONTHS = 24;
+
+// The ways the assets are split, in the switcher's order.
+const SPLITS = {
+  portfolio: "Cartera",
+  account: "Cuenta",
+  currency: "Moneda",
+} as const;
+type Split = keyof typeof SPLITS;
 
 // Each month's end value beside what was put in so far: the first month's
 // start plus every month's contributions up to it.
@@ -55,7 +75,7 @@ function chartPoints(closes: readonly MonthClose[]) {
   });
 }
 
-// The whole net worth today, how it is split, how it moved month by month,
+// The whole net worth today, how it moved month by month, how it is split,
 // and each month's and year's close. One portfolio shows only its assets
 // today: debts belong to no portfolio, and closes are of the whole.
 export function SummaryPage({
@@ -108,106 +128,218 @@ export function SummaryPage({
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
+  const [split, setSplit] = useState<Split>("portfolio");
   const current = closes.at(-1);
   const thisYear = years[0];
   const points = chartPoints(closes);
+  const { missing } = valuation.kinds.total;
+  // Nothing loaded yet: no holdings, and no month that moved.
+  const empty =
+    rows.length === 0 &&
+    closes.every(
+      ({ figures }) =>
+        compareDecimals(figures.endValue, "0") === 0 &&
+        compareDecimals(figures.contributed, "0") === 0,
+    );
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">Resumen</h1>
-          <p className="text-muted-foreground text-sm">
-            {portfolio
-              ? `Los activos de ${portfolio.name} hoy`
-              : "Tu patrimonio neto y cómo se movió mes a mes"}
-          </p>
-        </div>
-        <div
-          className="flex w-full flex-wrap items-end gap-2 sm:w-auto"
-          data-print="hidden"
-        >
-          <FilterSelect
-            id={`${id}-portfolio`}
-            label="Cartera"
-            value={portfolio?.id ?? ALL}
-            pending={false}
-            options={[
-              [ALL, "Todas las carteras"],
-              ...portfolios.map((each) => [each.id, each.name] as const),
-            ]}
-            onChange={(value) =>
-              url.set("portfolio", value === ALL ? null : value)
-            }
-          />
-          <UnitSelect
-            id={`${id}-unit`}
-            unit={unit}
-            referenceUnit={referenceUnit}
-            units={CLOSE_UNITS}
-            pending={false}
-            onChange={(param) => url.set("unit", param)}
-          />
-          <PrintButton />
-        </div>
-      </div>
-      {onAlertSeen && (
-        <MetAlerts
-          alerts={metAlerts}
-          readFailed={alertsReadFailed}
-          onSeen={onAlertSeen}
+    <div className="grid gap-8">
+      <div className="grid gap-4">
+        <PageHeader
+          title="Resumen"
+          filters={
+            !empty && (
+              <>
+                <FilterSelect
+                  id={`${id}-portfolio`}
+                  label="Cartera"
+                  value={portfolio?.id ?? ALL}
+                  pending={false}
+                  options={[
+                    [ALL, "Todas las carteras"],
+                    ...portfolios.map((each) => [each.id, each.name] as const),
+                  ]}
+                  onChange={(value) =>
+                    url.set("portfolio", value === ALL ? null : value)
+                  }
+                />
+                <UnitSelect
+                  id={`${id}-unit`}
+                  unit={unit}
+                  referenceUnit={referenceUnit}
+                  units={CLOSE_UNITS}
+                  pending={false}
+                  onChange={(param) => url.set("unit", param)}
+                />
+              </>
+            )
+          }
+          actions={
+            !empty && (
+              <>
+                <IconButton
+                  icon={Printer}
+                  size="toolbar"
+                  tooltip="Guardar en PDF"
+                  label="Guardar en PDF"
+                  onClick={() => window.print()}
+                />
+              </>
+            )
+          }
         />
-      )}
-      <MepNotice unit={unit} />
+        {onAlertSeen && (
+          <MetAlerts
+            alerts={metAlerts}
+            readFailed={alertsReadFailed}
+            onSeen={onAlertSeen}
+          />
+        )}
+        {missing > 0 && (
+          <Notice
+            variant="warning"
+            action={
+              <PageButton asChild data-print="hidden">
+                <Link href="/assets">Ver en Activos</Link>
+              </PageButton>
+            }
+          >
+            {missingQuotesText(missing)}
+          </Notice>
+        )}
+      </div>
 
-      {portfolio ? (
-        <>
-          <AssetsSummary valuation={valuation} unit={unit} pending={false} />
-          <Split id={`${id}-accounts`} title="Por cuenta">
-            <AccountsBreakdown
-              rows={rows}
-              accounts={valuation.accounts}
-              whole={valuation.kinds}
-              unit={unit}
-              pending={false}
-              href={scopeLink(hrefs, "account")}
-            />
-          </Split>
-          <Split id={`${id}-currencies`} title="Por moneda">
-            <CurrenciesBreakdown
-              currencies={valuation.currencies}
-              total={valuation.kinds.total}
-              unit={unit}
-            />
-          </Split>
-          <p className="text-muted-foreground text-xs">
-            El patrimonio neto, su evolución y los cierres se ven con todas las
-            carteras: las deudas no son de ninguna.
-          </p>
-        </>
+      {empty ? (
+        <EmptyState
+          icon={Upload}
+          title={
+            portfolio
+              ? `${portfolio.name} está vacía`
+              : "Tu patrimonio, en un lugar"
+          }
+          actions={
+            <PageButton asChild variant="default">
+              <Link href="/import">Cargar un resumen</Link>
+            </PageButton>
+          }
+        >
+          {portfolio
+            ? "Cuando cargues activos en esta cartera, los vas a ver acá."
+            : "Subí el resumen de tu broker, una captura o un Excel: lo leemos, lo revisás y armamos tu patrimonio en pesos y en dólares."}
+        </EmptyState>
+      ) : portfolio ? (
+        portfolioSummary()
       ) : (
         wholeSummary()
       )}
     </div>
   );
 
-  // All portfolios: the net worth, its months and closes, and every split.
+  // The split by portfolio, account or currency, one at a time on screen and
+  // every one on paper.
+  function splitSection(choices: readonly Split[], footnote?: string) {
+    const panel = `${id}-split`;
+    const shown = choices.includes(split) ? split : choices[0]!;
+    const tables: Record<Split, React.ReactNode> = {
+      portfolio: (
+        <PortfoliosBreakdown
+          rows={rows}
+          portfolios={valuation.portfolios}
+          total={valuation.kinds.total}
+          unit={unit}
+          pending={false}
+          href={scopeLink(hrefs, "portfolio")}
+        />
+      ),
+      account: (
+        <AccountsBreakdown
+          rows={rows}
+          accounts={valuation.accounts}
+          whole={valuation.kinds}
+          unit={unit}
+          pending={false}
+          href={scopeLink(hrefs, "account")}
+        />
+      ),
+      currency: (
+        <CurrenciesBreakdown
+          currencies={valuation.currencies}
+          total={valuation.kinds.total}
+          unit={unit}
+        />
+      ),
+    };
+    return (
+      <Section
+        title="Cómo está repartido"
+        icon={ChartPie}
+        description="Por tipo de activo y por clase, y dónde lo tenés"
+      >
+        <AssetsSummary
+          valuation={valuation}
+          unit={unit}
+          pending={false}
+          totalLabel={portfolio ? "Total" : "Activos"}
+        />
+        <div className="grid gap-2">
+          <Segmented
+            label="Ver por"
+            options={choices.map((value) => ({ value, label: SPLITS[value] }))}
+            value={shown}
+            onChange={setSplit}
+            controls={panel}
+            className="print:hidden"
+          />
+          {choices.map((each) => (
+            <div
+              key={each}
+              role="tabpanel"
+              id={each === shown ? panel : undefined}
+              aria-label={`Por ${SPLITS[each].toLowerCase()}`}
+              hidden={each !== shown}
+              data-print="shown"
+              className="grid gap-2"
+            >
+              <h3 className="hidden text-sm font-semibold print:block">
+                {`Por ${SPLITS[each].toLowerCase()}`}
+              </h3>
+              {tables[each]}
+            </div>
+          ))}
+          {footnote && (
+            <p className="text-muted-foreground text-xs">{footnote}</p>
+          )}
+        </div>
+      </Section>
+    );
+  }
+
+  // One portfolio: its assets today, split by account and currency.
+  function portfolioSummary() {
+    return splitSection(
+      ["account", "currency"],
+      "El patrimonio neto, su evolución y los cierres se ven con todas las carteras: las deudas no son de ninguna.",
+    );
+  }
+
+  // All portfolios: the net worth and its months, every split, the closes
+  // and the pinned charts.
   function wholeSummary() {
     return (
       <>
         {current && thisYear && (
-          <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <SummaryTile
+          <StatGrid aria-label="Patrimonio neto">
+            <StatTile
               label="Patrimonio neto"
               note={
                 current.endComplete
                   ? "Activos menos deudas, hoy"
-                  : "Activos menos deudas, hoy, sin lo que no tiene cotización"
+                  : "Activos menos deudas, sin lo que no tiene cotización"
               }
             >
               <AmountText amount={current.figures.endValue} unit={unit} />
-            </SummaryTile>
-            <SummaryTile
+            </StatTile>
+            <StatTile
               label={monthName(current.period)}
               note="Resultado del mes en curso"
             >
@@ -216,8 +348,8 @@ export function SummaryPage({
                 share={current.figures.share}
                 unit={unit}
               />
-            </SummaryTile>
-            <SummaryTile
+            </StatTile>
+            <StatTile
               label={`En ${thisYear.year}`}
               note="Resultado y rendimiento sin aportes"
             >
@@ -226,132 +358,72 @@ export function SummaryPage({
                 share={thisYear.totals.share}
                 unit={unit}
               />
-            </SummaryTile>
-            <SummaryTile
+            </StatTile>
+            <StatTile
               label={`Aportes en ${thisYear.year}`}
               note="Lo que entró menos lo que salió"
             >
               <AmountText amount={thisYear.totals.contributed} unit={unit} />
-            </SummaryTile>
-          </dl>
+            </StatTile>
+          </StatGrid>
         )}
 
-        <NetWorthChart points={points.slice(-CHART_MONTHS)} unit={unit} />
+        {points.length >= 2 && (
+          <Section
+            title="Evolución"
+            icon={TrendingUp}
+            description="Tu patrimonio neto a fin de cada mes, al lado de lo que pusiste"
+          >
+            <NetWorthChart points={points.slice(-CHART_MONTHS)} unit={unit} />
+          </Section>
+        )}
 
-        {onUnpin && <PinnedCharts pinned={pinned} onUnpin={onUnpin} />}
+        {splitSection(["portfolio", "account", "currency"])}
 
-        <section className="grid gap-3" aria-labelledby={`${id}-split`}>
-          <h2 id={`${id}-split`} className="text-base font-semibold">
-            Cómo está repartido
-          </h2>
-          <AssetsSummary valuation={valuation} unit={unit} pending={false} />
-        </section>
-
-        <Split id={`${id}-portfolios`} title="Por cartera">
-          <PortfoliosBreakdown
-            rows={rows}
-            portfolios={valuation.portfolios}
-            total={valuation.kinds.total}
-            unit={unit}
-            pending={false}
-            href={scopeLink(hrefs, "portfolio")}
-          />
-        </Split>
-        <Split id={`${id}-accounts`} title="Por cuenta">
-          <AccountsBreakdown
-            rows={rows}
-            accounts={valuation.accounts}
-            whole={valuation.kinds}
-            unit={unit}
-            pending={false}
-            href={scopeLink(hrefs, "account")}
-          />
-        </Split>
-        <Split id={`${id}-currencies`} title="Por moneda">
-          <CurrenciesBreakdown
-            currencies={valuation.currencies}
-            total={valuation.kinds.total}
-            unit={unit}
-          />
-        </Split>
-
-        <section className="grid gap-3" aria-labelledby={`${id}-closes`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id={`${id}-closes`} className="text-base font-semibold">
-              Cierres
-            </h2>
-            <nav aria-label="Años" className="flex gap-1">
-              {years.map((each) => (
-                <button
-                  key={each.year}
-                  type="button"
-                  aria-current={each.year === year?.year || undefined}
-                  onClick={() =>
-                    url.set(
-                      "year",
-                      each.year === years[0]?.year ? null : each.year,
-                    )
-                  }
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-sm tabular-nums",
-                    each.year === year?.year
-                      ? "bg-muted font-medium"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {each.year}
-                </button>
-              ))}
-            </nav>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            Cada mes se cierra solo cuando termina. Si cargás o cambiás algo de
-            un mes cerrado, su cierre se recalcula.
-          </p>
-          {year && (
-            <>
+        <Section
+          title="Cierres"
+          icon={CalendarCheck}
+          description="Cada mes se cierra solo cuando termina. Si cargás o cambiás algo de un mes cerrado, su cierre se recalcula."
+          actions={
+            year &&
+            years.length > 1 && (
+              <Segmented
+                label="Años"
+                options={years.map((each) => ({
+                  value: each.year,
+                  label: each.year,
+                }))}
+                value={year.year}
+                onChange={(next) =>
+                  url.set("year", next === years[0]?.year ? null : next)
+                }
+                controls={`${id}-closes`}
+                className="print:hidden"
+              />
+            )
+          }
+        >
+          {year ? (
+            <div
+              role="tabpanel"
+              id={`${id}-closes`}
+              aria-label={`Cierres de ${year.year}`}
+            >
               <ClosesTable
                 year={year}
                 unit={unit}
                 href={(period) => closeHref(period, closesQuery)}
               />
-              <p className="text-sm">
-                <Link
-                  href={closeHref(year.year, closesQuery)}
-                  className="underline-offset-2 hover:underline"
-                >
-                  {`Ver el cierre de ${year.year}`}
-                </Link>
-                {year.open && (
-                  <span className="ml-2 align-middle">
-                    <CloseStatus close={{ open: true, recalculatedOn: null }} />
-                  </span>
-                )}
-              </p>
-            </>
+            </div>
+          ) : (
+            <EmptyState icon={CalendarCheck} title="Todavía no hay cierres">
+              Cada mes se cierra solo cuando termina: el primero aparece acá.
+            </EmptyState>
           )}
-        </section>
+        </Section>
+
+        {onUnpin && <PinnedCharts pinned={pinned} onUnpin={onUnpin} />}
       </>
     );
   }
-}
-
-// One way the assets are split, under its heading.
-function Split({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="grid gap-3" aria-labelledby={id}>
-      <h2 id={id} className="text-base font-semibold">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
 }

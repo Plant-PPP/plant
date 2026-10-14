@@ -2,7 +2,8 @@ import type { Denominator } from "@plant/core";
 
 import type { SalesSlice } from "@/lib/holdings/movements-input";
 
-import { AmountText, GainLossText, SummaryTile } from "./sum-text";
+import { AmountText, GainLossText } from "./sum-text";
+import { StatTile } from "@/components/ui/stat-tile";
 
 const amount = (value: string | null | undefined, unit: Denominator) => (
   <AmountText amount={value} unit={unit} />
@@ -21,14 +22,14 @@ export function SalesSummary({
 }) {
   return (
     <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <SummaryTile label="Operaciones" note={`Ventas de ${year}`}>
+      <StatTile label="Operaciones" note={`Ventas de ${year}`}>
         {totals.count}
-      </SummaryTile>
-      <SummaryTile label="Bruto">{amount(totals.gross, unit)}</SummaryTile>
-      <SummaryTile label="Comisiones e impuestos">
+      </StatTile>
+      <StatTile label="Bruto">{amount(totals.gross, unit)}</StatTile>
+      <StatTile label="Comisiones e impuestos">
         {amount(totals.charges, unit)}
-      </SummaryTile>
-      <SummaryTile label="Resultado">
+      </StatTile>
+      <StatTile label="Resultado">
         <GainLossText
           gain={
             totals.result === null
@@ -37,7 +38,7 @@ export function SalesSummary({
           }
           unit={unit}
         />
-      </SummaryTile>
+      </StatTile>
     </dl>
   );
 }

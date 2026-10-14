@@ -121,7 +121,7 @@ const click = (tree: ReactNode, label: string) => {
     tree,
     (each) =>
       typeof each.onClick === "function" &&
-      (String(each["aria-label"] ?? "").startsWith(label) ||
+      (String(each["aria-label"] ?? each.label ?? "").startsWith(label) ||
         [each.children].flat().includes(label)),
   );
   if (!props) throw new Error(`no button ${label}`);

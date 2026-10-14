@@ -25,15 +25,18 @@ it("stays an alert whatever role the caller passes", () => {
   expect(html).not.toContain('role="status"');
 });
 
-it("is the only component writing role=alert, so form errors go through it", () => {
+it("shares role=alert only with Notice, so errors go through one of them", () => {
   const src = join(__dirname, "../..");
   const files = readdirSync(src, { recursive: true, encoding: "utf8" });
-  const self = join("components", "ui", "form-alert.tsx");
+  const owners = [
+    join("components", "ui", "form-alert.tsx"),
+    join("components", "ui", "notice.tsx"),
+  ];
   const hits = files.filter(
     (file) =>
       /\.tsx?$/.test(file) &&
       !/\.test\.tsx?$/.test(file) &&
-      file !== self &&
+      !owners.includes(file) &&
       /role(?:=|:\s*)\{?\s*["'`]alert["'`]/.test(
         readFileSync(join(src, file), "utf8"),
       ),

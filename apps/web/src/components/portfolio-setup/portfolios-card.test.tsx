@@ -73,7 +73,7 @@ it("fades a row the server has not confirmed yet", () => {
   expect(html).toMatch(
     /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="new-1"[^>]*aria-busy="true"/,
   );
-  expect(html).toMatch(/<tr[^>]*class="border-b" data-row-id="p1">/);
+  expect(html).toMatch(/<tr[^>]*class="[^"]*border-b[^"]*" data-row-id="p1">/);
 });
 
 it("passes the page's pending to its archived list", () => {

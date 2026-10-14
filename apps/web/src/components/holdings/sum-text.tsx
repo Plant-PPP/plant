@@ -1,5 +1,4 @@
 import type { Denominator } from "@plant/core";
-import type { ReactNode } from "react";
 
 import { countOf } from "@/lib/format/text";
 import {
@@ -23,6 +22,12 @@ export const NO_QUOTE = "Sin cotización";
 
 export const holdingsCountText = (count: number) =>
   countOf(count, "tenencia", "tenencias");
+
+// What a total leaves out for lack of a quote.
+export const missingQuotesText = (missing: number) =>
+  missing === 1
+    ? "A una tenencia le falta cotización; el total no la incluye."
+    : `A ${missing} tenencias les falta cotización; el total no las incluye.`;
 
 // A figure the page has no value for: a dash, read as what it means.
 export function MissingFigure({ text }: { text: string }) {
@@ -154,31 +159,5 @@ export function GainLossText({
         </span>
       )}
     </span>
-  );
-}
-
-// One figure of a summary's row of tiles, inside its `dl`: a label, the
-// figure, and a muted note under it.
-export function SummaryTile({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  note?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="bg-muted/60 grid gap-1 rounded-lg p-3">
-      <dt className="text-muted-foreground text-[11px]">{label}</dt>
-      <dd className="truncate text-base font-semibold tabular-nums">
-        {children}
-      </dd>
-      {note !== undefined && (
-        <dd className="text-muted-foreground text-[11px] tabular-nums">
-          {note}
-        </dd>
-      )}
-    </div>
   );
 }

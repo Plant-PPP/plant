@@ -5,11 +5,7 @@ import { Download, Info } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 
-import {
-  AmountText,
-  NUMBER_CELL,
-  SummaryTile,
-} from "@/components/holdings/sum-text";
+import { AmountText, NUMBER_CELL } from "@/components/holdings/sum-text";
 import { ResultText } from "@/components/summary/figures";
 import { PrintButton } from "@/components/summary/print-button";
 import { Button } from "@/components/ui/button";
@@ -22,6 +18,7 @@ import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { GAINS_LABELS, taxTables } from "@/lib/taxes/export";
 import type { GainsGroup, TaxReport, WealthLine } from "@/lib/taxes/report";
 import { cn } from "@/lib/utils";
+import { StatTile } from "@/components/ui/stat-tile";
 
 // The page's address for a year: none for the year it opens on.
 const yearHref = (year: string, defaultYear: string) =>
@@ -174,19 +171,19 @@ export function TaxesPage({
           </Button>
         </div>
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <SummaryTile
+          <StatTile
             label={`Gravados al ${formatDate(report.date)}`}
             note="Lo que pagaría el impuesto, antes del mínimo no imponible"
           >
             <AmountText amount={wealth.taxable} unit="ars" />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Exentos"
             note="Plazos fijos, bonos y obligaciones negociables"
           >
             <AmountText amount={wealth.exempt} unit="ars" />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Dólar BNA comprador"
             note={
               officialBuy
@@ -195,7 +192,7 @@ export function TaxesPage({
             }
           >
             <AmountText amount={officialBuy?.buy ?? null} unit="ars" />
-          </SummaryTile>
+          </StatTile>
         </dl>
         {wealth.lines.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -257,12 +254,12 @@ export function TaxesPage({
           </Button>
         </div>
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <SummaryTile
+          <StatTile
             label={`Resultados de ${report.year}`}
             note="Ventas, dividendos, cupones y rendimientos"
           >
             <ResultText amount={gains.total} share={null} unit="ars" />
-          </SummaryTile>
+          </StatTile>
         </dl>
         {gains.groups.length === 0 ? (
           <p className="text-muted-foreground text-sm">

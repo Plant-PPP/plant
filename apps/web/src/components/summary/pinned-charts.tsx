@@ -1,11 +1,13 @@
 "use client";
 
-import { PinOff } from "lucide-react";
+import { ChartNoAxesColumn, Pin, PinOff } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ChartBoundary, ChartCard } from "@/components/assistant/chart-card";
-import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { IconButton } from "@/components/ui/icon-button";
+import { Section } from "@/components/ui/section";
 import type { ChartPart } from "@/lib/assistant/chat";
 import { settle } from "@/lib/server-action-call";
 
@@ -41,36 +43,42 @@ export function PinnedCharts({
   }
 
   return (
-    <section className="grid gap-3" aria-labelledby="pinned-charts">
-      <h2 id="pinned-charts" className="text-base font-semibold">
-        Gráficos fijados
-      </h2>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {shown.map((each) => (
-          <div key={each.id} className="grid gap-1">
-            {each.chart ? (
-              <ChartBoundary>
-                <ChartCard chart={each.chart} asOf={each.asOf} />
-              </ChartBoundary>
-            ) : (
-              <p className="text-muted-foreground rounded-lg border p-3 text-xs">
-                No pudimos dibujar este gráfico con tus datos de hoy.
-              </p>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="justify-self-end"
-              aria-label={`Soltar: ${each.chart?.title ?? "gráfico"}`}
+    <Section
+      title="Gráficos fijados"
+      icon={Pin}
+      description="Los que fijaste desde el asistente, con tus datos de hoy"
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        {shown.map((each) => {
+          const unpinButton = (
+            <IconButton
+              icon={PinOff}
+              tooltip="Soltar"
+              label={`Soltar: ${each.chart?.title ?? "gráfico"}`}
               onClick={() => unpin(each.id)}
+            />
+          );
+          return each.chart ? (
+            <ChartBoundary key={each.id}>
+              <ChartCard
+                chart={each.chart}
+                asOf={each.asOf}
+                actions={unpinButton}
+              />
+            </ChartBoundary>
+          ) : (
+            <EmptyState
+              key={each.id}
+              icon={ChartNoAxesColumn}
+              title="No pudimos dibujar este gráfico"
+              actions={unpinButton}
             >
-              <PinOff />
-              Soltar
-            </Button>
-          </div>
-        ))}
+              Sus datos de hoy no alcanzan para armarlo, o su cartera ya no
+              está.
+            </EmptyState>
+          );
+        })}
       </div>
-    </section>
+    </Section>
   );
 }

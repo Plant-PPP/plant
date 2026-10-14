@@ -118,7 +118,6 @@ import { InstitutionIcon } from "@/components/portfolio-setup/institution-field"
 import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
-import { MepNotice } from "./mep-notice";
 import { RealEstateDialog } from "./real-estate-dialog";
 import { type SheetFields, sheetFields } from "./real-estate-fields";
 import { RenewDialog } from "./renew-dialog";
@@ -148,6 +147,7 @@ import {
   CALCULATING,
   GainLossText,
   MissingFigure,
+  missingQuotesText,
   NO_QUOTE,
   NUMBER_CELL,
   PendingSum,
@@ -1058,7 +1058,6 @@ export function AssetsSetup({
           classes={new Set(holdings.active.map(classOf))}
           pending={pending}
         />
-        <MepNotice unit={unit} />
         <div
           role="tabpanel"
           id={panelId(tabsId)}
@@ -1070,9 +1069,7 @@ export function AssetsSetup({
             <p className="text-xs text-muted-foreground">
               {/* The total is marked only when it values some holdings. */}
               {missing < valuation.kinds.total.count && "* "}
-              {missing === 1
-                ? "A una tenencia le falta cotización; el total no la incluye."
-                : `A ${missing} tenencias les falta cotización; el total no las incluye.`}
+              {missingQuotesText(missing)}
             </p>
           )}
           {tab !== "sales" && view.activeTruncated && shownRows.length > 0 && (
