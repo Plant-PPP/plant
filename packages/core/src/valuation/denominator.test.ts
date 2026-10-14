@@ -11,6 +11,10 @@ const ars = (amount: string) => ({
   amount: exactOf(amount),
   currency: "ARS" as const,
 });
+const eur = (amount: string) => ({
+  amount: exactOf(amount),
+  currency: "EUR" as const,
+});
 const UNITS = Object.keys(DENOMINATORS) as Denominator[];
 
 describe("lift", () => {
@@ -33,17 +37,24 @@ describe("lift", () => {
       expect(lift(usd("10"), view, reference).denominator).toBe(expected);
     },
   );
+
+  it("keeps euros as euros in every view", () => {
+    for (const view of UNITS) {
+      expect(lift(eur("10"), view, "mep").denominator).toBe("eur");
+    }
+  });
 });
 
 describe("rate", () => {
-  // One unit in pesos: ars 1, MEP 1200, CCL 1250, official 1000, BTC
-  // 1200 × 65000 = 78,000,000.
+  // One unit in pesos: ars 1, MEP 1200, CCL 1250, official 1000, euro 1300,
+  // BTC 1200 × 65000 = 78,000,000.
   const PESOS: Record<Denominator, string> = {
     ars: "1",
     usd_mep: "1200",
     usd_ccl: "1250",
     usd_official: "1000",
     btc: "78000000",
+    eur: "1300",
   };
 
   it.each(UNITS.flatMap((from) => UNITS.map((to) => [from, to] as const)))(
@@ -148,6 +159,32 @@ describe("the owner's rule for dollars", () => {
     if ("missing" in shown || "missing" in unit) throw new Error("missing");
     expect(toDecimal(shown.value.amount, 2)).toBe("65000");
     expect(toDecimal(unit.amount, 2)).toBe("62400");
+  });
+});
+
+describe("held euros", () => {
+  it.each([
+    ["ars", "130000", ["2026-10-09"]],
+    ["usd_mep", "108.33", ["2026-10-09"]],
+    ["usd_official", "130", ["2026-10-09"]],
+    ["btc", "0.00166667", ["2026-10-09", "2026-10-12"]],
+  ] as const)(
+    "values 100 euros in %s through pesos at the official euro",
+    (view, expected, dates) => {
+      const converted = convert(lift(eur("100"), view, "mep"), view, SNAPSHOT);
+      if ("missing" in converted) throw new Error(converted.missing);
+      expect(toDecimal(converted.value.amount, DENOMINATORS[view].scale)).toBe(
+        expected,
+      );
+      expect([...new Set(converted.dates)].toSorted()).toEqual(dates);
+    },
+  );
+
+  it("names the euro rate when it misses", () => {
+    const { eur: _eur, ...fx } = SNAPSHOT.fx;
+    expect(
+      express(eur("1"), SNAPSHOT.date, "ars", { ...SNAPSHOT, fx }, "mep"),
+    ).toEqual({ missing: "eur" });
   });
 });
 

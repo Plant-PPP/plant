@@ -93,6 +93,18 @@ describe("movementSchema", () => {
     expect(movementSchema.safeParse(movement).success).toBe(false);
   });
 
+  it("reads a stored movement saved before the euro's rate", () => {
+    expect(movementSchema.parse(purchase).rates).toEqual(ratesOf("2026-03-02"));
+  });
+
+  it("reads the euro's rate when a movement carries it", () => {
+    const rates = {
+      ...ratesOf("2026-03-02"),
+      eur: { sell: "1300", date: "2026-03-02" },
+    };
+    expect(movementSchema.parse({ ...purchase, rates }).rates).toEqual(rates);
+  });
+
   it("reads an entry order of 0", () => {
     expect(
       movementSchema.parse({ ...purchase, entry_order: 0 }).entry_order,

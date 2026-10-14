@@ -10,7 +10,7 @@ import { createDolarapiFeed, parse } from "./feed";
 // 2026-10-09 18:30 in Buenos Aires.
 const NOW = new Date("2026-10-09T21:30:00.000Z");
 
-// Invented values in the shape of /v1/dolares/{house}.
+// Invented values in the shape of /v1/dolares/{house} and /v1/cotizaciones/eur.
 const body = (casa: string, compra: number, venta: number) => ({
   moneda: "USD",
   casa,
@@ -27,6 +27,21 @@ describe("dolarapi parse", () => {
       rate_date: "2026-10-09",
       buy: "1401.2",
       sell: "1415.9",
+      quoted_at: "2026-10-09T20:57:00.000Z",
+    });
+  });
+
+  it("maps the official euro to the eur rate", () => {
+    expect(
+      parse(
+        { ...body("oficial", 1673.95, 1687.75), moneda: "EUR", nombre: "Euro" },
+        "eur",
+      ),
+    ).toEqual({
+      kind: "eur",
+      rate_date: "2026-10-09",
+      buy: "1673.95",
+      sell: "1687.75",
       quoted_at: "2026-10-09T20:57:00.000Z",
     });
   });
@@ -99,7 +114,7 @@ describe("dolarapi parse", () => {
 });
 
 describe("createDolarapiFeed", () => {
-  it("reads the four houses from their own endpoints", async () => {
+  it("reads the four dollars and the euro from their own endpoints", async () => {
     const urls: string[] = [];
     const feed = createDolarapiFeed(async (url) => {
       urls.push(url);
@@ -112,17 +127,19 @@ describe("createDolarapiFeed", () => {
       "https://dolarapi.com/v1/dolares/bolsa",
       "https://dolarapi.com/v1/dolares/contadoconliqui",
       "https://dolarapi.com/v1/dolares/blue",
+      "https://dolarapi.com/v1/cotizaciones/eur",
     ]);
     expect(rows.fxRates.map((row) => row.kind)).toEqual([
       "official",
       "mep",
       "ccl",
       "blue",
+      "eur",
     ]);
     expect(rows.prices).toEqual([]);
   });
 
-  it("requests the four houses at once", async () => {
+  it("requests every house at once", async () => {
     const answers: (() => void)[] = [];
     const feed = createDolarapiFeed(
       () =>
@@ -131,7 +148,7 @@ describe("createDolarapiFeed", () => {
         }),
     );
     const read = feed.readRaw(NOW);
-    expect(answers).toHaveLength(4);
+    expect(answers).toHaveLength(5);
     answers.forEach((answer) => answer());
     await read;
   });
@@ -147,6 +164,7 @@ describe("createDolarapiFeed", () => {
       "official",
       "mep",
       "ccl",
+      "eur",
     ]);
     expect(batch.refused.invalid).toEqual(["blue"]);
   });
@@ -168,11 +186,12 @@ describe("createDolarapiFeed", () => {
         "official",
         "mep",
         "ccl",
+        "eur",
       ]);
       expect(rows.unread).toEqual([{ key: "blue", code }]);
       const batch = checkBatch(rows, NOW, "dolarapi", false);
       expect([batch.fxRates.length, batch.refused.invalid]).toEqual([
-        3,
+        4,
         ["blue"],
       ]);
       expect(batch.unread).toEqual([`blue:${code}`]);
@@ -181,11 +200,16 @@ describe("createDolarapiFeed", () => {
 
   it("keeps the one house that answered", async () => {
     const feed = createDolarapiFeed(
-      failing({ oficial: "http_4xx", bolsa: "http_4xx", blue: "http_4xx" }),
+      failing({
+        oficial: "http_4xx",
+        bolsa: "http_4xx",
+        blue: "http_4xx",
+        eur: "http_4xx",
+      }),
     );
     const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi", false);
     expect(batch.fxRates.map((row) => row.kind)).toEqual(["ccl"]);
-    expect(batch.refused.invalid).toEqual(["official", "mep", "blue"]);
+    expect(batch.refused.invalid).toEqual(["official", "mep", "blue", "eur"]);
   });
 
   it("lists each unread house with its code", async () => {
@@ -222,6 +246,7 @@ describe("createDolarapiFeed", () => {
           bolsa: "bad_json",
           contadoconliqui: "timeout",
           blue: "http_5xx",
+          eur: "http_4xx",
         }),
       ),
     );
@@ -244,7 +269,7 @@ describe("createDolarapiFeed", () => {
       return body("x", 1, 2);
     });
     const rows = await feed.readRaw(NOW);
-    expect(rows.fxRates).toHaveLength(3);
+    expect(rows.fxRates).toHaveLength(4);
     expect(rows.unread).toEqual([{ key: "blue", code: "http_5xx" }]);
   });
 

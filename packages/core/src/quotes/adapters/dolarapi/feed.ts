@@ -10,15 +10,16 @@ import {
   type RawFxRate,
 } from "../../contract/quote";
 
-const BASE_URL = "https://dolarapi.com/v1/dolares";
+const BASE_URL = "https://dolarapi.com/v1";
 
 // One endpoint per house: the list at /v1/dolares has lagged a day behind
-// them on business days.
-const HOUSES: readonly { house: string; kind: FxRateKind }[] = [
-  { house: "oficial", kind: "official" },
-  { house: "bolsa", kind: "mep" },
-  { house: "contadoconliqui", kind: "ccl" },
-  { house: "blue", kind: "blue" },
+// them on business days. The euro is the official one (BNA).
+const HOUSES: readonly { path: string; kind: FxRateKind }[] = [
+  { path: "dolares/oficial", kind: "official" },
+  { path: "dolares/bolsa", kind: "mep" },
+  { path: "dolares/contadoconliqui", kind: "ccl" },
+  { path: "dolares/blue", kind: "blue" },
+  { path: "cotizaciones/eur", kind: "eur" },
 ];
 
 const responseSchema = z.object({
@@ -55,9 +56,9 @@ export function createDolarapiFeed(getJson: GetJson): RawQuoteFeed {
     listed: false,
     async readRaw() {
       const results = await Promise.all(
-        HOUSES.map(async ({ house, kind }): Promise<HouseRead> => {
+        HOUSES.map(async ({ path, kind }): Promise<HouseRead> => {
           try {
-            const json = await getJson(`${BASE_URL}/${house}`);
+            const json = await getJson(`${BASE_URL}/${path}`);
             return { ok: true, row: parse(json, kind) };
           } catch (error) {
             const code = feedReadCode(error);

@@ -104,6 +104,30 @@ describe("valueHoldings", () => {
     },
   );
 
+  it("values held euros at the official euro in any view", () => {
+    const euros = holdingSchema.parse({
+      ...base,
+      id: "eur",
+      portfolio_id: "p1",
+      asset_class: "cash",
+      currency: "EUR",
+      amount: "100",
+    });
+    // 100 × 1300 pesos; / 1200 MEP.
+    expect(
+      valueHoldings([euros], SNAPSHOT, {
+        denominator: "ars",
+        referenceDollar: "mep",
+      }).total,
+    ).toBe("130000");
+    expect(
+      valueHoldings([euros], SNAPSHOT, {
+        denominator: "usd_mep",
+        referenceDollar: "mep",
+      }).total,
+    ).toBe("108.33");
+  });
+
   it.each(["mep", "ccl"] as const)(
     "reconciles pesos with the %s dollar exactly",
     (dollar) => {
@@ -358,7 +382,7 @@ describe("quotesNeeded", () => {
 
   it("needs every unit's rate and price, whatever is held", () => {
     expect(quotesNeeded(cash)).toEqual({
-      fxKinds: ["mep", "ccl", "official"],
+      fxKinds: ["mep", "ccl", "official", "eur"],
       symbols: ["BTC"],
     });
   });

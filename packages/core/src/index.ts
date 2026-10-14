@@ -52,8 +52,13 @@ export {
   DENOMINATORS,
   type Denominator,
   isDenominator,
+  isViewUnit,
   UNIT_FX_KINDS,
   type UnitFxKind,
+  VALUED_FX_KINDS,
+  type ValuedFxKind,
+  VIEW_UNITS,
+  type ViewUnit,
 } from "./valuation/denominators";
 export {
   express,
