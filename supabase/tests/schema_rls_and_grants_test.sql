@@ -226,13 +226,14 @@ SELECT ok(
   'service_role adds instruments but never reads their names or aliases, updates nor deletes one'
 );
 
--- Mirrors QuoteTable in security-tests/src/reference-rows.ts, whose specs run
--- the service role's cases: the two change together.
+-- The quote tables mirror QuoteTable in security-tests/src/reference-rows.ts,
+-- whose specs run the service role's cases: the two change together. The
+-- service role also adds an instrument a provider lists, pinned above.
 SELECT set_eq(
   $$ SELECT relname::text FROM reference_tables r
      WHERE has_any_column_privilege('service_role', r.oid, 'INSERT') $$,
-  ARRAY['fx_rates', 'prices'],
-  'service_role inserts only into the quote tables'
+  ARRAY['fx_rates', 'prices', 'instruments'],
+  'service_role inserts only into the quote tables and the instruments catalog'
 );
 
 -- Without the pair, a user's row can point at a parent another user owns.
