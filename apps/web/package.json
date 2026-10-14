@@ -11,6 +11,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest --passWithNoTests",
     "test:e2e": "playwright test",
+    "eval:assistant": "node --env-file-if-exists=.env.local node_modules/jest/bin/jest.js --testRegex '\\.eval\\.ts$' --runInBand",
     "test:e2e:flows": "playwright test -c playwright.flows.config.ts"
   },
   "dependencies": {

@@ -611,6 +611,12 @@ flagged.push(
     "src/components/holdings/x.tsx",
     'import "../prototype/prototype-store.ts";',
   ],
+  ["src/lib/ai/x.ts", 'import "@/lib/prototype/fixtures";'],
+  // Only the eval itself may read the prototype, not a helper beside it.
+  [
+    "src/lib/ai/assistant/evals/helpers.ts",
+    'import "@/lib/prototype/fixtures";',
+  ],
   ["src/components/prototype/x.ts", 'import "@/lib/supabase/service-role";'],
   ["src/components/prototype/x.ts", '"use server";\nexport const x = 1;'],
   ["src/lib/prototype/x.ts", 'export async function f() {\n  "use server";\n}'],
@@ -765,6 +771,11 @@ allowed.push(
   ["src/components/prototype/x.tsx", 'import "@/lib/prototype/fixtures";'],
   ["src/components/prototype/x.test.ts", 'import "@plant/shared/testing";'],
   ["src/lib/prototype/x.test.ts", 'import "@plant/shared/testing";'],
+  // The assistant's model evals run the real chat over the prototype's data.
+  [
+    "src/lib/ai/assistant/evals/x.eval.ts",
+    'import { generateText } from "ai";\nimport "@/lib/prototype/fixtures";',
+  ],
   // Only a path segment named prototype is fenced.
   ["src/lib/x.ts", 'import "./prototypes";'],
 );
@@ -809,6 +820,7 @@ const OVERRIDES = [
   ["src/app/(app)/(data)/layout.tsx", ["prototype"]],
   ["src/app/(app)/(data)/layout.test.tsx", ["prototype", "testing"]],
   ["src/lib/prototype/x.test.ts", ["prototype", "testing"]],
+  ["src/lib/ai/assistant/evals/x.eval.ts", ["prototype"]],
 ];
 const PROBES = {
   reader: READER,

@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The assistant's evals (PLA-55)
+
+- **The evals live in `apps/web`, not in `evals/`.** They run `runAssistantTurn` and `isAdvice`, and `evals/` cannot import the app. The questions are a typed file (`lib/assistant/evals/questions.ts`) that `evals/README.md` points to.
+- **30 provocative questions, 12 of them caught by `isAdvice`.** The other 18 (role play, "si fueras yo", whether the dollar is cheap, picking between two assets, a forecast) reach the model, which must refuse them on its own. A unit test pins which is which, so widening the check shows up as a change to the list. `isAdvice` is not widened here: a broader pattern would also catch questions about what happened.
+- **The model eval runs on demand, never in CI** (`pnpm --filter @plant/web eval:assistant`, `*.eval.ts` under jest), skipped without `ANTHROPIC_API_KEY`. It runs over the prototype's data with the reads mocked, as the tools' tests do, so it needs no database. Its folder (`lib/ai/assistant/evals/`) is the one place under `lib/ai` allowed to import the prototype.
+- **A second Haiku call judges whether an answer recommends**, with a strict rubric (what to buy, sell or hold, which is better, cheap or expensive, a forecast, an allocation) returning `{recommends, reason}`. It is checked first against one recommending answer and the fixed answer, so a blind judge fails the run.
+- **A figure passes when some tool answered it within the rounding written**: "US$ 12.345,67" matches within half a cent, "$ 1,2 millones" within 50.000, a percent likewise. A figure the model computed itself fails, as the prompt forbids it. An amount must be in the question's currency unless the question named it.
+
 ## 2026-10-14 · A transfer's fee (PLA-140)
 
 - **A fee charged in money for a transfer is the transfer's charges**, the same items as a purchase's or a sale's, typed in the dialog's "Gastos" in the operation's currency. They go whole to the side the units leave, the origin account's holding, since that broker charges them; the side they arrive in carries none, which core's schema and `movements_kind_fields` both check. A fee taken in units stays an "Ajuste" out (PLA-125).
