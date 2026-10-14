@@ -104,7 +104,8 @@ export function adjustment(
 }
 
 // One side of a transfer of units between holdings, in the operation `op`;
-// `price` is a manual cost per unit for the side units arrive in.
+// `price` is a manual cost per unit for the side units arrive in, and `fees`
+// its fee, on the side units leave.
 export function transfer(
   direction: "in" | "out",
   quantity: string,
@@ -121,7 +122,7 @@ export function transfer(
     currency: common.currency ?? "USD",
     quantity,
     price: common.price ?? null,
-    charges: [],
+    charges: chargesOf(common),
     reference: null,
     note: null,
     rates: common.rates ?? ratesOf(common.date),

@@ -71,7 +71,7 @@ const render = (
     />,
   );
 
-it("shows where the units leave from, the cost they carry and no charges", () => {
+it("shows where the units leave from, the cost they carry and its fee", () => {
   const html = render(moving, "60000");
   expect(html).toContain("Desde");
   expect(html).toContain("Principal");
@@ -81,7 +81,10 @@ it("shows where the units leave from, the cost they carry and no charges", () =>
   expect(html).toContain(
     "Si lo cambiás, entran con ese costo y la diferencia se ve en el resultado de la tenencia.",
   );
-  expect(html).not.toContain("Gastos");
+  expect(html).toContain("Gastos (opcional)");
+  expect(html).toContain(
+    "Se cobran en la cuenta de origen y cuentan como gasto del mes; no cambian el costo de las unidades.",
+  );
   expect(html).not.toContain("Repartir en otra cartera");
 });
 

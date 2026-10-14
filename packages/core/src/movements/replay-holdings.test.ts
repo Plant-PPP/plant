@@ -1,3 +1,4 @@
+import { periodResult } from "./period";
 import { cashFlowsOf } from "./returns";
 import { ratesOf, trade, transfer } from "./fixtures.test-support";
 import type { Movement } from "./movement";
@@ -366,5 +367,69 @@ describe("transfer cash flows", () => {
     ];
     const flows = cashFlowsOf(own, replay(own, "usd_mep", "mep"))!;
     expect(flows.map((flow) => flow.amount)).toEqual(["-1000", "0", "-1000"]);
+  });
+});
+
+describe("a transfer's fee", () => {
+  const out = transfer("out", "5", {
+    holding: "x",
+    op: "t",
+    date: "2026-03-02",
+    fees: "7",
+  });
+  const arrive = transfer("in", "5", {
+    holding: "y",
+    op: "t",
+    date: "2026-03-02",
+  });
+  const all = [...X, out, arrive];
+
+  it("leaves the units' cost as it was and realizes nothing", () => {
+    const steps = replayHoldings(all, "usd_mep", "mep");
+    expect(money(steps, "x")).toEqual({
+      cost: "2500",
+      charges: "7",
+      income: "0",
+      realized: "0",
+    });
+    expect(money(steps, "y")).toEqual({
+      cost: "500",
+      charges: "0",
+      income: "0",
+      realized: "0",
+    });
+  });
+
+  it("is an expense of the transfer's month, paid out of no sale", () => {
+    const steps = replayHoldings(all, "usd_mep", "mep");
+    const flowsOf = (holding: string) =>
+      cashFlowsOf(
+        all.filter((movement) => movement.holding_id === holding),
+        steps.get(holding)!,
+      )!;
+    const march = [...flowsOf("x"), ...flowsOf("y")].filter(
+      (flow) => flow.date > "2026-02-28",
+    );
+    expect(march).toEqual([
+      { date: "2026-03-02", amount: "-7", kind: "sell", charges: "7" },
+      { date: "2026-03-02", amount: "0", kind: "buy", charges: "0" },
+    ]);
+    // Prices did not move: the month's result is the fee, lost.
+    expect(
+      periodResult({
+        from: "2026-02-28",
+        to: "2026-03-31",
+        startValue: "4000",
+        endValue: "4000",
+        flows: march,
+      }),
+    ).toMatchObject({
+      paidIn: "0",
+      proceeds: "0",
+      contributed: "0",
+      market: "0",
+      charges: "7",
+      result: "-7",
+    });
   });
 });

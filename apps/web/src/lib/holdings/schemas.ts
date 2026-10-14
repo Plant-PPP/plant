@@ -99,7 +99,8 @@ const incomeParts = {
 // A transfer moves its quantity out of one portfolio's holding and into
 // another's, in the same account or, when the arriving side names one,
 // another. The side units arrive in may name their cost per unit; without
-// one they carry the cost they left with.
+// one they carry the cost they left with. Its charges are its fee, which the
+// side units leave pays whole.
 const transferParts = {
   ...inAccount,
   parts: z
@@ -193,7 +194,7 @@ export const operationInputSchema = z.discriminatedUnion("kind", [
     .strict()
     .superRefine(onePerPortfolio),
   movementBranch("transfer")
-    .omit({ quantity: true, direction: true, price: true, charges: true })
+    .omit({ quantity: true, direction: true, price: true })
     .extend(transferParts)
     .strict()
     .superRefine(onePerPortfolio)
