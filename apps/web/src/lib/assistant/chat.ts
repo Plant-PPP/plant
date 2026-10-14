@@ -1,3 +1,4 @@
+import type { ChartTemplate } from "@/lib/charts/templates";
 import type { Denominator } from "@plant/core";
 
 import { countOf } from "@/lib/format/text";
@@ -21,13 +22,16 @@ export type ChartPart = {
   title: string;
   unit: ChatUnit;
   points: { label: string; value: string }[];
+  // How it is drawn, when the figures it shows have their own chart.
+  template?: ChartTemplate;
 };
 
 export const barsOf = (
+  template: ChartTemplate,
   title: string,
   unit: ChatUnit,
   points: ChartPart["points"],
-): ChartPart => ({ kind: "bars", title, unit, points });
+): ChartPart => ({ kind: "bars", template, title, unit, points });
 
 // The most charts one answer shows, and the most points each draws.
 export const MAX_CHARTS = 3;

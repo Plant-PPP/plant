@@ -1,3 +1,4 @@
+import { CHART_TEMPLATES, type ChartTemplate } from "@/lib/charts/templates";
 import {
   CHART_KINDS,
   CHAT_UNITS,
@@ -48,6 +49,9 @@ const chartOf = (value: unknown): ChartPart[] => {
   return [
     {
       kind: chart.kind as ChartPart["kind"],
+      ...(CHART_TEMPLATES.includes(chart.template as ChartTemplate) && {
+        template: chart.template as ChartTemplate,
+      }),
       unit: chart.unit as ChartPart["unit"],
       title: chart.title,
       points: points.slice(0, MAX_CHART_POINTS).flatMap((point) => {

@@ -4,7 +4,7 @@ import { barsOf } from "@/lib/assistant/chat";
 
 import { ChartBoundary, ChartCard } from "./chart-card";
 
-const chart = barsOf("Lo que debés", "ars", [
+const chart = barsOf("debts", "Lo que debés", "ars", [
   { label: "Hipoteca", value: "1000" },
 ]);
 
@@ -20,7 +20,7 @@ it("shows the title, the day and unit of the data, and its actions", () => {
   expect(html).toContain("Hipoteca");
 });
 
-it("draws a line with its first and last values, and every value for a screen reader", () => {
+it("draws a line as a chart named by its title, and every value for a screen reader", () => {
   const html = renderToStaticMarkup(
     <ChartCard
       chart={{
@@ -36,7 +36,7 @@ it("draws a line with its first and last values, and every value for a screen re
       asOf="2026-10-12"
     />,
   );
-  expect(html).toContain("<polyline");
+  expect(html).toContain('role="img" aria-label="Tu patrimonio"');
   expect(html).toContain("Ene 26: $ 100,00");
   expect(html).toContain("Feb 26: $ 150,00");
   expect(html).toContain("Mar 26: $ 120,00");

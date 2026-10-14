@@ -604,6 +604,7 @@ export function assistantData({
         meta: meta(history),
         chart: {
           kind: "line" as const,
+          template: "net_worth" as const,
           title: "Patrimonio neto al cierre de cada mes",
           unit,
           points: history.months.map((month) => ({
@@ -619,6 +620,7 @@ export function assistantData({
       return {
         meta: meta(split),
         chart: barsOf(
+          "distribution",
           "Cómo están repartidos tus activos",
           unit,
           split.byKind.map((each) => ({ label: each.kind, value: each.value })),
@@ -631,6 +633,7 @@ export function assistantData({
       return {
         meta: meta(listed),
         chart: barsOf(
+          "ranking",
           "Tus tenencias más grandes",
           unit,
           listed.holdings.flatMap((each) =>
@@ -646,6 +649,7 @@ export function assistantData({
       return {
         meta: meta(income),
         chart: barsOf(
+          "income",
           "Lo que esperás cobrar por mes",
           unit,
           income.byMonth.map((month) => ({
@@ -659,6 +663,7 @@ export function assistantData({
     return {
       meta: meta(owed),
       chart: barsOf(
+        "debts",
         "Lo que debés",
         unit,
         owed.debts.flatMap((each) =>
