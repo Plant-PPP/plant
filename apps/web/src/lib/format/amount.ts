@@ -22,6 +22,10 @@ const AFFIXES = {
   USD: { prefix: "US$ ", suffix: "" },
 } satisfies Record<Unit, { prefix: string; suffix: string }>;
 
+// A currency's symbol, as its amounts start: $ or US$.
+export const currencySymbol = (currency: Currency): string =>
+  AFFIXES[currency].prefix.trim();
+
 const CURRENCY_DIGITS = 2;
 const QUANTITY_DIGITS = 8;
 
