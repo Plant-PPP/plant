@@ -3,6 +3,7 @@ import {
   type DraftOperation,
   type ConnectionAdapters,
   type ConnectionDraft,
+  type ReadPeriod,
   type ConnectionProvider,
   type ImportDraft,
   type PortfolioSourcePort,
@@ -34,6 +35,7 @@ export type ImportToRead = {
       accountId: string;
       provider: ConnectionProvider;
       draft: ConnectionDraft;
+      period: ReadPeriod;
     }
 );
 
@@ -105,6 +107,7 @@ type Prepared =
       accountId: string;
       provider: ConnectionProvider;
       draft: ConnectionDraft;
+      period: ReadPeriod;
     }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
 type Read = {
@@ -227,6 +230,7 @@ export async function runImportDocument(
         accountId: found.accountId,
         provider: found.provider,
         draft: found.draft,
+        period: found.period,
       };
     }
     if (!found.path.startsWith(`${userId}/imports/`)) {
@@ -267,6 +271,7 @@ export async function runImportDocument(
           reading = await deps.connections[prepared.provider]().read(
             credentials,
             prepared.draft,
+            prepared.period,
           );
         } else {
           const bytes = await deps.store.download(prepared.path);

@@ -75,7 +75,8 @@ SELECT set_eq(
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.imports') $$,
   ARRAY['(table):SELECT', 'document_id:INSERT', 'source_connection_id:INSERT',
-        'provider:INSERT', 'sync_draft:INSERT', 'status:UPDATE'],
+        'provider:INSERT', 'sync_draft:INSERT', 'sync_from:INSERT', 'sync_to:INSERT',
+        'status:UPDATE'],
   'a user reads their imports, starts one of a file or a sync (account_api_keys_test.sql) and moves its status only as confirm_import_test.sql pins'
 );
 

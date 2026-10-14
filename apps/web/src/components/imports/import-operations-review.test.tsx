@@ -108,3 +108,40 @@ it("says an operation already in the account is loaded, set aside", () => {
   expect(html).toContain("1 ya estaba cargada");
   expect(html).toContain("Recuperar");
 });
+
+it("counts the operations it will import, and filters them by kind and asset", () => {
+  const html = render([
+    operation(),
+    operation({ id: "o2", reference: "124", discarded: true }),
+  ]);
+  expect(html).toContain("1 de 2 para importar");
+  expect(html).toContain('aria-label="Mostrar operaciones de tipo"');
+  expect(html).toContain(">Incluir las que se ven</button>");
+  expect(html).toContain(">Descartar las que se ven</button>");
+});
+
+it("filters by asset only when the operations name more than one", () => {
+  expect(render([operation()])).not.toContain(
+    'aria-label="Mostrar operaciones del activo"',
+  );
+  expect(
+    render([operation(), operation({ id: "o2", symbol: "GGAL" })]),
+  ).toContain('aria-label="Mostrar operaciones del activo"');
+});
+
+it("never brings back an operation the account holds under its number", () => {
+  const locked = render([
+    operation({ discarded: true, loaded: true }),
+    operation({ id: "o2", reference: "124" }),
+  ]);
+  expect(locked).toMatch(
+    /<button[^>]*disabled=""[^>]*aria-label="Recuperar la operación 1"/,
+  );
+  const unnumbered = render([
+    operation({ reference: null, discarded: true, loaded: true }),
+    operation({ id: "o2", reference: "124" }),
+  ]);
+  expect(unnumbered).not.toMatch(
+    /<button[^>]*disabled=""[^>]*aria-label="Recuperar la operación 1"/,
+  );
+});
