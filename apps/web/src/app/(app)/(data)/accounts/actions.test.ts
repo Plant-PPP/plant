@@ -541,7 +541,10 @@ describe("source connection actions", () => {
 // and answers with the next response; the client itself is not awaitable.
 function chainClient(
   responses: { data: unknown; error: Response["error"]; status: number }[],
-  removed: { error: { name: string } | null } = { error: null },
+  removed: {
+    error: { name: string } | null;
+    data?: { name: string }[];
+  } = { error: null },
 ) {
   const calls: unknown[][] = [];
   const query = (table: string) => {
@@ -697,6 +700,19 @@ describe("deleteSourceConnection", () => {
       level: "error",
       "error.type": "storage_remove",
     });
+  });
+
+  it("deletes the account when its files are already gone", async () => {
+    // A retry after the delete was refused once the files had left Storage.
+    const calls = chainClient([rows(), rows({ storage_path: PATH }), ok(ID)], {
+      error: null,
+      data: [],
+    });
+    await expect(deleteSourceConnection(ID)).resolves.toEqual({
+      ok: true,
+      id: ID,
+    });
+    expect(calls).toContainEqual(["from", "source_connections"]);
   });
 
   it("fails without removing files when the uploads cannot be read", async () => {
