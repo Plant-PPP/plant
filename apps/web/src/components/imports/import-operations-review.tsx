@@ -41,8 +41,10 @@ import {
   type ImportItem,
   type ImportOperationKind,
   type ImportOperationRow,
+  lackingField,
   lackingFigure,
   missingText,
+  savedToast,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
@@ -235,7 +237,11 @@ export function ImportOperationsReview({
       if (result !== "rejected" && result.ok) {
         const kept = finals.filter((row) => !row.discarded).length;
         toast.success(
-          `Guardaste ${countOf(kept, "operación", "operaciones")} de ${item.fileName} en ${institution}`,
+          savedToast(
+            countOf(kept, "operación", "operaciones"),
+            item,
+            institution,
+          ),
         );
         router.push(doneHref);
         return;
@@ -492,7 +498,12 @@ export function ImportOperationsReview({
                       }
                     />
                     {!row.discarded && missing[index]!.has("date") && (
-                      <ProblemText text={missingCopy} />
+                      <ProblemText
+                        text={lackingField(
+                          item.operations?.[index]?.date ?? null,
+                          item.origin,
+                        )}
+                      />
                     )}
                   </label>
                   <label className="grid gap-1 text-xs">

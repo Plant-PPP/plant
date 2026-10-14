@@ -1,8 +1,11 @@
 import {
   IMPORT_FAILURE_MESSAGES,
   importFailureMessage,
+  lackingField,
   lackingFigure,
+  missingText,
   readTotals,
+  savedToast,
   rowChange,
   totalsMatch,
 } from "./review";
@@ -96,4 +99,32 @@ it("says why a figure the review needs is lacking", () => {
   expect(lackingFigure("0", null, "sync", "amount")).toBe(
     "Ingresá un monto mayor a 0",
   );
+});
+
+it("blames a missing field on what the import read only when it never brought one", () => {
+  expect(lackingField(null, "sync")).toBe("No vino en la sincronización");
+  expect(lackingField(null, "document")).toBe("Falta en el documento");
+  expect(lackingField("2026-01-02", "document")).toBe("Completá este dato");
+  expect(lackingField("Visa", "sync")).toBe("Completá este dato");
+});
+
+it("words what a spreadsheet did not bring by the spreadsheet", () => {
+  expect(missingText("sheet")).toBe("Falta en la planilla");
+});
+
+it("names a sync's save by its account, a file's by the file too", () => {
+  const sync = { origin: "sync" as const, fileName: "Operaciones de IOL" };
+  expect(savedToast("2 operaciones", sync, "InvertirOnline")).toBe(
+    "Guardaste 2 operaciones de InvertirOnline",
+  );
+  expect(savedToast("lo", sync, "InvertirOnline")).toBe(
+    "Guardaste lo de InvertirOnline",
+  );
+  expect(
+    savedToast(
+      "2 operaciones",
+      { origin: "document", fileName: "boletos.pdf" },
+      "Cocos",
+    ),
+  ).toBe("Guardaste 2 operaciones de boletos.pdf en Cocos");
 });

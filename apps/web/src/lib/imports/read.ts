@@ -27,6 +27,7 @@ import {
   type ImportOrigin,
   type ImportOperationRow,
   type ImportRow,
+  SUPERSEDED_SYNC_MESSAGE,
 } from "@/lib/imports/review";
 import {
   IMPORT_ORIGIN_COLUMNS,
@@ -57,6 +58,16 @@ const rowSchema = importOriginSchema.extend({
   created_at: z.string(),
 });
 
+const importError = (
+  row: z.infer<typeof rowSchema>,
+  origin: ImportOrigin,
+): string | null =>
+  row.failure
+    ? importFailureMessage(row.failure, syncProvider(row))
+    : row.status === "failed" && origin === "sync"
+      ? SUPERSEDED_SYNC_MESSAGE
+      : null;
+
 // The user's latest `limit` imports, newest first, whether there were more,
 // and how many they started this month (in Buenos Aires), deleted ones
 // included. `limit` stays below MAX_ROWS, so one response holds the row past
@@ -84,12 +95,12 @@ export async function readImports(
   const rows = list.data as unknown[];
   const items = rows.slice(0, limit).map((data): ImportItem => {
     const row = rowSchema.parse(data);
+    const origin = importOrigin(row);
     return {
       id: row.id,
-      ...importOrigin(row),
+      ...origin,
       status: row.status,
-      error:
-        row.failure && importFailureMessage(row.failure, syncProvider(row)),
+      error: importError(row, origin.origin),
       documentDate: row.document_date,
       documentTotals: [],
       rows: [],
@@ -370,7 +381,7 @@ export async function readImportForReview(
     id: row.id,
     ...origin,
     status: row.status,
-    error: row.failure && importFailureMessage(row.failure, syncProvider(row)),
+    error: importError(row, origin.origin),
     documentDate: row.document_date,
     documentTotals: [
       { currency: "ARS" as const, amount: printed.printed_total_ars },

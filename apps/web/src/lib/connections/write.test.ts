@@ -598,6 +598,62 @@ describe("syncAccount", () => {
     },
   );
 
+  const supersededQueue = (insert: Answer) =>
+    answer((verb) =>
+      verb === "insert"
+        ? insert
+        : verb === "update"
+          ? { status: 200, data: [{ id: "q1" }], error: null }
+          : {
+              status: 200,
+              data: [
+                {
+                  id: "q1",
+                  status: "queued",
+                  ...HOLDINGS_SYNC,
+                  sync_draft: "operations",
+                },
+              ],
+              error: null,
+            },
+    );
+
+  it("logs the queued sync it failed for the new one", async () => {
+    answers.imports = supersededQueue({
+      status: 201,
+      data: [{ id: "i1" }],
+      error: null,
+    });
+    await syncAccount(ACCOUNT);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        "plant.connection.step": "sync",
+        "plant.outcome": "superseded",
+        "plant.import.id": "q1",
+      }),
+    );
+  });
+
+  it("logs both ids when the new sync fails to start after failing the queued one", async () => {
+    answers.imports = supersededQueue({
+      status: 500,
+      data: null,
+      error: { code: "XX000" },
+    });
+    expect(await syncAccount(ACCOUNT)).toEqual({
+      ok: false,
+      code: "failed",
+    });
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        "plant.connection.step": "sync",
+        "plant.outcome": "superseded_not_replaced",
+        "plant.import.id": "q1",
+        "plant.source_connection.id": ACCOUNT,
+      }),
+    );
+  });
+
   it("answers in progress when the queued sync it would fail starts being read", async () => {
     answers.imports = answer((verb) =>
       verb === "update"

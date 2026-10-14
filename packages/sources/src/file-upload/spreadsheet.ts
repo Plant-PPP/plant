@@ -91,10 +91,14 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   if (!sheet || !ref) throw new SourceError("nothing_found", false);
   const range = XLSX.utils.decode_range(ref);
   // SheetJS sets `!fullref` whenever the sheet claims rows past sheetRows,
-  // a styled empty cell far below included; only a parse that reached
-  // SHEET_PARSE_ROWS left rows unread.
+  // a styled empty cell far below included, and clamps `!ref` to the last
+  // row it parsed with a cell. Rows went unread when that parse reached
+  // SHEET_PARSE_ROWS, or when the table and lookahead window ends past it,
+  // a blank gap at the cap included.
   const parseCapped =
-    sheet["!fullref"] !== undefined && range.e.r >= SHEET_PARSE_ROWS - 1;
+    sheet["!fullref"] !== undefined &&
+    (range.e.r >= SHEET_PARSE_ROWS - 1 ||
+      range.s.r + SHEET_ROW_LIMIT + SHEET_LOOKAHEAD_ROWS > SHEET_PARSE_ROWS);
   range.e.c = Math.min(range.e.c, range.s.c + SHEET_COLUMN_LIMIT - 1);
   range.e.r = Math.min(
     range.e.r,

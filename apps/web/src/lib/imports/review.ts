@@ -69,6 +69,11 @@ export function importFailureMessage(
     : IMPORT_FAILURE_MESSAGES[failure];
 }
 
+// A failed sync with no failure: the user started another while it was
+// still queued.
+export const SUPERSEDED_SYNC_MESSAGE =
+  "La reemplazaste por otra sincronización.";
+
 // How sure the reading is of a row; a low one is for the user to check.
 export type Confidence = "high" | "medium" | "low";
 
@@ -90,9 +95,33 @@ export const issueLabel = (issue: ImportIssue, cash: boolean): string =>
     ? "Este saldo aparece más de una vez"
     : ISSUE_LABELS[issue];
 
+// What a file import read, as the review names it.
+export const fileNoun = (origin: ImportOrigin): string =>
+  origin === "sheet" ? "la planilla" : "el documento";
+
 // What a field the import did not bring says.
 export const missingText = (origin: ImportOrigin): string =>
-  origin === "sync" ? "No vino en la sincronización" : "Falta en el documento";
+  origin === "sync"
+    ? "No vino en la sincronización"
+    : `Falta en ${fileNoun(origin)}`;
+
+// Why a field the review needs is empty, given what the import brought:
+// never brought by it, or cleared by the user.
+export const lackingField = (
+  draft: string | null,
+  origin: ImportOrigin,
+): string => (draft === null ? missingText(origin) : "Completá este dato");
+
+// The toast after confirming `what` of an import into the account named
+// `institution`: a sync's by the account alone, a file's by the file too.
+export const savedToast = (
+  what: string,
+  item: Pick<ImportItem, "origin" | "fileName">,
+  institution: string,
+): string =>
+  item.origin === "sync"
+    ? `Guardaste ${what} de ${institution}`
+    : `Guardaste ${what} de ${item.fileName} en ${institution}`;
 
 const ABOVE_ZERO = {
   quantity: "Ingresá una cantidad mayor a 0",
@@ -110,7 +139,7 @@ export function lackingFigure(
   figure: keyof typeof ABOVE_ZERO,
 ): string {
   if (text.trim() !== "") return ABOVE_ZERO[figure];
-  return draft === null ? missingText(origin) : "Completá este dato";
+  return lackingField(draft, origin);
 }
 
 // Why the statement's date looks wrong, in the user's words.

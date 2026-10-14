@@ -64,11 +64,13 @@ import type { HeldCash } from "@/lib/imports/cash";
 import {
   CONFIDENCE_LABELS,
   DATE_ISSUE_LABELS,
+  fileNoun,
   type ImportItem,
   type ImportRow,
   issueLabel,
   readTotals,
   rowChange,
+  savedToast,
   totalsMatch,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
@@ -125,9 +127,7 @@ const CHANGE_TEXT = {
 // What the review asks of its rows when one is not ready, by what it read.
 export function invalidRowsAlert(origin: ImportItem["origin"]): string {
   const account =
-    origin === "sync"
-      ? ""
-      : `, su cuenta si ${origin === "sheet" ? "la planilla" : "el documento"} lista varias`;
+    origin === "sync" ? "" : `, su cuenta si ${fileNoun(origin)} lista varias`;
   return `Revisá las filas: cada una necesita un activo que no se repita en su cuenta, una cantidad mayor a 0${account} y, si suma unidades, su precio.`;
 }
 
@@ -452,6 +452,7 @@ export function ImportReview({
       .map((row) => row.symbol),
   );
   const omitted = [...held.keys()].filter((symbol) => !kept.has(symbol));
+  const noun = fileNoun(item.origin);
 
   const change = (id: string, patch: Partial<EditedRow>) =>
     setRows((current) =>
@@ -469,7 +470,7 @@ export function ImportReview({
         actions.confirm(item.id, finalRows, heldCash),
       );
       if (result !== "rejected" && result.ok) {
-        toast.success(`Guardaste lo de ${item.fileName} en ${institution}`);
+        toast.success(savedToast("lo", item, institution));
         router.push(doneHref);
         return;
       }
@@ -528,10 +529,10 @@ export function ImportReview({
               <TriangleAlert aria-hidden className="size-4 text-amber-600" />
             )}
             {matches === "none"
-              ? "El documento no muestra un total para comparar: revisá las filas."
+              ? `${item.origin === "sheet" ? "La planilla" : "El documento"} no muestra un total para comparar: revisá las filas.`
               : matches
-                ? "Lo leído suma lo mismo que el documento."
-                : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
+                ? `Lo leído suma lo mismo que ${noun}.`
+                : `Lo leído no suma lo mismo que ${noun}: revisá las filas dudosas.`}
           </p>
           <table className="w-fit text-sm tabular-nums">
             <caption className="sr-only">Totales por moneda</caption>
@@ -544,7 +545,7 @@ export function ImportReview({
                   Leído
                 </th>
                 <th scope="col" className="font-normal">
-                  Documento
+                  {item.origin === "sheet" ? "Planilla" : "Documento"}
                 </th>
               </tr>
             </thead>
@@ -569,7 +570,7 @@ export function ImportReview({
                     </td>
                     <td>
                       {printed === undefined ? (
-                        <MissingFigure text="Sin total en el documento" />
+                        <MissingFigure text={`Sin total en ${noun}`} />
                       ) : (
                         formatAmount(printed, currency)
                       )}
@@ -696,7 +697,7 @@ export function ImportReview({
                 {row.accountLabel !== undefined && accounts && (
                   <label className="grid gap-1 text-xs sm:col-span-4">
                     <span className="text-muted-foreground">
-                      {`Cuenta · el documento dice "${row.accountLabel}"`}
+                      {`Cuenta · ${noun} dice "${row.accountLabel}"`}
                     </span>
                     <Select
                       value={row.accountId ?? ""}
@@ -823,12 +824,14 @@ export function ImportReview({
           <h2 id={`${pickerId}-omitted`} className="text-base font-semibold">
             {item.origin === "sync"
               ? "No vinieron en la sincronización"
-              : "No figuran en el resumen"}
+              : item.origin === "sheet"
+                ? "No figuran en la planilla"
+                : "No figuran en el resumen"}
           </h2>
           <p className="text-muted-foreground text-xs">
             {item.origin === "sync"
               ? "Los tenés en la cuenta y la sincronización no los trajo: quedan como están."
-              : "Los tenés en la cuenta y el documento no los lista: quedan como están."}
+              : `Los tenés en la cuenta y ${noun} no los lista: quedan como están.`}
           </p>
           <ul className="grid gap-1 text-sm">
             {omitted.map((symbol) => (

@@ -48,3 +48,9 @@ it("says why a sync failed, in the sync's own words", () => {
   expect(html).toContain("Bitso rechazó la conexión.");
   expect(html).toContain("text-destructive");
 });
+
+it("says a sync with no failure was replaced by another", () => {
+  const html = sync({ status: "failed", failure: null });
+  expect(html).toContain("La reemplazaste por otra sincronización.");
+  expect(html).not.toContain("No pudimos leer la cuenta conectada");
+});
