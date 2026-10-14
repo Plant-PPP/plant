@@ -34,7 +34,11 @@ import {
   type SyncResult,
 } from "@/lib/connections/api-key";
 import { formatDate } from "@/lib/format/date";
-import { importFailureMessage, isBusy } from "@/lib/imports/review";
+import {
+  importFailureMessage,
+  isBusy,
+  SUPERSEDED_SYNC_MESSAGE,
+} from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
@@ -262,7 +266,9 @@ export function SyncStatus({
         <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
         <span>
           La última sincronización falló ({when}).{" "}
-          {importFailureMessage(sync.failure ?? "extraction_failed", provider)}
+          {sync.failure
+            ? importFailureMessage(sync.failure, provider)
+            : SUPERSEDED_SYNC_MESSAGE}
         </span>
       </p>
     );

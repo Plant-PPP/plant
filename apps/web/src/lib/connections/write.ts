@@ -478,6 +478,7 @@ export async function syncAccount(
       log(current, "in_progress");
       return { ok: false, code: "in_progress" };
     };
+    let superseded: string | undefined;
     // The sync in flight, resumed when it is the one asked for; null when
     // none is, or when `supersede` failed the queued one.
     const resume = async (supersede: boolean): Promise<SyncResult | null> => {
@@ -491,6 +492,15 @@ export async function syncAccount(
         return { ok: true, importId: flying.id };
       }
       if (supersede && (await failQueued(client, current.userId, flying.id))) {
+        superseded = flying.id;
+        serverLog.info(EVENT, {
+          [REQUEST_ID_FIELD]: current.requestId,
+          "enduser.id": current.userId,
+          "plant.connection.step": "sync",
+          "plant.connection.provider": current.provider,
+          "plant.import.id": flying.id,
+          "plant.outcome": "superseded",
+        });
         return null;
       }
       return inProgress();
@@ -517,6 +527,19 @@ export async function syncAccount(
       return (await resume(false)) ?? inProgress();
     }
     if (refused || started.data?.length !== 1) {
+      // The queued sync stays failed with no sync in its place; the next
+      // "Sincronizar" starts one.
+      if (superseded) {
+        serverLog.warn(EVENT, {
+          [REQUEST_ID_FIELD]: current.requestId,
+          "enduser.id": current.userId,
+          "plant.connection.step": "sync",
+          "plant.connection.provider": current.provider,
+          "plant.import.id": superseded,
+          "plant.source_connection.id": id,
+          "plant.outcome": "superseded_not_replaced",
+        });
+      }
       throw new Error(`sync not started: ${refused?.code ?? "no_row"}`);
     }
     const importId = started.data[0]!.id;

@@ -69,6 +69,11 @@ export function importFailureMessage(
     : IMPORT_FAILURE_MESSAGES[failure];
 }
 
+// A failed sync with no failure: the user started another while it was
+// still queued.
+export const SUPERSEDED_SYNC_MESSAGE =
+  "La reemplazaste por otra sincronización.";
+
 // How sure the reading is of a row; a low one is for the user to check.
 export type Confidence = "high" | "medium" | "low";
 

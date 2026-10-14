@@ -157,6 +157,27 @@ it("lists a sync by its provider and says why it failed in its own words", async
   ]);
 });
 
+it("says a sync failed for another one replaced it", async () => {
+  const read = await readImports(
+    clientOf(
+      [
+        {
+          id: "s1",
+          status: "failed",
+          failure: null,
+          document_date: null,
+          created_at: "2026-10-12T15:00:00+00:00",
+          source_connection_id: "a1",
+          provider: "binance",
+          document: null,
+        },
+      ],
+      0,
+    ) as never,
+  );
+  expect(read.items[0]!.error).toBe("La reemplazaste por otra sincronización.");
+});
+
 describe("with 51 imports", () => {
   const imports = Array.from({ length: 51 }, (_, index) => ({
     id: `i${index}`,
