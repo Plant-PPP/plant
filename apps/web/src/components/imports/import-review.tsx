@@ -292,19 +292,17 @@ export function ImportReview({
         !opensWithCost(row, quantity, cost));
   // The instruments the rows kept already list in each account: one row
   // each.
-  const listed = (except: string) =>
-    new Set(
-      rows
-        .filter((row) => !row.discarded && row.id !== except)
-        .map((row) => `${row.symbol}|${accountOf(row)}`),
-    );
-  const listedIn = (except: string, account: string) =>
-    new Set(
-      [...listed(except)].flatMap((key) => {
-        const [symbol, owner] = key.split("|");
-        return owner === account ? [symbol!] : [];
-      }),
-    );
+  const listedCount = new Map<string, number>();
+  for (const row of rows) {
+    if (row.discarded) continue;
+    const key = `${row.symbol}|${accountOf(row)}`;
+    listedCount.set(key, (listedCount.get(key) ?? 0) + 1);
+  }
+  // Whether another kept row lists the instrument in the row's account.
+  const listedElsewhere = (row: EditedRow, symbol: string) =>
+    (listedCount.get(`${symbol}|${accountOf(row)}`) ?? 0) -
+      (!row.discarded && row.symbol === symbol ? 1 : 0) >
+    0;
   // A row a document lists under an account names none of the user's until
   // the review picks one.
   const unrouted = (row: EditedRow) =>
@@ -316,7 +314,7 @@ export function ImportReview({
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
         !unrouted(each.row) &&
-        !listedIn(each.row.id, accountOf(each.row)).has(each.row.symbol) &&
+        !listedElsewhere(each.row, each.row.symbol) &&
         !priceInvalid(each) &&
         !costInvalid(each)),
   );
@@ -574,8 +572,7 @@ export function ImportReview({
                       id={`${pickerId}-${row.id}`}
                       aria-label={`Activo de la fila ${index + 1}`}
                       instruments={instruments.filter(
-                        (each) =>
-                          !listedIn(row.id, accountOf(row)).has(each.symbol),
+                        (each) => !listedElsewhere(row, each.symbol),
                       )}
                       value={row.symbol}
                       onChange={(symbol) =>
