@@ -77,7 +77,7 @@ describe("importDraftSchema", () => {
   it.each([
     ["no units", { quantity: "0" }],
     ["a float", { quantity: 5 }],
-    ["a currency it does not know", { currency: "EUR" }],
+    ["a currency it does not know", { currency: "GBP" }],
     ["a page 0", { page: 0 }],
     ["a value of 0", { value: "0" }],
     ["an extra field", { cuit: "20-12345678-9" }],
