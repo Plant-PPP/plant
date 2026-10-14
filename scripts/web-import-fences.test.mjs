@@ -469,7 +469,7 @@ const SINKS = [
   // Its user is a server action: it takes no user id, writing for the
   // session's claims.
   {
-    name: "recordExport",
+    name: "auditedExport",
     spec: "@/lib/export/export-audit-sink",
     file: "src/lib/export/export-audit-sink.ts",
     user: "src/app/(app)/(data)/settings/actions.ts",
@@ -593,6 +593,22 @@ flagged.push(
     "src/app/api/x/route.ts",
     "src/app/(app)/(data)/settings/page.tsx",
   ].map((filePath) => [filePath, 'import "@/lib/export/export-audit-sink";']),
+  // The settings actions reach the sink only through auditedExport, which
+  // decides each audit outcome itself, and the sink exports nothing else.
+  ...[
+    'import { recordExport } from "@/lib/export/export-audit-sink";\nexport async function f() {\n  await recordExport("success", undefined);\n}',
+    'import { auditedExport as recordExport } from "@/lib/export/export-audit-sink";\nexport const f = () => recordExport;',
+    'import * as sink from "@/lib/export/export-audit-sink";\nexport const f = () => sink;',
+    'export const f = () => import("@/lib/export/export-audit-sink");',
+  ].map((code) => [
+    "src/app/(app)/(data)/settings/actions.ts",
+    `"use server";\n${code}`,
+  ]),
+  ...[
+    "export async function recordExport() {}",
+    "export const recordExport = async () => {};",
+    "export class ExportAuditError extends Error {}",
+  ].map((code) => ["src/lib/export/export-audit-sink.ts", code]),
 );
 
 flagged.push(
@@ -706,11 +722,11 @@ const allowed = [
   ],
   [
     "src/lib/export/export-audit-sink.test.ts",
-    'import { recordExport } from "./export-audit-sink";\nexport const s = recordExport;',
+    'import { auditedExport } from "./export-audit-sink";\nexport const s = auditedExport;',
   ],
   [
     "src/app/(app)/(data)/settings/actions.ts",
-    '"use server";\nimport { recordExport } from "@/lib/export/export-audit-sink";\nexport async function f() {\n  await recordExport("success", undefined);\n}',
+    '"use server";\nimport { auditedExport } from "@/lib/export/export-audit-sink";\nexport async function f() {\n  return auditedExport(async () => ({ tables: [], truncated: false }));\n}',
   ],
   [
     "src/app/api/x/route.ts",

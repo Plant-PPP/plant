@@ -44,3 +44,24 @@ export function reportLimiter({
     return dropped === 1 ? "dropped_first" : "dropped";
   };
 }
+
+// A per-user bound on an action, with no instance budget: users who spend
+// theirs lock out nobody else. Past maxUsers in a window the rest share one
+// count, which bounds memory.
+export function userLimiter({
+  now,
+  perUser,
+  maxUsers = 10_000,
+}: {
+  now?: () => number;
+  perUser: number;
+  maxUsers?: number;
+}) {
+  const limit = reportLimiter({
+    now,
+    perSender: perUser,
+    perInstance: Number.POSITIVE_INFINITY,
+    maxSenders: maxUsers,
+  });
+  return (userId: string): boolean => limit(userId) === "logged";
+}

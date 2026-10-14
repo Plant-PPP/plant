@@ -118,6 +118,9 @@ export type MovementResult =
         // A statement older than a balance the account already set of the
         // same instrument.
         | "opens_later"
+        // An import confirmed against cash or holdings that changed after
+        // the review read them.
+        | "stale"
         | Extract<
             PortfolioSetupGuardHint,
             "portfolio_archived" | "source_connection_archived"

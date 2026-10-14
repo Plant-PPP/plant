@@ -1204,7 +1204,11 @@ export function setPrice<S extends Ledger>(
   const parsed = manualPriceSchema.safeParse(input);
   if (!parsed.success) return refused(state, { ok: false, code: "invalid" });
   const price = parsed.data;
-  const admitted = admitManualPrice(price, state.today);
+  const admitted = admitManualPrice(
+    price,
+    state.today,
+    state.instruments.find((each) => each.symbol === price.symbol)?.currency,
+  );
   if (!admitted.ok) return refused(state, admitted);
   return {
     state: {

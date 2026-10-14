@@ -100,6 +100,27 @@ const READER_CALLS_ONLY = [
   })),
 ];
 
+// The export audit sink exports auditedExport alone, and the settings actions
+// import nothing else from it, so no server action passes an audit outcome.
+const AUDITED_EXPORT = "auditedExport";
+const EXPORT_SINK_SOURCE = `[source.value=${asSelector(EXPORT_AUDIT_SINK.regex)}]`;
+const AUDITED_EXPORT_ONLY = [
+  `ImportDeclaration[importKind!="type"]${EXPORT_SINK_SOURCE} > ImportSpecifier[importKind!="type"]:matches([imported.name!="${AUDITED_EXPORT}"], [local.name!="${AUDITED_EXPORT}"])`,
+  `ImportDeclaration${EXPORT_SINK_SOURCE} > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
+  `ImportExpression${EXPORT_SINK_SOURCE}`,
+].map((selector) => ({
+  selector,
+  message: `Import only ${AUDITED_EXPORT} from the export audit sink.`,
+}));
+const EXPORTS_AUDITED_EXPORT_ONLY = [
+  `ExportNamedDeclaration > FunctionDeclaration[id.name!="${AUDITED_EXPORT}"]`,
+  "ExportNamedDeclaration > ClassDeclaration",
+  "ExportNamedDeclaration > VariableDeclaration",
+].map((selector) => ({
+  selector,
+  message: `The export audit sink exports only ${AUDITED_EXPORT}.`,
+}));
+
 // The prototype's directories, and what its files may not do: hold a server
 // action, which would be a public endpoint writing nothing real.
 const PROTOTYPE_FILES = ["src/components/prototype", "src/lib/prototype"];
@@ -230,16 +251,23 @@ export default defineConfig([
   },
   {
     files: ["src/lib/export/export-audit-sink.ts"],
-    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
+    rules: webRules({
+      allow: [SERVICE_ROLE],
+      syntax: [...SERVICE_WRITER_SYNTAX, ...EXPORTS_AUDITED_EXPORT_ONLY],
+    }),
   },
   {
     files: ["src/lib/export/export-audit-sink.test.ts"],
     rules: webRules({ allow: [EXPORT_AUDIT_SINK], syntax: LIB_SYNTAX }),
   },
-  // A server action may hold this sink: it takes no user id.
+  // A server action may hold this sink's auditedExport alone: it takes no
+  // user id and decides every audit outcome itself.
   {
     files: ["src/app/(app)/(data)/settings/actions.ts"],
-    rules: webRules({ allow: [EXPORT_AUDIT_SINK], syntax: LIB_SYNTAX }),
+    rules: webRules({
+      allow: [EXPORT_AUDIT_SINK],
+      syntax: [...LIB_SYNTAX, ...AUDITED_EXPORT_ONLY],
+    }),
   },
   {
     files: ["src/app/api/chat/route.ts"],

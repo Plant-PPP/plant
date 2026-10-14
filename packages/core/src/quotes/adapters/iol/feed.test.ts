@@ -177,6 +177,11 @@ describe("iol parseLine", () => {
     expect(parseLine(instrument("AL30"), titulos, NOW).price).toBe("");
   });
 
+  it("refuses a price with more decimals than a unit price holds", () => {
+    const titulos = [line("KO", 1.123456789)];
+    expect(parseLine(instrument("KO"), titulos, NOW).price).toBe("");
+  });
+
   it("does not read a line through a __proto__ key", () => {
     const titulos = [JSON.parse('{"__proto__":{"simbolo":"KO"}}') as unknown];
     expect(parseLine(instrument("KO"), titulos, NOW).price).toBe("");

@@ -25,6 +25,11 @@ it("refuses a typed quote whose unit price 8 decimals cannot hold", () => {
   expect(exactUnitPrice("cedear", "18650.5")).toBe("18650.5");
 });
 
+it("refuses a typed quote with more digits than a decimal string holds", () => {
+  expect(exactUnitPrice("cedear", "1.123456789")).toBeNull();
+  expect(exactUnitPrice("cedear", "1234567890123")).toBeNull();
+});
+
 it("normalizes a symbol to upper-case letters and digits", () => {
   expect(normalizeSymbol("  Coca-Cola ")).toBe("COCACOLA");
   expect(normalizeSymbol("Ñandú S.A.")).toBe("NANDUSA");

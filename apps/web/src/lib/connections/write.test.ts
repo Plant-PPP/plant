@@ -1,7 +1,7 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("next/cache", () => ({ revalidatePath: jest.fn() }));
 jest.mock("@/lib/auth/session-claims", () => ({
-  getSessionClaims: async () => ({ sub: USER }),
+  getSessionClaims: async () => ({ sub: mockSessionUser.id }),
 }));
 jest.mock("@/lib/request-id-server", () => ({
   currentRequestId: async () => undefined,
@@ -58,6 +58,7 @@ jest.mock("@/lib/supabase/server", () => ({
 }));
 
 const USER = "a0000000-0000-4000-8000-00000000000a";
+const mockSessionUser = { id: USER };
 const ACCOUNT = "a5000000-0000-4000-8000-0000000000a5";
 
 import {
@@ -105,6 +106,7 @@ beforeEach(() => {
   clock += 120_000;
   jest.spyOn(Date, "now").mockReturnValue(clock);
   lines = captureServerLog();
+  mockSessionUser.id = USER;
   writes.length = 0;
   checkReadOnly.mockReset().mockResolvedValue(undefined);
   startImport.mockReset().mockResolvedValue(undefined);
@@ -328,6 +330,17 @@ describe("connectApiKey", () => {
     expect(checkReadOnly.mock.calls.length).toBeLessThanOrEqual(5);
     expect(results.at(-1)).toEqual({ ok: false, code: "limited" });
     expect(lines.at(-1)).toMatchObject({ "plant.outcome": "limited" });
+  });
+
+  it("limits each user on their own, so other users using theirs up locks out nobody", async () => {
+    for (let user = 1; user <= 20; user += 1) {
+      mockSessionUser.id = `user-${user}`;
+      for (let i = 0; i < 5; i += 1) await connectApiKey(INPUT, adapters);
+    }
+    checkReadOnly.mockClear();
+    mockSessionUser.id = "user-21";
+    expect(await connectApiKey(INPUT, adapters)).toEqual({ ok: true });
+    expect(checkReadOnly).toHaveBeenCalledTimes(1);
   });
 
   it("answers not found when the database refuses the account", async () => {

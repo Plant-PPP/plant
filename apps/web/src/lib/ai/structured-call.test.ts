@@ -136,3 +136,25 @@ it("logs a provider's refusal by its type and status, never its message", async 
   ]);
   expect(JSON.stringify(lines)).not.toContain("SECRET_MESSAGE");
 });
+
+it("logs a failed call with the import it was reading", async () => {
+  const model = new MockLanguageModelV3({
+    doGenerate: () => Promise.reject(new Error("down")),
+  });
+  await structuredCall({
+    modelId: "gemini-3.8-flash",
+    costType: "import_extraction",
+    userId: "u1",
+    importId: "i1",
+    record: jest.fn<Promise<void>, [AiCostInsert]>(async () => {}),
+    model: () => model,
+    system: "s",
+    messages: [{ role: "user", content: "m" }],
+    schema: z.object({ ok: z.boolean() }),
+    timeoutMs: 1000,
+  }).catch(() => undefined);
+  expect(lines.at(-1)).toMatchObject({
+    event: "ai.call_failed",
+    "plant.import.id": "i1",
+  });
+});
