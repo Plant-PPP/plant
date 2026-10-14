@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Charts with Vega-Lite (PLA-29)
+
+- **Every chart is a Vega-Lite spec built from figures the server computed**, by five templates in `lib/charts/templates.ts`: distribution, net worth over time, income per month, debts and the holdings ranking. A value only places a mark; every number a chart prints is the text the app formatted, so Vega rounds nothing.
+- **One renderer, `VegaChart`**, loads Vega and Vega-Lite on the first chart, runs them without eval (`ast: true`, so the CSP keeps no `unsafe-eval`), draws SVG, follows its box's width and the theme, and finalizes its view on unmount.
+- **The theme reads Plant's tokens**: the eight chart colors, the loss color, the muted text and the borders, resolved by the browser, since Vega paints SVG attributes and cannot read a CSS variable; a spec names a token as `var(--name)` and the renderer resolves it. Numbers use the mono font and the es-AR separators.
+- **The assistant's charts carry their template**; a chart kept from before carries none and is drawn by its kind. The image export still draws on a canvas.
+- **"Vencimientos de deudas" is what is owed on each debt**: the assistant's figures are balances, and no reader gives a series by due date yet.
+
 ## 2026-10-14 · An account's icon from its site (PLA-102)
 
 - **An institution the app ships no icon of may take its site**, an optional "Sitio web" under "Otra". Plant's server reads the site's icon once, as the account is saved, so no outside service learns which institutions a user has; with no site, or none read, the account shows its initial.

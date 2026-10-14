@@ -7,101 +7,37 @@ import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import type { ChartPart } from "@/lib/assistant/chat";
 import {
-  barShare,
   chartCaption,
   chartCsv,
   chartFileName,
   drawChart,
-  largest,
-  linePoints,
   PNG_SIZE,
 } from "@/lib/assistant/chart-files";
 import { csvBlob, saveFile } from "@/lib/export/download";
-import { formatAmount, shownSign } from "@/lib/format/amount";
-import { cn } from "@/lib/utils";
+import { VegaChart } from "@/components/charts/vega-chart";
+import { templateSpec } from "@/lib/charts/templates";
+import { formatAmount } from "@/lib/format/amount";
 
-// One bar per value, to scale from 0 to the largest magnitude, a loss drawn
-// in red; each bar names its value. The rows share their columns, so every
-// bar's track is as long as the others.
-function Bars({ chart }: { chart: ChartPart }) {
-  const top = largest(chart);
-  return (
-    <ul className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] gap-x-2 gap-y-1.5">
-      {chart.points.map((point, index) => (
-        <li
-          // Two debts may share a label.
-          key={index}
-          className="col-span-3 grid grid-cols-subgrid items-center text-xs"
-        >
-          <span className="text-muted-foreground leading-tight break-words">
-            {point.label}
-          </span>
-          <span className="bg-muted h-2 overflow-hidden rounded-full">
-            <span
-              className={cn(
-                "block h-full rounded-full",
-                shownSign(point.value, chart.unit) < 0
-                  ? "bg-destructive"
-                  : "bg-chart-3",
-              )}
-              style={{ width: `${barShare(point.value, top) * 100}%` }}
-            />
-          </span>
-          <span className="tabular-nums">
-            {formatAmount(point.value, chart.unit)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-const LINE_WIDTH = 600;
-const LINE_HEIGHT = 160;
-
-// A line through the points in order, its first and last values named, and
+// The chart drawn by its template, or by its kind when it names none, with
 // each point's value in a list a screen reader reads.
-function Line({ chart }: { chart: ChartPart }) {
-  const placed = linePoints(chart, LINE_WIDTH, LINE_HEIGHT);
-  const first = chart.points[0];
-  const last = chart.points.at(-1);
+function ChartBody({ chart }: { chart: ChartPart }) {
+  const data = chart.points.map((point) => ({
+    ...point,
+    shown: formatAmount(point.value, chart.unit),
+  }));
+  const template =
+    chart.template ?? (chart.kind === "line" ? "net_worth" : "ranking");
   return (
     <div className="grid gap-1">
-      <svg
-        viewBox={`-8 -8 ${LINE_WIDTH + 16} ${LINE_HEIGHT + 16}`}
-        className="h-auto w-full"
-        aria-hidden
-      >
-        <polyline
-          points={placed.map(({ x, y }) => `${x},${y}`).join(" ")}
-          fill="none"
-          stroke="var(--chart-3)"
-          strokeWidth={3}
-          strokeLinejoin="round"
-        />
-        {placed.map(({ x, y }, index) => (
-          <circle key={index} cx={x} cy={y} r={4} fill="var(--chart-3)" />
-        ))}
-      </svg>
-      {first && last && (
-        <div className="text-muted-foreground flex justify-between text-xs tabular-nums">
-          <span>{`${first.label}: ${formatAmount(first.value, chart.unit)}`}</span>
-          <span>{`${last.label}: ${formatAmount(last.value, chart.unit)}`}</span>
-        </div>
-      )}
+      <VegaChart spec={templateSpec(template, data)} label={chart.title} />
       <ul className="sr-only">
-        {chart.points.map((point, index) => (
-          <li key={index}>
-            {`${point.label}: ${formatAmount(point.value, chart.unit)}`}
-          </li>
+        {data.map((point, index) => (
+          <li key={index}>{`${point.label}: ${point.shown}`}</li>
         ))}
       </ul>
     </div>
   );
 }
-
-const ChartBody = ({ chart }: { chart: ChartPart }) =>
-  chart.kind === "line" ? <Line chart={chart} /> : <Bars chart={chart} />;
 
 function savePng(chart: ChartPart, caption: string) {
   const canvas = document.createElement("canvas");

@@ -162,6 +162,7 @@ function calendarAnswer(
     } En los próximos ${CALENDAR_DAYS} días, ${formatAmount(sum(events), unit)}${complete ? "" : WITHOUT_PRICE}. Los dividendos y cupones son una estimación por lo que pagó cada activo antes; los vencimientos incluyen el capital.`,
     charts: [
       barsOf(
+        "income",
         "Cobros por mes",
         unit,
         months.map((each) => ({
@@ -251,6 +252,7 @@ export function prototypeAnswer(
       charts: returns
         ? [
             barsOf(
+              "ranking",
               `${instrument.symbol}: de dónde sale el resultado`,
               unit,
               resultBars(returns.result, unit, [
@@ -330,7 +332,10 @@ export function prototypeAnswer(
       text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${countOf(count, "deuda", "deudas")}.${
         count > 1 && valued[0] ? ` La más grande es ${valued[0].label}.` : ""
       }`,
-      charts: valued.length > 0 ? [barsOf("Lo que debés", unit, valued)] : [],
+      charts:
+        valued.length > 0
+          ? [barsOf("debts", "Lo que debés", unit, valued)]
+          : [],
       sources: [SOURCES.debts, SOURCES.quotes],
     };
   }
@@ -344,6 +349,7 @@ export function prototypeAnswer(
       text: `En ${thisYear.year} tus dividendos, cupones y rendimientos sumaron ${formatAmount(thisYear.totals.income, unit)}, antes de las retenciones.${thisYear.complete ? "" : PARTIAL_YEAR}`,
       charts: [
         barsOf(
+          "income",
           `Rentas de ${thisYear.year}`,
           unit,
           thisYear.months.map((month) => ({
@@ -384,6 +390,7 @@ export function prototypeAnswer(
       }${thisYear.complete ? "" : PARTIAL_YEAR} En lo que va de ${monthOf(current.period).toLowerCase()} vas ${signed(formatAmount(current.figures.result, unit), shownAmount(current.figures.result, unit))}.`,
       charts: [
         barsOf(
+          "income",
           `Resultado por mes de ${thisYear.year}`,
           unit,
           thisYear.months.map((month) => ({
@@ -415,6 +422,7 @@ export function prototypeAnswer(
       text: `Tu patrimonio neto es ${formatAmount(worth.netWorth, unit)}${today.endComplete ? "" : WITHOUT_PRICE}: tenés ${formatAmount(worth.assets, unit)} en activos${shownSign(owed.total, unit) === 0 ? "" : ` y debés ${formatAmount(owed.total, unit)}`}.`,
       charts: [
         barsOf(
+          "distribution",
           "Cómo está repartido",
           unit,
           (
