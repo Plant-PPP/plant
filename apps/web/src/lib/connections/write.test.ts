@@ -477,6 +477,16 @@ describe("syncAccount", () => {
       { from: "2026-02-01", to: "2026-01-01" },
     ],
     ["a day that is not one", "operations", { from: "2026-02-30", to: null }],
+    [
+      "a period that ends before 2000",
+      "operations",
+      { from: null, to: "1999-12-31" },
+    ],
+    [
+      "a period past year 9999",
+      "operations",
+      { from: "2026-01-01", to: "10000-01-01" },
+    ],
   ])("refuses %s", async (_, draft, period) => {
     answers.account_api_keys = answer(() => ({
       status: 200,
