@@ -1,9 +1,12 @@
 import { buenosAiresDate, fromScaled, toScaled } from "@plant/shared";
 import { z } from "zod";
 
-import { type DraftRow, SourceError } from "../file-upload/draft";
+import { SourceError } from "../file-upload/draft";
 import {
+  bodyText,
+  budgetedRead,
   call,
+  cashRow,
   decimalOf,
   defaultSleep,
   holdingsReading,
@@ -37,7 +40,7 @@ const REPORT_WAITS_MS = [2000, 3000, 5000, 5000, 10000];
 export const MERCADO_PAGO_READ_BUDGET_MS = 30_000;
 
 // The largest report Plant downloads: a week of releases is far smaller.
-const REPORT_MAX_CHARS = 5_000_000;
+const REPORT_MAX_BYTES = 5_000_000;
 
 const listSchema = z.array(
   z.object({
@@ -146,16 +149,13 @@ export function mercadoPagoConnection({
   budgetMs = MERCADO_PAGO_READ_BUDGET_MS,
   clock = () => performance.now(),
 }: ConnectionDeps = {}) {
-  let deadline = Number.POSITIVE_INFINITY;
-  const left = () => deadline - clock();
+  const budget = budgetedRead({ timeoutMs, budgetMs, clock, sleep });
 
   const request = async (
     path: string,
     { accessToken }: MercadoPagoCredentials,
     init: RequestInit = {},
   ): Promise<Response> => {
-    const budget = Math.min(timeoutMs, left());
-    if (budget <= 0) throw unavailable();
     const response = await call(
       get,
       `${baseUrl}${path}`,
@@ -167,7 +167,7 @@ export function mercadoPagoConnection({
           Accept: "application/json",
         },
       },
-      budget,
+      budget.requestTimeout(),
     );
     if (response.status === 401 || response.status === 403) throw rejected();
     return response;
@@ -201,7 +201,7 @@ export function mercadoPagoConnection({
   };
 
   const report = async (credentials: MercadoPagoCredentials) => {
-    deadline = clock() + budgetMs;
+    budget.start();
     const end = new Date(now());
     end.setUTCMinutes(0, 0, 0);
     const begin = new Date(end.getTime() - REPORT_DAYS * 86_400_000);
@@ -230,20 +230,17 @@ export function mercadoPagoConnection({
       }
       state = "pending";
     }
-    for (const wait of REPORT_WAITS_MS) {
-      if (typeof state === "object" || wait >= left()) break;
-      await sleep(wait);
-      state = await listed(credentials, begin, end);
-    }
-    if (typeof state !== "object") throw unavailable();
-    const file = state.file;
-    const response = await request(`${REPORT}/${file}`, credentials);
+    const generated =
+      typeof state === "object"
+        ? state
+        : await budget.poll(REPORT_WAITS_MS, async () => {
+            const current = await listed(credentials, begin, end);
+            return typeof current === "object" ? current : undefined;
+          });
+    if (generated === undefined) throw unavailable();
+    const response = await request(`${REPORT}/${generated.file}`, credentials);
     if (!response.ok) throw unavailable();
-    const csv = await response.text().catch(() => {
-      throw unavailable();
-    });
-    if (csv.length > REPORT_MAX_CHARS) throw unavailable();
-    return { csv, end };
+    return { csv: await bodyText(response, REPORT_MAX_BYTES), end };
   };
 
   return defineConnection({
@@ -255,28 +252,16 @@ export function mercadoPagoConnection({
     drafts: ["holdings"],
     // The token's own user proves it works.
     check: async (credentials) => {
-      deadline = clock() + budgetMs;
+      budget.start();
       const response = await request("/users/me", credentials);
       if (!response.ok) throw unavailable();
     },
     async read(credentials) {
       const { csv, end } = await report(credentials);
       const { balance, unreadable } = balanceOf(csv);
-      const rows: DraftRow[] = positive(balance)
-        ? [
-            {
-              symbol: "ARS",
-              quantity: balance,
-              price: null,
-              value: null,
-              currency: "ARS",
-              // Which line closes the report is read from its documentation,
-              // so the review asks the user to look.
-              confidence: "medium",
-              page: null,
-            },
-          ]
-        : [];
+      // Which line closes the report is read from its documentation, so the
+      // review asks the user to look.
+      const rows = positive(balance) ? [cashRow("ARS", balance, "medium")] : [];
       // A balance missing, unreadable, zero or below is counted, so the
       // review says a line was left out rather than showing nothing.
       const skipped = Math.max(unreadable, rows.length === 0 ? 1 : 0);

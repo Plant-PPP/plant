@@ -348,7 +348,15 @@ export function sheetToDraft(
       if (holding) skippedRows += 1;
       continue;
     }
-    const figures = figureHeaders.map((header) => cellOf(row, header));
+    const figures = [...figureHeaders, costHeader].map((header) =>
+      cellOf(row, header),
+    );
+    // A currency cell names the row's currency or, when it names none Plant
+    // keeps, makes no holding; an empty one takes the model's default, for
+    // the user to check.
+    const currencyCell = String(cellOf(row, mapping.currency)).trim();
+    const named = currencyCell === "" ? null : currencyOf(currencyCell);
+    const currency = currencyCell === "" ? mapping.currencyDefault : named;
     const parsed = draftRowSchema.safeParse({
       symbol: String(cellOf(row, mapping.symbol)),
       quantity: parseSheetDecimal(
@@ -361,10 +369,12 @@ export function sheetToDraft(
         cost: optionalDecimal(cellOf(row, costHeader), conventions.cost),
       }),
       ...(accountOf(row) && { account: accountOf(row) }),
-      currency:
-        currencyOf(String(cellOf(row, mapping.currency))) ??
-        mapping.currencyDefault,
-      confidence: figures.some(ambiguous) ? "low" : "high",
+      currency,
+      confidence: figures.some(ambiguous)
+        ? "low"
+        : named === null
+          ? "medium"
+          : "high",
       page: null,
     });
     if (parsed.success) rows.push(parsed.data);

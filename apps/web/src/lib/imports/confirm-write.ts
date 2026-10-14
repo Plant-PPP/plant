@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
+import { type CashEntry, cashEntries, readHeldCash } from "@/lib/imports/cash";
 import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
 import {
   IMPORT_ORIGIN_COLUMNS,
@@ -86,25 +87,29 @@ async function readyImport(
 type LedgerRead = Awaited<ReturnType<typeof ledgerFor>>;
 
 // Sends the operations written to confirm_import, each with the revisions of
-// its instruments as the ledger was read: the database checks them once, and
-// writes them in turn, all or nothing.
+// its instruments as the ledger was read, and then the cash balances: the
+// database checks them once, and writes them in turn, all or nothing.
 async function sendConfirm(
   client: Client,
   importId: string,
   ledger: LedgerRead["ledger"],
   symbolOf: LedgerRead["symbolOf"],
   written: { state: LedgerRead["ledger"]; operations: string[] },
+  cash: readonly CashEntry[] = [],
 ): Promise<{ result: MovementResult; failure?: unknown }> {
   const response = await client.rpc("confirm_import", {
     p_import_id: importId,
-    p_operations: written.operations.map((operation) => ({
-      parts: rpcPartsOf(written.state, operation),
-      expected: expectedRevisions(
-        ledger.revisions,
-        symbolOf,
-        operationSymbols(written.state, operation),
-      ),
-    })),
+    p_operations: [
+      ...written.operations.map((operation) => ({
+        parts: rpcPartsOf(written.state, operation),
+        expected: expectedRevisions(
+          ledger.revisions,
+          symbolOf,
+          operationSymbols(written.state, operation),
+        ),
+      })),
+      ...cash,
+    ],
   });
   if (!classifyPostgrestResult(response, 200)) {
     return { result: { ok: true, id: importId } };
@@ -147,26 +152,37 @@ export async function confirmImportRows(
       if (!item) {
         result = { ok: false, code: "not_found" };
       } else {
-        const { ledger, truncated, symbolOf } = await ledgerFor(client, {
-          date: item.date,
-        });
+        const [{ ledger, truncated, symbolOf }, heldCash] = await Promise.all([
+          ledgerFor(client, { date: item.date }),
+          readHeldCash(client),
+        ]);
         if (truncated) throw new LedgerReadError("movements", "truncated");
+        const typed = reviewed.data as unknown as ImportRow[];
+        const cash = cashEntries(
+          typed,
+          item.accountId,
+          new Set(ledger.accounts.map((each) => each.id)),
+          heldCash,
+        );
         const written = writeImportRouted(
           ledger,
           item,
-          reviewed.data as unknown as ImportRow[],
+          typed.filter((row) => row.assetClass !== "cash"),
           () => crypto.randomUUID(),
         );
-        if (!written.result.ok) {
+        if (!cash.ok) {
+          result = { ok: false, code: cash.code };
+        } else if (!written.result.ok) {
           result = written.result;
         } else {
-          operations = written.operations.length;
+          operations = written.operations.length + cash.entries.length;
           ({ result, failure } = await sendConfirm(
             client,
             item.id,
             ledger,
             symbolOf,
             written,
+            cash.entries,
           ));
         }
       }

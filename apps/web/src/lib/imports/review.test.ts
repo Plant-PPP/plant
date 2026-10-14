@@ -32,6 +32,15 @@ it("says what a row does to the account", () => {
   expect(rowChange(row("3", "1", true), "3")).toEqual({ kind: "discarded" });
 });
 
+it("adds cash up as its amount", () => {
+  expect(
+    readTotals([
+      row("2", "100.5"),
+      { ...row("50", null), assetClass: "cash" as const },
+    ]),
+  ).toEqual([{ currency: "ARS", amount: "251" }]);
+});
+
 it("adds up what was read, leaving out discarded and unpriced rows", () => {
   const totals = readTotals([
     row("2", "100.5"),

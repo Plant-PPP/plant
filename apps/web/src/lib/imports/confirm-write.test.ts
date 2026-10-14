@@ -17,16 +17,19 @@ jest.mock("@/lib/ledger/write", () => ({
   ledgerFor: (...args: unknown[]) => ledgerFor(...args),
 }));
 const importRead = jest.fn();
+const cashRead = jest.fn();
 const rpc = jest.fn();
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc,
-    from: () => {
+    from: (table: string) => {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        is: () => builder,
         limit: () => builder,
-        then: (resolve: (value: unknown) => unknown) => resolve(importRead()),
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve(table === "holdings" ? cashRead() : importRead()),
       };
       return builder;
     },
@@ -77,6 +80,121 @@ beforeEach(() => {
     symbolOf: new Map(),
   });
   rpc.mockReset().mockResolvedValue({ status: 200, data: IMPORT, error: null });
+  cashRead.mockReset().mockReturnValue({ status: 200, error: null, data: [] });
+});
+
+const cash = (currency: "ARS" | "USD", quantity: string) => ({
+  id: `cash-${currency}`,
+  assetClass: "cash",
+  symbol: currency,
+  quantity,
+  price: null,
+  value: null,
+  currency,
+  confidence: "high",
+  source: "Del documento",
+  discarded: false,
+});
+
+describe("cash", () => {
+  it("confirms a cash balance with the import's operations, against the cash read", async () => {
+    cashRead.mockReturnValue({
+      status: 200,
+      error: null,
+      data: [
+        {
+          id: "h1",
+          source_connection_id: ACCOUNT,
+          currency: "ARS",
+          amount: "100.00000000",
+        },
+      ],
+    });
+    expect(
+      await confirmImportRows(IMPORT, [
+        row("AAPL", "5"),
+        cash("USD", "812.4"),
+        cash("ARS", "125000.5"),
+      ]),
+    ).toEqual({ ok: true, id: IMPORT });
+    const [, args] = rpc.mock.calls[0]!;
+    expect(args.p_operations).toEqual([
+      expect.objectContaining({
+        parts: [expect.objectContaining({ instrument_symbol: "AAPL" })],
+      }),
+      {
+        cash: {
+          source_connection_id: ACCOUNT,
+          currency: "USD",
+          amount: "812.4",
+          expected: {},
+        },
+      },
+      {
+        cash: {
+          source_connection_id: ACCOUNT,
+          currency: "ARS",
+          amount: "125000.5",
+          expected: { h1: "100.00000000" },
+        },
+      },
+    ]);
+    expect(lines.at(-1)).toMatchObject({
+      "plant.outcome": "ok",
+      "plant.import.operation_count": 3,
+    });
+    expect(JSON.stringify(lines)).not.toContain("812.4");
+  });
+
+  it("leaves out a cash balance the review discarded", async () => {
+    await confirmImportRows(IMPORT, [
+      { ...cash("USD", "812.4"), discarded: true },
+    ]);
+    const [, args] = rpc.mock.calls[0]!;
+    expect(args.p_operations).toEqual([]);
+  });
+
+  it.each([
+    ["two balances in one currency", [cash("USD", "1"), cash("USD", "2")]],
+    ["a balance that is not above zero", [cash("USD", "0")]],
+    [
+      "a balance in an account the review did not route",
+      [{ ...cash("USD", "1"), accountLabel: "Caja de ahorro" }],
+    ],
+  ])("refuses %s, before writing", async (_, rows) => {
+    expect(await confirmImportRows(IMPORT, rows)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a balance where the account holds several in that currency", async () => {
+    cashRead.mockReturnValue({
+      status: 200,
+      error: null,
+      data: ["h1", "h2"].map((id) => ({
+        id,
+        source_connection_id: ACCOUNT,
+        currency: "USD",
+        amount: "1.00000000",
+      })),
+    });
+    expect(await confirmImportRows(IMPORT, [cash("USD", "5")])).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a balance in an account that is not the user's", async () => {
+    expect(
+      await confirmImportRows(IMPORT, [
+        { ...cash("USD", "5"), accountLabel: "Otra", accountId: "elsewhere" },
+      ]),
+    ).toEqual({ ok: false, code: "not_found" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
 
 it("confirms every operation with the import in one call", async () => {
