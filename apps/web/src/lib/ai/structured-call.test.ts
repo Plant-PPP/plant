@@ -61,3 +61,35 @@ it("traces the call without the document, the prompt or the answer", async () =>
     }),
   );
 });
+
+it("fails as unreadable without the answer it could not read", async () => {
+  const model = new MockLanguageModelV3({
+    doGenerate: async () => ({
+      content: [{ type: "text", text: JSON.stringify({ ok: "SECRET_ROW" }) }],
+      finishReason: { unified: "stop", raw: undefined },
+      usage: {
+        inputTokens: {
+          total: 10,
+          noCache: undefined,
+          cacheRead: undefined,
+          cacheWrite: undefined,
+        },
+        outputTokens: { total: 2, text: undefined, reasoning: undefined },
+      },
+      warnings: [],
+    }),
+  });
+  const failed = await structuredCall({
+    modelId: "gemini-3.8-flash",
+    costType: "import_extraction",
+    userId: "u1",
+    record: jest.fn<Promise<void>, [AiCostInsert]>(async () => {}),
+    model: () => model,
+    system: "s",
+    messages: [{ role: "user", content: "m" }],
+    schema: z.object({ ok: z.boolean() }),
+    timeoutMs: 1000,
+  }).catch((error: unknown) => error);
+  expect(failed).toMatchObject({ code: "unreadable", retryable: false });
+  expect((failed as Error).cause).toBeUndefined();
+});

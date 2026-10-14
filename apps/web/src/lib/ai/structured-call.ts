@@ -65,10 +65,8 @@ export async function structuredCall<T>({
     return output;
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error)) {
-      throw new SourceError("unreadable", false, { cause: error });
+      throw new SourceError("unreadable", false);
     }
-    throw new SourceError("extraction_failed", retryable(error), {
-      cause: error,
-    });
+    throw new SourceError("extraction_failed", retryable(error));
   }
 }

@@ -239,8 +239,8 @@ export function mercadoPagoConnection({
     const file = state.file;
     const response = await request(`${REPORT}/${file}`, credentials);
     if (!response.ok) throw unavailable();
-    const csv = await response.text().catch((cause: unknown) => {
-      throw unavailable(cause);
+    const csv = await response.text().catch(() => {
+      throw unavailable();
     });
     if (csv.length > REPORT_MAX_CHARS) throw unavailable();
     return { csv, end };

@@ -85,8 +85,8 @@ export function ibkrConnection({
       budget,
     );
     if (!response.ok) throw unavailable();
-    return response.text().catch((cause: unknown) => {
-      throw unavailable(cause);
+    return response.text().catch(() => {
+      throw unavailable();
     });
   };
 

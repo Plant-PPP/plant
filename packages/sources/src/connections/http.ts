@@ -18,8 +18,7 @@ export const rejected = () => new SourceError("connection_rejected", false);
 export const notReadOnly = () =>
   new SourceError("connection_not_read_only", false);
 // The provider did not answer, or not as it documents: a later attempt may.
-export const unavailable = (cause?: unknown) =>
-  new SourceError("extraction_failed", true, { cause });
+export const unavailable = () => new SourceError("extraction_failed", true);
 
 // One request to a provider, never following a redirect, within `timeoutMs`;
 // a network failure or a timeout is unavailable.
@@ -35,8 +34,8 @@ export async function call(
       redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch (cause) {
-    throw unavailable(cause);
+  } catch {
+    throw unavailable();
   }
 }
 
