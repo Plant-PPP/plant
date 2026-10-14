@@ -86,9 +86,11 @@ async function allMovements(
         rank: number;
         id: string;
       };
-      query = query.or(
-        `date.gt.${date},and(date.eq.${date},rank.gt.${rank}),and(date.eq.${date},rank.eq.${rank},id.gt.${id})`,
-      );
+      query = query
+        .gte("date", date)
+        .or(
+          `date.gt.${date},and(date.eq.${date},rank.gt.${rank}),and(date.eq.${date},rank.eq.${rank},id.gt.${id})`,
+        );
     }
     const data = checked(
       "movements",

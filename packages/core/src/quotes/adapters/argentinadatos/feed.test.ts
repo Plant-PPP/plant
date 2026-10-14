@@ -67,6 +67,7 @@ describe("argentinadatos parse", () => {
       parse([{ fecha: "0001-01-01", valor: 1 }], NOW),
       NOW,
       "argentinadatos",
+      false,
     );
     expect(batch.refused).toMatchObject({ stale: ["uva"], invalid: [] });
   });

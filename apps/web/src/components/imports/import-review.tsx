@@ -59,6 +59,7 @@ import { ASSET_CLASS_LABELS, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel, quotedInput } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
+import type { HeldCash } from "@/lib/imports/cash";
 import {
   CONFIDENCE_LABELS,
   DATE_ISSUE_LABELS,
@@ -73,7 +74,11 @@ import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
 
 export type ReviewActions = {
-  confirm: (id: string, rows: ImportRow[]) => Promise<MovementResult>;
+  confirm: (
+    id: string,
+    rows: ImportRow[],
+    heldCash: readonly HeldCash[],
+  ) => Promise<MovementResult>;
 };
 
 // A row as the user edits it: the quantity and price as typed, and whether
@@ -153,6 +158,7 @@ export function ImportReview({
   instruments,
   held,
   cash,
+  heldCash = [],
   accounts,
   routing,
   backHref,
@@ -166,6 +172,9 @@ export function ImportReview({
   held: ReadonlyMap<string, string>;
   // The account's cash now, when the page reads it.
   cash?: AccountCash;
+  // The cash holdings `cash` and each account's add up, as read: the confirm
+  // writes a balance only while its cash is still what they say.
+  heldCash?: readonly HeldCash[];
   // When the document lists several accounts: the user's accounts a row may
   // go to, each with what it holds, its default portfolio and the user's
   // other accounts holding each instrument.
@@ -427,7 +436,9 @@ export function ImportReview({
     }
     setAlert(undefined);
     startTransition(async () => {
-      const result = await settle(actions.confirm(item.id, finalRows));
+      const result = await settle(
+        actions.confirm(item.id, finalRows, heldCash),
+      );
       if (result !== "rejected" && result.ok) {
         toast.success(`Guardaste lo de ${item.fileName} en ${institution}`);
         router.push(doneHref);

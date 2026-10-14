@@ -85,9 +85,9 @@ function setUp({
     reading: jest.fn().mockResolvedValue(undefined),
     institution: jest.fn().mockResolvedValue("IOL"),
     credentials: jest.fn().mockResolvedValue(CREDENTIALS),
-    saveDraft: jest.fn().mockResolvedValue(undefined),
-    saveOperations: jest.fn().mockResolvedValue(undefined),
-    saveDebts: jest.fn().mockResolvedValue(undefined),
+    saveDraft: jest.fn().mockResolvedValue(true),
+    saveOperations: jest.fn().mockResolvedValue(true),
+    saveDebts: jest.fn().mockResolvedValue(true),
     failed: jest.fn().mockResolvedValue(undefined),
   };
   const deps: ImportJobDeps = {
@@ -196,6 +196,35 @@ it("saves a card statement as debts", async () => {
     "plant.import.document_kind": "card_statement",
   });
 });
+
+it.each(["saveDraft", "saveOperations", "saveDebts"] as const)(
+  "skips an import gone from being read before %s wrote",
+  async (save) => {
+    const result =
+      save === "saveOperations"
+        ? { operations: [{}], read: READ }
+        : save === "saveDebts"
+          ? { debts: [{}], read: READ }
+          : { draft: DRAFT, read: READ };
+    const { store, lines, run } = setUp({
+      read: jest.fn().mockResolvedValue(result),
+    });
+    store[save].mockResolvedValue(false);
+    expect(await run()).toEqual({ outcome: "skipped" });
+    expect(store.failed).not.toHaveBeenCalled();
+    expect(lines).toEqual([
+      {
+        level: "warn",
+        event: "imports.read",
+        fields: expect.objectContaining({
+          "plant.outcome": "skipped",
+          "plant.import.skip_reason": "gone",
+          "plant.import.id": IMPORT,
+        }),
+      },
+    ]);
+  },
+);
 
 it("finds nothing in a document of no operations", async () => {
   const { store, run } = setUp({

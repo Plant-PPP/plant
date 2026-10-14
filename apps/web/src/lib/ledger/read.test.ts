@@ -70,7 +70,7 @@ function fakeClient(
           return builder;
         },
       };
-      for (const method of ["select", "eq", "order"]) {
+      for (const method of ["select", "eq", "gte", "order"]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
           return builder;
@@ -231,6 +231,11 @@ it("reads every page past PostgREST's cap on rows, each after the last row read"
       "or",
       "date.gt.2026-09-15,and(date.eq.2026-09-15,rank.gt.4),and(date.eq.2026-09-15,rank.eq.4,id.gt.m01999)",
     ],
+  ]);
+  // A bound the index on date can use, alongside the keyset filter.
+  expect(calls.movements!.filter(([method]) => method === "gte")).toEqual([
+    ["gte", "date", "2026-09-15"],
+    ["gte", "date", "2026-09-15"],
   ]);
 });
 

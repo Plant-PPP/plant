@@ -56,6 +56,7 @@ describe("dolarapi parse", () => {
       { fxRates: [parse(json, "mep")], prices: [] },
       NOW,
       "dolarapi",
+      false,
     );
     expect([batch.fxRates.length, batch.refused.invalid]).toEqual([0, ["mep"]]);
   });
@@ -67,7 +68,12 @@ describe("dolarapi parse", () => {
     "maps a rate stamped %s to a dropped row, stale %i and invalid %i",
     (fechaActualizacion, stale, invalid) => {
       const row = parse({ ...body("bolsa", 1, 2), fechaActualizacion }, "mep");
-      const batch = checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi");
+      const batch = checkBatch(
+        { fxRates: [row], prices: [] },
+        NOW,
+        "dolarapi",
+        false,
+      );
       expect([
         batch.fxRates.length,
         batch.refused.stale.length,
@@ -136,7 +142,7 @@ describe("createDolarapiFeed", () => {
         ? { ...body("blue", 1, 2), compra: null }
         : body("x", 1, 2),
     );
-    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi", false);
     expect(batch.fxRates.map((row) => row.kind)).toEqual([
       "official",
       "mep",
@@ -164,7 +170,7 @@ describe("createDolarapiFeed", () => {
         "ccl",
       ]);
       expect(rows.unread).toEqual([{ key: "blue", code }]);
-      const batch = checkBatch(rows, NOW, "dolarapi");
+      const batch = checkBatch(rows, NOW, "dolarapi", false);
       expect([batch.fxRates.length, batch.refused.invalid]).toEqual([
         3,
         ["blue"],
@@ -177,7 +183,7 @@ describe("createDolarapiFeed", () => {
     const feed = createDolarapiFeed(
       failing({ oficial: "http_4xx", bolsa: "http_4xx", blue: "http_4xx" }),
     );
-    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi", false);
     expect(batch.fxRates.map((row) => row.kind)).toEqual(["ccl"]);
     expect(batch.refused.invalid).toEqual(["official", "mep", "blue"]);
   });
@@ -186,7 +192,7 @@ describe("createDolarapiFeed", () => {
     const feed = createDolarapiFeed(
       failing({ contadoconliqui: "http_4xx", blue: "http_5xx" }),
     );
-    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi");
+    const batch = checkBatch(await feed.readRaw(NOW), NOW, "dolarapi", false);
     expect(batch.unread).toEqual(["ccl:http_4xx", "blue:http_5xx"]);
   });
 

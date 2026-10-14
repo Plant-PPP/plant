@@ -24,13 +24,15 @@ export type ApiKeyInput = {
 
 // Why connecting was refused: input that does not parse, an account the
 // user does not have open, one at another institution than the provider, a
-// read-only confirmation missing, credentials the provider refuses, ones that
-// can do more than read, a provider that did not answer, or a failure.
+// read-only confirmation missing, too many tries in a minute, credentials the
+// provider refuses, ones that can do more than read, a provider that did not
+// answer, or a failure.
 export type ConnectCode =
   | "invalid"
   | "not_found"
   | "unsupported"
   | "unconfirmed"
+  | "limited"
   | "rejected"
   | "not_read_only"
   | "unavailable"
@@ -190,6 +192,7 @@ export const connectMessages = (name: string): Record<ConnectCode, string> => ({
   not_found: "No encontramos esa cuenta.",
   unsupported: `Esta cuenta no es de ${name}.`,
   unconfirmed: "Confirmá que el acceso es de solo lectura para conectarlo.",
+  limited: "Probaste muchas veces. Esperá un minuto y volvé a intentar.",
   rejected: `${name} rechazó los datos. Revisá que los copiaste bien y que sigan activos.`,
   not_read_only:
     "La clave puede operar, retirar o transferir. Creá una de solo lectura.",
