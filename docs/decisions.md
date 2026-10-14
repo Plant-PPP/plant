@@ -239,6 +239,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **30 questions a month, counted in `ai_questions` before the model runs**, under a lock (`check_assistant_quota`). A question counts once asked, even if its answer fails or its conversation is deleted.
 - **Under each answer: the day, the dollar and what it read.** These come from the tools' results; the transcript shows them once the answer has finished. Charts wait for PLA-53, and the suggested questions are the ones the tools answer.
 - **Stopping an answer** stops the screen; the server finishes and keeps it.
+
 ## 2026-10-13 · Promote to production (PLA-13)
 
 - **`.github/workflows/promote-to-production.yml`, run by hand from `staging`**, promotes staging HEAD or the full SHA it is given (an earlier one rolls back): `detect-changes` → `approve` → `supabase` → `vercel` → `inngest` → `smoke-test` → `tag`. It refuses a dispatch from another branch and a SHA that is not on `staging`.
