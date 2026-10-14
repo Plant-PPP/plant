@@ -360,6 +360,36 @@ describe("readImportForReview", () => {
     expect(read!.rows[1]).not.toHaveProperty("assetClass");
   });
 
+  it("labels a synced balance by the sync, not a document", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [
+          {
+            ...IMPORT,
+            document: null,
+            source_connection_id: "a1",
+            provider: "binance",
+            sync_draft: "holdings",
+          },
+        ],
+        [
+          item({
+            id: "c1",
+            symbol: "USD",
+            quantity: "812.4",
+            price: null,
+            asset_class: "cash",
+            currency: "USD",
+            source_page: null,
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows[0]!.source).toBe("De la sincronización");
+  });
+
   it("names an instrument by its aliases and its dollar lines", async () => {
     const read = await readImportForReview(
       clientWith(

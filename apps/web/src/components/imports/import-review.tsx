@@ -27,6 +27,7 @@ import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { InstrumentPicker } from "@/components/holdings/instrument-picker";
+import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import {
   holdingsCountText,
   MissingFigure,
@@ -413,13 +414,11 @@ export function ImportReview({
   // What the kept rows' figures fail, as they stand: a corrected row clears.
   // Prices are per unit here, whatever the instrument's quote basis.
   const issues = validateHoldings(
-    finalRows.map((row) => ({
+    finalRows.map((row, index) => ({
       symbol:
         row.discarded || row.symbol === ""
           ? ""
-          : row.assetClass === "cash"
-            ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
-            : `${row.symbol}|${row.accountId ?? item.accountId}`,
+          : keyOf(rows[index]!, row.symbol),
       quantity: row.quantity,
       price: row.discarded ? null : row.price,
       value: row.value ?? null,
@@ -501,87 +500,80 @@ export function ImportReview({
       </div>
 
       {item.skippedRows > 0 && (
-        <p
-          role="status"
-          className="flex items-center gap-2 rounded-lg border border-amber-500/50 p-4 text-sm"
-        >
-          <TriangleAlert
-            aria-hidden
-            className="size-4 shrink-0 text-amber-600"
-          />
-          {skippedLine(item)}
-        </p>
+        <LeftOutNotice>{skippedLine(item)}</LeftOutNotice>
       )}
 
-      <section
-        className={cn(
-          "grid gap-2 rounded-lg border p-4",
-          matches === true
-            ? "border-emerald-600/40"
-            : matches === false && "border-amber-500/50",
-        )}
-        aria-label="Totales"
-      >
-        <p className="flex items-center gap-2 text-sm font-medium">
-          {matches === true && (
-            <Check aria-hidden className="size-4 text-emerald-600" />
+      {item.origin !== "sync" && (
+        <section
+          className={cn(
+            "grid gap-2 rounded-lg border p-4",
+            matches === true
+              ? "border-emerald-600/40"
+              : matches === false && "border-amber-500/50",
           )}
-          {matches === false && (
-            <TriangleAlert aria-hidden className="size-4 text-amber-600" />
-          )}
-          {matches === "none"
-            ? "El documento no muestra un total para comparar: revisá las filas."
-            : matches
-              ? "Lo leído suma lo mismo que el documento."
-              : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
-        </p>
-        <table className="w-fit text-sm tabular-nums">
-          <caption className="sr-only">Totales por moneda</caption>
-          <thead>
-            <tr className="text-muted-foreground text-left text-xs">
-              <th scope="col" className="pr-6 font-normal">
-                Moneda
-              </th>
-              <th scope="col" className="pr-6 font-normal">
-                Leído
-              </th>
-              <th scope="col" className="font-normal">
-                Documento
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ...new Set(
-                [...item.documentTotals, ...totals].map(
-                  ({ currency }) => currency,
+          aria-label="Totales"
+        >
+          <p className="flex items-center gap-2 text-sm font-medium">
+            {matches === true && (
+              <Check aria-hidden className="size-4 text-emerald-600" />
+            )}
+            {matches === false && (
+              <TriangleAlert aria-hidden className="size-4 text-amber-600" />
+            )}
+            {matches === "none"
+              ? "El documento no muestra un total para comparar: revisá las filas."
+              : matches
+                ? "Lo leído suma lo mismo que el documento."
+                : "Lo leído no suma lo mismo que el documento: revisá las filas dudosas."}
+          </p>
+          <table className="w-fit text-sm tabular-nums">
+            <caption className="sr-only">Totales por moneda</caption>
+            <thead>
+              <tr className="text-muted-foreground text-left text-xs">
+                <th scope="col" className="pr-6 font-normal">
+                  Moneda
+                </th>
+                <th scope="col" className="pr-6 font-normal">
+                  Leído
+                </th>
+                <th scope="col" className="font-normal">
+                  Documento
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ...new Set(
+                  [...item.documentTotals, ...totals].map(
+                    ({ currency }) => currency,
+                  ),
                 ),
-              ),
-            ].map((currency) => {
-              const amountIn = (list: typeof totals) =>
-                list.find((each) => each.currency === currency)?.amount;
-              const printed = amountIn(item.documentTotals);
-              return (
-                <tr key={currency}>
-                  <th scope="row" className="pr-6 text-left font-normal">
-                    {currency}
-                  </th>
-                  <td className="pr-6">
-                    {formatAmount(amountIn(totals) ?? "0", currency)}
-                  </td>
-                  <td>
-                    {printed === undefined ? (
-                      <MissingFigure text="Sin total en el documento" />
-                    ) : (
-                      formatAmount(printed, currency)
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+              ].map((currency) => {
+                const amountIn = (list: typeof totals) =>
+                  list.find((each) => each.currency === currency)?.amount;
+                const printed = amountIn(item.documentTotals);
+                return (
+                  <tr key={currency}>
+                    <th scope="row" className="pr-6 text-left font-normal">
+                      {currency}
+                    </th>
+                    <td className="pr-6">
+                      {formatAmount(amountIn(totals) ?? "0", currency)}
+                    </td>
+                    <td>
+                      {printed === undefined ? (
+                        <MissingFigure text="Sin total en el documento" />
+                      ) : (
+                        formatAmount(printed, currency)
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -822,11 +814,14 @@ export function ImportReview({
       {omitted.length > 0 && (
         <section className="grid gap-2" aria-labelledby={`${pickerId}-omitted`}>
           <h2 id={`${pickerId}-omitted`} className="text-base font-semibold">
-            No figuran en el resumen
+            {item.origin === "sync"
+              ? "No vinieron en la sincronización"
+              : "No figuran en el resumen"}
           </h2>
           <p className="text-muted-foreground text-xs">
-            Los tenés en la cuenta y el documento no los lista: quedan como
-            están.
+            {item.origin === "sync"
+              ? "Los tenés en la cuenta y la sincronización no los trajo: quedan como están."
+              : "Los tenés en la cuenta y el documento no los lista: quedan como están."}
           </p>
           <ul className="grid gap-1 text-sm">
             {omitted.map((symbol) => (

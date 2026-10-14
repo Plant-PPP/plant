@@ -122,6 +122,31 @@ it("words the left-out holdings by what the import read", () => {
   expect(html("document")).toContain("quedó afuera");
 });
 
+it("words a sync's review by the sync, never a document", () => {
+  const html = renderToStaticMarkup(
+    <ImportReview
+      item={{
+        ...ITEM,
+        origin: "sync",
+        documentTotals: [],
+        rows: [{ ...ITEM.rows[0]!, source: "De la sincronización" }],
+      }}
+      institution="IOL"
+      instruments={[
+        { symbol: "AAPL", name: "Apple", currency: "ARS", type: "cedear" },
+        { symbol: "GD30", name: "Global 2030", currency: "USD", type: "bond" },
+      ]}
+      held={new Map([["GD30", "10"]])}
+      backHref="/import"
+      doneHref="/import"
+      actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+    />,
+  );
+  expect(html).toContain("No vinieron en la sincronización");
+  expect(html).not.toContain('aria-label="Totales"');
+  expect(html).not.toMatch(/documento|resumen/i);
+});
+
 it("takes rows with no asset chosen yet as no repeat", () => {
   const blank = { ...ITEM.rows[0]!, symbol: "" };
   const html = render(undefined, {

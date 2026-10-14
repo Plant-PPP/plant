@@ -66,6 +66,13 @@ it("asks for a balance the readings disagreed on before confirming", () => {
   expect(confirmButton(html)).toContain('disabled=""');
 });
 
+it("asks again for a balance typed that does not read as a number", () => {
+  const html = render([debt({ balance: "abc" })]);
+  expect(html).toContain("Ingresá un número válido");
+  expect(html).not.toContain("Falta en el documento");
+  expect(confirmButton(html)).toContain('disabled=""');
+});
+
 it("updates the card debt in the same currency that reads the same", () => {
   const html = render(
     [debt()],
