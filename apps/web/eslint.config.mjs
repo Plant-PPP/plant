@@ -168,6 +168,14 @@ export default defineConfig([
     files: [`src/lib/ai/**/*.${SOURCE}`],
     rules: webRules({ allow: [AI, AI_PROVIDERS], syntax: LIB_SYNTAX }),
   },
+  // The assistant's model evals run the real chat over the prototype's data.
+  {
+    files: [`src/lib/ai/assistant/evals/**/*.${SOURCE}`],
+    rules: webRules({
+      allow: [AI, AI_PROVIDERS, PROTOTYPE],
+      syntax: LIB_SYNTAX,
+    }),
+  },
   {
     files: ["src/lib/ai/ai-cost-sink.test.ts"],
     rules: webRules({

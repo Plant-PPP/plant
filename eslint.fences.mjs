@@ -72,12 +72,13 @@ export const TESTING = {
   message: "Only tests import a package's testing helpers.",
 };
 
-// The prototype runs on made-up data held in memory: only its own files and
-// the data pages and their layout, which choose it outside production, import
-// it.
+// The prototype runs on made-up data held in memory: only its own files, the
+// data pages and their layout, which choose it outside production, and the
+// assistant's model evals import it.
 export const PROTOTYPE = {
   regex: `(^|/)prototype(/.*)?${EXTENSION}$`,
-  message: "Only the prototype's own files and the data pages import it.",
+  message:
+    "Only the prototype's own files, the data pages and the assistant's evals import it.",
 };
 
 // The modules a block can be allowed to import. Every web block fences each
