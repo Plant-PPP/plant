@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(49);
+SELECT plan(52);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -492,6 +492,28 @@ SELECT is(
   'a buy cannot reopen a sold-out holding in an archived account'
 );
 ROLLBACK TO SAVEPOINT sold_out;
+
+-- A user moves an operation only to the last place, never past it.
+SELECT is(
+  pg_temp.error_of($$ UPDATE public.operations SET entry_order = 9223372036854775807 $$),
+  '22023 -',
+  'an operation cannot be moved anywhere but last'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.operations (entry_order) VALUES (9223372036854775807) $$),
+  '22023 -',
+  'an operation cannot be entered anywhere but last'
+);
+
+SAVEPOINT goes_last;
+SELECT lives_ok(
+  $$ UPDATE public.operations
+     SET entry_order = (SELECT max(o.entry_order) + 1 FROM public.operations o)
+     WHERE id = (SELECT min(o.id::text)::uuid FROM public.operations o) $$,
+  'an operation can be moved last'
+);
+ROLLBACK TO SAVEPOINT goes_last;
 
 RESET ROLE;
 
