@@ -79,6 +79,13 @@ const answerSchema = z.object({
           .describe(
             "The row's total value as printed, as a plain decimal with a dot, or null.",
           ),
+        account: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "The account, wallet or exchange the row is listed under, as printed, when the document lists holdings of several; else null.",
+          ),
         cost: z
           .string()
           .nullable()
@@ -192,6 +199,7 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
       // row it is on.
       const value = row.value?.trim() || null;
       const cost = row.cost?.trim() || null;
+      const account = row.account?.trim().slice(0, 60) || null;
       const parsed = draftRowSchema.safeParse({
         ...row,
         quantity: row.quantity.trim(),
@@ -199,6 +207,7 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
         value: positiveDecimalSchema.safeParse(value).success ? value : null,
         ...(cost !== null &&
           positiveDecimalSchema.safeParse(cost).success && { cost }),
+        ...(account !== null && { account }),
         page: row.page !== null && row.page >= 1 ? row.page : null,
       });
       return parsed.success ? [parsed.data] : [];

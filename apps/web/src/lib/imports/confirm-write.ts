@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
-import { type ImportToWrite, writeImport } from "@/lib/imports/confirm";
+import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
 import { ImportsReadError } from "@/lib/imports/read";
 import { writeImportOperations } from "@/lib/imports/confirm-operations";
 import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
@@ -141,7 +141,7 @@ export async function confirmImportRows(
           date: item.date,
         });
         if (truncated) throw new LedgerReadError("movements", "truncated");
-        const written = writeImport(
+        const written = writeImportRouted(
           ledger,
           item,
           reviewed.data as unknown as ImportRow[],

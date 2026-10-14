@@ -265,8 +265,9 @@ export function columnMappingFor(headers: readonly string[]) {
       quantity: header,
       price: header.nullable(),
       value: header.nullable(),
-      // Mappings saved before a sheet's cost was read have none.
+      // Mappings saved before a sheet's cost or account was read have none.
       cost: header.nullable().optional(),
+      account: header.nullable().optional(),
       currency: header.nullable(),
       date: header.nullable(),
       currencyDefault: currencySchema.nullable(),
@@ -298,6 +299,10 @@ export function sheetToDraft(
     sheet.rows.map((row) => cellOf(row, header));
   const figureHeaders = [mapping.quantity, mapping.price, mapping.value];
   const costHeader = mapping.cost ?? null;
+  const accountOf = (row: readonly SheetCell[]) =>
+    mapping.account
+      ? String(cellOf(row, mapping.account)).trim().slice(0, 60) || undefined
+      : undefined;
   const sheetConvention =
     numberConventionOf(figureHeaders.flatMap(cellsOf)) ?? "es-AR";
   const conventionOf = (header: string | null) =>
@@ -355,6 +360,7 @@ export function sheetToDraft(
       ...(costHeader !== null && {
         cost: optionalDecimal(cellOf(row, costHeader), conventions.cost),
       }),
+      ...(accountOf(row) && { account: accountOf(row) }),
       currency:
         currencyOf(String(cellOf(row, mapping.currency))) ??
         mapping.currencyDefault,

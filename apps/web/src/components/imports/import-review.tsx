@@ -138,6 +138,7 @@ export function ImportReview({
   institution,
   instruments,
   held,
+  accounts,
   routing,
   backHref,
   doneHref,
@@ -148,6 +149,13 @@ export function ImportReview({
   instruments: InstrumentRow[];
   // What the account holds of each instrument now.
   held: ReadonlyMap<string, string>;
+  // When the document lists several accounts: the user's accounts a row may
+  // go to, each with what it holds.
+  accounts?: readonly {
+    id: string;
+    institution: string;
+    held: ReadonlyMap<string, string>;
+  }[];
   // On a page that lets a row choose where its units go: the portfolios, the
   // account's default one, and the user's other accounts holding each
   // instrument, which the units may come from as a transfer.
@@ -189,10 +197,18 @@ export function ImportReview({
     return { row, quantity, price, cost };
   });
   // A row that adds units to the account needs their price.
+  // What the account a row goes to holds: the import's, or the one the
+  // review routed it to.
+  const accountOf = (row: EditedRow) => row.accountId ?? item.accountId;
+  const heldFor = (row: EditedRow) =>
+    accountOf(row) === item.accountId
+      ? held
+      : (accounts?.find((each) => each.id === accountOf(row))?.held ??
+        new Map<string, string>());
   const addsUnits = (row: EditedRow, quantity: string | null) => {
     const effect = rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      held.get(row.symbol),
+      heldFor(row).get(row.symbol),
     );
     return effect.kind === "new" || effect.kind === "up";
   };
@@ -209,7 +225,7 @@ export function ImportReview({
     cost !== null &&
     rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      held.get(row.symbol),
+      heldFor(row).get(row.symbol),
     ).kind === "new";
   const costInvalid = ({ row, cost }: (typeof parsed)[number]) =>
     !row.discarded &&
@@ -228,20 +244,33 @@ export function ImportReview({
       : exactOf(price).n === 0n &&
         needsPrice(row, quantity) &&
         !opensWithCost(row, quantity, cost));
-  // The instruments the rows kept already list: one row each.
+  // The instruments the rows kept already list in each account: one row
+  // each.
   const listed = (except: string) =>
     new Set(
       rows
         .filter((row) => !row.discarded && row.id !== except)
-        .map((row) => row.symbol),
+        .map((row) => `${row.symbol}|${accountOf(row)}`),
     );
+  const listedIn = (except: string, account: string) =>
+    new Set(
+      [...listed(except)].flatMap((key) => {
+        const [symbol, owner] = key.split("|");
+        return owner === account ? [symbol!] : [];
+      }),
+    );
+  // A row a document lists under an account names none of the user's until
+  // the review picks one.
+  const unrouted = (row: EditedRow) =>
+    row.accountLabel !== undefined && row.accountId === undefined;
   const valid = parsed.every(
     (each) =>
       each.row.discarded ||
       (each.quantity !== null &&
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
-        !listed(each.row.id).has(each.row.symbol) &&
+        !unrouted(each.row) &&
+        !listedIn(each.row.id, accountOf(each.row)).has(each.row.symbol) &&
         !priceInvalid(each) &&
         !costInvalid(each)),
   );
@@ -258,6 +287,8 @@ export function ImportReview({
       source: row.source,
       discarded: row.discarded,
       ...(row.portfolioId !== undefined && { portfolioId: row.portfolioId }),
+      ...(row.accountLabel !== undefined && { accountLabel: row.accountLabel }),
+      ...(row.accountId !== undefined && { accountId: row.accountId }),
       ...(row.transferFrom !== undefined && { transferFrom: row.transferFrom }),
     }),
   );
@@ -284,7 +315,9 @@ export function ImportReview({
   ).length;
   // What the account holds that no kept row lists: it stays as it is.
   const kept = new Set(
-    rows.filter((row) => !row.discarded).map((row) => row.symbol),
+    rows
+      .filter((row) => !row.discarded && accountOf(row) === item.accountId)
+      .map((row) => row.symbol),
   );
   const omitted = [...held.keys()].filter((symbol) => !kept.has(symbol));
 
@@ -296,7 +329,7 @@ export function ImportReview({
   function confirm() {
     if (!valid) {
       setAlert(
-        "Revisá las filas: cada una necesita un activo que no se repita, una cantidad mayor a 0 y, si suma unidades, su precio.",
+        "Revisá las filas: cada una necesita un activo que no se repita en su cuenta, una cantidad mayor a 0, su cuenta si el documento lista varias y, si suma unidades, su precio.",
       );
       return;
     }
@@ -470,7 +503,7 @@ export function ImportReview({
             const type = types.get(row.symbol);
             const effect = rowChange(
               { quantity: quantity ?? "0", discarded: row.discarded },
-              held.get(row.symbol),
+              heldFor(row).get(row.symbol),
             );
             const value =
               quantity && price
@@ -493,7 +526,8 @@ export function ImportReview({
                       id={`${pickerId}-${row.id}`}
                       aria-label={`Activo de la fila ${index + 1}`}
                       instruments={instruments.filter(
-                        (each) => !listed(row.id).has(each.symbol),
+                        (each) =>
+                          !listedIn(row.id, accountOf(row)).has(each.symbol),
                       )}
                       value={row.symbol}
                       onChange={(symbol) =>
@@ -528,6 +562,36 @@ export function ImportReview({
                     </span>
                   ))}
                 </div>
+                {row.accountLabel !== undefined && accounts && (
+                  <label className="grid gap-1 text-xs sm:col-span-4">
+                    <span className="text-muted-foreground">
+                      {`Cuenta · el documento dice "${row.accountLabel}"`}
+                    </span>
+                    <Select
+                      value={row.accountId ?? ""}
+                      disabled={row.discarded}
+                      onValueChange={(accountId) =>
+                        change(row.id, { accountId })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={`Cuenta de la fila ${index + 1}`}
+                        aria-invalid={
+                          (!row.discarded && unrouted(row)) || undefined
+                        }
+                      >
+                        <SelectValue placeholder="Elegí una cuenta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((each) => (
+                          <SelectItem key={each.id} value={each.id}>
+                            {each.institution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
                 <label className="grid gap-1 text-xs">
                   <span className="text-muted-foreground">Cantidad</span>
                   <Input

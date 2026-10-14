@@ -84,6 +84,7 @@ SELECT set_eq(
         'import_items.symbol:INSERT', 'import_items.quantity:INSERT', 'import_items.price:INSERT',
         'import_items.currency:INSERT', 'import_items.confidence:INSERT',
         'import_items.source_page:INSERT', 'import_items.cost:INSERT',
+        'import_items.account:INSERT',
         'imports.id:SELECT', 'imports.user_id:SELECT', 'imports.document_id:SELECT',
         'imports.status:SELECT', 'imports.status:UPDATE', 'imports.failure:UPDATE',
         'imports.document_date:UPDATE', 'imports.printed_total_ars:UPDATE',

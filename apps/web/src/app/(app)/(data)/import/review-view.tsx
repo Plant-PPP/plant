@@ -10,6 +10,7 @@ import { ImportOperationsReview } from "@/components/imports/import-operations-r
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
+import { routeRows } from "@/lib/imports/accounts-routing";
 import { markLoaded } from "@/lib/imports/operations-loaded";
 import { IMPORTS_VIEW_EVENT, readImportForReview } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
@@ -79,18 +80,32 @@ export async function ImportReviewView({ id }: { id: string }) {
     );
   }
 
+  const heldDate =
+    item.documentDate !== null && item.documentDate <= today
+      ? item.documentDate
+      : today;
+  // A document listing several accounts routes each row to the user's
+  // account its label names, and offers every account to choose from.
+  const several = item.rows.some((row) => row.accountLabel !== undefined);
   return (
     <ImportReview
-      item={item}
+      item={
+        several
+          ? { ...item, rows: routeRows(item.rows, ledger.accounts) }
+          : item
+      }
       institution={account?.institution ?? ""}
       instruments={ledger.instruments}
-      held={heldOn(
-        state,
-        item.accountId,
-        item.documentDate !== null && item.documentDate <= today
-          ? item.documentDate
-          : today,
-      )}
+      held={heldOn(state, item.accountId, heldDate)}
+      accounts={
+        several
+          ? ledger.accounts.map((each) => ({
+              id: each.id,
+              institution: each.institution,
+              held: heldOn(state, each.id, heldDate),
+            }))
+          : undefined
+      }
       routing={
         account && {
           portfolios: ledger.portfolios,

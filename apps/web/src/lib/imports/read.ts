@@ -100,6 +100,7 @@ const itemSchema = z.object({
   price: z.string().nullable(),
   value: z.string().nullable(),
   cost: z.string().nullable().optional(),
+  account: z.string().nullable().optional(),
   currency: z.enum(Constants.public.Enums.currency),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
@@ -231,6 +232,7 @@ function reviewRow(
           ? unitPrice(known.type, row.price)
           : row.price,
     value: sameCurrency ? row.value : null,
+    ...(row.account != null && { accountLabel: row.account }),
     ...(row.cost != null &&
       sameCurrency &&
       isUnitCost(row, known?.type) && {
@@ -263,7 +265,7 @@ export async function readImportForReview(
     client
       .from("import_items")
       .select(
-        "id, symbol, quantity:quantity::text, price:price::text, value:value::text, cost:cost::text, " +
+        "id, symbol, quantity:quantity::text, price:price::text, value:value::text, cost:cost::text, account, " +
           "currency, confidence, source_page",
       )
       .eq("import_id", id)

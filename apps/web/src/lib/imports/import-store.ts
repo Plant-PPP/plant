@@ -178,6 +178,7 @@ export function createImportStore(client: Client): ImportStorePort {
         price: row.price as unknown as number | null,
         value: row.value as unknown as number | null,
         cost: (row.cost ?? null) as unknown as number | null,
+        account: row.account ?? null,
         currency: row.currency,
         confidence: row.confidence,
         source_page: row.page,

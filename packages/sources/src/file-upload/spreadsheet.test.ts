@@ -412,6 +412,30 @@ describe("sheetToDraft", () => {
     expect(draft.rows[0]).toMatchObject({ symbol: "AAPL", cost: "12000.50" });
   });
 
+  it("reads each row's account when a column holds it", () => {
+    const { draft } = sheetToDraft(
+      {
+        headers: ["Activo", "Cuenta", "Cantidad"],
+        rows: [
+          ["BTC", "Nexo", "0,5"],
+          ["ETH", "", "2"],
+        ],
+      },
+      {
+        symbol: "Activo",
+        quantity: "Cantidad",
+        price: null,
+        value: null,
+        account: "Cuenta",
+        currency: null,
+        date: null,
+        currencyDefault: "USD",
+      },
+      "2026-10-13",
+    );
+    expect(draft.rows.map((row) => row.account)).toEqual(["Nexo", undefined]);
+  });
+
   it("counts the holdings it leaves out, not a total without a symbol", () => {
     // GD30 in euros and YPFD's negative quantity.
     expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);

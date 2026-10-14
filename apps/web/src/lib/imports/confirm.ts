@@ -154,6 +154,8 @@ const reviewedRowSchema = z.union([
     cost: positiveDecimalSchema.nullable().optional(),
     portfolioId: z.string().min(1).optional(),
     transferFrom: z.string().min(1).optional(),
+    accountLabel: z.string().optional(),
+    accountId: z.string().min(1).optional(),
   }),
 ]);
 
@@ -321,6 +323,43 @@ export function writeImport<S extends Ledger>(
     );
     if (!written.result.ok) return refuse(written.result);
     operations.push(operationId);
+    next = written.state;
+  }
+  return { state: next, result: { ok: true, id: item.id }, operations };
+}
+
+// The reviewed rows of a document that lists several accounts, each group
+// written into the account the review routed it to, the import's first, all
+// or nothing. A row a document lists under an account the review routed to
+// none is refused.
+export function writeImportRouted<S extends Ledger>(
+  state: S,
+  item: ImportToWrite,
+  rows: readonly ImportRow[],
+  newId: () => string,
+): ImportWrite<S> {
+  const kept = rows.filter((row) => !row.discarded);
+  if (
+    kept.some(
+      (row) => row.accountLabel !== undefined && row.accountId === undefined,
+    )
+  ) {
+    return { state, result: { ok: false, code: "invalid" }, operations: [] };
+  }
+  const groups = new Map<string, ImportRow[]>([[item.accountId, []]]);
+  for (const row of kept) {
+    const accountId = row.accountId ?? item.accountId;
+    groups.set(accountId, [...(groups.get(accountId) ?? []), row]);
+  }
+  let next = state;
+  const operations: string[] = [];
+  for (const [accountId, group] of groups) {
+    if (group.length === 0 && accountId !== item.accountId) continue;
+    const written = writeImport(next, { ...item, accountId }, group, newId);
+    if (!written.result.ok) {
+      return { state, result: written.result, operations: [] };
+    }
+    operations.push(...written.operations);
     next = written.state;
   }
   return { state: next, result: { ok: true, id: item.id }, operations };
