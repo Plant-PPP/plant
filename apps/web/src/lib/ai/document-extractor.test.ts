@@ -56,6 +56,7 @@ const extract = (model: MockLanguageModelV3, mimeType = "application/pdf") =>
 it("reads the holdings and costs the call to the user", async () => {
   const model = answering(
     JSON.stringify({
+      kind: "account_statement",
       documentDate: "2026-09-30",
       rows: [
         {
@@ -98,6 +99,7 @@ it("reads the holdings and costs the call to the user", async () => {
     mapping: "none",
     skippedRows: 0,
     disputes: 0,
+    documentKind: "account_statement",
   });
   expect(draft).toEqual({
     documentDate: "2026-09-30",
@@ -147,7 +149,12 @@ it("reads the holdings and costs the call to the user", async () => {
 it("drops a date that is not one", async () => {
   const { draft } = await extract(
     answering(
-      JSON.stringify({ documentDate: "30/09/2026", rows: [], totals: [] }),
+      JSON.stringify({
+        kind: "account_statement",
+        documentDate: "30/09/2026",
+        rows: [],
+        totals: [],
+      }),
     ),
   );
   expect(draft.documentDate).toBeNull();
@@ -157,6 +164,7 @@ it("keeps the totals the statement prints, one per currency", async () => {
   const { draft } = await extract(
     answering(
       JSON.stringify({
+        kind: "account_statement",
         documentDate: null,
         rows: [],
         totals: [
@@ -205,8 +213,11 @@ const row = (symbol: string, quantity: string, extra = {}) => ({
   ...extra,
 });
 
-const reading = (rows: object[], documentDate = "2026-09-30") =>
-  JSON.stringify({ documentDate, rows, totals: [] });
+const reading = (
+  rows: object[],
+  documentDate = "2026-09-30",
+  kind = "account_statement",
+) => JSON.stringify({ kind, documentDate, rows, totals: [] });
 
 // One mock per model id, so each reader answers its own reading.
 const byModel = (answers: Record<string, string>) => {
@@ -419,4 +430,24 @@ it("lets the step retry when one reader's provider is down", async () => {
   expect(draft.rows).toEqual([
     expect.objectContaining({ symbol: "AAPL", confidence: "low" }),
   ]);
+});
+
+it("reads no holdings from a document both readers call a card statement", async () => {
+  const { run } = byModel({
+    [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
+    [READERS[1]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
+  });
+  const { draft, read } = await run();
+  expect(read.documentKind).toBe("card_statement");
+  expect(draft.rows).toEqual([]);
+});
+
+it("keeps the holdings when the readers disagree on what the document is", async () => {
+  const { run } = byModel({
+    [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
+    [READERS[1]]: reading([row("AAPL", "5")]),
+  });
+  const { draft, read } = await run();
+  expect(read.documentKind).toBeNull();
+  expect(draft.rows).toHaveLength(1);
 });

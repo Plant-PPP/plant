@@ -187,6 +187,7 @@ export async function runImportDocument(
     "plant.import.mapping": read.mapping,
     "plant.import.skipped_count": read.skippedRows,
     "plant.import.dispute_count": read.disputes,
+    "plant.import.document_kind": read.documentKind ?? "unknown",
   });
   return { outcome: "ready", rows: read.rows };
 }

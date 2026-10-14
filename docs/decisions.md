@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · What a document is (PLA-37)
+
+- **The two readings say what the document is**, in the same calls that list its holdings: an account's statement of holdings, a trade ticket, a screenshot of holdings, a card statement or other. A separate pre-analysis round would add a third round of calls to a step that already takes up to two 100 s rounds of the 300 s a function has.
+- **Two of the readings must agree** (the tiebreak counts when it ran); otherwise the kind is unknown. A single surviving reading cannot agree with another, so it leaves the kind unknown.
+- **A document the readings agree is a trade ticket or a card statement yields no holdings**: what they list from it is a trade or spending, so the import fails as `nothing_found`. Any other kind, or none agreed, keeps the holdings.
+- **The kind is logged** (`plant.import.document_kind`, a closed set) and not stored. Institution, period and useful pages are not asked: the account already names the institution, and per-type extraction (PLA-78) is what would use the rest.
+
 ## 2026-10-14 · The portfolio source port (PLA-32)
 
 - **`PortfolioSourcePort` lives in `packages/sources`** (`port.ts`): a source's kind, a capability matrix that is local and never fails (holdings, movements, incremental reads; each `native` or `unsupported`), and `read`, which throws the existing `SourceError` with its code and `retryable`. The import job takes a `source` instead of an `extract` function.

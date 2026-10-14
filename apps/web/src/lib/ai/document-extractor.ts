@@ -9,6 +9,8 @@ import {
   draftRowSchema,
   DRAFT_ROW_LIMIT,
   type ImportDraft,
+  type DocumentKind,
+  documentKindSchema,
   type FileReader,
   importDraftSchema,
   SourceError,
@@ -43,6 +45,9 @@ const currency = z.enum(Constants.public.Enums.currency);
 // What the model answers. Loose on purpose: each row is checked against the
 // draft's schema afterwards, and a row that fails it is left out.
 const answerSchema = z.object({
+  kind: documentKindSchema.describe(
+    "What the document is. account_statement: shows positions or balances, even if it also lists the period's movements or card spending. trade_ticket: a confirmation (boleto) of one or a few operations, with no positions. screenshot: a capture of an app or site showing positions. card_statement: a credit card's spending statement only, with no account balances. other: anything else.",
+  ),
   documentDate: z
     .string()
     .nullable()
@@ -94,6 +99,18 @@ const SYSTEM = [
   "Use ARS for pesos and USD for dollars. Mark a row low confidence when a figure is hard to read or ambiguous.",
 ].join("\n");
 
+// Documents that show trades or spending, not holdings: what a reading lists
+// from them is not a holding.
+const NOT_HOLDINGS: readonly DocumentKind[] = [
+  "trade_ticket",
+  "card_statement",
+];
+
+// The kind two of the readings agree on, or null.
+const agreedKind = (kinds: readonly DocumentKind[]): DocumentKind | null =>
+  kinds.find((kind) => kinds.filter((each) => each === kind).length >= 2) ??
+  null;
+
 const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
   const totals = importDraftSchema.shape.totals.safeParse(
     answer.totals.map((total) => ({ ...total, amount: total.amount.trim() })),
@@ -131,28 +148,34 @@ export function documentExtractor({
   model?: ModelFactory;
 }): FileReader {
   return async ({ bytes, mimeType, userId, lastAttempt }) => {
-    const read = async (modelId: PricedModelId, ask: string) =>
-      toDraft(
-        await structuredCall({
-          modelId,
-          costType: "import_extraction",
-          userId,
-          record,
-          model,
-          system: SYSTEM,
-          schema: answerSchema,
-          timeoutMs: EXTRACTION_TIMEOUT_MS,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: ask },
-                { type: "file", data: bytes, mediaType: mimeType },
-              ],
-            },
-          ],
-        }),
-      );
+    const read = async (modelId: PricedModelId, ask: string) => {
+      const answer = await structuredCall({
+        modelId,
+        costType: "import_extraction",
+        userId,
+        record,
+        model,
+        system: SYSTEM,
+        schema: answerSchema,
+        timeoutMs: EXTRACTION_TIMEOUT_MS,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: ask },
+              { type: "file", data: bytes, mediaType: mimeType },
+            ],
+          },
+        ],
+      });
+      return { draft: toDraft(answer), kind: answer.kind };
+    };
+    // A document that is not a statement of holdings yields none.
+    const holdingsOf = (
+      draft: ImportDraft,
+      kind: DocumentKind | null,
+    ): ImportDraft =>
+      kind && NOT_HOLDINGS.includes(kind) ? { ...draft, rows: [] } : draft;
     const ask = "List the holdings in this statement.";
     const [one, two] = await Promise.allSettled([
       read(READERS[0], ask),
@@ -171,20 +194,23 @@ export function documentExtractor({
       );
       const survivor = [one, two].find((r) => r.status === "fulfilled");
       if (survivor?.status === "fulfilled" && (!passing || lastAttempt)) {
+        // One reading cannot agree with another on what the document is.
         return {
-          draft: unchecked(survivor.value),
+          draft: unchecked(survivor.value.draft),
           read: {
             reader: "document",
             mapping: "none",
             skippedRows: 0,
             disputes: 0,
+            documentKind: null,
           },
         };
       }
       throw passing ?? errors.find((e) => e !== null);
     }
-    const first = one.value;
-    const second = two.value;
+    const first = one.value.draft;
+    const second = two.value.draft;
+    const kinds = [one.value.kind, two.value.kind];
     const compared = compareReadings(first, second);
     const disputed = disputeCount(compared.disputes);
     let draft = agreedDraft(first, compared);
@@ -201,15 +227,18 @@ export function documentExtractor({
         }
         return null;
       });
-      draft = settle(first, second, tiebreak, compared);
+      if (tiebreak) kinds.push(tiebreak.kind);
+      draft = settle(first, second, tiebreak?.draft ?? null, compared);
     }
+    const documentKind = agreedKind(kinds);
     return {
-      draft,
+      draft: holdingsOf(draft, documentKind),
       read: {
         reader: "document",
         mapping: "none",
         skippedRows: 0,
         disputes: disputed,
+        documentKind,
       },
     };
   };

@@ -18,7 +18,13 @@ const input = (mimeType: string): SourceInput => ({
 
 const reading = (reader: "document" | "sheet"): SourceReading => ({
   draft: { documentDate: null, rows: [], totals: [] },
-  read: { reader, mapping: "none", skippedRows: 0, disputes: 0 },
+  read: {
+    reader,
+    mapping: "none",
+    skippedRows: 0,
+    disputes: 0,
+    documentKind: null,
+  },
 });
 
 const readers = () => ({

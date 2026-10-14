@@ -33,6 +33,18 @@ export type SourceInput = {
   lastAttempt: boolean;
 };
 
+// What a document is, as its reading tells: an account's statement of
+// holdings, a trade ticket, a screenshot of holdings, a card statement, or
+// something else.
+export const documentKindSchema = z.enum([
+  "account_statement",
+  "trade_ticket",
+  "screenshot",
+  "card_statement",
+  "other",
+]);
+export type DocumentKind = z.infer<typeof documentKindSchema>;
+
 // How a file was read: by a model reading the document, or from a
 // spreadsheet's columns, whose mapping was saved already (hit), made now
 // (miss) or not needed (none); how many of its rows made no holding; and how
@@ -43,6 +55,9 @@ export type SourceReadInfo = {
   mapping: "none" | "hit" | "miss";
   skippedRows: number;
   disputes: number;
+  // What the document's readings agreed it is; null for a spreadsheet or
+  // when they did not agree.
+  documentKind: DocumentKind | null;
 };
 
 export type SourceReading = { draft: ImportDraft; read: SourceReadInfo };
