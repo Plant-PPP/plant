@@ -6,7 +6,7 @@ const WINDOW_MS = 60_000;
 export type Verdict = "logged" | "dropped" | "dropped_first";
 
 export function reportLimiter({
-  now = Date.now,
+  now = () => Date.now(),
   perSender = 20,
   perInstance = 300,
   // Senders kept per window; past it, the window counts the rest as one.
