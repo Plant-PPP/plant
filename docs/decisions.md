@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Staging serves the real app, and only staging deploys on push
+
+- **Staging serves the real app**, as production does: `isProductionDeployment()` is true on Vercel's production and on the preview of the `staging` branch, the one Tomas tests on `plant-staging`'s real data. Every other preview and `next dev` still serve the prototype, which the e2e flows rely on; `pnpm dev:up:real` runs the real app locally against local Supabase. For staging this supersedes "Outside production, the data pages show made-up data" (PLA-109) and the real chat being production only (PLA-47).
+- **Only `staging` deploys on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns off every branch prefix a PR uses (`feat/*`, `fix/*`, `ci/*`, `chore/*` and the rest), so PR branches stop spending Vercel Hobby's 100 deployments a day and staging always gets one. `claude/*` PRs still get a preview on request (`preview.yml`); the required checks are `ci` and `forbidden-words`, so no PR waits on a Vercel check.
+
 ## 2026-10-14 · Security review fixes (PLA-62)
 
 - **Reading an institution's icon is limited to ten a minute per user** (a hundred per instance, in memory, as the CSP reports are): each read makes a few outbound requests.
