@@ -506,6 +506,9 @@ isOneToOne: false
             "account_credentials":
 { Args: { "p_provider": string,"p_source_connection_id": string,"p_user_id": string }; Returns: Json
                            },
+"audit_data_export":
+{ Args: { "p_outcome": string,"p_request_id"?: string,"p_user_id": string }; Returns: undefined
+                           },
 "confirm_import":
 { Args: { "p_import_id": string,"p_operations": Json }; Returns: string
                            },

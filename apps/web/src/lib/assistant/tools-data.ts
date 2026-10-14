@@ -683,12 +683,12 @@ export function assistantData({
 
     // The user's latest imports and how many they started this month.
     async importStatus() {
-      const { items, used } = await readImports(client);
+      const { items, truncated, used } = await readImports(client);
       return {
         sources: [SOURCES.imports],
         asOf: today,
         rate: null,
-        complete: true,
+        complete: !truncated,
         total: items.length,
         shown: Math.min(items.length, IMPORTS_LISTED),
         usedThisMonth: used,

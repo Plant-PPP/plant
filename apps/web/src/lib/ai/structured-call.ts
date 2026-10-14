@@ -12,6 +12,8 @@ import {
 } from "ai";
 import type { z } from "zod";
 
+import { errorType, serverLog } from "@/lib/log/server-log";
+
 import { costedModel, type ModelFactory, telemetryOf } from "./costed-model";
 
 // A provider that is down, rate limiting or too slow may answer on a later
@@ -67,6 +69,16 @@ export async function structuredCall<T>({
     if (NoObjectGeneratedError.isInstance(error)) {
       throw new SourceError("unreadable", false);
     }
+    const last = RetryError.isInstance(error) ? error.lastError : error;
+    serverLog.warn("ai.call_failed", {
+      "plant.cost_type": costType,
+      "gen_ai.request.model": modelId,
+      "enduser.id": userId,
+      "error.type": errorType(last),
+      "http.response.status_code": APICallError.isInstance(last)
+        ? last.statusCode
+        : undefined,
+    });
     throw new SourceError("extraction_failed", retryable(error));
   }
 }

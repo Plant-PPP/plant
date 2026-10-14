@@ -68,8 +68,8 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
       cellHTML: false,
       cellStyles: false,
     });
-  } catch (cause) {
-    throw new SourceError("unreadable", false, { cause });
+  } catch {
+    throw new SourceError("unreadable", false);
   }
   const name = workbook.SheetNames[0];
   const sheet = name === undefined ? undefined : workbook.Sheets[name];

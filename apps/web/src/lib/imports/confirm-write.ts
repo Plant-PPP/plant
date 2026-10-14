@@ -12,7 +12,11 @@ import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
-import { type CashEntry, cashEntries, readHeldCash } from "@/lib/imports/cash";
+import {
+  type CashEntry,
+  cashEntries,
+  reviewedCashSchema,
+} from "@/lib/imports/cash";
 import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
 import {
   IMPORT_ORIGIN_COLUMNS,
@@ -124,10 +128,12 @@ async function sendConfirm(
 // Writes the reviewed rows of a ready import into its account and marks it
 // confirmed, all in confirm_import's one transaction: admitted by the same
 // code the prototype runs against the user's ledger, then each operation
-// written with the revisions read.
+// written with the revisions read, and each cash balance against the cash
+// the review showed (`heldCash`).
 export async function confirmImportRows(
   importId: unknown,
   rows: unknown,
+  heldCash: unknown = [],
 ): Promise<MovementResult> {
   // Outside any try: its redirect to /login or /auth/mfa must propagate.
   const claims = await getSessionClaims();
@@ -142,7 +148,8 @@ export async function confirmImportRows(
     .array(z.record(z.string(), z.unknown()))
     .max(REVIEW_ROW_LIMIT)
     .safeParse(rows);
-  if (!id.success || !reviewed.success) {
+  const cashRead = reviewedCashSchema.safeParse(heldCash);
+  if (!id.success || !reviewed.success || !cashRead.success) {
     result = { ok: false, code: "invalid" };
   } else {
     try {
@@ -152,17 +159,16 @@ export async function confirmImportRows(
       if (!item) {
         result = { ok: false, code: "not_found" };
       } else {
-        const [{ ledger, truncated, symbolOf }, heldCash] = await Promise.all([
-          ledgerFor(client, { date: item.date }),
-          readHeldCash(client),
-        ]);
+        const { ledger, truncated, symbolOf } = await ledgerFor(client, {
+          date: item.date,
+        });
         if (truncated) throw new LedgerReadError("movements", "truncated");
         const typed = reviewed.data as unknown as ImportRow[];
         const cash = cashEntries(
           typed,
           item.accountId,
           new Set(ledger.accounts.map((each) => each.id)),
-          heldCash,
+          cashRead.data,
         );
         const written = writeImportRouted(
           ledger,

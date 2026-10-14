@@ -16,6 +16,7 @@ import {
   over,
   stored,
 } from "@plant/shared";
+import { draftAssetClassSchema } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -31,6 +32,7 @@ import {
   IMPORT_ORIGIN_COLUMNS,
   importOrigin,
   importOriginSchema,
+  syncProvider,
 } from "@/lib/imports/origin";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
@@ -87,7 +89,7 @@ export async function readImports(
       ...importOrigin(row),
       status: row.status,
       error:
-        row.failure && importFailureMessage(row.failure, row.document === null),
+        row.failure && importFailureMessage(row.failure, syncProvider(row)),
       documentDate: row.document_date,
       documentTotals: [],
       rows: [],
@@ -106,7 +108,7 @@ const itemSchema = z.object({
   value: z.string().nullable(),
   cost: z.string().nullable().optional(),
   account: z.string().nullable().optional(),
-  asset_class: z.enum(["instrument", "cash"]).optional(),
+  asset_class: draftAssetClassSchema.optional(),
   currency: z.enum(Constants.public.Enums.currency),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
@@ -364,8 +366,7 @@ export async function readImportForReview(
     id: row.id,
     ...importOrigin(row),
     status: row.status,
-    error:
-      row.failure && importFailureMessage(row.failure, row.document === null),
+    error: row.failure && importFailureMessage(row.failure, syncProvider(row)),
     documentDate: row.document_date,
     documentTotals: [
       { currency: "ARS" as const, amount: printed.printed_total_ars },

@@ -130,6 +130,80 @@ describe("cash rows", () => {
   });
 });
 
+describe("wallbit's stocks", () => {
+  it("reads a ticker that is also a currency's code as a stock", async () => {
+    fake.answer = (request) =>
+      request.path === "/api/public/v1/balance/stocks"
+        ? {
+            status: 200,
+            body: {
+              data: [
+                { symbol: "COP", shares: 3 },
+                { symbol: "PEN", shares: 2 },
+                { symbol: "CRC", shares: 1 },
+              ],
+            },
+          }
+        : request.path === "/api/public/v1/balance/checking"
+          ? { status: 200, body: { data: [{ currency: "USD", balance: 10 }] } }
+          : PROVIDER_FIXTURES.wallbit.ok(request);
+    const reading = await wallbitConnection(deps()).read(
+      WALLBIT_CREDENTIALS,
+      "holdings",
+    );
+    expect(rowsOf(reading)).toEqual([
+      ["COP", "3", "USD", "instrument"],
+      ["CRC", "1", "USD", "instrument"],
+      ["PEN", "2", "USD", "instrument"],
+      ["USD", "10", "USD", "cash"],
+    ]);
+    expect(holdings(reading).read.skippedRows).toBe(0);
+  });
+});
+
+describe("cash in several accounts of one currency", () => {
+  it("adds up IOL's accounts in dollars into one cash row", async () => {
+    fake.answer = (request) =>
+      request.path === "/api/v2/estadocuenta"
+        ? {
+            status: 200,
+            body: {
+              cuentas: [
+                { moneda: "dolar_Estadounidense", saldo: 100 },
+                { moneda: "dolar_Estadounidense", saldo: 50 },
+              ],
+            },
+          }
+        : PROVIDER_FIXTURES.iol.ok(request);
+    const reading = await iolConnection(deps()).read(
+      IOL_CREDENTIALS,
+      "holdings",
+    );
+    expect(
+      rowsOf(reading).filter(([, , , assetClass]) => assetClass === "cash"),
+    ).toEqual([["USD", "150", "USD", "cash"]]);
+  });
+
+  it("adds up IBKR's cash reports in dollars into one cash row", async () => {
+    const statement = IBKR_STATEMENT.replace(
+      '<CashReportCurrency currency="USD" endingCash="812.4" />',
+      '<CashReportCurrency currency="USD" endingCash="812.4" />' +
+        '<CashReportCurrency currency="USD" endingCash="0.6" />',
+    );
+    fake.answer = (request) =>
+      request.path.endsWith("/GetStatement")
+        ? { status: 200, type: "xml", body: statement }
+        : PROVIDER_FIXTURES.ibkr.ok(request);
+    const reading = await ibkrConnection(deps()).read(
+      IBKR_CREDENTIALS,
+      "holdings",
+    );
+    expect(
+      rowsOf(reading).filter(([, , , assetClass]) => assetClass === "cash"),
+    ).toEqual([["USD", "813", "USD", "cash"]]);
+  });
+});
+
 describe("binance's balances", () => {
   it("reads pesos as cash and leaves out, counted, a fiat Plant does not keep", async () => {
     fake.answer = (request) =>

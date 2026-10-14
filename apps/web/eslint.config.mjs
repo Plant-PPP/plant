@@ -10,6 +10,7 @@ import {
   asSelector,
   ASSISTANT_SINK,
   COST_SINK,
+  EXPORT_AUDIT_SINK,
   fenceExcept,
   IMPORT_SINK,
   LITERAL_IMPORTS_ONLY,
@@ -226,6 +227,19 @@ export default defineConfig([
   {
     files: ["src/lib/assistant/assistant-sink.test.ts"],
     rules: webRules({ allow: [ASSISTANT_SINK], syntax: LIB_SYNTAX }),
+  },
+  {
+    files: ["src/lib/export/export-audit-sink.ts"],
+    rules: webRules({ allow: [SERVICE_ROLE], syntax: SERVICE_WRITER_SYNTAX }),
+  },
+  {
+    files: ["src/lib/export/export-audit-sink.test.ts"],
+    rules: webRules({ allow: [EXPORT_AUDIT_SINK], syntax: LIB_SYNTAX }),
+  },
+  // A server action may hold this sink: it takes no user id.
+  {
+    files: ["src/app/(app)/(data)/settings/actions.ts"],
+    rules: webRules({ allow: [EXPORT_AUDIT_SINK], syntax: LIB_SYNTAX }),
   },
   {
     files: ["src/app/api/chat/route.ts"],

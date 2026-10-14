@@ -17,6 +17,8 @@ import { isProductionDeployment } from "@/lib/deployment";
 import { readLedger } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
+import { REQUEST_ID_FIELD } from "@/lib/request-id";
+import { currentRequestId } from "@/lib/request-id-server";
 import { createClient } from "@/lib/supabase/server";
 
 import { createPriceAlert, deletePriceAlert, exportData } from "./actions";
@@ -24,10 +26,11 @@ import { createPriceAlert, deletePriceAlert, exportData } from "./actions";
 export const metadata: Metadata = { title: navTitle("/settings") };
 
 // The user's price alerts and the instruments they hold, which an alert can
-// watch; none, logged, when they could not be read.
+// watch; none, logged and flagged, when they could not be read.
 async function userAlerts(): Promise<{
   alerts: PriceAlert[];
   instruments: AlertInstrument[];
+  readFailed: boolean;
 }> {
   const claims = await getSessionClaims();
   try {
@@ -39,7 +42,7 @@ async function userAlerts(): Promise<{
         referenceDollar: "mep",
       }),
     ]);
-    return { alerts, instruments: heldInstruments(ledger) };
+    return { alerts, instruments: heldInstruments(ledger), readFailed: false };
   } catch (error) {
     serverLog.error(
       "alerts.read",
@@ -47,10 +50,11 @@ async function userAlerts(): Promise<{
         "enduser.id": claims.sub,
         "plant.page": "/settings",
         "plant.outcome": "failed",
+        [REQUEST_ID_FIELD]: await currentRequestId(),
       },
       error,
     );
-    return { alerts: [], instruments: [] };
+    return { alerts: [], instruments: [], readFailed: true };
   }
 }
 

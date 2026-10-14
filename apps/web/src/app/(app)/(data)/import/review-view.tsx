@@ -125,6 +125,7 @@ export async function ImportReviewView({ id }: { id: string }) {
       instruments={ledger.instruments}
       held={heldOn(state, item.accountId, heldDate)}
       cash={cashIn(heldCash, item.accountId)}
+      heldCash={heldCash}
       accounts={
         several
           ? ledger.accounts.map((each) => ({

@@ -7,9 +7,17 @@ import {
 } from "./review";
 
 it("tells a sync the provider has not set up what it reads, in its own words", () => {
-  expect(importFailureMessage("unsupported", true)).toMatch(/reporte/);
-  expect(importFailureMessage("unsupported", false)).toBe(
+  expect(importFailureMessage("unsupported", "Bitso")).toMatch(
+    /^Bitso no tiene activado el reporte/,
+  );
+  expect(importFailureMessage("unsupported", null)).toBe(
     IMPORT_FAILURE_MESSAGES.unsupported,
+  );
+});
+
+it("names the provider that rejected a sync's connection", () => {
+  expect(importFailureMessage("connection_rejected", "Mercado Pago")).toBe(
+    "Mercado Pago rechazó la conexión. Revisá que siga activa o conectala de nuevo.",
   );
 });
 

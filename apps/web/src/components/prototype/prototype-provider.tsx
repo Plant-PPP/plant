@@ -18,10 +18,11 @@ import {
   type PriceAlert,
 } from "@/lib/alerts/alerts";
 import { withGainFigures } from "@/lib/alerts/gain";
-import type {
-  AssistantActions,
-  ChartPart,
-  PinResult,
+import {
+  type AssistantActions,
+  type ChartPart,
+  MAX_PINS,
+  type PinResult,
 } from "@/lib/assistant/chat";
 import type { HoldingDetails } from "@/components/holdings/assets-setup";
 import type { DebtActions } from "@/components/debts/debts-setup";
@@ -368,7 +369,7 @@ export function PrototypeProvider({
           if (s.pinnedCharts.some((each) => key(each.chart) === key(chart))) {
             return { state: s, result: "already" as const };
           }
-          if (s.pinnedCharts.length >= 12) {
+          if (s.pinnedCharts.length >= MAX_PINS) {
             return { state: s, result: "full" as const };
           }
           return {

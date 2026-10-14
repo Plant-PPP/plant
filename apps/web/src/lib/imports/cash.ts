@@ -34,6 +34,21 @@ const heldCashSchema = z.object({
   amount: z.string(),
 });
 
+// The cash holdings as the review read them, sent back with its rows:
+// confirm_import refuses as stale a balance whose cash changed since.
+export const reviewedCashSchema = z
+  .array(
+    z
+      .object({
+        id: z.string().max(64),
+        accountId: z.string().max(64),
+        currency: currencySchema,
+        amount: z.string().max(64),
+      })
+      .strict(),
+  )
+  .max(1_000);
+
 // The user's active cash holdings.
 export async function readHeldCash(client: Client): Promise<HeldCash[]> {
   const result = await client

@@ -53,17 +53,19 @@ import {
   currencyOf,
   instrumentLabel,
   instrumentNames,
+  unlabeledName,
 } from "@/lib/holdings/holding-name";
-import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
+import { ASSET_CLASS_LABELS, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel, quotedInput } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
+import type { HeldCash } from "@/lib/imports/cash";
 import {
   CONFIDENCE_LABELS,
   DATE_ISSUE_LABELS,
   type ImportItem,
   type ImportRow,
-  ISSUE_LABELS,
+  issueLabel,
   readTotals,
   rowChange,
   totalsMatch,
@@ -72,7 +74,11 @@ import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
 
 export type ReviewActions = {
-  confirm: (id: string, rows: ImportRow[]) => Promise<MovementResult>;
+  confirm: (
+    id: string,
+    rows: ImportRow[],
+    heldCash: readonly HeldCash[],
+  ) => Promise<MovementResult>;
 };
 
 // A row as the user edits it: the quantity and price as typed, and whether
@@ -142,11 +148,6 @@ export type AccountCash = {
   several: ReadonlySet<Currency>;
 };
 
-const CASH_LABELS: Record<Currency, string> = {
-  ARS: "Efectivo en pesos",
-  USD: "Efectivo en dólares",
-};
-
 // What the reading made of a document, to correct, discard or add to before
 // it goes into the account: each row with how sure the reading is and where
 // it was read, what it changes in the account, and the totals read against
@@ -157,6 +158,7 @@ export function ImportReview({
   instruments,
   held,
   cash,
+  heldCash = [],
   accounts,
   routing,
   backHref,
@@ -170,6 +172,9 @@ export function ImportReview({
   held: ReadonlyMap<string, string>;
   // The account's cash now, when the page reads it.
   cash?: AccountCash;
+  // The cash holdings `cash` and each account's add up, as read: the confirm
+  // writes a balance only while its cash is still what they say.
+  heldCash?: readonly HeldCash[];
   // When the document lists several accounts: the user's accounts a row may
   // go to, each with what it holds, its default portfolio and the user's
   // other accounts holding each instrument.
@@ -391,7 +396,7 @@ export function ImportReview({
         ? ""
         : row.assetClass === "cash"
           ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
-          : row.symbol,
+          : `${row.symbol}|${row.accountId ?? item.accountId}`,
       quantity: row.quantity,
       price: row.discarded ? null : row.price,
       value: row.value ?? null,
@@ -431,7 +436,9 @@ export function ImportReview({
     }
     setAlert(undefined);
     startTransition(async () => {
-      const result = await settle(actions.confirm(item.id, finalRows));
+      const result = await settle(
+        actions.confirm(item.id, finalRows, heldCash),
+      );
       if (result !== "rejected" && result.ok) {
         toast.success(`Guardaste lo de ${item.fileName} en ${institution}`);
         router.push(doneHref);
@@ -636,7 +643,7 @@ export function ImportReview({
                   ) : (
                     <span className="truncate font-medium">
                       {isCash(row)
-                        ? CASH_LABELS[row.currency]
+                        ? unlabeledName(ASSET_CLASS_LABELS.cash, row.currency)
                         : instrumentLabel(row.symbol, names.get(row.symbol))}
                     </span>
                   )}
@@ -655,7 +662,7 @@ export function ImportReview({
                       className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
                     >
                       <TriangleAlert aria-hidden className="size-3" />
-                      {ISSUE_LABELS[issue]}
+                      {issueLabel(issue, isCash(row))}
                     </span>
                   ))}
                   {!row.discarded && severalCash(row) && (

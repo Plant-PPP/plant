@@ -99,7 +99,11 @@ const adapters = Object.fromEntries(
 ) as unknown as ConnectionAdapters;
 
 let lines: Record<string, unknown>[];
+// Each test starts a fresh minute of the connect limiter.
+let clock = 0;
 beforeEach(() => {
+  clock += 120_000;
+  jest.spyOn(Date, "now").mockReturnValue(clock);
   lines = captureServerLog();
   writes.length = 0;
   checkReadOnly.mockReset().mockResolvedValue(undefined);
@@ -314,6 +318,16 @@ describe("connectApiKey", () => {
       provider: "wallbit",
       key_hint: "0001",
     });
+  });
+
+  it("asks a provider at most five times a minute for a user", async () => {
+    const results = [];
+    for (let i = 0; i < 6; i += 1) {
+      results.push(await connectApiKey(INPUT, adapters));
+    }
+    expect(checkReadOnly.mock.calls.length).toBeLessThanOrEqual(5);
+    expect(results.at(-1)).toEqual({ ok: false, code: "limited" });
+    expect(lines.at(-1)).toMatchObject({ "plant.outcome": "limited" });
   });
 
   it("answers not found when the database refuses the account", async () => {

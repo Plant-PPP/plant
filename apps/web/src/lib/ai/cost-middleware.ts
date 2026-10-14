@@ -103,8 +103,9 @@ export function costMiddleware(options: {
     });
   }
 
-  // The SDK retries each attempt through the middleware; the caller logs the
-  // final failure.
+  // The SDK retries each attempt through the middleware; a provider's
+  // refusal is logged once, as its final failure, by structuredCall or the
+  // assistant's turn.
   function callFailed(params: CallParams, error: unknown) {
     if (params.abortSignal?.aborted) unbilled("aborted", error);
     else if (!providerRefused(error)) unbilled("call_error", error);

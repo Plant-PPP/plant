@@ -1,16 +1,17 @@
-import { buenosAiresDate, fromScaled, toScaled } from "@plant/shared";
+import { buenosAiresDate } from "@plant/shared";
 import { z } from "zod";
 
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
 import {
   call,
-  cashRow,
   decimalOf,
+  heldRow,
   holdingsReading,
   isZero,
   jsonOf,
   notReadOnly,
   operationsReading,
+  OTHER_FIAT,
   positive,
   rejected,
   unavailable,
@@ -63,28 +64,16 @@ const forbiddenSchema = z.object({
 // A symbol as Wallbit names an asset or a currency.
 const SYMBOL = /^[A-Z0-9.]{1,20}$/;
 
-// The currencies Wallbit holds, as its API lists them: never an asset.
-const CURRENCIES = new Set([
+// The currencies Wallbit's checking account holds, as its API lists them:
+// pesos, dollars, its stablecoins and fiat Plant does not keep. In a trade
+// they are a currency exchange, never an asset.
+const CURRENCIES: ReadonlySet<string> = new Set([
   "USD",
-  "EUR",
   "ARS",
-  "MXN",
   "USDC",
   "USDT",
-  "BOB",
-  "COP",
-  "PEN",
-  "DOP",
-  "BRL",
-  "PHP",
-  "CLP",
-  "GTQ",
-  "PAB",
-  "CRC",
+  ...OTHER_FIAT,
 ]);
-
-// The stablecoins Wallbit holds, each a crypto instrument valued in dollars.
-const STABLECOINS = new Set(["USDC", "USDT"]);
 
 // Wallbit by API with a key the user made with the `read` permission only.
 // Wallbit does not say what a key may do unless a call needs more, so the
@@ -124,52 +113,27 @@ export function wallbitConnection({
       stocksSchema.safeParse(await read("/balance/stocks", credentials)),
     ];
     if (!checking.success || !stocks.success) throw unavailable();
-    // The same symbol in both accounts (dollars) adds up into one row. Pesos
-    // and dollars are cash, stablecoins and assets instruments in dollars,
-    // any other currency one Plant does not keep.
-    const held = new Map<string, bigint>();
+    // The investment account lists its dollars as the symbol USD, which adds
+    // up with the checking account's into one cash row. Checking holds
+    // currencies, so its fiat Plant does not keep is left out; the
+    // investment account holds stocks, whose tickers may match a currency's
+    // code (COP, PEN).
+    const held = new Map<string, unknown[]>();
     let skipped = 0;
     const add = (symbol: string, amount: unknown) => {
-      const quantity = decimalOf(amount);
-      if (
-        !SYMBOL.test(symbol) ||
-        quantity === null ||
-        (CURRENCIES.has(symbol) &&
-          symbol !== "ARS" &&
-          symbol !== "USD" &&
-          !STABLECOINS.has(symbol))
-      ) {
-        skipped += 1;
-        return;
-      }
-      if (isZero(quantity)) return;
-      try {
-        held.set(symbol, (held.get(symbol) ?? 0n) + toScaled(quantity));
-      } catch {
-        skipped += 1;
-      }
+      if (!SYMBOL.test(symbol)) skipped += 1;
+      else held.set(symbol, [...(held.get(symbol) ?? []), amount]);
     };
     for (const { currency, balance } of checking.data.data) {
-      add(currency, balance);
+      if (!OTHER_FIAT.has(currency)) add(currency, balance);
+      else if (!isZero(decimalOf(balance))) skipped += 1;
     }
     for (const { symbol, shares } of stocks.data.data) add(symbol, shares);
     const rows: DraftRow[] = [];
-    for (const [symbol, units] of held) {
-      const quantity = fromScaled(units);
-      if (!positive(quantity)) skipped += 1;
-      else if (symbol === "ARS" || symbol === "USD") {
-        rows.push(cashRow(symbol, quantity, "high"));
-      } else {
-        rows.push({
-          symbol,
-          quantity,
-          price: null,
-          value: null,
-          currency: "USD",
-          confidence: "high",
-          page: null,
-        });
-      }
+    for (const [symbol, amounts] of held) {
+      const row = heldRow(symbol, amounts);
+      if (row === null) skipped += 1;
+      else if (row !== "empty") rows.push(row);
     }
     return holdingsReading(rows, skipped, now());
   };
