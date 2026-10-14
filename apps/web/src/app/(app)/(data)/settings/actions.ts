@@ -8,13 +8,18 @@ import {
 import { requireSensitiveSession } from "@/lib/auth/sensitive-session";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { buenosAiresDate } from "@plant/shared";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
+import { type AlertWriteResult, newAlertSchema } from "@/lib/alerts/alerts";
+import { createAlert, deleteAlert, markAlertSeen } from "@/lib/alerts/read";
 import { readLiabilities } from "@/lib/debts/read";
 import type { ExportTable } from "@/lib/export/csv";
 import { readOtherHoldings } from "@/lib/export/read";
 import { exportTables } from "@/lib/export/tables";
 import { readImports } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
+import { refreshGainAlerts } from "@/lib/ledger/write";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { createClient } from "@/lib/supabase/server";
@@ -90,4 +95,77 @@ export async function exportData(): Promise<ExportTable[] | null> {
     );
     return null;
   }
+}
+
+const alertId = z.uuid();
+type AlertAction = "create" | "delete" | "seen";
+
+// Runs one write over the session's user's price alerts, logs it and
+// refreshes the pages that show them.
+async function alertWrite(
+  action: AlertAction,
+  write: (
+    client: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+  ) => Promise<AlertWriteResult>,
+): Promise<AlertWriteResult> {
+  const claims = await getSessionClaims();
+  const line = {
+    [REQUEST_ID_FIELD]: await currentRequestId(),
+    "enduser.id": claims.sub,
+    "plant.alerts.action": action,
+  };
+  try {
+    const result = await write(await createClient(), claims.sub);
+    serverLog.info("alerts.write", { ...line, "plant.outcome": result });
+    if (result === "ok") {
+      revalidatePath("/");
+      revalidatePath("/settings");
+    }
+    return result;
+  } catch (error) {
+    serverLog.error(
+      "alerts.write",
+      { ...line, "plant.outcome": "failed" },
+      error,
+    );
+    return "failed";
+  }
+}
+
+// Sets an alert from the form. A gain alert has its figure worked out from
+// the user's movements at once.
+export async function createPriceAlert(
+  input: unknown,
+): Promise<AlertWriteResult> {
+  const parsed = newAlertSchema.safeParse(input);
+  if (!parsed.success) return "invalid";
+  return alertWrite("create", async (client, userId) => {
+    const result = await createAlert(client, parsed.data);
+    if (result === "ok" && parsed.data.subjectKind === "gain") {
+      await refreshGainAlerts(userId);
+    }
+    return result;
+  });
+}
+
+export async function deletePriceAlert(id: unknown): Promise<boolean> {
+  const parsed = alertId.safeParse(id);
+  if (!parsed.success) return false;
+  const result = await alertWrite("delete", async (client) => {
+    await deleteAlert(client, parsed.data);
+    return "ok";
+  });
+  return result === "ok";
+}
+
+// Marks a met alert seen, so Resumen no longer shows it.
+export async function seePriceAlert(id: unknown): Promise<boolean> {
+  const parsed = alertId.safeParse(id);
+  if (!parsed.success) return false;
+  const result = await alertWrite("seen", async (client) => {
+    await markAlertSeen(client, parsed.data);
+    return "ok";
+  });
+  return result === "ok";
 }

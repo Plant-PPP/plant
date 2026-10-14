@@ -1,5 +1,6 @@
 "use client";
 
+import { withGainFigures } from "@/lib/alerts/gain";
 import { type Denominator, referenceUnit } from "@plant/core";
 import { notFound } from "next/navigation";
 
@@ -86,6 +87,10 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
         asOf: state.today,
       }))}
       onUnpin={actions.pins.unpin}
+      metAlerts={withGainFigures(state, state.priceAlerts).filter(
+        (each) => each.metOn !== null && each.seenAt === null,
+      )}
+      onAlertSeen={actions.alerts.seen}
     />
   );
 }

@@ -1,5 +1,10 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("next/cache", () => ({ revalidatePath: jest.fn() }));
+// Gain alerts' figures are worked out after each write; lib/alerts tests them.
+const syncGainAlerts = jest.fn(async () => 0);
+jest.mock("@/lib/alerts/read", () => ({
+  syncGainAlerts: (...args: unknown[]) => syncGainAlerts(...(args as [])),
+}));
 jest.mock("@/lib/auth/session-claims", () => ({
   getSessionClaims: async () => ({ sub: "u1" }),
 }));

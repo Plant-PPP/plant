@@ -9,6 +9,15 @@ import {
   useRef,
 } from "react";
 
+import {
+  alertQuote,
+  type AlertWriteResult,
+  MAX_ALERTS,
+  meets,
+  type NewAlert,
+  type PriceAlert,
+} from "@/lib/alerts/alerts";
+import { withGainFigures } from "@/lib/alerts/gain";
 import type {
   AssistantActions,
   ChartPart,
@@ -89,6 +98,11 @@ type Prototype = {
     pins: {
       pin: (chart: ChartPart) => Promise<PinResult>;
       unpin: (id: string) => Promise<boolean>;
+    };
+    alerts: {
+      create: (alert: NewAlert) => Promise<AlertWriteResult>;
+      delete: (id: string) => Promise<boolean>;
+      seen: (id: string) => Promise<boolean>;
     };
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
     rates: {
@@ -258,6 +272,92 @@ export function PrototypeProvider({
           unit,
           pricedSnapshotOf(latest.current, snapshot).snapshot,
         ).sources,
+    },
+    alerts: {
+      create: (alert) =>
+        write((s) => {
+          if (s.priceAlerts.length >= MAX_ALERTS) {
+            return { state: s, result: "full" as const };
+          }
+          let added: PriceAlert;
+          if (alert.subjectKind === "gain") {
+            const instrument = s.instruments.find(
+              (each) => each.symbol === alert.subject,
+            );
+            if (!instrument) {
+              return { state: s, result: "unknown_instrument" as const };
+            }
+            [added] = withGainFigures(s, [
+              {
+                id: crypto.randomUUID(),
+                subjectKind: "instrument",
+                subject: alert.subject,
+                direction: alert.direction,
+                threshold: null,
+                currency: instrument.currency,
+                gainPercent: alert.percent,
+                costPrice: null,
+                metOn: null,
+                metPrice: null,
+                seenAt: null,
+              },
+            ]) as [PriceAlert];
+          } else {
+            added = {
+              ...alert,
+              id: crypto.randomUUID(),
+              gainPercent: null,
+              costPrice: null,
+              metOn: null,
+              metPrice: null,
+              seenAt: null,
+            };
+          }
+          const quote = alertQuote(
+            added,
+            pricedSnapshotOf(s, snapshot).snapshot,
+          );
+          const met = quote !== null && meets(added, quote.price);
+          return {
+            state: {
+              ...s,
+              priceAlerts: [
+                {
+                  ...added,
+                  // Never a day before it was set, as the quotes job keeps it.
+                  metOn: met
+                    ? quote.date > s.today
+                      ? quote.date
+                      : s.today
+                    : null,
+                  metPrice: met ? quote.price : null,
+                },
+                ...s.priceAlerts,
+              ],
+            },
+            result: "ok" as const,
+          };
+        }),
+      delete: (id) =>
+        write((s) => ({
+          state: {
+            ...s,
+            priceAlerts: s.priceAlerts.filter((each) => each.id !== id),
+          },
+          result: true,
+        })),
+      seen: (id) =>
+        write((s) => ({
+          state: {
+            ...s,
+            priceAlerts: s.priceAlerts.map((each) =>
+              each.id === id && each.metOn !== null
+                ? { ...each, seenAt: new Date().toISOString() }
+                : each,
+            ),
+          },
+          result: true,
+        })),
     },
     pins: {
       // A chart is pinned once: by which chart it is when it says, as the

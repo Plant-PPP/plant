@@ -20,7 +20,7 @@ import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { serverLog } from "@/lib/log/server-log";
 import { getJson, postForm } from "@/lib/quotes/get-json";
 import { iolCredentials } from "@/lib/quotes/iol-credentials";
-import { quoteSink } from "@/lib/quotes/quote-sink";
+import { priceAlertsSink, quoteSink } from "@/lib/quotes/quote-sink";
 
 // The quotes, import and file deletion jobs run under `next dev`, and on a
 // deployment only where PLANT_RUN_JOBS is "1": plant-staging is also
@@ -30,6 +30,7 @@ export const { GET, POST, PUT } = serve(
     quotes: () => ({
       feeds: quoteFeeds({ getJson, postForm, iol: iolCredentials() }),
       store: quoteSink(),
+      alerts: priceAlertsSink(),
       log: serverLog,
       now: () => new Date(),
     }),
