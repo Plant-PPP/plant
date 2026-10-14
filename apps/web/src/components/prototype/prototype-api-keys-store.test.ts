@@ -1,3 +1,5 @@
+import { CONNECTION_PROVIDERS } from "@plant/sources";
+
 import { connectionForm, providerOf } from "@/lib/connections/api-key";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 
@@ -135,6 +137,23 @@ it("syncs into an import to review, one at a time, counting no upload", () => {
     confirmImport(ready, "s1", item.rows, () => crypto.randomUUID()).result,
   ).toMatchObject({ ok: true });
 });
+
+it.each(CONNECTION_PROVIDERS)(
+  "syncs a %s account into rows to review",
+  (provider) => {
+    const apiKeys = new Map(state.apiKeys);
+    apiKeys.set(BINANCE.id, { provider, keyHint: "0001", connectedOn: TODAY });
+    const queued = addSync(
+      { ...state, apiKeys },
+      { id: "s1", accountId: BINANCE.id },
+    );
+    const item = finishSync(queued.state, "s1").imports.find(
+      (each) => each.id === "s1",
+    )!;
+    expect(item.status).toBe("ready");
+    expect(item.rows.length).toBeGreaterThan(0);
+  },
+);
 
 it("disconnects the key", () => {
   const removed = disconnectApiKey(connected, BINANCE.id);

@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { DraftRow } from "../file-upload/draft";
 import {
   call,
+  hexOf,
+  hmacSha256,
   holdingsReading,
   jsonOf,
   notReadOnly,
@@ -50,22 +52,8 @@ const accountSchema = z.object({
 // An asset as Binance names it: capitals and digits.
 const ASSET = /^[A-Z0-9]{1,20}$/;
 
-const hex = (bytes: ArrayBuffer) =>
-  Array.from(new Uint8Array(bytes), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-
-async function signature(secret: string, payload: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return hex(await crypto.subtle.sign("HMAC", key, encoder.encode(payload)));
-}
+const signature = async (secret: string, payload: string) =>
+  hexOf(await hmacSha256(secret, payload));
 
 // One balance as a holding: what is free and what open orders hold, in
 // units. null when it is not a holding Plant can store: a name Binance does

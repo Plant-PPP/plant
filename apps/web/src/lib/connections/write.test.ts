@@ -68,7 +68,12 @@ import {
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
-import { connectApiKey, disconnectApiKey, syncAccount } from "./write";
+import {
+  connectApiKey,
+  credentialsBytes,
+  disconnectApiKey,
+  syncAccount,
+} from "./write";
 
 // Made up.
 const CREDENTIALS = {
@@ -129,6 +134,13 @@ afterEach(() => {
 });
 
 const logged = () => JSON.stringify(lines);
+
+it("measures credentials as Postgres prints their jsonb", () => {
+  expect(credentialsBytes({ a: "b", c: "d" })).toBe(
+    '{"a": "b", "c": "d"}'.length,
+  );
+  expect(credentialsBytes({ a: "ñ" })).toBe('{"a": "ñ"}'.length + 1);
+});
 
 describe("connectApiKey", () => {
   it("asks the provider first, then hands the credentials to the database for Vault", async () => {
@@ -252,6 +264,11 @@ describe("connectApiKey", () => {
     { ...INPUT, confirmedReadOnly: undefined },
     { ...INPUT, accountId: "not-a-uuid" },
     { ...INPUT, extra: true },
+    // Each value fits, the object does not fit what the database takes.
+    {
+      ...INPUT,
+      credentials: { apiKey: "A".repeat(2100), apiSecret: "B".repeat(2100) },
+    },
   ])("refuses input that does not parse, asking nobody", async (input) => {
     expect(await connectApiKey(input, adapters)).toEqual({
       ok: false,

@@ -52,6 +52,18 @@ const BALANCES: Record<
     { symbol: "AL30", quantity: "1500" },
     { symbol: "MELI", quantity: "4" },
   ],
+  roxom: [{ symbol: "BTC", quantity: "0.125" }],
+  // The prototype has no cash to sync: the money in the account stands as
+  // the money market fund it earns in.
+  mercadopago: [{ symbol: "FIMAAHO", quantity: "200000" }],
+  bitso: [
+    { symbol: "BTC", quantity: "0.03" },
+    { symbol: "ETH", quantity: "0.4" },
+  ],
+  ripio: [
+    { symbol: "BTC", quantity: "0.0225" },
+    { symbol: "SOL", quantity: "5" },
+  ],
 };
 
 export function connectApiKey(
