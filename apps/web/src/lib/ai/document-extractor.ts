@@ -130,7 +130,7 @@ export function documentExtractor({
   record: (row: AiCostInsert) => Promise<void>;
   model?: ModelFactory;
 }): ImportJobDeps["extract"] {
-  return async ({ bytes, mimeType, userId }) => {
+  return async ({ bytes, mimeType, userId, lastAttempt }) => {
     const read = async (modelId: PricedModelId, ask: string) =>
       toDraft(
         await structuredCall({
@@ -187,13 +187,15 @@ export function documentExtractor({
     let draft = agreedDraft(first, compared);
     if (disputed > 0) {
       // A tiebreak the provider may answer later fails the reading for the
-      // step to retry; one that cannot answer settles on the two readings,
-      // whatever they differ on marked low.
+      // step to retry, unless no retry follows; otherwise it settles on the
+      // two readings, whatever they differ on marked low.
       const tiebreak = await read(
         TIEBREAK_MODEL,
         tiebreakBrief(compared.disputes, first, second),
       ).catch((error: unknown) => {
-        if (error instanceof SourceError && error.retryable) throw error;
+        if (error instanceof SourceError && error.retryable && !lastAttempt) {
+          throw error;
+        }
         return null;
       });
       draft = settle(first, second, tiebreak, compared);

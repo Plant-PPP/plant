@@ -177,6 +177,21 @@ describe("settle", () => {
     expect(settled.rows.map((r) => r.confidence)).toEqual(["low", "low"]);
   });
 
+  it("marks low a row whose figures won from different lines", () => {
+    const first = draft([row("AAPL", "10", { price: "2", value: "20" })]);
+    const second = draft([row("AAPL", "10", { price: "2", value: "60" })]);
+    const tiebreak = draft([row("AAPL", "30", { price: "2", value: "60" })]);
+    const settled = settle(
+      first,
+      second,
+      tiebreak,
+      compareReadings(first, second),
+    );
+    expect(settled.rows).toEqual([
+      row("AAPL", "10", { price: "2", value: "60", confidence: "low" }),
+    ]);
+  });
+
   it("keeps no more rows than a draft takes", () => {
     const many = (n: number, prefix: string) =>
       Array.from({ length: n }, (_, i) => row(`${prefix}${i}`, "1"));

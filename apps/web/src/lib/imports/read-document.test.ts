@@ -7,6 +7,7 @@ const input = (mimeType: string) => ({
   mimeType,
   userId: "u1",
   importId: "i1",
+  lastAttempt: false,
   institution: "IOL",
 });
 

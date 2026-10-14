@@ -94,6 +94,7 @@ it("reads the file into a draft and marks the import ready", async () => {
     mimeType: "application/pdf",
     userId: USER,
     institution: "IOL",
+    lastAttempt: false,
   });
   expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT);
   expect(lines).toEqual([

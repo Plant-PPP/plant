@@ -140,6 +140,13 @@ export function settle(
     // Without a tiebreak a row one reader lists is kept for the user to check.
     if (listed.length < (tiebreak ? 2 : 1)) continue;
     const bothReaders = readings[0]!.has(key) && readings[1]!.has(key);
+    // Figures voted one by one may come from different lines; the row stands
+    // unchecked only when two readings agree on all of them together.
+    const wholeRow = listed.some((x, i) =>
+      listed.some(
+        (y, j) => i < j && FIGURES.every((f) => sameDecimal(x[f], y[f])),
+      ),
+    );
     const base = readings[2]!.get(key) ?? listed[0]!;
     let unsure = false;
     const figures = Object.fromEntries(
@@ -160,7 +167,7 @@ export function settle(
       // A row one reader missed may be another's line under a different
       // name, so it is for the user to check too.
       confidence:
-        unsure || !bothReaders
+        unsure || !bothReaders || !wholeRow
           ? "low"
           : listed.map((row) => row.confidence).reduce(lowerConfidence),
       page: listed.find((row) => row.page !== null)?.page ?? null,
