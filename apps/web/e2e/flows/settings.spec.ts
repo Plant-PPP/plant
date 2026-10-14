@@ -9,15 +9,19 @@ async function openSettings(page: Page, email: string) {
   await expect(page).toHaveURL(/\/settings$/);
 }
 
-test("Ajustes exports the data as CSV", async ({ page }) => {
+test("Ajustes exports the data as Excel and as CSV", async ({ page }) => {
   await openSettings(page, await signIn(page));
 
   const card = page
     .locator("[data-slot=card]")
     .filter({ hasText: "Tus datos" });
-  const download = page.waitForEvent("download");
-  await card.getByRole("button").first().click();
-  expect((await download).suggestedFilename()).toMatch(/\.csv$/);
+  const workbook = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Todo en Excel" }).click();
+  expect((await workbook).suggestedFilename()).toBe("plant.xlsx");
+
+  const csv = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Tenencias" }).click();
+  expect((await csv).suggestedFilename()).toBe("tenencias.csv");
 });
 
 // The prototype deletes the data it holds; the user starts over as a new one.
