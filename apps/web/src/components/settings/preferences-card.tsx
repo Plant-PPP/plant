@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  DENOMINATORS,
   type Denominator,
   type ReferenceDollar,
   referenceUnit,
+  VIEW_UNITS,
 } from "@plant/core";
 import { useId } from "react";
 import { toast } from "sonner";
@@ -112,7 +112,7 @@ export function PreferencesCard({
               <SelectItem value={REFERENCE}>
                 {`Tu dólar de referencia (${reference})`}
               </SelectItem>
-              {(Object.keys(DENOMINATORS) as Denominator[]).map((each) => (
+              {VIEW_UNITS.map((each) => (
                 <SelectItem key={each} value={each}>
                   {UNIT_LABELS[each]}
                 </SelectItem>
