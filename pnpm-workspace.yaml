@@ -30,6 +30,9 @@ auditConfig:
     # braces (via eslint-config-next): no patched release exists. Only lint
     # reaches it, with glob patterns from this repo.
     - GHSA-vfj7-8cjw-p6xm
+    # sprintf-js (via jest's transform): no patched release
+    # exists. Only the test runner reaches it, with this repo's own strings.
+    - GHSA-hp3w-g68c-fv3c
 
 onlyBuiltDependencies:
   - esbuild
