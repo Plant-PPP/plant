@@ -63,10 +63,14 @@ describe("bytesMatch", () => {
     expect(bytesMatch("image/png", bytes("%PDF-1.7"))).toBe(false);
   });
 
-  it("takes a CSV whose head cuts a character, but not one that is not UTF-8", () => {
+  it("takes a CSV in UTF-8 or Windows-1252, but not UTF-16", () => {
     const long = bytes("a".repeat(4095), [0xc3, 0xb1]);
     expect(bytesMatch("text/csv", long)).toBe(true);
-    expect(bytesMatch("text/csv", bytes("a;b\n", [0xff, 0xfe]))).toBe(false);
+    // "Dólar" in Windows-1252.
+    expect(bytesMatch("text/csv", bytes("D", [0xf3], "lar;1\n"))).toBe(true);
+    expect(
+      bytesMatch("text/csv", bytes("", [0xff, 0xfe, 0x61, 0x00, 0x3b, 0x00])),
+    ).toBe(false);
     expect(bytesMatch("text/csv", bytes(""))).toBe(false);
   });
 });
