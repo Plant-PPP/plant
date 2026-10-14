@@ -76,6 +76,20 @@ describe("scoreReading", () => {
     });
   });
 
+  it("matches a row exactly before taking a low one as flagged", () => {
+    const two = expectedReadingSchema.parse({
+      rows: [
+        { symbol: "GGAL", quantity: "100", currency: "ARS" },
+        { symbol: "GGAL", quantity: "200", currency: "ARS" },
+      ],
+    });
+    const score = scoreReading(
+      two,
+      draft([row("GGAL", "200", { confidence: "low" }), row("GGAL", "999")]),
+    );
+    expect(score).toMatchObject({ right: 1, flagged: 0, wrong: ["GGAL|ARS"] });
+  });
+
   it("tells pesos and dollars of one symbol apart", () => {
     const score = scoreReading(expected, draft([row("AL30", "1000")]));
     expect(score.wrong).toContain("AL30|USD");

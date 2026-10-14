@@ -27,7 +27,12 @@ export const expectedReadingSchema = z
           })
           .strict(),
       )
-      .default([]),
+      .default([])
+      .refine(
+        (totals) =>
+          new Set(totals.map((total) => total.currency)).size === totals.length,
+        "One total per currency",
+      ),
   })
   .strict();
 export type ExpectedReading = z.infer<typeof expectedReadingSchema>;
@@ -59,26 +64,28 @@ export function scoreReading(
   for (const row of draft.rows) {
     read.set(keyOf(row), [...(read.get(keyOf(row)) ?? []), row]);
   }
-  let right = 0;
-  let flagged = 0;
-  const wrong: string[] = [];
-  for (const row of expected.rows) {
+  // Exact matches first, so a low row is not taken for one it is not.
+  const unmatched = expected.rows.filter((row) => {
     const candidates = read.get(keyOf(row)) ?? [];
     const same = candidates.findIndex(
       (each) => compareDecimals(each.quantity, row.quantity) === 0,
     );
-    if (same !== -1) {
-      right += 1;
-      candidates.splice(same, 1);
-      continue;
-    }
+    if (same === -1) return true;
+    candidates.splice(same, 1);
+    return false;
+  });
+  const right = expected.rows.length - unmatched.length;
+  let flagged = 0;
+  const wrong: string[] = [];
+  for (const row of unmatched) {
+    const candidates = read.get(keyOf(row)) ?? [];
     const low = candidates.findIndex((each) => each.confidence === "low");
-    if (low !== -1) {
-      flagged += 1;
-      candidates.splice(low, 1);
+    if (low === -1) {
+      wrong.push(keyOf(row));
       continue;
     }
-    wrong.push(keyOf(row));
+    flagged += 1;
+    candidates.splice(low, 1);
   }
   const extra = [...read.entries()].flatMap(([key, rows]) =>
     rows.map(() => key),
