@@ -246,26 +246,31 @@ it("passes the operations and debts a reading left out to the store", async () =
   expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, [{}], 3);
 });
 
-it.each(["institution", "download"] as const)(
-  "skips, before reading the file, an import whose %s is gone",
-  async (gone) => {
-    const { deps, store, lines, run } = setUp();
-    store[gone].mockResolvedValue(null);
-    expect(await run()).toEqual({ outcome: "skipped" });
-    expect(deps.source.read).not.toHaveBeenCalled();
-    expect(store.failed).not.toHaveBeenCalled();
-    expect(lines).toEqual([
-      {
-        level: "warn",
-        event: "imports.read",
-        fields: expect.objectContaining({
-          "plant.outcome": "skipped",
-          "plant.import.skip_reason": "gone",
-        }),
-      },
-    ]);
-  },
-);
+it("skips, before reading the file, an import deleted meanwhile", async () => {
+  const { deps, store, lines, run } = setUp();
+  store.institution.mockResolvedValue(null);
+  expect(await run()).toEqual({ outcome: "skipped" });
+  expect(deps.source.read).not.toHaveBeenCalled();
+  expect(store.failed).not.toHaveBeenCalled();
+  expect(lines).toEqual([
+    {
+      level: "warn",
+      event: "imports.read",
+      fields: expect.objectContaining({
+        "plant.outcome": "skipped",
+        "plant.import.skip_reason": "gone",
+      }),
+    },
+  ]);
+});
+
+it("fails as unreadable an import whose file is gone while the import is not", async () => {
+  const { deps, store, run } = setUp();
+  store.download.mockResolvedValue(null);
+  expect(await run()).toEqual({ outcome: "failed" });
+  expect(deps.source.read).not.toHaveBeenCalled();
+  expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, "unreadable");
+});
 
 it("finds nothing in a document of no operations", async () => {
   const { store, run } = setUp({
@@ -282,7 +287,7 @@ it("reads the file into a draft and marks the import ready", async () => {
   expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.institution).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
-  expect(store.download).toHaveBeenCalledWith(PATH);
+  expect(store.download).toHaveBeenCalledWith(PATH, USER);
   expect(deps.source.read).toHaveBeenCalledWith({
     importId: IMPORT,
     bytes: BYTES,

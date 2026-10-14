@@ -18,7 +18,7 @@ it("rejects every call when there is no secret key", async () => {
   const sink = importSink();
   for (const call of [
     () => sink.load("i1", "u1"),
-    () => sink.download("p"),
+    () => sink.download("u1/imports/p", "u1"),
     () => sink.reading("i1", "u1"),
     () => sink.institution("i1", "u1"),
     () => sink.failed("i1", "u1", "unreadable"),

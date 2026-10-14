@@ -165,7 +165,7 @@ it("downloads no file where none is any more", async () => {
       message: "Object not found",
     },
   }));
-  expect(await store.download("p")).toBeNull();
+  expect(await store.download(`${USER}/imports/p`, USER)).toBeNull();
 });
 
 it("throws a store error when a download fails otherwise", async () => {
@@ -173,8 +173,23 @@ it("throws a store error when a download fails otherwise", async () => {
     status: 500,
     body: { statusCode: "500", error: "internal", message: "boom" },
   }));
-  const error = await store.download("p").catch((e: unknown) => e);
+  const error = await store
+    .download(`${USER}/imports/p`, USER)
+    .catch((e: unknown) => e);
   expect(error).toMatchObject({ step: "download" });
+});
+
+it("downloads no file outside the user's imports", async () => {
+  const { store, calls } = storeWith(() => ({ status: 200, body: {} }));
+  for (const path of [
+    `a0000000-0000-4000-8000-00000000000b/imports/p`,
+    `${USER}/other/p`,
+    `${USER}/imports/../../a0000000-0000-4000-8000-00000000000b/imports/p`,
+  ]) {
+    const error = await store.download(path, USER).catch((e: unknown) => e);
+    expect(error).toMatchObject({ step: "download", code: "path" });
+  }
+  expect(calls).toEqual([]);
 });
 
 const DRAFT = {

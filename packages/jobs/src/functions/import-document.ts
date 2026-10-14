@@ -41,14 +41,15 @@ export type ImportToRead = {
 
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
-// the import's id and its user, and saving a draft of holdings or of
+// the user (and the import's id where it takes one), and saving a draft of holdings or of
 // operations replaces any draft, of either, a failed attempt left. A call
 // that fails throws an error named ImportStoreError with the `step` and the
 // `code` that failed, the only parts of it the job keeps.
 export interface ImportStorePort {
   load(importId: string, userId: string): Promise<ImportToRead | null>;
-  // null when no file is at the path: the import was deleted meanwhile.
-  download(path: string): Promise<Uint8Array | null>;
+  // null when no file is at the path. Throws for a path outside the user's
+  // `<userId>/imports/` folder.
+  download(path: string, userId: string): Promise<Uint8Array | null>;
   reading(importId: string, userId: string): Promise<void>;
   // The institution of the account the import's file was uploaded to; null
   // when the import was deleted meanwhile.
@@ -280,8 +281,9 @@ export async function runImportDocument(
         } else {
           const institution = await deps.store.institution(importId, userId);
           if (institution === null) return { gone: true };
-          const bytes = await deps.store.download(prepared.path);
-          if (bytes === null) return { gone: true };
+          const bytes = await deps.store.download(prepared.path, userId);
+          // The import is still there, so its file is lost, not deleted.
+          if (bytes === null) throw new SourceError("unreadable", false);
           reading = await deps.source.read({
             importId,
             bytes,
