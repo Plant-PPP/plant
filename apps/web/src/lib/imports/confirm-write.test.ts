@@ -17,19 +17,17 @@ jest.mock("@/lib/ledger/write", () => ({
   ledgerFor: (...args: unknown[]) => ledgerFor(...args),
 }));
 const importRead = jest.fn();
-const cashRead = jest.fn();
 const rpc = jest.fn();
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc,
-    from: (table: string) => {
+    from: () => {
       const builder = {
         select: () => builder,
         eq: () => builder,
         is: () => builder,
         limit: () => builder,
-        then: (resolve: (value: unknown) => unknown) =>
-          resolve(table === "holdings" ? cashRead() : importRead()),
+        then: (resolve: (value: unknown) => unknown) => resolve(importRead()),
       };
       return builder;
     },
@@ -80,7 +78,14 @@ beforeEach(() => {
     symbolOf: new Map(),
   });
   rpc.mockReset().mockResolvedValue({ status: 200, data: IMPORT, error: null });
-  cashRead.mockReset().mockReturnValue({ status: 200, error: null, data: [] });
+});
+
+// A cash holding as the review read it.
+const held = (id: string, currency: "ARS" | "USD", amount: string) => ({
+  id,
+  accountId: ACCOUNT,
+  currency,
+  amount,
 });
 
 const cash = (currency: "ARS" | "USD", quantity: string) => ({
@@ -97,25 +102,13 @@ const cash = (currency: "ARS" | "USD", quantity: string) => ({
 });
 
 describe("cash", () => {
-  it("confirms a cash balance with the import's operations, against the cash read", async () => {
-    cashRead.mockReturnValue({
-      status: 200,
-      error: null,
-      data: [
-        {
-          id: "h1",
-          source_connection_id: ACCOUNT,
-          currency: "ARS",
-          amount: "100.00000000",
-        },
-      ],
-    });
+  it("confirms a cash balance with the import's operations, against the cash the review read", async () => {
     expect(
-      await confirmImportRows(IMPORT, [
-        row("AAPL", "5"),
-        cash("USD", "812.4"),
-        cash("ARS", "125000.5"),
-      ]),
+      await confirmImportRows(
+        IMPORT,
+        [row("AAPL", "5"), cash("USD", "812.4"), cash("ARS", "125000.5")],
+        [held("h1", "ARS", "100.00000000")],
+      ),
     ).toEqual({ ok: true, id: IMPORT });
     const [, args] = rpc.mock.calls[0]!;
     expect(args.p_operations).toEqual([
@@ -146,6 +139,40 @@ describe("cash", () => {
     expect(JSON.stringify(lines)).not.toContain("812.4");
   });
 
+  it("refuses as stale a balance whose cash changed after the review read it", async () => {
+    // The account's cash now, as confirm_import compares it.
+    const now = { h1: "150.00000000" };
+    rpc.mockImplementation(async (_, args: { p_operations: unknown[] }) => {
+      const stale = args.p_operations.some((operation) => {
+        const { cash: balance } = operation as {
+          cash?: { expected: Record<string, string> };
+        };
+        return balance && balance.expected.h1 !== now.h1;
+      });
+      return stale
+        ? { status: 409, data: null, error: { code: "PT409", hint: "stale" } }
+        : { status: 200, data: IMPORT, error: null };
+    });
+    expect(
+      await confirmImportRows(
+        IMPORT,
+        [cash("ARS", "125000.5")],
+        [held("h1", "ARS", "100.00000000")],
+      ),
+    ).toEqual({ ok: false, code: "failed" });
+    const [, args] = rpc.mock.calls[0]!;
+    expect(args.p_operations).toEqual([
+      {
+        cash: {
+          source_connection_id: ACCOUNT,
+          currency: "ARS",
+          amount: "125000.5",
+          expected: { h1: "100.00000000" },
+        },
+      },
+    ]);
+  });
+
   it("leaves out a cash balance the review discarded", async () => {
     await confirmImportRows(IMPORT, [
       { ...cash("USD", "812.4"), discarded: true },
@@ -170,20 +197,24 @@ describe("cash", () => {
   });
 
   it("refuses a balance where the account holds several in that currency", async () => {
-    cashRead.mockReturnValue({
-      status: 200,
-      error: null,
-      data: ["h1", "h2"].map((id) => ({
-        id,
-        source_connection_id: ACCOUNT,
-        currency: "USD",
-        amount: "1.00000000",
-      })),
-    });
-    expect(await confirmImportRows(IMPORT, [cash("USD", "5")])).toEqual({
-      ok: false,
-      code: "invalid",
-    });
+    expect(
+      await confirmImportRows(
+        IMPORT,
+        [cash("USD", "5")],
+        ["h1", "h2"].map((id) => held(id, "USD", "1.00000000")),
+      ),
+    ).toEqual({ ok: false, code: "invalid" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses cash read in a shape the review never sends", async () => {
+    expect(
+      await confirmImportRows(
+        IMPORT,
+        [cash("USD", "5")],
+        [{ ...held("h1", "USD", "1"), user_id: "u2" }],
+      ),
+    ).toEqual({ ok: false, code: "invalid" });
     expect(rpc).not.toHaveBeenCalled();
   });
 
