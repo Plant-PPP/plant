@@ -1,5 +1,6 @@
 import { quoteFeeds } from "@plant/core";
 import { createServeOptions } from "@plant/jobs";
+import { createSourceForConnection, fileUploadSource } from "@plant/sources";
 import { serve } from "inngest/next";
 
 import { aiCostSink } from "@/lib/ai/ai-cost-sink";
@@ -11,7 +12,6 @@ import {
   importSink,
   orphanFileSink,
 } from "@/lib/imports/import-sink";
-import { readDocument } from "@/lib/imports/read-document";
 import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { serverLog } from "@/lib/log/server-log";
 import { getJson } from "@/lib/quotes/get-json";
@@ -30,13 +30,20 @@ export const { GET, POST, PUT } = serve(
     }),
     imports: () => ({
       store: importSink(),
-      extract: readDocument({
-        document: documentExtractor({ record: aiCostSink() }),
-        sheet: spreadsheetReader({
-          mappings: columnMappingsSink(),
-          mapColumns: columnMapper({ record: aiCostSink() }),
-        }),
-      }),
+      // Every account reads uploaded files until a broker API arrives.
+      source: createSourceForConnection(
+        { kind: "file_upload" },
+        {
+          file_upload: () =>
+            fileUploadSource({
+              document: documentExtractor({ record: aiCostSink() }),
+              sheet: spreadsheetReader({
+                mappings: columnMappingsSink(),
+                mapColumns: columnMapper({ record: aiCostSink() }),
+              }),
+            }),
+        },
+      ),
       log: serverLog,
     }),
     files: () => ({

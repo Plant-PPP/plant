@@ -1,3 +1,5 @@
+import type { FileUploadType } from "@plant/sources";
+
 // What Cargar takes: PDFs, pictures and spreadsheets up to 20 MiB, each
 // checked by its first bytes, not by what the browser says it is. The bucket
 // and uploaded_documents hold the same list and limit.
@@ -5,15 +7,8 @@ export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 
 export const UPLOAD_BUCKET = "imports";
 
-export type UploadType =
-  | "application/pdf"
-  | "image/png"
-  | "image/jpeg"
-  | "image/webp"
-  | "image/heic"
-  | "text/csv"
-  | "application/vnd.ms-excel"
-  | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+// The types the file_upload source has a reader for.
+export type UploadType = FileUploadType;
 
 const startsWith = (bytes: Uint8Array, prefix: readonly number[], at = 0) =>
   bytes.length >= at + prefix.length &&
