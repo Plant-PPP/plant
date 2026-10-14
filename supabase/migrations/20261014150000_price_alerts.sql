@@ -73,11 +73,11 @@ CREATE POLICY "Requires two-factor authentication" ON public.price_alerts
   WITH CHECK ((SELECT auth.jwt() ->> 'aal') = 'aal2' OR (SELECT auth.jwt() -> 'mfa_enrolled') = 'false'::jsonb);
 
 -- A user keeps at most 50 alerts, counted under a lock on the user so two
--- inserts at once cannot both pass.
+-- inserts at once cannot both pass. It runs as the user: their own rows are
+-- the ones it counts.
 CREATE FUNCTION private.price_alerts_limit()
   RETURNS trigger
   LANGUAGE plpgsql
-  SECURITY DEFINER
   SET search_path = ''
   AS $$
 BEGIN

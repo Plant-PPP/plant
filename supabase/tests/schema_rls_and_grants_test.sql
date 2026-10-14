@@ -254,8 +254,9 @@ SELECT set_eq(
   ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
         'private.record_mfa_factor_event()', 'private.record_file_deletion()',
         'private.record_conversation_deletion()', 'private.check_import_quota()',
-        'public.imports_used_this_month()'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers and the quota count are the only SECURITY DEFINER functions'
+        'public.imports_used_this_month()'::regprocedure::text,
+        'public.meet_price_alerts()'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota triggers, the quota count and the price alerts check are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

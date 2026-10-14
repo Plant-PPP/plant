@@ -5,9 +5,11 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-14 · Price alerts in the app (PLA-154)
 
 - **An alert is on a dollar's sell rate (MEP, CCL, official or blue, in pesos) or an instrument's price in its currency, above or below a figure**, and it fires once: the quotes job marks it met with the quote's day and price, and it waits no more. The user sets a new one for the next figure.
-- **The latest quote counts, whenever the alert was set**, so one that is already met is marked on the next run, as the prototype marks it when it is set.
-- **The quotes job checks every alert in one SQL statement** (`meet_price_alerts`, SECURITY DEFINER, only the service role runs it) after it saves the quotes. A failure is logged and the alerts wait for the next hourly run; the quotes run keeps its outcome.
-- **Alerts show on Resumen until the user marks them seen**, not in a header bell: the header sits outside the data pages' prototype, and Plant has no mail or push channel yet. They are set and deleted in Ajustes, 50 at most.
+- **A gain alert is on an instrument the user holds: it gains (or loses) a percent over its average cost.** The cost is the open lots' (FIFO), in the currency the instrument is quoted in, as Activos works it out; the alert stores it and the price it means. Both are worked out again after every write that changes movements (an operation, a holding created or deleted, an import confirmed), so the figure follows what the user holds; a lot whose cost has no value in that currency leaves the alert waiting with no figure, and the page says so.
+- **An instrument's quote is its feed price or the user's own manual price, the newer one winning** (the manual one on the same day), as the valuation does: today only crypto has a feed, so a bond or a CEDEAR is watched through the prices the user enters. A dollar's quote is the feed's.
+- **The latest quote counts, whenever the alert was set**, so one that is already met is marked on the next run, as the prototype marks it when it is set; its day is never before the day it was set.
+- **The quotes job checks every alert in one SQL statement** (`meet_price_alerts`, SECURITY DEFINER, only the service role runs it) after it saves the quotes and before it writes its run line. A failure is logged and the alerts wait for the next hourly run; the quotes run keeps its outcome.
+- **Alerts show on Resumen until the user marks them seen**, not in a header bell: the header sits outside the data pages' prototype, and Plant has no mail or push channel yet. They are set and deleted in Ajustes, 50 at most, which a trigger enforces under a lock on the user.
 
 ## 2026-10-14 · Export to Excel and PDF (PLA-71)
 
