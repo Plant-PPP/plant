@@ -89,6 +89,7 @@ SELECT set_eq(
         'imports.status:SELECT', 'imports.status:UPDATE', 'imports.failure:UPDATE',
         'imports.document_date:UPDATE', 'imports.printed_total_ars:UPDATE',
         'imports.printed_total_usd:UPDATE', 'imports.skipped_rows:UPDATE',
+        'imports.source_connection_id:SELECT', 'imports.provider:SELECT',
         'uploaded_documents.id:SELECT', 'uploaded_documents.user_id:SELECT',
         'uploaded_documents.storage_path:SELECT', 'uploaded_documents.mime_type:SELECT',
         'uploaded_documents.delete_after:SELECT', 'uploaded_documents.file_deleted_at:SELECT',
@@ -96,7 +97,7 @@ SELECT set_eq(
         'uploaded_documents.source_connection_id:SELECT',
         'source_connections.id:SELECT', 'source_connections.user_id:SELECT',
         'source_connections.institution:SELECT'],
-  'the jobs read an import, its file and its account''s institution, move the import along, write its draft and mark a file deleted, nothing more'
+  'the jobs read an import, its file or its account and exchange, and its account''s institution, move the import along, write its draft and mark a file deleted, nothing more'
 );
 
 SELECT is_empty(

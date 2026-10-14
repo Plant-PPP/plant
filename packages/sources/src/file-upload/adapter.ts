@@ -19,9 +19,12 @@ export const FILE_TYPE_READERS = {
   "text/csv": "sheet",
   "application/vnd.ms-excel": "sheet",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "sheet",
-} as const satisfies Record<string, SourceReadInfo["reader"]>;
+} as const satisfies Record<string, FileReaderKind>;
 
 export type FileUploadType = keyof typeof FILE_TYPE_READERS;
+
+// The readers a file goes to; an exchange is read by its own source.
+type FileReaderKind = Exclude<SourceReadInfo["reader"], "api">;
 
 export type FileReader = (input: SourceInput) => Promise<SourceReading>;
 
@@ -38,7 +41,7 @@ const isFileUploadType = (type: string): type is FileUploadType =>
 // refuses a type it does not take as unsupported, and a PDF longer than
 // PDF_PAGE_LIMIT before any reader sees it.
 export function fileUploadSource(
-  readers: Record<SourceReadInfo["reader"], FileReader>,
+  readers: Record<FileReaderKind, FileReader>,
 ): PortfolioSourcePort {
   return {
     kind: "file_upload",

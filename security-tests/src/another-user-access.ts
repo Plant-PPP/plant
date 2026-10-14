@@ -8,7 +8,12 @@ import {
   rowsOf,
   users,
 } from "./pentest-helpers";
-import { DELETE_GRANTED, OWNED_KEYS, type OwnedTable } from "./reference-rows";
+import {
+  DELETE_GRANTED,
+  OWNED_KEYS,
+  type OwnedTable,
+  selectOf,
+} from "./reference-rows";
 
 const { a, b } = users;
 
@@ -38,7 +43,11 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
     });
 
     test("GET of B's rows returns nothing", async () => {
-      const res = await rest(a, "GET", `${table}?user_id=eq.${b.id}`);
+      const res = await rest(
+        a,
+        "GET",
+        `${table}?${selectOf(table)}user_id=eq.${b.id}`,
+      );
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
     });
@@ -58,7 +67,11 @@ export function describeAnotherUserAccess<T extends OwnedTable>(
       };
 
       test("GET of B's row by id returns nothing", async () => {
-        const res = await rest(a, "GET", `${table}?id=eq.${await idOfB()}`);
+        const res = await rest(
+          a,
+          "GET",
+          `${table}?${selectOf(table)}id=eq.${await idOfB()}`,
+        );
         expect(res.status).toBe(200);
         expect(res.body).toEqual([]);
       });

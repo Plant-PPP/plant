@@ -27,6 +27,11 @@ import {
   type ImportOperationRow,
   type ImportRow,
 } from "@/lib/imports/review";
+import {
+  IMPORT_ORIGIN_COLUMNS,
+  importOrigin,
+  importOriginSchema,
+} from "@/lib/imports/origin";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
 type Client = SupabaseClient<Database>;
@@ -42,16 +47,12 @@ export class ImportsReadError extends Error {
   }
 }
 
-const rowSchema = z.object({
+const rowSchema = importOriginSchema.extend({
   id: z.string(),
   status: z.enum(Constants.public.Enums.import_status),
   failure: z.enum(Constants.public.Enums.import_failure).nullable(),
   document_date: z.string().nullable(),
   created_at: z.string(),
-  document: z.object({
-    file_name: z.string(),
-    source_connection_id: z.string(),
-  }),
 });
 
 // The user's latest imports, as Cargar lists them, and how many they started
@@ -63,8 +64,7 @@ export async function readImports(
     client
       .from("imports")
       .select(
-        "id, status, failure, document_date, created_at, " +
-          "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, source_connection_id)",
+        `id, status, failure, document_date, created_at, ${IMPORT_ORIGIN_COLUMNS}`,
       )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -80,8 +80,7 @@ export async function readImports(
     const row = rowSchema.parse(data);
     return {
       id: row.id,
-      fileName: row.document.file_name,
-      accountId: row.document.source_connection_id,
+      ...importOrigin(row),
       status: row.status,
       error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
       documentDate: row.document_date,
@@ -288,7 +287,7 @@ export async function readImportForReview(
       .select(
         "id, status, failure, document_date, created_at, " +
           "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, skipped_rows, " +
-          "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, source_connection_id)",
+          IMPORT_ORIGIN_COLUMNS,
       )
       .eq("id", id)
       .limit(1),
@@ -341,8 +340,7 @@ export async function readImportForReview(
   );
   return {
     id: row.id,
-    fileName: row.document.file_name,
-    accountId: row.document.source_connection_id,
+    ...importOrigin(row),
     status: row.status,
     error: row.failure && IMPORT_FAILURE_MESSAGES[row.failure],
     documentDate: row.document_date,

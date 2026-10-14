@@ -32,6 +32,10 @@ export const IMPORT_FAILURE_MESSAGES = {
   nothing_found: "No encontramos tenencias ni operaciones en el archivo.",
   extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
   too_many_pages: `El PDF tiene más de ${PDF_PAGE_LIMIT} páginas. Subí solo las del resumen.`,
+  connection_rejected:
+    "El exchange rechazó la clave. Revisá que siga activa o conectá otra.",
+  connection_not_read_only:
+    "La clave puede operar, retirar o transferir. Conectá una de solo lectura.",
 } as const;
 
 // How sure the reading is of a row; a low one is for the user to check.

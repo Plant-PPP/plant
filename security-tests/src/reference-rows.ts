@@ -18,6 +18,7 @@ export type QuoteTable = Extract<ReferenceTable, "fx_rates" | "prices">;
 // owner where the primary key is (user_id, id), or its owner. A new owned
 // table fails typecheck here until it is listed.
 export const OWNED_KEYS = {
+  account_api_keys: "id",
   ai_conversations: "user_id,id",
   ai_costs: "id",
   ai_messages: "user_id,id",
@@ -49,6 +50,7 @@ export const OWNED_KEYS = {
 // The owned tables authenticated may DELETE from, each table's isolation test
 // in supabase/tests pins the grant.
 export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
+  "account_api_keys",
   "ai_conversations",
   "holdings",
   "liabilities",
@@ -62,6 +64,21 @@ export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
   "tax_report_exclusions",
   "uploaded_documents",
 ]);
+
+// The owned tables authenticated reads only some columns of, with those
+// columns: a GET of `*` is refused, so every shared case names them. Each
+// table's isolation test in supabase/tests pins the grant.
+const READABLE_COLUMNS: Partial<Record<OwnedTable, string>> = {
+  account_api_keys:
+    "id,user_id,source_connection_id,provider,key_hint,created_at",
+};
+
+// The `select=` a GET of the table's rows sends, with its trailing `&`, or
+// nothing where authenticated reads every column.
+export const selectOf = (table: OwnedTable): string => {
+  const columns = READABLE_COLUMNS[table];
+  return columns ? `select=${columns}&` : "";
+};
 
 type Column<T extends ReferenceTable> = keyof Tables[T]["Row"] & string;
 

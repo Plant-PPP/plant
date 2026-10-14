@@ -1,6 +1,11 @@
 import { quoteFeeds } from "@plant/core";
 import { createServeOptions } from "@plant/jobs";
-import { createSourceForConnection, fileUploadSource } from "@plant/sources";
+import {
+  BINANCE_BASE_URL,
+  binanceSource,
+  createSourceForConnection,
+  fileUploadSource,
+} from "@plant/sources";
 import { serve } from "inngest/next";
 
 import { aiCostSink } from "@/lib/ai/ai-cost-sink";
@@ -30,7 +35,8 @@ export const { GET, POST, PUT } = serve(
     }),
     imports: () => ({
       store: importSink(),
-      // Every account reads uploaded files until a broker API arrives.
+      // An uploaded file is read by the file_upload source, a sync by its
+      // exchange's.
       source: createSourceForConnection(
         { kind: "file_upload" },
         {
@@ -44,6 +50,9 @@ export const { GET, POST, PUT } = serve(
             }),
         },
       ),
+      exchanges: {
+        binance: () => binanceSource({ baseUrl: BINANCE_BASE_URL }),
+      },
       log: serverLog,
     }),
     files: () => ({

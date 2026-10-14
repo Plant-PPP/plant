@@ -4,7 +4,7 @@ import { type Denominator, type Position } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { DataTable } from "@/components/ui/data-table";
@@ -57,6 +57,7 @@ export function ScopePage({
   backHref,
   revision,
   loadMovements,
+  connection,
 }: {
   scope: Scope;
   rows: HoldingRow[];
@@ -73,6 +74,8 @@ export function ScopePage({
   // Changes when any of its movements does, so the list reads them again.
   revision: string;
   loadMovements: MovementsInput["loadMovements"];
+  // An exchange account's connection by API, under its header.
+  connection?: ReactNode;
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
@@ -183,6 +186,8 @@ export function ScopePage({
           />
         </div>
       </div>
+
+      {connection}
 
       <AssetsSummary valuation={valuation} unit={unit} pending={false} />
 

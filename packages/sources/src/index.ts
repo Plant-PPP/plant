@@ -1,6 +1,18 @@
 // The port every source implements, the file_upload adapter, what reading a
-// file yields and how a source fails. Broker and exchange APIs arrive as other
-// adapters.
+// file yields and how a source fails, and the exchanges read by API.
+export {
+  BINANCE_BASE_URL,
+  type BinanceOptions,
+  binanceSource,
+} from "./exchange/binance";
+export {
+  type ExchangeAdapters,
+  type ExchangeCredentials,
+  exchangeCredentialsSchema,
+  type ExchangeProvider,
+  exchangeProviderSchema,
+  type ExchangeSourcePort,
+} from "./exchange/port";
 export {
   FILE_TYPE_READERS,
   type FileReader,

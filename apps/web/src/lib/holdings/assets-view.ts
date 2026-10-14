@@ -10,7 +10,13 @@ export const ASSETS_VIEW_EVENT = "assets.view";
 
 // What the assets page was reading when it failed.
 export type AssetsRead =
-  "instruments" | "profile" | "snapshot" | "valuation" | "ledger" | "debts";
+  | "instruments"
+  | "profile"
+  | "snapshot"
+  | "valuation"
+  | "ledger"
+  | "debts"
+  | "api_key";
 
 // Logs one failure of the assets page and throws it as already logged, so the
 // (app) error page shows a retry.
