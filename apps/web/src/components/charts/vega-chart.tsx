@@ -17,6 +17,12 @@ let loaded: Promise<{
 const load = () =>
   (loaded ??= Promise.all([import("vega-embed"), import("vega-lite")]).then(
     ([embed, lite]) => ({ embed: embed.default, compile: lite.compile }),
+    // A load that failed, as a chunk lost to a deploy, is tried again by the
+    // next chart.
+    (error: unknown) => {
+      loaded = null;
+      throw error;
+    },
   ));
 
 const FORMAT_LOCALE = d3FormatLocale("es-AR");
@@ -136,16 +142,21 @@ export function VegaChart({
     };
   }, [key, dark]);
 
-  if (failed) {
-    return (
-      <p className="text-muted-foreground text-xs">
-        No pudimos mostrar este gráfico.
-      </p>
-    );
-  }
+  // The box stays mounted, so a new spec or theme draws again after a
+  // failure.
   return (
     <div role="img" aria-label={label} className={cn("w-full", className)}>
-      <div ref={box} aria-hidden className="w-full [&_svg]:max-w-full" />
+      {failed && (
+        <p className="text-muted-foreground text-xs">
+          No pudimos mostrar este gráfico.
+        </p>
+      )}
+      <div
+        ref={box}
+        aria-hidden
+        hidden={failed}
+        className="w-full [&_svg]:max-w-full"
+      />
     </div>
   );
 }
