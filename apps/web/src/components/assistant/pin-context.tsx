@@ -4,16 +4,19 @@ import { createContext, type ReactNode, useContext } from "react";
 
 import type { ChartPart, PinResult } from "@/lib/assistant/chat";
 
-// How a page pins an answer's chart to Resumen; none where charts are not
-// pinned.
-type Pin = (chart: ChartPart) => Promise<PinResult>;
+// How a page pins an answer's chart to Resumen, and which charts it can pin;
+// none where charts are not pinned.
+type Pin = {
+  pin: (chart: ChartPart) => Promise<PinResult>;
+  pins: (chart: ChartPart) => boolean;
+};
 
 export const PinContext = createContext<Pin | null>(null);
 
 export const usePin = () => useContext(PinContext);
 
 // Pins by which of the assistant's charts it is, through a server action;
-// a chart that does not say which is not pinned.
+// a chart that does not say which, as one kept from before, cannot be pinned.
 export function SourcePinProvider({
   action,
   children,
@@ -23,9 +26,11 @@ export function SourcePinProvider({
 }) {
   return (
     <PinContext.Provider
-      value={(chart) =>
-        chart.source ? action(chart.source) : Promise.resolve("failed")
-      }
+      value={{
+        pin: (chart) =>
+          chart.source ? action(chart.source) : Promise.resolve("failed"),
+        pins: (chart) => chart.source !== undefined,
+      }}
     >
       {children}
     </PinContext.Provider>

@@ -118,7 +118,8 @@ export async function unpinChart(id: unknown): Promise<boolean> {
       "plant.outcome": removed ? "ok" : "not_found",
     });
     revalidatePath("/");
-    return removed;
+    // A pin already gone, as one unpinned in another tab, is unpinned too.
+    return true;
   } catch (error) {
     serverLog.error(
       "assistant.pin",

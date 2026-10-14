@@ -91,6 +91,7 @@ const closesFields = ({
 async function pinnedCharts({
   context,
   unit,
+  reference,
 }: Awaited<ReturnType<typeof closesView>>): Promise<PinnedChart[]> {
   const client = await createClient();
   let pins: Pin[];
@@ -111,7 +112,7 @@ async function pinnedCharts({
     context,
     unit: CHAT_UNITS.includes(unit as ChatUnit)
       ? (unit as ChatUnit)
-      : "usd_mep",
+      : reference,
     today,
   });
   return Promise.all(

@@ -18,12 +18,17 @@ export type Pin = {
   portfolioId: string | null;
 };
 
+// Only allocation and holdings are drawn for one portfolio.
 export const pinSourceSchema = z
   .object({
     topic: z.enum(CHART_TOPICS),
     portfolioId: z.uuid().nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ topic, portfolioId }) =>
+      portfolioId === null || topic === "allocation" || topic === "holdings",
+  );
 
 export class PinsError extends Error {
   constructor(readonly code: string) {

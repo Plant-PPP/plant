@@ -12,7 +12,7 @@ import { usePrototype } from "./prototype-provider";
 export function PrototypeChat() {
   const { state, actions } = usePrototype();
   return (
-    <PinContext.Provider value={actions.pins.pin}>
+    <PinContext.Provider value={{ pin: actions.pins.pin, pins: () => true }}>
       <AssistantPage
         conversations={state.conversations}
         used={usedThisMonth(state.askedOn, state.today)}

@@ -54,8 +54,6 @@ function savePng(chart: ChartPart, caption: string) {
   }, "image/png");
 }
 
-// An answer's chart: its title, the day and unit of its data, and actions to
-// see it larger or save it as a CSV or an image.
 const PIN_MESSAGES = {
   pinned: "Fijaste el gráfico en el Resumen.",
   already: "Ese gráfico ya está fijado en el Resumen.",
@@ -63,6 +61,8 @@ const PIN_MESSAGES = {
   failed: "No pudimos fijar el gráfico. Probá de nuevo.",
 } as const;
 
+// An answer's chart: its title, the day and unit of its data, and actions to
+// see it larger, save it as a CSV or an image, or pin it to Resumen.
 export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
   const [expanded, setExpanded] = useState(false);
   const pin = usePin();
@@ -103,11 +103,12 @@ export function ChartCard({ chart, asOf }: { chart: ChartPart; asOf: string }) {
           {action("Descargar imagen", <ImageDown />, () =>
             savePng(chart, caption),
           )}
-          {pin &&
+          {pin?.pins(chart) &&
             !pinning &&
             action("Fijar en el Resumen", <Pin />, () => {
               setPinning(true);
-              void pin(chart)
+              void pin
+                .pin(chart)
                 .catch(() => "failed" as const)
                 .then((result) => {
                   setPinning(false);

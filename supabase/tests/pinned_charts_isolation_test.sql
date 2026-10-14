@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(9);
+SELECT plan(10);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -110,6 +110,19 @@ SELECT results_eq(
   $$ VALUES ('b0000000-0000-4000-8000-00000000000b', 'net_worth') $$,
   'deleting removes only the user''s own'
 );
+
+-- ── Enrolled in MFA but signed in at aal1 ───────────────────────────────────
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'b0000000-0000-4000-8000-00000000000b', 'role', 'authenticated',
+                    'aal', 'aal1', 'mfa_enrolled', true)::text, true);
+SET LOCAL ROLE authenticated;
+
+SELECT is_empty(
+  $$ SELECT id FROM public.pinned_charts $$,
+  'a user enrolled in MFA reads no pinned chart before the second factor'
+);
+
+RESET ROLE;
 
 -- ── A portfolio's chart goes with it ────────────────────────────────────────
 INSERT INTO public.pinned_charts (user_id, topic, portfolio_id)

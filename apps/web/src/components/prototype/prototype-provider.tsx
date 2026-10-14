@@ -257,13 +257,12 @@ export function PrototypeProvider({
         ).sources,
     },
     pins: {
-      // A chart is pinned once, by what it shows.
+      // A chart is pinned once: by which chart it is when it says, as the
+      // real app does, or else by what it shows.
       pin: (chart) =>
         write((s) => {
-          const key = JSON.stringify(chart);
-          if (
-            s.pinnedCharts.some((each) => JSON.stringify(each.chart) === key)
-          ) {
+          const key = (each: ChartPart) => JSON.stringify(each.source ?? each);
+          if (s.pinnedCharts.some((each) => key(each.chart) === key(chart))) {
             return { state: s, result: "already" as const };
           }
           if (s.pinnedCharts.length >= 12) {
