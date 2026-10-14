@@ -244,6 +244,7 @@ function reviewRow(
 ): ImportRow {
   const row = itemSchema.parse(data);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
+  const unpaged = origin === "sync" ? "De la sincronización" : "Del documento";
   if (row.asset_class === "cash") {
     return {
       id: row.id,
@@ -255,8 +256,7 @@ function reviewRow(
       ...(row.account != null && { accountLabel: row.account }),
       currency: row.currency,
       confidence: row.confidence,
-      source:
-        page ?? (origin === "sync" ? "De la sincronización" : "Del documento"),
+      source: page ?? unpaged,
       discarded: false,
     };
   }
@@ -288,7 +288,7 @@ function reviewRow(
       }),
     currency: known?.instrumentCurrency ?? row.currency,
     confidence: row.confidence,
-    source: [page, named].filter(Boolean).join(" · ") || "Del documento",
+    source: [page, named].filter(Boolean).join(" · ") || unpaged,
     discarded: false,
   };
 }

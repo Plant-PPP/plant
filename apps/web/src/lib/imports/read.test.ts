@@ -390,6 +390,26 @@ describe("readImportForReview", () => {
     expect(read!.rows[0]!.source).toBe("De la sincronización");
   });
 
+  it("labels a synced holding by the sync, not a document", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [
+          {
+            ...IMPORT,
+            document: null,
+            source_connection_id: "a1",
+            provider: "binance",
+            sync_draft: "holdings",
+          },
+        ],
+        [item({ id: "h1", source_page: null })],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows[0]!.source).toBe("De la sincronización");
+  });
+
   it("names an instrument by its aliases and its dollar lines", async () => {
     const read = await readImportForReview(
       clientWith(
