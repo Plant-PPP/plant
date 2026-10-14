@@ -50,6 +50,7 @@ const extract = (model: MockLanguageModelV3, mimeType = "application/pdf") =>
     userId: USER,
     importId: "i1",
     institution: "IOL",
+    lastAttempt: false,
   });
 
 it("reads the holdings and costs the call to the user", async () => {
@@ -224,6 +225,7 @@ const byModel = (answers: Record<string, string>) => {
         userId: USER,
         importId: "i1",
         institution: "IOL",
+        lastAttempt: false,
       }),
   };
 };
@@ -254,6 +256,7 @@ it("asks a third model only about what the two readers disagree on", async () =>
     userId: USER,
     importId: "i1",
     institution: "IOL",
+    lastAttempt: false,
   });
   expect(read.disputes).toBe(1);
   expect(draft.rows.map((r) => [r.symbol, r.quantity])).toEqual([
@@ -322,6 +325,60 @@ it("lets the step retry when the tiebreak's provider is down", async () => {
     userId: USER,
     importId: "i1",
     institution: "IOL",
+    lastAttempt: false,
   }).catch((e: unknown) => e);
+  expect(error).toMatchObject({ code: "extraction_failed", retryable: true });
+});
+
+it("settles on the two readings when the tiebreak fails on the last attempt", async () => {
+  const [, lite31] = READERS;
+  let calls = 0;
+  const shared = new MockLanguageModelV3({
+    doGenerate: async () => {
+      if (calls++ === 0) {
+        return {
+          content: [{ type: "text", text: reading([row("GGAL", "100")]) }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      }
+      throw new APICallError({
+        message: "overloaded",
+        url: "https://x",
+        requestBodyValues: {},
+        statusCode: 503,
+        isRetryable: true,
+      });
+    },
+  });
+  const second = answering(reading([row("GGAL", "1000")]));
+  const { draft } = await documentExtractor({
+    record,
+    model: (id) => (id === lite31 ? second : shared),
+  })({
+    bytes: BYTES,
+    mimeType: "application/pdf",
+    userId: USER,
+    importId: "i1",
+    institution: "IOL",
+    lastAttempt: true,
+  });
+  expect(draft.rows).toEqual([
+    expect.objectContaining({
+      symbol: "GGAL",
+      quantity: "100",
+      confidence: "low",
+    }),
+  ]);
+});
+
+it("lets a reading that timed out be retried", async () => {
+  const model = new MockLanguageModelV3({
+    doGenerate: async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    },
+  });
+  const error = await extract(model).catch((e: unknown) => e);
   expect(error).toMatchObject({ code: "extraction_failed", retryable: true });
 });

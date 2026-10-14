@@ -28,6 +28,9 @@ export type SourceInput = {
   mimeType: string;
   userId: string;
   institution: string;
+  // No retry follows this attempt, so a reader settles for what it has
+  // rather than failing on a provider that may answer later.
+  lastAttempt: boolean;
 };
 
 // How a file was read: by a model reading the document, or from a

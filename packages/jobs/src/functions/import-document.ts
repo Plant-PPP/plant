@@ -10,6 +10,9 @@ import { NonRetriableError } from "inngest";
 
 import { inngest } from "../client";
 
+// How many times a failed run is tried again.
+export const IMPORT_RETRIES = 3;
+
 export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
 
 // An import as the job reads it: whose it is, where it stands, and its file.
@@ -148,6 +151,7 @@ export async function runImportDocument(
           mimeType: prepared.mimeType,
           userId,
           institution: await deps.store.institution(importId, userId),
+          lastAttempt: attempt >= IMPORT_RETRIES,
         });
         if (draft.rows.length === 0) {
           throw new SourceError("nothing_found", false);
@@ -226,7 +230,7 @@ export const importDocument = (deps: ImportJobDeps) =>
       // One file at a time per user, so one user's statements do not hold
       // everyone else's.
       concurrency: { key: "event.data.userId", limit: 1 },
-      retries: 3,
+      retries: IMPORT_RETRIES,
       onFailure: ({ event }) =>
         failAbandonedImport(deps, event.data.event.data),
     },

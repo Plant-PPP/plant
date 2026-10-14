@@ -13,6 +13,7 @@ const input = (mimeType: string): SourceInput => ({
   userId: "u1",
   importId: "i1",
   institution: "IOL",
+  lastAttempt: false,
 });
 
 const reading = (reader: "document" | "sheet"): SourceReading => ({

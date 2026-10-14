@@ -14,10 +14,12 @@ import type { z } from "zod";
 
 import { costedModel, type ModelFactory, telemetryOf } from "./costed-model";
 
-// A provider that is down or rate limiting may answer on a later attempt. The
-// SDK wraps what its own retries met in a RetryError.
+// A provider that is down, rate limiting or too slow may answer on a later
+// attempt. The SDK wraps what its own retries met in a RetryError.
 function retryable(error: unknown): boolean {
   const last = RetryError.isInstance(error) ? error.lastError : error;
+  // AbortSignal.timeout rejects with a DOMException, which may not be an Error.
+  if ((last as { name?: unknown } | null)?.name === "TimeoutError") return true;
   return APICallError.isInstance(last) ? last.isRetryable : false;
 }
 
