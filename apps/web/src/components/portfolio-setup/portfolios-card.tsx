@@ -187,6 +187,7 @@ export function PortfoliosCard({
         view={view}
         title={COPY.title}
         emptyText={COPY.emptyText}
+        emptyDescription="Agrupá tus inversiones como quieras: largo plazo, ahorro, un objetivo."
         truncatedText={COPY.truncated}
         columns={[
           ...dataColumns(href),
