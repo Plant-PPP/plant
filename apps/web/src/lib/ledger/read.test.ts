@@ -16,34 +16,61 @@ const PORTFOLIO = "a1000000-0000-4000-8000-0000000000a1";
 type Response = { data: unknown; error: unknown; status: number };
 const ok = (data: unknown): Response => ({ data, error: null, status: 200 });
 
-// Each table answers its own response and records its calls.
-function fakeClient(responses: Record<string, Response>) {
+// Each table answers its own response and records its calls; `sequence`
+// records each request as it starts and each answer as it resolves.
+// `afterPage` runs after each answer, to change the rows between two pages.
+function fakeClient(
+  responses: Record<string, Response>,
+  afterPage: (table: string) => void = () => {},
+) {
   const calls: Record<string, unknown[][]> = {};
+  const sequence: string[] = [];
   const client = {
     from: (table: string) => {
+      sequence.push(`from ${table}`);
       const own: unknown[][] = calls[table] ?? [];
       calls[table] = own;
       let range: [number, number] | undefined;
+      let limit: number | undefined;
+      let after: string | undefined;
       const builder: Record<string, unknown> = {
-        // A paged read answers its page, as PostgREST does.
+        // A paged read answers its page, as PostgREST does: by offset, or
+        // by limit after the row a keyset filter names (rows sorted already).
         then: (resolve: (value: Response) => unknown) => {
           const response = responses[table]!;
-          return resolve(
-            range && Array.isArray(response.data)
-              ? {
-                  ...response,
-                  data: response.data.slice(range[0], range[1] + 1),
-                }
-              : response,
-          );
+          const rows = response.data;
+          let data = rows;
+          if (Array.isArray(rows) && range) {
+            data = rows.slice(range[0], range[1] + 1);
+          } else if (Array.isArray(rows) && limit !== undefined) {
+            const start =
+              after === undefined
+                ? 0
+                : rows.findIndex((row: { id: string }) => row.id === after) + 1;
+            data = rows.slice(start, start + limit);
+          }
+          sequence.push(`answer ${table}`);
+          const answered = resolve({ ...response, data });
+          afterPage(table);
+          return answered;
         },
         range: (from: number, to: number) => {
           own.push(["range", from, to]);
           range = [from, to];
           return builder;
         },
+        limit: (rows: number) => {
+          own.push(["limit", rows]);
+          limit = rows;
+          return builder;
+        },
+        or: (filter: string) => {
+          own.push(["or", filter]);
+          after = /id\.gt\.([^,)]+)\)$/.exec(filter)?.[1];
+          return builder;
+        },
       };
-      for (const method of ["select", "eq", "order", "limit"]) {
+      for (const method of ["select", "eq", "order"]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
           return builder;
@@ -52,7 +79,11 @@ function fakeClient(responses: Record<string, Response>) {
       return builder;
     },
   };
-  return { client: client as unknown as SupabaseClient<Database>, calls };
+  return {
+    client: client as unknown as SupabaseClient<Database>,
+    calls,
+    sequence,
+  };
 }
 
 const MOVEMENT_ROW = {
@@ -60,6 +91,7 @@ const MOVEMENT_ROW = {
   holding_id: "h1",
   operation_id: "o1",
   entry_order: 4,
+  rank: 4,
   kind: "purchase",
   date: "2026-09-15",
   currency: "ARS",
@@ -174,31 +206,62 @@ it("builds the ledger from the user's rows", async () => {
   // Amounts as text, in core's order.
   expect(String(calls.movements![0]![1])).toContain("quantity:quantity::text");
   expect(calls.movements).toContainEqual(["order", "rank"]);
-  expect(calls.movements).toContainEqual(["range", 0, 999]);
+  expect(calls.movements).toContainEqual(["limit", 1000]);
 });
 
-it("reads every page past PostgREST's cap on rows", async () => {
-  const rows = Array.from({ length: 2_500 }, (_, n) => ({
+// Ids that sort as the page order does.
+const movementRows = (count: number) =>
+  Array.from({ length: count }, (_, n) => ({
     ...MOVEMENT_ROW,
-    id: `m${n}`,
+    id: `m${String(n).padStart(5, "0")}`,
   }));
-  const { client, calls } = fakeClient(responses(rows));
+
+it("reads every page past PostgREST's cap on rows, each after the last row read", async () => {
+  const { client, calls } = fakeClient(responses(movementRows(2_500)));
   const { ledger, truncated } = await readLedger(client, OPTIONS);
   expect(truncated).toBe(false);
   expect(ledger.movements.get("h1")).toHaveLength(2_500);
-  expect(calls.movements!.filter(([method]) => method === "range")).toEqual([
-    ["range", 0, 999],
-    ["range", 1000, 1999],
-    ["range", 2000, 2999],
+  expect(calls.movements!.filter(([method]) => method === "range")).toEqual([]);
+  expect(calls.movements!.filter(([method]) => method === "or")).toEqual([
+    [
+      "or",
+      "date.gt.2026-09-15,and(date.eq.2026-09-15,rank.gt.4),and(date.eq.2026-09-15,rank.eq.4,id.gt.m00999)",
+    ],
+    [
+      "or",
+      "date.gt.2026-09-15,and(date.eq.2026-09-15,rank.gt.4),and(date.eq.2026-09-15,rank.eq.4,id.gt.m01999)",
+    ],
   ]);
 });
 
+it("neither repeats nor skips a movement when one is written between two pages", async () => {
+  const rows = movementRows(2_500);
+  let pages = 0;
+  const { client } = fakeClient(responses(rows), (table) => {
+    if (table === "movements" && ++pages === 1) {
+      rows.unshift({ ...MOVEMENT_ROW, id: "m-new", date: "2026-01-02" });
+    }
+  });
+  const { ledger } = await readLedger(client, OPTIONS);
+  const ids = ledger.movements.get("h1")!.map((each) => each.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids.filter((id) => id !== "m-new")).toEqual(
+    movementRows(2_500).map((each) => each.id),
+  );
+});
+
+it("reads the revisions before the movements", async () => {
+  const { client, sequence } = fakeClient(responses());
+  await readLedger(client, OPTIONS);
+  expect(sequence.indexOf("answer holdings")).toBeLessThan(
+    sequence.indexOf("from movements"),
+  );
+});
+
 it("says when the movements were cut", async () => {
-  const rows = Array.from({ length: LEDGER_MOVEMENT_LIMIT + 1 }, (_, n) => ({
-    ...MOVEMENT_ROW,
-    id: `m${n}`,
-  }));
-  const { client } = fakeClient(responses(rows));
+  const { client } = fakeClient(
+    responses(movementRows(LEDGER_MOVEMENT_LIMIT + 1)),
+  );
   const { ledger, truncated } = await readLedger(client, OPTIONS);
   expect(truncated).toBe(true);
   expect(ledger.movements.get("h1")).toHaveLength(LEDGER_MOVEMENT_LIMIT);
