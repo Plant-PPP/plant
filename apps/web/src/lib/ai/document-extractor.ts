@@ -1,5 +1,4 @@
 import "server-only";
-import type { ImportJobDeps } from "@plant/jobs";
 import {
   type AiCostInsert,
   Constants,
@@ -10,6 +9,7 @@ import {
   draftRowSchema,
   DRAFT_ROW_LIMIT,
   type ImportDraft,
+  type FileReader,
   importDraftSchema,
   SourceError,
 } from "@plant/sources";
@@ -129,7 +129,7 @@ export function documentExtractor({
 }: {
   record: (row: AiCostInsert) => Promise<void>;
   model?: ModelFactory;
-}): ImportJobDeps["extract"] {
+}): FileReader {
   return async ({ bytes, mimeType, userId, lastAttempt }) => {
     const read = async (modelId: PricedModelId, ask: string) =>
       toDraft(

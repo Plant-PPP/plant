@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The portfolio source port (PLA-32)
+
+- **`PortfolioSourcePort` lives in `packages/sources`** (`port.ts`): a source's kind, a capability matrix that is local and never fails (holdings, movements, incremental reads; each `native` or `unsupported`), and `read`, which throws the existing `SourceError` with its code and `retryable`. The import job takes a `source` instead of an `extract` function.
+- **The one factory takes the connection's kind, not its id**: `createSourceForConnection({ kind }, adapters)`. `packages/sources` reads no database, and `source_connections` has no kind column while every account is a file upload; the composition root passes `file_upload` and builds the adapters with what reads files.
+- **The `file_upload` adapter owns which reader takes each type** (`FILE_TYPE_READERS`); the type a file is uploaded as comes from that list (`UploadType`), so a new upload type has a reader or fails typecheck. The readers (the model, the spreadsheet parser) stay in `apps/web` and are injected.
+- **No cursor yet.** A file has nothing to resume from; the first API adapter adds the cursor, persisted after the import commits, with `incremental` set to `native`.
+
 ## 2026-10-14 · Two readings and a tiebreak (PLA-36)
 
 - **Two models read each statement side by side**, `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, on the standard tier, each costed to the user as `import_extraction`. They are compared on the parsed drafts, not on the raw answers: a row is matched by its symbol as printed (case aside), its currency and which occurrence it is, and two figures agree when they are the same number (`compareDecimals`), however written.

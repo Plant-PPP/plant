@@ -1,4 +1,8 @@
-import { type ImportDraft, SourceError } from "@plant/sources";
+import {
+  type ImportDraft,
+  type PortfolioSourcePort,
+  SourceError,
+} from "@plant/sources";
 import type { LogFields } from "@plant/shared";
 import { NonRetriableError } from "inngest";
 
@@ -38,7 +42,12 @@ const READ = {
 
 type Line = { level: string; event: string; fields: LogFields };
 
-function setUp(overrides: Partial<ImportJobDeps> = {}) {
+function setUp({
+  read = jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
+  ...overrides
+}: Partial<Omit<ImportJobDeps, "source">> & {
+  read?: PortfolioSourcePort["read"];
+} = {}) {
   const lines: Line[] = [];
   const log = (level: string) => (event: string, fields: LogFields) =>
     lines.push({ level, event, fields });
@@ -57,7 +66,15 @@ function setUp(overrides: Partial<ImportJobDeps> = {}) {
   };
   const deps: ImportJobDeps = {
     store,
-    extract: jest.fn().mockResolvedValue({ draft: DRAFT, read: READ }),
+    source: {
+      kind: "file_upload",
+      capabilities: () => ({
+        holdings: "native",
+        movements: "unsupported",
+        incremental: "unsupported",
+      }),
+      read,
+    },
     log: { info: log("info"), warn: log("warn"), error: log("error") },
     ...overrides,
   };
@@ -88,7 +105,7 @@ it("reads the file into a draft and marks the import ready", async () => {
   expect(store.institution).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.load).toHaveBeenCalledWith(IMPORT, USER);
   expect(store.download).toHaveBeenCalledWith(PATH);
-  expect(deps.extract).toHaveBeenCalledWith({
+  expect(deps.source.read).toHaveBeenCalledWith({
     importId: IMPORT,
     bytes: BYTES,
     mimeType: "application/pdf",
@@ -118,7 +135,7 @@ it("reads the file into a draft and marks the import ready", async () => {
 
 it("logs how many rows the reading skipped", async () => {
   const { lines, run } = setUp({
-    extract: jest.fn().mockResolvedValue({
+    read: jest.fn().mockResolvedValue({
       draft: DRAFT,
       read: { reader: "sheet", mapping: "hit", skippedRows: 2, disputes: 0 },
     }),
@@ -170,7 +187,7 @@ it.each([
   ["a bug", new Error("boom"), "extraction_failed"],
 ])("marks the import failed on %s", async (_, error, failure) => {
   const { store, run } = setUp({
-    extract: jest.fn().mockRejectedValue(error),
+    read: jest.fn().mockRejectedValue(error),
   });
   expect(await run()).toEqual({ outcome: "failed" });
   expect(store.failed).toHaveBeenCalledWith(IMPORT, USER, failure);
@@ -179,7 +196,7 @@ it.each([
 
 it("fails an import whose file lists nothing", async () => {
   const { store, run } = setUp({
-    extract: jest.fn().mockResolvedValue({
+    read: jest.fn().mockResolvedValue({
       draft: { documentDate: null, rows: [], totals: [] },
       read: READ,
     }),
@@ -191,7 +208,7 @@ it("fails an import whose file lists nothing", async () => {
 it("does not retry a failure a retry would not pass", async () => {
   const thrown: unknown[] = [];
   const { deps } = setUp({
-    extract: jest.fn().mockRejectedValue(new SourceError("unsupported", false)),
+    read: jest.fn().mockRejectedValue(new SourceError("unsupported", false)),
   });
   await runImportDocument(deps, {
     step: {
@@ -214,7 +231,7 @@ it("does not retry a failure a retry would not pass", async () => {
 it("lets a retryable failure reach the step, which retries it", async () => {
   const thrown: unknown[] = [];
   const { deps } = setUp({
-    extract: jest
+    read: jest
       .fn()
       .mockRejectedValue(new SourceError("extraction_failed", true)),
   });
@@ -251,7 +268,7 @@ it.each([
   "keeps the failure's code when the engine rebuilds %s",
   async (_, error, failure) => {
     const { deps, store } = setUp({
-      extract: jest.fn().mockRejectedValue(error),
+      read: jest.fn().mockRejectedValue(error),
     });
     await runImportDocument(deps, {
       step: {
