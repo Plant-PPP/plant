@@ -1,10 +1,13 @@
 import {
   compareMovements,
   express,
+  type IncomePattern,
+  incomePattern,
   type Movement,
   placementFigures,
+  quantityOn,
   type QuoteSnapshot,
-  upcomingIncome,
+  upcomingFrom,
 } from "@plant/core";
 import {
   addDays,
@@ -16,12 +19,18 @@ import {
 } from "@plant/shared";
 
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
-import type { Ledger } from "@/lib/ledger/ledger";
+import { groupOf, type Ledger } from "@/lib/ledger/ledger";
 
 import type { ChatUnit } from "./chat";
 
 // How far ahead the calendar looks.
 export const CALENDAR_DAYS = 90;
+
+const latestPattern = (patterns: readonly (IncomePattern | null)[]) =>
+  patterns.reduce<IncomePattern | null>(
+    (best, each) => (each && (!best || each.last > best.last) ? each : best),
+    null,
+  );
 
 export type IncomeEvent = {
   date: string;
@@ -53,8 +62,12 @@ export function incomeCalendar(
     return "missing" in shown ? null : stored(shown.value.amount);
   };
   const open = state.holdings.filter((each) => !each.closed);
+  const sortedOf = (id: string) =>
+    [...(state.movements.get(id) ?? [])].sort(compareMovements);
   // Each holding is projected from its own payments, as every account pays
-  // on its own day, then one instrument's payments on a day are summed.
+  // on its own day, then one instrument's payments on a day are summed. A
+  // holding with no pattern of its own, as one whose units came from another
+  // account, takes the latest pattern another holding of its instrument has.
   const paid = new Map<
     string,
     { date: string; kind: IncomeEvent["kind"]; symbol: string } & Pick<
@@ -65,10 +78,21 @@ export function incomeCalendar(
   for (const { holding } of open) {
     if (holding.asset_class !== "instrument") continue;
     const symbol = holding.instrument_symbol;
-    const sorted = [...(state.movements.get(holding.id) ?? [])].sort(
-      compareMovements,
-    );
-    for (const each of upcomingIncome(sorted, state.today, CALENDAR_DAYS)) {
+    const sorted = sortedOf(holding.id);
+    const pattern =
+      incomePattern(sorted, state.today) ??
+      latestPattern(
+        groupOf(state, holding.id)
+          .filter((id) => id !== holding.id)
+          .map((id) => incomePattern(sortedOf(id), state.today)),
+      );
+    const held = quantityOn(sorted, state.today);
+    for (const each of upcomingFrom(
+      pattern,
+      held,
+      state.today,
+      CALENDAR_DAYS,
+    )) {
       const key = `${symbol}|${each.date}|${each.kind}|${each.currency}`;
       const kept = paid.get(key);
       paid.set(key, {
