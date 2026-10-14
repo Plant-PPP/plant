@@ -186,16 +186,16 @@ export function documentExtractor({
     const disputed = disputeCount(compared.disputes);
     let draft = agreedDraft(first, compared);
     if (disputed > 0) {
-      // A tiebreak that fails settles on the two readings alone: a row only
-      // one lists is left out, and a figure they differ on is marked low.
+      // A tiebreak the provider may answer later fails the reading for the
+      // step to retry; one that cannot answer settles on the two readings,
+      // whatever they differ on marked low.
       const tiebreak = await read(
         TIEBREAK_MODEL,
         tiebreakBrief(compared.disputes, first, second),
-      ).catch((): ImportDraft => ({
-        documentDate: null,
-        rows: [],
-        totals: [],
-      }));
+      ).catch((error: unknown) => {
+        if (error instanceof SourceError && error.retryable) throw error;
+        return null;
+      });
       draft = settle(first, second, tiebreak, compared);
     }
     return {

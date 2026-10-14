@@ -103,7 +103,7 @@ describe("settle", () => {
     ).toEqual([
       ["AAPL", "5", "high"],
       ["GGAL", "100", "high"],
-      ["BTC", "2", "high"],
+      ["BTC", "2", "low"],
     ]);
   });
 
@@ -150,6 +150,31 @@ describe("settle", () => {
       ["10", "high"],
       ["20", "high"],
     ]);
+  });
+
+  it("keeps a row one reader lists, low, when the tiebreak could not answer", () => {
+    const first = draft([row("AAPL", "5"), row("GGAL", "100")]);
+    const second = draft([row("AAPL", "5")], { documentDate: null });
+    const settled = settle(first, second, null, compareReadings(first, second));
+    expect(settled.rows).toEqual([
+      row("AAPL", "5"),
+      row("GGAL", "100", { confidence: "low" }),
+    ]);
+    expect(settled.documentDate).toBe("2026-09-30");
+  });
+
+  it("marks low a row one reader missed even when the tiebreak lists it", () => {
+    // The same holding under two names: each stands, for the user to check.
+    const first = draft([row("GGAL", "100")]);
+    const second = draft([row("GRUPO GALICIA", "100")]);
+    const tiebreak = draft([row("GGAL", "100"), row("GRUPO GALICIA", "100")]);
+    const settled = settle(
+      first,
+      second,
+      tiebreak,
+      compareReadings(first, second),
+    );
+    expect(settled.rows.map((r) => r.confidence)).toEqual(["low", "low"]);
   });
 
   it("keeps no more rows than a draft takes", () => {
