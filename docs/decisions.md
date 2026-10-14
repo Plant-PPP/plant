@@ -2,18 +2,21 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Pinned charts (PLA-69)
+
+- **A pin stores what the chart is about, not its numbers**: the topic and, for allocation and holdings, the portfolio. Resumen draws each pin again from today's data in its own unit (the reference dollar's when the assistant has no such unit), so a pinned chart never goes stale and its numbers still come from the server.
+- **One pin per topic and portfolio, twelve at most**, oldest first. A pin whose portfolio is deleted goes with it; one that cannot be drawn shows as such, never breaking Resumen.
+- **Unpinning is optimistic** and comes back with a toast if the server refuses.
+
 ## 2026-10-14 · Staging serves the real app, and only staging deploys on push
 
 - **Staging serves the real app**, as production does: `isProductionDeployment()` is true on Vercel's production and on the preview of the `staging` branch, the one Tomas tests on `plant-staging`'s real data. Every other preview and `next dev` still serve the prototype, which the e2e flows rely on; `pnpm dev:up:real` runs the real app locally against local Supabase. For staging this supersedes "Outside production, the data pages show made-up data" (PLA-109) and the real chat being production only (PLA-47).
 - **Only `staging` deploys on push.** `git.deploymentEnabled` in `apps/web/vercel.json` turns off every branch prefix a PR uses (`feat/*`, `fix/*`, `ci/*`, `chore/*` and the rest), so PR branches stop spending Vercel Hobby's 100 deployments a day and staging always gets one. `claude/*` PRs still get a preview on request (`preview.yml`); the required checks are `ci` and `forbidden-words`, so no PR waits on a Vercel check. Staging's jobs and keys are the Preview variables scoped to the `staging` branch (see "The jobs on a deployment"), so a `claude/*` preview never runs a job.
-  \=======
 
 ## 2026-10-14 · A PDF's page cap (PLA-152)
 
 - **A PDF of more than 30 pages fails as `too_many_pages` before any model reads it**, so an import's cost stays bounded: the file_upload source counts its pages in code (the root `/Pages` node's `/Count`, or else its `/Page` objects) and Cargar asks for only the statement's pages.
 - **A PDF whose page count is not in plain sight**, as one with compressed object streams, is read as before rather than refused for a count nobody could take.
-
-> > > > > > > origin/staging
 
 ## 2026-10-14 · Security review fixes (PLA-62)
 

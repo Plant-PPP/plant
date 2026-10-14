@@ -1,4 +1,5 @@
 import "server-only";
+import type { ChartTopic } from "./chat";
 import {
   DENOMINATORS,
   type InstrumentType,
@@ -573,11 +574,18 @@ export function assistantData({
     const drawn = await chartOf(kind, portfolio);
     if ("error" in drawn) return drawn;
     const { meta, chart } = drawn;
+    // Which chart it is, so it can be pinned and drawn again: a portfolio
+    // only splits allocation and holdings.
+    const of =
+      kind === "allocation" || kind === "holdings"
+        ? (portfolioOf(await load(), portfolio)?.id ?? null)
+        : null;
     return {
       ...meta,
       unit,
       chart: {
         ...chart,
+        source: { topic: kind, portfolioId: of },
         title: Array.from(chart.title).slice(0, 60).join(""),
         points: chart.points
           .slice(0, MAX_CHART_POINTS)
@@ -676,15 +684,7 @@ export function assistantData({
   return { ...tools, chart };
 }
 
-// What a chart can show, each from one of the tools.
-export const CHART_TOPICS = [
-  "net_worth",
-  "allocation",
-  "holdings",
-  "income",
-  "debts",
-] as const;
-export type ChartTopic = (typeof CHART_TOPICS)[number];
+export { CHART_TOPICS, type ChartTopic } from "./chat";
 
 // A unit's price as the market quotes it and the app shows it: a bond's per
 // 100 nominal.

@@ -1,12 +1,18 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import type { ChatMessage } from "@/lib/assistant/chat";
+import type { ChatMessage, PinResult } from "@/lib/assistant/chat";
 import {
   conversationMessages,
   deleteConversation as deleteOwn,
 } from "@/lib/assistant/conversations";
+import {
+  pinChart as pinOwn,
+  pinSourceSchema,
+  unpinChart as unpinOwn,
+} from "@/lib/assistant/pins";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { serverLog } from "@/lib/log/server-log";
 import { createClient } from "@/lib/supabase/server";
@@ -67,6 +73,58 @@ export async function deleteConversation(id: unknown): Promise<boolean> {
       {
         "enduser.id": claims.sub,
         "plant.assistant.action": "delete",
+        "plant.outcome": "failed",
+      },
+      error,
+    );
+    return false;
+  }
+}
+
+// Pins one of the assistant's charts to Resumen, by which chart it is.
+export async function pinChart(source: unknown): Promise<PinResult> {
+  const parsed = pinSourceSchema.safeParse(source);
+  if (!parsed.success) return "failed";
+  const claims = await getSessionClaims();
+  let result: PinResult;
+  let failure: unknown;
+  try {
+    result = await pinOwn(await createClient(), parsed.data);
+  } catch (error) {
+    result = "failed";
+    failure = error;
+  }
+  const line = {
+    "enduser.id": claims.sub,
+    "plant.assistant.action": "pin",
+    "plant.assistant.chart_topic": parsed.data.topic,
+    "plant.outcome": result,
+  };
+  if (result === "failed") serverLog.error("assistant.pin", line, failure);
+  else serverLog.info("assistant.pin", line);
+  if (result === "pinned") revalidatePath("/");
+  return result;
+}
+
+export async function unpinChart(id: unknown): Promise<boolean> {
+  const parsed = conversationId.safeParse(id);
+  if (!parsed.success) return false;
+  const claims = await getSessionClaims();
+  try {
+    const removed = await unpinOwn(await createClient(), parsed.data);
+    serverLog.info("assistant.pin", {
+      "enduser.id": claims.sub,
+      "plant.assistant.action": "unpin",
+      "plant.outcome": removed ? "ok" : "not_found",
+    });
+    revalidatePath("/");
+    return removed;
+  } catch (error) {
+    serverLog.error(
+      "assistant.pin",
+      {
+        "enduser.id": claims.sub,
+        "plant.assistant.action": "unpin",
         "plant.outcome": "failed",
       },
       error,
