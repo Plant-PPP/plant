@@ -74,7 +74,7 @@ export function AssetsTabs({
     <div
       role="tablist"
       aria-label="Vista"
-      className="bg-muted inline-flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-lg p-0.5"
+      className="bg-muted inline-flex h-7 w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-md p-0.5"
     >
       {orderOf(tabs).map((each) => (
         <button
@@ -89,7 +89,7 @@ export function AssetsTabs({
           onClick={() => choose(each)}
           onKeyDown={onKeyDown}
           className={cn(
-            "focus-visible:ring-ring rounded-md px-3 py-1 text-sm whitespace-nowrap outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed",
+            "focus-visible:ring-ring h-full rounded-sm px-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed",
             each === shown
               ? "bg-background text-foreground shadow-xs"
               : "text-muted-foreground hover:text-foreground",

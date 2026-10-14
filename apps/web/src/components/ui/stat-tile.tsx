@@ -35,10 +35,10 @@ function StatTile({
         className,
       )}
     >
-      <dt className="text-muted-foreground truncate text-xs font-medium">
+      <dt className="text-muted-foreground truncate text-sm font-medium">
         {label}
       </dt>
-      <dd className="truncate text-xl font-semibold tracking-tight tabular-nums">
+      <dd className="truncate text-2xl font-semibold tracking-tight tabular-nums">
         {children}
       </dd>
       {note !== undefined && (
