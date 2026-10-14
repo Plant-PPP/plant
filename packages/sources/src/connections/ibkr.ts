@@ -1,3 +1,4 @@
+import type { Currency } from "@plant/shared";
 import { z } from "zod";
 
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
@@ -5,7 +6,7 @@ import {
   bodyText,
   budgetedRead,
   call,
-  cashRow,
+  summedCashRows,
   decimalOf,
   defaultSleep,
   holdingsReading,
@@ -150,19 +151,22 @@ export function ibkrConnection({
       });
     }
     // Cash by currency, at the statement's end; the base currency's summary
-    // repeats the others.
+    // repeats the others. A currency reported more than once is added up.
+    const cash: { currency: Currency; amount: string }[] = [];
     for (const each of elements(xml, "CashReportCurrency")) {
       if (each.currency === "BASE_SUMMARY") continue;
       const currency = currencyOf(each.currency);
-      const quantity = decimalOf(each.endingCash);
-      if (isZero(quantity)) continue;
-      if (currency === null || !positive(quantity)) {
+      const amount = decimalOf(each.endingCash);
+      if (isZero(amount)) continue;
+      if (currency === null || amount === null) {
         skipped += 1;
         continue;
       }
-      rows.push(cashRow(currency, quantity, "high"));
+      cash.push({ currency, amount });
     }
-    const reading = holdingsReading(rows, skipped, now());
+    const summed = summedCashRows(cash, "high");
+    rows.push(...summed.rows);
+    const reading = holdingsReading(rows, skipped + summed.skipped, now());
     const toDate = isoDate(elements(xml, "FlexStatement")[0]?.toDate);
     if (toDate) reading.draft.documentDate = toDate;
     return reading;

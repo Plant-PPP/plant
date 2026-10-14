@@ -379,11 +379,8 @@ describe("mercado pago", () => {
       balanceOf(
         "﻿DATE;RECORD_TYPE;BALANCE_AMOUNT;CURRENCY\r\n2026-10-01;release;1500,25;ARS\r\n2026-10-02;release;1.234.567,89;ARS\r\n2026-10-03;release;99,00;USD\r\n",
       ),
-    ).toEqual({ balance: "1234567.89", unreadable: 0 });
-    expect(balanceOf("DATE,RECORD_TYPE\n2026-10-01,release\n")).toEqual({
-      balance: null,
-      unreadable: 0,
-    });
+    ).toBe("1234567.89");
+    expect(balanceOf("DATE,RECORD_TYPE\n2026-10-01,release\n")).toBeNull();
   });
 
   it("never reads a comma as a decimal mark in a report separated by commas", () => {
@@ -391,20 +388,20 @@ describe("mercado pago", () => {
       balanceOf(
         'DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-01,900.50,ARS\n2026-10-02,"1,500",ARS\n',
       ),
-    ).toEqual({ balance: null, unreadable: 1 });
+    ).toBeNull();
   });
 
-  it("counts a balance that does not read rather than falling back to an earlier line", () => {
+  it("has no balance when the last one does not read, never an earlier line's", () => {
     expect(
       balanceOf(
         'DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-01,900.50,ARS\n2026-10-02,"1.234,56",ARS\n',
       ),
-    ).toEqual({ balance: null, unreadable: 1 });
+    ).toBeNull();
     expect(
       balanceOf(
         "DATE;BALANCE_AMOUNT;CURRENCY\n2026-10-01;900,50;ARS\n2026-10-02;12.34.5,6;ARS\n",
       ),
-    ).toEqual({ balance: null, unreadable: 1 });
+    ).toBeNull();
   });
 
   it("keeps a line break inside quotes in its field", () => {
@@ -412,7 +409,7 @@ describe("mercado pago", () => {
       balanceOf(
         'DATE,DESCRIPTION,BALANCE_AMOUNT,CURRENCY\n2026-10-01,"Pago\nen dos líneas",700.25,ARS\n',
       ),
-    ).toEqual({ balance: "700.25", unreadable: 0 });
+    ).toBe("700.25");
   });
 
   it("counts a zero balance as left out, so the draft is not silently empty", async () => {
@@ -430,6 +427,23 @@ describe("mercado pago", () => {
     }).read(MERCADO_PAGO_CREDENTIALS, "holdings")) as HoldingsReading;
     expect(reading.draft.rows).toEqual([]);
     expect(reading.read.skippedRows).toBe(1);
+  });
+
+  it("counts nothing left out when only an earlier line's balance does not read", async () => {
+    fake.answer = (request) =>
+      request.path.endsWith(".csv")
+        ? {
+            status: 200,
+            type: "text",
+            body: "DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-13,abc,ARS\n2026-10-14,700.25,ARS\n",
+          }
+        : PROVIDER_FIXTURES.mercadopago.ok(request);
+    const reading = (await mercadoPagoConnection({
+      ...deps(),
+      sleep: async () => undefined,
+    }).read(MERCADO_PAGO_CREDENTIALS, "holdings")) as HoldingsReading;
+    expect(rowsOf(reading)).toEqual([["ARS", "700.25", "ARS"]]);
+    expect(reading.read.skippedRows).toBe(0);
   });
 
   it("waits for a report already asked for instead of asking again", async () => {
