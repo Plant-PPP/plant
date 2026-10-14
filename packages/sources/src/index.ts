@@ -7,6 +7,7 @@ export {
   type FileUploadType,
   fileUploadSource,
 } from "./file-upload/adapter";
+export { PDF_PAGE_LIMIT, pdfPageCount } from "./file-upload/pdf";
 export {
   createSourceForConnection,
   DEBT_DOCUMENT_KINDS,

@@ -1,3 +1,4 @@
+import { PDF_PAGE_LIMIT } from "@plant/sources";
 import type { ImportIssue } from "@plant/core";
 import {
   compareDecimals,
@@ -30,6 +31,7 @@ export const IMPORT_FAILURE_MESSAGES = {
   unreadable: "No pudimos leer el archivo. Probá con otra copia o una captura.",
   nothing_found: "No encontramos tenencias ni operaciones en el archivo.",
   extraction_failed: "No pudimos leer el archivo. Probá de nuevo más tarde.",
+  too_many_pages: `El PDF tiene más de ${PDF_PAGE_LIMIT} páginas. Subí solo las del resumen.`,
 } as const;
 
 // How sure the reading is of a row; a low one is for the user to check.
