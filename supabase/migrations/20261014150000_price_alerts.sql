@@ -97,9 +97,10 @@ CREATE TRIGGER price_alerts_limit BEFORE INSERT ON public.price_alerts
 -- Marks met every waiting alert its subject's latest quote meets, and returns
 -- how many. SECURITY DEFINER because it reads and writes every user's alerts;
 -- only the service role (the quotes job) may run it. A dollar's quote is its
--- latest sell rate, in pesos; an instrument's is its latest price, the user's
--- own manual price winning on its day or later, and counts only in the
--- alert's currency. A gain alert with no figure yet waits.
+-- latest sell rate, in pesos; an instrument's is its latest price, in the
+-- alert's currency only. Either way the user's own rate or price, up to
+-- today, wins on its day or later, as the valuation takes them. A gain alert
+-- with no figure yet waits.
 CREATE FUNCTION public.meet_price_alerts()
   RETURNS integer
   LANGUAGE sql
@@ -118,6 +119,14 @@ CREATE FUNCTION public.meet_price_alerts()
          WHERE f.kind = (CASE WHEN a.subject_kind = 'dollar' THEN a.subject END)::public.fx_rate_kind
          ORDER BY f.rate_date DESC LIMIT 1)
         UNION ALL
+        (SELECT r.sell, r.rate_date, 'ARS'::public.currency, 1
+         FROM public.manual_rates r
+         WHERE r.user_id = a.user_id
+           AND r.kind = (CASE WHEN a.subject_kind = 'dollar' AND a.subject IN ('mep', 'ccl', 'official')
+                              THEN a.subject END)::public.manual_rate_kind
+           AND r.rate_date <= (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+         ORDER BY r.rate_date DESC LIMIT 1)
+        UNION ALL
         (SELECT p.price, p.price_date, p.currency, 0
          FROM public.prices p
          WHERE a.subject_kind = 'instrument' AND p.symbol = a.subject
@@ -126,6 +135,7 @@ CREATE FUNCTION public.meet_price_alerts()
         (SELECT m.price, m.price_date, m.currency, 1
          FROM public.manual_prices m
          WHERE a.subject_kind = 'instrument' AND m.user_id = a.user_id AND m.symbol = a.subject
+           AND m.price_date <= (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
          ORDER BY m.price_date DESC LIMIT 1)
       ) AS c (price, quoted_on, currency, manual)
       ORDER BY c.quoted_on DESC, c.manual DESC

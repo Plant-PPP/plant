@@ -131,14 +131,20 @@ RESET ROLE;
 INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
 VALUES ('PGTAPX', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 100, 'USD',
         'kraken', now(), now());
--- Ana's own BTC price, today: it wins over any feed price of an earlier day.
+-- Ana's own BTC price and MEP rate, today: they win over any feed quote of
+-- an earlier day. A price dated tomorrow is not hers yet.
 INSERT INTO public.manual_prices (user_id, symbol, price_date, price, currency)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'BTC',
-        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 0.5, 'USD');
+        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 0.5, 'USD'),
+       ('a0000000-0000-4000-8000-00000000000a', 'BTC',
+        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date + 1, 999999, 'USD');
+INSERT INTO public.manual_rates (user_id, kind, rate_date, sell)
+VALUES ('a0000000-0000-4000-8000-00000000000a', 'mep',
+        (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 100000000);
 SET LOCAL ROLE service_role;
 
-SELECT is(public.meet_price_alerts(), 2,
-  'the check marks met the alerts the latest quote meets, the user''s own price included, and not a gain alert with no figure');
+SELECT is(public.meet_price_alerts(), 3,
+  'the check marks met the alerts the latest quote meets, the user''s own price and rate up to today included, and not a gain alert with no figure');
 SELECT is(public.meet_price_alerts(), 0, 'an alert is met once');
 
 RESET ROLE;
@@ -146,7 +152,8 @@ SELECT results_eq(
   $$ SELECT user_id::text, met_price, met_on = (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
      FROM public.price_alerts WHERE met_on IS NOT NULL ORDER BY met_price $$,
   $$ VALUES ('a0000000-0000-4000-8000-00000000000a', 0.5::numeric, true),
-            ('a0000000-0000-4000-8000-00000000000a', 100::numeric, true) $$,
+            ('a0000000-0000-4000-8000-00000000000a', 100::numeric, true),
+            ('a0000000-0000-4000-8000-00000000000a', 100000000::numeric, true) $$,
   'each met alert keeps the quote and the day it was met at'
 );
 

@@ -155,10 +155,10 @@ export async function ledgerForDates(client: Client, dates: readonly string[]) {
 export async function refreshGainAlerts(userId: string): Promise<void> {
   try {
     const client: Client = await createClient();
-    await syncGainAlerts(
-      client,
-      async (dates) => (await ledgerForDates(client, dates)).ledger,
-    );
+    await syncGainAlerts(client, async (dates) => {
+      const { ledger, truncated } = await ledgerForDates(client, dates);
+      return { ledger, truncated };
+    });
   } catch (error) {
     serverLog.error(
       "alerts.gain_sync",

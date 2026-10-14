@@ -32,7 +32,8 @@ export function averageCost(
   const held = allRows(ledger).flatMap((row) => {
     if (row.holding.instrument_symbol !== symbol) return [];
     const position = positions.get(row.id);
-    return position ? [position] : [];
+    // A holding sold out holds no lot, whatever its history cost.
+    return position && exactOf(position.quantity).n !== 0n ? [position] : [];
   });
   if (held.length === 0) return null;
   const cost = sumOrNull(held.map((each) => each.money?.cost ?? null));
@@ -110,10 +111,10 @@ export function gainFigure(
   },
 ): { costPrice: string; threshold: string } | null {
   const cost = averageCost(ledger, alert.subject, alert.currency);
-  return cost === null
-    ? null
-    : {
-        costPrice: cost,
-        threshold: gainThreshold(cost, alert.direction, alert.gainPercent),
-      };
+  if (cost === null) return null;
+  const threshold = gainThreshold(cost, alert.direction, alert.gainPercent);
+  // A price numeric(20, 8) holds, above zero.
+  return /^\d{1,12}(\.\d{1,8})?$/.test(threshold) && exactOf(threshold).n > 0n
+    ? { costPrice: cost, threshold }
+    : null;
 }

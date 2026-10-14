@@ -172,12 +172,16 @@ function AlertForm({
   const [direction, setDirection] = useState<"above" | "below">("above");
   const [figure, setFigure] = useState("");
   const [alert, setAlert] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const onInstrument = subject === PRICE || subject === GAIN;
   const instrument = instruments.find((each) => each.symbol === symbol);
   const directions =
     subject === GAIN ? DIRECTION_LABELS.gain : DIRECTION_LABELS.price;
 
   const submit = async () => {
+    if (onInstrument && !instrument) {
+      return setAlert("Elegí un activo que tengas.");
+    }
     const value = parseAmountInput(figure);
     const pending = (
       fields: Pick<PriceAlert, "subjectKind" | "subject" | "currency"> &
@@ -231,7 +235,12 @@ function AlertForm({
       return setAlert(subject === GAIN ? INVALID_PERCENT : INVALID_PRICE);
     }
     setAlert(null);
-    if (await onCreate(input, shown)) setFigure("");
+    setBusy(true);
+    try {
+      if (await onCreate(input, shown)) setFigure("");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -324,7 +333,12 @@ function AlertForm({
         </div>
       </div>
       {alert && <FormAlert>{alert}</FormAlert>}
-      <Button type="submit" size="sm" className="justify-self-start">
+      <Button
+        type="submit"
+        size="sm"
+        className="justify-self-start"
+        disabled={busy}
+      >
         Crear alerta
       </Button>
     </form>

@@ -321,7 +321,12 @@ export function PrototypeProvider({
               priceAlerts: [
                 {
                   ...added,
-                  metOn: met ? quote.date : null,
+                  // Never a day before it was set, as the quotes job keeps it.
+                  metOn: met
+                    ? quote.date > s.today
+                      ? quote.date
+                      : s.today
+                    : null,
                   metPrice: met ? quote.price : null,
                 },
                 ...s.priceAlerts,

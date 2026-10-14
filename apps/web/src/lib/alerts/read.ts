@@ -149,7 +149,9 @@ const same = (a: string | null, b: string | null) =>
 // a lot bought in another currency has its cost.
 export async function syncGainAlerts(
   client: Client,
-  load: (dates: readonly string[]) => Promise<Ledger>,
+  load: (
+    dates: readonly string[],
+  ) => Promise<{ ledger: Ledger; truncated: boolean }>,
 ): Promise<number> {
   const result = await client
     .from("price_alerts")
@@ -166,7 +168,10 @@ export async function syncGainAlerts(
   }
   const alerts = (result.data as unknown[]).map(alertOf);
   if (alerts.length === 0) return 0;
-  const base = await load([]);
+  const { ledger: base, truncated: cut } = await load([]);
+  // A ledger cut short would give a cost that is not the user's: the stored
+  // figures stay until a full read.
+  if (cut) return 0;
   const symbols = new Set(alerts.map((each) => each.subject));
   const alerted = new Set(
     base.holdings
@@ -176,7 +181,9 @@ export async function syncGainAlerts(
   const dates = [...base.movements]
     .filter(([holdingId]) => alerted.has(holdingId))
     .flatMap(([, movements]) => movements.map((each) => each.date));
-  const ledger = dates.length > 0 ? await load(dates) : base;
+  const read = dates.length > 0 ? await load(dates) : null;
+  if (read?.truncated) return 0;
+  const ledger = read?.ledger ?? base;
   let moved = 0;
   for (const alert of alerts) {
     const figure = gainFigure(ledger, {
@@ -196,8 +203,9 @@ export async function syncGainAlerts(
       })
       .eq("id", alert.id)
       .is("met_on", null);
-    if (classifyPostgrestResult(update, 204)) throw new AlertsError("gain");
-    moved += 1;
+    // One alert the table refuses (a figure it cannot hold) leaves the others
+    // to be worked out.
+    if (!classifyPostgrestResult(update, 204)) moved += 1;
   }
   return moved;
 }
