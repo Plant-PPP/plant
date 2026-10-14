@@ -42,9 +42,7 @@ function StatTile({
         {children}
       </dd>
       {note !== undefined && (
-        <dd className="text-muted-foreground truncate text-xs tabular-nums">
-          {note}
-        </dd>
+        <dd className="text-muted-foreground text-xs tabular-nums">{note}</dd>
       )}
     </div>
   );
