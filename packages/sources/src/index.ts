@@ -17,6 +17,7 @@ export {
   type CredentialField,
   type Credentials,
   type ReadOnlyCheck,
+  type ReadPeriod,
 } from "./connections/port";
 export {
   FILE_TYPE_READERS,

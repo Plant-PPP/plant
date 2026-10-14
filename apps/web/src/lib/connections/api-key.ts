@@ -3,6 +3,7 @@ import {
   type ConnectionProvider,
   connectionAdapters,
   type ReadOnlyCheck,
+  type ReadPeriod,
 } from "@plant/sources";
 import type { Database } from "@plant/shared";
 
@@ -61,7 +62,11 @@ export type DisconnectResult = { ok: boolean };
 export type ApiKeyActions = {
   connect: (input: ApiKeyInput) => Promise<ConnectResult>;
   disconnect: (accountId: string) => Promise<DisconnectResult>;
-  sync: (accountId: string, draft: ConnectionDraft) => Promise<SyncResult>;
+  sync: (
+    accountId: string,
+    draft: ConnectionDraft,
+    period?: ReadPeriod,
+  ) => Promise<SyncResult>;
 };
 
 // ── The registry ────────────────────────────────────────────────────────────

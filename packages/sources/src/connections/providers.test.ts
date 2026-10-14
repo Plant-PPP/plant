@@ -266,6 +266,65 @@ describe("iol", () => {
   });
 });
 
+describe("iol operations", () => {
+  beforeEach(() => {
+    fake.answer = PROVIDER_FIXTURES.iol.ok;
+  });
+
+  it("reads executed buys and sells, named by IOL's order number, and skips any other kind", async () => {
+    const reading = (await iolConnection(deps()).read(
+      IOL_CREDENTIALS,
+      "operations",
+    )) as OperationsReading;
+    expect(operationsOf(reading)).toEqual([
+      {
+        date: "2026-09-20",
+        kind: "sale",
+        symbol: "AAPL",
+        quantity: "5",
+        price: "18400",
+        amount: null,
+        charges: null,
+        reference: "51234890",
+        currency: "ARS",
+        confidence: "medium",
+        page: null,
+      },
+      {
+        date: "2026-09-02",
+        kind: "purchase",
+        symbol: "AL30",
+        quantity: "1000",
+        price: "73.4",
+        amount: "73400",
+        charges: null,
+        reference: "51234567",
+        currency: "ARS",
+        confidence: "medium",
+        page: null,
+      },
+    ]);
+    expect(reading.read.skippedRows).toBe(1);
+  });
+
+  it("asks IOL for the executed orders of the period, and keeps only those inside it", async () => {
+    const reading = await iolConnection(deps()).read(
+      IOL_CREDENTIALS,
+      "operations",
+      { from: "2026-09-10", to: null },
+    );
+    const asked = fake.requests.find(
+      (each) => each.path === "/api/v2/operaciones",
+    );
+    expect(new URLSearchParams(asked!.url.split("?")[1]).toString()).toBe(
+      "filtro.estado=terminadas&filtro.fechaDesde=2026-09-10",
+    );
+    expect(operationsOf(reading).map((each) => each.reference)).toEqual([
+      "51234890",
+    ]);
+  });
+});
+
 describe("roxom", () => {
   beforeEach(() => {
     fake.answer = PROVIDER_FIXTURES.roxom.ok;

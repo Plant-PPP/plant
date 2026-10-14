@@ -1,6 +1,7 @@
 "use client";
 
-import type { ConnectionDraft } from "@plant/sources";
+import { buenosAiresDate } from "@plant/shared";
+import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
 import {
   CircleAlert,
   CircleCheck,
@@ -78,18 +79,21 @@ export function ApiKeyCard({
 }) {
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
-  const [dialog, setDialog] = useState<"connect" | "disconnect" | null>(null);
+  const [dialog, setDialog] = useState<
+    "connect" | "disconnect" | "operations" | null
+  >(null);
+  const operationsOpener = useRef<HTMLButtonElement>(null);
   const [synced, setSynced] = useState<ConnectionDraft | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const sync = (draft: ConnectionDraft) =>
+  const sync = (draft: ConnectionDraft, period?: ReadPeriod) =>
     startTransition(async () => {
       setError(null);
       setSynced(null);
       setConnected(false);
-      const failure = await syncFailure(actions.sync(accountId, draft));
+      const failure = await syncFailure(actions.sync(accountId, draft, period));
       if (failure) setError(failure);
       else setSynced(draft);
     });
@@ -136,11 +140,12 @@ export function ApiKeyCard({
               </PendingButton>
               {form.drafts.includes("operations") && (
                 <PendingButton
+                  ref={operationsOpener}
                   type="button"
                   size="sm"
                   variant="outline"
                   pending={pending}
-                  onClick={() => sync("operations")}
+                  onClick={() => setDialog("operations")}
                 >
                   <ListOrdered aria-hidden />
                   Traer operaciones
@@ -194,6 +199,17 @@ export function ApiKeyCard({
         </p>
       )}
       {error && <FormAlert>{error}</FormAlert>}
+      {dialog === "operations" && (
+        <OperationsDialog
+          name={form.name}
+          returnFocusTo={() => operationsOpener.current}
+          onClose={() => setDialog(null)}
+          onSubmit={(period) => {
+            setDialog(null);
+            sync("operations", period);
+          }}
+        />
+      )}
       {dialog === "connect" && (
         <ConnectDialog
           accountId={accountId}
@@ -262,6 +278,103 @@ export function SyncStatus({ sync }: { sync: LastSync }) {
       </span>
     </p>
   );
+}
+
+// A year back from a Buenos Aires day, as YYYY-MM-DD.
+export const yearBefore = (day: string): string =>
+  `${Number(day.slice(0, 4)) - 1}${day.slice(4)}`.replace(/-02-29$/, "-02-28");
+
+// The days the operations sync reads: a year up to today unless the user
+// picks others. Operations already in the account come back marked in the
+// review, so a period that overlaps an earlier one writes nothing twice.
+function OperationsDialog({
+  name,
+  returnFocusTo,
+  onClose,
+  onSubmit,
+}: {
+  name: string;
+  returnFocusTo: () => HTMLElement | null;
+  onClose: () => void;
+  onSubmit: (period: ReadPeriod) => void;
+}) {
+  const id = useId();
+  const today = buenosAiresDate(new Date());
+  const [from, setFrom] = useState(yearBefore(today));
+  const [to, setTo] = useState(today);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <AppDialog
+      onClose={onClose}
+      returnFocusTo={returnFocusTo}
+      title={`Traer operaciones de ${name}`}
+      description="Elegí desde y hasta qué día. Después revisás cada operación en Cargar y elegís cuáles importar; las que ya están en la cuenta aparecen marcadas."
+    >
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const failure = periodFailure(from, to, today);
+          if (failure) setError(failure);
+          else onSubmit({ from, to });
+        }}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor={`${id}-from`}>Desde</Label>
+            <Input
+              id={`${id}-from`}
+              type="date"
+              required
+              min={PERIOD_START}
+              max={today}
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`${id}-to`}>Hasta</Label>
+            <Input
+              id={`${id}-to`}
+              type="date"
+              required
+              min={PERIOD_START}
+              max={today}
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </div>
+        </div>
+        {error && <FormAlert>{error}</FormAlert>}
+        <DialogFooter>
+          <Button type="button" size="sm" variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" size="sm">
+            Traer operaciones
+          </Button>
+        </DialogFooter>
+      </form>
+    </AppDialog>
+  );
+}
+
+const PERIOD_START = "2000-01-01";
+
+// Why the period cannot be read, in the user's words; null when it can.
+export function periodFailure(
+  from: string,
+  to: string,
+  today: string,
+): string | null {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!day.test(from) || !day.test(to)) return "Elegí las dos fechas.";
+  if (from < PERIOD_START) return "Elegí una fecha desde el año 2000.";
+  if (from > to)
+    return "La fecha de inicio tiene que ser anterior a la de fin.";
+  if (to > today) return "La fecha de fin no puede ser posterior a hoy.";
+  return null;
 }
 
 function ConnectDialog({

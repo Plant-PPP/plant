@@ -9,7 +9,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(33);
+SELECT plan(35);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -132,8 +132,10 @@ SELECT ok(
   has_column_privilege('authenticated', 'public.imports', 'source_connection_id', 'INSERT')
     AND has_column_privilege('authenticated', 'public.imports', 'provider', 'INSERT')
     AND has_column_privilege('authenticated', 'public.imports', 'sync_draft', 'INSERT')
+    AND has_column_privilege('authenticated', 'public.imports', 'sync_from', 'INSERT')
+    AND has_column_privilege('authenticated', 'public.imports', 'sync_to', 'INSERT')
     AND NOT has_column_privilege('authenticated', 'public.imports', 'user_id', 'INSERT'),
-  'a user starts a sync naming its account, provider and draft, never its owner'
+  'a user starts a sync naming its account, provider, draft and period, never its owner'
 );
 
 -- ── Signed in as Ana ────────────────────────────────────────────────────────
@@ -214,6 +216,20 @@ SELECT is(
   pg_temp.error_of($$ UPDATE public.account_api_keys SET source_connection_id = 'b5000000-0000-4000-8000-0000000000b5' $$),
   '42501',
   'a user never moves a key to another account'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider, sync_draft, sync_from)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'holdings', '2026-01-01') $$),
+  '23514',
+  'only a sync of operations reads a period'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.imports (source_connection_id, provider, sync_draft, sync_from, sync_to)
+                      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'binance', 'operations', '2026-02-01', '2026-01-01') $$),
+  '23514',
+  'a period never ends before it starts'
 );
 
 SELECT is(

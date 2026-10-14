@@ -395,6 +395,8 @@ describe("syncAccount", () => {
           source_connection_id: ACCOUNT,
           provider: "binance",
           sync_draft: "holdings",
+          sync_from: null,
+          sync_to: null,
         },
       }),
     );
@@ -416,10 +418,12 @@ describe("syncAccount", () => {
       data: [{ provider: "wallbit" }],
       error: null,
     }));
-    expect(await syncAccount(ACCOUNT, "operations")).toEqual({
-      ok: true,
-      importId: "i1",
-    });
+    expect(
+      await syncAccount(ACCOUNT, "operations", {
+        from: "2026-01-01",
+        to: null,
+      }),
+    ).toEqual({ ok: true, importId: "i1" });
     expect(writes).toContainEqual(
       expect.objectContaining({
         table: "imports",
@@ -427,9 +431,36 @@ describe("syncAccount", () => {
           source_connection_id: ACCOUNT,
           provider: "wallbit",
           sync_draft: "operations",
+          sync_from: "2026-01-01",
+          sync_to: null,
         },
       }),
     );
+  });
+
+  it.each([
+    [
+      "a period on a sync of holdings",
+      "holdings",
+      { from: "2026-01-01", to: null },
+    ],
+    [
+      "a period that ends before it starts",
+      "operations",
+      { from: "2026-02-01", to: "2026-01-01" },
+    ],
+    ["a day that is not one", "operations", { from: "2026-02-30", to: null }],
+  ])("refuses %s", async (_, draft, period) => {
+    answers.account_api_keys = answer(() => ({
+      status: 200,
+      data: [{ provider: "wallbit" }],
+      error: null,
+    }));
+    expect(await syncAccount(ACCOUNT, draft, period)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(writes).toEqual([]);
   });
 
   it.each([

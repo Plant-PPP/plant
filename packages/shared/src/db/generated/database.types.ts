@@ -223,14 +223,14 @@ isOneToOne: false
                   ]
                 },"imports": {
                   Row: {
-                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"sync_draft": string | null,"updated_at": string,"user_id": string
+                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"sync_draft": string | null,"sync_from": string | null,"sync_to": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"sync_from"?: string | null,"sync_to"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
