@@ -345,7 +345,7 @@ export function checkBatch(
   raw: RawQuoteRows,
   now: Date,
   source: QuoteSource,
-  listed = false,
+  listed: boolean,
 ): QuoteBatch {
   const stamp = { source, fetched_at: now.toISOString() };
   const refused = Object.fromEntries(

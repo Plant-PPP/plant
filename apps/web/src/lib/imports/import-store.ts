@@ -218,7 +218,7 @@ export function createImportStore(client: Client): ImportStorePort {
     },
 
     async saveDraft(importId, userId, draft, skippedRows) {
-      if (!(await clearDraft(importId, userId))) return;
+      if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const rows = draft.rows.map((row, position) => ({
         user_id: userId,
@@ -245,10 +245,11 @@ export function createImportStore(client: Client): ImportStorePort {
         printed_total_usd: printed("USD"),
         skipped_rows: skippedRows,
       });
+      return true;
     },
 
     async saveOperations(importId, userId, operations) {
-      if (!(await clearDraft(importId, userId))) return;
+      if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const decimal = (value: string | null) =>
         value as unknown as number | null;
@@ -279,10 +280,11 @@ export function createImportStore(client: Client): ImportStorePort {
         printed_total_usd: null,
         skipped_rows: 0,
       });
+      return true;
     },
 
     async saveDebts(importId, userId, debts) {
-      if (!(await clearDraft(importId, userId))) return;
+      if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const decimal = (value: string | null) =>
         value as unknown as number | null;
@@ -306,6 +308,7 @@ export function createImportStore(client: Client): ImportStorePort {
         printed_total_usd: null,
         skipped_rows: 0,
       });
+      return true;
     },
 
     async failed(importId, userId, failure) {

@@ -21,6 +21,10 @@ export const CHART_TOPICS = [
 ] as const;
 export type ChartTopic = (typeof CHART_TOPICS)[number];
 
+// The most charts Resumen shows pinned; private.pinned_charts_limit holds
+// the same figure (max-pins.test.ts).
+export const MAX_PINS = 12;
+
 // What pinning a chart to Resumen came to.
 export type PinResult = "pinned" | "already" | "full" | "failed";
 

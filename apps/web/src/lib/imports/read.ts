@@ -32,6 +32,7 @@ import {
   IMPORT_ORIGIN_COLUMNS,
   importOrigin,
   importOriginSchema,
+  syncProvider,
 } from "@/lib/imports/origin";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
@@ -88,7 +89,7 @@ export async function readImports(
       ...importOrigin(row),
       status: row.status,
       error:
-        row.failure && importFailureMessage(row.failure, row.document === null),
+        row.failure && importFailureMessage(row.failure, syncProvider(row)),
       documentDate: row.document_date,
       documentTotals: [],
       rows: [],
@@ -365,8 +366,7 @@ export async function readImportForReview(
     id: row.id,
     ...importOrigin(row),
     status: row.status,
-    error:
-      row.failure && importFailureMessage(row.failure, row.document === null),
+    error: row.failure && importFailureMessage(row.failure, syncProvider(row)),
     documentDate: row.document_date,
     documentTotals: [
       { currency: "ARS" as const, amount: printed.printed_total_ars },

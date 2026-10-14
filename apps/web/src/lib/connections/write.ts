@@ -27,6 +27,7 @@ import {
   type SyncResult,
 } from "@/lib/connections/api-key";
 import { serverLog } from "@/lib/log/server-log";
+import { reportLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
@@ -102,6 +103,11 @@ async function line(step: Line["step"]): Promise<Line> {
     started: performance.now(),
   };
 }
+
+// Each connect asks the provider whether the credentials work, so without a
+// bound a user could test credentials against it through Plant. In memory,
+// per serverless instance.
+const limit = reportLimiter({ perSender: 5, perInstance: 100 });
 
 const REFUSALS: Partial<Record<string, ConnectCode>> = {
   connection_rejected: "rejected",
@@ -261,6 +267,10 @@ export async function connectApiKey(
     if (providerOf(institution) !== provider) {
       log(current, "unsupported");
       return { ok: false, code: "unsupported" };
+    }
+    if (limit(current.userId) !== "logged") {
+      log(current, "limited");
+      return { ok: false, code: "limited" };
     }
     try {
       await adapter.check(credentials);

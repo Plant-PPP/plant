@@ -466,6 +466,15 @@ const SINKS = [
     file: "src/lib/assistant/assistant-sink.ts",
     user: "src/app/api/chat/route.ts",
   },
+  // Its user is a server action: it takes no user id, writing for the
+  // session's claims.
+  {
+    name: "recordExport",
+    spec: "@/lib/export/export-audit-sink",
+    file: "src/lib/export/export-audit-sink.ts",
+    user: "src/app/(app)/(data)/settings/actions.ts",
+    serverAction: true,
+  },
 ];
 const sinkParts = ({ spec, file }) => ({
   dir: file.slice(0, file.lastIndexOf("/")),
@@ -477,7 +486,7 @@ const SERVICE_IMPORT =
 
 flagged.push(
   ...SINKS.flatMap((sink) => {
-    const { name, spec, file, user } = sink;
+    const { name, spec, file, user, serverAction } = sink;
     const { dir, base, test } = sinkParts(sink);
     const others = SINKS.filter((other) => other !== sink);
     return [
@@ -525,13 +534,17 @@ flagged.push(
       ],
       [user, `export { ${name} } from "${spec}";`],
       [user, `export * from "${spec}";`],
-      [
-        user,
-        `"use server";\nimport { ${name} } from "${spec}";\nexport async function POST() {}`,
-      ],
+      ...(serverAction
+        ? []
+        : [
+            [
+              user,
+              `"use server";\nimport { ${name} } from "${spec}";\nexport async function POST() {}`,
+            ],
+            [user, 'export async function POST() {\n  "use server";\n}'],
+          ]),
       [user, `import { ${name} } from "${spec}";\nexport { ${name} };`],
       [user, `import { ${name} } from "${spec}";\nexport default { ${name} };`],
-      [user, 'export async function POST() {\n  "use server";\n}'],
       [user, 'import "@/lib/supabase/service-role";'],
       [user, 'import { generateText } from "ai";'],
       [file, '"use server";\nexport const x = 1;'],
@@ -574,6 +587,12 @@ flagged.push(
     "src/app/api/x/route.ts",
     "src/app/(app)/page.tsx",
   ].map((filePath) => [filePath, 'import "@/lib/assistant/assistant-sink";']),
+  // Only the settings actions may use the export audit sink.
+  ...[
+    "src/app/(app)/(data)/assets/actions.ts",
+    "src/app/api/x/route.ts",
+    "src/app/(app)/(data)/settings/page.tsx",
+  ].map((filePath) => [filePath, 'import "@/lib/export/export-audit-sink";']),
 );
 
 flagged.push(
@@ -680,6 +699,18 @@ const allowed = [
   [
     "src/app/api/chat/route.ts",
     'import { aiCostSink } from "@/lib/ai/ai-cost-sink";\nimport { assistantSink } from "@/lib/assistant/assistant-sink";\nexport async function POST() {\n  aiCostSink();\n  assistantSink();\n  return new Response();\n}',
+  ],
+  [
+    "src/lib/export/export-audit-sink.ts",
+    'import { createServiceRoleClient } from "@/lib/supabase/service-role";',
+  ],
+  [
+    "src/lib/export/export-audit-sink.test.ts",
+    'import { recordExport } from "./export-audit-sink";\nexport const s = recordExport;',
+  ],
+  [
+    "src/app/(app)/(data)/settings/actions.ts",
+    '"use server";\nimport { recordExport } from "@/lib/export/export-audit-sink";\nexport async function f() {\n  await recordExport("success", undefined);\n}',
   ],
   [
     "src/app/api/x/route.ts",
@@ -798,6 +829,9 @@ const OVERRIDES = [
   ["src/lib/imports/import-sink.test.ts", []],
   ["src/lib/assistant/assistant-sink.ts", []],
   ["src/lib/assistant/assistant-sink.test.ts", []],
+  ["src/lib/export/export-audit-sink.ts", []],
+  ["src/lib/export/export-audit-sink.test.ts", []],
+  ["src/app/(app)/(data)/settings/actions.ts", []],
   ["src/lib/supabase/service-role.ts", []],
   ["src/app/api/x/route.ts", []],
   ["src/app/api/inngest/route.ts", []],
@@ -831,6 +865,7 @@ const PROBES = {
   quoteSink: 'import "@/lib/quotes/quote-sink";',
   importSink: 'import "@/lib/imports/import-sink";',
   assistantSink: 'import "@/lib/assistant/assistant-sink";',
+  exportAuditSink: 'import "@/lib/export/export-audit-sink";',
   claims: 'import "@/lib/auth/session-claims-unchecked";',
   testing: 'import "@plant/shared/testing";',
   prototype: 'import "@/lib/prototype/fixtures";',
@@ -842,7 +877,8 @@ for (const [filePath, exempt] of OVERRIDES) {
     // Each block's own allowances: src/lib/ai except the cost sink reaches models,
     // each sink's test reaches its sink, route handlers reach the cost sink,
     // the Inngest route the quote and import sinks, the chat route the
-    // assistant sink, and the sinks and service-role.ts the client.
+    // assistant sink, the settings actions the export audit sink, and the
+    // sinks and service-role.ts the client.
     if (
       probe === "ai" &&
       filePath.startsWith("src/lib/ai/") &&
@@ -879,8 +915,16 @@ for (const [filePath, exempt] of OVERRIDES) {
       continue;
     }
     if (
+      probe === "exportAuditSink" &&
+      /export-audit-sink\.test\.ts$|^src\/app\/\(app\)\/\(data\)\/settings\/actions\.ts$/.test(
+        filePath,
+      )
+    ) {
+      continue;
+    }
+    if (
       probe === "service" &&
-      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts|assistant-sink\.ts/.test(
+      /service-role|ai-cost-sink\.ts|quote-sink\.ts|import-sink\.ts|assistant-sink\.ts|export-audit-sink\.ts/.test(
         filePath,
       )
     ) {

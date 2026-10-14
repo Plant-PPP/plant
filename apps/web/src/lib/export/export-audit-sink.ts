@@ -1,8 +1,8 @@
 import "server-only";
-import type { Database } from "@plant/shared";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getSessionClaims } from "@/lib/auth/session-claims";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type ExportAuditOutcome = "success" | "failure" | "denied";
 
@@ -12,14 +12,18 @@ export class ExportAuditError extends Error {
   }
 }
 
-// Writes the export's audit row; record_data_export writes it for the
-// session's user only.
+// Writes the export's audit row past RLS, for the user of the session's
+// verified claims: it takes no user id, so no caller can name another one.
+// Only the settings actions may import it.
 export async function recordExport(
-  client: SupabaseClient<Database>,
   outcome: ExportAuditOutcome,
   requestId: string | undefined,
 ): Promise<void> {
-  const result = await client.rpc("record_data_export", {
+  const client = createServiceRoleClient();
+  if (!client) throw new ExportAuditError("unconfigured");
+  const { sub } = await getSessionClaims();
+  const result = await client.rpc("audit_data_export", {
+    p_user_id: sub,
     p_outcome: outcome,
     ...(requestId === undefined ? {} : { p_request_id: requestId }),
   });

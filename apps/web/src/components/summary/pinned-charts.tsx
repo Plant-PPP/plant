@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ChartBoundary, ChartCard } from "@/components/assistant/chart-card";
 import { Button } from "@/components/ui/button";
 import type { ChartPart } from "@/lib/assistant/chat";
+import { settle } from "@/lib/server-action-call";
 
 // A chart pinned from the assistant, drawn again from today's data; null when
 // it could not be (its portfolio is gone, or the data failed).
@@ -29,8 +30,7 @@ export function PinnedCharts({
   function unpin(id: string) {
     setGone((current) => new Set(current).add(id));
     startTransition(async () => {
-      const removed = await onUnpin(id).catch(() => false);
-      if (removed) return;
+      if ((await settle(onUnpin(id))) === true) return;
       setGone((current) => {
         const next = new Set(current);
         next.delete(id);

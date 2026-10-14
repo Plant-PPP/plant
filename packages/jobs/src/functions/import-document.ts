@@ -58,23 +58,24 @@ export interface ImportStorePort {
     provider: ConnectionProvider,
   ): Promise<unknown>;
   // `skippedRows` are the holdings the reading left out, for the review to
-  // say.
+  // say. Each save* answers false, writing nothing, for an import no longer
+  // being read (confirmed, failed or deleted meanwhile).
   saveDraft(
     importId: string,
     userId: string,
     draft: ImportDraft,
     skippedRows: number,
-  ): Promise<void>;
+  ): Promise<boolean>;
   saveOperations(
     importId: string,
     userId: string,
     operations: DraftOperation[],
-  ): Promise<void>;
+  ): Promise<boolean>;
   saveDebts(
     importId: string,
     userId: string,
     debts: DraftDebt[],
-  ): Promise<void>;
+  ): Promise<boolean>;
   failed(
     importId: string,
     userId: string,
@@ -248,9 +249,9 @@ export async function runImportDocument(
     return { outcome: "skipped" };
   }
 
-  let read: Read;
+  let read: Read | { gone: true };
   try {
-    read = await step.run("read", async (): Promise<Read> => {
+    read = await step.run("read", async (): Promise<Read | { gone: true }> => {
       try {
         let reading: SourceReading;
         if (prepared.origin === "connection") {
@@ -285,18 +286,22 @@ export async function runImportDocument(
               ? reading.debts.length
               : reading.draft.rows.length;
         if (rows === 0) throw new SourceError("nothing_found", false);
-        if ("operations" in reading) {
-          await deps.store.saveOperations(importId, userId, reading.operations);
-        } else if ("debts" in reading) {
-          await deps.store.saveDebts(importId, userId, reading.debts);
-        } else {
-          await deps.store.saveDraft(
-            importId,
-            userId,
-            reading.draft,
-            reading.read.skippedRows,
-          );
-        }
+        const saved =
+          "operations" in reading
+            ? await deps.store.saveOperations(
+                importId,
+                userId,
+                reading.operations,
+              )
+            : "debts" in reading
+              ? await deps.store.saveDebts(importId, userId, reading.debts)
+              : await deps.store.saveDraft(
+                  importId,
+                  userId,
+                  reading.draft,
+                  reading.read.skippedRows,
+                );
+        if (!saved) return { gone: true };
         return {
           rows,
           draft:
@@ -331,6 +336,15 @@ export async function runImportDocument(
       });
     }
     return { outcome: "failed" };
+  }
+
+  if ("gone" in read) {
+    deps.log.warn("imports.read", {
+      ...fields,
+      "plant.outcome": "skipped",
+      "plant.import.skip_reason": "gone",
+    });
+    return { outcome: "skipped" };
   }
 
   deps.log.info("imports.read", {

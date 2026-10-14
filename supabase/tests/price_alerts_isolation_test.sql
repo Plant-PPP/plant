@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(16);
+SELECT plan(17);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -203,5 +203,14 @@ SELECT is_empty(
 );
 
 RESET ROLE;
+-- An alert in a currency its symbol is never quoted in finds no price at
+-- once, instead of walking the symbol's whole history.
+SELECT is(
+  (SELECT pg_get_indexdef(i.indexrelid) FROM pg_index i
+   WHERE i.indexrelid = to_regclass('public.prices_symbol_currency_price_date_idx') AND i.indisvalid),
+  'CREATE INDEX prices_symbol_currency_price_date_idx ON public.prices USING btree (symbol, currency, price_date DESC)',
+  'a symbol''s latest price in one currency is found by an index'
+);
+
 SELECT * FROM finish();
 ROLLBACK;

@@ -32,8 +32,9 @@ export async function acceptTerms(): Promise<{ ok: boolean }> {
 export async function confirmImport(
   importId: unknown,
   rows: unknown,
+  heldCash: unknown,
 ): Promise<MovementResult> {
-  return confirmRows(importId, rows);
+  return confirmRows(importId, rows, heldCash);
 }
 
 export async function confirmImportOperations(
