@@ -322,3 +322,64 @@ it("draws net worth as the history gives it, and caps every chart", async () => 
     error: "unknown_portfolio",
   });
 });
+
+it("prices a hypothetical from today's net worth, labelled as one", async () => {
+  const tools = data();
+  const summary = await tools.portfolioSummary();
+  const scenario = await tools.scenario({ dollar: "mep", dollarChange: "10" });
+  if (!("today" in scenario) || !("netWorth" in summary)) throw new Error();
+  expect(scenario.today.netWorth).toBe(summary.netWorth);
+  expect(scenario).toMatchObject({
+    hypothetical: true,
+    label: "Escenario hipotético",
+    assumptions: ["el dólar MEP sube 10 %"],
+    unit: "usd_mep",
+  });
+  expect(scenario.chart.title).toMatch(/hipotético/);
+  expect(
+    await tools.scenario({ instrument: "Nada", priceChange: "10" }),
+  ).toMatchObject({ error: "unknown_instrument" });
+  expect(await tools.scenario({})).toEqual({ error: "no_change" });
+  expect(await tools.scenario({ dollar: "mep" })).toEqual({
+    error: "no_change",
+  });
+  expect(
+    await tools.scenario({ instrument: "TSLA", priceChange: "10" }),
+  ).toMatchObject({ error: "unknown_instrument" });
+  const ccl = await tools.scenario({ dollar: "ccl", dollarChange: "10.05" });
+  if (!("changesNothing" in ccl)) throw new Error();
+  expect(ccl.assumptions).toEqual([]);
+  expect(ccl.changesNothing).toEqual(["el dólar CCL sube 10,05 %"]);
+  const apple = await tools.scenario({
+    instrument: "aapl",
+    priceChange: "-20",
+  });
+  if (!("change" in apple)) throw new Error();
+  expect(Number(apple.change)).toBeLessThan(0);
+});
+
+it("summarizes the last closed month with a waterfall that adds up", async () => {
+  const tools = data();
+  const month = await tools.monthSummary({});
+  if (!("breakdown" in month)) throw new Error();
+  expect(month).toMatchObject({
+    period: "septiembre de 2026",
+    months: 1,
+    inProgress: false,
+    sources: ["Cierres", "Movimientos", "Cotizaciones"],
+  });
+  const { contributed, prices, dollar, yields } = month.breakdown;
+  expect(
+    [contributed, prices, dollar, yields].reduce(
+      (sum, each) => sum + Number(each),
+      0,
+    ),
+  ).toBeCloseTo(Number(month.change), 6);
+  expect(month.chart.template).toBe("waterfall");
+  const range = await tools.monthSummary({ from: "2026-09", to: "2026-07" });
+  if (!("months" in range)) throw new Error();
+  expect(range.period).toBe("julio de 2026 a septiembre de 2026");
+  expect(await tools.monthSummary({ from: "1999-01" })).toMatchObject({
+    error: "unknown_month",
+  });
+});

@@ -11,6 +11,7 @@ export const CHART_TEMPLATES = [
   "debts",
   "ranking",
   "bars",
+  "waterfall",
 ] as const;
 export type ChartTemplate = (typeof CHART_TEMPLATES)[number];
 
@@ -220,6 +221,69 @@ export function netWorthSpec(
   };
 }
 
+// A whole that changed and the parts it changed by: the first and last
+// figures are totals, drawn from zero, and each one between floats from where
+// the last left off, up in the gain color or down in the loss color.
+export function waterfallSpec(figures: readonly ChartDatum[]): TopLevelSpec {
+  const data = distinctLabels(figures);
+  let reached = 0;
+  const values = plotted(data).map((each, index) => {
+    const total = index === 0 || index === data.length - 1;
+    const base = total ? 0 : reached;
+    const top = total ? each.value : reached + each.value;
+    reached = top;
+    return {
+      ...each,
+      base,
+      top,
+      // Where its figure is printed: above the bar, whichever way it goes.
+      peak: Math.max(base, top),
+      step: total ? "total" : each.value < 0 ? "down" : "up",
+    };
+  });
+  return {
+    $schema: SCHEMA,
+    width: "container",
+    height: 200,
+    data: { values },
+    encoding: {
+      x: {
+        field: "label",
+        type: "ordinal",
+        sort: labelOrder(data, "given"),
+        axis: { labelAngle: 0, labelLimit: 90 },
+      },
+    },
+    layer: [
+      {
+        mark: { type: "bar", width: { band: 0.6 }, cornerRadiusEnd: 0 },
+        encoding: {
+          y: {
+            field: "base",
+            type: "quantitative",
+            axis: { format: "~s", grid: true, tickCount: 4 },
+          },
+          y2: { field: "top" },
+          color: {
+            condition: [
+              { test: "datum.step === 'down'", value: "var(--loss)" },
+              { test: "datum.step === 'up'", value: "var(--gain)" },
+            ],
+            value: "var(--chart-3)",
+          },
+        },
+      },
+      {
+        mark: { type: "text", baseline: "bottom", dy: -4 },
+        encoding: {
+          y: { field: "peak", type: "quantitative" },
+          text: { field: "shown" },
+        },
+      },
+    ],
+  };
+}
+
 // The spec of a template for its figures.
 export function templateSpec(
   template: ChartTemplate,
@@ -238,5 +302,7 @@ export function templateSpec(
       return netWorthSpec(data);
     case "bars":
       return barsSpec(data);
+    case "waterfall":
+      return waterfallSpec(data);
   }
 }
