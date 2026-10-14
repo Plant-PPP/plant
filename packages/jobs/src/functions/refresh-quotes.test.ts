@@ -621,6 +621,55 @@ describe("runRefreshQuotes", () => {
   });
 });
 
+describe("price alerts after the quotes", () => {
+  const alertLines = (lines: Line[]) =>
+    lines.filter((line) => line.event === "quotes.alerts");
+
+  it("marks the alerts the saved quotes meet, and logs how many", async () => {
+    const meet = jest.fn(async () => 2);
+    const d = { ...deps([feed(INDEX, ok(index()))]), alerts: { meet } };
+    const { result } = await drive(d);
+    expect(result).toMatchObject({ outcome: "ok" });
+    expect(meet).toHaveBeenCalledTimes(1);
+    // Once, though the alerts step runs in a request of its own.
+    expect(runLines(d.lines)).toHaveLength(1);
+    expect(alertLines(d.lines)).toEqual([
+      {
+        level: "info",
+        event: "quotes.alerts",
+        fields: {
+          "plant.inngest.run_id": RUN_ID,
+          "plant.outcome": "ok",
+          "plant.alerts.met_count": 2,
+        },
+      },
+    ]);
+  });
+
+  it("retries the check, then logs its failure and keeps the run's outcome", async () => {
+    const meet = jest.fn(async (): Promise<number> => {
+      throw new Error("unavailable");
+    });
+    const d = { ...deps([feed(INDEX, ok(index()))]), alerts: { meet } };
+    const { result } = await drive(d);
+    expect(result).toMatchObject({ outcome: "ok" });
+    expect(meet).toHaveBeenCalledTimes(RETRIES + 1);
+    expect(alertLines(d.lines)).toMatchObject([
+      { level: "error", fields: { "plant.outcome": "failed" } },
+    ]);
+  });
+
+  it("checks no alert when every feed failed", async () => {
+    const meet = jest.fn(async () => 0);
+    const d = {
+      ...deps([feed(INDEX, fail(new QuoteFeedError("http_4xx")))]),
+      alerts: { meet },
+    };
+    await drive(d);
+    expect(meet).not.toHaveBeenCalled();
+  });
+});
+
 describe("refresh-quotes registration", () => {
   afterEach(restoreEnv);
 

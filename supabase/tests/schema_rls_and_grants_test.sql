@@ -257,8 +257,9 @@ SELECT set_eq(
         'private.record_conversation_deletion()', 'private.check_import_quota()',
         'private.store_account_credentials()', 'private.delete_account_credentials()',
         'public.imports_used_this_month()'::regprocedure::text,
-        'public.account_credentials(uuid,uuid,text)'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count and the job''s credentials read are the only SECURITY DEFINER functions'
+        'public.account_credentials(uuid,uuid,text)'::regprocedure::text,
+        'public.meet_price_alerts()'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read and the price alerts check are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

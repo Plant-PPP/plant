@@ -389,6 +389,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"price_alerts": {
+                  Row: {
+                    "cost_price": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"direction": string,"gain_percent": number | null,"id": string,"met_on": string | null,"met_price": number | null,"seen_at": string | null,"subject": string,"subject_kind": string,"threshold": number | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cost_price"?: number | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"direction": string,"gain_percent"?: number | null,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject": string,"subject_kind": string,"threshold"?: number | null,"user_id"?: string
+                  }
+                  Update: {
+                    "cost_price"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"direction"?: string,"gain_percent"?: number | null,"id"?: string,"met_on"?: string | null,"met_price"?: number | null,"seen_at"?: string | null,"subject"?: string,"subject_kind"?: string,"threshold"?: number | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"prices": {
                   Row: {
                     "currency": Database["public"]['Enums']["currency"],"fetched_at": string,"price": number,"price_date": string,"quoted_at": string,"source": Database["public"]['Enums']["quote_source"],"symbol": string
@@ -499,6 +513,9 @@ isOneToOne: false
 { Args: { "p_debts": Json,"p_import_id": string }; Returns: string
                            },
 "imports_used_this_month":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"meet_price_alerts":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "orphan_import_files":

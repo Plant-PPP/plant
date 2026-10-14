@@ -27,7 +27,12 @@ import {
   operationSymbols,
   rpcPartsOf,
 } from "@/lib/ledger/rpc-parts";
-import { ledgerFor, ledgerForDates, rpcFailure } from "@/lib/ledger/write";
+import {
+  ledgerFor,
+  ledgerForDates,
+  refreshGainAlerts,
+  rpcFailure,
+} from "@/lib/ledger/write";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
@@ -171,7 +176,7 @@ export async function confirmImportRows(
     }
   }
 
-  logConfirm({
+  await logConfirm({
     requestId,
     userId: claims.sub,
     draft: "holdings",
@@ -184,7 +189,7 @@ export async function confirmImportRows(
 }
 
 // One line per confirmation, and the pages it changes revalidated.
-function logConfirm({
+async function logConfirm({
   requestId,
   userId,
   draft,
@@ -217,6 +222,7 @@ function logConfirm({
     revalidatePath("/import", "layout");
     revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
   }
+  if (result.ok && draft !== "debts") await refreshGainAlerts(userId);
 }
 
 // Writes the reviewed operations of a ready import into its account and
@@ -285,7 +291,7 @@ export async function confirmImportOperations(
     }
   }
 
-  logConfirm({
+  await logConfirm({
     requestId,
     userId: claims.sub,
     draft: "operations",
@@ -378,7 +384,7 @@ export async function confirmImportDebts(
     }
   }
 
-  logConfirm({
+  await logConfirm({
     requestId,
     userId: claims.sub,
     draft: "debts",

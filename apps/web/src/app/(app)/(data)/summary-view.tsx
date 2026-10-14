@@ -1,4 +1,7 @@
 import { unpinChart } from "@/app/(app)/(data)/assistant/actions";
+import { seePriceAlert } from "@/app/(app)/(data)/settings/actions";
+import type { PriceAlert } from "@/lib/alerts/alerts";
+import { readAlerts } from "@/lib/alerts/read";
 import type { PinnedChart } from "@/components/summary/pinned-charts";
 import { CHAT_UNITS, type ChatUnit } from "@/lib/assistant/chat";
 import { type Pin, readPins } from "@/lib/assistant/pins";
@@ -84,6 +87,25 @@ const closesFields = ({
   "plant.liability.truncated": read.debtsTruncated,
   "plant.assets.truncated": read.holdings.activeTruncated,
 });
+
+// The price alerts the quotes met that the user has not seen; none, logged,
+// when they could not be read.
+async function metAlerts({
+  context,
+}: Awaited<ReturnType<typeof closesView>>): Promise<PriceAlert[]> {
+  try {
+    return (await readAlerts(await createClient())).filter(
+      (each) => each.metOn !== null && each.seenAt === null,
+    );
+  } catch (error) {
+    serverLog.error(
+      SUMMARY_VIEW_EVENT,
+      { ...contextFields(context), "plant.outcome": "alerts_failed" },
+      error,
+    );
+    return [];
+  }
+}
 
 // The charts the user pinned from the assistant, each drawn again from today's
 // data in Resumen's unit (the reference dollar's when the assistant has no
@@ -185,6 +207,8 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
       closesQuery={closesQuery(unit, reference)}
       pinned={await pinnedCharts(view)}
       onUnpin={unpinChart}
+      metAlerts={await metAlerts(view)}
+      onAlertSeen={seePriceAlert}
     />
   );
 }
