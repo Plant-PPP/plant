@@ -30,13 +30,7 @@ export type SheetCell = string | number;
 
 // The first sheet of a file: its first non-empty row as headers and the rows
 // under it.
-// A sheet's headers and rows, and how many rows past the read limit it has,
-// which are not read.
-export type Sheet = {
-  headers: string[];
-  rows: SheetCell[][];
-  rowsCut?: number;
-};
+export type Sheet = { headers: string[]; rows: SheetCell[][] };
 
 const isBlank = (row: readonly SheetCell[]) =>
   row.every((cell) => String(cell).trim() === "");
@@ -82,14 +76,6 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   const ref = sheet?.["!ref"];
   if (!sheet || !ref) throw new SourceError("nothing_found", false);
   const range = XLSX.utils.decode_range(ref);
-  // SheetJS keeps a workbook's whole range when it stops at sheetRows; a
-  // CSV's rows are its non-blank lines.
-  const full = XLSX.utils.decode_range(sheet["!fullref"] ?? ref);
-  const rowsInFile =
-    text === null
-      ? full.e.r - full.s.r + 1
-      : text.split(/\r\n|\n|\r/).filter((line) => line.trim() !== "").length;
-  const rowsCut = Math.max(0, rowsInFile - SHEET_ROW_LIMIT);
   range.e.c = Math.min(range.e.c, range.s.c + SHEET_COLUMN_LIMIT - 1);
   range.e.r = Math.min(range.e.r, range.s.r + SHEET_ROW_LIMIT - 1);
   const table = XLSX.utils
@@ -119,7 +105,6 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   return {
     headers,
     rows: table.slice(start + 1).filter((row) => !isBlank(row)),
-    rowsCut,
   };
 }
 
@@ -292,8 +277,8 @@ export type ColumnMapping = z.infer<ReturnType<typeof columnMappingFor>>;
 // The draft a mapped sheet yields: the first DRAFT_ROW_LIMIT rows that make a
 // valid holding, and the latest date of the date column up to `today`
 // (YYYY-MM-DD). `skippedRows` are the holdings it leaves out, for the user:
-// rows with a symbol and a quantity that make none or come past the limit,
-// and the rows the sheet has past what was read. `unreadRows` are the rows
+// rows with a symbol and a quantity that make none or come past the limit.
+// `unreadRows` are the rows
 // before the limit with a quantity that make no holding, symbol or not, for
 // telling whether a mapping reads the sheet.
 export function sheetToDraft(
@@ -332,7 +317,7 @@ export function sheetToDraft(
     typeof cell === "string" && AMBIGUOUS.test(numberText(cell));
 
   const rows: DraftRow[] = [];
-  let skippedRows = sheet.rowsCut ?? 0;
+  let skippedRows = 0;
   let unreadRows = 0;
   let documentDate: string | null = null;
   for (const row of sheet.rows) {
