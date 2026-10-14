@@ -25,6 +25,7 @@ import {
   importFailureMessage,
   type ImportDebtRow,
   type ImportItem,
+  type ImportOrigin,
   type ImportOperationRow,
   type ImportRow,
 } from "@/lib/imports/review";
@@ -247,6 +248,7 @@ function isUnitCost(
 function reviewRow(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
+  origin: ImportOrigin,
 ): ImportRow {
   const row = itemSchema.parse(data);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
@@ -261,7 +263,8 @@ function reviewRow(
       ...(row.account != null && { accountLabel: row.account }),
       currency: row.currency,
       confidence: row.confidence,
-      source: page ?? "Del documento",
+      source:
+        page ?? (origin === "sync" ? "De la sincronización" : "Del documento"),
       discarded: false,
     };
   }
@@ -362,9 +365,10 @@ export async function readImportForReview(
   const index = instrumentIndex(
     instruments.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
   );
+  const origin = importOrigin(row);
   return {
     id: row.id,
-    ...importOrigin(row),
+    ...origin,
     status: row.status,
     error: row.failure && importFailureMessage(row.failure, syncProvider(row)),
     documentDate: row.document_date,
@@ -374,7 +378,9 @@ export async function readImportForReview(
     ].flatMap(({ currency, amount }) =>
       amount === null ? [] : [{ currency, amount }],
     ),
-    rows: (items.data as unknown[]).map((each) => reviewRow(each, index)),
+    rows: (items.data as unknown[]).map((each) =>
+      reviewRow(each, index, origin.origin),
+    ),
     ...(operations.data.length > 0 && {
       operations: (operations.data as unknown[]).map((each) =>
         reviewOperation(each, index),

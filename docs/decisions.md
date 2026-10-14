@@ -37,6 +37,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A queued sync is started again only for the same request** (draft and days); another request while one is queued answers `in_progress`.
 - **Rows that two readings make past the draft's limit together** (holdings, operations or debts) count as skipped rows.
 - **Uploading again a file whose import is still queued** starts its job as a retry, under a new event id, as a sync does.
+- **A sync's holdings review never speaks of a document.** It shows no totals panel (a connector prints no total), its holdings not listed read "No vinieron en la sincronización", and a balance with no page reads "De la sincronización".
+- **A debt balance typed that is not a number** asks for a valid number, as the minimum payment does.
 
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 
@@ -143,7 +145,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-14 · Security review fixes (PLA-62)
 
-- **Reading an institution's icon is limited to ten a minute per user** (a hundred per instance, in memory, as the CSP reports are): each read makes a few outbound requests.
+- **Reading an institution's icon is limited to ten a minute per user** (a hundred per instance, in memory, as the CSP reports are): each read makes a few outbound requests. (Superseded: the limit is per user only, with no budget per instance; see "Findings from a full-repository review".)
 - **A structured model answer stops at 32,000 output tokens**, well past a full 500-row draft, so a runaway answer costs no more than that. A page cap for PDFs is PLA-152.
 - **The icon read's address check also refuses** 192.88.99.0/24, the local-use NAT64 prefix (64:ff9b:1::/48), Teredo (2001::/32), and 6to4 (2002::/16) when the IPv4 address it carries is private. Pinning the connection to the address checked is PLA-153.
 

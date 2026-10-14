@@ -45,6 +45,7 @@ export type CardDebt = {
 };
 
 const NEW = "new";
+const NOT_A_NUMBER = "Ingresá un número válido";
 
 // A debt as the user completes it: its figures as typed.
 type EditedDebt = ReviewedDebt & {
@@ -101,12 +102,10 @@ export function ImportDebtsReview({
     }),
   );
   const missing = finals.map((row) => new Set(missingDebtFields(row)));
-  const minimumInvalid = rows.map(
-    (row) =>
-      !row.discarded &&
-      row.minimumText.trim() !== "" &&
-      parseAmountInput(row.minimumText) === null,
-  );
+  const typedInvalid = (row: EditedDebt, text: string) =>
+    !row.discarded && text.trim() !== "" && parseAmountInput(text) === null;
+  const balanceInvalid = rows.map((row) => typedInvalid(row, row.balanceText));
+  const minimumInvalid = rows.map((row) => typedInvalid(row, row.minimumText));
   const kept = finals.some((row) => !row.discarded);
   // The card debts the kept debts update: one debt each.
   const updated = finals.flatMap((row) =>
@@ -296,7 +295,11 @@ export function ImportDebtsReview({
                         change(row.id, { balanceText: event.target.value })
                       }
                     />
-                    {problem("balance") && <Missing />}
+                    {balanceInvalid[index] ? (
+                      <Problem text={NOT_A_NUMBER} />
+                    ) : (
+                      problem("balance") && <Missing />
+                    )}
                   </label>
                   <label className="grid gap-1 text-xs">
                     <span className="text-muted-foreground">
@@ -312,9 +315,7 @@ export function ImportDebtsReview({
                         change(row.id, { minimumText: event.target.value })
                       }
                     />
-                    {minimumInvalid[index] && (
-                      <Problem text="Ingresá un número válido" />
-                    )}
+                    {minimumInvalid[index] && <Problem text={NOT_A_NUMBER} />}
                   </label>
                   <label className="grid gap-1 text-xs">
                     <span className="text-muted-foreground">
