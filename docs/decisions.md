@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Price alerts from an asset's page
+
+- **An instrument's alert is set from its page**, with the bell beside the unit select: on its price in its own currency, or, while the user holds it, on its gain or loss over their average cost. The bell shows whether or not the user holds it.
+- **Ajustes' alerts card sets only a dollar's alert**, and lists and deletes every alert, a dollar's or an instrument's. Its select no longer offers instruments: with none held it showed only dollars while the card spoke of bonds and CEDEARs.
+
 ## 2026-10-14 · Findings from a full-repository review
 
 - **Imported cash is a cash holding.** A provider's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`), one per currency: balances of several accounts in a currency (IOL's, IBKR's) are added up. The review names it as Activos does ("Efectivo USD") with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the cash holdings the review read, which it sends back with the rows, so cash edited in between is refused as stale:
