@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(22);
+SELECT plan(23);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -275,6 +275,16 @@ SELECT throws_ok(
   '42501',
   NULL,
   'anon reads no import'
+);
+
+-- ── The file deletion job ───────────────────────────────────────────────────
+RESET ROLE;
+-- Its due query, files still there by delete_after, walks this index.
+SELECT is(
+  (SELECT indexdef FROM pg_indexes
+   WHERE schemaname = 'public' AND indexname = 'uploaded_documents_due_idx'),
+  'CREATE INDEX uploaded_documents_due_idx ON public.uploaded_documents USING btree (delete_after) WHERE (file_deleted_at IS NULL)',
+  'the documents whose file is due are found by delete_after through an index'
 );
 
 SELECT * FROM finish();

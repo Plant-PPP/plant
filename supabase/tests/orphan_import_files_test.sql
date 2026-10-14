@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(9);
+SELECT plan(10);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -139,5 +139,9 @@ SELECT is(
 );
 
 RESET ROLE;
+-- A page after the cursor probes the documents by path, not by scanning them.
+SELECT has_index('public', 'uploaded_documents', 'uploaded_documents_storage_path_idx',
+                 ARRAY['storage_path'], 'a document is found by its path alone');
+
 SELECT * FROM finish();
 ROLLBACK;
