@@ -6,7 +6,7 @@ import type { GetJson, PostForm, RawQuoteFeed } from "../../contract/port";
 import {
   parseResponse,
   type QuoteFeedCode,
-  quoteFailureOf,
+  feedReadCode,
   QuoteFeedError,
   type RawPrice,
 } from "../../contract/quote";
@@ -176,11 +176,6 @@ type PanelRead =
   | { ok: true; type: PanelType; titulos: unknown[] }
   | { ok: false; type: PanelType; code: QuoteFeedCode };
 
-const readCode = (error: unknown): QuoteFeedCode | null => {
-  const { known, stage, code } = quoteFailureOf(error);
-  return known && stage === "read" ? (code as QuoteFeedCode) : null;
-};
-
 export function createIolFeed(deps: IolDeps): RawQuoteFeed {
   let session: Session | null = null;
 
@@ -220,7 +215,7 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
           at,
         );
       } catch (error) {
-        const code = readCode(error);
+        const code = feedReadCode(error);
         if (code !== "http_4xx" && code !== "unauthorized") throw error;
       }
     }
@@ -251,7 +246,7 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
               titulos: parseResponse(panelSchema, json).titulos,
             };
           } catch (error) {
-            const code = readCode(error);
+            const code = feedReadCode(error);
             if (code === null) throw error;
             return { ok: false, type, code };
           }
@@ -262,6 +257,7 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
 
   return {
     id: "iol",
+    listed: true,
     async readRaw(now) {
       const { credentials } = deps;
       if (!credentials) throw new QuoteFeedError("unconfigured");

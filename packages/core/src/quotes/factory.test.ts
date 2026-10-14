@@ -9,10 +9,45 @@ const [SOURCE, , OTHER_SOURCE] = Constants.public.Enums.quote_source;
 
 const raw = (readRaw: RawQuoteFeed["readRaw"]): RawQuoteFeed => ({
   id: SOURCE,
+  listed: false,
   readRaw,
 });
 
 describe("toQuoteFeed", () => {
+  it.each([
+    [true, { closed: ["GGAL"], stale: [] }],
+    [false, { closed: [], stale: ["GGAL"] }],
+  ])(
+    "reads Friday's price on Saturday by the feed's listed flag (%s)",
+    async (listed, refused) => {
+      const feed = toQuoteFeed({
+        id: OTHER_SOURCE,
+        listed,
+        readRaw: async () => ({
+          fxRates: [],
+          prices: [
+            {
+              symbol: "GGAL",
+              price_date: "2026-10-09",
+              price: "7000",
+              currency: "ARS",
+              quoted_at: "2026-10-09T20:00:00.000Z",
+            },
+            {
+              symbol: "BTC",
+              price_date: "2026-10-10",
+              price: "65000",
+              currency: "USD",
+              quoted_at: "2026-10-10T21:00:00.000Z",
+            },
+          ],
+        }),
+      });
+      const batch = await feed.read(new Date("2026-10-10T21:30:00.000Z"));
+      expect(batch.refused).toMatchObject(refused);
+    },
+  );
+
   it("throws a retryable empty when a feed returned no rows", async () => {
     const feed = toQuoteFeed(raw(async () => ({ fxRates: [], prices: [] })));
     await expect(feed.read(NOW)).rejects.toMatchObject({
@@ -182,6 +217,7 @@ describe("toQuoteFeed", () => {
     } as RawPrice;
     const feed = toQuoteFeed({
       id: OTHER_SOURCE,
+      listed: false,
       readRaw: async () => ({ fxRates: [], prices: [carried] }),
     });
     const batch = await feed.read(NOW);
