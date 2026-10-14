@@ -183,3 +183,19 @@ it("adds units to a holding already held at the price, not the position's cost",
   const last = [...topped.state.movements.values()].flat().at(-1);
   expect(last).toMatchObject({ kind: "adjustment", price: "20000" });
 });
+
+it("adds units to a held position at the cost when no price was kept", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", null), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+});

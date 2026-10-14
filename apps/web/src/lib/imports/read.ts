@@ -1,5 +1,7 @@
 import "server-only";
 import {
+  type InstrumentType,
+  quotedPrice,
   normalizeSymbol,
   instrumentIndex,
   resolveSymbol,
@@ -12,6 +14,7 @@ import {
   type Database,
   exactOf,
   over,
+  stored,
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -170,13 +173,23 @@ const totalsSchema = z.object({
 // Whether a printed cost reads as one unit's: within ten times either way of
 // the price or of the value per unit, when the row prints either. A column
 // of total costs taken for unit costs is left out rather than proposed.
-function isUnitCost(row: z.infer<typeof itemSchema>): boolean {
+function isUnitCost(
+  row: z.infer<typeof itemSchema>,
+  type: InstrumentType | undefined,
+): boolean {
   const cost = exactOf(row.cost!);
+  // The printed cost and price are on the quote's basis (a bond's per 100);
+  // the value per unit is on one unit's.
   const perUnit =
     row.price !== null
       ? exactOf(row.price)
       : row.value !== null
-        ? over(exactOf(row.value), exactOf(row.quantity))
+        ? exactOf(
+            quotedPrice(
+              type ?? "cedear",
+              stored(over(exactOf(row.value), exactOf(row.quantity))),
+            ),
+          )
         : null;
   if (perUnit === null) return true;
   const ratio = over(cost, perUnit);
@@ -220,7 +233,7 @@ function reviewRow(
     value: sameCurrency ? row.value : null,
     ...(row.cost != null &&
       sameCurrency &&
-      isUnitCost(row) && {
+      isUnitCost(row, known?.type) && {
         cost: known ? unitPrice(known.type, row.cost) : row.cost,
       }),
     currency: known?.instrumentCurrency ?? row.currency,

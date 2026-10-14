@@ -290,8 +290,10 @@ export function writeImport<S extends Ledger>(
         undefined;
     // A holding that opens comes in at the average cost the review kept, the
     // whole position's; units added to one already held come in at the price,
-    // as the average of the whole is not theirs.
-    const entry = opens ? (row.cost ?? row.price) : row.price;
+    // as the average of the whole is not theirs, and at the cost only when no
+    // price was kept.
+    const entry =
+      (opens ? (row.cost ?? row.price) : (row.price ?? row.cost)) ?? null;
     if (order > 0 && (entry === null || compareDecimals(entry, "0") <= 0)) {
       return refuse({ ok: false, code: "invalid" });
     }
