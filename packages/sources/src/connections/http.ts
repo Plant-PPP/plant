@@ -204,16 +204,19 @@ export const base64Of = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes));
 
 // The ISO 4217 fiat currencies Plant does not keep: all but pesos and
-// dollars, and the Mongolian tugrik, whose MNT exchanges list as Mantle.
+// dollars, and the codes exchanges list as tokens, which a balance there names:
+// MNT (Mantle, not the tugrik), SCR (Scroll, not the Seychelles rupee), RON
+// (Ronin, not the leu), ERN (Ethernity, not the nakfa), TOP (TOP Network, not
+// the pa'anga) and SOS (OpenDAO, not the Somali shilling).
 export const OTHER_FIAT: ReadonlySet<string> = new Set(
   `
 AED AFN ALL AMD ANG AOA AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL
 BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD
-EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR
+EGP ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR
 ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR
 LRD LSL LYD MAD MDL MGA MKD MMK MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK
-NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK
-SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS
+NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RSD RUB RWF SAR SBD SDG SEK
+SGD SHP SLE SLL SRD SSP STN SVC SYP SZL THB TJS TMT TND TRY TTD TWD TZS
 UAH UGX UYU UZS VED VES VND VUV WST XAF XCD XCG XOF XPF YER ZAR ZMW ZWG ZWL
 `
     .split(/\s+/)
