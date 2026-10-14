@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
-import { exchangeOf } from "@/lib/connections/api-key";
+import { connectionForm, providerOf } from "@/lib/connections/api-key";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
@@ -56,7 +56,7 @@ export function PrototypeScope({
   const unit = chosen ?? reference;
   const apiKey = (kind === "account" && state.apiKeys.get(id)) || null;
   const provider =
-    apiKey?.provider ?? (account ? exchangeOf(account.institution) : null);
+    apiKey?.provider ?? (account ? providerOf(account.institution) : null);
   return (
     <ScopePage
       scope={scope}
@@ -85,7 +85,8 @@ export function PrototypeScope({
         provider && (
           <ApiKeyCard
             accountId={id}
-            provider={provider}
+            // The prototype's review takes holdings only.
+            form={{ ...connectionForm(provider), drafts: ["holdings"] }}
             apiKey={apiKey}
             actions={actions.apiKeys}
           />

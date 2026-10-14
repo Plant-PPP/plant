@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "account_api_keys": {
                   Row: {
-                    "created_at": string,"id": string,"key_hint": string,"provider": string,"secret_ciphertext": string,"source_connection_id": string,"user_id": string
+                    "created_at": string,"credentials": Json | null,"id": string,"key_hint": string,"provider": string,"secret_ciphertext": string | null,"source_connection_id": string,"user_id": string,"vault_secret": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"key_hint": string,"provider": string,"secret_ciphertext": string,"source_connection_id": string,"user_id"?: string
+                    "created_at"?: string,"credentials"?: Json | null,"id"?: string,"key_hint": string,"provider": string,"secret_ciphertext"?: string | null,"source_connection_id": string,"user_id"?: string,"vault_secret"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"key_hint"?: string,"provider"?: string,"secret_ciphertext"?: string,"source_connection_id"?: string,"user_id"?: string
+                    "created_at"?: string,"credentials"?: Json | null,"id"?: string,"key_hint"?: string,"provider"?: string,"secret_ciphertext"?: string | null,"source_connection_id"?: string,"user_id"?: string,"vault_secret"?: string | null
                   }
                   Relationships: [
                     {
@@ -223,14 +223,14 @@ isOneToOne: false
                   ]
                 },"imports": {
                   Row: {
-                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"updated_at": string,"user_id": string
+                    "created_at": string,"document_date": string | null,"document_id": string | null,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"provider": string | null,"skipped_rows": number,"source_connection_id": string | null,"status": Database["public"]['Enums']["import_status"],"sync_draft": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"document_date"?: string | null,"document_id"?: string | null,"failure"?: Database["public"]['Enums']["import_failure"] | null,"id"?: string,"printed_total_ars"?: number | null,"printed_total_usd"?: number | null,"provider"?: string | null,"skipped_rows"?: number,"source_connection_id"?: string | null,"status"?: Database["public"]['Enums']["import_status"],"sync_draft"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -503,7 +503,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "confirm_import":
+            "account_credentials":
+{ Args: { "p_provider": string,"p_source_connection_id": string,"p_user_id": string }; Returns: Json
+                           },
+"confirm_import":
 { Args: { "p_import_id": string,"p_operations": Json }; Returns: string
                            },
 "confirm_import_debts":

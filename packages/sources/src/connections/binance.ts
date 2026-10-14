@@ -1,28 +1,25 @@
-import {
-  buenosAiresDate,
-  fromScaled,
-  positiveDecimalSchema,
-  toScaled,
-} from "@plant/shared";
+import { fromScaled, toScaled } from "@plant/shared";
 import { z } from "zod";
 
+import type { DraftRow } from "../file-upload/draft";
 import {
-  DRAFT_ROW_LIMIT,
-  type DraftRow,
-  SourceError,
-} from "../file-upload/draft";
-import type { HoldingsReading } from "../port";
-import type { ExchangeCredentials, ExchangeSourcePort } from "./port";
+  call,
+  holdingsReading,
+  jsonOf,
+  notReadOnly,
+  positive,
+  rejected,
+  unavailable,
+} from "./http";
+import { type ConnectionDeps, defineConnection } from "./port";
 
 export const BINANCE_BASE_URL = "https://api.binance.com";
 
-export type BinanceOptions = {
-  // Binance's REST API; a test points it at a fake.
-  baseUrl: string;
-  fetch?: typeof fetch;
-  now?: () => Date;
-  timeoutMs?: number;
-};
+export const binanceCredentialsSchema = z.object({
+  apiKey: z.string().regex(/^[A-Za-z0-9]{16,128}$/),
+  apiSecret: z.string().regex(/^[A-Za-z0-9]{16,128}$/),
+});
+type BinanceCredentials = z.infer<typeof binanceCredentialsSchema>;
 
 // The answers Binance gives a key it does not take: a malformed key, an
 // unknown key or one refused from this IP, a bad signature, an unknown key id.
@@ -71,8 +68,8 @@ async function signature(secret: string, payload: string): Promise<string> {
 }
 
 // One balance as a holding: what is free and what open orders hold, in
-// units. null when it is not a holding Plant can store: nothing held, a
-// name Binance does not use, or more units than a quantity holds.
+// units. null when it is not a holding Plant can store: a name Binance does
+// not use, or more units than a quantity holds.
 function rowOf(balance: {
   asset: string;
   free: string;
@@ -87,7 +84,7 @@ function rowOf(balance: {
   } catch {
     return null;
   }
-  if (!positiveDecimalSchema.safeParse(quantity).success) return null;
+  if (!positive(quantity)) return null;
   return {
     symbol: balance.asset,
     quantity,
@@ -102,67 +99,60 @@ function rowOf(balance: {
 // Binance's spot account by API, read-only: it asks what the key may do and
 // the account's balances, each a signed GET, and never calls an endpoint
 // that changes anything.
-export function binanceSource({
-  baseUrl,
+export function binanceConnection({
+  baseUrl = BINANCE_BASE_URL,
   fetch: get = fetch,
   now = () => new Date(),
   timeoutMs = 10_000,
-}: BinanceOptions): ExchangeSourcePort {
+}: ConnectionDeps = {}) {
   const signedGet = async (
     path: string,
     params: Record<string, string>,
-    { apiKey, apiSecret }: ExchangeCredentials,
+    { apiKey, apiSecret }: BinanceCredentials,
   ): Promise<unknown> => {
     const query = new URLSearchParams({
       ...params,
       recvWindow: "10000",
       timestamp: String(now().getTime()),
     }).toString();
-    const url = `${baseUrl}${path}?${query}&signature=${await signature(apiSecret, query)}`;
-    let response: Response;
-    try {
-      response = await get(url, {
-        headers: { "X-MBX-APIKEY": apiKey },
-        redirect: "error",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (cause) {
-      throw new SourceError("extraction_failed", true, { cause });
-    }
-    const body: unknown = await response.json().catch(() => null);
+    const response = await call(
+      get,
+      `${baseUrl}${path}?${query}&signature=${await signature(apiSecret, query)}`,
+      { headers: { "X-MBX-APIKEY": apiKey } },
+      timeoutMs,
+    );
+    const body = await jsonOf(response);
     if (response.ok) return body;
     const code = (body as { code?: unknown } | null)?.code;
     if (
       response.status === 401 ||
       (typeof code === "number" && REJECTED_CODES.has(code))
     ) {
-      throw new SourceError("connection_rejected", false);
+      throw rejected();
     }
-    // Rate limits, a clock out of the window, Binance down: a later
-    // attempt may pass.
-    throw new SourceError("extraction_failed", true);
+    // Rate limits, a clock out of the window, Binance down.
+    throw unavailable();
   };
 
-  const checkReadOnly = async (credentials: ExchangeCredentials) => {
+  const check = async (credentials: BinanceCredentials) => {
     const restrictions = restrictionsSchema.safeParse(
       await signedGet("/sapi/v1/account/apiRestrictions", {}, credentials),
     );
-    if (!restrictions.success) {
-      throw new SourceError("extraction_failed", true);
-    }
-    if (restrictions.data.enableReading !== true) {
-      throw new SourceError("connection_rejected", false);
-    }
-    if (!isReadOnly(restrictions.data)) {
-      throw new SourceError("connection_not_read_only", false);
-    }
+    if (!restrictions.success) throw unavailable();
+    if (restrictions.data.enableReading !== true) throw rejected();
+    if (!isReadOnly(restrictions.data)) throw notReadOnly();
   };
 
-  return {
+  return defineConnection({
     provider: "binance",
-    checkReadOnly,
-    async read(credentials): Promise<HoldingsReading> {
-      await checkReadOnly(credentials);
+    credentials: binanceCredentialsSchema,
+    secrets: ["apiSecret"],
+    hintField: "apiKey",
+    readOnly: "checked",
+    drafts: ["holdings"],
+    check,
+    async read(credentials) {
+      await check(credentials);
       const account = accountSchema.safeParse(
         await signedGet(
           "/api/v3/account",
@@ -170,30 +160,16 @@ export function binanceSource({
           credentials,
         ),
       );
-      if (!account.success) throw new SourceError("extraction_failed", true);
+      if (!account.success) throw unavailable();
       const rows: DraftRow[] = [];
-      let skippedRows = 0;
+      let skipped = 0;
       for (const balance of account.data.balances) {
         const row = rowOf(balance);
         if (row === "empty") continue;
-        if (row === null || rows.length >= DRAFT_ROW_LIMIT) skippedRows += 1;
+        if (row === null) skipped += 1;
         else rows.push(row);
       }
-      rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
-      return {
-        draft: {
-          documentDate: buenosAiresDate(now()),
-          rows,
-          totals: [],
-        },
-        read: {
-          reader: "api",
-          mapping: "none",
-          skippedRows,
-          disputes: 0,
-          documentKind: null,
-        },
-      };
+      return holdingsReading(rows, skipped, now());
     },
-  };
+  });
 }

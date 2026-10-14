@@ -13,11 +13,56 @@ import {
   requestIdFrom,
 } from "@/lib/request-id";
 
+// Outbound URLs that carry a credential in their query: Interactive
+// Brokers' Flex Web Service takes the user's Flex token as `t=`.
+export const SECRET_QUERY_URLS: readonly RegExp[] = [
+  /^https:\/\/[^/?#]*interactivebrokers\.com\/AccountManagement\/FlexWebService\//,
+];
+
+const SECRET_QUERY_PARAM = /([?&]t=)[^&#\s]*/g;
+
+// A URL, or a span name holding one, with the credential of a URL in
+// SECRET_QUERY_URLS masked; anything else as it came.
+export function scrubSecretQuery(text: string): string {
+  return SECRET_QUERY_URLS.some((url) => url.test(text.replace(/^\w+ /, "")))
+    ? text.replace(SECRET_QUERY_PARAM, "$1<masked>")
+    : text;
+}
+
+const URL_ATTRIBUTES = ["http.url", "url.full", "http.target", "url.query"];
+
+// Masks the credential in an outbound span's name and URL attributes as the
+// span starts, where Next and the fetch instrumentation set them.
+const secretQueryScrub = {
+  onStart(span: {
+    name?: string;
+    attributes?: Record<string, unknown>;
+    updateName(name: string): unknown;
+    setAttribute(key: string, value: string): unknown;
+  }) {
+    if (span.name) {
+      const name = scrubSecretQuery(span.name);
+      if (name !== span.name) span.updateName(name);
+    }
+    for (const key of URL_ATTRIBUTES) {
+      const value = span.attributes?.[key];
+      if (typeof value !== "string") continue;
+      const scrubbed = scrubSecretQuery(value);
+      if (scrubbed !== value) span.setAttribute(key, scrubbed);
+    }
+  },
+  onEnd() {},
+  forceFlush: () => Promise.resolve(),
+  shutdown: () => Promise.resolve(),
+};
+
 // Traces go to OTEL_EXPORTER_OTLP_ENDPOINT or _TRACES_ENDPOINT (Dash0 from
 // PLA-73). Without one nothing is registered and the OpenTelemetry API stays
 // a no-op. Before an endpoint is set, a span processor must scrub the query
 // from `http.target`, `http.url` and fetch span names: /auth/callback's
-// carries the PKCE code.
+// carries the PKCE code. Outbound calls whose URL carries a credential
+// (SECRET_QUERY_URLS) are not traced by the fetch instrumentation, and any
+// other span naming one has it masked.
 export async function register() {
   if (
     !process.env.OTEL_EXPORTER_OTLP_ENDPOINT &&
@@ -31,6 +76,8 @@ export async function register() {
     registerOTel({
       serviceName: "plant-web",
       attributes: { "service.version": process.env.VERCEL_GIT_COMMIT_SHA },
+      instrumentationConfig: { fetch: { ignoreUrls: [...SECRET_QUERY_URLS] } },
+      spanProcessors: [secretQueryScrub as never, "auto"],
     });
   } catch (error) {
     serverLog.error("otel.register", {}, error);

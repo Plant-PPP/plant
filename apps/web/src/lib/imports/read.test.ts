@@ -89,7 +89,7 @@ it("says why a failed import stopped, and keeps a read one's date", async () => 
   ]);
 });
 
-it("lists a sync by its exchange and says why it failed in its own words", async () => {
+it("lists a sync by its provider and says why it failed in its own words", async () => {
   const failed = (failure: string, id: string, synced: boolean) => ({
     id,
     status: "failed",
@@ -122,12 +122,12 @@ it("lists a sync by its exchange and says why it failed in its own words", async
     [
       "Sincronización con Binance",
       "a1",
-      "No encontramos saldos en tu cuenta del exchange.",
+      "No encontramos saldos ni operaciones en la cuenta conectada.",
     ],
     [
       "Sincronización con Binance",
       "a1",
-      "No pudimos leer tu cuenta del exchange. Probá de nuevo más tarde.",
+      "No pudimos leer la cuenta conectada. Probá de nuevo más tarde.",
     ],
     ["c.pdf", "a1", "No encontramos tenencias ni operaciones en el archivo."],
   ]);

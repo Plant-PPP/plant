@@ -1,9 +1,9 @@
 import {
   type DraftDebt,
   type DraftOperation,
-  type ExchangeAdapters,
-  type ExchangeCredentials,
-  type ExchangeProvider,
+  type ConnectionAdapters,
+  type ConnectionDraft,
+  type ConnectionProvider,
   type ImportDraft,
   type PortfolioSourcePort,
   SourceError,
@@ -22,13 +22,19 @@ export const IMPORT_RETRIES = 3;
 export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
 
 // An import as the job reads it: whose it is, where it stands, and what it
-// reads: an uploaded file, or an account's balances at its exchange (a sync).
+// reads: an uploaded file, or an account's holdings or operations at its
+// broker or exchange (a sync).
 export type ImportToRead = {
   userId: string;
   status: Database["public"]["Enums"]["import_status"];
 } & (
   | { origin: "file"; path: string; mimeType: string }
-  | { origin: "exchange"; accountId: string; provider: ExchangeProvider }
+  | {
+      origin: "connection";
+      accountId: string;
+      provider: ConnectionProvider;
+      draft: ConnectionDraft;
+    }
 );
 
 // Where the job reads an import and its file and writes what it read; the
@@ -41,13 +47,14 @@ export interface ImportStorePort {
   reading(importId: string, userId: string): Promise<void>;
   // The institution of the account the import's file was uploaded to.
   institution(importId: string, userId: string): Promise<string>;
-  // The key of that exchange the user's account holds, unsealed; null when
+  // The credentials of that provider the user's account holds, out of
+  // Vault, as stored (the provider's adapter parses them); null when
   // it holds none any more.
   credentials(
     userId: string,
     accountId: string,
-    provider: ExchangeProvider,
-  ): Promise<ExchangeCredentials | null>;
+    provider: ConnectionProvider,
+  ): Promise<unknown>;
   // `skippedRows` are the holdings the reading left out, for the review to
   // say.
   saveDraft(
@@ -78,8 +85,8 @@ export type ImportJobDeps = {
   // The connection's source reads a file's holdings, throwing a
   // SourceError when it cannot.
   source: PortfolioSourcePort;
-  // Each exchange's source reads a sync's balances with the account's key.
-  exchanges: ExchangeAdapters;
+  // Each provider's adapter reads a sync with the account's credentials.
+  connections: ConnectionAdapters;
   log: Logger;
 };
 
@@ -90,9 +97,10 @@ type Prepared =
   | { ok: true; origin: "file"; path: string; mimeType: string }
   | {
       ok: true;
-      origin: "exchange";
+      origin: "connection";
       accountId: string;
-      provider: ExchangeProvider;
+      provider: ConnectionProvider;
+      draft: ConnectionDraft;
     }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
 type Read = {
@@ -141,7 +149,7 @@ export function failureOf(error: unknown): SourceErrorCode {
   return "extraction_failed";
 }
 
-// Reads one queued import's file, or its account's exchange, into its draft.
+// Reads one queued import's file, or its account's provider, into its draft.
 // The event names the import and its user; the job trusts neither: the import
 // must be that user's, queued, with its file under that user's folder, and a
 // sync reads only that user's key of that account. A step's id never changes:
@@ -165,13 +173,14 @@ export async function runImportDocument(
     if (found.status !== "queued" && found.status !== "reading") {
       return { ok: false, reason: "not_queued" };
     }
-    if (found.origin === "exchange") {
+    if (found.origin === "connection") {
       await deps.store.reading(importId, userId);
       return {
         ok: true,
-        origin: "exchange",
+        origin: "connection",
         accountId: found.accountId,
         provider: found.provider,
+        draft: found.draft,
       };
     }
     if (!found.path.startsWith(`${userId}/imports/`)) {
@@ -199,15 +208,20 @@ export async function runImportDocument(
     read = await step.run("read", async (): Promise<Read> => {
       try {
         let reading: SourceReading;
-        if (prepared.origin === "exchange") {
+        if (prepared.origin === "connection") {
           const credentials = await deps.store.credentials(
             userId,
             prepared.accountId,
             prepared.provider,
           );
           // The user disconnected the key after the sync started.
-          if (!credentials) throw new SourceError("connection_rejected", false);
-          reading = await deps.exchanges[prepared.provider]().read(credentials);
+          if (credentials == null) {
+            throw new SourceError("connection_rejected", false);
+          }
+          reading = await deps.connections[prepared.provider]().read(
+            credentials,
+            prepared.draft,
+          );
         } else {
           const bytes = await deps.store.download(prepared.path);
           reading = await deps.source.read({

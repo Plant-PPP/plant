@@ -2,7 +2,7 @@ import { quoteFeeds } from "@plant/core";
 import { createServeOptions } from "@plant/jobs";
 import {
   createSourceForConnection,
-  exchangeAdapters,
+  connectionAdapters,
   fileUploadSource,
 } from "@plant/sources";
 import { serve } from "inngest/next";
@@ -37,7 +37,7 @@ export const { GET, POST, PUT } = serve(
     imports: () => ({
       store: importSink(),
       // An uploaded file is read by the file_upload source, a sync by its
-      // exchange's.
+      // provider's adapter.
       source: createSourceForConnection(
         { kind: "file_upload" },
         {
@@ -51,7 +51,7 @@ export const { GET, POST, PUT } = serve(
             }),
         },
       ),
-      exchanges: exchangeAdapters(),
+      connections: connectionAdapters(),
       log: serverLog,
     }),
     files: () => ({

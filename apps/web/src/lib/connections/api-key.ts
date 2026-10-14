@@ -1,38 +1,45 @@
-import type { ExchangeProvider } from "@plant/sources";
+import {
+  type ConnectionDraft,
+  type ConnectionProvider,
+  connectionAdapters,
+  type ReadOnlyCheck,
+} from "@plant/sources";
 
-// An account's exchange key as the page shows it: never the key, only its
-// last four characters.
+// An account's connection as the page shows it: the provider and the last
+// characters of the field it names the credentials by, never a secret.
 export type ApiKeyView = {
-  provider: ExchangeProvider;
+  provider: ConnectionProvider;
   keyHint: string;
   connectedOn: string;
 };
 
 export type ApiKeyInput = {
   accountId: string;
-  provider: ExchangeProvider;
-  apiKey: string;
-  apiSecret: string;
+  provider: ConnectionProvider;
+  credentials: Record<string, string>;
+  // The user confirmed the credentials only read, where the provider does
+  // not say (or has none that only read).
+  confirmedReadOnly: boolean;
 };
 
-// Why connecting a key was refused: input that does not parse, an account
-// the user does not have open, one at another institution than the
-// exchange, a key the exchange refuses, one that can do
-// more than read, an exchange that did not answer, a deployment with no
-// server key to seal it with, or a failure.
+// Why connecting was refused: input that does not parse, an account the
+// user does not have open, one at another institution than the provider, a
+// read-only confirmation missing, credentials the provider refuses, ones that
+// can do more than read, a provider that did not answer, or a failure.
 export type ConnectCode =
   | "invalid"
   | "not_found"
   | "unsupported"
+  | "unconfirmed"
   | "rejected"
   | "not_read_only"
   | "unavailable"
-  | "unconfigured"
   | "failed";
 export type ConnectResult = { ok: true } | { ok: false; code: ConnectCode };
 
-// Why a sync did not start: input that does not parse, an account with no
-// key (or archived), one syncing already, or a failure.
+// Why a sync did not start: input that does not parse (or a draft the
+// provider does not read), an account with no key (or archived), one
+// syncing already, or a failure.
 export type SyncCode = "invalid" | "not_connected" | "in_progress" | "failed";
 export type SyncResult =
   { ok: true; importId: string } | { ok: false; code: SyncCode };
@@ -42,35 +49,125 @@ export type DisconnectResult = { ok: boolean };
 export type ApiKeyActions = {
   connect: (input: ApiKeyInput) => Promise<ConnectResult>;
   disconnect: (accountId: string) => Promise<DisconnectResult>;
-  sync: (accountId: string) => Promise<SyncResult>;
+  sync: (accountId: string, draft: ConnectionDraft) => Promise<SyncResult>;
 };
 
-export const EXCHANGE_NAMES: Record<ExchangeProvider, string> = {
-  binance: "Binance",
+// ── The registry ────────────────────────────────────────────────────────────
+// Each provider as the app shows it: its name, the institutions it is, the
+// label of each of its adapter's fields, how to make the credentials and,
+// where the provider does not say they only read, what the user confirms.
+type ProviderCopy = {
+  name: string;
+  institution: RegExp;
+  fields: Record<string, string>;
+  help: string;
+  confirm?: string;
 };
 
-// The exchange an account's institution is, by its name; null for any other
-// institution, whose page offers no key.
-export function exchangeOf(institution: string): ExchangeProvider | null {
-  return /^binance\b/i.test(institution.trim()) ? "binance" : null;
+export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
+  binance: {
+    name: "Binance",
+    institution: /^binance\b/i,
+    fields: { apiKey: "Clave de API", apiSecret: "Clave secreta" },
+    help: 'En Binance, creá una clave de API con solo "Habilitar lectura". Si la clave puede operar, retirar o transferir, no la aceptamos.',
+  },
+  wallbit: {
+    name: "Wallbit",
+    institution: /^wallbit\b/i,
+    fields: { apiKey: "API key" },
+    help: 'En Wallbit, andá a Configuración → API Keys y creá una key con el permiso "read" solamente, sin "trade". Si Wallbit nos avisa que la key puede operar, la rechazamos.',
+    confirm: 'Confirmo que la key tiene solo el permiso "read".',
+  },
+  ibkr: {
+    name: "Interactive Brokers",
+    institution: /^(interactive brokers|ibkr)\b/i,
+    fields: { token: "Token de Flex", queryId: "ID de la Flex Query" },
+    help: "En el Client Portal, entrá a Rendimiento e informes → Flex Queries y creá una Activity Flex Query en XML con Open Positions, Cash Report, Trades y Cash Transactions; anotá su ID. Después activá Flex Web Service en la misma pantalla y generá un token. Ese token solo pide tus informes: no puede operar.",
+  },
+  nexo: {
+    name: "Nexo",
+    institution: /^nexo\b/i,
+    fields: { apiKey: "API key", apiSecret: "API secret" },
+    help: "En Nexo Pro, andá a API Management y creá una key con el rol VIEWER, que solo puede leer. Leemos los saldos de Nexo Pro; los de tu cuenta de ahorro cargalos con un resumen.",
+    confirm: "Confirmo que la key tiene el rol VIEWER (solo lectura).",
+  },
+  iol: {
+    name: "InvertirOnline",
+    institution: /^(iol|invertir ?online)\b/i,
+    fields: { username: "Usuario de IOL", password: "Contraseña" },
+    help: "IOL no tiene un acceso de solo lectura: se conecta con tu usuario y contraseña. Plant los guarda cifrados y solo los usa para leer tu portafolio y tu estado de cuenta; nunca opera.",
+    confirm:
+      "Entiendo que IOL no tiene acceso de solo lectura y que Plant solo lee.",
+  },
+};
+
+// The provider an account's institution is, by its name; null for any
+// other institution, whose page offers no connection.
+export function providerOf(institution: string): ConnectionProvider | null {
+  const name = institution.trim();
+  const found = (Object.keys(PROVIDERS) as ConnectionProvider[]).find(
+    (provider) => PROVIDERS[provider].institution.test(name),
+  );
+  return found ?? null;
 }
 
+// Whether the user must confirm the credentials only read.
+export const needsConfirmation = (readOnly: ReadOnlyCheck) =>
+  readOnly === "confirmed" || readOnly === "none";
+
+// What the connect card shows for a provider: its adapter's fields with
+// their labels, what it reads, and whether the user confirms read-only.
+export type ConnectionForm = {
+  provider: ConnectionProvider;
+  name: string;
+  fields: { name: string; label: string; secret: boolean }[];
+  // The label of the field the connection is named by.
+  hint: string;
+  drafts: ConnectionDraft[];
+  help: string;
+  confirm: string | null;
+};
+
+export function connectionForm(provider: ConnectionProvider): ConnectionForm {
+  const adapter = connectionAdapters()[provider]();
+  const copy = PROVIDERS[provider];
+  return {
+    provider,
+    name: copy.name,
+    fields: adapter.fields.map((field) => ({
+      ...field,
+      label: copy.fields[field.name] ?? field.name,
+    })),
+    hint: copy.fields[adapter.hintField] ?? adapter.hintField,
+    drafts: [...adapter.drafts],
+    help: copy.help,
+    confirm: needsConfirmation(adapter.readOnly)
+      ? (copy.confirm ?? null)
+      : null,
+  };
+}
+
+// The last letters or digits of the field the provider is named by, as the
+// page shows them.
+export const keyHintOf = (value: string) =>
+  value.replace(/[^A-Za-z0-9]/g, "").slice(-4) || "0";
+
 export const CONNECT_MESSAGES: Record<ConnectCode, string> = {
-  invalid: "Revisá la clave y el secreto: son letras y números, sin espacios.",
+  invalid: "Revisá los datos: falta alguno o tiene caracteres que no van.",
   not_found: "No encontramos esa cuenta.",
-  unsupported: "Solo podés conectar la clave a una cuenta de Binance.",
+  unsupported: "Esta cuenta no es de ese proveedor.",
+  unconfirmed: "Confirmá que el acceso es de solo lectura para conectarlo.",
   rejected:
-    "Binance rechazó la clave. Revisá que la copiaste bien y que siga activa.",
+    "El proveedor rechazó los datos. Revisá que los copiaste bien y que sigan activos.",
   not_read_only:
-    "La clave puede operar, retirar o transferir. Creá una con solo lectura.",
-  unavailable: "Binance no respondió. Probá de nuevo en unos minutos.",
-  unconfigured: "No pudimos guardar la clave. Probá de nuevo más tarde.",
-  failed: "No pudimos guardar la clave. Probá de nuevo más tarde.",
+    "La clave puede operar, retirar o transferir. Creá una de solo lectura.",
+  unavailable: "El proveedor no respondió. Probá de nuevo en unos minutos.",
+  failed: "No pudimos guardar la conexión. Probá de nuevo más tarde.",
 };
 
 export const SYNC_MESSAGES: Record<SyncCode, string> = {
   invalid: "No encontramos esa cuenta.",
-  not_connected: "La cuenta no tiene una clave conectada.",
+  not_connected: "La cuenta no tiene una conexión.",
   in_progress: "Ya estamos sincronizando esta cuenta.",
   failed: "No pudimos sincronizar. Probá de nuevo más tarde.",
 };

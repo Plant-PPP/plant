@@ -24,6 +24,9 @@ export async function disconnectApiKey(
   return disconnect(accountId);
 }
 
-export async function syncAccount(accountId: unknown): Promise<SyncResult> {
-  return sync(accountId);
+export async function syncAccount(
+  accountId: unknown,
+  draft: unknown,
+): Promise<SyncResult> {
+  return sync(accountId, draft);
 }

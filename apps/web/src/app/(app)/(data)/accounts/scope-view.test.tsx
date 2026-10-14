@@ -34,6 +34,7 @@ jest.mock("@/lib/connections/write", () => ({
 
 import type * as React from "react";
 
+import * as apiKeyActions from "@/app/(app)/(data)/accounts/api-key-actions";
 import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsView, writeOperation } from "@/lib/ledger/ledger";
@@ -128,9 +129,15 @@ it("lists a holding sold out apart from the open ones", async () => {
   expect(page.props.soldRows.map((row) => row.id)).toEqual([sold.id]);
 });
 
-it("hands the page only data and server actions", async () => {
+it("hands the page and the connection card only data and server actions", async () => {
   const page = await render("account", ACCOUNT);
-  expect(nonActionFunctions(page.props, [movementActions])).toEqual([]);
+  const { connection, ...props } = page.props as typeof page.props & {
+    connection: React.ReactElement<Record<string, unknown>>;
+  };
+  expect(nonActionFunctions(props, [movementActions])).toEqual([]);
+  // The account is at IOL, which connects by API.
+  expect(connection.props.form).toMatchObject({ provider: "iol" });
+  expect(nonActionFunctions(connection.props, [apiKeyActions])).toEqual([]);
 });
 
 it.each([

@@ -12,7 +12,7 @@ import { loadMovements } from "@/app/(app)/(data)/assets/movement-actions";
 import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { exchangeOf } from "@/lib/connections/api-key";
+import { connectionForm, providerOf } from "@/lib/connections/api-key";
 import { readApiKey } from "@/lib/connections/write";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
@@ -91,7 +91,7 @@ export async function ScopeView({
       : null;
   const provider =
     apiKey?.provider ??
-    (scope.kind === "account" ? exchangeOf(scope.institution) : null);
+    (scope.kind === "account" ? providerOf(scope.institution) : null);
 
   const inScope = (row: HoldingRow) =>
     kind === "account" ? row.account.id === id : row.portfolio.id === id;
@@ -164,7 +164,7 @@ export async function ScopeView({
         provider && (
           <ApiKeyCard
             accountId={id}
-            provider={provider}
+            form={connectionForm(provider)}
             apiKey={apiKey}
             actions={{
               connect: connectApiKey,

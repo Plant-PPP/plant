@@ -34,10 +34,11 @@
 --   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
 --   which run as the caller with an empty search_path, and
 --   imports_used_this_month), service_role none in private, only
---   service_role orphan_import_files, which runs as the caller, the only
---   SECURITY DEFINER
---   functions are the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers
---   and imports_used_this_month, and no trigger on public,
+--   service_role orphan_import_files, which runs as the caller, and
+--   account_credentials (account_api_keys_test.sql), the only SECURITY DEFINER
+--   functions are the signup, session, MFA factor, file deletion, conversation deletion,
+--   import quota and account credentials (into and out of Vault) triggers,
+--   imports_used_this_month and account_credentials, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
@@ -254,9 +255,11 @@ SELECT set_eq(
   ARRAY['private.create_profile_for_new_user()', 'private.record_session_event()',
         'private.record_mfa_factor_event()', 'private.record_file_deletion()',
         'private.record_conversation_deletion()', 'private.check_import_quota()',
+        'private.store_account_credentials()', 'private.delete_account_credentials()',
         'public.imports_used_this_month()'::regprocedure::text,
+        'public.account_credentials(uuid,uuid,text)'::regprocedure::text,
         'public.meet_price_alerts()'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota triggers, the quota count and the price alerts check are the only SECURITY DEFINER functions'
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read and the price alerts check are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
@@ -359,8 +362,10 @@ SELECT is_empty(
              ('private.record_mfa_factor_event()'::regprocedure, 'auth.mfa_factors'::regclass),
              ('private.record_file_deletion()'::regprocedure, 'public.uploaded_documents'::regclass),
              ('private.record_conversation_deletion()'::regprocedure, 'public.ai_conversations'::regclass),
-             ('private.check_import_quota()'::regprocedure, 'public.imports'::regclass)) $$,
-  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session, MFA factor, file deletion, conversation deletion and import quota triggers'
+             ('private.check_import_quota()'::regprocedure, 'public.imports'::regclass),
+             ('private.store_account_credentials()'::regprocedure, 'public.account_api_keys'::regclass),
+             ('private.delete_account_credentials()'::regprocedure, 'public.account_api_keys'::regclass)) $$,
+  'no trigger on public, private or auth runs a SECURITY DEFINER function besides the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers'
 );
 
 -- Rule actions run as the table owner, past RLS.

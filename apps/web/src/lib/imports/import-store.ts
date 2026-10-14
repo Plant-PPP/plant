@@ -2,13 +2,12 @@ import "server-only";
 import type { ImportStorePort, ImportToRead } from "@plant/jobs";
 import { Constants, type Database } from "@plant/shared";
 import {
-  exchangeCredentialsSchema,
-  exchangeProviderSchema,
+  connectionDraftSchema,
+  connectionProviderSchema,
 } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { open, sealContext } from "@/lib/connections/secret-box";
 import { UPLOAD_BUCKET } from "@/lib/imports/upload";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
@@ -16,7 +15,7 @@ type Client = SupabaseClient<Database>;
 
 // A store that failed: the step retries it, and past its retries the import
 // fails as extraction_failed. Only the step and the code are kept, never the
-// error's details, which may carry a row or a key.
+// error's details, which may carry a row or credentials.
 export class ImportStoreError extends Error {
   override readonly name = "ImportStoreError";
   constructor(
@@ -40,8 +39,9 @@ const BEING_READ: Database["public"]["Enums"]["import_status"][] = [
   "reading",
 ];
 
-// An import reads an uploaded document or, for a sync, its account's
-// exchange; the database holds it to one.
+// An import reads an uploaded document or, for a sync, its account at its
+// provider; the database holds it to one. A sync from before syncs of
+// operations read holdings.
 const loadedSchema = z.union([
   z.object({
     user_id: z.string(),
@@ -53,7 +53,8 @@ const loadedSchema = z.union([
     status: z.enum(Constants.public.Enums.import_status),
     document: z.null(),
     source_connection_id: z.string(),
-    provider: exchangeProviderSchema,
+    provider: connectionProviderSchema,
+    sync_draft: connectionDraftSchema.nullable(),
   }),
 ]);
 
@@ -73,12 +74,8 @@ function checked(
 // The job's store over a service-role client: it bypasses RLS and Storage's
 // policies, so every call filters by the import's id and by its user, and the
 // job checks the import is its event's user's before it reads the file or the
-// key. `secretsKey` opens an account's sealed key; null where the deployment
-// has none.
-export function createImportStore(
-  client: Client,
-  secretsKey: Buffer | null,
-): ImportStorePort {
+// credentials.
+export function createImportStore(client: Client): ImportStorePort {
   // Whether the import is still being read, and if so clears any draft, of
   // holdings or of operations, an earlier attempt wrote: a retried read may
   // tell the document apart differently. A read retried after the import was
@@ -139,7 +136,7 @@ export function createImportStore(
       const result = await client
         .from("imports")
         .select(
-          "user_id, status, source_connection_id, provider, " +
+          "user_id, status, source_connection_id, provider, sync_draft, " +
             "document:uploaded_documents!imports_user_id_document_id_fkey(storage_path, mime_type)",
         )
         .eq("id", importId)
@@ -153,9 +150,10 @@ export function createImportStore(
         return {
           userId: found.user_id,
           status: found.status,
-          origin: "exchange",
+          origin: "connection",
           accountId: found.source_connection_id,
           provider: found.provider,
+          draft: found.sync_draft ?? "holdings",
         };
       }
       return {
@@ -167,38 +165,16 @@ export function createImportStore(
       };
     },
 
-    // The sealed key is bound to its user, account and exchange: one that
-    // was copied to another row does not open.
+    // Read out of Vault by the database, for that user's account and
+    // provider only; the provider's adapter parses them.
     async credentials(userId, accountId, provider) {
-      if (!secretsKey)
-        throw new ImportStoreError("credentials", "unconfigured");
-      const result = await client
-        .from("account_api_keys")
-        .select("secret_ciphertext")
-        .eq("user_id", userId)
-        .eq("source_connection_id", accountId)
-        .eq("provider", provider)
-        .limit(1);
+      const result = await client.rpc("account_credentials", {
+        p_user_id: userId,
+        p_source_connection_id: accountId,
+        p_provider: provider,
+      });
       checked("credentials", result, 200);
-      const [row] = result.data ?? [];
-      if (row === undefined) return null;
-      let plain: unknown;
-      try {
-        plain = JSON.parse(
-          open(
-            row.secret_ciphertext,
-            sealContext(userId, accountId, provider),
-            secretsKey,
-          ),
-        );
-      } catch {
-        throw new ImportStoreError("credentials", "unopened");
-      }
-      const credentials = exchangeCredentialsSchema.safeParse(plain);
-      if (!credentials.success) {
-        throw new ImportStoreError("credentials", "malformed");
-      }
-      return credentials.data;
+      return result.data ?? null;
     },
 
     async download(path) {
