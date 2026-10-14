@@ -8,6 +8,7 @@ import type { InstrumentRow } from "@/lib/holdings/read";
 import {
   IMPORT_FAILURE_MESSAGES,
   type ImportItem,
+  type ImportOperationRow,
   type ImportRow,
 } from "@/lib/imports/review";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
@@ -88,6 +89,56 @@ const itemSchema = z.object({
   source_page: z.number().nullable(),
 });
 
+const operationSchema = z.object({
+  id: z.string(),
+  date: z.string().nullable(),
+  kind: z.enum(["purchase", "sale", "dividend", "coupon"]).nullable(),
+  symbol: z.string().nullable(),
+  quantity: z.string().nullable(),
+  price: z.string().nullable(),
+  amount: z.string().nullable(),
+  charges: z.string().nullable(),
+  reference: z.string().nullable(),
+  currency: z.enum(Constants.public.Enums.currency),
+  confidence: z.enum(Constants.public.Enums.import_confidence),
+  source_page: z.number().nullable(),
+});
+
+// An operation as the review completes it. An instrument Plant knows keeps
+// its symbol; one it does not, or none named, is left for the user to choose,
+// with what the document called it. The currency stays as printed: an
+// operation carries its own, so a dollar line of AL30 is a dollar trade of
+// AL30. The price stays as printed until the instrument is known.
+function reviewOperation(
+  data: unknown,
+  index: ReturnType<typeof instrumentIndex>,
+): ImportOperationRow {
+  const row = operationSchema.parse(data);
+  const known = row.symbol === null ? null : resolveSymbol(row.symbol, index);
+  const page = row.source_page === null ? null : `Página ${row.source_page}`;
+  const named =
+    row.symbol === null
+      ? "El documento no dice qué activo es"
+      : known && known.symbol === row.symbol.trim().toUpperCase()
+        ? null
+        : `Leído como "${row.symbol}"`;
+  return {
+    id: row.id,
+    date: row.date,
+    kind: row.kind,
+    symbol: known?.symbol ?? "",
+    quantity: row.quantity,
+    price: row.price,
+    amount: row.amount,
+    charges: row.charges,
+    reference: row.reference,
+    currency: row.currency,
+    confidence: row.confidence,
+    source: [page, named].filter(Boolean).join(" · ") || "Del documento",
+    discarded: false,
+  };
+}
+
 const totalsSchema = z.object({
   printed_total_ars: z.string().nullable(),
   printed_total_usd: z.string().nullable(),
@@ -140,7 +191,7 @@ export async function readImportForReview(
   id: string,
   instruments: readonly InstrumentRow[],
 ): Promise<ImportItem | null> {
-  const [found, items] = await Promise.all([
+  const [found, items, operations] = await Promise.all([
     client
       .from("imports")
       .select(
@@ -158,10 +209,21 @@ export async function readImportForReview(
       )
       .eq("import_id", id)
       .order("position"),
+    client
+      .from("import_operations")
+      .select(
+        "id, date, kind, symbol, quantity:quantity::text, price:price::text, " +
+          "amount:amount::text, charges:charges::text, reference, currency, " +
+          "confidence, source_page",
+      )
+      .eq("import_id", id)
+      .order("position"),
   ]);
   const failure =
-    classifyPostgrestResult(found, 200) ?? classifyPostgrestResult(items, 200);
-  if (failure || !found.data || !items.data) {
+    classifyPostgrestResult(found, 200) ??
+    classifyPostgrestResult(items, 200) ??
+    classifyPostgrestResult(operations, 200);
+  if (failure || !found.data || !items.data || !operations.data) {
     throw new ImportsReadError(failure?.code ?? "no_data");
   }
   const [data] = found.data as unknown[];
@@ -185,6 +247,11 @@ export async function readImportForReview(
       amount === null ? [] : [{ currency, amount }],
     ),
     rows: (items.data as unknown[]).map((each) => reviewRow(each, index)),
+    ...(operations.data.length > 0 && {
+      operations: (operations.data as unknown[]).map((each) =>
+        reviewOperation(each, index),
+      ),
+    }),
     skippedRows: printed.skipped_rows,
     createdOn: buenosAiresDate(new Date(row.created_at)),
   };

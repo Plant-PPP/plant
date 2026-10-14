@@ -110,7 +110,11 @@ describe("readImportForReview", () => {
       type: "bond" as const,
     },
   ];
-  const clientWith = (found: unknown[], items: unknown[]) => ({
+  const clientWith = (
+    found: unknown[],
+    items: unknown[],
+    operations: unknown[] = [],
+  ) => ({
     from: (table: string) => {
       const builder = {
         select: () => builder,
@@ -121,7 +125,12 @@ describe("readImportForReview", () => {
           resolve({
             status: 200,
             error: null,
-            data: table === "imports" ? found : items,
+            data:
+              table === "imports"
+                ? found
+                : table === "import_operations"
+                  ? operations
+                  : items,
           }),
       };
       return builder;
@@ -258,5 +267,72 @@ describe("readImportForReview", () => {
     expect(
       await readImportForReview(clientWith([], []) as never, "i1", INSTRUMENTS),
     ).toBeNull();
+  });
+  it("reads a draft of operations, asking for what it does not name", async () => {
+    const operation = (patch: Record<string, unknown>) => ({
+      id: "o1",
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: "AAPL",
+      quantity: "5",
+      price: "18000",
+      amount: null,
+      charges: "120.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "high",
+      source_page: 1,
+      ...patch,
+    });
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [],
+        [
+          operation({}),
+          operation({ id: "o2", symbol: null, source_page: null }),
+          operation({
+            id: "o3",
+            symbol: "GD30D",
+            currency: "USD",
+            price: "65",
+          }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read?.rows).toEqual([]);
+    expect(
+      read?.operations?.map(({ id, symbol, currency, price, source }) => ({
+        id,
+        symbol,
+        currency,
+        price,
+        source,
+      })),
+    ).toEqual([
+      {
+        id: "o1",
+        symbol: "AAPL",
+        currency: "ARS",
+        price: "18000",
+        source: "Página 1",
+      },
+      {
+        id: "o2",
+        symbol: "",
+        currency: "ARS",
+        price: "18000",
+        source: "El documento no dice qué activo es",
+      },
+      {
+        id: "o3",
+        symbol: "GD30",
+        currency: "USD",
+        price: "65",
+        source: 'Página 1 · Leído como "GD30D"',
+      },
+    ]);
   });
 });
