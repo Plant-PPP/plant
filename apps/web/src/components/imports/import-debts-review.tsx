@@ -169,7 +169,7 @@ export function ImportDebtsReview({
       )}
 
       <section className="grid gap-3" aria-labelledby={`${listId}-list`}>
-        <h2 id={`${listId}-list`} className="text-base font-semibold">
+        <h2 id={`${listId}-list`} className="text-sm font-semibold">
           {countOf(rows.length, "deuda", "deudas")}
         </h2>
         <ul className="grid gap-2">

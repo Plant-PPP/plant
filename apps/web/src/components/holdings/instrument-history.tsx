@@ -441,10 +441,10 @@ export function InstrumentHistory({
 
           <section className="grid gap-3" aria-labelledby={`${unitId}-where`}>
             <div className="grid gap-1">
-              <h2 id={`${unitId}-where`} className="text-lg font-semibold">
+              <h2 id={`${unitId}-where`} className="text-sm font-semibold">
                 Dónde lo tenés
               </h2>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs">
                 Cuánto tenés en cada cuenta y cartera.
               </p>
             </div>
@@ -458,10 +458,10 @@ export function InstrumentHistory({
           <section className="grid gap-3" aria-labelledby={`${unitId}-history`}>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="grid gap-1">
-                <h2 id={`${unitId}-history`} className="text-lg font-semibold">
+                <h2 id={`${unitId}-history`} className="text-sm font-semibold">
                   Historial
                 </h2>
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-xs">
                   Cada compra, venta, rendimiento y traspaso, el más reciente
                   primero.
                 </p>

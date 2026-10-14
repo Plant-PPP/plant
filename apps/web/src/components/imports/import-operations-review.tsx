@@ -306,7 +306,7 @@ export function ImportOperationsReview({
 
       <section className="grid gap-3" aria-labelledby={`${pickerId}-list`}>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 id={`${pickerId}-list`} className="text-base font-semibold">
+          <h2 id={`${pickerId}-list`} className="text-sm font-semibold">
             {countOf(rows.length, "operación", "operaciones")}
           </h2>
           {incomplete > 0 && (

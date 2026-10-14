@@ -294,7 +294,7 @@ export function ImportPage({
       )}
 
       <section className="grid gap-3" aria-labelledby={`${id}-imports`}>
-        <h2 id={`${id}-imports`} className="text-base font-semibold">
+        <h2 id={`${id}-imports`} className="text-sm font-semibold">
           Tus cargas
         </h2>
         {imports.length === 0 ? (

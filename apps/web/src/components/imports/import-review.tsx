@@ -589,7 +589,7 @@ export function ImportReview({
 
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">
+          <h2 className="text-sm font-semibold">
             {holdingsCountText(rows.filter((row) => !row.discarded).length)}
             {doubtful > 0 && (
               <Badge variant="warning" className="ml-2 align-middle">
@@ -826,7 +826,7 @@ export function ImportReview({
 
       {omitted.length > 0 && (
         <section className="grid gap-2" aria-labelledby={`${pickerId}-omitted`}>
-          <h2 id={`${pickerId}-omitted`} className="text-base font-semibold">
+          <h2 id={`${pickerId}-omitted`} className="text-sm font-semibold">
             {item.origin === "sync"
               ? "No vinieron en la sincronización"
               : item.origin === "sheet"

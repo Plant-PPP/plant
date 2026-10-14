@@ -260,7 +260,7 @@ export function DebtsSetup({
         onAdd={() => !pending && setDialog({ kind: "create" })}
       >
         {shown.active.length > 0 && (
-          <StatGrid>
+          <StatGrid className="lg:grid-cols-3">
             <StatTile
               label="Total"
               note={
@@ -271,7 +271,6 @@ export function DebtsSetup({
                 {formatAmount(valued.total, unit)}
               </span>
             </StatTile>
-            <StatTile label="Deudas">{shown.active.length}</StatTile>
             <StatTile label="Con cuota" note="Pagás cuota todos los meses">
               {monthly.length}
             </StatTile>

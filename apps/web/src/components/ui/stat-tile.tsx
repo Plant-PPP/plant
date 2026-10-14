@@ -35,9 +35,7 @@ function StatTile({
         className,
       )}
     >
-      <dt className="text-muted-foreground truncate text-sm font-medium">
-        {label}
-      </dt>
+      <dt className="text-muted-foreground text-sm font-medium">{label}</dt>
       {/* A figure is never cut: it steps down with the tile's width, and
           wraps as a last resort. */}
       <dd className="text-lg font-semibold tracking-tight break-words tabular-nums @[11rem]:text-xl @[15rem]:text-2xl">

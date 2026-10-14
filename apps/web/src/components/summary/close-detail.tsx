@@ -246,7 +246,7 @@ export function MonthCloseDetail({
         benchmarks={close.benchmarks}
       />
       <section className="grid gap-3">
-        <h2 className="text-base font-semibold">Movimientos del mes</h2>
+        <h2 className="text-sm font-semibold">Movimientos del mes</h2>
         {lines.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No hubo movimientos este mes.
@@ -314,7 +314,7 @@ export function YearCloseDetail({
         year
       />
       <section className="grid gap-3">
-        <h2 className="text-base font-semibold">Mes a mes</h2>
+        <h2 className="text-sm font-semibold">Mes a mes</h2>
         <ClosesTable
           year={year}
           unit={unit}
