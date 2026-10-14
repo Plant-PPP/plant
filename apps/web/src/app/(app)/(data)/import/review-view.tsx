@@ -12,6 +12,7 @@ import { ImportOperationsReview } from "@/components/imports/import-operations-r
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { readLiabilities } from "@/lib/debts/read";
+import { cashIn, readHeldCash } from "@/lib/imports/cash";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
 import { routeRows } from "@/lib/imports/accounts-routing";
 import { markLoaded } from "@/lib/imports/operations-loaded";
@@ -107,6 +108,9 @@ export async function ImportReviewView({ id }: { id: string }) {
     item.documentDate !== null && item.documentDate <= today
       ? item.documentDate
       : today;
+  const heldCash = item.rows.some((row) => row.assetClass === "cash")
+    ? await readHeldCash(client).catch(fail)
+    : [];
   // A document listing several accounts routes each row to the user's
   // account its label names, and offers every account to choose from.
   const several = item.rows.some((row) => row.accountLabel !== undefined);
@@ -120,12 +124,14 @@ export async function ImportReviewView({ id }: { id: string }) {
       institution={account?.institution ?? ""}
       instruments={ledger.instruments}
       held={heldOn(state, item.accountId, heldDate)}
+      cash={cashIn(heldCash, item.accountId)}
       accounts={
         several
           ? ledger.accounts.map((each) => ({
               id: each.id,
               institution: each.institution,
               held: heldOn(state, each.id, heldDate),
+              cash: cashIn(heldCash, each.id),
               defaultPortfolioId: each.portfolio.id,
               elsewhere: heldElsewhere(state, each.id),
             }))

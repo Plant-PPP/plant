@@ -265,6 +265,44 @@ describe("readImportForReview", () => {
     ]);
   });
 
+  it("reads cash as a balance in its currency, never as an instrument", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({
+            id: "c1",
+            symbol: "USD",
+            quantity: "812.4",
+            price: null,
+            asset_class: "cash",
+            currency: "USD",
+            source_page: null,
+          }),
+          item({ id: "r1", asset_class: "instrument" }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read!.rows).toEqual([
+      {
+        id: "c1",
+        assetClass: "cash",
+        symbol: "USD",
+        quantity: "812.4",
+        price: null,
+        value: null,
+        currency: "USD",
+        confidence: "high",
+        source: "Del documento",
+        discarded: false,
+      },
+      expect.objectContaining({ id: "r1", symbol: "AAPL" }),
+    ]);
+    expect(read!.rows[1]).not.toHaveProperty("assetClass");
+  });
+
   it("names an instrument by its aliases and its dollar lines", async () => {
     const read = await readImportForReview(
       clientWith(

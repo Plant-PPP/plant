@@ -141,6 +141,66 @@ it("still asks for the price of units added to a holding already held", () => {
   );
 });
 
+describe("cash", () => {
+  const cashRow = (currency: "ARS" | "USD", quantity: string) => ({
+    id: `cash-${currency}`,
+    assetClass: "cash" as const,
+    symbol: currency,
+    quantity,
+    price: null,
+    value: null,
+    currency,
+    confidence: "high" as const,
+    source: "Del documento",
+    discarded: false,
+  });
+  const renderCash = (cash?: Parameters<typeof ImportReview>[0]["cash"]) =>
+    renderToStaticMarkup(
+      <ImportReview
+        item={{
+          ...ITEM,
+          rows: [cashRow("USD", "812.4"), cashRow("ARS", "1000")],
+        }}
+        institution="IBKR"
+        instruments={[]}
+        held={new Map()}
+        cash={cash}
+        routing={{
+          portfolios: [{ id: "p1", name: "Principal" }],
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        }}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: async () => ({ ok: true, id: "r1" }) }}
+      />,
+    );
+
+  it("shows a cash balance by its currency, against the account's cash, with no price", () => {
+    const html = renderCash({
+      held: new Map([["USD", "500"]]),
+      several: new Set(),
+    });
+    expect(html).toContain("Efectivo en dólares");
+    expect(html).toContain("Efectivo en pesos");
+    expect(html).toContain("Sube de 500");
+    expect(html).toContain("Nueva");
+    expect(html).toContain('aria-label="Monto de la fila 1"');
+    expect(html).not.toContain("Precio de la fila");
+    expect(html).not.toContain("Cartera de la fila");
+  });
+
+  it("asks to set by hand a balance the account holds in several cash holdings", () => {
+    const html = renderCash({
+      held: new Map([["USD", "500"]]),
+      several: new Set(["USD"]),
+    });
+    expect(html).toContain(
+      "Tenés varios saldos en esta moneda en la cuenta: descartá la fila y actualizalos a mano.",
+    );
+  });
+});
+
 it("asks for the account of a row a document lists under one it cannot name", () => {
   const html = renderToStaticMarkup(
     <ImportReview

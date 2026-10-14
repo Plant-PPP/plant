@@ -6,7 +6,13 @@ import {
   type InstrumentType,
   validateHoldings,
 } from "@plant/core";
-import { buenosAiresDate, exactOf, times, toDecimal } from "@plant/shared";
+import {
+  buenosAiresDate,
+  type Currency,
+  exactOf,
+  times,
+  toDecimal,
+} from "@plant/shared";
 import {
   ArrowLeft,
   Check,
@@ -129,6 +135,18 @@ export function pickedInstrument(
   };
 }
 
+// An account's cash in each currency, and the currencies it holds in more
+// than one cash holding, which a statement's balance does not update.
+export type AccountCash = {
+  held: ReadonlyMap<Currency, string>;
+  several: ReadonlySet<Currency>;
+};
+
+const CASH_LABELS: Record<Currency, string> = {
+  ARS: "Efectivo en pesos",
+  USD: "Efectivo en dólares",
+};
+
 // What the reading made of a document, to correct, discard or add to before
 // it goes into the account: each row with how sure the reading is and where
 // it was read, what it changes in the account, and the totals read against
@@ -138,6 +156,7 @@ export function ImportReview({
   institution,
   instruments,
   held,
+  cash,
   accounts,
   routing,
   backHref,
@@ -149,6 +168,8 @@ export function ImportReview({
   instruments: InstrumentRow[];
   // What the account holds of each instrument now.
   held: ReadonlyMap<string, string>;
+  // The account's cash now, when the page reads it.
+  cash?: AccountCash;
   // When the document lists several accounts: the user's accounts a row may
   // go to, each with what it holds, its default portfolio and the user's
   // other accounts holding each instrument.
@@ -156,6 +177,7 @@ export function ImportReview({
     id: string;
     institution: string;
     held: ReadonlyMap<string, string>;
+    cash?: AccountCash;
     defaultPortfolioId: string;
     elsewhere: ReadonlyMap<
       string,
@@ -210,6 +232,20 @@ export function ImportReview({
       ? held
       : (accounts?.find((each) => each.id === accountOf(row))?.held ??
         new Map<string, string>());
+  const cashFor = (row: EditedRow) =>
+    accountOf(row) === item.accountId
+      ? cash
+      : accounts?.find((each) => each.id === accountOf(row))?.cash;
+  const isCash = (row: EditedRow) => row.assetClass === "cash";
+  // What the account holds of the row's instrument, or its cash in the row's
+  // currency.
+  const heldOf = (row: EditedRow) =>
+    isCash(row)
+      ? cashFor(row)?.held.get(row.currency)
+      : heldFor(row).get(row.symbol);
+  // Cash the account holds in several holdings of the row's currency.
+  const severalCash = (row: EditedRow) =>
+    isCash(row) && (cashFor(row)?.several.has(row.currency) ?? false);
   // Where a row's units may go, from the account it goes to. When the
   // document lists several accounts, none it lists is a transfer's source: it
   // already gives that account's figure.
@@ -242,13 +278,14 @@ export function ImportReview({
   const addsUnits = (row: EditedRow, quantity: string | null) => {
     const effect = rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      heldFor(row).get(row.symbol),
+      heldOf(row),
     );
     return effect.kind === "new" || effect.kind === "up";
   };
   // The account a row's units come from, while it still adds units and that
   // account is still offered.
   const transferOf = (row: EditedRow, quantity: string | null) =>
+    !isCash(row) &&
     row.transferFrom !== undefined &&
     routing &&
     addsUnits(row, quantity) &&
@@ -258,9 +295,11 @@ export function ImportReview({
       ? row.transferFrom
       : undefined;
   // A row that adds units to the account needs their price, unless they come
-  // from another account, carrying their cost.
+  // from another account, carrying their cost. Cash has none.
   const needsPrice = (row: EditedRow, quantity: string | null) =>
-    addsUnits(row, quantity) && transferOf(row, quantity) === undefined;
+    !isCash(row) &&
+    addsUnits(row, quantity) &&
+    transferOf(row, quantity) === undefined;
   // A cost kept is what a new holding comes in at, so its price is not
   // needed then; units added to one held come in at the price.
   const opensWithCost = (
@@ -271,7 +310,7 @@ export function ImportReview({
     cost !== null &&
     rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
-      heldFor(row).get(row.symbol),
+      heldOf(row),
     ).kind === "new";
   const costInvalid = ({ row, cost }: (typeof parsed)[number]) =>
     !row.discarded &&
@@ -290,17 +329,19 @@ export function ImportReview({
       : exactOf(price).n === 0n &&
         needsPrice(row, quantity) &&
         !opensWithCost(row, quantity, cost));
-  // The instruments the rows kept already list in each account: one row
-  // each.
+  // The instruments and the cash currencies the rows kept already list in
+  // each account: one row each.
+  const keyOf = (row: EditedRow, symbol: string) =>
+    `${isCash(row) ? "cash" : "instrument"}|${symbol}|${accountOf(row)}`;
   const listedCount = new Map<string, number>();
   for (const row of rows) {
     if (row.discarded) continue;
-    const key = `${row.symbol}|${accountOf(row)}`;
+    const key = keyOf(row, row.symbol);
     listedCount.set(key, (listedCount.get(key) ?? 0) + 1);
   }
   // Whether another kept row lists the instrument in the row's account.
   const listedElsewhere = (row: EditedRow, symbol: string) =>
-    (listedCount.get(`${symbol}|${accountOf(row)}`) ?? 0) -
+    (listedCount.get(keyOf(row, symbol)) ?? 0) -
       (!row.discarded && row.symbol === symbol ? 1 : 0) >
     0;
   // A row a document lists under an account names none of the user's until
@@ -314,6 +355,7 @@ export function ImportReview({
         exactOf(each.quantity).n > 0n &&
         each.row.symbol !== "" &&
         !unrouted(each.row) &&
+        !severalCash(each.row) &&
         !listedElsewhere(each.row, each.row.symbol) &&
         !priceInvalid(each) &&
         !costInvalid(each)),
@@ -321,6 +363,7 @@ export function ImportReview({
   const finalRows: ImportRow[] = parsed.map(
     ({ row, quantity, price, cost }) => ({
       id: row.id,
+      ...(isCash(row) && { assetClass: "cash" as const }),
       symbol: row.symbol,
       quantity: quantity ?? "0",
       price,
@@ -344,7 +387,11 @@ export function ImportReview({
   // Prices are per unit here, whatever the instrument's quote basis.
   const issues = validateHoldings(
     finalRows.map((row) => ({
-      symbol: row.discarded ? "" : row.symbol,
+      symbol: row.discarded
+        ? ""
+        : row.assetClass === "cash"
+          ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
+          : row.symbol,
       quantity: row.quantity,
       price: row.discarded ? null : row.price,
       value: row.value ?? null,
@@ -362,7 +409,10 @@ export function ImportReview({
   // What the account holds that no kept row lists: it stays as it is.
   const kept = new Set(
     rows
-      .filter((row) => !row.discarded && accountOf(row) === item.accountId)
+      .filter(
+        (row) =>
+          !row.discarded && !isCash(row) && accountOf(row) === item.accountId,
+      )
       .map((row) => row.symbol),
   );
   const omitted = [...held.keys()].filter((symbol) => !kept.has(symbol));
@@ -549,7 +599,7 @@ export function ImportReview({
             const type = types.get(row.symbol);
             const effect = rowChange(
               { quantity: quantity ?? "0", discarded: row.discarded },
-              heldFor(row).get(row.symbol),
+              heldOf(row),
             );
             const value =
               quantity && price
@@ -585,7 +635,9 @@ export function ImportReview({
                     />
                   ) : (
                     <span className="truncate font-medium">
-                      {instrumentLabel(row.symbol, names.get(row.symbol))}
+                      {isCash(row)
+                        ? CASH_LABELS[row.currency]
+                        : instrumentLabel(row.symbol, names.get(row.symbol))}
                     </span>
                   )}
                   <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
@@ -606,6 +658,13 @@ export function ImportReview({
                       {ISSUE_LABELS[issue]}
                     </span>
                   ))}
+                  {!row.discarded && severalCash(row) && (
+                    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+                      <TriangleAlert aria-hidden className="size-3" />
+                      Tenés varios saldos en esta moneda en la cuenta: descartá
+                      la fila y actualizalos a mano.
+                    </span>
+                  )}
                 </div>
                 {row.accountLabel !== undefined && accounts && (
                   <label className="grid gap-1 text-xs sm:col-span-4">
@@ -642,10 +701,12 @@ export function ImportReview({
                   </label>
                 )}
                 <label className="grid gap-1 text-xs">
-                  <span className="text-muted-foreground">Cantidad</span>
+                  <span className="text-muted-foreground">
+                    {isCash(row) ? `Monto (${row.currency})` : "Cantidad"}
+                  </span>
                   <Input
                     value={row.quantityText}
-                    aria-label={`Cantidad de la fila ${index + 1}`}
+                    aria-label={`${isCash(row) ? "Monto" : "Cantidad"} de la fila ${index + 1}`}
                     inputMode="decimal"
                     disabled={row.discarded}
                     aria-invalid={
@@ -657,28 +718,32 @@ export function ImportReview({
                     }
                   />
                 </label>
-                <label className="grid gap-1 text-xs">
-                  <span className="text-muted-foreground">
-                    {type
-                      ? `Precio ${priceBasisLabel(type)} (${row.currency})`
-                      : `Precio (${row.currency})`}
-                    {value && (
-                      <span className="text-foreground ml-1 tabular-nums">
-                        {`· ${formatAmount(value, row.currency)}`}
-                      </span>
-                    )}
-                  </span>
-                  <Input
-                    value={row.priceText}
-                    aria-label={`Precio de la fila ${index + 1}`}
-                    aria-invalid={priceInvalid(parsed[index]!) || undefined}
-                    inputMode="decimal"
-                    disabled={row.discarded}
-                    onChange={(event) =>
-                      change(row.id, { priceText: event.target.value })
-                    }
-                  />
-                </label>
+                {isCash(row) ? (
+                  <span aria-hidden className="hidden sm:block" />
+                ) : (
+                  <label className="grid gap-1 text-xs">
+                    <span className="text-muted-foreground">
+                      {type
+                        ? `Precio ${priceBasisLabel(type)} (${row.currency})`
+                        : `Precio (${row.currency})`}
+                      {value && (
+                        <span className="text-foreground ml-1 tabular-nums">
+                          {`· ${formatAmount(value, row.currency)}`}
+                        </span>
+                      )}
+                    </span>
+                    <Input
+                      value={row.priceText}
+                      aria-label={`Precio de la fila ${index + 1}`}
+                      aria-invalid={priceInvalid(parsed[index]!) || undefined}
+                      inputMode="decimal"
+                      disabled={row.discarded}
+                      onChange={(event) =>
+                        change(row.id, { priceText: event.target.value })
+                      }
+                    />
+                  </label>
+                )}
                 {row.printsCost && (
                   <label className="grid gap-1 text-xs sm:col-start-3">
                     <span className="text-muted-foreground">
@@ -710,6 +775,7 @@ export function ImportReview({
                 </Button>
                 {routing &&
                   !row.discarded &&
+                  !isCash(row) &&
                   (effect.kind === "new" || effect.kind === "up") && (
                     <RowRouting
                       index={index}
