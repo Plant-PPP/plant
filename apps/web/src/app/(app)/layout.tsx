@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { PageCrumbsProvider } from "@/components/layout/page-crumbs";
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
 import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -23,8 +24,10 @@ export default async function AppLayout({
           peer supplies the canvas's left margin. */}
       <div className="flex min-w-0 flex-1 md:peer-data-[state=collapsed]:ml-2">
         <SidebarInset>
-          <AppSidebarHeader />
-          <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
+          <PageCrumbsProvider>
+            <AppSidebarHeader />
+            <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
+          </PageCrumbsProvider>
         </SidebarInset>
       </div>
     </SidebarProvider>

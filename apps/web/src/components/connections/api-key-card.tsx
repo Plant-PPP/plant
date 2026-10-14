@@ -1,5 +1,6 @@
 "use client";
 
+import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
@@ -114,18 +115,18 @@ export function ApiKeyCard({
   return (
     <section
       aria-labelledby={headingId}
-      className="grid gap-3 rounded-xl border p-4"
+      className="border-primary/15 bg-muted/40 grid gap-3 rounded-lg border p-3"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="grid gap-0.5">
           <h2
             id={headingId}
-            className="flex items-center gap-2 text-base font-semibold"
+            className="flex items-center gap-2 text-sm font-medium"
           >
-            <KeyRound aria-hidden className="size-4" />
+            <KeyRound aria-hidden className="text-primary size-4" />
             Conexión con {form.name}
           </h2>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-xs">
             {apiKey
               ? `${form.hint}: …${apiKey.keyHint} · conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee: nunca opera ni retira.`
               : `Conectá tu cuenta de ${form.name} para traer tus tenencias sin subir archivos. Plant solo lee: nunca opera ni retira.`}
@@ -136,7 +137,7 @@ export function ApiKeyCard({
             <>
               <PendingButton
                 type="button"
-                size="sm"
+                className={PAGE_BUTTON_CLASS}
                 pending={pending}
                 onClick={() => sync("holdings")}
               >
@@ -147,8 +148,8 @@ export function ApiKeyCard({
                 <PendingButton
                   ref={operationsOpener}
                   type="button"
-                  size="sm"
                   variant="outline"
+                  className={PAGE_BUTTON_CLASS}
                   pending={pending}
                   onClick={() => setDialog("operations")}
                 >
@@ -159,8 +160,8 @@ export function ApiKeyCard({
               <Button
                 ref={opener}
                 type="button"
-                size="sm"
                 variant="outline"
+                className={PAGE_BUTTON_CLASS}
                 onClick={() => setDialog("disconnect")}
               >
                 Desconectar
@@ -170,7 +171,8 @@ export function ApiKeyCard({
             <Button
               ref={opener}
               type="button"
-              size="sm"
+              variant="outline"
+              className={PAGE_BUTTON_CLASS}
               onClick={() => setDialog("connect")}
             >
               Conectar {form.name}
@@ -179,14 +181,10 @@ export function ApiKeyCard({
         </div>
       </div>
       {connected && (
-        <p
-          role="status"
-          className="border-gain/30 bg-gain/10 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-        >
-          <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+        <Notice variant="success">
           Conectamos tu cuenta de {form.name}. Sincronizala para traer tus
           tenencias.
-        </p>
+        </Notice>
       )}
       {!synced && !connected && apiKey?.lastSync && (
         <SyncStatus sync={apiKey.lastSync} provider={form.name} />

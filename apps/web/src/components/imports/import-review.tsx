@@ -1,5 +1,6 @@
 "use client";
 
+import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { Notice } from "@/components/ui/notice";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,14 +16,7 @@ import {
   times,
   toDecimal,
 } from "@plant/shared";
-import {
-  ArrowLeft,
-  Check,
-  Plus,
-  RotateCcw,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+import { Check, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
@@ -504,28 +498,22 @@ export function ImportReview({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Cargar
-        </Link>
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">Revisá lo que leímos</h1>
-          <p className="text-muted-foreground text-sm">
-            {`${item.fileName} · ${institution}`}
-            {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[{ label: "Cargar", href: backHref }, { label: item.fileName }]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="sr-only">Revisá lo que leímos</h1>
+        <p className="text-muted-foreground text-xs">
+          {institution}
+          {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
+        </p>
+        {dateIssue && (
+          <p className="flex items-center gap-1.5 text-xs">
+            <TriangleAlert aria-hidden className="text-warn size-3.5" />
+            {DATE_ISSUE_LABELS[dateIssue]}
           </p>
-          {dateIssue && (
-            <p className="flex items-center gap-1.5 text-sm">
-              <TriangleAlert aria-hidden className="text-warn size-4" />
-              {DATE_ISSUE_LABELS[dateIssue]}
-            </p>
-          )}
-        </div>
+        )}
       </div>
 
       {item.skippedRows > 0 && (

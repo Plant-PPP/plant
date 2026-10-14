@@ -2,8 +2,7 @@
 
 import { type Denominator, isTrade } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { PageCrumbs } from "@/components/layout/page-crumbs";
 import type { ReactNode } from "react";
 
 import { AmountText, NUMBER_CELL } from "@/components/holdings/sum-text";
@@ -38,19 +37,15 @@ function Header({
   backHref: string;
 }) {
   return (
-    <div className="grid gap-3">
-      <Link
-        href={backHref}
-        className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-      >
-        <ArrowLeft aria-hidden className="size-4" />
-        Resumen
-      </Link>
-      <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
-        {title}
+    <>
+      <PageCrumbs
+        crumbs={[{ label: "Resumen", href: backHref }, { label: title }]}
+      />
+      <div className="flex min-h-7 items-center gap-2">
+        <h1 className="sr-only">{title}</h1>
         {status}
-      </h1>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -17,6 +17,9 @@ function PageHeader({
   actions?: React.ReactNode;
   className?: string;
 }) {
+  // With nothing to show, only the screen-reader title remains: an empty row
+  // would push the content down.
+  if (!filters && !actions) return <h1 className="sr-only">{title}</h1>;
   return (
     <div
       data-slot="page-header"

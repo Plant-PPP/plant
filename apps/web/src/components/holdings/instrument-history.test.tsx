@@ -138,7 +138,7 @@ it("starts a movement of the instrument on its open holdings only", () => {
 
 it("says the user holds none of it once the last holding is gone", () => {
   const html = render([]);
-  expect(html).toContain("No tenés Ethereum en ninguna cuenta.");
+  expect(html).toContain("No tenés Ethereum");
   // No holding is left to value a unit of it.
   expect(html).not.toContain("Cripto ·");
   expect(html).not.toContain(">Historial<");

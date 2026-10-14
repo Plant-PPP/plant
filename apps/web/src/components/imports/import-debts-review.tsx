@@ -1,7 +1,8 @@
 "use client";
 
+import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { LIABILITY_LABEL_MAX } from "@plant/core";
-import { ArrowLeft, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
@@ -150,23 +151,13 @@ export function ImportDebtsReview({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Cargar
-        </Link>
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">
-            Revisá las deudas que leímos
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {`${item.fileName} · ${institution}`}
-          </p>
-        </div>
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[{ label: "Cargar", href: backHref }, { label: item.fileName }]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="sr-only">Revisá las deudas que leímos</h1>
+        <p className="text-muted-foreground text-xs">{institution}</p>
       </div>
 
       {item.skippedRows > 0 && (

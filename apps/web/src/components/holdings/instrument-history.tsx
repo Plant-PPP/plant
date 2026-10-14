@@ -1,9 +1,11 @@
 "use client";
 
+import { PageCrumbs } from "@/components/layout/page-crumbs";
+import { EmptyState } from "@/components/ui/empty-state";
+import { routeItemForPath } from "@/lib/navigation";
 import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ArrowLeftRight } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeftRight, Wallet } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
 
@@ -292,59 +294,58 @@ export function InstrumentHistory({
   ];
 
   return (
-    <div className="grid gap-6" data-slot="setup-section">
+    <div className="grid gap-4" data-slot="setup-section">
       <p role="status" className="sr-only">
         {pending ? "Guardando…" : ""}
       </p>
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Activos
-        </Link>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <h1
-              ref={heading}
-              tabIndex={-1}
-              className="flex items-center gap-2 text-xl font-semibold outline-none"
-            >
-              {instrument.name}
-              <TickerChip ticker={instrument.symbol} />
-            </h1>
-            {/* The line is the class and price; the page values the price from a
-                holding of it, so the line goes with the last one. */}
-            {shown.length > 0 && (
-              <p className="text-muted-foreground text-sm">
-                {HOLDING_CLASS_LABELS[instrument.type]} ·{" "}
-                {price.value === null
-                  ? NO_QUOTE
-                  : `${formatQuotedPrice(price.value, unit, instrument.type)} ${
-                      price.source === "manual" && price.date
-                        ? `(manual, ${formatDate(price.date)})`
-                        : price.date
-                          ? `al ${formatDate(price.date)}`
-                          : ""
-                    }`}
-              </p>
-            )}
+      <PageCrumbs
+        crumbs={[
+          {
+            label: routeItemForPath(backHref)?.title ?? "Activos",
+            href: backHref,
+          },
+          { label: instrument.name },
+        ]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 ref={heading} tabIndex={-1} className="sr-only">
+          {instrument.name}
+        </h1>
+        <TickerChip ticker={instrument.symbol} />
+        {/* The class and price; the page values the price from a holding of
+            it, so the line goes with the last one. */}
+        {shown.length > 0 && (
+          <p className="text-muted-foreground text-xs">
+            {HOLDING_CLASS_LABELS[instrument.type]} ·{" "}
+            {price.value === null
+              ? NO_QUOTE
+              : `${formatQuotedPrice(price.value, unit, instrument.type)} ${
+                  price.source === "manual" && price.date
+                    ? `(manual, ${formatDate(price.date)})`
+                    : price.date
+                      ? `al ${formatDate(price.date)}`
+                      : ""
+                }`}
+          </p>
+        )}
+        {shown.length > 0 && (
+          <div className="ml-auto" data-print="hidden">
+            <UnitSelect
+              id={unitId}
+              unit={unit}
+              referenceUnit={referenceUnit}
+              pending={pending}
+              onChange={(param) => url.set("unit", param)}
+            />
           </div>
-          <UnitSelect
-            id={unitId}
-            unit={unit}
-            referenceUnit={referenceUnit}
-            pending={pending}
-            onChange={(param) => url.set("unit", param)}
-          />
-        </div>
+        )}
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {`No tenés ${instrument.name} en ninguna cuenta.`}
-        </p>
+        <EmptyState icon={Wallet} title={`No tenés ${instrument.name}`}>
+          Cuando lo compres o lo cargues en alguna cuenta, vas a ver acá cuánto
+          tenés y su historial.
+        </EmptyState>
       ) : (
         <>
           {page.inTaxReport !== null && (

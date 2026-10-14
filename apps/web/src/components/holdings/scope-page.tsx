@@ -1,12 +1,15 @@
 "use client";
 
+import { routeItemForPath } from "@/lib/navigation";
+import { PageCrumbs } from "@/components/layout/page-crumbs";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
 import { type Denominator, type Position } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeftRight, Wallet } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
-import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
 import { DataTable } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { HOLDING_CLASS_LABELS, classOf } from "@/lib/holdings/classes";
@@ -28,7 +31,6 @@ import { NameLink } from "./holding-cells";
 import { MovementsTable } from "./movements-table";
 import {
   GainLossText,
-  holdingsCountText,
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
@@ -154,78 +156,73 @@ export function ScopePage({
     },
   ];
 
+  const empty = rows.length === 0 && soldRows.length === 0;
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Activos
-        </Link>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <h1 className="flex items-center gap-2 text-xl font-semibold">
-              {scope.kind === "account" && (
-                <InstitutionIcon name={scope.institution} />
-              )}
-              {title}
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              {scope.kind === "account" ? "Cuenta" : "Cartera"} ·{" "}
-              {holdingsCountText(rows.length)}
-            </p>
-          </div>
-          <UnitSelect
-            id={`${id}-unit`}
-            unit={unit}
-            referenceUnit={referenceUnit}
-            pending={false}
-            onChange={(param) => url.set("unit", param)}
-          />
-        </div>
-      </div>
-
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[
+          {
+            label: routeItemForPath(backHref)?.title ?? "Cuentas",
+            href: backHref,
+          },
+          { label: title },
+        ]}
+      />
+      <PageHeader
+        title={title}
+        filters={
+          !empty && (
+            <UnitSelect
+              id={`${id}-unit`}
+              unit={unit}
+              referenceUnit={referenceUnit}
+              pending={false}
+              onChange={(param) => url.set("unit", param)}
+            />
+          )
+        }
+      />
       {connection}
-
-      <AssetsSummary valuation={valuation} unit={unit} pending={false} />
-
-      <section className="grid gap-3" aria-labelledby={`${id}-holdings`}>
-        <h2 id={`${id}-holdings`} className="text-base font-semibold">
-          Tenencias
-        </h2>
-        <DataTable
-          caption={`Tenencias de ${title}`}
-          columns={columns}
-          data={rows}
-        />
-      </section>
-
-      <section className="grid gap-3" aria-labelledby={`${id}-movements`}>
-        <h2 id={`${id}-movements`} className="text-base font-semibold">
-          Movimientos
-        </h2>
-        <MovementsTable
-          key={`${revision}:${unit}`}
-          scope={movementScope}
-          unit={unit}
-          instrumentTypes={
-            new Map(
-              [...rows, ...soldRows].flatMap((row) =>
-                row.holding.asset_class === "instrument" && row.instrumentType
-                  ? [[row.holding.instrument_symbol, row.instrumentType]]
-                  : [],
-              ),
-            )
-          }
-          load={loadMovements}
-          holdingName={(holdingId) => {
-            const row = byId.get(holdingId);
-            return row ? holdingName(row.holding, names) : "";
-          }}
-        />
-      </section>
+      {empty ? (
+        <EmptyState icon={Wallet} title={`${title} todavía no tiene tenencias`}>
+          {scope.kind === "account"
+            ? "Subí un resumen de esta cuenta en Cargar, o conectala si tu broker lo permite."
+            : "Elegí esta cartera al cargar o editar una tenencia en Activos."}
+        </EmptyState>
+      ) : (
+        <div className="grid gap-8">
+          <AssetsSummary valuation={valuation} unit={unit} pending={false} />
+          <Section title="Tenencias" icon={Wallet}>
+            <DataTable
+              caption={`Tenencias de ${title}`}
+              columns={columns}
+              data={rows}
+            />
+          </Section>
+          <Section title="Movimientos" icon={ArrowLeftRight}>
+            <MovementsTable
+              key={`${revision}:${unit}`}
+              scope={movementScope}
+              unit={unit}
+              instrumentTypes={
+                new Map(
+                  [...rows, ...soldRows].flatMap((row) =>
+                    row.holding.asset_class === "instrument" &&
+                    row.instrumentType
+                      ? [[row.holding.instrument_symbol, row.instrumentType]]
+                      : [],
+                  ),
+                )
+              }
+              load={loadMovements}
+              holdingName={(holdingId) => {
+                const row = byId.get(holdingId);
+                return row ? holdingName(row.holding, names) : "";
+              }}
+            />
+          </Section>
+        </div>
+      )}
     </div>
   );
 }
