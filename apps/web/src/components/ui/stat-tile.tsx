@@ -31,14 +31,16 @@ function StatTile({
     <div
       data-slot="stat-tile"
       className={cn(
-        "bg-card grid min-w-0 content-start gap-1.5 rounded-lg border px-4 py-3",
+        "bg-card @container grid min-w-0 content-start gap-1.5 rounded-lg border px-4 py-3",
         className,
       )}
     >
       <dt className="text-muted-foreground truncate text-sm font-medium">
         {label}
       </dt>
-      <dd className="truncate text-2xl font-semibold tracking-tight tabular-nums">
+      {/* A figure is never cut: it steps down with the tile's width, and
+          wraps as a last resort. */}
+      <dd className="text-lg font-semibold tracking-tight break-words tabular-nums @[11rem]:text-xl @[15rem]:text-2xl">
         {children}
       </dd>
       {note !== undefined && (
