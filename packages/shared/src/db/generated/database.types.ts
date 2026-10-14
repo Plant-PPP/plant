@@ -526,6 +526,11 @@ isOneToOne: false
               "id": string,"name": string
             }[]
                            },
+"quotes_before":
+{ Args: { "p_before": string,"p_fx_kinds": (Database["public"]['Enums']["fx_rate_kind"])[],"p_symbols": (string)[] }; Returns: {
+              "amount": string,"currency": Database["public"]['Enums']["currency"],"kind": Database["public"]['Enums']["fx_rate_kind"],"quote_date": string,"symbol": string
+            }[]
+                           },
 "record_data_export":
 { Args: { "p_outcome": string,"p_request_id"?: string }; Returns: undefined
                            },

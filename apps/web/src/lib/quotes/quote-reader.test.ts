@@ -36,6 +36,18 @@ const calls = (fetch: jest.Mock) =>
     headers: new Headers(init.headers),
   }));
 
+const beforeBodies = (fetch: jest.Mock) =>
+  (fetch.mock.calls as [string, RequestInit][])
+    .filter(([url]) => url.includes("/rpc/quotes_before"))
+    .map(
+      ([, init]) =>
+        JSON.parse(String(init.body)) as {
+          p_before: string;
+          p_fx_kinds: string[];
+          p_symbols: string[];
+        },
+    );
+
 const RANGE: QuoteRange = {
   from: "2026-10-03",
   to: "2026-10-10",
@@ -63,14 +75,16 @@ it("reads each table once, counted, filtered by key and date, amounts as text", 
   const fetch = jest.fn(async (url: string) =>
     url.includes("/fx_rates")
       ? answer([{ kind: "mep", rate_date: "2026-10-09", sell: "1200" }])
-      : answer([
-          {
-            symbol: "BTC",
-            price_date: "2026-10-10",
-            price: "65000",
-            currency: "USD",
-          },
-        ]),
+      : url.includes("/rpc/")
+        ? answer([])
+        : answer([
+            {
+              symbol: "BTC",
+              price_date: "2026-10-10",
+              price: "65000",
+              currency: "USD",
+            },
+          ]),
   );
   const stored = await readerWith(fetch).read(RANGE);
   expect(stored).toEqual({
@@ -107,6 +121,62 @@ it("reads each table once, counted, filtered by key and date, amounts as text", 
   expect(prices!.headers.get("prefer")).toContain("count=exact");
 });
 
+it("reads each key's latest quote before the range in one call, amounts as text", async () => {
+  const fetch = jest.fn(async (url: string) =>
+    url.includes("/rpc/quotes_before")
+      ? answer([
+          {
+            kind: "mep",
+            symbol: null,
+            quote_date: "2026-09-01",
+            amount: "1150",
+            currency: null,
+          },
+          {
+            kind: null,
+            symbol: "BTC",
+            quote_date: "2026-08-30",
+            amount: "60000",
+            currency: "USD",
+          },
+        ])
+      : answer([]),
+  );
+  const stored = await readerWith(fetch).read(RANGE);
+  expect(stored).toEqual({
+    fxRates: [{ kind: "mep", rate_date: "2026-09-01", sell: "1150" }],
+    prices: [
+      {
+        symbol: "BTC",
+        price_date: "2026-08-30",
+        price: "60000",
+        currency: "USD",
+      },
+    ],
+  });
+  expect(beforeBodies(fetch)).toEqual([
+    {
+      p_before: "2026-10-03",
+      p_fx_kinds: ["mep", "ccl", "official"],
+      p_symbols: ["BTC", "ETH"],
+    },
+  ]);
+});
+
+it("splits the read before the range so no answer passes MAX_ROWS", async () => {
+  const fetch = jest.fn(async () => answer([]));
+  await readerWith(fetch).read({ ...RANGE, symbols: symbols(998) });
+  expect(
+    beforeBodies(fetch).map((body) => [
+      body.p_fx_kinds.length,
+      body.p_symbols.length,
+    ]),
+  ).toEqual([
+    [3, 997],
+    [0, 1],
+  ]);
+});
+
 it("reads 125 symbols over 8 days in one price call and 126 in two", async () => {
   const fetch = jest.fn(async () => answer([]));
   await readerWith(fetch).read({ ...RANGE, symbols: symbols(125) });
@@ -127,7 +197,10 @@ it("reads 125 symbols over 8 days in one price call and 126 in two", async () =>
 it("skips the fx read when no kind is needed", async () => {
   const fetch = jest.fn(async () => answer([]));
   await readerWith(fetch).read({ ...RANGE, fxKinds: [] });
-  expect(calls(fetch).map((c) => c.url.pathname)).toEqual(["/rest/v1/prices"]);
+  expect(calls(fetch).map((c) => c.url.pathname)).toEqual([
+    "/rest/v1/prices",
+    "/rest/v1/rpc/quotes_before",
+  ]);
 });
 
 it("throws QuoteReadTruncated when a read comes back with no count", async () => {
@@ -144,8 +217,14 @@ it("throws QuoteReadTruncated when a read comes back with no count", async () =>
 });
 
 it("throws QuoteReadTruncated when PostgREST cut a counted read (206)", async () => {
-  const fetch = jest.fn(async () =>
-    answer([{ kind: "mep", rate_date: "2026-10-09", sell: "1200" }], 2, 206),
+  const fetch = jest.fn(async (url: string) =>
+    url.includes("/rpc/")
+      ? answer([])
+      : answer(
+          [{ kind: "mep", rate_date: "2026-10-09", sell: "1200" }],
+          2,
+          206,
+        ),
   );
   await expect(readerWith(fetch).read(RANGE)).rejects.toBeInstanceOf(
     QuoteReadTruncated,

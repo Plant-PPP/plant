@@ -74,13 +74,20 @@ export type Price = z.output<typeof priceSchema>;
 // The quotes a valuation reads for one day: each rate (by fx_rate_kind) and
 // each price as its latest row on or before `date` and within QUOTE_CARRY_DAYS
 // of it, with the date that row carries. Amounts are decimal strings, so a
-// reader selects numeric columns as text.
+// reader selects numeric columns as text. feedDates: the date of each key's
+// latest stored row on or before `date`, at any age, which a manual value
+// older than it loses to; a snapshot built from rows always has it.
 export type QuoteSnapshot = {
   date: string;
   fx: Partial<Record<FxRateKind, { sell: string; date: string }>>;
   prices: Partial<
     Record<string, { price: string; currency: Currency; date: string }>
   >;
+  feedDates?: FeedDates;
+};
+export type FeedDates = {
+  fx: Partial<Record<FxRateKind, string>>;
+  prices: Partial<Record<string, string>>;
 };
 
 // Which quotes a snapshot holds: these rate kinds and these price symbols.

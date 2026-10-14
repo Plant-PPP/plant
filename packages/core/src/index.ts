@@ -11,6 +11,7 @@ export type {
   StoredQuotes,
 } from "./quotes/contract/port";
 export {
+  type FeedDates,
   feedErrorForStatus,
   type FxRate,
   type FxRateKind,
@@ -38,6 +39,9 @@ export {
 export type { IolCredentials } from "./quotes/adapters/iol/feed";
 export { quoteFeeds } from "./quotes/factory";
 export {
+  feedDatesOn,
+  type FeedDays,
+  feedDaysOf,
   QUOTE_CARRY_DAYS,
   readQuotesOn,
   readSnapshot,

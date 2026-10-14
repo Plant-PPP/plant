@@ -32,8 +32,8 @@
 -- - A foreign key between two owned public tables pairs user_id with user_id.
 -- - No extension is installed in either schema, anon can execute no function
 --   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
---   which run as the caller with an empty search_path, and
---   imports_used_this_month), service_role none in private, only
+--   which run as the caller with an empty search_path, imports_used_this_month
+--   and quotes_before (quotes_before_test.sql)), service_role none in private, only
 --   service_role orphan_import_files, which runs as the caller,
 --   account_credentials (account_api_keys_test.sql), meet_price_alerts
 --   (price_alerts_isolation_test.sql) and audit_data_export
@@ -154,7 +154,8 @@ SELECT is_empty(
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure,
                                        'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
-                                       'public.imports_used_this_month()'::regprocedure]))
+                                       'public.imports_used_this_month()'::regprocedure,
+                                       'public.quotes_before(date,public.fx_rate_kind[],text[])'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
   'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'

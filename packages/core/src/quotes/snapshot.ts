@@ -4,7 +4,7 @@ import type {
   QuoteReaderPort,
   StoredQuotes,
 } from "./contract/port";
-import type { QuoteNeed, QuoteSnapshot } from "./contract/quote";
+import type { FeedDates, QuoteNeed, QuoteSnapshot } from "./contract/quote";
 
 // How many days a saved quote stands in for the days after it: a long weekend
 // plus holidays, never a stale rate weeks old.
@@ -25,7 +25,8 @@ const isValid = (amount: string): boolean =>
   positiveDecimalSchema.safeParse(amount).success;
 
 // Each key's latest row inside the range, whatever order the rows came in. A
-// row whose amount fails the decimal check is dropped and counted.
+// row whose amount fails the decimal check is dropped and counted. Every row
+// on or before the range's end, inside it or not, dates its key in feedDates.
 export function snapshotFromRows(
   range: QuoteRange,
   rows: StoredQuotes,
@@ -35,9 +36,13 @@ export function snapshotFromRows(
   const symbols = new Set(range.symbols);
   const fx: QuoteSnapshot["fx"] = {};
   const prices: QuoteSnapshot["prices"] = {};
+  const feedDates: FeedDates = { fx: {}, prices: {} };
   let invalidCount = 0;
   for (const row of rows.fxRates) {
-    if (!kinds.has(row.kind) || !inRange(row.rate_date)) continue;
+    if (!kinds.has(row.kind) || row.rate_date > range.to) continue;
+    const fed = feedDates.fx[row.kind];
+    if (!fed || fed < row.rate_date) feedDates.fx[row.kind] = row.rate_date;
+    if (!inRange(row.rate_date)) continue;
     if (!isValid(row.sell)) {
       invalidCount += 1;
       continue;
@@ -48,9 +53,12 @@ export function snapshotFromRows(
     }
   }
   for (const row of rows.prices) {
-    if (!symbols.has(row.symbol) || !inRange(row.price_date)) {
-      continue;
+    if (!symbols.has(row.symbol) || row.price_date > range.to) continue;
+    const fed = feedDates.prices[row.symbol];
+    if (!fed || fed < row.price_date) {
+      feedDates.prices[row.symbol] = row.price_date;
     }
+    if (!inRange(row.price_date)) continue;
     if (!isValid(row.price)) {
       invalidCount += 1;
       continue;
@@ -64,11 +72,78 @@ export function snapshotFromRows(
       };
     }
   }
-  return { snapshot: { date: range.to, fx, prices }, invalidCount };
+  return {
+    snapshot: { date: range.to, fx, prices, feedDates },
+    invalidCount,
+  };
+}
+
+// Each key's stored dates, oldest first, so feedDatesOn finds a day's
+// feedDates without walking every row.
+export type FeedDays = {
+  fx: ReadonlyMap<string, readonly string[]>;
+  prices: ReadonlyMap<string, readonly string[]>;
+};
+
+function datesByKey(
+  rows: readonly { key: string; date: string }[],
+): Map<string, string[]> {
+  const byKey = new Map<string, string[]>();
+  for (const { key, date } of rows) {
+    const dates = byKey.get(key);
+    if (dates) dates.push(date);
+    else byKey.set(key, [date]);
+  }
+  for (const dates of byKey.values()) dates.sort();
+  return byKey;
+}
+
+export const feedDaysOf = (rows: StoredQuotes): FeedDays => ({
+  fx: datesByKey(
+    rows.fxRates.map((row) => ({ key: row.kind, date: row.rate_date })),
+  ),
+  prices: datesByKey(
+    rows.prices.map((row) => ({ key: row.symbol, date: row.price_date })),
+  ),
+});
+
+function lastOnOrBefore(
+  dates: readonly string[] | undefined,
+  date: string,
+): string | undefined {
+  if (!dates) return undefined;
+  let low = 0;
+  let high = dates.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (dates[middle]! <= date) low = middle + 1;
+    else high = middle;
+  }
+  return low > 0 ? dates[low - 1] : undefined;
+}
+
+// The feedDates snapshotOn gives `date` from the rows `days` was built from.
+export function feedDatesOn(
+  days: FeedDays,
+  date: string,
+  need: QuoteNeed,
+): FeedDates {
+  const feedDates: FeedDates = { fx: {}, prices: {} };
+  for (const kind of need.fxKinds) {
+    const fed = lastOnOrBefore(days.fx.get(kind), date);
+    if (fed) feedDates.fx[kind] = fed;
+  }
+  for (const symbol of need.symbols) {
+    const fed = lastOnOrBefore(days.prices.get(symbol), date);
+    if (fed) feedDates.prices[symbol] = fed;
+  }
+  return feedDates;
 }
 
 // The snapshot for a day from rows already read: every row the store would
-// return for that day's range, or more.
+// return for that day's range, or more. In place of the latest row the store
+// returns before the range, any rows that include the latest one on or before
+// the day do; readQuotesOn's do.
 export const snapshotOn = (
   rows: StoredQuotes,
   date: string,
