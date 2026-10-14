@@ -17,16 +17,16 @@ export function DeleteAccountCard({ onDelete }: { onDelete: () => void }) {
   const [asking, setAsking] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Borrar tu cuenta</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Borrar tu cuenta</CardTitle>
         <CardDescription>
           Borra tus cuentas, tenencias, movimientos, deudas, cargas y consultas,
           y los archivos que subiste. Si querés guardar algo, bajá tus datos
           antes.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <Button
           ref={button}
           type="button"

@@ -69,16 +69,16 @@ export function RatesCard({
       ? toast.success(text)
       : toast.error("No pudimos guardar. Probá de nuevo.");
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dólar de hoy</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Dólar de hoy</CardTitle>
         <CardDescription>
           Con estas cotizaciones valuamos todo. Si una no te cierra, corregila:
           tu valor le gana a la cotización de ese día y sigue hasta que llegue
           una más nueva.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <ul className="grid gap-2">
           {rates.map((rate) => (
             <li

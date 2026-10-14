@@ -114,9 +114,9 @@ export function AlertsCard({
     });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Alertas de precio</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Alertas de precio</CardTitle>
         <CardDescription>
           Te avisamos en el Resumen cuando un dólar o un activo llegue al precio
           que elijas, o cuando un activo que tenés gane o pierda un porcentaje
@@ -125,7 +125,7 @@ export function AlertsCard({
           o un CEDEAR, usa el último precio que cargues a mano.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="pt-6 grid gap-4">
         <AlertForm instruments={instruments} onCreate={create} />
         {readFailed && (
           <FormAlert>
