@@ -18,7 +18,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Ledger reads**: the holdings' revisions are read before the movements, and movements are paged by keyset on `(date, rank, id)`, so a write during the read leaves a stale revision that `write_operation` refuses. Holdings are still paged by offset; past 1000 instrument holdings a repeat only shows twice.
 - **Span scrubbing** runs `scrubSensitiveText` and the Flex token mask over every span name and URL attribute (`http.url`, `url.full`, `http.target`, `url.query`, `next.span_name`), wherever the URL sits in the text.
 - **An instrument holding's units are written only inside `write_operation`**: inserting one, or updating its amount, raises 42501 for `authenticated` without the transaction mark PLA-147 uses for movements.
-- **Pinned charts are capped at 12 by a trigger** (hint `pinned_charts_full`), the same number as `MAX_PINS`.
+- **Pinned charts are capped at 12 by a trigger** (hint `pinned_charts_full`), the same number as `MAX_PINS` (`max-pins.test.ts` reads it from the migration). Re-pinning a chart already pinned skips the count, so the unique key answers 23505 ("already") even at 12.
 - **A price alert reads the latest quote in its own currency**, filtered before the latest is picked.
 - **Quote feeds declare whether they are listed** (`RawQuoteFeed.listed`). A listed feed's Friday price is the market's last on the weekend; shared code names no source.
 - **Indexes** on `uploaded_documents (delete_after) WHERE file_deleted_at IS NULL` for the file deletion job and on `uploaded_documents (storage_path)` for the orphan sweep.

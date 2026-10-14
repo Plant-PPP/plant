@@ -5,13 +5,9 @@ import { z } from "zod";
 
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
 
-import { CHART_TOPICS, type ChartPart, type PinResult } from "./chat";
+import { CHART_TOPICS, type ChartPart, MAX_PINS, type PinResult } from "./chat";
 
 type Client = SupabaseClient<Database>;
-
-// The most charts Resumen shows pinned; private.pinned_charts_limit holds
-// the same figure.
-export const MAX_PINS = 12;
 
 export type Pin = {
   id: string;
