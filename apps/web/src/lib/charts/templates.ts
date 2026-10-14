@@ -10,6 +10,7 @@ export const CHART_TEMPLATES = [
   "income",
   "debts",
   "ranking",
+  "bars",
 ] as const;
 export type ChartTemplate = (typeof CHART_TEMPLATES)[number];
 
@@ -17,6 +18,17 @@ export type ChartTemplate = (typeof CHART_TEMPLATES)[number];
 export type ChartDatum = { label: string; value: string; shown: string };
 
 const SCHEMA = "https://vega.github.io/schema/vega-lite/v6.json";
+
+// Each label once: a band holds one figure, so a second "Tarjeta" is shown
+// as "Tarjeta (2)" rather than stacked on the first.
+function distinctLabels(data: readonly ChartDatum[]): ChartDatum[] {
+  const seen = new Map<string, number>();
+  return data.map((each) => {
+    const count = (seen.get(each.label) ?? 0) + 1;
+    seen.set(each.label, count);
+    return count === 1 ? each : { ...each, label: `${each.label} (${count})` };
+  });
+}
 
 // Positions on screen only: a mark needs no exact decimal.
 const plotted = (data: readonly ChartDatum[]) =>
@@ -39,9 +51,10 @@ const labelOrder = (data: readonly ChartDatum[], sort: "given" | "largest") =>
 // whole splits into, the largest holdings, or what is owed. `sort` keeps the
 // order given or puts the largest first; a negative value is drawn in red.
 function horizontalBars(
-  data: readonly ChartDatum[],
+  figures: readonly ChartDatum[],
   { sort, colorByLabel }: { sort: "given" | "largest"; colorByLabel: boolean },
 ): TopLevelSpec {
+  const data = distinctLabels(figures);
   return {
     $schema: SCHEMA,
     width: "container",
@@ -101,8 +114,13 @@ export const rankingSpec = (data: readonly ChartDatum[]) =>
 export const debtsSpec = (data: readonly ChartDatum[]) =>
   horizontalBars(data, { sort: "largest", colorByLabel: false });
 
-// What is expected each month, in month order, its value over each bar.
-export function incomeSpec(data: readonly ChartDatum[]): TopLevelSpec {
+// Any other figures, in the order given.
+export const barsSpec = (data: readonly ChartDatum[]) =>
+  horizontalBars(data, { sort: "given", colorByLabel: false });
+
+// What is expected each month, in month order, its value past each bar's end.
+export function incomeSpec(figures: readonly ChartDatum[]): TopLevelSpec {
+  const data = distinctLabels(figures);
   return {
     $schema: SCHEMA,
     width: "container",
@@ -132,7 +150,13 @@ export function incomeSpec(data: readonly ChartDatum[]): TopLevelSpec {
         },
       },
       {
+        transform: [{ filter: "datum.value >= 0" }],
         mark: { type: "text", baseline: "bottom", dy: -4 },
+        encoding: { text: { field: "shown" } },
+      },
+      {
+        transform: [{ filter: "datum.value < 0" }],
+        mark: { type: "text", baseline: "top", dy: 4 },
         encoding: { text: { field: "shown" } },
       },
     ],
@@ -212,5 +236,7 @@ export function templateSpec(
       return incomeSpec(data);
     case "net_worth":
       return netWorthSpec(data);
+    case "bars":
+      return barsSpec(data);
   }
 }

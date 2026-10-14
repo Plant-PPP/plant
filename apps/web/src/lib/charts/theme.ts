@@ -20,7 +20,9 @@ export function chartConfig(colors: ChartColors): Config {
   return {
     background: "transparent",
     font: colors.sans,
-    aria: true,
+    // The chart's name is on its box and its figures in the text beside it;
+    // marks described one by one would read raw numbers.
+    aria: false,
     padding: 4,
     view: { stroke: "transparent" },
     axis: {

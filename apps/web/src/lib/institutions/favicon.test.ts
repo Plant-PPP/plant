@@ -34,11 +34,16 @@ it("tells public addresses from every private, local or reserved one", () => {
     "::ffff:7f00:1",
     "64:ff9b::a9fe:a9fe",
     "2001:db8::1",
+    "192.88.99.1",
+    "64:ff9b:1::a",
+    "2002:7f00:1::",
+    "2001:0:4136:e378:8000:63bf:3fff:fdd2",
     "not an address",
   ]) {
     expect([address, isPrivateAddress(address)]).toEqual([address, true]);
   }
   for (const address of [
+    "2002:808:808::",
     "8.8.8.8",
     "172.32.0.1",
     "2800:3f0:4002::200e",

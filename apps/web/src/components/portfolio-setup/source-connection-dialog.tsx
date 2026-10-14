@@ -60,6 +60,8 @@ const ICON_MESSAGES: Record<
   too_large:
     "El ícono de ese sitio es muy grande. Dejalo vacío para usar la inicial.",
   failed: "No pudimos leer el ícono. Probá de nuevo o dejalo vacío.",
+  limited:
+    "Probaste muchos sitios seguidos. Esperá un minuto y volvé a intentar.",
 };
 
 // The dialog's starting values. An archived portfolio is not among the page's

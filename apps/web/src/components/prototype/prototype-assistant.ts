@@ -252,7 +252,7 @@ export function prototypeAnswer(
       charts: returns
         ? [
             barsOf(
-              "ranking",
+              "bars",
               `${instrument.symbol}: de dónde sale el resultado`,
               unit,
               resultBars(returns.result, unit, [

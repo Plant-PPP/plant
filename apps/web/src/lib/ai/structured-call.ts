@@ -23,6 +23,10 @@ function retryable(error: unknown): boolean {
   return APICallError.isInstance(last) ? last.isRetryable : false;
 }
 
+// The most a structured answer may run: a full draft of 500 rows fits well
+// within it, and a runaway answer stops there instead of costing more.
+const MAX_OUTPUT_TOKENS = 32_000;
+
 // One model call that answers in `schema`, costed to the user. A model that
 // answers nothing usable fails as unreadable; anything else fails as
 // extraction_failed, retryable when the provider may answer later.
@@ -54,6 +58,7 @@ export async function structuredCall<T>({
       output: Output.object({ schema }),
       messages,
       maxRetries: 1,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(timeoutMs),
       experimental_telemetry: telemetryOf(costType),
     });

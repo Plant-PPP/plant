@@ -17,6 +17,12 @@ let loaded: Promise<{
 const load = () =>
   (loaded ??= Promise.all([import("vega-embed"), import("vega-lite")]).then(
     ([embed, lite]) => ({ embed: embed.default, compile: lite.compile }),
+    // A load that failed, as a chunk lost to a deploy, is tried again by the
+    // next chart.
+    (error: unknown) => {
+      loaded = null;
+      throw error;
+    },
   ));
 
 const FORMAT_LOCALE = d3FormatLocale("es-AR");
@@ -51,7 +57,8 @@ function pageColors(dark: boolean): ChartColors {
   };
 }
 
-// The spec with every "var(--name)" string replaced by the color it names.
+// The spec with every "var(--name)" string replaced by the color it names;
+// its data, which only labels and places marks, is left as it is.
 function resolved<T>(value: T): T {
   if (typeof value === "string") {
     const name = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
@@ -60,7 +67,10 @@ function resolved<T>(value: T): T {
   if (Array.isArray(value)) return value.map(resolved) as T;
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, each]) => [key, resolved(each)]),
+      Object.entries(value).map(([key, each]) => [
+        key,
+        key === "data" ? each : resolved(each),
+      ]),
     ) as T;
   }
   return value;
@@ -79,6 +89,8 @@ export function VegaChart({
   label: string;
   className?: string;
 }) {
+  // Vega takes over the box it draws in, so the chart's name stays on the
+  // one around it.
   const box = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === "dark";
@@ -89,6 +101,7 @@ export function VegaChart({
     const element = box.current;
     if (!element) return;
     let disposed = false;
+    setFailed(false);
     let finalize: (() => void) | null = null;
     let observer: ResizeObserver | null = null;
     load()
@@ -112,8 +125,10 @@ export function VegaChart({
           return;
         }
         finalize = () => result.finalize();
+        // A width of "container" follows only the window; the box may
+        // change on its own, as the sidebar folds.
         observer = new ResizeObserver(() => {
-          void result.view.resize().runAsync();
+          void result.view.width(element.clientWidth).runAsync();
         });
         observer.observe(element);
       })
@@ -127,19 +142,21 @@ export function VegaChart({
     };
   }, [key, dark]);
 
-  if (failed) {
-    return (
-      <p className="text-muted-foreground text-xs">
-        No pudimos mostrar este gráfico.
-      </p>
-    );
-  }
+  // The box stays mounted, so a new spec or theme draws again after a
+  // failure.
   return (
-    <div
-      ref={box}
-      role="img"
-      aria-label={label}
-      className={cn("w-full [&_svg]:max-w-full", className)}
-    />
+    <div role="img" aria-label={label} className={cn("w-full", className)}>
+      {failed && (
+        <p className="text-muted-foreground text-xs">
+          No pudimos mostrar este gráfico.
+        </p>
+      )}
+      <div
+        ref={box}
+        aria-hidden
+        hidden={failed}
+        className="w-full [&_svg]:max-w-full"
+      />
+    </div>
   );
 }
