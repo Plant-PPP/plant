@@ -148,8 +148,8 @@ importers:
         specifier: ^3.7.0
         version: 3.7.0
       undici:
-        specifier: 7.24.4
-        version: 7.24.4
+        specifier: 7.30.0
+        version: 7.30.0
       vega:
         specifier: 6.2.0
         version: 6.2.0
@@ -5248,8 +5248,8 @@ packages:
     resolution: {integrity: sha512-R+RODBqp6i2pPflGdq+xIOUkl+RNfGgHwoinecKu/JCuf2uO06cOKoDbI2P7Dn6KcswdKwrczbU6IYJ6K8X+wg==}
     engines: {node: '>=18.17'}
 
-  undici@7.24.4:
-    resolution: {integrity: sha512-BM/JzwwaRXxrLdElV2Uo6cTLEjhSb3WXboncJamZ15NgUURmvlXvxa6xkwIOILIjPNo9i8ku136ZvWV0Uly8+w==}
+  undici@7.30.0:
+    resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
     engines: {node: '>=20.18.1'}
 
   unrs-resolver@1.12.2:
@@ -11073,7 +11073,7 @@ snapshots:
 
   undici@6.29.0: {}
 
-  undici@7.24.4: {}
+  undici@7.30.0: {}
 
   unrs-resolver@1.12.2:
     dependencies:
