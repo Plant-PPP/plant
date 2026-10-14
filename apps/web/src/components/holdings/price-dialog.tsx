@@ -128,14 +128,14 @@ export function PriceDialog({
             <Label htmlFor={fieldId("price")}>
               {`Precio ${priceBasisLabel(instrument.type)}`}
             </Label>
-            <Input {...control("price")} inputMode="decimal" />
+            <Input {...control("price")} inputMode="decimal" required />
             <p className="text-muted-foreground text-xs">
               {CURRENCY_LABELS[instrument.currency]}
             </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("date")}>Fecha</Label>
-            <Input {...control("date")} type="date" max={today} />
+            <Input {...control("date")} type="date" max={today} required />
           </div>
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}

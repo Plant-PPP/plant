@@ -13,7 +13,7 @@ import type {
 } from "@/lib/holdings/valuation-view";
 import { cn } from "@/lib/utils";
 
-import { PendingSum, ShareText } from "./sum-text";
+import { MissingFigure, NO_QUOTE, PendingSum, ShareText } from "./sum-text";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 const KINDS: { kind: HoldingKind | "total"; label: string }[] = [
@@ -84,6 +84,9 @@ export function AssetsSummary({
                     ? ` · ${kinds.total.missing} sin cotización`
                     : ""
                 }`
+              ) : kinds[kind].count > 0 &&
+                kinds[kind].missing === kinds[kind].count ? (
+                NO_QUOTE
               ) : (
                 <ShareText
                   share={kinds[kind].share}
@@ -92,7 +95,14 @@ export function AssetsSummary({
               )
             }
           >
-            <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
+            {/* A tile's figure is a number or a dash; that nothing has a
+                quote is the note's to say. */}
+            {kinds[kind].count > 0 &&
+            kinds[kind].missing === kinds[kind].count ? (
+              <MissingFigure text={NO_QUOTE} />
+            ) : (
+              <PendingSum sum={kinds[kind]} unit={unit} pending={pending} />
+            )}
           </StatTile>
         ))}
       </StatGrid>

@@ -88,7 +88,7 @@ it.each([
   [
     "cash",
     { currency: "USD" },
-    ["Tipo", "Cuenta", "Cartera", "Moneda", "Monto", "Nombre (opcional)"],
+    ["Tipo", "Cuenta", "Cartera", "Moneda", "Monto", "Nombre"],
   ],
   [
     "fixed_term",
@@ -102,7 +102,7 @@ it.each([
       "TNA (%)",
       "Desde",
       "Vence",
-      "Nombre (opcional)",
+      "Nombre",
     ],
   ],
   [

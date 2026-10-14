@@ -400,6 +400,7 @@ export function HoldingDialog({
           )}
 
           {textField("amount", "amount", AMOUNT_LABELS[fields.assetClass], {
+            required: true,
             inputMode: "decimal",
             autoComplete: "off",
           })}
@@ -435,14 +436,7 @@ export function HoldingDialog({
           {shown.has("valued_on") &&
             textField("valuedOn", "valuedOn", "Valuado el", { type: "date" })}
           {shown.has("label") &&
-            textField(
-              "label",
-              "label",
-              fields.assetClass === "cash" || fields.assetClass === "fixed_term"
-                ? "Nombre (opcional)"
-                : "Nombre",
-              { autoComplete: "off" },
-            )}
+            textField("label", "label", "Nombre", { autoComplete: "off" })}
 
           {mode === "edit" && details && row && (
             <ReportSwitch

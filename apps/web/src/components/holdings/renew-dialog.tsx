@@ -147,15 +147,15 @@ export function RenewDialog({
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label htmlFor={fieldId("startedOn")}>Desde</Label>
-            <Input {...control("startedOn")} type="date" />
+            <Input {...control("startedOn")} type="date" required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("maturesOn")}>Vence</Label>
-            <Input {...control("maturesOn")} type="date" />
+            <Input {...control("maturesOn")} type="date" required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("rate")}>TNA (%)</Label>
-            <Input {...control("rate")} inputMode="decimal" />
+            <Input {...control("rate")} inputMode="decimal" required />
           </div>
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}

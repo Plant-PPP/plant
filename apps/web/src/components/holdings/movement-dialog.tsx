@@ -1,6 +1,6 @@
 "use client";
 
-import { DialogActions } from "@/components/ui/dialog-actions";
+import { DialogActions, MoreFields } from "@/components/ui/dialog-actions";
 import {
   CHARGE_KINDS,
   type ChargeKind,
@@ -416,7 +416,7 @@ export function MovementDialog({
               !(adjustment && fields.direction === "out") &&
               textField(
                 "price",
-                adjustment ? `Costo ${basis} (opcional)` : `Precio ${basis}`,
+                adjustment ? `Costo ${basis}` : `Precio ${basis}`,
                 { inputMode: "decimal" },
               )}
           </div>
@@ -668,7 +668,7 @@ export function MovementDialog({
             </div>
           ) : (
             <fieldset className="grid gap-2">
-              <legend className="mb-2 text-sm font-medium">
+              <legend className="mb-2 text-xs font-medium">
                 {income ? "Monto por cartera" : "Cantidad por cartera"}
               </legend>
               {fields.parts.map((part, index) => (
@@ -752,116 +752,121 @@ export function MovementDialog({
             </fieldset>
           )}
 
-          {!yielding && (
-            <fieldset className="grid gap-2">
-              <legend className="mb-2 text-sm font-medium">
-                Gastos (opcional)
-              </legend>
-              {moving && (
-                <p className="-mt-2 text-xs text-muted-foreground">
-                  Se cobran en la cuenta de origen y cuentan como gasto del mes;
-                  no cambian el costo de las unidades.
-                </p>
-              )}
-              {fields.charges.map((charge, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[9rem_1fr_7rem_auto] items-center gap-2"
-                >
-                  <Select
-                    value={charge.kind}
-                    onValueChange={choose((value) => {
-                      setCharge(index, { kind: value as ChargeKind });
-                      settle("charges");
-                    })}
+          <MoreFields
+            label={yielding ? "Referencia y nota" : "Gastos, referencia y nota"}
+            defaultOpen={
+              fields.charges.length > 0 ||
+              fields.reference !== "" ||
+              fields.note !== ""
+            }
+          >
+            {!yielding && (
+              <fieldset className="grid gap-2">
+                <legend className="mb-2 text-xs font-medium">Gastos</legend>
+                {moving && (
+                  <p className="-mt-2 text-xs text-muted-foreground">
+                    Se cobran en la cuenta de origen y cuentan como gasto del
+                    mes; no cambian el costo de las unidades.
+                  </p>
+                )}
+                {fields.charges.map((charge, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[9rem_1fr_7rem_auto] items-center gap-2"
                   >
-                    <SelectTrigger
-                      aria-label={`Tipo del gasto ${index + 1}`}
-                      id={index === 0 ? fieldId("charges") : undefined}
-                      {...control("charges")}
-                      className="w-full"
+                    <Select
+                      value={charge.kind}
+                      onValueChange={choose((value) => {
+                        setCharge(index, { kind: value as ChargeKind });
+                        settle("charges");
+                      })}
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHARGE_KINDS.map((each) => (
-                        <SelectItem key={each} value={each}>
-                          {CHARGE_KIND_LABELS[each]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {NAMED_CHARGES.includes(charge.kind) ? (
+                      <SelectTrigger
+                        aria-label={`Tipo del gasto ${index + 1}`}
+                        id={index === 0 ? fieldId("charges") : undefined}
+                        {...control("charges")}
+                        className="w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHARGE_KINDS.map((each) => (
+                          <SelectItem key={each} value={each}>
+                            {CHARGE_KIND_LABELS[each]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {NAMED_CHARGES.includes(charge.kind) ? (
+                      <Input
+                        aria-label={`Nombre del gasto ${index + 1}`}
+                        placeholder={
+                          charge.kind === "tax" ? "Sellos, IIBB…" : "Nombre"
+                        }
+                        autoComplete="off"
+                        value={charge.label}
+                        onChange={(event) => {
+                          setCharge(index, { label: event.target.value });
+                          settle("charges");
+                        }}
+                      />
+                    ) : (
+                      <span aria-hidden />
+                    )}
                     <Input
-                      aria-label={`Nombre del gasto ${index + 1}`}
-                      placeholder={
-                        charge.kind === "tax"
-                          ? "Sellos, IIBB… (opcional)"
-                          : "Nombre"
-                      }
+                      aria-label={`Monto del gasto ${index + 1}`}
+                      {...control("charges")}
+                      inputMode="decimal"
                       autoComplete="off"
-                      value={charge.label}
+                      value={charge.amount}
                       onChange={(event) => {
-                        setCharge(index, { label: event.target.value });
+                        setCharge(index, { amount: event.target.value });
                         settle("charges");
                       }}
                     />
-                  ) : (
-                    <span aria-hidden />
-                  )}
-                  <Input
-                    aria-label={`Monto del gasto ${index + 1}`}
-                    {...control("charges")}
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={charge.amount}
-                    onChange={(event) => {
-                      setCharge(index, { amount: event.target.value });
-                      settle("charges");
-                    }}
-                  />
-                  <RemoveButton
-                    label={`Quitar el gasto ${index + 1}`}
-                    disabled={false}
+                    <RemoveButton
+                      label={`Quitar el gasto ${index + 1}`}
+                      disabled={false}
+                      onClick={() =>
+                        setFields((current) => ({
+                          ...current,
+                          charges: current.charges.filter(
+                            (_, at) => at !== index,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+                <div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
                     onClick={() =>
                       setFields((current) => ({
                         ...current,
-                        charges: current.charges.filter(
-                          (_, at) => at !== index,
-                        ),
+                        charges: [
+                          ...current.charges,
+                          { kind: "commission", label: "", amount: "" },
+                        ],
                       }))
                     }
-                  />
+                  >
+                    <Plus />
+                    Agregar gasto
+                  </Button>
                 </div>
-              ))}
-              <div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    setFields((current) => ({
-                      ...current,
-                      charges: [
-                        ...current.charges,
-                        { kind: "commission", label: "", amount: "" },
-                      ],
-                    }))
-                  }
-                >
-                  <Plus />
-                  Agregar gasto
-                </Button>
-              </div>
-            </fieldset>
-          )}
+              </fieldset>
+            )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {textField("reference", "Referencia (opcional)", {
-              placeholder: "N.º de operación",
-            })}
-            {textField("note", "Nota (opcional)")}
-          </div>
+            <div className="grid grid-cols-2 gap-3">
+              {textField("reference", "Referencia", {
+                placeholder: "N.º de operación",
+              })}
+              {textField("note", "Nota")}
+            </div>
+          </MoreFields>
           {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
         </div>
         <DialogActions

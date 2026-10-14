@@ -289,9 +289,9 @@ it("says a total with no quoted holding has none, never 0", () => {
   expect(unquoted).not.toContain("$ 0,00");
   expect(unquoted).toContain(">A una tenencia le falta cotización");
   expect(unquoted).not.toContain("* A una tenencia");
-  // The holding's value and price, the footer, the total card and the cash
-  // card.
-  expect(unquoted.match(/Sin cotización/g)).toHaveLength(5);
+  // The holding's value and price, the footer, and the total and cash cards,
+  // whose figure is a dash read as it; the cash card's note says it too.
+  expect(unquoted.match(/Sin cotización/g)).toHaveLength(6);
 });
 
 it("leaves out of the bar a class with no share, largest share first", () => {
@@ -350,7 +350,7 @@ it("shows no share, never 0,0 %, for a kind core could not value", () => {
     }),
   });
   expect(html).toMatch(
-    /<dt[^>]*>Inversiones<\/dt><dd[^>]*><span[^>]*>Sin cotización<\/span><\/dd><dd[^>]*><span aria-hidden="true"[^>]*>—<\/span><span class="sr-only">Sin porcentaje/,
+    /<dt[^>]*>Inversiones<\/dt><dd[^>]*><span aria-hidden="true"[^>]*>—<\/span><span class="sr-only">Sin cotización<\/span><\/dd><dd[^>]*>Sin cotización<\/dd>/,
   );
   expect(html).not.toMatch(/>0,0 %/);
 });

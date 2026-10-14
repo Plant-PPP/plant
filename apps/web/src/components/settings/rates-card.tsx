@@ -192,6 +192,7 @@ function RateDialog({
             <Input
               id={`${id}-sell`}
               inputMode="decimal"
+              required
               autoComplete="off"
               aria-invalid={alert === INVALID || undefined}
               value={sell}
@@ -204,6 +205,7 @@ function RateDialog({
               id={`${id}-date`}
               type="date"
               max={today}
+              required
               aria-invalid={alert === FUTURE || undefined}
               value={date}
               onChange={(event) => setDate(event.target.value)}
