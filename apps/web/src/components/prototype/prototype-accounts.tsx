@@ -1,6 +1,7 @@
 "use client";
 
 import { AccountsSetup } from "@/components/portfolio-setup/accounts-setup";
+import { SCOPE_HREFS } from "@/lib/holdings/scope-hrefs";
 import type { IconResult } from "@/lib/institutions/read-icon";
 import type { ListView } from "@/lib/portfolio-setup/read";
 
@@ -33,6 +34,7 @@ export function PrototypeAccounts({
         portfolios: actions.portfolios,
       }}
       deletable={deletableRows(state)}
+      hrefs={SCOPE_HREFS}
     />
   );
 }

@@ -130,3 +130,27 @@ it("offers delete only on the accounts a delete would go through for", () => {
   expect(markup).toContain('aria-label="Borrar Vieja"');
   expect(markup).not.toContain('aria-label="Borrar Banco Uno"');
 });
+
+it("links each active account's name to its page once the server has it", () => {
+  const markup = renderToStaticMarkup(
+    <SourceConnectionsCard
+      view={listView({
+        active: [first, { ...second, id: "new-1" }],
+        archived: [{ ...first, id: "c3", institution: "Vieja" }],
+      })}
+      pending={false}
+      run={() => true}
+      portfolios={[]}
+      href={(id) => `/accounts/${id}`}
+      actions={{
+        create: jest.fn(),
+        update: jest.fn(),
+        archive: jest.fn(),
+        restore: jest.fn(),
+      }}
+    />,
+  );
+  expect(markup).toMatch(/<a[^>]*href="\/accounts\/c1"[^>]*>Banco Uno<\/a>/);
+  expect(markup).not.toContain('href="/accounts/new-1"');
+  expect(markup).not.toContain('href="/accounts/c3"');
+});
