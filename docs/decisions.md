@@ -5,7 +5,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-14 · A close's real return (PLA-67)
 
 - **A close in pesos is set against inflation and the dollar.** Its detail adds a row: inflation over the period, read from the UVA (CER follows the consumer price index, about a month late, and its daily value is already stored), the real return as (1 + return) / (1 + inflation) - 1, the MEP dollar's move, and the return against it the same way. In a dollar unit the row is left out: the return already is one in dollars.
-- **Each month's change is read from the UVA and the MEP at its two ends**, with the same quotes the close values its holdings at; a year chains its months and shows nothing when any month lacks a quote, rather than a figure for part of it. The rates stored start the day the quotes job did, so earlier months show a dash until a history backfill.
+- **Each month's change is read from the UVA and the MEP at its two ends**, with the same quotes the close values its holdings at, and only an end whose rate is at most a week old. A month that started with nothing held, as the first one, measures its return on part of it only, so it is set against nothing. A year chains the months whose return it chains, leaving out those, and shows nothing when any of them lacks a quote, rather than a figure for part of it. The rates stored start the day the quotes job did, so earlier months show a dash until a history backfill.
 
 ## 2026-10-14 · Staging serves the real app, and only staging deploys on push
 

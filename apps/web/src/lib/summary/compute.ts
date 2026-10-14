@@ -1,4 +1,4 @@
-import { benchmarksBetween, chainedChange, NO_BENCHMARKS } from "./benchmarks";
+import { benchmarksBetween, chainedChange } from "./benchmarks";
 import {
   type CashFlow,
   cashFlowsOf,
@@ -476,14 +476,13 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
       // A month that started with nothing held measures its return on part
-      // of it only, so it is set against nothing over the whole.
-      benchmarks:
-        exactOf(start.held).n === 0n
-          ? NO_BENCHMARKS
-          : benchmarksBetween(
-              { day: month.from, snapshot: pricedAt(state, month.from) },
-              { day: month.to, snapshot: pricedAt(state, month.to) },
-            ),
+      // of it only, so it is set against nothing, and its year leaves it out.
+      ...(exactOf(start.held).n !== 0n && {
+        benchmarks: benchmarksBetween(
+          { day: month.from, snapshot: pricedAt(state, month.from) },
+          { day: month.to, snapshot: pricedAt(state, month.to) },
+        ),
+      }),
     };
   });
   byUnit.set(unit, closes);
@@ -532,21 +531,21 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
           (each) => each.complete && each.figures.share !== null,
         ),
         open: months.some((each) => each.open),
-        // Over the same months the year's return chains: those whose own
-        // could be measured.
+        // Over the months whose return could be measured and that started
+        // with something held.
         benchmarks: {
           inflation: chainedChange(
             months.flatMap((each) =>
-              each.figures.share === null
+              each.figures.share === null || !each.benchmarks
                 ? []
-                : [each.benchmarks?.inflation ?? null],
+                : [each.benchmarks.inflation],
             ),
           ),
           dollar: chainedChange(
             months.flatMap((each) =>
-              each.figures.share === null
+              each.figures.share === null || !each.benchmarks
                 ? []
-                : [each.benchmarks?.dollar ?? null],
+                : [each.benchmarks.dollar],
             ),
           ),
         },

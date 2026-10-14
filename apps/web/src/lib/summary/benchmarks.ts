@@ -49,8 +49,6 @@ export const benchmarksBetween = (
   dollar: changeOf(start, end, "mep"),
 });
 
-export const NO_BENCHMARKS: Benchmarks = { inflation: null, dollar: null };
-
 // Consecutive periods' changes as one; null when any of them is unknown, so
 // a year never claims a figure for months it could not measure.
 export function chainedChange(
