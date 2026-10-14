@@ -382,3 +382,41 @@ it("lets a reading that timed out be retried", async () => {
   const error = await extract(model).catch((e: unknown) => e);
   expect(error).toMatchObject({ code: "extraction_failed", retryable: true });
 });
+
+it("lets the step retry when one reader's provider is down", async () => {
+  const [, lite31] = READERS;
+  const down = new MockLanguageModelV3({
+    doGenerate: async () => {
+      throw new APICallError({
+        message: "overloaded",
+        url: "https://x",
+        requestBodyValues: {},
+        statusCode: 503,
+        isRetryable: true,
+      });
+    },
+  });
+  const input = {
+    bytes: BYTES,
+    mimeType: "application/pdf",
+    userId: USER,
+    importId: "i1",
+    institution: "IOL",
+  };
+  const extractor = documentExtractor({
+    record,
+    model: (id) =>
+      id === lite31 ? down : answering(reading([row("AAPL", "5")])),
+  });
+  await expect(
+    extractor({ ...input, lastAttempt: false }),
+  ).rejects.toMatchObject({
+    code: "extraction_failed",
+    retryable: true,
+  });
+  // With no retry left, the other reading stands, every row low.
+  const { draft } = await extractor({ ...input, lastAttempt: true });
+  expect(draft.rows).toEqual([
+    expect.objectContaining({ symbol: "AAPL", confidence: "low" }),
+  ]);
+});

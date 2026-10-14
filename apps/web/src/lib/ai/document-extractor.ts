@@ -158,11 +158,19 @@ export function documentExtractor({
       read(READERS[0], ask),
       read(READERS[1], ask),
     ]);
-    // One reader failing leaves the other's reading, every row for the user
-    // to check; both failing fails the reading, retryable if either may pass.
+    // A reader the provider may answer later fails the reading for the step
+    // to retry, unless no retry follows. Otherwise one reader failing leaves
+    // the other's reading, every row for the user to check; both failing
+    // fails the reading, retryable if either may pass.
     if (one.status === "rejected" || two.status === "rejected") {
+      const errors = [one, two].map((r) =>
+        r.status === "rejected" ? r.reason : null,
+      );
+      const passing = errors.find(
+        (e) => e instanceof SourceError && e.retryable,
+      );
       const survivor = [one, two].find((r) => r.status === "fulfilled");
-      if (survivor?.status === "fulfilled") {
+      if (survivor?.status === "fulfilled" && (!passing || lastAttempt)) {
         return {
           draft: unchecked(survivor.value),
           read: {
@@ -173,12 +181,7 @@ export function documentExtractor({
           },
         };
       }
-      const errors = [one, two].map((r) =>
-        r.status === "rejected" ? r.reason : null,
-      );
-      throw (
-        errors.find((e) => e instanceof SourceError && e.retryable) ?? errors[0]
-      );
+      throw passing ?? errors.find((e) => e !== null);
     }
     const first = one.value;
     const second = two.value;
