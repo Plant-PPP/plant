@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
 import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
@@ -16,7 +17,6 @@ import { useId, useRef, useState, useTransition } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -352,14 +352,7 @@ function OperationsDialog({
           </div>
         </div>
         {error && <FormAlert>{error}</FormAlert>}
-        <DialogFooter>
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" size="sm">
-            Traer operaciones
-          </Button>
-        </DialogFooter>
+        <DialogActions submitLabel="Traer operaciones" />
       </form>
     </AppDialog>
   );
@@ -468,14 +461,7 @@ function ConnectDialog({
           </label>
         )}
         {error && <FormAlert id={alertId}>{error}</FormAlert>}
-        <DialogFooter>
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <PendingButton type="submit" size="sm" pending={pending}>
-            Conectar
-          </PendingButton>
-        </DialogFooter>
+        <DialogActions submitLabel="Conectar" pending={pending} />
       </form>
     </AppDialog>
   );

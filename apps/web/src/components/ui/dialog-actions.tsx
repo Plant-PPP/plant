@@ -22,12 +22,17 @@ const DIALOG_BUTTON = "h-8 text-xs";
 function DialogActions({
   submitLabel,
   pending = false,
+  disabled,
   destructive = false,
+  describedBy,
   children,
 }: {
   submitLabel: string;
   pending?: boolean;
+  disabled?: boolean;
   destructive?: boolean;
+  // The field alert the submit button points at, when there is one.
+  describedBy?: string;
   // Further actions, before Cancelar (an edit's delete).
   children?: React.ReactNode;
 }) {
@@ -42,6 +47,8 @@ function DialogActions({
       <PendingButton
         type="submit"
         pending={pending}
+        disabled={disabled}
+        aria-describedby={describedBy}
         variant={destructive ? "destructive" : "default"}
         className={cn(DIALOG_BUTTON, "gap-2")}
       >

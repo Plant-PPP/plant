@@ -1,9 +1,8 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { useId, useRef, useState } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,11 +81,7 @@ export function NameDialog({
           />
           {error && <FormAlert id={alertId}>{error}</FormAlert>}
         </div>
-        <DialogFooter>
-          <Button type="submit" size="sm">
-            {submitLabel}
-          </Button>
-        </DialogFooter>
+        <DialogActions submitLabel={submitLabel} />
       </form>
     </AppDialog>
   );

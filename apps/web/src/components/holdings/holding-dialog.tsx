@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import type { Currency } from "@plant/shared";
 import Link from "next/link";
 
@@ -8,11 +9,9 @@ import type * as React from "react";
 import { useId, useState } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -473,15 +472,10 @@ export function HoldingDialog({
             </FormAlert>
           )}
         </div>
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            {mode === "create" ? "Agregar" : "Guardar"}
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel={mode === "create" ? "Agregar" : "Guardar"}
+          describedBy={alert ? alertId : undefined}
+        />
       </form>
     </AppDialog>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { type Placement, placementFigures } from "@plant/core";
 import { addDays, daysBetween } from "@plant/shared";
 import { useId, useState } from "react";
@@ -7,8 +8,6 @@ import { useId, useState } from "react";
 import { useFieldAlert } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,15 +159,10 @@ export function RenewDialog({
           </div>
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            Renovar
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel="Renovar"
+          describedBy={alert ? alertId : undefined}
+        />
       </form>
     </AppDialog>
   );

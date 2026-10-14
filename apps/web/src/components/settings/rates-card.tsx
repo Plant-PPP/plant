@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import type { ManualRateKind } from "@plant/core";
 import { useId, useRef, useState } from "react";
@@ -14,7 +15,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -211,11 +211,7 @@ function RateDialog({
           </div>
         </div>
         {alert && <FormAlert>{alert}</FormAlert>}
-        <DialogFooter>
-          <Button type="submit" size="sm">
-            Guardar
-          </Button>
-        </DialogFooter>
+        <DialogActions submitLabel="Guardar" />
       </form>
     </AppDialog>
   );

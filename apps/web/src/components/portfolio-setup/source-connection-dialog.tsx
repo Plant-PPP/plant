@@ -1,9 +1,8 @@
 "use client";
 
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { useId, useRef, useState, useTransition } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -356,16 +355,11 @@ export function SourceConnectionDialog({
 
           {alert && <FormAlert id={ids.alert}>{alert.text}</FormAlert>}
         </div>
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={reading}
-            aria-describedby={alert ? ids.alert : undefined}
-          >
-            {submitLabel}
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel={submitLabel}
+          describedBy={alert ? ids.alert : undefined}
+          disabled={reading}
+        />
       </form>
     </AppDialog>
   );
