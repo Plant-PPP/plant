@@ -33,7 +33,6 @@ export {
   type IncomePattern,
   incomePattern,
   upcomingFrom,
-  upcomingIncome,
   type UpcomingIncome,
 } from "./income/upcoming";
 export type { IolCredentials } from "./quotes/adapters/iol/feed";
@@ -67,7 +66,6 @@ export {
   type Holding,
   holdingDateSchema,
   holdingSchema,
-  instrumentValue,
   MAX_ANNUAL_RATE,
   type OmittableColumn,
   valueHolding,
@@ -78,7 +76,6 @@ export {
   type RealEstateTerms,
 } from "./real-estate/figures";
 export {
-  interestTo,
   type Placement,
   type PlacementFigures,
   placementFigures,
@@ -90,10 +87,8 @@ export {
 } from "./valuation/holdings";
 export {
   CHARGE_KINDS,
-  CHARGE_LABEL_MAX,
   type Charge,
   type ChargeKind,
-  chargeSchema,
   isIncome,
   isTrade,
   isYield,
@@ -103,9 +98,7 @@ export {
   type MovementKind,
   type MovementRate,
   type MovementRates,
-  movementRatesSchema,
   movementSchema,
-  NOTE_MAX,
   REFERENCE_MAX,
   startsHolding,
   takesMovements,
@@ -120,11 +113,9 @@ export {
   movementKey,
 } from "./movements/order";
 export {
-  chargesOf,
   EMPTY_POSITION,
   type LedgerStep,
   type Position,
-  PositionError,
   type PositionMoney,
   positionOf,
   replay,
@@ -159,7 +150,6 @@ export {
 } from "./instruments";
 export {
   documentDateIssue,
-  IMPORT_ISSUES,
   type ImportIssue,
   validateHoldings,
   type ValidatedRow,
@@ -198,7 +188,5 @@ export {
   liabilityQuotesNeeded,
   type LiabilityKind,
   liabilitySchema,
-  liabilityValue,
-  unitsAgree,
   valueLiabilities,
 } from "./liabilities/liability";
