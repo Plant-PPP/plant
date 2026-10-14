@@ -28,10 +28,19 @@ const balanceSchema = z.object({
   }),
 });
 
+// Six random digits, every value equally likely: a draw past the last whole
+// million of the 32-bit range is drawn again.
+const SALT_LIMIT = 4_294_000_000;
+function saltOf(): string {
+  for (;;) {
+    const [draw] = crypto.getRandomValues(new Uint32Array(1));
+    if (draw! < SALT_LIMIT) return String(draw! % 1_000_000).padStart(6, "0");
+  }
+}
+
 // A nonce Bitso takes (its v2): the time in milliseconds and a random salt
 // of six digits, so two requests in the same millisecond still differ.
-const nonceOf = (now: Date) =>
-  `${now.getTime()}${String(crypto.getRandomValues(new Uint32Array(1))[0]! % 1_000_000).padStart(6, "0")}`;
+const nonceOf = (now: Date) => `${now.getTime()}${saltOf()}`;
 
 // Bitso by API, with a key the user made with only "View balances" and "View
 // account information". Bitso does not say what a key may do, so the user
