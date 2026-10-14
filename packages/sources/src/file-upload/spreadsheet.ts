@@ -23,14 +23,20 @@ import { isZip, zipFitsLimit } from "./zip";
 const SHEET_COLUMN_LIMIT = 50;
 // The longest header a column may have.
 const HEADER_LIMIT = 80;
-// Headers and a few title or blank rows above the table.
+// Headers and a few title or blank rows above the table. Blank rows count
+// towards it.
 const SHEET_ROW_LIMIT = DRAFT_ROW_LIMIT + 20;
 
 export type SheetCell = string | number;
 
 // The first sheet of a file: its first non-empty row as headers and the rows
-// under it.
-export type Sheet = { headers: string[]; rows: SheetCell[][] };
+// under it. `truncated` when the sheet goes on past SHEET_ROW_LIMIT rows,
+// which are not read.
+export type Sheet = {
+  headers: string[];
+  rows: SheetCell[][];
+  truncated?: boolean;
+};
 
 const isBlank = (row: readonly SheetCell[]) =>
   row.every((cell) => String(cell).trim() === "");
@@ -61,7 +67,7 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   try {
     workbook = XLSX.read(text ?? bytes, {
       type: csv ? "string" : "array",
-      sheetRows: SHEET_ROW_LIMIT,
+      sheetRows: SHEET_ROW_LIMIT + 1,
       dense: true,
       raw: csv,
       cellFormula: false,
@@ -77,8 +83,8 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   if (!sheet || !ref) throw new SourceError("nothing_found", false);
   const range = XLSX.utils.decode_range(ref);
   range.e.c = Math.min(range.e.c, range.s.c + SHEET_COLUMN_LIMIT - 1);
-  range.e.r = Math.min(range.e.r, range.s.r + SHEET_ROW_LIMIT - 1);
-  const table = XLSX.utils
+  range.e.r = Math.min(range.e.r, range.s.r + SHEET_ROW_LIMIT);
+  const read = XLSX.utils
     .sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: "",
@@ -90,6 +96,8 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
         typeof cell === "number" ? cell : String(cell),
       ),
     );
+  const truncated = read.length > SHEET_ROW_LIMIT;
+  const table = read.slice(0, SHEET_ROW_LIMIT);
   const start = table.findIndex((row) => !isBlank(row));
   if (start === -1) throw new SourceError("nothing_found", false);
   const headers = table[start]!.map((cell) => String(cell).trim());
@@ -105,6 +113,7 @@ export function readSheet(bytes: Uint8Array, mimeType: string): Sheet {
   return {
     headers,
     rows: table.slice(start + 1).filter((row) => !isBlank(row)),
+    ...(truncated && { truncated }),
   };
 }
 
@@ -280,10 +289,10 @@ export type ColumnMapping = z.infer<ReturnType<typeof columnMappingFor>>;
 // The draft a mapped sheet yields: the first DRAFT_ROW_LIMIT rows that make a
 // valid holding, and the latest date of the date column up to `today`
 // (YYYY-MM-DD). `skippedRows` are the holdings it leaves out, for the user:
-// rows with a symbol and a quantity that make none or come past the limit.
-// `unreadRows` are the rows
-// before the limit with a quantity that make no holding, symbol or not, for
-// telling whether a mapping reads the sheet.
+// rows with a symbol and a quantity that make none or come past the limit,
+// and at least one when the sheet was truncated, whose unread rows it cannot
+// count. `unreadRows` are the rows before the limit with a quantity that make
+// no holding, symbol or not, for telling whether a mapping reads the sheet.
 export function sheetToDraft(
   sheet: Sheet,
   mapping: ColumnMapping,
@@ -385,7 +394,7 @@ export function sheetToDraft(
   }
   return {
     draft: { documentDate, rows, totals: [] },
-    skippedRows,
+    skippedRows: sheet.truncated ? Math.max(skippedRows, 1) : skippedRows,
     unreadRows,
   };
 }
