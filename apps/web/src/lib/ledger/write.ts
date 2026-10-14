@@ -447,6 +447,22 @@ export async function setManualPrice(input: unknown): Promise<PriceResult> {
   }
   const { symbol, price_date, price, currency } = parsed.data;
   const client: Client = await createClient();
+  const instrument = await client
+    .from("instruments")
+    .select("currency")
+    .eq("symbol", symbol)
+    .limit(1);
+  const readFailure = classifyPostgrestResult(instrument, 200);
+  if (readFailure || !instrument.data) {
+    log("set_manual_price", { ...fields, outcome: "failed" }, instrument.error);
+    return { ok: false, code: "failed" };
+  }
+  // A price in another currency than its instrument's would value its
+  // holdings in the wrong one.
+  if (instrument.data[0]?.currency !== currency) {
+    log("set_manual_price", { ...fields, outcome: "invalid" });
+    return { ok: false, code: "invalid" };
+  }
   // Amounts stay decimal strings; the casts are only for the generated types.
   const inserted = await client.from("manual_prices").insert({
     symbol,

@@ -19,7 +19,9 @@ const rpc = jest.fn();
 const manualPrices = jest.fn();
 const transfersOf = jest.fn();
 const deleted = jest.fn();
+const instruments = jest.fn();
 const filters: unknown[][] = [];
+const inserts: [string, unknown][] = [];
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc,
@@ -27,6 +29,7 @@ jest.mock("@/lib/supabase/server", () => ({
       const builder = {
         select: () => builder,
         delete: () => builder,
+        insert: (body: unknown) => (inserts.push([table, body]), builder),
         limit: () => builder,
         is: (...args: unknown[]) => (filters.push(["is", ...args]), builder),
         eq: (...args: unknown[]) => (filters.push(["eq", ...args]), builder),
@@ -43,7 +46,9 @@ jest.mock("@/lib/supabase/server", () => ({
               ? transfersOf()
               : table === "holdings"
                 ? deleted()
-                : manualPrices(),
+                : table === "instruments"
+                  ? instruments()
+                  : manualPrices(),
           ),
       };
       return builder;
@@ -73,6 +78,7 @@ import {
   ledgerForDates,
   quoteOnDate,
   runOperation,
+  setManualPrice,
   suggestTransferCost,
 } from "./write";
 
@@ -84,6 +90,12 @@ beforeEach(() => {
   syncGainAlerts.mockClear();
   rpc.mockReset();
   filters.length = 0;
+  inserts.length = 0;
+  instruments.mockReset().mockReturnValue({
+    data: [{ currency: "ARS" }],
+    error: null,
+    status: 200,
+  });
   manualPrices
     .mockReset()
     .mockReturnValue({ data: [], error: null, status: 200 });
@@ -363,6 +375,44 @@ describe("a day's quote", () => {
     });
     expect(await quoteOnDate(QUERY)).toBeNull();
     expect(lines.at(-1)).toMatchObject({ "plant.outcome": "failed" });
+  });
+});
+
+describe("a manual price", () => {
+  const INPUT = {
+    symbol: "AAPL",
+    price_date: "2026-09-15",
+    price: "18100",
+    currency: "ARS",
+  };
+
+  it("is stated in its instrument's currency", async () => {
+    manualPrices.mockReturnValue({ data: null, error: null, status: 201 });
+    expect(await setManualPrice(INPUT)).toEqual({ ok: true });
+    expect(filters).toContainEqual(["eq", "symbol", "AAPL"]);
+    expect(inserts).toEqual([["manual_prices", INPUT]]);
+  });
+
+  it("refuses a price in another currency than its instrument's", async () => {
+    instruments.mockReturnValue({
+      data: [{ currency: "USD" }],
+      error: null,
+      status: 200,
+    });
+    expect(await setManualPrice(INPUT)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("refuses an instrument the catalog does not list", async () => {
+    instruments.mockReturnValue({ data: [], error: null, status: 200 });
+    expect(await setManualPrice(INPUT)).toEqual({
+      ok: false,
+      code: "invalid",
+    });
+    expect(inserts).toEqual([]);
   });
 });
 
