@@ -1,7 +1,7 @@
 -- A user writes an operation's entry order only to put it last, as
 -- write_operation does (PLA-144): any other value, through the API's grants on
--- the column, would leave its movements behind or push the next place past
--- bigint.
+-- the column, could push the next place past bigint and block every later
+-- write.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
