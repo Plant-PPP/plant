@@ -130,7 +130,9 @@ describe("readImportForReview", () => {
                 ? found
                 : table === "import_operations"
                   ? operations
-                  : items,
+                  : table === "import_debts"
+                    ? []
+                    : items,
           }),
       };
       return builder;

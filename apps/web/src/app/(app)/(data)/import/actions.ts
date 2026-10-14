@@ -2,6 +2,7 @@
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
+  confirmImportDebts as confirmDebts,
   confirmImportOperations as confirmOperations,
   confirmImportRows as confirmRows,
 } from "@/lib/imports/confirm-write";
@@ -40,4 +41,11 @@ export async function confirmImportOperations(
   rows: unknown,
 ): Promise<MovementResult & { rowId?: string }> {
   return confirmOperations(importId, rows);
+}
+
+export async function confirmImportDebts(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult> {
+  return confirmDebts(importId, rows);
 }

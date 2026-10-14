@@ -66,7 +66,11 @@ export function createImportStore(client: Client): ImportStorePort {
       .limit(1);
     checked("draft", current, 200);
     if ((current.data ?? []).length === 0) return false;
-    for (const table of ["import_items", "import_operations"] as const) {
+    for (const table of [
+      "import_items",
+      "import_operations",
+      "import_debts",
+    ] as const) {
       checked(
         "draft",
         await client
@@ -221,6 +225,33 @@ export function createImportStore(client: Client): ImportStorePort {
         await client.from("import_operations").insert(rows),
         201,
       );
+      await markReady(importId, userId, {
+        document_date: null,
+        printed_total_ars: null,
+        printed_total_usd: null,
+        skipped_rows: 0,
+      });
+    },
+
+    async saveDebts(importId, userId, debts) {
+      if (!(await clearDraft(importId, userId))) return;
+      // Amounts stay decimal strings; the cast is only for the generated types.
+      const decimal = (value: string | null) =>
+        value as unknown as number | null;
+      const rows = debts.map((debt, position) => ({
+        user_id: userId,
+        import_id: importId,
+        position,
+        label: debt.label,
+        lender: debt.lender,
+        currency: debt.currency,
+        balance: decimal(debt.balance),
+        minimum_payment: decimal(debt.minimumPayment),
+        due_date: debt.dueDate,
+        confidence: debt.confidence,
+        source_page: debt.page,
+      }));
+      checked("draft", await client.from("import_debts").insert(rows), 201);
       await markReady(importId, userId, {
         document_date: null,
         printed_total_ars: null,

@@ -4,11 +4,14 @@ import { z } from "zod";
 
 import {
   confirmImport,
+  confirmImportDebts,
   confirmImportOperations,
 } from "@/app/(app)/(data)/import/actions";
+import { ImportDebtsReview } from "@/components/imports/import-debts-review";
 import { ImportOperationsReview } from "@/components/imports/import-operations-review";
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { readLiabilities } from "@/lib/debts/read";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
 import { routeRows } from "@/lib/imports/accounts-routing";
 import { markLoaded } from "@/lib/imports/operations-loaded";
@@ -53,6 +56,26 @@ export async function ImportReviewView({ id }: { id: string }) {
   if (!item || item.status !== "ready") notFound();
   const account = ledger.accounts.find((each) => each.id === item.accountId);
   const state = { ...ledger, referenceDollar };
+
+  if (item.debts) {
+    const debts = await readLiabilities(client).catch(fail);
+    serverLog.info(IMPORTS_VIEW_EVENT, {
+      ...contextFields(context),
+      "plant.outcome": "ok",
+      "plant.import.draft": "debts",
+      "plant.import.row_count": item.debts.length,
+    });
+    return (
+      <ImportDebtsReview
+        item={item}
+        institution={account?.institution ?? ""}
+        cards={debts.active.filter((debt) => debt.kind === "credit_card")}
+        backHref="/import"
+        doneHref="/debts"
+        actions={{ confirm: confirmImportDebts }}
+      />
+    );
+  }
 
   const lines = item.operations ?? item.rows;
   serverLog.info(IMPORTS_VIEW_EVENT, {

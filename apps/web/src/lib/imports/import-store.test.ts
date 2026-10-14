@@ -113,19 +113,20 @@ it("replaces the draft, then marks the import ready at the document's date", asy
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
     "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
     "POST /rest/v1/import_items",
     "PATCH /rest/v1/imports",
   ]);
-  for (const call of [calls[0]!, calls[4]!]) {
+  for (const call of [calls[0]!, calls[5]!]) {
     expect(call.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
     expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
     expect(call.url.searchParams.get("status")).toBe("in.(queued,reading)");
   }
-  for (const call of [calls[1]!, calls[2]!]) {
+  for (const call of [calls[1]!, calls[2]!, calls[3]!]) {
     expect(call.url.searchParams.get("import_id")).toBe(`eq.${IMPORT}`);
     expect(call.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
   }
-  expect(calls[3]!.body).toEqual([
+  expect(calls[4]!.body).toEqual([
     {
       user_id: USER,
       import_id: IMPORT,
@@ -141,7 +142,7 @@ it("replaces the draft, then marks the import ready at the document's date", asy
       source_page: 2,
     },
   ]);
-  expect(calls[4]!.body).toEqual({
+  expect(calls[5]!.body).toEqual({
     status: "ready",
     document_date: "2026-09-30",
     printed_total_ars: null,
@@ -171,10 +172,11 @@ it("replaces any draft with the operations, then marks the import ready", async 
     "GET /rest/v1/imports",
     "DELETE /rest/v1/import_items",
     "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
     "POST /rest/v1/import_operations",
     "PATCH /rest/v1/imports",
   ]);
-  expect(calls[3]!.body).toEqual([
+  expect(calls[4]!.body).toEqual([
     {
       user_id: USER,
       import_id: IMPORT,
@@ -192,7 +194,7 @@ it("replaces any draft with the operations, then marks the import ready", async 
       source_page: 1,
     },
   ]);
-  expect(calls[4]!.body).toEqual({
+  expect(calls[5]!.body).toEqual({
     status: "ready",
     document_date: null,
     printed_total_ars: null,
@@ -243,4 +245,43 @@ it("throws a store error with only the step and code", async () => {
   expect(error).toBeInstanceOf(ImportStoreError);
   expect(error).toMatchObject({ step: "reading", code: "XX000" });
   expect(String(error)).not.toContain("row details");
+});
+
+it("replaces any draft with a card statement's debts, then marks the import ready", async () => {
+  const { store, calls } = storeWith(draftAnswers());
+  await store.saveDebts(IMPORT, USER, [
+    {
+      label: "Visa",
+      lender: null,
+      currency: "ARS",
+      balance: "250000.5",
+      minimumPayment: null,
+      dueDate: "2026-10-20",
+      confidence: "high",
+      page: 1,
+    },
+  ]);
+  expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
+    "GET /rest/v1/imports",
+    "DELETE /rest/v1/import_items",
+    "DELETE /rest/v1/import_operations",
+    "DELETE /rest/v1/import_debts",
+    "POST /rest/v1/import_debts",
+    "PATCH /rest/v1/imports",
+  ]);
+  expect(calls[4]!.body).toEqual([
+    {
+      user_id: USER,
+      import_id: IMPORT,
+      position: 0,
+      label: "Visa",
+      lender: null,
+      currency: "ARS",
+      balance: "250000.5",
+      minimum_payment: null,
+      due_date: "2026-10-20",
+      confidence: "high",
+      source_page: 1,
+    },
+  ]);
 });

@@ -1,5 +1,11 @@
 import "server-only";
-import { buenosAiresDate, Constants, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  Constants,
+  currencySchema,
+  type Database,
+  positiveDecimalSchema,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -190,7 +196,7 @@ function logConfirm({
 }: {
   requestId: string | undefined;
   userId: string;
-  draft: "holdings" | "operations";
+  draft: "holdings" | "operations" | "debts";
   operations: number;
   started: number;
   result: MovementResult;
@@ -210,7 +216,7 @@ function logConfirm({
   else serverLog.warn(EVENT, line);
   if (result.ok || outcome === "failed") {
     revalidatePath("/import", "layout");
-    revalidatePath("/assets", "layout");
+    revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
   }
 }
 
@@ -285,6 +291,99 @@ export async function confirmImportOperations(
     userId: claims.sub,
     draft: "operations",
     operations,
+    started,
+    result,
+    failure,
+  });
+  return result;
+}
+
+// A debt the review kept, as confirm_import_debts takes it: a new card debt,
+// named, or the user's card debt it updates.
+const reviewedDebtSchema = z
+  .object({
+    liabilityId: z.uuid().nullable(),
+    label: z.string().trim().min(1).max(60).nullable(),
+    lender: z.string().trim().min(1).max(60).nullable(),
+    currency: currencySchema,
+    balance: positiveDecimalSchema,
+    minimumPayment: positiveDecimalSchema.nullable(),
+    dueDate: z.iso.date().nullable(),
+  })
+  .loose()
+  .refine((debt) => debt.liabilityId !== null || debt.label !== null);
+
+// Writes the debts a review kept from a card statement and marks the import
+// confirmed, in confirm_import_debts' one transaction.
+export async function confirmImportDebts(
+  importId: unknown,
+  rows: unknown,
+): Promise<MovementResult> {
+  // Outside any try: its redirect to /login or /auth/mfa must propagate.
+  const claims = await getSessionClaims();
+  const started = performance.now();
+  const requestId = await currentRequestId();
+
+  let result: MovementResult;
+  let failure: unknown;
+  let debts = 0;
+  const id = z.uuid().safeParse(importId);
+  const kept = z
+    .array(z.object({ discarded: z.boolean() }).loose())
+    .max(10)
+    .safeParse(rows);
+  const reviewed = z
+    .array(reviewedDebtSchema)
+    // Two debts of one statement never update the same card debt.
+    .refine((debts) => {
+      const updated = debts.flatMap((debt) =>
+        debt.liabilityId === null ? [] : [debt.liabilityId],
+      );
+      return new Set(updated).size === updated.length;
+    })
+    .safeParse((kept.data ?? []).filter((row) => !row.discarded));
+  if (!id.success || !kept.success || !reviewed.success) {
+    result = { ok: false, code: "invalid" };
+  } else {
+    try {
+      const client: Client = await createClient();
+      debts = reviewed.data.length;
+      const response = await client.rpc("confirm_import_debts", {
+        p_import_id: id.data,
+        p_debts: reviewed.data.map((debt) => ({
+          liability_id: debt.liabilityId,
+          label: debt.label,
+          lender: debt.lender,
+          currency: debt.currency,
+          balance: debt.balance,
+          installment: debt.minimumPayment,
+          next_due_on: debt.dueDate,
+        })),
+      });
+      if (!classifyPostgrestResult(response, 200)) {
+        result = { ok: true, id: id.data };
+      } else {
+        const error = response.error ?? {};
+        // A CHECK the input passed but the database holds: a date out of
+        // range.
+        const code =
+          "code" in error && error.code === "23514"
+            ? "invalid"
+            : rpcFailure(error);
+        result = { ok: false, code };
+        if (code === "failed") failure = response.error;
+      }
+    } catch (error) {
+      result = { ok: false, code: "failed" };
+      failure = error;
+    }
+  }
+
+  logConfirm({
+    requestId,
+    userId: claims.sub,
+    draft: "debts",
+    operations: debts,
     started,
     result,
     failure,
