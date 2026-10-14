@@ -51,7 +51,7 @@ export function PreferencesCard({
   const save = (next: Preferences) =>
     void onChange(next).then((result) =>
       result.ok
-        ? toast.success("Guardamos tus preferencias.")
+        ? toast.success("Guardamos tus preferencias")
         : toast.error("No pudimos guardar. Probá de nuevo."),
     );
   const reference = UNIT_LABELS[referenceUnit(preferences.referenceDollar)];

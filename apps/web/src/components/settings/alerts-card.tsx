@@ -99,7 +99,7 @@ export function AlertsCard({
         change({ add: pending });
         const settled = await settle(onCreate(alert));
         const result = settled === "rejected" ? "failed" : settled;
-        if (result === "ok") toast.success("Creaste la alerta.");
+        if (result === "ok") toast.success("Creaste la alerta");
         else toast.error(REFUSED[result]);
         resolve(result === "ok");
       }),
@@ -335,6 +335,7 @@ function AlertForm({
           <Input
             id={`${id}-figure`}
             inputMode="decimal"
+            required
             autoComplete="off"
             placeholder={subject === GAIN ? "20" : undefined}
             aria-invalid={alert !== null || undefined}

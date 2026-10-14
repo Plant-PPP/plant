@@ -35,7 +35,7 @@ test("deleting the account in Ajustes leaves a new user's Resumen", async ({
   await dialog.getByRole("button", { name: "Borrar mi cuenta" }).click();
 
   await expect(
-    page.getByText("Borramos tu cuenta y todo lo que tenía."),
+    page.getByText("Borramos tu cuenta y todo lo que tenía"),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 
