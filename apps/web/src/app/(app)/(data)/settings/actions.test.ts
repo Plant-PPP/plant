@@ -2,6 +2,7 @@ const requestHeaders = new Headers();
 const requireSensitiveSession = jest.fn();
 const unenrollForSession = jest.fn();
 const createClient = jest.fn();
+const createServiceRoleClient = jest.fn();
 const readLedger = jest.fn();
 const readOtherHoldings = jest.fn();
 const readLiabilities = jest.fn();
@@ -17,6 +18,9 @@ jest.mock("@/lib/auth/session-claims", () => ({
 }));
 jest.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
+}));
+jest.mock("@/lib/supabase/service-role", () => ({
+  createServiceRoleClient: () => createServiceRoleClient(),
 }));
 jest.mock("@/lib/ledger/read", () => ({
   readLedger: (...args: unknown[]) => readLedger(...args),
@@ -127,7 +131,8 @@ describe("exportData", () => {
 
   beforeEach(() => {
     rpc.mockResolvedValue({ data: null, error: null, status: 204 });
-    createClient.mockResolvedValue({ rpc });
+    createClient.mockResolvedValue({});
+    createServiceRoleClient.mockReturnValue({ rpc });
   });
 
   it("asks to sign in again on stale amr claims, reading nothing, and audits the denial", async () => {
@@ -141,7 +146,8 @@ describe("exportData", () => {
     expect(readOtherHoldings).not.toHaveBeenCalled();
     expect(readLiabilities).not.toHaveBeenCalled();
     expect(readImports).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+    expect(rpc).toHaveBeenCalledWith("audit_data_export", {
+      p_user_id: "user-1",
       p_outcome: "denied",
       p_request_id: REQUEST_ID,
     });
@@ -156,7 +162,8 @@ describe("exportData", () => {
     expect(readImports).toHaveBeenCalledWith(expect.anything(), {
       limit: EXPORT_IMPORTS_LIMIT,
     });
-    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+    expect(rpc).toHaveBeenCalledWith("audit_data_export", {
+      p_user_id: "user-1",
       p_outcome: "success",
       p_request_id: REQUEST_ID,
     });
@@ -188,11 +195,22 @@ describe("exportData", () => {
     });
   });
 
+  it("hands over nothing without the secret key", async () => {
+    readsSucceed();
+    createServiceRoleClient.mockReturnValue(null);
+    await expect(exportData()).resolves.toBeNull();
+    expect(lines.at(-1)).toMatchObject({
+      level: "error",
+      "plant.export.step": "audit",
+    });
+  });
+
   it("audits a failed read", async () => {
     readsSucceed();
     readLedger.mockRejectedValue(new Error("down"));
     await expect(exportData()).resolves.toBeNull();
-    expect(rpc).toHaveBeenCalledWith("record_data_export", {
+    expect(rpc).toHaveBeenCalledWith("audit_data_export", {
+      p_user_id: "user-1",
       p_outcome: "failure",
       p_request_id: REQUEST_ID,
     });

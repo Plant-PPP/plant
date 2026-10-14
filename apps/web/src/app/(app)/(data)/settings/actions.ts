@@ -14,7 +14,7 @@ import { z } from "zod";
 import { type AlertWriteResult, newAlertSchema } from "@/lib/alerts/alerts";
 import { createAlert, deleteAlert, markAlertSeen } from "@/lib/alerts/read";
 import { readLiabilities } from "@/lib/debts/read";
-import { recordExport } from "@/lib/export/audit";
+import { recordExport } from "@/lib/export/export-audit-sink";
 import type { ExportTable } from "@/lib/export/csv";
 import { EXPORT_IMPORTS_LIMIT, readOtherHoldings } from "@/lib/export/read";
 import { type ExportAnswer, exportTables } from "@/lib/export/tables";
@@ -97,7 +97,7 @@ export async function exportData(): Promise<ExportAnswer> {
     );
 
   if (!gate.ok) {
-    await recordExport(client, "denied", requestId).catch((error: unknown) =>
+    await recordExport("denied", requestId).catch((error: unknown) =>
       failed("audit", error),
     );
     return { stepUp: gate.stepUp };
@@ -107,13 +107,13 @@ export async function exportData(): Promise<ExportAnswer> {
     answer = await readExport(client);
   } catch (error) {
     failed("read", error);
-    await recordExport(client, "failure", requestId).catch((auditError) =>
+    await recordExport("failure", requestId).catch((auditError) =>
       failed("audit", auditError),
     );
     return null;
   }
   try {
-    await recordExport(client, "success", requestId);
+    await recordExport("success", requestId);
   } catch (error) {
     failed("audit", error);
     return null;
