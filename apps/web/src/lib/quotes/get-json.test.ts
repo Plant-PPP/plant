@@ -2,7 +2,7 @@ import { feedErrorForStatus, QuoteFeedError } from "@plant/core";
 
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { getJson } from "./get-json";
+import { getJson, postForm } from "./get-json";
 
 const URL = "https://quotes.test/v1/x";
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -163,4 +163,39 @@ it("maps a timeout while reading the body to timeout", async () => {
   });
   answer(new Response(body, { status: 200 }));
   await expect(getJson(URL)).rejects.toMatchObject({ code: "timeout" });
+});
+
+it("sends the headers it is given", async () => {
+  answer(new Response("{}", { status: 200 }));
+  await getJson(URL, { Authorization: "Bearer made-up" });
+  expect(fetchMock).toHaveBeenCalledWith(
+    URL,
+    expect.objectContaining({ headers: { Authorization: "Bearer made-up" } }),
+  );
+});
+
+it("posts a form and reads the answer as JSON, with the same rules", async () => {
+  answer(new Response(JSON.stringify({ access_token: "x" }), { status: 200 }));
+  await expect(
+    postForm(URL, { grant_type: "password", username: "a b" }),
+  ).resolves.toEqual({ access_token: "x" });
+  expect(fetchMock).toHaveBeenCalledWith(
+    URL,
+    expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=password&username=a+b",
+      redirect: "manual",
+      signal: expect.any(AbortSignal),
+    }),
+  );
+});
+
+it("keeps the form out of a refused post's error", async () => {
+  answer(new Response("invalid_grant for made-up-password", { status: 400 }));
+  const error = await failure(postForm(URL, { password: "made-up-password" }));
+  expect(error).toMatchObject({ code: "http_4xx", retryable: false });
+  expect(JSON.stringify([error, String(error)])).not.toContain(
+    "made-up-password",
+  );
 });

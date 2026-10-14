@@ -1,7 +1,13 @@
 import { createArgentinadatosFeed } from "./adapters/argentinadatos/feed";
 import { createDolarapiFeed } from "./adapters/dolarapi/feed";
+import { createIolFeed, type IolCredentials } from "./adapters/iol/feed";
 import { createKrakenFeed } from "./adapters/kraken/feed";
-import type { GetJson, QuoteFeedPort, RawQuoteFeed } from "./contract/port";
+import type {
+  GetJson,
+  PostForm,
+  QuoteFeedPort,
+  RawQuoteFeed,
+} from "./contract/port";
 import { checkBatch, QUOTE_FEED_CODES, QuoteFeedError } from "./contract/quote";
 
 export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
@@ -31,12 +37,21 @@ export function toQuoteFeed(raw: RawQuoteFeed): QuoteFeedPort {
   };
 }
 
+// iol is null when Plant's IOL account is not configured: that feed fails
+// unconfigured and the others read as usual.
 export function quoteFeeds(deps: {
   getJson: GetJson;
+  postForm: PostForm;
+  iol: IolCredentials | null;
 }): readonly QuoteFeedPort[] {
   return [
     createDolarapiFeed(deps.getJson),
     createArgentinadatosFeed(deps.getJson),
     createKrakenFeed(deps.getJson),
+    createIolFeed({
+      getJson: deps.getJson,
+      postForm: deps.postForm,
+      credentials: deps.iol,
+    }),
   ].map(toQuoteFeed);
 }

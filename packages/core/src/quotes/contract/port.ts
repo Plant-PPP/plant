@@ -23,7 +23,16 @@ export interface RawQuoteFeed {
 
 // The HTTP reader the composition root injects. It throws QuoteFeedError, whose
 // code says whether a retry can help (QUOTE_FEED_CODES in quote.ts).
-export type GetJson = (url: string) => Promise<unknown>;
+export type GetJson = (
+  url: string,
+  headers?: Readonly<Record<string, string>>,
+) => Promise<unknown>;
+
+// A form POST read as JSON, with GetJson's errors.
+export type PostForm = (
+  url: string,
+  form: Readonly<Record<string, string>>,
+) => Promise<unknown>;
 
 export type QuoteRows = Pick<QuoteBatch, "fxRates" | "prices">;
 // The rows this call inserted; a row already stored counts 0.

@@ -151,6 +151,27 @@ describe("quoteWindow", () => {
       "stale",
     ],
     [
+      "Friday's listed price on Saturday",
+      "listed",
+      FRIDAY,
+      "2026-10-10T18:05:00",
+      "closed",
+    ],
+    [
+      "Thursday's listed price on Friday",
+      "listed",
+      THURSDAY,
+      "2026-10-09T18:05:00",
+      "stale",
+    ],
+    [
+      "a listed price at 15:00",
+      "listed",
+      FRIDAY,
+      "2026-10-09T15:00:00",
+      "early",
+    ],
+    [
       "Saturday's UVA on Sunday at 09:00",
       "uva",
       SATURDAY,

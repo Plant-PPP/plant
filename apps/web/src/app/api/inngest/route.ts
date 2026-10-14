@@ -14,7 +14,8 @@ import {
 } from "@/lib/imports/import-sink";
 import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { serverLog } from "@/lib/log/server-log";
-import { getJson } from "@/lib/quotes/get-json";
+import { getJson, postForm } from "@/lib/quotes/get-json";
+import { iolCredentials } from "@/lib/quotes/iol-credentials";
 import { quoteSink } from "@/lib/quotes/quote-sink";
 
 // The quotes, import and file deletion jobs run under `next dev`, and on a
@@ -23,7 +24,7 @@ import { quoteSink } from "@/lib/quotes/quote-sink";
 export const { GET, POST, PUT } = serve(
   createServeOptions({
     quotes: () => ({
-      feeds: quoteFeeds({ getJson }),
+      feeds: quoteFeeds({ getJson, postForm, iol: iolCredentials() }),
       store: quoteSink(),
       log: serverLog,
       now: () => new Date(),

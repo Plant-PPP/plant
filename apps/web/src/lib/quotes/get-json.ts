@@ -1,5 +1,10 @@
 import "server-only";
-import { feedErrorForStatus, type GetJson, QuoteFeedError } from "@plant/core";
+import {
+  feedErrorForStatus,
+  type GetJson,
+  type PostForm,
+  QuoteFeedError,
+} from "@plant/core";
 
 const TIMEOUT_MS = 10_000;
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -37,14 +42,11 @@ async function readCapped(response: Response): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// The quote feeds' HTTP reader. Every error it throws is a QuoteFeedError, and
-// none carries the body or the parser's message. Inngest retries the step when
-// the code is retryable. A redirect is answered by its status (`http_4xx`, not
-// retried).
-export const getJson: GetJson = async (url) => {
+async function readJson(url: string, init: RequestInit): Promise<unknown> {
   let text: string;
   try {
     const response = await fetch(url, {
+      ...init,
       signal: AbortSignal.timeout(TIMEOUT_MS),
       redirect: "manual",
       cache: "no-store",
@@ -63,4 +65,18 @@ export const getJson: GetJson = async (url) => {
   } catch {
     throw new QuoteFeedError("bad_json");
   }
-};
+}
+
+// The quote feeds' HTTP reader. Every error it throws is a QuoteFeedError, and
+// none carries the body, the headers, the form or the parser's message.
+// Inngest retries the step when the code is retryable. A redirect is answered
+// by its status (`http_4xx`, not retried).
+export const getJson: GetJson = (url, headers) =>
+  readJson(url, headers ? { headers } : {});
+
+export const postForm: PostForm = (url, form) =>
+  readJson(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(form).toString(),
+  });

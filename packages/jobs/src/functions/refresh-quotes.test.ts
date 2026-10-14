@@ -20,7 +20,7 @@ import {
   runRefreshQuotes,
 } from "./refresh-quotes";
 
-const [DOLLARS, INDEX, CRYPTO] = Constants.public.Enums.quote_source;
+const [DOLLARS, INDEX, CRYPTO, LISTED] = Constants.public.Enums.quote_source;
 const RETRIES = 2;
 const RUN_ID = "01M8Z3K4567890QWERTYXABCDE";
 
@@ -670,13 +670,19 @@ describe("refresh-quotes registration", () => {
 // request, through the job: what the adapters rethrow and the factory throws
 // reaches the run line. How each provider's answers are classified is core's,
 // tested there.
+const CREDENTIALS = { username: "plant-test-user", password: "made-up-secret" };
+const ACCESS_TOKEN = "made-up-access-token";
+
 describe("runRefreshQuotes over the factory's feeds", () => {
   const failing = (error: Error) => {
     const reads = new Map<string, number>();
+    const fail = async () => {
+      throw error;
+    };
     const feeds = quoteFeeds({
-      getJson: async () => {
-        throw error;
-      },
+      getJson: fail,
+      postForm: fail,
+      iol: CREDENTIALS,
     }).map((feed): QuoteFeedPort => ({
       id: feed.id,
       read: (now) => {
@@ -687,7 +693,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     return { feeds, reads };
   };
   const everyFeed = (code: string) =>
-    [DOLLARS, INDEX, CRYPTO]
+    [DOLLARS, INDEX, CRYPTO, LISTED]
       .map((id) => `${id}:read:${code}`)
       .sort()
       .join(",");
@@ -698,9 +704,9 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const d = deps(feeds);
     const { thrown } = await drive(d);
     expect(thrown).toBeInstanceOf(NonRetriableError);
-    expect([...reads.values()]).toEqual([1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1]);
     expect(feedLines(d.lines).map((line) => [line.level, line.error])).toEqual(
-      [DOLLARS, INDEX, CRYPTO].map(() => ["error", bug]),
+      [DOLLARS, INDEX, CRYPTO, LISTED].map(() => ["error", bug]),
     );
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
@@ -715,7 +721,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(forged);
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual([1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1]);
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
       "plant.quotes.unread": "",
@@ -736,10 +742,93 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(new QuoteFeedError("timeout"));
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual(Array(3).fill(RETRIES + 1));
+    expect([...reads.values()]).toEqual(Array(4).fill(RETRIES + 1));
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("timeout"),
       "plant.quotes.stage": "read",
     });
+  });
+
+  // Invented answers in each provider's shape, all dated today.
+  const answer = (url: string): unknown => {
+    const { hostname } = new URL(url);
+    if (hostname === "dolarapi.com") {
+      return {
+        compra: 1,
+        venta: 2,
+        fechaActualizacion: "2026-10-09T20:00:00Z",
+      };
+    }
+    if (hostname === "api.argentinadatos.com") {
+      return [{ fecha: TODAY, valor: 1603.33 }];
+    }
+    if (hostname === "api.invertironline.com") {
+      return {
+        titulos: [
+          {
+            simbolo: "AAPL",
+            ultimoPrecio: 18250.5,
+            fecha: "2026-10-09T17:00:00",
+          },
+          {
+            simbolo: "GD30D",
+            ultimoPrecio: 81.2,
+            fecha: "2026-10-09T17:00:00",
+          },
+        ],
+      };
+    }
+    return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
+  };
+
+  const sources = (d: ReturnType<typeof deps>) =>
+    new Set(
+      d.save.mock.calls.flatMap(([rows]) =>
+        [...rows.fxRates, ...rows.prices].map((row) => row.source),
+      ),
+    );
+
+  it("reads IOL alongside the other feeds, with no credential in a log line or step output", async () => {
+    const memo = new Map<string, Memo>();
+    const d = deps([
+      ...quoteFeeds({
+        getJson: async (url) => answer(url),
+        postForm: async () => ({ access_token: ACCESS_TOKEN, expires_in: 899 }),
+        iol: CREDENTIALS,
+      }),
+    ]);
+    await drive(d, memo);
+    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, LISTED]));
+    const listed = d.save.mock.calls
+      .flatMap(([rows]) => rows.prices)
+      .filter((row) => row.source === LISTED);
+    expect(listed.map((row) => [row.symbol, row.price])).toEqual([
+      ["AAPL", "18250.5"],
+      ["GD30", "0.812"],
+    ]);
+    const visible = JSON.stringify([d.lines, [...memo.values()]]);
+    for (const secret of [
+      ACCESS_TOKEN,
+      CREDENTIALS.username,
+      CREDENTIALS.password,
+    ]) {
+      expect(visible).not.toContain(secret);
+    }
+  });
+
+  it("runs the other feeds when IOL is not configured", async () => {
+    const d = deps([
+      ...quoteFeeds({
+        getJson: async (url) => answer(url),
+        postForm: async () => ({ access_token: ACCESS_TOKEN }),
+        iol: null,
+      }),
+    ]);
+    const { result } = await drive(d);
+    expect(result).toMatchObject({ outcome: "partial" });
+    expect(runLines(d.lines)[0]?.fields).toMatchObject({
+      "plant.quotes.failed_codes": `${LISTED}:read:unconfigured`,
+    });
+    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO]));
   });
 });

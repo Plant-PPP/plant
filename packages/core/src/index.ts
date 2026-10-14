@@ -1,5 +1,6 @@
 export type {
   GetJson,
+  PostForm,
   QuoteFeedPort,
   QuoteRange,
   QuoteReaderPort,
@@ -34,6 +35,7 @@ export {
   upcomingIncome,
   type UpcomingIncome,
 } from "./income/upcoming";
+export type { IolCredentials } from "./quotes/adapters/iol/feed";
 export { quoteFeeds } from "./quotes/factory";
 export {
   QUOTE_CARRY_DAYS,
