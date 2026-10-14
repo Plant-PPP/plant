@@ -21,6 +21,13 @@ export type ExportData = Ledger & {
   imports: readonly ImportItem[];
 };
 
+// What an export answers: its tables and whether any was cut, the step-up it
+// needs first, or null when it could not be read.
+export type ExportAnswer =
+  | { tables: ExportTable[]; truncated: boolean }
+  | { stepUp: "sign_in_again" }
+  | null;
+
 // The tables an export has, in order, by file name and what the page calls
 // them.
 export const EXPORT_KINDS = [

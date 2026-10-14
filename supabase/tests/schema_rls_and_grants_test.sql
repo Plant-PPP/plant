@@ -33,12 +33,12 @@
 -- - No extension is installed in either schema, anon can execute no function
 --   in them, authenticated only the RPCs (write_operation, confirm_import and confirm_import_debts,
 --   which run as the caller with an empty search_path, and
---   imports_used_this_month), service_role none in private, only
+--   imports_used_this_month and record_data_export), service_role none in private, only
 --   service_role orphan_import_files, which runs as the caller, and
 --   account_credentials (account_api_keys_test.sql), the only SECURITY DEFINER
 --   functions are the signup, session, MFA factor, file deletion, conversation deletion,
 --   import quota and account credentials (into and out of Vault) triggers,
---   imports_used_this_month and account_credentials, and no trigger on public,
+--   imports_used_this_month, record_data_export and account_credentials, and no trigger on public,
 --   private or auth runs another definer. No table in either schema has rewrite rules.
 -- - Every SECURITY DEFINER function, and every function in private, sets its
 --   search_path.
@@ -151,7 +151,8 @@ SELECT is_empty(
                                        'public.write_operation(uuid,jsonb,jsonb,boolean)'::regprocedure,
                                        'public.confirm_import(uuid,jsonb)'::regprocedure,
                                        'public.confirm_import_debts(uuid,jsonb)'::regprocedure,
-                                       'public.imports_used_this_month()'::regprocedure]))
+                                       'public.imports_used_this_month()'::regprocedure,
+                                       'public.record_data_export(text,text)'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
   'anon and PUBLIC cannot execute any function in public or private, authenticated only the RPCs, nor service_role in private'
@@ -258,8 +259,9 @@ SELECT set_eq(
         'private.store_account_credentials()', 'private.delete_account_credentials()',
         'public.imports_used_this_month()'::regprocedure::text,
         'public.account_credentials(uuid,uuid,text)'::regprocedure::text,
-        'public.meet_price_alerts()'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read and the price alerts check are the only SECURITY DEFINER functions'
+        'public.meet_price_alerts()'::regprocedure::text,
+        'public.record_data_export(text,text)'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check and the export''s audit row are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

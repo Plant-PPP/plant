@@ -1,16 +1,22 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { readImportForReview, readImports } from "./read";
+import { IMPORTS_LISTED, readImportForReview, readImports } from "./read";
 
 const rpcs: string[] = [];
+// The list answers at most the rows asked for, as PostgREST does.
 const clientOf = (list: unknown, used: number | null) => ({
   from: () => {
+    let limit = Infinity;
     const builder = {
       select: () => builder,
       order: () => builder,
-      limit: () => builder,
+      limit: (rows: number) => ((limit = rows), builder),
       then: (resolve: (value: unknown) => unknown) =>
-        resolve({ status: 200, data: list, error: null }),
+        resolve({
+          status: 200,
+          data: Array.isArray(list) ? list.slice(0, limit) : list,
+          error: null,
+        }),
     };
     return builder;
   },
@@ -39,6 +45,7 @@ it("lists each import by its file and account, dated in Buenos Aires", async () 
   );
   expect(read).toEqual({
     used: 3,
+    truncated: false,
     items: [
       {
         id: "i1",
@@ -131,6 +138,31 @@ it("lists a sync by its provider and says why it failed in its own words", async
     ],
     ["c.pdf", "a1", "No encontramos tenencias ni operaciones en el archivo."],
   ]);
+});
+
+describe("with 51 imports", () => {
+  const imports = Array.from({ length: 51 }, (_, index) => ({
+    id: `i${index}`,
+    status: "ready",
+    failure: null,
+    document_date: null,
+    created_at: "2026-10-12T15:00:00+00:00",
+    document: { file_name: "a.pdf", source_connection_id: "a1" },
+  }));
+
+  it("lists the latest IMPORTS_LISTED and says the list was cut", async () => {
+    const read = await readImports(clientOf(imports, 0) as never);
+    expect(read.items).toHaveLength(IMPORTS_LISTED);
+    expect(read.truncated).toBe(true);
+  });
+
+  it("reads them all when asked for more", async () => {
+    const read = await readImports(clientOf(imports, 0) as never, {
+      limit: 100,
+    });
+    expect(read.items).toHaveLength(51);
+    expect(read.truncated).toBe(false);
+  });
 });
 
 it("throws when the count is missing", async () => {
