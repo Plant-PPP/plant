@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · A PDF's page cap (PLA-152)
+
+- **A PDF of more than 30 pages fails as `too_many_pages` before any model reads it**, so an import's cost stays bounded: the file_upload source counts its pages in code (the root `/Pages` node's `/Count`, or else its `/Page` objects) and Cargar asks for only the statement's pages.
+- **A PDF whose page count is not in plain sight**, as one with compressed object streams, is read as before rather than refused for a count nobody could take.
+
 ## 2026-10-14 · Security review fixes (PLA-62)
 
 - **Reading an institution's icon is limited to ten a minute per user** (a hundred per instance, in memory, as the CSP reports are): each read makes a few outbound requests.

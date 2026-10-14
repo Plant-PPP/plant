@@ -87,3 +87,23 @@ describe("createSourceForConnection", () => {
     expect(build).toHaveBeenCalledTimes(1);
   });
 });
+
+it("refuses a PDF longer than the page limit before any reader sees it", async () => {
+  const read = jest.fn();
+  const source = fileUploadSource({ document: read, sheet: read });
+  const pages = Array.from(
+    { length: 31 },
+    (_, index) => `${index + 3} 0 obj << /Type /Page >> endobj`,
+  ).join("\n");
+  await expect(
+    source.read({
+      importId: "i1",
+      bytes: new TextEncoder().encode(`%PDF-1.4\n${pages}`),
+      mimeType: "application/pdf",
+      userId: "u1",
+      institution: "IOL",
+      lastAttempt: false,
+    }),
+  ).rejects.toMatchObject({ code: "too_many_pages", retryable: false });
+  expect(read).not.toHaveBeenCalled();
+});
