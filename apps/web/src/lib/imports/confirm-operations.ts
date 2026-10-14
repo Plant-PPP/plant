@@ -1,6 +1,7 @@
-import { exactUnitPrice } from "@plant/core";
+import { exactUnitPrice, REFERENCE_MAX } from "@plant/core";
 import {
   compareDecimals,
+  currencySchema,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -38,9 +39,9 @@ const reviewedSchema = z.union([
       discarded: z.literal(false),
       date: z.iso.date(),
       symbol: z.string().min(1),
-      currency: z.enum(["ARS", "USD"]),
+      currency: currencySchema,
       charges: nonNegativeDecimalSchema.nullable(),
-      reference: z.string().trim().min(1).max(40).nullable(),
+      reference: z.string().trim().min(1).max(REFERENCE_MAX).nullable(),
     }),
     keptSchema,
   ),

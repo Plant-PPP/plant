@@ -1,4 +1,5 @@
 import "server-only";
+import { LIABILITY_LABEL_MAX } from "@plant/core";
 import {
   buenosAiresDate,
   Constants,
@@ -333,8 +334,8 @@ export async function confirmImportOperations(
 const reviewedDebtSchema = z
   .object({
     liabilityId: z.uuid().nullable(),
-    label: z.string().trim().min(1).max(60).nullable(),
-    lender: z.string().trim().min(1).max(60).nullable(),
+    label: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
+    lender: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
     currency: currencySchema,
     balance: positiveDecimalSchema,
     minimumPayment: positiveDecimalSchema.nullable(),
