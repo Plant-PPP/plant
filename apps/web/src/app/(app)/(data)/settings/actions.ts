@@ -14,7 +14,7 @@ import { z } from "zod";
 import { type AlertWriteResult, newAlertSchema } from "@/lib/alerts/alerts";
 import { createAlert, deleteAlert, markAlertSeen } from "@/lib/alerts/read";
 import { readLiabilities } from "@/lib/debts/read";
-import { recordExport } from "@/lib/export/export-audit-sink";
+import { auditedExport } from "@/lib/export/export-audit-sink";
 import type { ExportTable } from "@/lib/export/csv";
 import { EXPORT_IMPORTS_LIMIT, readOtherHoldings } from "@/lib/export/read";
 import { type ExportAnswer, exportTables } from "@/lib/export/tables";
@@ -75,61 +75,9 @@ async function readExport(
 }
 
 // Everything the session's user loaded, as the tables of an export, read
-// under RLS once the step-up lets them through. Each try leaves an audit row
-// with its outcome, and the tables go out only once theirs is written.
+// under RLS.
 export async function exportData(): Promise<ExportAnswer> {
-  const requestId = await currentRequestId();
-  const gate = await requireSensitiveSession("export");
-  const claims = await getSessionClaims();
-  const client = await createClient();
-  const started = performance.now();
-  const failed = (step: "audit" | "read", error: unknown) =>
-    serverLog.error(
-      "settings.export",
-      {
-        [REQUEST_ID_FIELD]: requestId,
-        "enduser.id": claims.sub,
-        "plant.outcome": "failed",
-        "plant.export.step": step,
-        "plant.duration_ms": Math.round(performance.now() - started),
-      },
-      error,
-    );
-
-  if (!gate.ok) {
-    await recordExport("denied", requestId).catch((error: unknown) =>
-      failed("audit", error),
-    );
-    return { stepUp: gate.stepUp };
-  }
-  let answer: { tables: ExportTable[]; truncated: boolean };
-  try {
-    answer = await readExport(client);
-  } catch (error) {
-    failed("read", error);
-    await recordExport("failure", requestId).catch((auditError) =>
-      failed("audit", auditError),
-    );
-    return null;
-  }
-  try {
-    await recordExport("success", requestId);
-  } catch (error) {
-    failed("audit", error);
-    return null;
-  }
-  serverLog.info("settings.export", {
-    [REQUEST_ID_FIELD]: requestId,
-    "enduser.id": claims.sub,
-    "plant.outcome": "ok",
-    "plant.export.truncated": answer.truncated,
-    "plant.export.row_count": answer.tables.reduce(
-      (sum, table) => sum + table.rows.length,
-      0,
-    ),
-    "plant.duration_ms": Math.round(performance.now() - started),
-  });
-  return answer;
+  return auditedExport(async () => readExport(await createClient()));
 }
 
 const alertId = z.uuid();

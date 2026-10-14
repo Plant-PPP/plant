@@ -1,4 +1,9 @@
-import { EXPORT_FAILED, EXPORT_PARTIAL, exportOutcome } from "./export-status";
+import {
+  EXPORT_FAILED,
+  EXPORT_LIMITED,
+  EXPORT_PARTIAL,
+  exportOutcome,
+} from "./export-status";
 
 const tables = [
   { name: "cargas", label: "Cargas", header: ["Archivo"], rows: [["a"]] },
@@ -14,6 +19,13 @@ it("says the export failed when it could not be read", () => {
   expect(exportOutcome(null)).toEqual({
     kind: "failed",
     notice: EXPORT_FAILED,
+  });
+});
+
+it("says to wait when the server limits exports", () => {
+  expect(exportOutcome({ limited: true })).toEqual({
+    kind: "failed",
+    notice: EXPORT_LIMITED,
   });
 });
 

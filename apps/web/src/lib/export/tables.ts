@@ -26,6 +26,7 @@ export type ExportData = Ledger & {
 export type ExportAnswer =
   | { tables: ExportTable[]; truncated: boolean }
   | { stepUp: "sign_in_again" }
+  | { limited: true }
   | null;
 
 // The tables an export has, in order, by file name and what the page calls
