@@ -33,6 +33,7 @@ const READ = {
   reader: "document",
   mapping: "none",
   skippedRows: 0,
+  disputes: 0,
 } as const;
 
 type Line = { level: string; event: string; fields: LogFields };
@@ -105,6 +106,7 @@ it("reads the file into a draft and marks the import ready", async () => {
         "plant.import.reader": "document",
         "plant.import.mapping": "none",
         "plant.import.skipped_count": 0,
+        "plant.import.dispute_count": 0,
         "plant.import.id": IMPORT,
       }),
     },
@@ -117,7 +119,7 @@ it("logs how many rows the reading skipped", async () => {
   const { lines, run } = setUp({
     extract: jest.fn().mockResolvedValue({
       draft: DRAFT,
-      read: { reader: "sheet", mapping: "hit", skippedRows: 2 },
+      read: { reader: "sheet", mapping: "hit", skippedRows: 2, disputes: 0 },
     }),
   });
   await run();

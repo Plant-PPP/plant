@@ -84,6 +84,7 @@ export function spreadsheetReader({
         reader: "sheet",
         mapping: stored.success ? "hit" : "miss",
         skippedRows: reading.skippedRows,
+        disputes: 0,
       },
     };
   };

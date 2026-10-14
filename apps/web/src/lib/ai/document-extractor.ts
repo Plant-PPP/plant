@@ -14,15 +14,26 @@ import {
 } from "@plant/sources";
 import { z } from "zod";
 
+import {
+  compareReadings,
+  disputeCount,
+  settle,
+  tiebreakBrief,
+} from "./consensus";
 import type { ModelFactory } from "./costed-model";
 import { structuredCall } from "./structured-call";
 
-// The model that reads statements, which it takes as they are, and maps a
-// spreadsheet's columns.
-export const EXTRACTION_MODEL = "gemini-3.8-flash" satisfies PricedModelId;
+// The two models that read each statement, as it is, side by side, and the
+// one that reads again only what they disagree on.
+export const READERS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+] as const satisfies readonly PricedModelId[];
+export const TIEBREAK_MODEL = "gemini-3.5-flash-lite" satisfies PricedModelId;
 
-// The longest a reading may take before the step retries it.
-const EXTRACTION_TIMEOUT_MS = 120_000;
+// The longest one reading may take; the two readers and the tiebreak run in
+// two rounds inside one step.
+const EXTRACTION_TIMEOUT_MS = 100_000;
 
 const currency = z.enum(Constants.public.Enums.currency);
 
@@ -105,9 +116,10 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
   };
 };
 
-// Reads a statement's holdings with the model, costing the call to the user.
-// `record` writes the cost row; `model` is the provider's, replaced in tests.
-// It does not check the file's type: only PDFs and pictures are routed here.
+// Reads a statement's holdings with two models, and a third over what they
+// disagree on, costing every call to the user. `record` writes the cost rows;
+// `model` is the provider's, replaced in tests. It does not check the file's
+// type: only PDFs and pictures are routed here.
 export function documentExtractor({
   record,
   model,
@@ -116,28 +128,55 @@ export function documentExtractor({
   model?: ModelFactory;
 }): ImportJobDeps["extract"] {
   return async ({ bytes, mimeType, userId }) => {
-    const answer = await structuredCall({
-      modelId: EXTRACTION_MODEL,
-      costType: "import_extraction",
-      userId,
-      record,
-      model,
-      system: SYSTEM,
-      schema: answerSchema,
-      timeoutMs: EXTRACTION_TIMEOUT_MS,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "List the holdings in this statement." },
-            { type: "file", data: bytes, mediaType: mimeType },
+    const read = async (modelId: PricedModelId, ask: string) =>
+      toDraft(
+        await structuredCall({
+          modelId,
+          costType: "import_extraction",
+          userId,
+          record,
+          model,
+          system: SYSTEM,
+          schema: answerSchema,
+          timeoutMs: EXTRACTION_TIMEOUT_MS,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: ask },
+                { type: "file", data: bytes, mediaType: mimeType },
+              ],
+            },
           ],
-        },
-      ],
-    });
+        }),
+      );
+    const ask = "List the holdings in this statement.";
+    const [first, second] = await Promise.all([
+      read(READERS[0], ask),
+      read(READERS[1], ask),
+    ]);
+    const compared = compareReadings(first, second);
+    const disputed = disputeCount(compared.disputes);
+    const draft =
+      disputed === 0
+        ? first
+        : settle(
+            first,
+            second,
+            await read(
+              TIEBREAK_MODEL,
+              tiebreakBrief(compared.disputes, first, second),
+            ),
+            compared,
+          );
     return {
-      draft: toDraft(answer),
-      read: { reader: "document", mapping: "none", skippedRows: 0 },
+      draft,
+      read: {
+        reader: "document",
+        mapping: "none",
+        skippedRows: 0,
+        disputes: disputed,
+      },
     };
   };
 }

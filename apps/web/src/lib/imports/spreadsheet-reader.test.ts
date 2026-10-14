@@ -57,6 +57,7 @@ it("maps a format's columns once, then reads the same format without the model",
     reader: "sheet",
     mapping: "miss",
     skippedRows: 0,
+    disputes: 0,
   });
   expect(
     first.draft.rows.map(({ symbol, quantity, price }) => [
@@ -74,6 +75,7 @@ it("maps a format's columns once, then reads the same format without the model",
     reader: "sheet",
     mapping: "hit",
     skippedRows: 0,
+    disputes: 0,
   });
   expect(mapColumns).toHaveBeenCalledTimes(1);
 

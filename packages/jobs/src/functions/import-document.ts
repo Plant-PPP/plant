@@ -47,6 +47,9 @@ export type ImportRead = {
   reader: "document" | "sheet";
   mapping: "none" | "hit" | "miss";
   skippedRows: number;
+  // Figures and rows the document's two readings disagreed on, which a third
+  // settled; 0 for a spreadsheet.
+  disputes: number;
 };
 
 export type ImportJobDeps = {
@@ -191,6 +194,7 @@ export async function runImportDocument(
     "plant.import.reader": read.reader,
     "plant.import.mapping": read.mapping,
     "plant.import.skipped_count": read.skippedRows,
+    "plant.import.dispute_count": read.disputes,
   });
   return { outcome: "ready", rows: read.rows };
 }

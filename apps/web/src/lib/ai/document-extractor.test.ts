@@ -8,7 +8,11 @@ jest.mock("@ai-sdk/google", () => ({ google: jest.fn() }));
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
-import { documentExtractor, EXTRACTION_MODEL } from "./document-extractor";
+import {
+  documentExtractor,
+  READERS,
+  TIEBREAK_MODEL,
+} from "./document-extractor";
 
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const BYTES = new TextEncoder().encode("%PDF-1.7");
@@ -92,6 +96,7 @@ it("reads the holdings and costs the call to the user", async () => {
     reader: "document",
     mapping: "none",
     skippedRows: 0,
+    disputes: 0,
   });
   expect(draft).toEqual({
     documentDate: "2026-09-30",
@@ -119,11 +124,14 @@ it("reads the holdings and costs the call to the user", async () => {
     // Totals that are not all decimals are left out.
     totals: [],
   });
+  // Two readings that agree need no third.
+  expect(record.mock.calls.map(([row]) => row.model_id).sort()).toEqual(
+    [...READERS].sort(),
+  );
   expect(record).toHaveBeenCalledWith(
     expect.objectContaining({
       user_id: USER,
       cost_type: "import_extraction",
-      model_id: EXTRACTION_MODEL,
     }),
   );
   const [call] = model.doGenerateCalls;
@@ -183,4 +191,89 @@ it("lets a provider that is down be retried", async () => {
   });
   const error = await extract(model).catch((e: unknown) => e);
   expect(error).toMatchObject({ code: "extraction_failed", retryable: true });
+});
+
+const row = (symbol: string, quantity: string, extra = {}) => ({
+  symbol,
+  quantity,
+  price: null,
+  value: null,
+  currency: "ARS",
+  confidence: "high",
+  page: 1,
+  ...extra,
+});
+
+const reading = (rows: object[], documentDate = "2026-09-30") =>
+  JSON.stringify({ documentDate, rows, totals: [] });
+
+// One mock per model id, so each reader answers its own reading.
+const byModel = (answers: Record<string, string>) => {
+  const models = Object.fromEntries(
+    Object.entries(answers).map(([id, text]) => [id, answering(text)]),
+  );
+  return {
+    models,
+    run: () =>
+      documentExtractor({
+        record,
+        model: (id) => models[id]!,
+      })({
+        bytes: BYTES,
+        mimeType: "application/pdf",
+        userId: USER,
+        importId: "i1",
+        institution: "IOL",
+      }),
+  };
+};
+
+it("asks a third model only about what the two readers disagree on", async () => {
+  const [lite35, lite31] = READERS;
+  expect(TIEBREAK_MODEL).toBe(lite35);
+  // The tiebreak shares a model id with the first reader, so the first answer
+  // is the reading and the second the tiebreak.
+  let calls = 0;
+  const first = reading([row("AAPL", "5"), row("GGAL", "100")]);
+  const tiebreak = reading([row("GGAL", "100")]);
+  const shared = new MockLanguageModelV3({
+    doGenerate: async () => ({
+      content: [{ type: "text", text: calls++ === 0 ? first : tiebreak }],
+      finishReason: { unified: "stop", raw: undefined },
+      usage,
+      warnings: [],
+    }),
+  });
+  const second = answering(reading([row("AAPL", "5"), row("GGAL", "1000")]));
+  const { draft, read } = await documentExtractor({
+    record,
+    model: (id) => (id === lite31 ? second : shared),
+  })({
+    bytes: BYTES,
+    mimeType: "application/pdf",
+    userId: USER,
+    importId: "i1",
+    institution: "IOL",
+  });
+  expect(read.disputes).toBe(1);
+  expect(draft.rows.map((r) => [r.symbol, r.quantity])).toEqual([
+    ["AAPL", "5"],
+    ["GGAL", "100"],
+  ]);
+  expect(record).toHaveBeenCalledTimes(3);
+  const ask = shared.doGenerateCalls[1]!.prompt.flatMap(
+    (message): { type: string; text?: string }[] =>
+      Array.isArray(message.content) ? message.content : [],
+  ).find((part) => part.type === "text");
+  expect(ask?.text).toContain("<symbol>GGAL</symbol> (ARS)");
+  expect(ask?.text).not.toContain("AAPL");
+});
+
+it("fails the reading when either reader fails", async () => {
+  const [, lite31] = READERS;
+  const { run } = byModel({
+    [READERS[0]]: reading([row("AAPL", "5")]),
+    [lite31]: "not json",
+  });
+  await expect(run()).rejects.toMatchObject({ code: "unreadable" });
 });
