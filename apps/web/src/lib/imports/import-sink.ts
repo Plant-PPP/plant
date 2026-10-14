@@ -1,5 +1,9 @@
 import "server-only";
-import type { FileDeletionStorePort, ImportStorePort } from "@plant/jobs";
+import type {
+  FileDeletionStorePort,
+  ImportStorePort,
+  OrphanFileStorePort,
+} from "@plant/jobs";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -13,6 +17,10 @@ import {
   FileDeletionStoreError,
 } from "./file-deletion-store";
 import { createImportStore, ImportStoreError } from "./import-store";
+import {
+  createOrphanFileStore,
+  OrphanFileStoreError,
+} from "./orphan-file-store";
 
 // Reads any user's import and file and writes its draft, past RLS and
 // Storage's policies: only the Inngest route may import it.
@@ -59,4 +67,18 @@ export function fileDeletionSink(): FileDeletionStorePort {
     };
   }
   return createFileDeletionStore(client);
+}
+
+// Removes any user's files no document points at, past Storage's policies.
+export function orphanFileSink(): OrphanFileStorePort {
+  const client = createServiceRoleClient();
+  if (!client) {
+    return {
+      orphans: () =>
+        Promise.reject(new OrphanFileStoreError("orphans", "unconfigured")),
+      remove: () =>
+        Promise.reject(new OrphanFileStoreError("remove", "unconfigured")),
+    };
+  }
+  return createOrphanFileStore(client);
 }
