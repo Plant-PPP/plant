@@ -1,10 +1,6 @@
 import "server-only";
 import { inngestJobRunner } from "@plant/jobs";
-import {
-  buenosAiresDate,
-  buenosAiresMonthStart,
-  type Database,
-} from "@plant/shared";
+import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -137,15 +133,11 @@ async function accountOpen(client: Client, id: string): Promise<boolean> {
 // Whether the user has imports left this month. The database checks it again
 // when the import is filed.
 async function quotaLeft(client: Client): Promise<boolean> {
-  const today = buenosAiresDate(new Date());
-  const result = await client
-    .from("imports")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", buenosAiresMonthStart(today));
-  if (classifyPostgrestResult(result, 200) || result.count === null) {
+  const result = await client.rpc("imports_used_this_month");
+  if (classifyPostgrestResult(result, 200) || typeof result.data !== "number") {
     throw new Error("imports count failed");
   }
-  return result.count < IMPORTS_PER_MONTH;
+  return result.data < IMPORTS_PER_MONTH;
 }
 
 // The size and type a file's name and size say, before any byte is sent.

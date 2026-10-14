@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · The app reads the quota the database counts (PLA-143)
+
+- **`public.imports_used_this_month()` counts the caller's rows of `private.import_requests`** since the start of the month in Buenos Aires, as the quota trigger does. The upload's check before signing the URL, Cargar's counter and the assistant's import status read it, so deleting files gives back no import on screen either. It is `SECURITY DEFINER` (authenticated holds nothing on the private table), reads only `auth.uid()`'s rows and only authenticated may execute it; it joins the floor's RPC and definer lists and has its pentest spec.
+
 ## 2026-10-14 · Spreadsheets in US formats (PLA-138)
 
 - **Each figure column reads as its text cells show.** A cell only a US sheet writes ("1,234.56", "1,234,567", "230.50") makes the column US, where commas group thousands and the dot is the decimal point; a cell only an es-AR one writes ("12,5", "1.234,56", "1.234.567") keeps it es-AR, and wins over US evidence. A column whose cells tell nothing ("1,500", "1.234", "10") takes what the quantity, price and value columns show together, and es-AR when they tell nothing either. A cell that reads both ways ("1,500", "1.234") stays low confidence in either convention. A mostly es-AR sheet with a dot-decimal price column ("230.50") reads its quantity column's lone "1.234" as one and a fraction; it is low confidence, for the user to check.

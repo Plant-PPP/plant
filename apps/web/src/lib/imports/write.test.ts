@@ -15,7 +15,6 @@ type Answer = {
   data?: unknown;
   error?: unknown;
   status: number;
-  count?: number;
 };
 const answers: Record<string, jest.Mock<Answer, [string]>> = {};
 const writes: { table: string; verb: string; body?: unknown }[] = [];
@@ -24,9 +23,12 @@ const storage = {
   download: jest.fn(),
   remove: jest.fn(),
 };
+const used = jest.fn<Answer, []>();
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     storage: { from: () => storage },
+    rpc: async (name: string) =>
+      name === "imports_used_this_month" ? used() : { status: 404 },
     from: (table: string) => {
       let verb = "select";
       const builder = {
@@ -42,7 +44,6 @@ jest.mock("@/lib/supabase/server", () => ({
           return builder;
         },
         eq: () => builder,
-        gte: () => builder,
         is: () => builder,
         order: () => builder,
         limit: () => builder,
@@ -95,11 +96,12 @@ beforeEach(() => {
         ? { status: 200, data: [], error: null }
         : { status: 204, error: null },
   );
-  answers.imports = jest.fn<Answer, [string]>((verb) =>
-    verb === "insert"
-      ? { status: 201, data: [{ id: "i1" }], error: null }
-      : { status: 200, count: 0, error: null },
-  );
+  answers.imports = jest.fn<Answer, [string]>(() => ({
+    status: 201,
+    data: [{ id: "i1" }],
+    error: null,
+  }));
+  used.mockReset().mockReturnValue({ status: 200, data: 0, error: null });
   storage.createSignedUploadUrl
     .mockReset()
     .mockResolvedValue({ data: { token: "t1" }, error: null });
@@ -178,15 +180,21 @@ describe("startUpload", () => {
     expect(await start()).toEqual({ ok: false, code: "not_found" });
   });
 
-  it("refuses once the month's imports are used up", async () => {
-    answers.imports!.mockReturnValue({
+  it("refuses once the month's imports are used up, deleted ones included", async () => {
+    used.mockReturnValue({
       status: 200,
-      count: IMPORTS_PER_MONTH,
+      data: IMPORTS_PER_MONTH,
       error: null,
     });
     expect(await start()).toEqual({ ok: false, code: "quota" });
     expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
     expect(lines.at(-1)).toMatchObject({ "plant.outcome": "quota" });
+  });
+
+  it("fails when the month's count cannot be read", async () => {
+    used.mockReturnValue({ status: 500, error: { code: "XX000" } });
+    expect(await start()).toEqual({ ok: false, code: "failed" });
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
   });
 
   it("logs a failure to sign the URL", async () => {
