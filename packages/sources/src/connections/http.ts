@@ -161,18 +161,18 @@ export function holdingsReading(
   };
 }
 
-// Operations as a draft, newest first, at most DRAFT_ROW_LIMIT of them.
+// Operations as a draft, all of them: defineConnection keeps those in the
+// read's period and only then caps them.
 export function operationsReading(
   operations: DraftOperation[],
   skipped: number,
 ): OperationsReading {
-  operations.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   return {
-    operations: operations.slice(0, DRAFT_ROW_LIMIT),
+    operations,
     read: {
       reader: "api",
       mapping: "none",
-      skippedRows: skipped + Math.max(0, operations.length - DRAFT_ROW_LIMIT),
+      skippedRows: skipped,
       disputes: 0,
       documentKind: null,
     },
