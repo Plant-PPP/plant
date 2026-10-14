@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Price alerts in the app (PLA-154)
+
+- **An alert is on a dollar's sell rate (MEP, CCL, official or blue, in pesos) or an instrument's price in its currency, above or below a figure**, and it fires once: the quotes job marks it met with the quote's day and price, and it waits no more. The user sets a new one for the next figure.
+- **The latest quote counts, whenever the alert was set**, so one that is already met is marked on the next run, as the prototype marks it when it is set.
+- **The quotes job checks every alert in one SQL statement** (`meet_price_alerts`, SECURITY DEFINER, only the service role runs it) after it saves the quotes. A failure is logged and the alerts wait for the next hourly run; the quotes run keeps its outcome.
+- **Alerts show on Resumen until the user marks them seen**, not in a header bell: the header sits outside the data pages' prototype, and Plant has no mail or push channel yet. They are set and deleted in Ajustes, 50 at most.
+
 ## 2026-10-14 · Export to Excel and PDF (PLA-71)
 
 - **Ajustes exports everything the user loaded as one Excel workbook**, one sheet per kind of row, beside the CSVs it already offered. The real app reads the data only when the user asks for a file, through a server action under RLS: every holding and movement, the debts Deudas lists and the latest imports Cargar lists.

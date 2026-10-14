@@ -86,6 +86,10 @@ export function PrototypeSummary({ params }: { params: KeysetParams }) {
         asOf: state.today,
       }))}
       onUnpin={actions.pins.unpin}
+      metAlerts={state.priceAlerts.filter(
+        (each) => each.metOn !== null && each.seenAt === null,
+      )}
+      onAlertSeen={actions.alerts.seen}
     />
   );
 }

@@ -20,6 +20,7 @@ import {
   realEstateSheetSchema,
 } from "@/lib/real-estate/sheet";
 import type { Conversation } from "@/lib/assistant/chat";
+import type { PriceAlert } from "@/lib/alerts/alerts";
 import type { ImportItem } from "@/lib/imports/review";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { HoldingDeleteResult } from "@/lib/holdings/delete-result";
@@ -73,6 +74,9 @@ export type PrototypeState = Ledger & {
   // The assistant's charts pinned to Resumen, as drawn: the prototype's data
   // does not change under them. Oldest first.
   pinnedCharts: { id: string; chart: ChartPart }[];
+  // The price alerts, newest first. One is checked against the prototype's
+  // quotes when it is set, since no job runs here.
+  priceAlerts: PriceAlert[];
 };
 
 export type Write<R> = LedgerWrite<R, PrototypeState>;
@@ -193,6 +197,7 @@ export function initialState(
     conversations: [],
     askedOn: [],
     pinnedCharts: [],
+    priceAlerts: [],
   };
 }
 

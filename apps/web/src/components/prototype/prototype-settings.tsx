@@ -4,6 +4,7 @@ import { MANUAL_RATE_KINDS } from "@plant/core";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { AlertsCard } from "@/components/settings/alerts-card";
 import { DeleteAccountCard } from "@/components/settings/delete-account-card";
 import { ExportCard } from "@/components/settings/export-card";
 import { PreferencesCard } from "@/components/settings/preferences-card";
@@ -36,6 +37,11 @@ export function PrototypeSettings() {
         today={state.today}
         onSet={actions.rates.set}
         onRevert={actions.rates.revert}
+      />
+      <AlertsCard
+        alerts={state.priceAlerts}
+        onCreate={actions.alerts.create}
+        onDelete={actions.alerts.delete}
       />
       <ExportCard load={async () => exportTables(state)} />
       <DeleteAccountCard

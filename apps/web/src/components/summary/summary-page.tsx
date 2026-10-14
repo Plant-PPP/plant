@@ -15,6 +15,7 @@ import { FilterSelect, UnitSelect } from "@/components/holdings/filter-select";
 import { MepNotice } from "@/components/holdings/mep-notice";
 import { PortfoliosBreakdown } from "@/components/holdings/portfolios-breakdown";
 import { AmountText, SummaryTile } from "@/components/holdings/sum-text";
+import type { PriceAlert } from "@/lib/alerts/alerts";
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
 import {
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
 
 import { ClosesTable } from "./closes-table";
 import { CurrenciesBreakdown } from "./currencies-breakdown";
+import { MetAlerts } from "./met-alerts";
 import { PrintButton } from "./print-button";
 import { CloseStatus, ResultText } from "./figures";
 import { NetWorthChart } from "./net-worth-chart";
@@ -71,6 +73,8 @@ export function SummaryPage({
   closesQuery,
   pinned = [],
   onUnpin,
+  metAlerts = [],
+  onAlertSeen,
 }: {
   // Every month, oldest first, the last one in progress.
   closes: MonthClose[];
@@ -95,6 +99,9 @@ export function SummaryPage({
   // one go.
   pinned?: readonly PinnedChart[];
   onUnpin?: (id: string) => Promise<boolean>;
+  // The price alerts met and not seen yet, and the way to mark one seen.
+  metAlerts?: readonly PriceAlert[];
+  onAlertSeen?: (id: string) => Promise<boolean>;
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
@@ -141,6 +148,7 @@ export function SummaryPage({
           <PrintButton />
         </div>
       </div>
+      {onAlertSeen && <MetAlerts alerts={metAlerts} onSeen={onAlertSeen} />}
       <MepNotice unit={unit} />
 
       {portfolio ? (

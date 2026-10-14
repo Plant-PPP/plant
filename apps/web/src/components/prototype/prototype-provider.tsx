@@ -9,6 +9,12 @@ import {
   useRef,
 } from "react";
 
+import {
+  alertQuote,
+  MAX_ALERTS,
+  meets,
+  type NewAlert,
+} from "@/lib/alerts/alerts";
 import type {
   AssistantActions,
   ChartPart,
@@ -86,6 +92,11 @@ type Prototype = {
     pins: {
       pin: (chart: ChartPart) => Promise<PinResult>;
       unpin: (id: string) => Promise<boolean>;
+    };
+    alerts: {
+      create: (alert: NewAlert) => Promise<boolean>;
+      delete: (id: string) => Promise<boolean>;
+      seen: (id: string) => Promise<boolean>;
     };
     preferences: { set: (next: Preferences) => Promise<{ ok: boolean }> };
     rates: {
@@ -255,6 +266,55 @@ export function PrototypeProvider({
           unit,
           pricedSnapshotOf(latest.current, snapshot).snapshot,
         ).sources,
+    },
+    alerts: {
+      create: (alert) =>
+        write((s) => {
+          if (s.priceAlerts.length >= MAX_ALERTS) {
+            return { state: s, result: false };
+          }
+          const quote = alertQuote(
+            alert,
+            pricedSnapshotOf(s, snapshot).snapshot,
+          );
+          const met = quote !== null && meets(alert, quote.price);
+          return {
+            state: {
+              ...s,
+              priceAlerts: [
+                {
+                  ...alert,
+                  id: crypto.randomUUID(),
+                  metOn: met ? quote.date : null,
+                  metPrice: met ? quote.price : null,
+                  seenAt: null,
+                },
+                ...s.priceAlerts,
+              ],
+            },
+            result: true,
+          };
+        }),
+      delete: (id) =>
+        write((s) => ({
+          state: {
+            ...s,
+            priceAlerts: s.priceAlerts.filter((each) => each.id !== id),
+          },
+          result: true,
+        })),
+      seen: (id) =>
+        write((s) => ({
+          state: {
+            ...s,
+            priceAlerts: s.priceAlerts.map((each) =>
+              each.id === id && each.metOn !== null
+                ? { ...each, seenAt: new Date().toISOString() }
+                : each,
+            ),
+          },
+          result: true,
+        })),
     },
     pins: {
       // A chart is pinned once: by which chart it is when it says, as the

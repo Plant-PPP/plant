@@ -35,6 +35,11 @@ jest.mock("@/lib/assistant/pins", () => ({ readPins: async () => [] }));
 // The server action Resumen hands the page to unpin a chart.
 const unpinChart = async () => true;
 jest.mock("@/app/(app)/(data)/assistant/actions", () => ({ unpinChart }));
+// No price alert met.
+jest.mock("@/lib/alerts/read", () => ({ readAlerts: async () => [] }));
+// The server action Resumen hands the page to mark an alert seen.
+const seePriceAlert = async () => true;
+jest.mock("@/app/(app)/(data)/settings/actions", () => ({ seePriceAlert }));
 jest.mock("@/components/summary/summary-page", () => ({
   SummaryPage: () => null,
 }));
@@ -217,8 +222,11 @@ describe("Resumen", () => {
     expect((await summary({ unit: "btc" })).props.unit).toBe("usd_ccl");
   });
 
-  it("hands the page only data, and the server action that unpins", async () => {
-    expect(functionsIn((await summary()).props)).toEqual([unpinChart]);
+  it("hands the page only data, and the server actions that unpin and mark seen", async () => {
+    expect(functionsIn((await summary()).props)).toEqual([
+      unpinChart,
+      seePriceAlert,
+    ]);
   });
 });
 

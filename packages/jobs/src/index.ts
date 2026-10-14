@@ -31,7 +31,7 @@ export type {
   ImportStorePort,
   ImportToRead,
 } from "./functions/import-document";
-export type { QuoteJobDeps } from "./functions/refresh-quotes";
+export type { PriceAlertsPort, QuoteJobDeps } from "./functions/refresh-quotes";
 export { inngestJobRunner, type JobRunner } from "./job-runner";
 
 const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
