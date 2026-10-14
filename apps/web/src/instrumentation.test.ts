@@ -91,6 +91,65 @@ describe("register", () => {
     ]);
   });
 
+  async function scrubberOf() {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.example";
+    await register();
+    return (
+      registerOTel.mock.calls[0][0] as {
+        spanProcessors: { onStart: (span: unknown) => void }[];
+      }
+    ).spanProcessors[0]!;
+  }
+
+  it("masks the Flex token in Next's own fetch span, name and next.span_name", async () => {
+    const scrub = await scrubberOf();
+    const url =
+      "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=123456789012&q=987654&v=3";
+    const span = {
+      name: `fetch GET ${url}`,
+      attributes: { "next.span_name": `fetch GET ${url}`, "http.url": url },
+      updateName: jest.fn(),
+      setAttribute: jest.fn(),
+    };
+    scrub.onStart(span);
+    const masked =
+      "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=<masked>&q=987654&v=3";
+    expect(span.updateName).toHaveBeenCalledWith(`fetch GET ${masked}`);
+    expect(span.setAttribute.mock.calls).toEqual(
+      expect.arrayContaining([
+        ["http.url", masked],
+        ["next.span_name", `fetch GET ${masked}`],
+      ]),
+    );
+  });
+
+  it("masks the PKCE code in the request span's name and http.target", async () => {
+    const scrub = await scrubberOf();
+    const code = "0b7c8d2e-1f3a-4b5c-9d6e-7f8a9b0c1d2e";
+    const target = `/auth/callback?code=${code}&next=%2Fsettings`;
+    const span = {
+      name: `GET ${target}`,
+      attributes: {
+        "http.target": target,
+        "http.url": `https://plant.example${target}`,
+      },
+      updateName: jest.fn(),
+      setAttribute: jest.fn(),
+    };
+    scrub.onStart(span);
+    expect(JSON.stringify(span.updateName.mock.calls)).not.toContain(code);
+    expect(span.updateName).toHaveBeenCalledWith(
+      "GET /auth/callback?code=<masked>&next=%2Fsettings",
+    );
+    expect(span.setAttribute.mock.calls).toEqual([
+      [
+        "http.url",
+        "https://plant.example/auth/callback?code=<masked>&next=%2Fsettings",
+      ],
+      ["http.target", "/auth/callback?code=<masked>&next=%2Fsettings"],
+    ]);
+  });
+
   it.each([
     "https://api.binance.com/api/v3/account?timestamp=1&t=2",
     "https://example.com/AccountManagement/FlexWebService/SendRequest?t=1",
