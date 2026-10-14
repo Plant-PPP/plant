@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Closes value each day once (PLA-139)
+
+- **Each day's quotes are built once per state and shared by every unit.** The stored rows are indexed by day, so a snapshot reads only the eight days it covers, and each instrument's last trade prices are one timeline per symbol, built once and searched by date. Within one unit, a month's end is the next one's start, so each day's net worth is valued once, with core's `valueHoldings` total instead of the whole assets-page valuation. A holding's quantity on a day is found by binary search, which relies on a holding's movements being sorted oldest first, as `Ledger` already requires. The output is the same: `closes-compute.test.ts` checks it against the previous implementation, kept verbatim in `closes-oracle.test-support.ts`, over the prototype and a made-up ledger, and against a digest of that implementation's output over 20,000 movements across ten years, where one unit went from about 19 s to about 1 s.
+
 ## 2026-10-14 · Files no document names are deleted (PLA-141)
 
 - **`delete-orphan-files` removes, once a day, every object of the `imports` bucket over a day old whose name no `uploaded_documents.storage_path` holds**: a signed upload whose `finishUpload` never ran, an object a user wrote straight into their folder, a file whose row the user deleted through the API, and the files of a deleted Auth user. The day keeps an upload whose finish has not run yet out of it. Uploads stay open to any name under `{uid}/imports/`, since the row is filed only after the server has read the file back.

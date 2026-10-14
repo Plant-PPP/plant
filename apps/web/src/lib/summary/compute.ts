@@ -12,13 +12,16 @@ import {
   type QuoteNeed,
   type QuoteSnapshot,
   periodResult,
+  QUOTE_CARRY_DAYS,
   quotesNeeded,
+  type StoredQuotes,
   snapshotOn,
   takesUnits,
   valueHoldings,
   valueLiabilities,
 } from "@plant/core";
 import {
+  addDays,
   compareExact,
   currencySchema,
   type Exact,
@@ -35,7 +38,6 @@ import {
 
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
-import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import {
   allRows,
   difference,
@@ -70,36 +72,164 @@ type HoldingLedger = {
   realized: (string | null)[];
 };
 
-// Each instrument holding's movements with what each left and paid, in `unit`.
+type TradeDay = { date: string; price: QuoteSnapshot["prices"][string] };
+
+// What every day's quotes are read from, built once per state: the stored
+// rows by day, each instrument's trading days, and each day's quotes once
+// read, which do not depend on the unit.
+type Pricing = {
+  need: QuoteNeed;
+  rowsByDay: Map<string, StoredQuotes>;
+  trades: Map<string, TradeDay[]>;
+  snapshots: Map<string, QuoteSnapshot>;
+};
+
+const pricingCache = new WeakMap<ClosesState, Pricing>();
+
+function rowsByDayOf(quotes: StoredQuotes): Map<string, StoredQuotes> {
+  const byDay = new Map<string, StoredQuotes>();
+  const dayOf = (date: string) => {
+    let day = byDay.get(date);
+    if (!day) {
+      day = { fxRates: [], prices: [] };
+      byDay.set(date, day);
+    }
+    return day;
+  };
+  for (const row of quotes.fxRates) dayOf(row.rate_date).fxRates.push(row);
+  for (const row of quotes.prices) dayOf(row.price_date).prices.push(row);
+  return byDay;
+}
+
+// Each instrument's price on each of its trading days, oldest first, which
+// values it on a day no feed or manual price covers: that day's purchases,
+// sales and yields averaged by their units, so how they split across holdings
+// or which was recorded first does not matter; in the currency most of them
+// traded in. An opening balance's or an adjustment's price is a cost, not
+// what a unit was worth.
+function tradeDaysOf(state: ClosesState): Map<string, TradeDay[]> {
+  const bySymbol = new Map<
+    string,
+    Map<string, Map<string, { units: Exact; worth: Exact }>>
+  >();
+  for (const row of allRows(state)) {
+    if (row.holding.asset_class !== "instrument") continue;
+    const symbol = row.holding.instrument_symbol;
+    for (const movement of state.movements.get(row.id) ?? []) {
+      if (
+        (movement.kind !== "purchase" &&
+          movement.kind !== "sale" &&
+          movement.kind !== "yield") ||
+        exactOf(movement.price).n === 0n
+      ) {
+        continue;
+      }
+      let days = bySymbol.get(symbol);
+      if (!days) {
+        days = new Map();
+        bySymbol.set(symbol, days);
+      }
+      let byCurrency = days.get(movement.date);
+      if (!byCurrency) {
+        byCurrency = new Map();
+        days.set(movement.date, byCurrency);
+      }
+      const units = exactOf(movement.quantity);
+      const was = byCurrency.get(movement.currency);
+      byCurrency.set(movement.currency, {
+        units: plus(was?.units ?? ZERO, units),
+        worth: plus(was?.worth ?? ZERO, times(units, exactOf(movement.price))),
+      });
+    }
+  }
+  return new Map(
+    [...bySymbol].map(([symbol, days]) => [
+      symbol,
+      [...days]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([date, byCurrency]) => {
+          const [currency, { units, worth }] = [...byCurrency].sort(
+            ([a, x], [b, y]) =>
+              compareExact(y.units, x.units) || (a < b ? -1 : 1),
+          )[0]!;
+          return {
+            date,
+            price: {
+              price: stored(over(worth, units)),
+              currency: currencySchema.parse(currency),
+              date,
+            },
+          };
+        }),
+    ]),
+  );
+}
+
+function pricingOf(state: ClosesState): Pricing {
+  let pricing = pricingCache.get(state);
+  if (!pricing) {
+    pricing = {
+      need: closesNeed(state),
+      rowsByDay: rowsByDayOf(state.quotes),
+      trades: tradeDaysOf(state),
+      snapshots: new Map(),
+    };
+    pricingCache.set(state, pricing);
+  }
+  return pricing;
+}
+
+// The index of the last of `items`, sorted by date, on or before `date`, or
+// -1.
+function lastOnOrBefore(
+  items: readonly { date: string }[],
+  date: string,
+): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (items[middle]!.date <= date) low = middle + 1;
+    else high = middle;
+  }
+  return low - 1;
+}
+
 // A day's quotes as the closes value them: the stored ones of that day with
 // the user's own prices and rates over them, and an instrument nothing quotes
 // at its last trade price up to that day.
-function pricedAt(
-  state: ClosesState,
-  ledgers: readonly Pick<HoldingLedger, "row" | "movements">[],
-  date: string,
-  need: ReturnType<typeof closesNeed>,
-): QuoteSnapshot {
+function pricedAt(state: ClosesState, date: string): QuoteSnapshot {
+  const pricing = pricingOf(state);
+  const kept = pricing.snapshots.get(date);
+  if (kept) return kept;
+  // Only the rows of the days the snapshot reads, each day's in stored order.
+  const rows: StoredQuotes = { fxRates: [], prices: [] };
+  for (let back = 0; back <= QUOTE_CARRY_DAYS; back += 1) {
+    const day = pricing.rowsByDay.get(addDays(date, -back));
+    if (!day) continue;
+    rows.fxRates.push(...day.fxRates);
+    rows.prices.push(...day.prices);
+  }
   const quoted = pricedSnapshotOf(
     state,
-    snapshotOn(state.quotes, date, need).snapshot,
+    snapshotOn(rows, date, pricing.need).snapshot,
   ).snapshot;
-  return {
-    ...quoted,
-    prices: { ...lastTradePrices(ledgers, date), ...quoted.prices },
-  };
+  const traded: QuoteSnapshot["prices"] = {};
+  for (const [symbol, days] of pricing.trades) {
+    const last = lastOnOrBefore(days, date);
+    if (last >= 0) traded[symbol] = days[last]!.price;
+  }
+  const snapshot = { ...quoted, prices: { ...traded, ...quoted.prices } };
+  pricing.snapshots.set(date, snapshot);
+  return snapshot;
 }
 
 // Today's quotes as the closes value them, for what Resumen shows split
 // today, so it adds up to the last close.
-export function pricedToday(state: ClosesState): QuoteSnapshot {
-  const ledgers = allRows(state).map((row) => ({
-    row,
-    movements: state.movements.get(row.id) ?? [],
-  }));
-  return pricedAt(state, ledgers, state.today, closesNeed(state));
-}
+export const pricedToday = (state: ClosesState): QuoteSnapshot =>
+  pricedAt(state, state.today);
 
+// Each instrument holding's movements with what each left and paid, in `unit`.
 function ledgersOf(state: ClosesState, unit: Denominator): HoldingLedger[] {
   return allRows(state).flatMap((row) => {
     const movements = state.movements.get(row.id);
@@ -142,76 +272,10 @@ function holdingsAt(
   return allRows(state).flatMap((row) => {
     const ledger = byId.get(row.id);
     if (!ledger) return [row];
-    let last = -1;
-    while (
-      last + 1 < ledger.movements.length &&
-      ledger.movements[last + 1]!.date <= date
-    ) {
-      last += 1;
-    }
+    const last = lastOnOrBefore(ledger.movements, date);
     const quantity = last < 0 ? "0" : ledger.quantities[last]!;
     return exactOf(quantity).n === 0n ? [] : [rowAt(row, quantity)];
   });
-}
-
-// Each instrument's price on its latest trading day up to `date`, which
-// values it on a day no feed or manual price covers: that day's purchases,
-// sales and yields averaged by their units, so how they split across holdings
-// or which was recorded first does not matter; in the currency most of them
-// traded in. An opening balance's or an adjustment's price is a cost, not
-// what a unit was worth.
-function lastTradePrices(
-  ledgers: readonly Pick<HoldingLedger, "row" | "movements">[],
-  date: string,
-): QuoteSnapshot["prices"] {
-  type Day = {
-    date: string;
-    byCurrency: Map<string, { units: Exact; worth: Exact }>;
-  };
-  const latest = new Map<string, Day>();
-  for (const { row, movements } of ledgers) {
-    if (row.holding.asset_class !== "instrument") continue;
-    const symbol = row.holding.instrument_symbol;
-    for (const movement of movements) {
-      if (
-        movement.date > date ||
-        (movement.kind !== "purchase" &&
-          movement.kind !== "sale" &&
-          movement.kind !== "yield") ||
-        exactOf(movement.price).n === 0n
-      ) {
-        continue;
-      }
-      const kept = latest.get(symbol);
-      if (kept && kept.date > movement.date) continue;
-      const day =
-        kept?.date === movement.date
-          ? kept
-          : { date: movement.date, byCurrency: new Map() };
-      const units = exactOf(movement.quantity);
-      const was = day.byCurrency.get(movement.currency);
-      day.byCurrency.set(movement.currency, {
-        units: plus(was?.units ?? ZERO, units),
-        worth: plus(was?.worth ?? ZERO, times(units, exactOf(movement.price))),
-      });
-      latest.set(symbol, day);
-    }
-  }
-  return Object.fromEntries(
-    [...latest].map(([symbol, day]) => {
-      const [currency, { units, worth }] = [...day.byCurrency].sort(
-        ([a, x], [b, y]) => compareExact(y.units, x.units) || (a < b ? -1 : 1),
-      )[0]!;
-      return [
-        symbol,
-        {
-          price: stored(over(worth, units)),
-          currency: currencySchema.parse(currency),
-          date: day.date,
-        },
-      ];
-    }),
-  );
 }
 
 const cache = new WeakMap<ClosesState, Map<string, MonthClose[]>>();
@@ -291,33 +355,34 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
 
   const ledgers = ledgersOf(state, unit);
   const first = firstDay(ledgers, state.today);
-  const need = closesNeed(state);
-  const snapshotAt = (date: string): QuoteSnapshot =>
-    pricedAt(state, ledgers, date, need);
-  const valued = (holdings: HoldingRow[], date: string) => {
-    const snapshot = snapshotAt(date);
-    const total = holdingsValuation({
-      holdings,
-      truncated: false,
-      snapshot,
-      unit,
-      referenceDollar: state.referenceDollar,
-    }).kinds.total;
-    return { value: total.value, complete: total.complete, snapshot };
-  };
   // Net worth: what is held less what is owed. A debt keeps today's balance
-  // on every past day, in its own unit, until debts have a history.
+  // on every past day, in its own unit, until debts have a history. A
+  // month's end is the next one's start, so each day is valued once.
+  const values = new Map<
+    string,
+    { value: string; held: string; complete: boolean }
+  >();
   const valueAt = (date: string) => {
-    const held = valued(holdingsAt(state, ledgers, date), date);
-    const owed = valueLiabilities(state.liabilities, held.snapshot, {
+    const kept = values.get(date);
+    if (kept) return kept;
+    const snapshot = pricedAt(state, date);
+    const options = {
       denominator: unit,
       referenceDollar: state.referenceDollar,
-    });
-    return {
-      value: difference(held.value, owed.total),
-      held: held.value,
+    };
+    const held = valueHoldings(
+      holdingsAt(state, ledgers, date).map((row) => row.holding),
+      snapshot,
+      options,
+    );
+    const owed = valueLiabilities(state.liabilities, snapshot, options);
+    const value = {
+      value: difference(held.total, owed.total),
+      held: held.total,
       complete: held.complete && owed.complete,
     };
+    values.set(date, value);
+    return value;
   };
   // What each opening balance and adjustment out moved at, which the month's
   // detail shows.
@@ -339,7 +404,7 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
     }
     const worth = valueHoldings(
       [rowAt(ledger.row, movement.quantity).holding],
-      snapshotAt(movement.date),
+      pricedAt(state, movement.date),
       { denominator: unit, referenceDollar: state.referenceDollar },
     );
     if (!worth.complete) return { flow, priced: false };
@@ -358,26 +423,36 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
     };
   };
 
+  // Each month's movements, holding by holding, oldest first: a month runs
+  // from the day after the last one's end to its own end, today for the one
+  // in progress.
+  const byPeriod = new Map<string, [HoldingLedger, number][]>();
+  for (const ledger of ledgers) {
+    ledger.movements.forEach((movement, index) => {
+      if (movement.date > state.today) return;
+      const period = movement.date.slice(0, 7);
+      const own = byPeriod.get(period) ?? [];
+      own.push([ledger, index]);
+      byPeriod.set(period, own);
+    });
+  }
+
   const closes = monthsBetween(first, state.today).map((month) => {
     const start = valueAt(month.from);
     const end = valueAt(month.to);
-    const inMonth = (date: string) => date > month.from && date <= month.to;
     const flows: CashFlow[] = [];
     const period = { from: month.from, to: month.to, flows };
     const realized: (string | null)[] = [];
     // Whether every movement of the month could be expressed in the unit,
     // and every opening balance and adjustment out priced on its day.
     let known = true;
-    for (const ledger of ledgers) {
-      ledger.movements.forEach((movement, index) => {
-        if (!inMonth(movement.date)) return;
-        if (ledger.flows) {
-          const { flow, priced } = flowOf(ledger, index);
-          flows.push(flow);
-          if (!priced) known = false;
-        } else known = false;
-        realized.push(ledger.realized[index]!);
-      });
+    for (const [ledger, index] of byPeriod.get(month.period) ?? []) {
+      if (ledger.flows) {
+        const { flow, priced } = flowOf(ledger, index);
+        flows.push(flow);
+        if (!priced) known = false;
+      } else known = false;
+      realized.push(ledger.realized[index]!);
     }
     return {
       ...month,
