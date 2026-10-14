@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Assistant scenarios and month summaries (PLA-70)
+
+- **A scenario moves today's quotes and nothing else.** `simulateScenario` scales one dollar's sell rate (MEP, CCL, official, or all three), one instrument's price or every price by a percent between -99.99 and 1000, and revalues the open holdings and the debts at today's quotes as Resumen does. A peso price that follows the dollar in reality (a CEDEAR) stays where it is; the tool's note says so, and the answer opens with "Hipotético:". An instrument the user does not hold, or has no price for today, is refused rather than "moved", and a dollar nothing they hold or owe is valued at is reported as changing nothing.
+- **A month's change splits into what was put in, prices, the dollar and yields**, which add up to the change exactly. The dollar's part is the month-end holdings and debts at end quotes less the same at end prices with the start's dollar rates; prices take the rest of the closes' market result. A CEDEAR's peso price that rose with the CCL therefore counts as price in pesos. Income paid out (without yields, which are their own part) and charges are listed apart. Several consecutive months add up month by month.
+- **The month summary is a tool, not a chart topic.** `getMonthSummary` returns the figures and its waterfall chart in one result, so pinning it would need a topic the `pinned_charts` table does not accept; its chart carries no source and is not pinnable in the real app. Without months it takes the last closed month, or the one in progress when none has closed.
+- **The waterfall is its own template** (`waterfall`): the first and last points are totals drawn from zero and the ones between float from where the last left off, each figure printed above its bar.
+- **Left out:** voice dictation, memory and alerts (alerts are PLA-154). CSV download of a chart already exists.
+
 ## 2026-10-14 · Export to Excel and PDF (PLA-71)
 
 - **Ajustes exports everything the user loaded as one Excel workbook**, one sheet per kind of row, beside the CSVs it already offered. The real app reads the data only when the user asks for a file, through a server action under RLS: every holding and movement, the debts Deudas lists and the latest imports Cargar lists.

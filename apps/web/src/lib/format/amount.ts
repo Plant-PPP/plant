@@ -101,6 +101,12 @@ export function formatShare(decimal: string): string {
   return `${esAr(decimal, 1)} %`;
 }
 
+// A percent as typed, up to two decimals and none it does not need: 10 %,
+// 10,05 %, 0,04 %.
+export function formatPercent(decimal: string): string {
+  return `${esAr(decimal, 2, { trim: true })} %`;
+}
+
 // A quantity held, up to 8 decimals, trailing zeros dropped: 0,5 or 1.234.
 export function formatQuantity(decimal: string): string {
   return esAr(decimal, QUANTITY_DIGITS, { trim: true });
