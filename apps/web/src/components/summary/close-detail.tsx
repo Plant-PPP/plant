@@ -148,6 +148,12 @@ function CloseFigures({
           </SummaryTile>
         </dl>
       )}
+      {unit === "ars" && !benchmarks && (
+        <p className="text-muted-foreground text-xs">
+          El mes empezó sin tenencias: su rendimiento cubre solo una parte, así
+          que no se compara con la inflación ni con el dólar.
+        </p>
+      )}
       {!complete && (
         <p className="text-muted-foreground text-xs">
           Faltó algún dato: la cotización de un activo o una deuda al inicio o
