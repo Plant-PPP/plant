@@ -35,6 +35,7 @@ import {
   type PriceAlert,
 } from "@/lib/alerts/alerts";
 import { currencySymbol, parseAmountInput } from "@/lib/format/amount";
+import { settle } from "@/lib/server-action-call";
 
 // An instrument the user holds, which an alert can watch, and the currency
 // it is quoted in.
@@ -69,11 +70,13 @@ const REFUSED: Record<Exclude<AlertWriteResult, "ok">, string> = {
 export function AlertsCard({
   alerts,
   instruments,
+  readFailed = false,
   onCreate,
   onDelete,
 }: {
   alerts: readonly PriceAlert[];
   instruments: readonly AlertInstrument[];
+  readFailed?: boolean;
   onCreate: (alert: NewAlert) => Promise<AlertWriteResult>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -93,7 +96,8 @@ export function AlertsCard({
     new Promise<boolean>((resolve) =>
       startTransition(async () => {
         change({ add: pending });
-        const result = await onCreate(alert).catch(() => "failed" as const);
+        const settled = await settle(onCreate(alert));
+        const result = settled === "rejected" ? "failed" : settled;
         if (result === "ok") toast.success("Creaste la alerta.");
         else toast.error(REFUSED[result]);
         resolve(result === "ok");
@@ -103,7 +107,7 @@ export function AlertsCard({
   const remove = (id: string) =>
     startTransition(async () => {
       change({ remove: id });
-      if (!(await onDelete(id).catch(() => false))) {
+      if ((await settle(onDelete(id))) !== true) {
         toast.error("No pudimos borrar la alerta. Probá de nuevo.");
       }
     });
@@ -122,6 +126,11 @@ export function AlertsCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         <AlertForm instruments={instruments} onCreate={create} />
+        {readFailed && (
+          <FormAlert>
+            No pudimos leer tus alertas. Recargá la página para verlas.
+          </FormAlert>
+        )}
         {shown.length > 0 && (
           <ul className="grid gap-2">
             {shown.map((alert) => (

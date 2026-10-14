@@ -20,6 +20,7 @@ import { csvBlob, saveFile } from "@/lib/export/download";
 import { EXPORT_KINDS, type ExportAnswer } from "@/lib/export/tables";
 import { xlsxBlob } from "@/lib/export/xlsx";
 import { SETTINGS_ITEM } from "@/lib/navigation";
+import { settle } from "@/lib/server-action-call";
 import { createClient } from "@/lib/supabase/client";
 
 import { EXPORT_FAILED, exportOutcome } from "./export-status";
@@ -33,8 +34,9 @@ export function ExportCard({ load }: { load: () => Promise<ExportAnswer> }) {
 
   async function save(file: (tables: readonly ExportTable[]) => Promise<void>) {
     setBusy(true);
+    const answer = await settle(load());
     try {
-      const outcome = exportOutcome(await load().catch(() => null));
+      const outcome = exportOutcome(answer === "rejected" ? null : answer);
       if (outcome.kind === "step_up") setStepUp(true);
       else if (outcome.kind === "failed") toast.error(outcome.notice);
       else {

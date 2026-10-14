@@ -39,27 +39,30 @@ export const IMPORT_FAILURE_MESSAGES = {
 } as const;
 
 // A sync reads a connected account, not a file: its own words where they
-// differ.
+// differ, naming its provider.
 const SYNC_FAILURE_MESSAGES: Partial<
-  Record<keyof typeof IMPORT_FAILURE_MESSAGES, string>
+  Record<keyof typeof IMPORT_FAILURE_MESSAGES, (provider: string) => string>
 > = {
-  nothing_found: "No encontramos saldos ni operaciones en la cuenta conectada.",
-  unsupported:
-    "El proveedor no tiene activado el reporte que leemos. Seguí los pasos de la ayuda de la conexión y sincronizá de nuevo.",
-  extraction_failed:
+  nothing_found: () =>
+    "No encontramos saldos ni operaciones en la cuenta conectada.",
+  unsupported: (provider) =>
+    `${provider} no tiene activado el reporte que leemos. Seguí los pasos de la ayuda de la conexión y sincronizá de nuevo.`,
+  extraction_failed: () =>
     "No pudimos leer la cuenta conectada. Probá de nuevo más tarde.",
+  connection_rejected: (provider) =>
+    `${provider} rechazó la conexión. Revisá que siga activa o conectala de nuevo.`,
 };
 
-// Why a failed import stopped, in the user's words: a sync's (`sync`) as
-// one, a file's otherwise.
+// Why a failed import stopped, in the user's words: a sync's, by the name of
+// the provider it reads (`provider`), else a file's.
 export function importFailureMessage(
   failure: keyof typeof IMPORT_FAILURE_MESSAGES,
-  sync: boolean,
+  provider: string | null,
 ): string {
-  return (
-    (sync ? SYNC_FAILURE_MESSAGES[failure] : undefined) ??
-    IMPORT_FAILURE_MESSAGES[failure]
-  );
+  const sync = SYNC_FAILURE_MESSAGES[failure];
+  return provider !== null && sync
+    ? sync(provider)
+    : IMPORT_FAILURE_MESSAGES[failure];
 }
 
 // How sure the reading is of a row; a low one is for the user to check.
@@ -72,10 +75,16 @@ export const CONFIDENCE_LABELS: Record<Confidence, string> = {
 };
 
 // What a row's figures fail, in the user's words.
-export const ISSUE_LABELS: Record<ImportIssue, string> = {
+const ISSUE_LABELS: Record<ImportIssue, string> = {
   value_mismatch: "El valor no coincide con cantidad × precio",
   duplicate_symbol: "Este instrumento aparece más de una vez",
 };
+
+// A row's issue in the user's words, a cash balance's in its own.
+export const issueLabel = (issue: ImportIssue, cash: boolean): string =>
+  cash && issue === "duplicate_symbol"
+    ? "Este saldo aparece más de una vez"
+    : ISSUE_LABELS[issue];
 
 // Why the statement's date looks wrong, in the user's words.
 export const DATE_ISSUE_LABELS = {

@@ -53,8 +53,9 @@ import {
   currencyOf,
   instrumentLabel,
   instrumentNames,
+  unlabeledName,
 } from "@/lib/holdings/holding-name";
-import { MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
+import { ASSET_CLASS_LABELS, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import { priceBasisLabel, quotedInput } from "@/lib/holdings/price-input";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
@@ -63,7 +64,7 @@ import {
   DATE_ISSUE_LABELS,
   type ImportItem,
   type ImportRow,
-  ISSUE_LABELS,
+  issueLabel,
   readTotals,
   rowChange,
   totalsMatch,
@@ -140,11 +141,6 @@ export function pickedInstrument(
 export type AccountCash = {
   held: ReadonlyMap<Currency, string>;
   several: ReadonlySet<Currency>;
-};
-
-const CASH_LABELS: Record<Currency, string> = {
-  ARS: "Efectivo en pesos",
-  USD: "Efectivo en dólares",
 };
 
 // What the reading made of a document, to correct, discard or add to before
@@ -391,7 +387,7 @@ export function ImportReview({
         ? ""
         : row.assetClass === "cash"
           ? `cash|${row.symbol}|${row.accountId ?? item.accountId}`
-          : row.symbol,
+          : `${row.symbol}|${row.accountId ?? item.accountId}`,
       quantity: row.quantity,
       price: row.discarded ? null : row.price,
       value: row.value ?? null,
@@ -636,7 +632,7 @@ export function ImportReview({
                   ) : (
                     <span className="truncate font-medium">
                       {isCash(row)
-                        ? CASH_LABELS[row.currency]
+                        ? unlabeledName(ASSET_CLASS_LABELS.cash, row.currency)
                         : instrumentLabel(row.symbol, names.get(row.symbol))}
                     </span>
                   )}
@@ -655,7 +651,7 @@ export function ImportReview({
                       className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
                     >
                       <TriangleAlert aria-hidden className="size-3" />
-                      {ISSUE_LABELS[issue]}
+                      {issueLabel(issue, isCash(row))}
                     </span>
                   ))}
                   {!row.discarded && severalCash(row) && (
