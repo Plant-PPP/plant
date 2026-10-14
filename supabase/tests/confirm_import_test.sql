@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(15);
+SELECT plan(18);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -138,6 +138,36 @@ SELECT results_eq(
             (SELECT count(*)::int FROM public.holdings WHERE instrument_symbol = 'GD30') $$,
   $$ VALUES ('ready', 0) $$,
   'and writes none of its operations'
+);
+
+-- Two operations that read one holding differently are refused.
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import('a9000000-0000-4000-8000-0000000000a2',
+                        jsonb_build_array(pg_temp.opening('AAPL', '1'),
+                                          jsonb_set(pg_temp.opening('AAPL', '1'), '{expected}',
+                                            (SELECT jsonb_object_agg(h.id, h.movements_revision + 7)
+                                             FROM public.holdings h WHERE h.instrument_symbol = 'AAPL')))) $$),
+  '22023',
+  'operations that read one holding differently are refused'
+);
+
+-- A purchase that opens a holding and a sale of it, both read before the
+-- first, go in one import.
+SELECT is(
+  public.confirm_import('a9000000-0000-4000-8000-0000000000a2',
+    jsonb_build_array(
+      pg_temp.opening('MSFT', '5'),
+      jsonb_set(pg_temp.opening('MSFT', '2'), '{parts,0,kind}', '"sale"'))),
+  'a9000000-0000-4000-8000-0000000000a2'::uuid,
+  'an import may touch one instrument more than once'
+);
+
+SELECT results_eq(
+  $$ SELECT (SELECT amount::text FROM public.holdings WHERE instrument_symbol = 'MSFT'),
+            (SELECT count(*)::int FROM public.movements m
+             JOIN public.holdings h ON h.id = m.holding_id WHERE h.instrument_symbol = 'MSFT') $$,
+  $$ VALUES ('3.00000000', 2) $$,
+  'with each of its operations written in turn'
 );
 
 SELECT is(

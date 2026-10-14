@@ -161,6 +161,26 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"import_operations": {
+                  Row: {
+                    "amount": number | null,"charges": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string | null,"id": string,"import_id": string,"kind": Database["public"]['Enums']["movement_kind"] | null,"position": number,"price": number | null,"quantity": number | null,"reference": string | null,"source_page": number | null,"symbol": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"charges"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date"?: string | null,"id"?: string,"import_id": string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"position": number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "amount"?: number | null,"charges"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string | null,"id"?: string,"import_id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"position"?: number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "import_operations_user_id_import_id_fkey"
+      columns: ["user_id","import_id"]
+isOneToOne: false
+      referencedRelation: "imports"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"imports": {
                   Row: {
                     "created_at": string,"document_date": string | null,"document_id": string,"failure": Database["public"]['Enums']["import_failure"] | null,"id": string,"printed_total_ars": number | null,"printed_total_usd": number | null,"skipped_rows": number,"status": Database["public"]['Enums']["import_status"],"updated_at": string,"user_id": string
