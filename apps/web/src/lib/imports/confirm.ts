@@ -151,6 +151,7 @@ const reviewedRowSchema = z.union([
     symbol: z.string().min(1),
     quantity: positiveDecimalSchema,
     price: nonNegativeDecimalSchema.nullable(),
+    cost: positiveDecimalSchema.nullable().optional(),
     portfolioId: z.string().min(1).optional(),
     transferFrom: z.string().min(1).optional(),
   }),
@@ -267,9 +268,11 @@ export function writeImport<S extends Ledger>(
       next = moved.state;
       continue;
     }
+    // Units that come in do so at the cost the review kept, else the price.
+    const entry = row.cost ?? row.price;
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
-      if (row.price === null || compareDecimals(row.price, "0") <= 0) {
+      if (entry === null || compareDecimals(entry, "0") <= 0) {
         return refuse({ ok: false, code: "invalid" });
       }
       parts = [{ portfolio_id: destination, quantity: diff }];
@@ -300,7 +303,7 @@ export function writeImport<S extends Ledger>(
         instrument_symbol: row.symbol,
         date,
         currency: instrument.currency,
-        price: order > 0 ? row.price : "0",
+        price: order > 0 ? entry : "0",
         parts,
         charges: [],
         reference: null,

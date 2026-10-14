@@ -108,3 +108,11 @@ it("says how many holdings of a spreadsheet were left out", () => {
   expect(html(1)).toContain("Una fila de la planilla no se pudo leer");
   expect(html(3)).toContain("3 filas de la planilla no se pudieron leer");
 });
+
+it("shows the average cost a document printed, for the units to come in at", () => {
+  const html = render(undefined, {
+    ...ITEM,
+    rows: [{ ...ITEM.rows[0]!, cost: "12000" }],
+  });
+  expect(html).toContain("Costo promedio");
+});

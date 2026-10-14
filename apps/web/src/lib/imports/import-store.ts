@@ -177,6 +177,7 @@ export function createImportStore(client: Client): ImportStorePort {
         quantity: row.quantity as unknown as number,
         price: row.price as unknown as number | null,
         value: row.value as unknown as number | null,
+        cost: (row.cost ?? null) as unknown as number | null,
         currency: row.currency,
         confidence: row.confidence,
         source_page: row.page,

@@ -134,6 +134,7 @@ it("replaces the draft, then marks the import ready at the document's date", asy
       quantity: "5",
       price: null,
       value: "90000",
+      cost: null,
       currency: "ARS",
       confidence: "low",
       source_page: 2,

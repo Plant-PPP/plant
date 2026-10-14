@@ -146,3 +146,22 @@ it("refuses a statement older than a holding the account already has", () => {
   expect(written.operations).toEqual([]);
   expect(written.state).toBe(opened);
 });
+
+it("opens a holding at the cost the review kept, else at the price", () => {
+  const written = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", "18000"), cost: "12000" }],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const [movement] = [...written.state.movements.values()].flat();
+  expect(movement).toMatchObject({ kind: "opening_balance", price: "12000" });
+  const withoutPrice = writeImport(
+    emptyLedger(),
+    ITEM,
+    [{ ...row("AAPL", "5", null), cost: "12000" }],
+    newId,
+  );
+  expect(withoutPrice.result).toEqual({ ok: true, id: "i1" });
+});

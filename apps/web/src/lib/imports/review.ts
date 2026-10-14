@@ -63,6 +63,9 @@ export type ImportRow = {
   // The row's value as the document prints it, in its currency; the
   // prototype's rows print none.
   value?: string | null;
+  // The cost of one unit the units came in at, in its currency: the average
+  // cost the document prints, else the price.
+  cost?: string | null;
   currency: Currency;
   confidence: Confidence;
   source: string;

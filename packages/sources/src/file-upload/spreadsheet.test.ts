@@ -391,6 +391,27 @@ describe("sheetToDraft", () => {
     ],
   };
 
+  it("reads the average cost when a column holds it", () => {
+    const { draft } = sheetToDraft(
+      {
+        headers: ["Especie", "Cantidad", "PPC", "Moneda"],
+        rows: [["AAPL", "5", "12.000,50", "ARS"]],
+      },
+      {
+        symbol: "Especie",
+        quantity: "Cantidad",
+        price: null,
+        value: null,
+        cost: "PPC",
+        currency: "Moneda",
+        date: null,
+        currencyDefault: null,
+      },
+      "2026-10-13",
+    );
+    expect(draft.rows[0]).toMatchObject({ symbol: "AAPL", cost: "12000.50" });
+  });
+
   it("counts the holdings it leaves out, not a total without a symbol", () => {
     // GD30 in euros and YPFD's negative quantity.
     expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);

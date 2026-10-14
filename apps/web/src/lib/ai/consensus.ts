@@ -81,10 +81,13 @@ export function compareReadings(
     const x = a.get(key);
     const y = b.get(key);
     if (x && y && !unsettled.has(instrumentOf(key))) {
+      // A cost the readings differ on is left out, not voted on.
+      const { cost, ...rest } = x;
       agreed.set(key, {
-        ...x,
+        ...rest,
         confidence: lowerConfidence(x.confidence, y.confidence),
         page: x.page ?? y.page,
+        ...(cost != null && sameDecimal(cost, y.cost ?? null) && { cost }),
       });
     } else {
       rows.push(key);
