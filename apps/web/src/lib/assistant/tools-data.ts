@@ -545,7 +545,7 @@ export function assistantData({
 
     // The user's latest imports and how many they started this month.
     async importStatus() {
-      const { items, used } = await readImports(client, today);
+      const { items, used } = await readImports(client);
       return {
         sources: [SOURCES.imports],
         asOf: today,
