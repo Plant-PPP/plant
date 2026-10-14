@@ -21,11 +21,12 @@ export const DRAFT_ROW_LIMIT = 500;
 
 // One holding as the document lists it: the instrument as it names it, how
 // many, the price per unit and the holding's value it prints in its currency,
-// and the page it is on.
+// and the page it is on. Only cash may be at zero: a balance listed at zero,
+// which brings the account's cash in that currency to zero.
 export const draftRowSchema = z
   .object({
     symbol: z.string().trim().min(1).max(30),
-    quantity: positiveDecimalSchema,
+    quantity: nonNegativeDecimalSchema,
     price: positiveDecimalSchema.nullable(),
     value: positiveDecimalSchema.nullable(),
     // The average cost per unit it prints, a bond's per 100 nominal.
@@ -39,7 +40,13 @@ export const draftRowSchema = z
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (row) =>
+      row.assetClass === "cash" ||
+      positiveDecimalSchema.safeParse(row.quantity).success,
+    { path: ["quantity"], message: "Must be greater than 0" },
+  );
 
 // What a file yields: the date its holdings are at, when it prints one, its
 // rows, and the holdings totals it prints, at most one per currency.

@@ -510,7 +510,7 @@ describe("mercado pago", () => {
     ).toBe("700.25");
   });
 
-  it("counts a zero balance as left out, so the draft is not silently empty", async () => {
+  it("reads a zero balance as pesos at zero, which the review brings to zero", async () => {
     fake.answer = (request) =>
       request.path.endsWith(".csv")
         ? {
@@ -523,8 +523,14 @@ describe("mercado pago", () => {
       ...deps(),
       sleep: async () => undefined,
     }).read(MERCADO_PAGO_CREDENTIALS, "holdings")) as HoldingsReading;
-    expect(reading.draft.rows).toEqual([]);
-    expect(reading.read.skippedRows).toBe(1);
+    expect(reading.draft.rows).toEqual([
+      expect.objectContaining({
+        symbol: "ARS",
+        quantity: "0",
+        assetClass: "cash",
+      }),
+    ]);
+    expect(reading.read.skippedRows).toBe(0);
   });
 
   it("counts nothing left out when only an earlier line's balance does not read", async () => {

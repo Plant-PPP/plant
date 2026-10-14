@@ -10,6 +10,7 @@ import {
   decimalOf,
   defaultSleep,
   holdingsReading,
+  isZero,
   jsonOf,
   positive,
   rejected,
@@ -256,8 +257,12 @@ export function mercadoPagoConnection({
       const balance = balanceOf(csv);
       // Which line closes the report is read from its documentation, so the
       // review asks the user to look.
-      const rows = positive(balance) ? [cashRow("ARS", balance, "medium")] : [];
-      // A balance missing, unreadable, zero or below is counted, so the
+      const rows = positive(balance)
+        ? [cashRow("ARS", balance, "medium")]
+        : isZero(balance)
+          ? [cashRow("ARS", "0", "medium")]
+          : [];
+      // A balance missing, unreadable or below zero is counted, so the
       // review says a line was left out rather than showing nothing.
       const skipped = rows.length === 0 ? 1 : 0;
       const reading = holdingsReading(rows, skipped, now());
