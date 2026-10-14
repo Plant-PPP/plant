@@ -174,6 +174,7 @@ export function ImportOperationsReview({
   const incomplete = missing.filter(
     (each, index) => each.size > 0 || invalidTyped[index]!.size > 0,
   ).length;
+  const loadedCount = rows.filter((row) => row.loaded).length;
   const doubtful = rows.filter(
     (row) => !row.discarded && row.confidence === "low",
   ).length;
@@ -261,6 +262,13 @@ export function ImportOperationsReview({
           {incomplete > 0 && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-200">
               {`${incomplete} con datos faltantes`}
+            </span>
+          )}
+          {loadedCount > 0 && (
+            <span className="text-muted-foreground text-xs">
+              {loadedCount === 1
+                ? "1 ya estaba cargada"
+                : `${loadedCount} ya estaban cargadas`}
             </span>
           )}
           {doubtful > 0 && (

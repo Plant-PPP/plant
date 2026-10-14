@@ -105,5 +105,6 @@ it("says an operation already in the account is loaded, set aside", () => {
     operation({ id: "o2" }),
   ]);
   expect(html).toContain("Ya está cargada");
+  expect(html).toContain("1 ya estaba cargada");
   expect(html).toContain("Recuperar");
 });
