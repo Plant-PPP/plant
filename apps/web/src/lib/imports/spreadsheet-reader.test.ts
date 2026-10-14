@@ -49,6 +49,7 @@ it("maps a format's columns once, then reads the same format without the model",
     bytes: STATEMENT,
     mimeType: CSV,
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   };
 
@@ -57,6 +58,7 @@ it("maps a format's columns once, then reads the same format without the model",
     reader: "sheet",
     mapping: "miss",
     skippedRows: 0,
+    disputes: 0,
   });
   expect(
     first.draft.rows.map(({ symbol, quantity, price }) => [
@@ -74,6 +76,7 @@ it("maps a format's columns once, then reads the same format without the model",
     reader: "sheet",
     mapping: "hit",
     skippedRows: 0,
+    disputes: 0,
   });
   expect(mapColumns).toHaveBeenCalledTimes(1);
 
@@ -96,6 +99,7 @@ it("keeps no mapping that reads no rows", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(draft.rows).toEqual([]);
@@ -122,6 +126,7 @@ describe("with quantity, price and value mapped", () => {
       mimeType: CSV,
       userId: "u1",
       importId: "i1",
+      lastAttempt: false,
       institution: "IOL",
     });
     return { draft, kept };
@@ -158,6 +163,7 @@ it("keeps no mapping that skips as many rows as it reads", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(draft.rows).toHaveLength(1);
@@ -175,6 +181,7 @@ it("maps again when a kept mapping no longer fits the headers", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(how.mapping).toBe("miss");
@@ -198,6 +205,7 @@ it("reads the rows even when the mapping cannot be kept", async () => {
     mimeType: CSV,
     userId: "u1",
     importId: "i1",
+    lastAttempt: false,
     institution: "IOL",
   });
   expect(draft.rows).toHaveLength(2);

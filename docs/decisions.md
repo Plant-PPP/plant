@@ -2,6 +2,18 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Two readings and a tiebreak (PLA-36)
+
+- **Two models read each statement side by side**, `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, on the standard tier, each costed to the user as `import_extraction`. They are compared on the parsed drafts, not on the raw answers: a row is matched by its symbol as printed (case aside), its currency and which occurrence it is, and two figures agree when they are the same number (`compareDecimals`), however written.
+- **Only disputes go to a third call.** A row one reading lists and the other does not, a quantity, price or value that differs, the date and a total per currency are disputes; when there are none the first reading stands and no third call is made. Otherwise `gemini-3.5-flash-lite` reads the file again with a brief naming only the disputed holdings (the symbols neutralized and inside `<symbol>` tags), the date or the totals.
+- **An instrument with one disputed line has every line disputed**, and the tiebreak lists every line of it, so an instrument listed twice lines up across the three readings by position.
+- **A reader whose provider may answer later fails the reading for the step to retry**, except on the last attempt. Otherwise a reader that fails leaves the other's reading, every row marked `low`; both failing fails the reading, retryable when either error is. A tiebreak the provider may answer later fails the reading for the step to retry, except on the last attempt; one that cannot answer settles on the two readings, keeping a row only one lists and every figure they differ on, marked `low`.
+- **A row stands unchecked only when two readings agree on all its figures together**: figures voted one by one may come from different lines of an instrument listed twice. A model call that times out is retryable, like a provider that is down.
+- **A row one reader missed is marked `low` even when the tiebreak lists it**: it may be the other reader's line under another name, which would otherwise stand twice.
+- **Each dispute is settled by two of three.** A row stands when two readings list it, so one the tiebreak leaves out counts as a vote against; each figure takes the value two share. A figure no two share takes the tiebreak's and marks the row `low` for the review. The page is not voted on: the first that names one is kept.
+- **Pre-analysis (PLA-37) and per-type extraction (PLA-78) are not part of it.** The column mapper keeps `gemini-3.8-flash`. The job logs how many disputes a reading had (`plant.import.dispute_count`), never their values.
+- **Not checked against real statements.** The tests use mocked models; a run over real documents waits for PLA-44's set and PLA-45's eval.
+
 ## 2026-10-14 · The assistant's evals (PLA-55)
 
 - **The evals live in `apps/web`, not in `evals/`.** They run `runAssistantTurn` and `isAdvice`, and `evals/` cannot import the app. The questions are a typed file (`lib/assistant/evals/questions.ts`) that `evals/README.md` points to.
@@ -166,7 +178,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 ## 2026-10-13 · The import job (PLA-35)
 
-- **One reading, no consensus yet.** The job sends the file to `gemini-3.8-flash` once and checks each row against the draft's schema; a row that fails it is left out. Pre-analysis and consensus arrive with PLA-36 and PLA-37.
+- **One reading, no consensus yet** (superseded by PLA-36). The job sends the file to `gemini-3.8-flash` once and checks each row against the draft's schema; a row that fails it is left out. Pre-analysis and consensus arrive with PLA-36 and PLA-37.
 - **The model reads PDFs and pictures; CSV and Excel fail as `unsupported`** until PLA-38 parses them in code.
 - **The event names the import and its user, and the job checks both** against the import before it reads the file: the import must be that user's, queued, with its file under that user's folder.
 - **The job runs only under `next dev`**, like the quotes job, until PLA-73 registers both on a deployment with the secret key there. On a deployment an upload stays queued.

@@ -11,18 +11,32 @@ import {
   DRAFT_ROW_LIMIT,
   type ImportDraft,
   importDraftSchema,
+  SourceError,
 } from "@plant/sources";
 import { z } from "zod";
 
+import {
+  agreedDraft,
+  compareReadings,
+  disputeCount,
+  settle,
+  tiebreakBrief,
+  unchecked,
+} from "./consensus";
 import type { ModelFactory } from "./costed-model";
 import { structuredCall } from "./structured-call";
 
-// The model that reads statements, which it takes as they are, and maps a
-// spreadsheet's columns.
-export const EXTRACTION_MODEL = "gemini-3.8-flash" satisfies PricedModelId;
+// The two models that read each statement, as it is, side by side, and the
+// one that reads again only what they disagree on.
+export const READERS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+] as const satisfies readonly PricedModelId[];
+export const TIEBREAK_MODEL = "gemini-3.5-flash-lite" satisfies PricedModelId;
 
-// The longest a reading may take before the step retries it.
-const EXTRACTION_TIMEOUT_MS = 120_000;
+// The longest one reading may take; the two readers and the tiebreak run in
+// two rounds inside one step.
+const EXTRACTION_TIMEOUT_MS = 100_000;
 
 const currency = z.enum(Constants.public.Enums.currency);
 
@@ -105,9 +119,10 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
   };
 };
 
-// Reads a statement's holdings with the model, costing the call to the user.
-// `record` writes the cost row; `model` is the provider's, replaced in tests.
-// It does not check the file's type: only PDFs and pictures are routed here.
+// Reads a statement's holdings with two models, and a third over what they
+// disagree on, costing every call to the user. `record` writes the cost rows;
+// `model` is the provider's, replaced in tests. It does not check the file's
+// type: only PDFs and pictures are routed here.
 export function documentExtractor({
   record,
   model,
@@ -115,29 +130,87 @@ export function documentExtractor({
   record: (row: AiCostInsert) => Promise<void>;
   model?: ModelFactory;
 }): ImportJobDeps["extract"] {
-  return async ({ bytes, mimeType, userId }) => {
-    const answer = await structuredCall({
-      modelId: EXTRACTION_MODEL,
-      costType: "import_extraction",
-      userId,
-      record,
-      model,
-      system: SYSTEM,
-      schema: answerSchema,
-      timeoutMs: EXTRACTION_TIMEOUT_MS,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "List the holdings in this statement." },
-            { type: "file", data: bytes, mediaType: mimeType },
+  return async ({ bytes, mimeType, userId, lastAttempt }) => {
+    const read = async (modelId: PricedModelId, ask: string) =>
+      toDraft(
+        await structuredCall({
+          modelId,
+          costType: "import_extraction",
+          userId,
+          record,
+          model,
+          system: SYSTEM,
+          schema: answerSchema,
+          timeoutMs: EXTRACTION_TIMEOUT_MS,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: ask },
+                { type: "file", data: bytes, mediaType: mimeType },
+              ],
+            },
           ],
-        },
-      ],
-    });
+        }),
+      );
+    const ask = "List the holdings in this statement.";
+    const [one, two] = await Promise.allSettled([
+      read(READERS[0], ask),
+      read(READERS[1], ask),
+    ]);
+    // A reader the provider may answer later fails the reading for the step
+    // to retry, unless no retry follows. Otherwise one reader failing leaves
+    // the other's reading, every row for the user to check; both failing
+    // fails the reading, retryable if either may pass.
+    if (one.status === "rejected" || two.status === "rejected") {
+      const errors = [one, two].map((r) =>
+        r.status === "rejected" ? r.reason : null,
+      );
+      const passing = errors.find(
+        (e) => e instanceof SourceError && e.retryable,
+      );
+      const survivor = [one, two].find((r) => r.status === "fulfilled");
+      if (survivor?.status === "fulfilled" && (!passing || lastAttempt)) {
+        return {
+          draft: unchecked(survivor.value),
+          read: {
+            reader: "document",
+            mapping: "none",
+            skippedRows: 0,
+            disputes: 0,
+          },
+        };
+      }
+      throw passing ?? errors.find((e) => e !== null);
+    }
+    const first = one.value;
+    const second = two.value;
+    const compared = compareReadings(first, second);
+    const disputed = disputeCount(compared.disputes);
+    let draft = agreedDraft(first, compared);
+    if (disputed > 0) {
+      // A tiebreak the provider may answer later fails the reading for the
+      // step to retry, unless no retry follows; otherwise it settles on the
+      // two readings, whatever they differ on marked low.
+      const tiebreak = await read(
+        TIEBREAK_MODEL,
+        tiebreakBrief(compared.disputes, first, second),
+      ).catch((error: unknown) => {
+        if (error instanceof SourceError && error.retryable && !lastAttempt) {
+          throw error;
+        }
+        return null;
+      });
+      draft = settle(first, second, tiebreak, compared);
+    }
     return {
-      draft: toDraft(answer),
-      read: { reader: "document", mapping: "none", skippedRows: 0 },
+      draft,
+      read: {
+        reader: "document",
+        mapping: "none",
+        skippedRows: 0,
+        disputes: disputed,
+      },
     };
   };
 }

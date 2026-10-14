@@ -1,14 +1,20 @@
 import "server-only";
-import { type AiCostInsert, neutralizePromptText } from "@plant/shared";
+import {
+  type AiCostInsert,
+  neutralizePromptText,
+  type PricedModelId,
+} from "@plant/shared";
 import {
   type ColumnMapping,
   columnMappingFor,
   type Sheet,
 } from "@plant/sources/spreadsheet";
 
-import { EXTRACTION_MODEL } from "./document-extractor";
 import type { ModelFactory } from "./costed-model";
 import { structuredCall } from "./structured-call";
+
+// The model that maps a spreadsheet's columns.
+export const COLUMN_MAPPING_MODEL = "gemini-3.8-flash" satisfies PricedModelId;
 
 // The longest a mapping may take before the step retries the reading.
 const MAPPING_TIMEOUT_MS = 60_000;
@@ -48,7 +54,7 @@ export function columnMapper({
       .map((row) => row.map(cellText).join(" | "))
       .join("\n");
     return structuredCall({
-      modelId: EXTRACTION_MODEL,
+      modelId: COLUMN_MAPPING_MODEL,
       costType: "import_column_mapping",
       userId,
       record,
