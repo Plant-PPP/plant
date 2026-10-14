@@ -1,8 +1,7 @@
 import "server-only";
 import { validateHoldings } from "@plant/core";
-import type { ImportJobDeps } from "@plant/jobs";
 import { buenosAiresDate } from "@plant/shared";
-import type { ImportDraft } from "@plant/sources";
+import type { FileReader, ImportDraft } from "@plant/sources";
 import {
   type ColumnMapping,
   columnMappingFor,
@@ -56,7 +55,7 @@ export function spreadsheetReader({
     userId: string;
   }) => Promise<ColumnMapping>;
   now?: () => Date;
-}): ImportJobDeps["extract"] {
+}): FileReader {
   return async ({ importId, bytes, mimeType, userId, institution }) => {
     const sheet = readSheet(bytes, mimeType);
     const stored = columnMappingFor(sheet.headers).safeParse(

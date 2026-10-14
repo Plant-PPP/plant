@@ -1,7 +1,9 @@
 import {
   type ImportDraft,
+  type PortfolioSourcePort,
   SourceError,
   type SourceErrorCode,
+  type SourceReadInfo,
 } from "@plant/sources";
 import { Constants, type Database, type Logger } from "@plant/shared";
 import { NonRetriableError } from "inngest";
@@ -40,28 +42,11 @@ export interface ImportStorePort {
   ): Promise<void>;
 }
 
-// How a file was read: by a model reading the document, or from a
-// spreadsheet's columns, whose mapping was saved already (hit), made now
-// (miss) or not needed (none); and how many of its rows made no holding.
-export type ImportRead = {
-  reader: "document" | "sheet";
-  mapping: "none" | "hit" | "miss";
-  skippedRows: number;
-  // Figures and rows the document's two readings disagreed on, which a third
-  // settled; 0 for a spreadsheet.
-  disputes: number;
-};
-
 export type ImportJobDeps = {
   store: ImportStorePort;
-  // Reads a file's holdings, throwing a SourceError when it cannot.
-  extract(input: {
-    importId: string;
-    bytes: Uint8Array;
-    mimeType: string;
-    userId: string;
-    institution: string;
-  }): Promise<{ draft: ImportDraft; read: ImportRead }>;
+  // The connection's source reads a file's holdings, throwing a
+  // SourceError when it cannot.
+  source: PortfolioSourcePort;
   log: Logger;
 };
 
@@ -71,7 +56,7 @@ export type ImportJobDeps = {
 type Prepared =
   | { ok: true; path: string; mimeType: string }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
-type Read = { rows: number } & ImportRead;
+type Read = { rows: number } & SourceReadInfo;
 
 export type ImportSteps = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -157,7 +142,7 @@ export async function runImportDocument(
     read = await step.run("read", async (): Promise<Read> => {
       try {
         const bytes = await deps.store.download(prepared.path);
-        const { draft, read } = await deps.extract({
+        const { draft, read } = await deps.source.read({
           importId,
           bytes,
           mimeType: prepared.mimeType,
