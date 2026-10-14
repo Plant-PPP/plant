@@ -602,8 +602,9 @@ export function monthDetail(
 // what the holdings and debts at each month's end were worth at its end quotes
 // less what they were worth with the dollar rates of its start and the same
 // prices; the prices' part is the rest of the market result, so a peso price
-// that follows the dollar (a CEDEAR) counts as price. Income paid out and
-// charges are listed apart, as the closes count them.
+// that follows the dollar (a CEDEAR) counts as price. Income paid out
+// (dividends, coupons and rents, without yields) and charges are listed
+// apart.
 export type ChangeBetween = {
   from: string;
   to: string;
@@ -696,7 +697,8 @@ export function changeBetween(
     prices: stored(minus(sum("market"), dollar)),
     dollar: stored(dollar),
     yields: stored(yields),
-    income: stored(sum("income")),
+    // What was paid out; what yields added is in `yields`, not here too.
+    income: stored(minus(sum("income"), yields)),
     charges: stored(sum("charges")),
     result: stored(sum("result")),
     realized: sumOrNull(months.map((each) => each.realized)),

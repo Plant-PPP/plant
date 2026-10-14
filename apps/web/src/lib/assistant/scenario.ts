@@ -9,7 +9,7 @@ import {
 } from "@plant/core";
 import { exactOf, minus, over, plus, stored, times } from "@plant/shared";
 
-import { formatShare } from "@/lib/format/amount";
+import { formatPercent } from "@/lib/format/amount";
 
 import { barsOf, type ChartPart, type ChatUnit } from "./chat";
 import { worthOfAssets } from "./figures";
@@ -33,6 +33,19 @@ export const validChange = (change: string): boolean =>
   SCENARIO_CHANGE.test(change) &&
   Number(change) > -100 &&
   Number(change) <= 1000;
+
+// What the scenario tool is asked: a dollar only with how much it moves, an
+// instrument only with how much its price moves, and at least one move.
+export type ScenarioInput = {
+  dollar?: ScenarioDollar;
+  dollarChange?: string;
+  instrument?: string;
+  priceChange?: string;
+};
+export const pairedScenario = (input: ScenarioInput): boolean =>
+  (input.dollar === undefined || input.dollarChange !== undefined) &&
+  (input.instrument === undefined || input.priceChange !== undefined) &&
+  (input.dollarChange !== undefined || input.priceChange !== undefined);
 
 const factorOf = (change: string) =>
   plus(exactOf("1"), over(exactOf(change), exactOf("100")));
@@ -72,30 +85,45 @@ const DOLLAR_NAMES: Record<ScenarioDollar, string> = {
   all: "el dólar (MEP, CCL y oficial)",
 };
 
-// What a shock assumes, in the user's words: "el dólar MEP sube 10 %".
+export type ShockPart = "dollar" | "price";
+
+// What each part of a shock assumes, in the user's words: "el dólar MEP
+// sube 10 %".
 export function assumptionsOf(
   shock: Shock,
   instrumentName: string | null,
-): string[] {
+): Partial<Record<ShockPart, string>> {
   const moved = (change: string) => {
-    // "10 %", not "10,0 %": the percent as the user said it.
-    const size = formatShare(change.replace(/^-/, "")).replace(",0 %", " %");
+    const size = formatPercent(change.replace(/^-/, ""));
     return change.startsWith("-") ? `baja ${size}` : `sube ${size}`;
   };
-  return [
-    ...(shock.dollar
-      ? [`${DOLLAR_NAMES[shock.dollar.kind]} ${moved(shock.dollar.change)}`]
-      : []),
-    ...(shock.price
-      ? [
-          `${
-            shock.price.symbol === null
-              ? "el precio de todos tus activos con cotización"
-              : `el precio de ${instrumentName ?? shock.price.symbol}`
-          } ${moved(shock.price.change)}`,
-        ]
-      : []),
-  ];
+  return {
+    ...(shock.dollar && {
+      dollar: `${DOLLAR_NAMES[shock.dollar.kind]} ${moved(shock.dollar.change)}`,
+    }),
+    ...(shock.price && {
+      price: `${
+        shock.price.symbol === null
+          ? "el precio de todos tus activos con cotización"
+          : `el precio de ${instrumentName ?? shock.price.symbol}`
+      } ${moved(shock.price.change)}`,
+    }),
+  };
+}
+
+// Whether a price shock on one instrument has something to move: a holding
+// of it, and a price for it today.
+export function priceTarget(
+  holdings: readonly Holding[],
+  snapshot: QuoteSnapshot,
+  symbol: string,
+): "held" | "not_held" | "unpriced" {
+  const held = holdings.some(
+    (each) =>
+      each.asset_class === "instrument" && each.instrument_symbol === symbol,
+  );
+  if (!held) return "not_held";
+  return snapshot.prices[symbol] ? "held" : "unpriced";
 }
 
 // Net worth today and under the shock, side by side, the chart labelled as
@@ -141,6 +169,13 @@ export function scenarioOf({
   const shocked = worthAt(shockedSnapshot(snapshot, shock));
   const change = minus(exactOf(shocked.netWorth), exactOf(today.netWorth));
   const base = exactOf(today.netWorth);
+  // The parts that move nothing the user holds or owes: a dollar nothing is
+  // valued at, or prices of nothing held.
+  const idle = (["dollar", "price"] as const).filter((part) => {
+    if (!shock[part]) return false;
+    const alone = worthAt(shockedSnapshot(snapshot, { [part]: shock[part] }));
+    return alone.assets === today.assets && alone.debts === today.debts;
+  });
   return {
     today: {
       assets: today.assets,
@@ -157,5 +192,6 @@ export function scenarioOf({
     share: base.n > 0n ? stored(over(change, base)) : null,
     complete: today.complete && shocked.complete,
     missing: today.missing,
+    idle: idle as ShockPart[],
   };
 }

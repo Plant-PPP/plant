@@ -51,7 +51,9 @@ import { changeChart, changePeriod, lastClosed } from "./month-change";
 import {
   assumptionsOf,
   scenarioChart,
-  type ScenarioDollar,
+  pairedScenario,
+  priceTarget,
+  type ScenarioInput,
   scenarioOf,
   type Shock,
 } from "./scenario";
@@ -76,7 +78,8 @@ export type ToolFailure = {
     | "unknown_portfolio"
     | "unknown_instrument"
     | "unknown_month"
-    | "no_change";
+    | "no_change"
+    | "unpriced_instrument";
 };
 
 // A name the user or a document wrote, before it reaches a model.
@@ -560,21 +563,21 @@ export function assistantData({
 
     // Net worth today and under a hypothetical move of a dollar or of prices,
     // computed here at today's quotes with only the named ones moved.
-    async scenario({
-      dollar,
-      dollarChange,
-      instrument,
-      priceChange,
-    }: {
-      dollar?: ScenarioDollar;
-      dollarChange?: string;
-      instrument?: string;
-      priceChange?: string;
-    }) {
+    async scenario(input: ScenarioInput) {
+      const { dollar, dollarChange, instrument, priceChange } = input;
+      if (!pairedScenario(input)) return { error: "no_change" as const };
       const read = await load();
       const snapshot = pricedToday(read);
+      const holdings = read.holdings.active.map((row) => row.holding);
       const symbol = instrument ? symbolOf(read, instrument) : null;
       if (symbol === null && instrument) return unknownInstrument(read);
+      if (symbol !== null) {
+        const target = priceTarget(holdings, snapshot, symbol);
+        if (target === "not_held") return unknownInstrument(read);
+        if (target === "unpriced") {
+          return { error: "unpriced_instrument" as const, symbol };
+        }
+      }
       const shock: Shock = {
         ...(dollarChange !== undefined && {
           dollar: { kind: dollar ?? "all", change: dollarChange },
@@ -583,19 +586,20 @@ export function assistantData({
           price: { symbol, change: priceChange },
         }),
       };
-      if (!shock.dollar && !shock.price) return { error: "no_change" as const };
       const name =
         symbol === null
           ? null
           : read.state.instruments.find((each) => each.symbol === symbol)!.name;
       const outcome = scenarioOf({
-        holdings: read.holdings.active.map((row) => row.holding),
+        holdings,
         liabilities: read.state.liabilities,
         snapshot,
         unit,
         referenceDollar: read.state.referenceDollar,
         shock,
       });
+      const said = assumptionsOf(shock, name === null ? null : named(name));
+      const parts = (["dollar", "price"] as const).filter((part) => said[part]);
       return {
         ...metaOf(
           read,
@@ -606,8 +610,12 @@ export function assistantData({
         unit,
         hypothetical: true,
         label: "Escenario hipotético",
-        assumptions: assumptionsOf(shock, name === null ? null : named(name)),
-        note: "Es un cálculo hipotético, no una predicción: mueve solo lo indicado y deja el resto de las cotizaciones y precios como están hoy (un CEDEAR en pesos no sigue al dólar).",
+        assumptions: parts
+          .filter((part) => !outcome.idle.includes(part))
+          .map((part) => said[part]!),
+        // What the user asked about that moves nothing they hold or owe.
+        changesNothing: outcome.idle.map((part) => said[part]!),
+        note: "Es un cálculo hipotético, no una predicción: mueve solo lo indicado y deja el resto de las cotizaciones y precios como están hoy (un CEDEAR en pesos no sigue al dólar). Lo que está en changesNothing no cambia nada de lo que tiene o debe: decilo así, no como un movimiento.",
         today: outcome.today,
         scenario: outcome.scenario,
         change: outcome.change,
@@ -668,7 +676,7 @@ export function assistantData({
         share: fraction(change.share),
         inflation: fraction(change.benchmarks.inflation),
         dollarMove: fraction(change.benchmarks.dollar),
-        note: "contributed es lo que puso neto (negativo si sacó); prices y dollar, lo que hicieron los precios y el dólar con lo que tenía; yields, lo que sumaron los rendimientos. income son los dividendos, cupones y rentas que cobró, y charges, comisiones e impuestos. share es el rendimiento sin contar lo que puso; inflation y dollarMove, cuánto subieron la inflación y el dólar MEP en el mismo período.",
+        note: "contributed es lo que puso neto (negativo si sacó); prices y dollar, lo que hicieron los precios y el dólar con lo que tenía; yields, lo que sumaron los rendimientos que se suman a la tenencia. income son los dividendos, cupones y rentas que cobró aparte, antes de retenciones, sin contar yields; charges, comisiones e impuestos. share es el rendimiento sin contar lo que puso; inflation y dollarMove, cuánto subieron la inflación y el dólar MEP en el mismo período.",
         chart: changeChart(change, unit),
       };
     },

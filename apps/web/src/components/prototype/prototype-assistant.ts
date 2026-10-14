@@ -41,6 +41,7 @@ import {
 } from "@/lib/assistant/month-change";
 import {
   assumptionsOf,
+  priceTarget,
   scenarioChart,
   scenarioOf,
   type Shock,
@@ -246,23 +247,56 @@ function scenarioAnswer(
     ? (state.instruments.find((each) => each.symbol === shock.price!.symbol)
         ?.name ?? null)
     : null;
+  const holdings = holdingsView(state).active.map((row) => row.holding);
+  const snapshot = pricedToday(state);
+  const sources = [SOURCES.holdings, SOURCES.debts, SOURCES.quotes];
+  if (shock.price?.symbol) {
+    const target = priceTarget(holdings, snapshot, shock.price.symbol);
+    if (target !== "held") {
+      return {
+        ...base,
+        text:
+          target === "not_held"
+            ? `No tenés ${name ?? shock.price.symbol}, así que su precio no cambia tu patrimonio.`
+            : `No hay un precio de hoy de ${name ?? shock.price.symbol} para calcularlo.`,
+        charts: [],
+        sources,
+      };
+    }
+  }
   const outcome = scenarioOf({
-    holdings: holdingsView(state).active.map((row) => row.holding),
+    holdings,
     liabilities: state.liabilities,
-    snapshot: pricedToday(state),
+    snapshot,
     unit,
     referenceDollar: state.referenceDollar,
     shock,
   });
+  const said = assumptionsOf(shock, name);
+  const parts = (["dollar", "price"] as const).filter((part) => said[part]);
+  const moving = parts.filter((part) => !outcome.idle.includes(part));
+  const still = outcome.idle.map((part) => said[part]!);
+  if (moving.length === 0) {
+    return {
+      ...base,
+      text: `Hipotético: si ${still.join(" y ")}, tu patrimonio neto no cambiaría: nada de lo que tenés o debés depende de eso.`,
+      charts: [],
+      sources,
+    };
+  }
   const share =
     outcome.share === null || shownSign(outcome.change, unit) === 0
       ? ""
       : `, ${formatFraction(outcome.share)}`;
   return {
     ...base,
-    text: `Hipotético: si ${assumptionsOf(shock, name).join(" y ")}, tu patrimonio neto pasaría de ${formatAmount(outcome.today.netWorth, unit)} a ${formatAmount(outcome.scenario.netWorth, unit)}${outcome.complete ? "" : WITHOUT_PRICE}: ${signed(formatAmount(outcome.change, unit), shownAmount(outcome.change, unit))}${share}. Es un cálculo con las cotizaciones de hoy que mueve solo eso y deja igual el resto; no es una predicción.`,
+    text: `Hipotético: si ${moving.map((part) => said[part]!).join(" y ")}, tu patrimonio neto pasaría de ${formatAmount(outcome.today.netWorth, unit)} a ${formatAmount(outcome.scenario.netWorth, unit)}${outcome.complete ? "" : WITHOUT_PRICE}: ${signed(formatAmount(outcome.change, unit), shownAmount(outcome.change, unit))}${share}.${
+      still.length === 0
+        ? ""
+        : ` Que ${still.join(" y ")} no cambia nada de lo que tenés o debés.`
+    } Es un cálculo con las cotizaciones de hoy que mueve solo eso y deja igual el resto; no es una predicción.`,
     charts: [scenarioChart(outcome, unit)],
-    sources: [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
+    sources,
   };
 }
 
@@ -307,7 +341,7 @@ function monthAnswer(
     text: `En ${changePeriod(change)} tu patrimonio pasó de ${formatAmount(change.startValue, unit)} a ${formatAmount(change.endValue, unit)} (${signed(formatAmount(total, unit), shownAmount(total, unit))}): ${parts.slice(0, -1).join(", ")} y ${parts.at(-1)}.${
       shownSign(change.income, unit) === 0
         ? ""
-        : ` Cobraste ${formatAmount(change.income, unit)} de dividendos, cupones y rentas.`
+        : ` Cobraste ${formatAmount(change.income, unit)} de dividendos, cupones y rentas, antes de las retenciones.`
     }${
       change.share === null
         ? ""

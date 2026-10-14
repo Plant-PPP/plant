@@ -6,6 +6,7 @@ import { CHAT_UNITS } from "@/lib/assistant/chat";
 import {
   SCENARIO_CHANGE,
   SCENARIO_DOLLARS,
+  pairedScenario,
   validChange,
 } from "@/lib/assistant/scenario";
 import {
@@ -157,21 +158,26 @@ export function assistantTools(
     simulateScenario: tool({
       description:
         'Un escenario hipotético: cuánto valdría hoy el patrimonio neto si un dólar o un precio se moviera un porcentaje ("si el MEP sube 10 %", "si Apple cae 20 %"). Mueve solo lo indicado y deja igual el resto. Es un cálculo, no una predicción.',
-      inputSchema: z.object({
-        dollar: z
-          .enum(SCENARIO_DOLLARS)
-          .optional()
-          .describe(
-            "Qué dólar se mueve: mep, ccl, official o all (los tres). Sin él, all.",
-          ),
-        dollarChange: percent.optional(),
-        instrument: instrument
-          .optional()
-          .describe(
-            "El instrumento cuyo precio se mueve; sin él, todos los precios.",
-          ),
-        priceChange: percent.optional(),
-      }),
+      inputSchema: z
+        .object({
+          dollar: z
+            .enum(SCENARIO_DOLLARS)
+            .optional()
+            .describe(
+              "Qué dólar se mueve: mep, ccl, official o all (los tres). Sin él, all.",
+            ),
+          dollarChange: percent.optional(),
+          instrument: instrument
+            .optional()
+            .describe(
+              "El instrumento cuyo precio se mueve; sin él, todos los precios.",
+            ),
+          priceChange: percent.optional(),
+        })
+        .refine(pairedScenario, {
+          message:
+            "dollar va con dollarChange, instrument con priceChange, y hace falta al menos un cambio.",
+        }),
       execute: guarded("simulateScenario", (input) => data.scenario(input)),
     }),
     getMonthSummary: tool({

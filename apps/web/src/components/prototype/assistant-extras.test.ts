@@ -3,10 +3,14 @@ import { exactOf, minus, plus, stored } from "@plant/shared";
 
 import { changeChart, lastClosed } from "@/lib/assistant/month-change";
 import {
+  assumptionsOf,
+  pairedScenario,
+  priceTarget,
   scenarioOf,
   shockedSnapshot,
   validChange,
 } from "@/lib/assistant/scenario";
+import { formatPercent } from "@/lib/format/amount";
 import { buildFixtures } from "@/lib/prototype/fixtures";
 import { changeBetween, closesOf, pricedToday } from "@/lib/summary/compute";
 
@@ -208,4 +212,67 @@ describe("the prototype assistant", () => {
       expect(answer.charts[0]?.template).toBe("waterfall");
     },
   );
+});
+
+describe("review fixes", () => {
+  const priced = pricedToday(state);
+  const holdings = holdingsView(state).active.map((row) => row.holding);
+  const ask = (question: string) =>
+    prototypeAnswer(state, question, "usd_mep", snapshot);
+
+  it("says a percent with the decimals it was given, and none it was not", () => {
+    expect(formatPercent("10.05")).toBe("10,05 %");
+    expect(formatPercent("0.04")).toBe("0,04 %");
+    expect(formatPercent("10")).toBe("10 %");
+    expect(
+      assumptionsOf({ dollar: { kind: "mep", change: "-0.5" } }, null).dollar,
+    ).toBe("el dólar MEP baja 0,5 %");
+  });
+
+  it("tells an instrument not held or not priced from one it can move", () => {
+    expect(priceTarget(holdings, priced, "AAPL")).toBe("held");
+    expect(priceTarget(holdings, priced, "TSLA")).toBe("not_held");
+    const prices = { ...priced.prices };
+    delete prices.AAPL;
+    expect(priceTarget(holdings, { ...priced, prices }, "AAPL")).toBe(
+      "unpriced",
+    );
+    expect(ask("¿Y si Tesla sube 10 %?").text).toBe(
+      "No tenés Tesla, así que su precio no cambia tu patrimonio.",
+    );
+  });
+
+  it("says a dollar nothing depends on changes nothing", () => {
+    const outcome = scenarioOf({
+      holdings,
+      liabilities: state.liabilities,
+      snapshot: priced,
+      unit: "usd_mep",
+      referenceDollar: state.referenceDollar,
+      shock: { dollar: { kind: "ccl", change: "10" } },
+    });
+    expect(outcome.idle).toEqual(["dollar"]);
+    const answer = ask("¿Qué pasa si el CCL sube 10 %?");
+    expect(answer.text).toMatch(/no cambiaría: nada de lo que tenés/);
+    expect(answer.charts).toEqual([]);
+  });
+
+  it("takes a dollar only with its change, and an instrument only with its", () => {
+    expect(pairedScenario({ dollar: "mep" })).toBe(false);
+    expect(pairedScenario({ instrument: "AAPL" })).toBe(false);
+    expect(pairedScenario({})).toBe(false);
+    expect(pairedScenario({ dollar: "mep", dollarChange: "10" })).toBe(true);
+    expect(pairedScenario({ priceChange: "-5" })).toBe(true);
+  });
+
+  it("counts yields once: in yields, not in the income paid out", () => {
+    const closes = closesOf(state, "ars");
+    const period = lastClosed(closes)!;
+    const from = closes.at(-6)!.period;
+    const change = changeBetween(state, "ars", from, period)!;
+    const income = closes
+      .filter((each) => each.period >= from && each.period <= period)
+      .map((each) => each.figures.income);
+    expect(sum(change.income, change.yields)).toBe(sum(...income));
+  });
 });

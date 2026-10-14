@@ -340,6 +340,16 @@ it("prices a hypothetical from today's net worth, labelled as one", async () => 
     await tools.scenario({ instrument: "Nada", priceChange: "10" }),
   ).toMatchObject({ error: "unknown_instrument" });
   expect(await tools.scenario({})).toEqual({ error: "no_change" });
+  expect(await tools.scenario({ dollar: "mep" })).toEqual({
+    error: "no_change",
+  });
+  expect(
+    await tools.scenario({ instrument: "TSLA", priceChange: "10" }),
+  ).toMatchObject({ error: "unknown_instrument" });
+  const ccl = await tools.scenario({ dollar: "ccl", dollarChange: "10.05" });
+  if (!("changesNothing" in ccl)) throw new Error();
+  expect(ccl.assumptions).toEqual([]);
+  expect(ccl.changesNothing).toEqual(["el dólar CCL sube 10,05 %"]);
   const apple = await tools.scenario({
     instrument: "aapl",
     priceChange: "-20",
