@@ -89,22 +89,25 @@ export function instrumentIndex(
 }
 
 // `currency` is what the document's line is in, `instrumentCurrency` what the
-// instrument is quoted in: they differ on a D (MEP) or C (cable) line.
+// instrument is quoted in: they differ on a D (MEP) or C (cable) line, the
+// one case `dollarLine` is true.
 export type ResolvedSymbol = {
   symbol: string;
   type: InstrumentType;
   instrumentCurrency: Currency;
   currency: Currency;
+  dollarLine: boolean;
 };
 
 const resolved = (
   instrument: CatalogInstrument,
-  currency: Currency = instrument.currency,
+  dollarLine = false,
 ): ResolvedSymbol => ({
   symbol: instrument.symbol,
   type: instrument.type,
   instrumentCurrency: instrument.currency,
-  currency,
+  currency: dollarLine ? "USD" : instrument.currency,
+  dollarLine,
 });
 
 const DOLLAR_LINE_TYPES: readonly InstrumentType[] = ["bond", "cedear"];
@@ -123,7 +126,7 @@ export function resolveSymbol(
   if (local) return resolved(local);
   const base = /[DC]$/.test(key) ? index.bySymbol.get(key.slice(0, -1)) : null;
   if (base && DOLLAR_LINE_TYPES.includes(base.type)) {
-    return resolved(base, "USD");
+    return resolved(base, true);
   }
   const alias = index.byAlias.get(key);
   return alias ? resolved(alias) : null;

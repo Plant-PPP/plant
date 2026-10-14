@@ -2,7 +2,6 @@ import "server-only";
 import {
   type InstrumentType,
   quotedPrice,
-  normalizeSymbol,
   instrumentIndex,
   resolveSymbol,
   unitPrice,
@@ -158,12 +157,6 @@ function reviewDebt(data: unknown): ImportDebtRow {
   };
 }
 
-// Whether the document names an instrument by its D (MEP) or C (cable) line.
-const isDollarLine = (printed: string, symbol: string) => {
-  const key = normalizeSymbol(printed.trim().replace(/\.BA$/i, ""));
-  return /[DC]$/.test(key) && key.slice(0, -1) === normalizeSymbol(symbol);
-};
-
 // An operation as the review completes it. An instrument Plant knows keeps
 // its symbol; one it does not, or none named, is left for the user to choose,
 // with what the document called it. The currency is the operation's own: a
@@ -194,8 +187,7 @@ function reviewOperation(
     reference: row.reference?.trim() || null,
     // A dollar line (AL30D, GD30C) is a dollar trade, whatever currency was
     // read.
-    currency:
-      known && isDollarLine(row.symbol!, known.symbol) ? "USD" : row.currency,
+    currency: known?.dollarLine ? "USD" : row.currency,
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || "Del documento",
     discarded: false,

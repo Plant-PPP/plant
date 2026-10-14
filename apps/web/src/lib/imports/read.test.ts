@@ -477,6 +477,43 @@ describe("readImportForReview", () => {
       },
     ]);
   });
+  it("keeps the currency of an operation named by an alias ending in D", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [],
+        [
+          {
+            id: "o1",
+            date: "2026-09-01",
+            kind: "purchase",
+            symbol: "XD",
+            quantity: "5",
+            price: "100",
+            amount: null,
+            charges: null,
+            reference: null,
+            currency: "ARS",
+            confidence: "high",
+            source_page: 1,
+          },
+        ],
+      ) as never,
+      "i1",
+      [
+        {
+          symbol: "X",
+          name: "Fondo X",
+          currency: "ARS",
+          type: "fci",
+          aliases: ["XD"],
+        },
+      ],
+    );
+    expect(
+      read?.operations?.map(({ symbol, currency }) => ({ symbol, currency })),
+    ).toEqual([{ symbol: "X", currency: "ARS" }]);
+  });
   it("proposes a printed cost only when it reads as one unit's", async () => {
     const read = await readImportForReview(
       clientWith(
