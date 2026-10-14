@@ -93,7 +93,13 @@ export async function POST(request: Request): Promise<Response> {
     fields["enduser.id"] = claims.sub;
     outcome = "bad_request";
     status = 400;
-    const raw = (await boundedText(request, BODY_LIMIT)) ?? "";
+    // A client that aborts midway rejects the body's read.
+    const read = await boundedText(request, BODY_LIMIT).catch(() => undefined);
+    if (read === undefined) {
+      outcome = "aborted";
+      return plainText("No pudimos leer tu pregunta.", status);
+    }
+    const raw = read ?? "";
     const parsed =
       raw !== ""
         ? body.safeParse(
