@@ -23,7 +23,7 @@ import { type Benchmarks, beyond } from "@/lib/summary/benchmarks";
 
 import { ClosesTable } from "./closes-table";
 import { CloseStatus, ResultText, ShareText } from "./figures";
-import { StatTile } from "@/components/ui/stat-tile";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 type Figures = YearClose["totals"];
 
@@ -65,8 +65,8 @@ function CloseFigures({
   year?: boolean;
 }) {
   return (
-    <div className="grid gap-3">
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid gap-2">
+      <StatGrid>
         <StatTile label="Patrimonio neto al inicio">
           <AmountText amount={figures.startValue} unit={unit} />
         </StatTile>
@@ -89,8 +89,8 @@ function CloseFigures({
         >
           <AmountText amount={figures.contributed} unit={unit} />
         </StatTile>
-      </dl>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      </StatGrid>
+      <StatGrid>
         <StatTile label="Resultado de mercado" note="Precios y dólar">
           <ResultText amount={figures.market} share={null} unit={unit} />
         </StatTile>
@@ -109,11 +109,11 @@ function CloseFigures({
         >
           <AmountText amount={figures.charges} unit={unit} />
         </StatTile>
-      </dl>
+      </StatGrid>
       {/* A return in pesos set against prices and the dollar; in dollars it
           already is one. */}
       {unit === "ars" && benchmarks && (
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatGrid>
           <StatTile label="Inflación" note="Según la UVA, que sigue al IPC">
             <ShareText share={benchmarks.inflation} />
           </StatTile>
@@ -138,7 +138,7 @@ function CloseFigures({
               colored
             />
           </StatTile>
-        </dl>
+        </StatGrid>
       )}
       {unit === "ars" && !benchmarks && (
         <p className="text-muted-foreground text-xs">
@@ -233,7 +233,7 @@ export function MonthCloseDetail({
     },
   ];
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <Header
         title={`Cierre de ${monthInText(close.period)}`}
         status={<CloseStatus close={close} />}
@@ -288,7 +288,7 @@ export function YearCloseDetail({
     (each: MonthClose) => each.recalculatedOn !== null,
   );
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <Header
         title={`Cierre de ${year.year}`}
         status={
