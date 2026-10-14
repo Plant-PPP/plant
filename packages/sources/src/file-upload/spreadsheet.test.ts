@@ -13,6 +13,11 @@ import {
 } from "./spreadsheet";
 import { WORKBOOK_UNZIPPED_LIMIT } from "./zip";
 
+jest.mock("xlsx", () => {
+  const actual = jest.requireActual<typeof import("xlsx")>("xlsx");
+  return { ...actual, read: jest.fn(actual.read) };
+});
+
 const XLSX_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -126,6 +131,22 @@ describe("readSheet", () => {
     ["an empty XLSX sheet", xlsxOf(XLSX.utils.aoa_to_sheet([])), XLSX_TYPE],
   ])("finds nothing in %s", (_, bytes, mimeType) => {
     expectSourceError(() => readSheet(bytes, mimeType), "nothing_found");
+  });
+
+  it("refuses a CSV that starts like a zip behind a byte-order mark, before SheetJS opens it", () => {
+    const bytes = new Uint8Array([
+      0xef,
+      0xbb,
+      0xbf,
+      0x50,
+      0x4b,
+      3,
+      4,
+      ...new TextEncoder().encode("a,b"),
+    ]);
+    jest.mocked(XLSX.read).mockClear();
+    expectSourceError(() => readSheet(bytes, "text/csv"), "unreadable");
+    expect(XLSX.read).not.toHaveBeenCalled();
   });
 
   it("refuses a file it cannot open", () => {
