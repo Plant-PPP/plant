@@ -268,13 +268,8 @@ export function writeImport<S extends Ledger>(
       next = moved.state;
       continue;
     }
-    // Units that come in do so at the cost the review kept, else the price.
-    const entry = row.cost ?? row.price;
     let parts: { portfolio_id: string; quantity: string }[];
     if (order > 0) {
-      if (entry === null || compareDecimals(entry, "0") <= 0) {
-        return refuse({ ok: false, code: "invalid" });
-      }
       parts = [{ portfolio_id: destination, quantity: diff }];
     } else {
       let left = difference("0", diff);
@@ -293,6 +288,13 @@ export function writeImport<S extends Ledger>(
       order > 0 &&
       holdingIn(next, account.id, row.symbol, parts[0]!.portfolio_id) ===
         undefined;
+    // A holding that opens comes in at the average cost the review kept, the
+    // whole position's; units added to one already held come in at the price,
+    // as the average of the whole is not theirs.
+    const entry = opens ? (row.cost ?? row.price) : row.price;
+    if (order > 0 && (entry === null || compareDecimals(entry, "0") <= 0)) {
+      return refuse({ ok: false, code: "invalid" });
+    }
     const operationId = newId();
     const written = writeOperation(
       next,

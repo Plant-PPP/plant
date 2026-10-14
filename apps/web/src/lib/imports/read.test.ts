@@ -336,4 +336,21 @@ describe("readImportForReview", () => {
       },
     ]);
   });
+  it("proposes a printed cost only when it reads as one unit's", async () => {
+    const read = await readImportForReview(
+      clientWith(
+        [IMPORT],
+        [
+          item({ id: "unit", cost: "15000" }),
+          item({ id: "total", cost: "900000" }),
+        ],
+      ) as never,
+      "i1",
+      INSTRUMENTS,
+    );
+    expect(read?.rows.map((row) => [row.id, row.cost])).toEqual([
+      ["unit", "15000"],
+      ["total", undefined],
+    ]);
+  });
 });

@@ -165,3 +165,21 @@ it("opens a holding at the cost the review kept, else at the price", () => {
   );
   expect(withoutPrice.result).toEqual({ ok: true, id: "i1" });
 });
+
+it("adds units to a holding already held at the price, not the position's cost", () => {
+  const first = writeImport(
+    emptyLedger(),
+    ITEM,
+    [row("AAPL", "5", "18000")],
+    newId,
+  );
+  const topped = writeImport(
+    first.state,
+    ITEM,
+    [{ ...row("AAPL", "8", "20000"), cost: "12000" }],
+    newId,
+  );
+  expect(topped.result).toEqual({ ok: true, id: "i1" });
+  const last = [...topped.state.movements.values()].flat().at(-1);
+  expect(last).toMatchObject({ kind: "adjustment", price: "20000" });
+});

@@ -78,7 +78,7 @@ it("asks where a new instrument goes, and whether it comes from another account"
   expect(html).not.toContain('aria-label="Cartera de la fila 2"');
 });
 
-it("clears a price printed in another currency when the row's instrument is picked", () => {
+it("clears a price and cost printed in another currency when the row's instrument is picked", () => {
   const instruments = [
     { symbol: "AAPL", currency: "ARS" as const },
     { symbol: "BTC", currency: "USD" as const },
@@ -88,6 +88,8 @@ it("clears a price printed in another currency when the row's instrument is pick
     currency: "ARS",
     value: null,
     priceText: "",
+    costText: "",
+    printsCost: false,
   });
   expect(pickedInstrument("USD", "BTC", instruments)).toEqual({
     symbol: "BTC",

@@ -109,7 +109,7 @@ const CHANGE_TEXT = {
   discarded: "Descartada",
 } as const;
 
-// What picking a row's instrument changes: a price or value printed in
+// What picking a row's instrument changes: a price, value or cost printed in
 // another currency no longer describes the row, so the user types the price.
 export function pickedInstrument(
   printed: ImportRow["currency"],
@@ -120,7 +120,12 @@ export function pickedInstrument(
   return {
     symbol,
     currency,
-    ...(currency !== printed && { value: null, priceText: "" }),
+    ...(currency !== printed && {
+      value: null,
+      priceText: "",
+      costText: "",
+      printsCost: false,
+    }),
   };
 }
 

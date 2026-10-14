@@ -5,7 +5,14 @@ import {
   resolveSymbol,
   unitPrice,
 } from "@plant/core";
-import { buenosAiresDate, Constants, type Database } from "@plant/shared";
+import {
+  buenosAiresDate,
+  compareExact,
+  Constants,
+  type Database,
+  exactOf,
+  over,
+} from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -160,6 +167,25 @@ const totalsSchema = z.object({
   skipped_rows: z.number().int().nonnegative(),
 });
 
+// Whether a printed cost reads as one unit's: within ten times either way of
+// the price or of the value per unit, when the row prints either. A column
+// of total costs taken for unit costs is left out rather than proposed.
+function isUnitCost(row: z.infer<typeof itemSchema>): boolean {
+  const cost = exactOf(row.cost!);
+  const perUnit =
+    row.price !== null
+      ? exactOf(row.price)
+      : row.value !== null
+        ? over(exactOf(row.value), exactOf(row.quantity))
+        : null;
+  if (perUnit === null) return true;
+  const ratio = over(cost, perUnit);
+  return (
+    compareExact(ratio, exactOf("0.1")) >= 0 &&
+    compareExact(ratio, exactOf("10")) <= 0
+  );
+}
+
 // A draft row as the review edits it. An instrument Plant knows keeps its
 // symbol and its price per unit (a bond's document prints it per 100); one it
 // does not know is left for the user to choose, with what the document named.
@@ -193,7 +219,8 @@ function reviewRow(
           : row.price,
     value: sameCurrency ? row.value : null,
     ...(row.cost != null &&
-      sameCurrency && {
+      sameCurrency &&
+      isUnitCost(row) && {
         cost: known ? unitPrice(known.type, row.cost) : row.cost,
       }),
     currency: known?.instrumentCurrency ?? row.currency,

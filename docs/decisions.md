@@ -5,7 +5,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-14 · A holdings table's average cost (PLA-151)
 
 - **A holdings table's average cost per unit is read** (costo promedio, PPC), by the document readers and, through a mapped column, from spreadsheets, into a new nullable `import_items.cost`, a bond's per 100 nominal as printed and per unit in the review, like the price. The two readings keep it only when they agree; a cost is never voted on.
-- **The review shows it only when the document printed one**, editable, and the units an import brings in come in at that cost rather than the market price, which is still what the value is checked against. With a cost kept, the price may stay empty.
+- **A cost that does not read as one unit's is left out**: one more than ten times, or less than a tenth of, the row's price or value per unit is taken for a total, which a column named "Costo" may hold, and is not proposed. A cost on a disputed row stands only when two readings print it alike.
+- **The review shows it only when the document printed one**, editable, and dropped with the price when the instrument picked is in another currency. A holding that opens comes in at that cost rather than the market price, which is still what the value is checked against; with a cost kept, the price may stay empty. Units added to a holding already held come in at the price: the average cost is the whole position's, not theirs.
 - **Several accounts in one file and other currencies are not part of it**: PLA-151's other half and its own issue.
 
 ## 2026-10-14 · Importing operations (PLA-149)
