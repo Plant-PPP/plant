@@ -2,8 +2,6 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
-<<<<<<< HEAD
-
 ## 2026-10-14 · Staging serves the real app, and only staging deploys on push
 
 - **Staging serves the real app**, as production does: `isProductionDeployment()` is true on Vercel's production and on the preview of the `staging` branch, the one Tomas tests on `plant-staging`'s real data. Every other preview and `next dev` still serve the prototype, which the e2e flows rely on; `pnpm dev:up:real` runs the real app locally against local Supabase. For staging this supersedes "Outside production, the data pages show made-up data" (PLA-109) and the real chat being production only (PLA-47).
