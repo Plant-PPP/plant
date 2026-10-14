@@ -113,21 +113,24 @@ function typedInvalid(
 ): Set<FigureField> {
   const invalid = new Set<FigureField>();
   if (row.discarded) return invalid;
-  const texts: Record<FigureField, string> = {
-    quantity: row.quantityText,
-    price: row.priceText,
-    amount: row.amountText,
+  // Only the figures the kind shows: a trade's units and price, an income's
+  // amount, and the charges.
+  const trade = row.kind === "purchase" || row.kind === "sale";
+  const income = row.kind === "dividend" || row.kind === "coupon";
+  const texts: Partial<Record<FigureField, string>> = {
+    ...(trade && { quantity: row.quantityText, price: row.priceText }),
+    ...(income && { amount: row.amountText }),
     charges: row.chargesText,
   };
   for (const figure of Object.keys(texts) as FigureField[]) {
     if (
-      texts[figure].trim() !== "" &&
-      parseAmountInput(texts[figure]) === null
+      texts[figure]!.trim() !== "" &&
+      parseAmountInput(texts[figure]!) === null
     ) {
       invalid.add(figure);
     }
   }
-  const price = parseAmountInput(row.priceText);
+  const price = trade ? parseAmountInput(row.priceText) : null;
   if (price !== null && type && exactUnitPrice(type, price) === null) {
     invalid.add("price");
   }

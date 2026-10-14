@@ -101,6 +101,9 @@ export function mergeOperations(
     ) as Pick<DraftOperation, (typeof TEXTS)[number]>;
     const symbol = x.symbol === y.symbol ? x.symbol : null;
     if (symbol !== x.symbol) disputed = true;
+    // The currency cannot be left empty: the first reading's stands, for the
+    // user to check.
+    if (x.currency !== y.currency) disputed = true;
     merged.push({
       ...x,
       ...decimals,

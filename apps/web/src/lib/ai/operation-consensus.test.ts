@@ -80,3 +80,9 @@ it("pairs operations named differently by their number, else date, kind and unit
     [null, "7", "low"],
   ]);
 });
+
+it("marks low an operation the readers read in different currencies", () => {
+  expect(
+    mergeOperations([operation()], [operation({ currency: "USD" })]),
+  ).toEqual([operation({ confidence: "low" })]);
+});
