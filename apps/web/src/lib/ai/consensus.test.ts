@@ -133,6 +133,22 @@ describe("settle", () => {
     ]);
   });
 
+  it("matches the tiebreak's row to the disputed occurrence of an instrument listed twice", () => {
+    const first = draft([row("AL30", "10"), row("AL30", "20")]);
+    const second = draft([row("AL30", "10"), row("AL30", "25")]);
+    const tiebreak = draft([row("AL30", "25")]);
+    const settled = settle(
+      first,
+      second,
+      tiebreak,
+      compareReadings(first, second),
+    );
+    expect(settled.rows.map((r) => [r.quantity, r.confidence])).toEqual([
+      ["10", "high"],
+      ["25", "high"],
+    ]);
+  });
+
   it("settles the date and totals by majority, else the tiebreak's", () => {
     const first = draft([], {
       documentDate: "2026-09-30",

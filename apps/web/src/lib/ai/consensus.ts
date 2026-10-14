@@ -10,14 +10,36 @@ const sameDecimal = (a: string | null, b: string | null) =>
 
 // A row's identity across readings: the symbol as printed, its currency, and
 // which occurrence it is, so an instrument listed twice stays two rows.
+const baseOf = (row: DraftRow) =>
+  `${row.symbol.trim().toUpperCase()}|${row.currency}`;
+
 function keyed(rows: readonly DraftRow[]): Map<string, DraftRow> {
   const seen = new Map<string, number>();
   const out = new Map<string, DraftRow>();
   for (const row of rows) {
-    const base = `${row.symbol.trim().toUpperCase()}|${row.currency}`;
+    const base = baseOf(row);
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
     out.set(`${base}#${n}`, row);
+  }
+  return out;
+}
+
+// The tiebreak lists only disputed rows, so its rows of one instrument take
+// that instrument's disputed occurrences in order, not their own positions.
+function keyedTo(
+  rows: readonly DraftRow[],
+  disputed: readonly string[],
+): Map<string, DraftRow> {
+  const slots = new Map<string, string[]>();
+  for (const key of disputed) {
+    const base = key.slice(0, key.lastIndexOf("#"));
+    slots.set(base, [...(slots.get(base) ?? []), key]);
+  }
+  const out = new Map<string, DraftRow>();
+  for (const row of rows) {
+    const key = slots.get(baseOf(row))?.shift();
+    if (key) out.set(key, row);
   }
   return out;
 }
@@ -110,7 +132,7 @@ export function settle(
   const readings = [
     keyed(first.rows),
     keyed(second.rows),
-    keyed(tiebreak.rows),
+    keyedTo(tiebreak.rows, disputes.rows),
   ];
   const settled = new Map(agreed);
   for (const key of disputes.rows) {
