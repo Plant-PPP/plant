@@ -200,6 +200,7 @@ describe("checkBatch", () => {
       { fxRates: [fx()], prices: [price()] },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates[0]).toEqual({
       ...fx(),
@@ -217,7 +218,12 @@ describe("checkBatch", () => {
 
   it("stamps the read instant over a fetched_at the row carries", () => {
     const row = { ...fx(), fetched_at: "2020-01-01T00:00:00.000Z" };
-    const batch = checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi");
+    const batch = checkBatch(
+      { fxRates: [row], prices: [] },
+      NOW,
+      "dolarapi",
+      false,
+    );
     expect(batch.fxRates.map((kept) => kept.fetched_at)).toEqual([
       NOW.toISOString(),
     ]);
@@ -244,7 +250,9 @@ describe("checkBatch", () => {
     ],
   ])("counts %s as invalid", (_label, row) => {
     expect(
-      counts(checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi")),
+      counts(
+        checkBatch({ fxRates: [row], prices: [] }, NOW, "dolarapi", false),
+      ),
     ).toEqual({
       fxRates: 0,
       prices: 0,
@@ -264,6 +272,7 @@ describe("checkBatch", () => {
       { fxRates: [fx({ buy, sell })], prices: [] },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates).toHaveLength(kept ? 1 : 0);
     expect(batch.refused.invalid).toHaveLength(kept ? 0 : 1);
@@ -282,7 +291,9 @@ describe("checkBatch", () => {
     ["a float artifact", price({ price: "0.30000000000000004" })],
   ])("counts a price with %s as invalid", (_label, row) => {
     expect(
-      counts(checkBatch({ fxRates: [], prices: [row] }, NOW, "dolarapi")),
+      counts(
+        checkBatch({ fxRates: [], prices: [row] }, NOW, "dolarapi", false),
+      ),
     ).toEqual({
       fxRates: 0,
       prices: 0,
@@ -305,6 +316,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates.map((row) => row.quoted_at)).toEqual([utc]);
   });
@@ -317,6 +329,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(counts(batch)).toEqual({
       fxRates: 0,
@@ -334,6 +347,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.refused).toMatchObject({ stale: [], invalid: ["mep", "BTC"] });
   });
@@ -350,6 +364,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates.map((row) => [row.kind, row.sell])).toEqual([
       ["mep", "1460"],
@@ -367,6 +382,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.prices.map((row) => row.symbol)).toEqual(["BTC", "ETH"]);
     expect(batch.refused.invalid).toEqual([]);
@@ -378,6 +394,7 @@ describe("checkBatch", () => {
       { fxRates: [fx({ kind: "uva", buy: null }), fx()], prices: [price()] },
       morning,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates.map((row) => row.kind)).toEqual(["uva"]);
     expect(batch.prices).toEqual([]);
@@ -394,6 +411,7 @@ describe("checkBatch", () => {
       { fxRates: [fx({ sell: "1450" }), fx({ sell: "0" })], prices: [] },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates.map((row) => row.sell)).toEqual(["1450"]);
     expect(batch.refused.invalid).toEqual(["mep"]);
@@ -411,6 +429,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates.map((row) => row.sell)).toEqual(["1460"]);
     expect(batch.refused).toMatchObject({ stale: ["mep"], invalid: ["mep"] });
@@ -429,7 +448,9 @@ describe("checkBatch", () => {
       "_unknown",
     ],
   ])("refuses %s as invalid under key %s", (_label, raw, key) => {
-    expect(checkBatch(raw, NOW, "dolarapi").refused.invalid).toEqual([key]);
+    expect(checkBatch(raw, NOW, "dolarapi", false).refused.invalid).toEqual([
+      key,
+    ]);
   });
 
   it("refuses each unread part as invalid and lists it with its code", () => {
@@ -444,6 +465,7 @@ describe("checkBatch", () => {
       },
       NOW,
       "dolarapi",
+      false,
     );
     expect(batch.fxRates).toHaveLength(1);
     expect(batch.refused.invalid).toEqual(["blue", "ccl"]);
@@ -455,6 +477,7 @@ describe("checkBatch", () => {
       { fxRates: [fx({ rate_date: FRIDAY })], prices: [] },
       at("2026-10-10T18:05:00"),
       "dolarapi",
+      false,
     );
     expect(batch.refused).toEqual({
       early: [],
@@ -685,11 +708,13 @@ describe("the quotes migrations", () => {
               { fxRates: [], prices: [price({ price: value })] },
               NOW,
               "kraken",
+              false,
             )
           : checkBatch(
               { fxRates: [fx({ buy: value, sell: value })], prices: [] },
               NOW,
               "dolarapi",
+              false,
             );
       const kept = (value: string) => {
         const batch = amount(value);
