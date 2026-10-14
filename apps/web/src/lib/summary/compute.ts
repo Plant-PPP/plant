@@ -1,3 +1,4 @@
+import { benchmarksBetween, chainedChange } from "./benchmarks";
 import {
   type CashFlow,
   cashFlowsOf,
@@ -474,6 +475,14 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       complete: start.complete && end.complete && known,
       endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
+      // A month that started with nothing held measures its return on part
+      // of it only, so it is set against nothing, and its year leaves it out.
+      ...(exactOf(start.held).n !== 0n && {
+        benchmarks: benchmarksBetween(
+          { day: month.from, snapshot: pricedAt(state, month.from) },
+          { day: month.to, snapshot: pricedAt(state, month.to) },
+        ),
+      }),
     };
   });
   byUnit.set(unit, closes);
@@ -522,6 +531,24 @@ export function yearsOfCloses(closes: readonly MonthClose[]): YearClose[] {
           (each) => each.complete && each.figures.share !== null,
         ),
         open: months.some((each) => each.open),
+        // Over the months whose return could be measured and that started
+        // with something held.
+        benchmarks: {
+          inflation: chainedChange(
+            months.flatMap((each) =>
+              each.figures.share === null || !each.benchmarks
+                ? []
+                : [each.benchmarks.inflation],
+            ),
+          ),
+          dollar: chainedChange(
+            months.flatMap((each) =>
+              each.figures.share === null || !each.benchmarks
+                ? []
+                : [each.benchmarks.dollar],
+            ),
+          ),
+        },
       };
     })
     .reverse();

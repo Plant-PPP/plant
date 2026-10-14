@@ -1,3 +1,4 @@
+import type { Benchmarks } from "./benchmarks";
 import { addDays } from "@plant/shared";
 import type { Denominator, InstrumentType, PeriodResult } from "@plant/core";
 
@@ -92,6 +93,8 @@ export type MonthClose = Month & {
   complete: boolean;
   endComplete: boolean;
   recalculatedOn: string | null;
+  // How inflation and the dollar moved over the month.
+  benchmarks?: Benchmarks;
 };
 
 // A year's months and their sum, with its return chained month by month.
@@ -113,6 +116,8 @@ export type YearClose = {
   };
   complete: boolean;
   open: boolean;
+  // How inflation and the dollar moved over the year, its months chained.
+  benchmarks?: Benchmarks;
 };
 
 // A month's detail: its close and every movement in it, newest first, each
