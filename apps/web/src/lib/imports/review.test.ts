@@ -1,6 +1,7 @@
 import {
   IMPORT_FAILURE_MESSAGES,
   importFailureMessage,
+  lackingFigure,
   readTotals,
   rowChange,
   totalsMatch,
@@ -77,4 +78,22 @@ it("adds up what was read, leaving out discarded and unpriced rows", () => {
     ]),
   ).toBe("none");
   expect(totalsMatch(totals, [])).toBe("none");
+});
+
+it("says why a figure the review needs is lacking", () => {
+  expect(lackingFigure("", null, "sync", "price")).toBe(
+    "No vino en la sincronización",
+  );
+  expect(lackingFigure(" ", null, "document", "price")).toBe(
+    "Falta en el documento",
+  );
+  expect(lackingFigure("", "100", "document", "price")).toBe(
+    "Completá este dato",
+  );
+  expect(lackingFigure("0", "0", "document", "quantity")).toBe(
+    "Ingresá una cantidad mayor a 0",
+  );
+  expect(lackingFigure("0", null, "sync", "amount")).toBe(
+    "Ingresá un monto mayor a 0",
+  );
 });

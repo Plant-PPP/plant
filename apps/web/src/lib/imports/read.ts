@@ -141,7 +141,11 @@ const debtSchema = z.object({
   source_page: z.number().nullable(),
 });
 
-function reviewDebt(data: unknown): ImportDebtRow {
+// Where a row with no page says it came from.
+const unpagedSource = (origin: ImportOrigin) =>
+  origin === "sync" ? "De la sincronización" : "Del documento";
+
+function reviewDebt(data: unknown, origin: ImportOrigin): ImportDebtRow {
   const row = debtSchema.parse(data);
   return {
     id: row.id,
@@ -153,7 +157,9 @@ function reviewDebt(data: unknown): ImportDebtRow {
     dueDate: row.due_date,
     confidence: row.confidence,
     source:
-      row.source_page === null ? "Del documento" : `Página ${row.source_page}`,
+      row.source_page === null
+        ? unpagedSource(origin)
+        : `Página ${row.source_page}`,
     discarded: false,
   };
 }
@@ -166,13 +172,16 @@ function reviewDebt(data: unknown): ImportDebtRow {
 function reviewOperation(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
+  origin: ImportOrigin,
 ): ImportOperationRow {
   const row = operationSchema.parse(data);
   const known = row.symbol === null ? null : resolveSymbol(row.symbol, index);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
   const named =
     row.symbol === null
-      ? "El documento no dice qué activo es"
+      ? origin === "sync"
+        ? "La sincronización no dice qué activo es"
+        : "El documento no dice qué activo es"
       : known && known.symbol === row.symbol.trim().toUpperCase()
         ? null
         : `Leído como "${row.symbol}"`;
@@ -190,7 +199,7 @@ function reviewOperation(
     // read.
     currency: known?.dollarLine ? "USD" : row.currency,
     confidence: row.confidence,
-    source: [page, named].filter(Boolean).join(" · ") || "Del documento",
+    source: [page, named].filter(Boolean).join(" · ") || unpagedSource(origin),
     discarded: false,
   };
 }
@@ -234,9 +243,10 @@ function isUnitCost(
 // An instrument Plant knows keeps its
 // symbol and its price per unit (a bond's document prints it per 100); one it
 // does not know is left for the user to choose, with what the document named.
-// A line in another currency than the instrument's (AL30D, a dollar line of
-// AL30, or a peso instrument the document prices in dollars) leaves its price
-// and value for the user, so no dollar price is ever written as a peso one.
+// A dollar line (AL30D, GD30C) or a line in another currency than the
+// instrument's (a peso instrument the document prices in dollars) leaves its
+// price and value for the user, so no line's price is ever written as the
+// instrument's.
 function reviewRow(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
@@ -244,7 +254,7 @@ function reviewRow(
 ): ImportRow {
   const row = itemSchema.parse(data);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
-  const unpaged = origin === "sync" ? "De la sincronización" : "Del documento";
+  const unpaged = unpagedSource(origin);
   if (row.asset_class === "cash") {
     return {
       id: row.id,
@@ -266,9 +276,7 @@ function reviewRow(
       ? null
       : `Leído como "${row.symbol}"`;
   const sameCurrency =
-    !known ||
-    (known.currency === known.instrumentCurrency &&
-      row.currency === known.instrumentCurrency);
+    !known || (!known.dollarLine && row.currency === known.instrumentCurrency);
   return {
     id: row.id,
     symbol: known?.symbol ?? "",
@@ -375,11 +383,13 @@ export async function readImportForReview(
     ),
     ...(operations.data.length > 0 && {
       operations: (operations.data as unknown[]).map((each) =>
-        reviewOperation(each, index),
+        reviewOperation(each, index, origin.origin),
       ),
     }),
     ...(debts.data.length > 0 && {
-      debts: (debts.data as unknown[]).map(reviewDebt),
+      debts: (debts.data as unknown[]).map((each) =>
+        reviewDebt(each, origin.origin),
+      ),
     }),
     skippedRows: printed.skipped_rows,
     createdOn: buenosAiresDate(new Date(row.created_at)),

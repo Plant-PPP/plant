@@ -90,6 +90,29 @@ export const issueLabel = (issue: ImportIssue, cash: boolean): string =>
     ? "Este saldo aparece más de una vez"
     : ISSUE_LABELS[issue];
 
+// What a field the import did not bring says.
+export const missingText = (origin: ImportOrigin): string =>
+  origin === "sync" ? "No vino en la sincronización" : "Falta en el documento";
+
+const ABOVE_ZERO = {
+  quantity: "Ingresá una cantidad mayor a 0",
+  price: "Ingresá un precio mayor a 0",
+  amount: "Ingresá un monto mayor a 0",
+} as const;
+
+// Why a figure the review needs is lacking, given its text, which reads as a
+// number when not empty: typed at 0 or below, cleared by the user, or never
+// brought by the import.
+export function lackingFigure(
+  text: string,
+  draft: string | null,
+  origin: ImportOrigin,
+  figure: keyof typeof ABOVE_ZERO,
+): string {
+  if (text.trim() !== "") return ABOVE_ZERO[figure];
+  return draft === null ? missingText(origin) : "Completá este dato";
+}
+
 // Why the statement's date looks wrong, in the user's words.
 export const DATE_ISSUE_LABELS = {
   future: "La fecha del resumen es posterior a hoy.",
