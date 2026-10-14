@@ -1,7 +1,15 @@
 "use client";
 
+import { PageButton } from "@/components/ui/page-button";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Camera, FileUp, LoaderCircle } from "lucide-react";
+import {
+  Camera,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  FileUp,
+  LoaderCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -37,19 +45,28 @@ export type ImportActions = {
 
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
+// An import's status as a row shows it: a colored icon and its label.
 function StatusBadge({ item }: { item: ImportItem }) {
   const busy = isBusy(item.status);
+  const Icon = busy
+    ? LoaderCircle
+    : item.status === "ready"
+      ? CircleDot
+      : item.status === "failed"
+        ? CircleAlert
+        : CircleCheck;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs",
-        item.status === "ready" && "bg-primary/15 text-foreground",
-        item.status === "failed" && "bg-destructive/15 text-destructive",
-        item.status === "confirmed" && "bg-muted text-muted-foreground",
-        busy && "bg-muted text-foreground",
-      )}
-    >
-      {busy && <LoaderCircle aria-hidden className="size-3 animate-spin" />}
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <Icon
+        aria-hidden
+        className={cn(
+          "size-3.5 shrink-0",
+          busy && "text-muted-foreground animate-spin",
+          item.status === "ready" && "text-primary",
+          item.status === "failed" && "text-destructive",
+          item.status === "confirmed" && "text-gain",
+        )}
+      />
       {IMPORT_STATUS_LABELS[item.status]}
     </span>
   );
@@ -111,7 +128,9 @@ export function ImportPage({
         <>
           <TruncatedText className="font-medium" text={item.fileName} />
           {item.error && (
-            <span className="text-destructive block text-xs">{item.error}</span>
+            <span className="text-muted-foreground block text-xs">
+              {item.error}
+            </span>
           )}
         </>
       ),
@@ -143,9 +162,9 @@ export function ImportPage({
         <span className="flex flex-wrap items-center justify-end gap-2">
           <StatusBadge item={item} />
           {item.status === "ready" && (
-            <Button asChild size="sm" variant="outline" className="h-7">
+            <PageButton asChild>
               <Link href={reviewHref(item.id)}>Revisar</Link>
-            </Button>
+            </PageButton>
           )}
         </span>
       ),
