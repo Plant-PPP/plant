@@ -44,6 +44,8 @@ const SYNC_FAILURE_MESSAGES: Partial<
   Record<keyof typeof IMPORT_FAILURE_MESSAGES, string>
 > = {
   nothing_found: "No encontramos saldos ni operaciones en la cuenta conectada.",
+  unsupported:
+    "El proveedor no tiene activado el reporte que leemos. Seguí los pasos de la ayuda de la conexión y sincronizá de nuevo.",
   extraction_failed:
     "No pudimos leer la cuenta conectada. Probá de nuevo más tarde.",
 };

@@ -374,13 +374,139 @@ describe("mercado pago", () => {
     expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([2000, 3000]);
   });
 
-  it("reads a report separated by semicolons with decimal commas, and only pesos", () => {
+  it("reads a report separated by semicolons the es-AR way, and only pesos", () => {
     expect(
       balanceOf(
-        "﻿DATE;RECORD_TYPE;BALANCE_AMOUNT;CURRENCY\r\n2026-10-01;release;1500,25;ARS\r\n2026-10-02;release;99,00;USD\r\n",
+        "﻿DATE;RECORD_TYPE;BALANCE_AMOUNT;CURRENCY\r\n2026-10-01;release;1500,25;ARS\r\n2026-10-02;release;1.234.567,89;ARS\r\n2026-10-03;release;99,00;USD\r\n",
       ),
-    ).toBe("1500.25");
-    expect(balanceOf("DATE,RECORD_TYPE\n2026-10-01,release\n")).toBeNull();
+    ).toEqual({ balance: "1234567.89", unreadable: 0 });
+    expect(balanceOf("DATE,RECORD_TYPE\n2026-10-01,release\n")).toEqual({
+      balance: null,
+      unreadable: 0,
+    });
+  });
+
+  it("never reads a comma as a decimal mark in a report separated by commas", () => {
+    expect(
+      balanceOf(
+        'DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-01,900.50,ARS\n2026-10-02,"1,500",ARS\n',
+      ),
+    ).toEqual({ balance: null, unreadable: 1 });
+  });
+
+  it("counts a balance that does not read rather than falling back to an earlier line", () => {
+    expect(
+      balanceOf(
+        'DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-01,900.50,ARS\n2026-10-02,"1.234,56",ARS\n',
+      ),
+    ).toEqual({ balance: null, unreadable: 1 });
+    expect(
+      balanceOf(
+        "DATE;BALANCE_AMOUNT;CURRENCY\n2026-10-01;900,50;ARS\n2026-10-02;12.34.5,6;ARS\n",
+      ),
+    ).toEqual({ balance: null, unreadable: 1 });
+  });
+
+  it("keeps a line break inside quotes in its field", () => {
+    expect(
+      balanceOf(
+        'DATE,DESCRIPTION,BALANCE_AMOUNT,CURRENCY\n2026-10-01,"Pago\nen dos líneas",700.25,ARS\n',
+      ),
+    ).toEqual({ balance: "700.25", unreadable: 0 });
+  });
+
+  it("counts a zero balance as left out, so the draft is not silently empty", async () => {
+    fake.answer = (request) =>
+      request.path.endsWith(".csv")
+        ? {
+            status: 200,
+            type: "text",
+            body: "DATE,BALANCE_AMOUNT,CURRENCY\n2026-10-14,0.00,ARS\n",
+          }
+        : PROVIDER_FIXTURES.mercadopago.ok(request);
+    const reading = (await mercadoPagoConnection({
+      ...deps(),
+      sleep: async () => undefined,
+    }).read(MERCADO_PAGO_CREDENTIALS, "holdings")) as HoldingsReading;
+    expect(reading.draft.rows).toEqual([]);
+    expect(reading.read.skippedRows).toBe(1);
+  });
+
+  it("waits for a report already asked for instead of asking again", async () => {
+    let lists = 0;
+    fake.answer = (request) => {
+      if (!request.path.endsWith("/list")) {
+        return PROVIDER_FIXTURES.mercadopago.ok(request);
+      }
+      lists += 1;
+      return {
+        status: 200,
+        body: [
+          {
+            begin_date: "2026-10-07T15:00:00Z",
+            end_date: "2026-10-14T15:00:00Z",
+            file_name:
+              lists < 3
+                ? null
+                : "release-report-123456789-2026-10-14-150000.csv",
+            status: lists < 3 ? "pending" : "processed",
+          },
+        ],
+      };
+    };
+    await mercadoPagoConnection({
+      ...deps(),
+      sleep: async () => undefined,
+    }).read(MERCADO_PAGO_CREDENTIALS, "holdings");
+    expect(fake.requests.map((each) => each.method)).not.toContain("POST");
+    expect(lists).toBe(3);
+  });
+
+  it("refuses for good a report Mercado Pago lists under a name that is no report file", async () => {
+    for (const name of ["..", ".", "../../users/me", "report.txt", "-.csv"]) {
+      fake.answer = (request) =>
+        request.path.endsWith("/list")
+          ? {
+              status: 200,
+              body: [
+                {
+                  begin_date: "2026-10-07T15:00:00Z",
+                  end_date: "2026-10-14T15:00:00Z",
+                  file_name: name,
+                  status: "processed",
+                },
+              ],
+            }
+          : PROVIDER_FIXTURES.mercadopago.ok(request);
+      fake.requests = [];
+      expect(
+        await failure(
+          mercadoPagoConnection(deps()).read(
+            MERCADO_PAGO_CREDENTIALS,
+            "holdings",
+          ),
+        ),
+      ).toEqual({ code: "extraction_failed", retryable: true });
+      expect(fake.requests).toHaveLength(1);
+    }
+  });
+
+  it("asks the user to set the report up when Mercado Pago has no configuration for it", async () => {
+    fake.answer = (request) =>
+      request.method === "POST"
+        ? {
+            status: 404,
+            body: { message: "Configuration not found", status: 404 },
+          }
+        : PROVIDER_FIXTURES.mercadopago.ok(request);
+    expect(
+      await failure(
+        mercadoPagoConnection(deps()).read(
+          MERCADO_PAGO_CREDENTIALS,
+          "holdings",
+        ),
+      ),
+    ).toEqual({ code: "unsupported", retryable: false });
   });
 });
 

@@ -35,14 +35,33 @@ type Client = SupabaseClient<Database>;
 
 const EVENT = "connections.api_key";
 
+// The most bytes the database takes for an account's credentials, as the
+// text of their jsonb.
+export const CREDENTIALS_MAX_BYTES = 4096;
+
+// The bytes of credentials as Postgres prints their jsonb: JSON with a space
+// after each colon and comma.
+export const credentialsBytes = (credentials: Record<string, string>) => {
+  const entries = Object.keys(credentials).length;
+  return (
+    new TextEncoder().encode(JSON.stringify(credentials)).length +
+    Math.max(0, 2 * entries - 1)
+  );
+};
+
 // The credentials are checked by the provider's own schema; this only bounds
-// their shape: a value fits a private key in PEM, and the database caps the
-// whole object at 4 KiB.
+// their shape: a value fits a private key in PEM, and the whole object fits
+// what the database takes, so an oversize one is invalid rather than a
+// failed write.
 const connectSchema = z
   .object({
     accountId: z.uuid(),
     provider: connectionProviderSchema,
-    credentials: z.record(z.string().max(40), z.string().max(4096)),
+    credentials: z
+      .record(z.string().max(40), z.string().max(CREDENTIALS_MAX_BYTES))
+      .refine(
+        (credentials) => credentialsBytes(credentials) <= CREDENTIALS_MAX_BYTES,
+      ),
     confirmedReadOnly: z.boolean(),
   })
   .strict();

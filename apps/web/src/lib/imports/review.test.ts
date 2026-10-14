@@ -1,4 +1,17 @@
-import { readTotals, rowChange, totalsMatch } from "./review";
+import {
+  IMPORT_FAILURE_MESSAGES,
+  importFailureMessage,
+  readTotals,
+  rowChange,
+  totalsMatch,
+} from "./review";
+
+it("tells a sync the provider has not set up what it reads, in its own words", () => {
+  expect(importFailureMessage("unsupported", true)).toMatch(/reporte/);
+  expect(importFailureMessage("unsupported", false)).toBe(
+    IMPORT_FAILURE_MESSAGES.unsupported,
+  );
+});
 
 const row = (quantity: string, price: string | null, discarded = false) => ({
   id: quantity,

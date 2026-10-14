@@ -1,7 +1,7 @@
 import { buenosAiresDate, fromScaled, toScaled } from "@plant/shared";
 import { z } from "zod";
 
-import type { DraftRow } from "../file-upload/draft";
+import { type DraftRow, SourceError } from "../file-upload/draft";
 import {
   call,
   decimalOf,
@@ -48,39 +48,54 @@ const listSchema = z.array(
   }),
 );
 
-const FILE_NAME = /^[A-Za-z0-9._-]{1,200}$/;
+// A report's file name: a plain name ending in .csv, never a path.
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,195}\.csv$/i;
 
-// One line of a CSV report, split by its separator; a field in double quotes
-// may hold the separator, and two double quotes in it are one.
-function fieldsOf(line: string, separator: string): string[] {
-  const fields: string[] = [];
+// A report's rows, split by its separator. A field in double quotes may hold
+// the separator or a line break, and two double quotes in it are one.
+function rowsOf(csv: string, separator: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let field = "";
   let quoted = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i]!;
+  const endRow = () => {
+    row.push(field.trim());
+    if (row.some(Boolean)) rows.push(row);
+    row = [];
+    field = "";
+  };
+  for (let i = 0; i < csv.length; i += 1) {
+    const char = csv[i]!;
     if (quoted) {
-      if (char === '"' && line[i + 1] === '"') {
+      if (char === '"' && csv[i + 1] === '"') {
         field += '"';
         i += 1;
       } else if (char === '"') quoted = false;
       else field += char;
     } else if (char === '"') quoted = true;
     else if (char === separator) {
-      fields.push(field.trim());
+      row.push(field.trim());
       field = "";
-    } else field += char;
+    } else if (char === "\n") endRow();
+    else if (char !== "\r") field += char;
   }
-  fields.push(field.trim());
-  return fields;
+  endRow();
+  return rows;
 }
 
-// An amount as the report prints it: a decimal point, or a decimal comma
-// where the separator is a semicolon.
-function amountOf(text: string | undefined): string | null {
-  const decimal = decimalOf(
-    /^-?\d+,\d+$/.test(text ?? "") ? text!.replace(",", ".") : text,
-  );
-  if (decimal === null) return null;
+const PLAIN = /^-?\d+(\.\d+)?$/;
+const ES_AR = /^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$/;
+
+// An amount as the report prints it: a decimal point, or, only in a report
+// separated by semicolons, the es-AR way (thousands dots, a decimal comma).
+// null for anything else.
+function amountOf(text: string, separator: string): string | null {
+  let decimal: string | null = null;
+  if (PLAIN.test(text)) decimal = text;
+  else if (separator === ";" && text.includes(",") && ES_AR.test(text)) {
+    decimal = text.replace(/\./g, "").replace(",", ".");
+  }
+  if (decimal === null || decimalOf(decimal) === null) return null;
   try {
     return fromScaled(toScaled(decimal));
   } catch {
@@ -88,27 +103,33 @@ function amountOf(text: string | undefined): string | null {
   }
 }
 
-// The account's available balance in pesos at the report's end: the
-// balance on its last line that prints one. null when no line does.
-export function balanceOf(csv: string): string | null {
-  const lines = csv.replace(/^﻿/, "").split(/\r?\n/).filter(Boolean);
-  const header = lines[0] ?? "";
+// The account's available balance in pesos at the report's end: the balance
+// on the last peso line that prints one, or null when there is none or that
+// one does not read (never an earlier line's); and how many peso lines print
+// a balance that does not read.
+export function balanceOf(csv: string): {
+  balance: string | null;
+  unreadable: number;
+} {
+  const text = csv.replace(/^﻿/, "");
+  const header = text.slice(0, text.search(/\r?\n|$/));
   const separator =
     header.split(";").length > header.split(",").length ? ";" : ",";
-  const columns = fieldsOf(header, separator).map((each) => each.toUpperCase());
-  const balanceAt = columns.indexOf("BALANCE_AMOUNT");
-  const currencyAt = columns.indexOf("CURRENCY");
-  if (balanceAt < 0) return null;
+  const [columns = [], ...lines] = rowsOf(text, separator);
+  const names = columns.map((each) => each.toUpperCase());
+  const balanceAt = names.indexOf("BALANCE_AMOUNT");
+  const currencyAt = names.indexOf("CURRENCY");
   let balance: string | null = null;
-  for (const line of lines.slice(1)) {
-    const fields = fieldsOf(line, separator);
-    const currency = currencyAt < 0 ? "ARS" : fields[currencyAt];
-    const amount = amountOf(fields[balanceAt]);
-    if (amount !== null && (currency === "ARS" || currency === "")) {
-      balance = amount;
-    }
+  let unreadable = 0;
+  if (balanceAt < 0) return { balance, unreadable };
+  for (const fields of lines) {
+    const currency = currencyAt < 0 ? "" : (fields[currencyAt] ?? "");
+    const printed = fields[balanceAt] ?? "";
+    if ((currency !== "ARS" && currency !== "") || printed === "") continue;
+    balance = amountOf(printed, separator);
+    if (balance === null) unreadable += 1;
   }
-  return balance;
+  return { balance, unreadable };
 }
 
 // Mercado Pago by the user's own production access token, which Mercado Pago
@@ -152,12 +173,13 @@ export function mercadoPagoConnection({
     return response;
   };
 
-  // The report of the period, once Mercado Pago lists it as generated.
+  // Where the period's report stands in Mercado Pago's list: not there,
+  // there but still being generated, or generated, by its file name.
   const listed = async (
     credentials: MercadoPagoCredentials,
     begin: Date,
     end: Date,
-  ): Promise<string | null> => {
+  ): Promise<"missing" | "pending" | { file: string }> => {
     const response = await request(`${REPORT}/list`, credentials);
     const parsed = listSchema.safeParse(await jsonOf(response));
     if (!response.ok || !parsed.success) throw unavailable();
@@ -166,11 +188,16 @@ export function mercadoPagoConnection({
         Date.parse(each.begin_date) === begin.getTime() &&
         Date.parse(each.end_date) === end.getTime(),
     );
-    if (!found?.file_name || !FILE_NAME.test(found.file_name)) return null;
-    if (found.status && /^(pending|processing|enqueued)$/i.test(found.status)) {
-      return null;
+    if (!found) return "missing";
+    if (
+      !found.file_name ||
+      (found.status && /^(pending|processing|enqueued)$/i.test(found.status))
+    ) {
+      return "pending";
     }
-    return found.file_name;
+    // A name that is not a plain report file is not followed.
+    if (!FILE_NAME.test(found.file_name)) throw unavailable();
+    return { file: found.file_name };
   };
 
   const report = async (credentials: MercadoPagoCredentials) => {
@@ -178,8 +205,8 @@ export function mercadoPagoConnection({
     const end = new Date(now());
     end.setUTCMinutes(0, 0, 0);
     const begin = new Date(end.getTime() - REPORT_DAYS * 86_400_000);
-    let file = await listed(credentials, begin, end);
-    if (file === null) {
+    let state = await listed(credentials, begin, end);
+    if (state === "missing") {
       const created = await request(REPORT, credentials, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -188,19 +215,28 @@ export function mercadoPagoConnection({
           end_date: end.toISOString().replace(/\.\d{3}Z$/, "Z"),
         }),
       });
+      // An account that never set the report up has no configuration to
+      // generate it with: the user sets it up, no retry helps.
+      if (created.status === 400 || created.status === 404) {
+        const message = JSON.stringify(await jsonOf(created));
+        if (/config/i.test(message)) {
+          throw new SourceError("unsupported", false);
+        }
+      }
       // 202: generating. Anything else, a 203 included (dates it does not
       // take), is for a later attempt.
       if (created.status !== 202 && created.status !== 200) {
         throw unavailable();
       }
-      for (const wait of REPORT_WAITS_MS) {
-        if (wait >= left()) break;
-        await sleep(wait);
-        file = await listed(credentials, begin, end);
-        if (file !== null) break;
-      }
+      state = "pending";
     }
-    if (file === null) throw unavailable();
+    for (const wait of REPORT_WAITS_MS) {
+      if (typeof state === "object" || wait >= left()) break;
+      await sleep(wait);
+      state = await listed(credentials, begin, end);
+    }
+    if (typeof state !== "object") throw unavailable();
+    const file = state.file;
     const response = await request(`${REPORT}/${file}`, credentials);
     if (!response.ok) throw unavailable();
     const csv = await response.text().catch((cause: unknown) => {
@@ -225,7 +261,7 @@ export function mercadoPagoConnection({
     },
     async read(credentials) {
       const { csv, end } = await report(credentials);
-      const balance = balanceOf(csv);
+      const { balance, unreadable } = balanceOf(csv);
       const rows: DraftRow[] = positive(balance)
         ? [
             {
@@ -241,7 +277,10 @@ export function mercadoPagoConnection({
             },
           ]
         : [];
-      const reading = holdingsReading(rows, balance === null ? 1 : 0, now());
+      // A balance missing, unreadable, zero or below is counted, so the
+      // review says a line was left out rather than showing nothing.
+      const skipped = Math.max(unreadable, rows.length === 0 ? 1 : 0);
+      const reading = holdingsReading(rows, skipped, now());
       reading.draft.documentDate = buenosAiresDate(end);
       return reading;
     },

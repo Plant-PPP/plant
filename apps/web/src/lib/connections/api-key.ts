@@ -111,7 +111,7 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
     name: "Mercado Pago",
     institution: /^mercado ?pago\b/i,
     fields: { accessToken: "Access Token de producción" },
-    help: 'En Mercado Pago Developers, entrá a "Tus integraciones", creá una aplicación y copiá su Access Token de producción (empieza con APP_USR-). Leemos el dinero disponible en tu cuenta con el reporte de liberaciones, que Mercado Pago tarda unos minutos en generar; lo que rinde en Mercado Fondo y tus otros movimientos cargalos con un resumen.',
+    help: 'En Mercado Pago Developers, entrá a "Tus integraciones", creá una aplicación y copiá su Access Token de producción (empieza con APP_USR-). Leemos el dinero disponible en tu cuenta con el reporte de liberaciones: si nunca lo usaste, generalo una vez desde Reportes → Liberaciones en Mercado Pago para que quede activado. Mercado Pago tarda unos minutos en generarlo; lo que rinde en Mercado Fondo y tus otros movimientos cargalos con un resumen.',
     confirm:
       "Entiendo que el Access Token de Mercado Pago tiene todos los permisos y que Plant solo lee.",
   },
@@ -119,7 +119,7 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
     name: "Bitso",
     institution: /^bitso\b/i,
     fields: { apiKey: "API key", apiSecret: "API secret" },
-    help: 'En Bitso, andá a Perfil → API y creá una key con los permisos "View balances" y "View account information" solamente, sin "Place orders", "Make withdrawals" ni "Perform security actions". Leemos tus saldos.',
+    help: 'En Bitso, andá a Perfil → API y creá una key nueva solo para Plant, con los permisos "View balances" y "View account information" solamente, sin "Place orders", "Make withdrawals" ni "Perform security actions". No la uses en otra app: Bitso rechaza los pedidos de una key que otro programa usa a la vez. Leemos tus saldos.',
     confirm:
       'Confirmo que la key tiene solo "View balances" y "View account information".',
   },
