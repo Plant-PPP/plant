@@ -287,3 +287,70 @@ it("exports both sections as tables", () => {
     ["Dividendos", "1", "500"],
   ]);
 });
+
+it("counts a yield that takes units out as the ledger books it", () => {
+  const state = ledger();
+  // One AAPL unit, held at a cost of 2.000, lost on a day it was worth 3.000.
+  const written = writeOperation(
+    state,
+    {
+      kind: "yield",
+      source_connection_id: ACCOUNT,
+      instrument_symbol: "AAPL",
+      date: "2025-07-01",
+      currency: "ARS",
+      price: "3000",
+      reference: null,
+      note: null,
+      parts: [{ portfolio_id: PORTFOLIO, direction: "out", quantity: "1" }],
+    },
+    { operationId: "lost", newId: () => crypto.randomUUID() },
+  );
+  expect(written.result).toMatchObject({ ok: true });
+  const after = written.state;
+  const { gains } = taxReport(after, {
+    year: "2025",
+    officialBuy: OFFICIAL_BUY,
+    leftOut: leftOutOf(after, NONE),
+    isPlazoFijo: () => true,
+  });
+  expect(gains.groups).toContainEqual({
+    kind: "yield",
+    count: 1,
+    amount: "-2000",
+  });
+});
+
+it("counts no placement left out that started after the year ended", () => {
+  const state = ledger();
+  const placement: Holding = {
+    ...CASH,
+    id: "f0000000-0000-4000-8000-0000000000f0",
+    asset_class: "fixed_term",
+    currency: "ARS",
+    amount: "1000",
+    annual_rate: "0.3",
+    started_on: "2026-01-10",
+    matures_on: "2026-02-10",
+  } as Holding;
+  const withPlacement: ClosesState = {
+    ...state,
+    holdings: [
+      ...state.holdings,
+      {
+        holding: placement,
+        accountId: ACCOUNT,
+        portfolioId: PORTFOLIO,
+        closed: false,
+        origin: MANUAL,
+      },
+    ],
+  };
+  const report = taxReport(withPlacement, {
+    year: "2025",
+    officialBuy: OFFICIAL_BUY,
+    leftOut: leftOutOf(withPlacement, new Set([assetKey(placement)])),
+    isPlazoFijo: () => true,
+  });
+  expect(report.leftOut).toBe(0);
+});

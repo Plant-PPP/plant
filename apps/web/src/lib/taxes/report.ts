@@ -3,6 +3,7 @@ import {
   INSTRUMENT_TYPES,
   isIncome,
   isYield,
+  takesUnits,
   valueHolding,
 } from "@plant/core";
 import {
@@ -149,12 +150,12 @@ function wealthOf(
   const out = new Set<AssetKey>();
   for (const row of rows) {
     const key = assetKey(row.holding);
+    const value = valueHolding(row.holding, snapshot);
+    if ("state" in value && value.state === "not_started") continue;
     if (leftOut(row)) {
       out.add(key);
       continue;
     }
-    const value = valueHolding(row.holding, snapshot);
-    if ("state" in value && value.state === "not_started") continue;
     const money = "missing" in value ? null : value.money;
     const ars =
       money === null
@@ -232,9 +233,17 @@ function gainsOf(
       } else if (isIncome(movement.kind) || isYield(movement)) {
         kind = movement.kind as "dividend" | "coupon" | "yield";
         const step = steps[index];
-        amount = step
-          ? moneyChange(positionBefore(steps, index), step, "income")
-          : null;
+        const before = positionBefore(steps, index);
+        // Units a yield takes out lose their value that day and realize what
+        // they had gained over their cost, as the ledger books it.
+        amount = !step
+          ? null
+          : isYield(movement) && takesUnits(movement)
+            ? sumOrNull([
+                moneyChange(before, step, "income"),
+                moneyChange(before, step, "realized"),
+              ])
+            : moneyChange(before, step, "income");
       } else return;
       const group = byKind.get(kind) ?? { operations: new Set(), amounts: [] };
       group.operations.add(movement.operation_id);

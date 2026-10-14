@@ -80,6 +80,8 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
       report={report}
       years={years}
       defaultYear={defaultTaxYear(years, today)}
+      placementKinds={false}
+      assetExclusion={false}
     />
   );
 }

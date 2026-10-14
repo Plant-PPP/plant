@@ -46,6 +46,8 @@ export function PrototypeTaxes({ params }: { params: KeysetParams }) {
       })}
       years={years}
       defaultYear={defaultTaxYear(years, state.today)}
+      placementKinds
+      assetExclusion
     />
   );
 }

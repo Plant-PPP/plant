@@ -34,10 +34,26 @@ const REPORT: TaxReport = {
   leftOut: 2,
 };
 
-const render = (report: TaxReport) =>
+const render = (report: TaxReport, prototype = true) =>
   renderToStaticMarkup(
-    <TaxesPage report={report} years={["2026", "2025"]} defaultYear="2025" />,
+    <TaxesPage
+      report={report}
+      years={["2026", "2025"]}
+      defaultYear="2025"
+      placementKinds={prototype}
+      assetExclusion={prototype}
+    />,
   );
+
+it("tells the real app's limits: placements as plazo fijo, accounts only", () => {
+  const real = render(REPORT, false);
+  expect(real).toContain("Toda colocación a tasa cuenta como plazo fijo");
+  expect(real).toContain("Lo cambiás en la cuenta.");
+  expect(real).not.toContain("en el activo");
+  const prototype = render(REPORT);
+  expect(prototype).not.toContain("Toda colocación a tasa");
+  expect(prototype).toContain("Lo cambiás en la cuenta o en el activo.");
+});
 
 it("says it is an estimate and shows both reports in pesos", () => {
   const html = render(REPORT);

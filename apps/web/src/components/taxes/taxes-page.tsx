@@ -97,10 +97,17 @@ export function TaxesPage({
   report,
   years,
   defaultYear,
+  placementKinds,
+  assetExclusion,
 }: {
   report: TaxReport;
   years: readonly string[];
   defaultYear: string;
+  // Whether the data tells a plazo fijo from other placements at a rate;
+  // without it, every one counts as a plazo fijo.
+  placementKinds: boolean;
+  // Whether the user can leave a single asset out, besides a whole account.
+  assetExclusion: boolean;
 }) {
   const id = useId();
   const { wealth, gains, officialBuy } = report;
@@ -217,6 +224,13 @@ export function TaxesPage({
             cripto y los inmuebles cuentan como gravados; si tu efectivo está en
             un banco argentino puede estar exento.
           </li>
+          {!placementKinds && (
+            <li>
+              Toda colocación a tasa cuenta como plazo fijo, así que va como
+              exenta. Si tenés una caución o un préstamo otorgado, sumalo a mano
+              a lo gravado.
+            </li>
+          )}
           <li>
             Los inmuebles y otros activos van al valor que cargaste, no a su
             valuación fiscal. El efectivo y los plazos fijos de años pasados van
@@ -289,7 +303,9 @@ export function TaxesPage({
           {report.leftOut === 1
             ? "Dejaste 1 activo fuera del reporte impositivo."
             : `Dejaste ${report.leftOut} activos fuera del reporte impositivo.`}{" "}
-          Lo cambiás en la cuenta o en el activo.
+          {assetExclusion
+            ? "Lo cambiás en la cuenta o en el activo."
+            : "Lo cambiás en la cuenta."}
         </p>
       )}
     </div>
