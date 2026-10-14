@@ -1,5 +1,5 @@
 import type { AiCostInsert } from "@plant/shared";
-import { SourceError } from "@plant/sources";
+import { type SourceReading, SourceError } from "@plant/sources";
 import { APICallError } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 
@@ -13,6 +13,12 @@ import {
   READERS,
   TIEBREAK_MODEL,
 } from "./document-extractor";
+
+// The holdings a reading yields, failing the test when it yields operations.
+const holdings = (reading: SourceReading) => {
+  if (!("draft" in reading)) throw new Error("read as operations");
+  return reading;
+};
 
 const USER = "a0000000-0000-4000-8000-00000000000a";
 const BYTES = new TextEncoder().encode("%PDF-1.7");
@@ -93,7 +99,7 @@ it("reads the holdings and costs the call to the user", async () => {
       ],
     }),
   );
-  const { draft, read } = await extract(model);
+  const { draft, read } = holdings(await extract(model));
   expect(read).toEqual({
     reader: "document",
     mapping: "none",
@@ -147,31 +153,35 @@ it("reads the holdings and costs the call to the user", async () => {
 });
 
 it("drops a date that is not one", async () => {
-  const { draft } = await extract(
-    answering(
-      JSON.stringify({
-        kind: "account_statement",
-        documentDate: "30/09/2026",
-        rows: [],
-        totals: [],
-      }),
+  const { draft } = holdings(
+    await extract(
+      answering(
+        JSON.stringify({
+          kind: "account_statement",
+          documentDate: "30/09/2026",
+          rows: [],
+          totals: [],
+        }),
+      ),
     ),
   );
   expect(draft.documentDate).toBeNull();
 });
 
 it("keeps the totals the statement prints, one per currency", async () => {
-  const { draft } = await extract(
-    answering(
-      JSON.stringify({
-        kind: "account_statement",
-        documentDate: null,
-        rows: [],
-        totals: [
-          { currency: "ARS", amount: "1500.25" },
-          { currency: "USD", amount: "120" },
-        ],
-      }),
+  const { draft } = holdings(
+    await extract(
+      answering(
+        JSON.stringify({
+          kind: "account_statement",
+          documentDate: null,
+          rows: [],
+          totals: [
+            { currency: "ARS", amount: "1500.25" },
+            { currency: "USD", amount: "120" },
+          ],
+        }),
+      ),
     ),
   );
   expect(draft.totals).toEqual([
@@ -258,17 +268,19 @@ it("asks a third model only about what the two readers disagree on", async () =>
     }),
   });
   const second = answering(reading([row("AAPL", "5"), row("GGAL", "1000")]));
-  const { draft, read } = await documentExtractor({
-    record,
-    model: (id) => (id === lite31 ? second : shared),
-  })({
-    bytes: BYTES,
-    mimeType: "application/pdf",
-    userId: USER,
-    importId: "i1",
-    institution: "IOL",
-    lastAttempt: false,
-  });
+  const { draft, read } = holdings(
+    await documentExtractor({
+      record,
+      model: (id) => (id === lite31 ? second : shared),
+    })({
+      bytes: BYTES,
+      mimeType: "application/pdf",
+      userId: USER,
+      importId: "i1",
+      institution: "IOL",
+      lastAttempt: false,
+    }),
+  );
   expect(read.disputes).toBe(1);
   expect(draft.rows.map((r) => [r.symbol, r.quantity])).toEqual([
     ["AAPL", "5"],
@@ -289,7 +301,7 @@ it("keeps the other reading, every row low, when one reader fails", async () => 
     [READERS[0]]: reading([row("AAPL", "5")]),
     [lite31]: "not json",
   });
-  const { draft } = await run();
+  const { draft } = holdings(await run());
   expect(draft.rows).toEqual([
     expect.objectContaining({ symbol: "AAPL", confidence: "low" }),
   ]);
@@ -364,17 +376,19 @@ it("settles on the two readings when the tiebreak fails on the last attempt", as
     },
   });
   const second = answering(reading([row("GGAL", "1000")]));
-  const { draft } = await documentExtractor({
-    record,
-    model: (id) => (id === lite31 ? second : shared),
-  })({
-    bytes: BYTES,
-    mimeType: "application/pdf",
-    userId: USER,
-    importId: "i1",
-    institution: "IOL",
-    lastAttempt: true,
-  });
+  const { draft } = holdings(
+    await documentExtractor({
+      record,
+      model: (id) => (id === lite31 ? second : shared),
+    })({
+      bytes: BYTES,
+      mimeType: "application/pdf",
+      userId: USER,
+      importId: "i1",
+      institution: "IOL",
+      lastAttempt: true,
+    }),
+  );
   expect(draft.rows).toEqual([
     expect.objectContaining({
       symbol: "GGAL",
@@ -426,7 +440,7 @@ it("lets the step retry when one reader's provider is down", async () => {
     retryable: true,
   });
   // With no retry left, the other reading stands, every row low.
-  const { draft } = await extractor({ ...input, lastAttempt: true });
+  const { draft } = holdings(await extractor({ ...input, lastAttempt: true }));
   expect(draft.rows).toEqual([
     expect.objectContaining({ symbol: "AAPL", confidence: "low" }),
   ]);
@@ -437,7 +451,7 @@ it("reads no holdings from a document both readers call a card statement", async
     [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
     [READERS[1]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
   });
-  const { draft, read } = await run();
+  const { draft, read } = holdings(await run());
   expect(read.documentKind).toBe("card_statement");
   expect(draft.rows).toEqual([]);
 });
@@ -447,7 +461,95 @@ it("keeps the holdings when the readers disagree on what the document is", async
     [READERS[0]]: reading([row("AAPL", "5")], "2026-09-30", "card_statement"),
     [READERS[1]]: reading([row("AAPL", "5")]),
   });
-  const { draft, read } = await run();
+  const { draft, read } = holdings(await run());
   expect(read.documentKind).toBeNull();
   expect(draft.rows).toHaveLength(1);
+});
+
+const operation = (extra: object = {}) => ({
+  date: "2026-09-01",
+  kind: "purchase",
+  symbol: "GGAL",
+  quantity: "100",
+  price: "5000",
+  amount: null,
+  charges: "25.5",
+  reference: "123",
+  currency: "ARS",
+  confidence: "high",
+  page: 1,
+  ...extra,
+});
+
+const operationsReading = (operations: object[], kind = "trade_ticket") =>
+  JSON.stringify({
+    kind,
+    documentDate: null,
+    rows: [],
+    operations,
+    totals: [],
+  });
+
+it("reads a document both readers call a ticket as operations, with no tiebreak", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading([operation()]),
+    [READERS[1]]: operationsReading([
+      operation({ symbol: null, quantity: "1000" }),
+    ]),
+  });
+  const reading = await run();
+  expect(reading.read.documentKind).toBe("trade_ticket");
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  // The readings disagree on the instrument's name, so each is its own row,
+  // and each is for the user to check.
+  expect(reading.operations).toHaveLength(2);
+  expect(reading.operations.every((each) => each.confidence === "low")).toBe(
+    true,
+  );
+  expect(record).toHaveBeenCalledTimes(2);
+});
+
+it("leaves a field the readers disagree on for the review", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading([operation()], "operations_list"),
+    [READERS[1]]: operationsReading(
+      [operation({ quantity: "1000", charges: "25.50" })],
+      "operations_list",
+    ),
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  expect(reading.operations).toEqual([
+    {
+      date: "2026-09-01",
+      kind: "purchase",
+      symbol: "GGAL",
+      quantity: null,
+      price: "5000",
+      amount: null,
+      charges: "25.5",
+      reference: "123",
+      currency: "ARS",
+      confidence: "low",
+      page: 1,
+    },
+  ]);
+});
+
+it("keeps what an operation's reading cannot parse as missing, not the row", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading([
+      operation({ quantity: "1.000,5", date: "01/09/2026" }),
+    ]),
+    [READERS[1]]: operationsReading([
+      operation({ quantity: "1.000,5", date: "01/09/2026" }),
+    ]),
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  expect(reading.operations[0]).toMatchObject({
+    quantity: null,
+    date: null,
+    symbol: "GGAL",
+  });
 });

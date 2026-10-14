@@ -1,4 +1,5 @@
 import {
+  type DraftOperation,
   type ImportDraft,
   type PortfolioSourcePort,
   SourceError,
@@ -25,8 +26,8 @@ export type ImportToRead = {
 
 // Where the job reads an import and its file and writes what it read; the
 // composition root implements it with the service role. Every call filters by
-// the import's id and its user, and saveDraft replaces any draft a failed
-// attempt left.
+// the import's id and its user, and saving a draft of holdings or of
+// operations replaces any draft, of either, a failed attempt left.
 export interface ImportStorePort {
   load(importId: string, userId: string): Promise<ImportToRead | null>;
   download(path: string): Promise<Uint8Array>;
@@ -40,6 +41,11 @@ export interface ImportStorePort {
     userId: string,
     draft: ImportDraft,
     skippedRows: number,
+  ): Promise<void>;
+  saveOperations(
+    importId: string,
+    userId: string,
+    operations: DraftOperation[],
   ): Promise<void>;
   failed(
     importId: string,
@@ -62,7 +68,7 @@ export type ImportJobDeps = {
 type Prepared =
   | { ok: true; path: string; mimeType: string }
   | { ok: false; reason: "missing" | "not_queued" | "path" };
-type Read = { rows: number } & SourceReadInfo;
+type Read = { rows: number; draft: "holdings" | "operations" } & SourceReadInfo;
 
 export type ImportSteps = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -148,7 +154,7 @@ export async function runImportDocument(
     read = await step.run("read", async (): Promise<Read> => {
       try {
         const bytes = await deps.store.download(prepared.path);
-        const { draft, read } = await deps.source.read({
+        const reading = await deps.source.read({
           importId,
           bytes,
           mimeType: prepared.mimeType,
@@ -156,11 +162,26 @@ export async function runImportDocument(
           institution: await deps.store.institution(importId, userId),
           lastAttempt: attempt >= IMPORT_RETRIES,
         });
-        if (draft.rows.length === 0) {
-          throw new SourceError("nothing_found", false);
+        const rows =
+          "operations" in reading
+            ? reading.operations.length
+            : reading.draft.rows.length;
+        if (rows === 0) throw new SourceError("nothing_found", false);
+        if ("operations" in reading) {
+          await deps.store.saveOperations(importId, userId, reading.operations);
+        } else {
+          await deps.store.saveDraft(
+            importId,
+            userId,
+            reading.draft,
+            reading.read.skippedRows,
+          );
         }
-        await deps.store.saveDraft(importId, userId, draft, read.skippedRows);
-        return { rows: draft.rows.length, ...read };
+        return {
+          rows,
+          draft: "operations" in reading ? "operations" : "holdings",
+          ...reading.read,
+        };
       } catch (error) {
         if (error instanceof SourceError && !error.retryable) {
           throw new NonRetriableError(error.code, { cause: error });
@@ -183,6 +204,7 @@ export async function runImportDocument(
     ...fields,
     "plant.outcome": "ok",
     "plant.import.row_count": read.rows,
+    "plant.import.draft": read.draft,
     "plant.import.reader": read.reader,
     "plant.import.mapping": read.mapping,
     "plant.import.skipped_count": read.skippedRows,

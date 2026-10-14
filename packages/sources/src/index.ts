@@ -9,6 +9,9 @@ export {
 } from "./file-upload/adapter";
 export {
   createSourceForConnection,
+  type HoldingsReading,
+  type OperationsReading,
+  OPERATION_DOCUMENT_KINDS,
   type DocumentKind,
   documentKindSchema,
   type PortfolioSourcePort,
@@ -24,6 +27,9 @@ export {
 } from "./port";
 export {
   DRAFT_ROW_LIMIT,
+  type DraftOperation,
+  draftOperationSchema,
+  OPERATION_KINDS,
   type DraftRow,
   draftRowSchema,
   importConfidenceSchema,

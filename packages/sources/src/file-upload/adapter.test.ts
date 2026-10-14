@@ -64,11 +64,11 @@ describe("fileUploadSource", () => {
     await expect(source.read(input("application/pdf"))).rejects.toBe(error);
   });
 
-  it("reads holdings, not movements or changes since a cursor", () => {
+  it("reads holdings and operations, not changes since a cursor", () => {
     const capabilities = fileUploadSource(readers()).capabilities();
     expect(sourceCapabilitiesSchema.parse(capabilities)).toEqual({
       holdings: "native",
-      movements: "unsupported",
+      movements: "native",
       incremental: "unsupported",
     });
   });
