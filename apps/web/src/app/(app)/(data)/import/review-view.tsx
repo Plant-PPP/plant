@@ -10,6 +10,7 @@ import { ImportOperationsReview } from "@/components/imports/import-operations-r
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
+import { markLoaded } from "@/lib/imports/operations-loaded";
 import { IMPORTS_VIEW_EVENT, readImportForReview } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
 import { readReferenceDollar } from "@/lib/holdings/read";
@@ -65,7 +66,10 @@ export async function ImportReviewView({ id }: { id: string }) {
   if (item.operations) {
     return (
       <ImportOperationsReview
-        item={item}
+        item={{
+          ...item,
+          operations: markLoaded(state, item.accountId, item.operations),
+        }}
         institution={account?.institution ?? ""}
         instruments={ledger.instruments}
         backHref="/import"

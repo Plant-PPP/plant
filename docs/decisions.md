@@ -8,6 +8,11 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A cost that does not read as one unit's is left out**: one more than ten times, or less than a tenth of, the row's price or value per unit is taken for a total, which a column named "Costo" may hold, and is not proposed. A cost on a disputed row stands only when two readings print it alike.
 - **The review shows it only when the document printed one**, editable, and dropped with the price when the instrument picked is in another currency. A holding that opens comes in at that cost rather than the market price, which is still what the value is checked against; with a cost kept, the price may stay empty. Units added to a holding already held come in at the price, the review asking for it: the average cost is the whole position's, not theirs, and is used only when no price was kept.
 - **Several accounts in one file and other currencies are not part of it**: PLA-151's other half and its own issue.
+## 2026-10-14 · Operations already loaded (PLA-150)
+
+- **An operation the account already has starts discarded**, marked "Ya está cargada" and counted above the list, for the user to bring back if it is not the same. It is the same when an operation of the account of its kind and instrument carries its transaction number, or, when the document prints no number, when one of its instrument on its day, of its kind, has its units or its amount, its parts across portfolios added up. Each operation of the account answers for one row at most, so two equal fills of a day are not both taken for the one already loaded. Only the account the document was uploaded to is looked in.
+- **Not matched:** a position that came in as an opening balance (another kind) and numbers written differently ("0123" and "123"); both lead to a duplicate the user can discard, never to a dropped operation.
+- **It is worked out when the review opens**, from the ledger the page already reads, and not stored: a confirmation in between is seen on the next visit.
 
 ## 2026-10-14 · Importing operations (PLA-149)
 
