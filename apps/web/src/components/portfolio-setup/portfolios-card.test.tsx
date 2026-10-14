@@ -55,7 +55,7 @@ it("lists archived rows in their own table with only a restore button", () => {
   expect(html).toContain('aria-label="Restaurar Vieja"');
   expect(html).not.toContain('aria-label="Archivar Vieja"');
   expect(html).not.toContain('aria-label="Renombrar Vieja"');
-  expect(html).toContain("No tenés carteras activas.");
+  expect(html).toContain("No tenés carteras activas");
 });
 
 it("keeps the add button focusable while a write runs", () => {

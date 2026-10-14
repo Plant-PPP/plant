@@ -20,7 +20,7 @@ function PageHeader({
   return (
     <div
       data-slot="page-header"
-      className={cn("flex flex-wrap items-center gap-2", className)}
+      className={cn("flex min-h-7 flex-wrap items-center gap-2", className)}
     >
       <h1 className="sr-only">{title}</h1>
       {filters && (

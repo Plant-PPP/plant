@@ -198,7 +198,7 @@ export function ImportDebtsReview({
                   "grid gap-3 rounded-lg border p-3",
                   !row.discarded &&
                     (missing[index]!.size > 0 || row.confidence === "low") &&
-                    "border-amber-500/60 bg-amber-500/5",
+                    "border-warn/50 bg-warn/5",
                   row.discarded && "opacity-50",
                 )}
               >
@@ -384,8 +384,8 @@ export function ImportDebtsReview({
 
 function Problem({ text }: { text: string }) {
   return (
-    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-      <TriangleAlert aria-hidden className="size-3" />
+    <span className="flex items-center gap-1 text-xs">
+      <TriangleAlert aria-hidden className="text-warn size-3" />
       {text}
     </span>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { exactUnitPrice } from "@plant/core";
 import { buenosAiresDate, type Currency } from "@plant/shared";
 import { ArrowLeft, RotateCcw, TriangleAlert, X } from "lucide-react";
@@ -318,9 +319,7 @@ export function ImportOperationsReview({
             {countOf(rows.length, "operación", "operaciones")}
           </h2>
           {incomplete > 0 && (
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-200">
-              {`${incomplete} con datos faltantes`}
-            </span>
+            <Badge variant="warning">{`${incomplete} con datos faltantes`}</Badge>
           )}
           {loadedCount > 0 && (
             <span className="text-muted-foreground text-xs">
@@ -410,7 +409,7 @@ export function ImportOperationsReview({
                   "grid gap-3 rounded-lg border p-3",
                   !row.discarded &&
                     (missing[index]!.size > 0 || row.confidence === "low") &&
-                    "border-amber-500/60 bg-amber-500/5",
+                    "border-warn/50 bg-warn/5",
                   refused === row.id && "border-destructive",
                   row.discarded && "opacity-50",
                 )}
@@ -623,8 +622,8 @@ export function ImportOperationsReview({
 
 function ProblemText({ text }: { text: string }) {
   return (
-    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-      <TriangleAlert aria-hidden className="size-3" />
+    <span className="flex items-center gap-1 text-xs">
+      <TriangleAlert aria-hidden className="text-warn size-3" />
       {text}
     </span>
   );

@@ -230,10 +230,13 @@ export function ImportPage({
               >
                 Elegir archivos
               </Button>
+              {/* A phone opens its camera; a computer would only open the
+                  same file picker, so it gets no such button. */}
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                className="hidden pointer-coarse:inline-flex"
                 disabled={left === 0 || !accountId}
                 onClick={() => camera.current?.click()}
               >

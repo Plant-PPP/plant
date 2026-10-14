@@ -1,7 +1,7 @@
 "use client";
 
 import type * as React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import { cn } from "@/lib/utils";
 
-// A form's dialog, open while mounted: a caller mounts it to open it.
+// A form's dialog, open while mounted: a caller mounts it to open it. Its
+// form sends only once complete (see useSubmitWhenValid).
 function AppDialog({
   onClose,
   title,
@@ -36,10 +38,13 @@ function AppDialog({
   const [opener] = useState(() =>
     typeof document === "undefined" ? null : document.activeElement,
   );
+  const content = useRef<HTMLDivElement>(null);
+  useSubmitWhenValid(content);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        ref={content}
         data-slot="app-dialog"
         className={cn(
           "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md",

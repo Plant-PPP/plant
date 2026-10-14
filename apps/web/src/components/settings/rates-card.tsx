@@ -1,5 +1,6 @@
 "use client";
 
+import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import type { ManualRateKind } from "@plant/core";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -159,6 +160,8 @@ function RateDialog({
   onClose: () => void;
   onSubmit: (sell: string, date: string) => void;
 }) {
+  const form = useRef<HTMLFormElement>(null);
+  useSubmitWhenValid(form);
   const id = useId();
   const [sell, setSell] = useState(rate.sell ? amountInput(rate.sell) : "");
   const [date, setDate] = useState(today);
@@ -171,6 +174,7 @@ function RateDialog({
       returnFocusTo={returnFocusTo}
     >
       <form
+        ref={form}
         className="grid gap-4"
         noValidate
         onSubmit={(event) => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { Notice } from "@/components/ui/notice";
+import { Badge } from "@/components/ui/badge";
 import {
   documentDateIssue,
   exactUnitPrice,
@@ -518,8 +520,8 @@ export function ImportReview({
             {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
           </p>
           {dateIssue && (
-            <p className="flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300">
-              <TriangleAlert aria-hidden className="size-4" />
+            <p className="flex items-center gap-1.5 text-sm">
+              <TriangleAlert aria-hidden className="text-warn size-4" />
               {DATE_ISSUE_LABELS[dateIssue]}
             </p>
           )}
@@ -531,28 +533,23 @@ export function ImportReview({
       )}
 
       {item.origin !== "sync" && (
-        <section
-          className={cn(
-            "grid gap-2 rounded-lg border p-4",
-            matches === true
-              ? "border-emerald-600/40"
-              : matches === false && "border-amber-500/50",
-          )}
+        <Notice
           aria-label="Totales"
-        >
-          <p className="flex items-center gap-2 text-sm font-medium">
-            {matches === true && (
-              <Check aria-hidden className="size-4 text-emerald-600" />
-            )}
-            {matches === false && (
-              <TriangleAlert aria-hidden className="size-4 text-amber-600" />
-            )}
-            {matches === "none"
+          variant={
+            matches === true
+              ? "success"
+              : matches === false
+                ? "warning"
+                : "info"
+          }
+          title={
+            matches === "none"
               ? `${item.origin === "sheet" ? "La planilla" : "El documento"} no muestra un total para comparar: revisá las filas.`
               : matches
                 ? `Lo leído suma lo mismo que ${noun}.`
-                : `Lo leído no suma lo mismo que ${noun}: revisá las filas dudosas.`}
-          </p>
+                : `Lo leído no suma lo mismo que ${noun}: revisá las filas dudosas.`
+          }
+        >
           <table className="w-fit text-sm tabular-nums">
             <caption className="sr-only">Totales por moneda</caption>
             <thead>
@@ -599,7 +596,7 @@ export function ImportReview({
               })}
             </tbody>
           </table>
-        </section>
+        </Notice>
       )}
 
       <section className="grid gap-3">
@@ -607,9 +604,9 @@ export function ImportReview({
           <h2 className="text-base font-semibold">
             {holdingsCountText(rows.filter((row) => !row.discarded).length)}
             {doubtful > 0 && (
-              <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
+              <Badge variant="warning" className="ml-2 align-middle">
                 {countOf(doubtful, "dudosa", "dudosas")}
-              </span>
+              </Badge>
             )}
           </h2>
           <Button
@@ -656,7 +653,7 @@ export function ImportReview({
                   "grid gap-3 rounded-lg border p-3 @container sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end",
                   (row.confidence === "low" || issues[index]!.length > 0) &&
                     !row.discarded &&
-                    "border-amber-500/60 bg-amber-500/5",
+                    "border-warn/50 bg-warn/5",
                   row.discarded && "opacity-50",
                 )}
               >
@@ -701,15 +698,15 @@ export function ImportReview({
                   {issues[index]!.map((issue) => (
                     <span
                       key={issue}
-                      className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
+                      className="flex items-center gap-1 text-xs"
                     >
-                      <TriangleAlert aria-hidden className="size-3" />
+                      <TriangleAlert aria-hidden className="text-warn size-3" />
                       {issueLabel(issue, isCash(row))}
                     </span>
                   ))}
                   {!row.discarded && severalCash(row) && (
-                    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-                      <TriangleAlert aria-hidden className="size-3" />
+                    <span className="flex items-center gap-1 text-xs">
+                      <TriangleAlert aria-hidden className="text-warn size-3" />
                       Tenés varios saldos en esta moneda en la cuenta: descartá
                       la fila y actualizalos a mano.
                     </span>

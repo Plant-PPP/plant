@@ -104,7 +104,7 @@ export function NameLink({
     <Link
       href={href}
       title={text}
-      className={`block truncate underline-offset-2 hover:underline ${className ?? ""}`}
+      className={`block truncate ${className ?? ""}`}
     >
       {text}
     </Link>

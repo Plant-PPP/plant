@@ -201,12 +201,12 @@ it("names each holding in its actions", () => {
 });
 
 it("says when there are no holdings", () => {
-  expect(render([])).toContain("Todavía no cargaste tenencias.");
+  expect(render([])).toContain("Todavía no cargaste tenencias");
 });
 
 it("links to the accounts when there is none to hold anything", () => {
   expect(render([], { accounts: [] })).toMatch(
-    /primero agregá una cuenta en <a[^>]*href="\/accounts"[^>]*>Cuentas<\/a>/,
+    /<a[^>]*href="\/accounts"[^>]*>Agregar una cuenta<\/a>/,
   );
 });
 
@@ -378,12 +378,13 @@ it("shows a share as calculating until the server values its part", () => {
 
 it("shows the reference unit chosen once its param is cleared", () => {
   // The page still values in pesos until the server answers; the choice shows first.
-  const cleared = render([], { referenceUnit: "usd_ccl" });
+  const holdings = [row("h1", PRINCIPAL, "1000")];
+  const cleared = render(holdings, { referenceUnit: "usd_ccl" });
   expect(cleared).toContain("Dólar CCL");
   expect(cleared).not.toContain(">Pesos<");
-  expect(render([], { referenceUnit: "usd_ccl", urlUnit: "ars" })).toContain(
-    ">Pesos<",
-  );
+  expect(
+    render(holdings, { referenceUnit: "usd_ccl", urlUnit: "ars" }),
+  ).toContain(">Pesos<");
 });
 
 it("offers archiving only to a page that passes it", () => {

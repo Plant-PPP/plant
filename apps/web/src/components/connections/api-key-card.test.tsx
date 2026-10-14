@@ -43,7 +43,7 @@ it.each(["queued", "reading"] as const)(
 it("says why a sync failed, in the sync's own words", () => {
   const html = sync({ status: "failed", failure: "connection_rejected" });
   expect(html).toContain(
-    "La última sincronización falló (14/10/2026 a las 12:31).",
+    "La última sincronización falló (14/10/2026 a las 12:31)",
   );
   expect(html).toContain("Bitso rechazó la conexión.");
   expect(html).toContain("text-destructive");

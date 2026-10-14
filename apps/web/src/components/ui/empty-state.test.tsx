@@ -8,13 +8,13 @@ it("says what goes here and offers the way to start", () => {
     <EmptyState
       icon={Upload}
       title="Tu patrimonio, en un lugar"
-      actions={<a href="/import">Cargar</a>}
+      actions={<button type="button">Cargar</button>}
     >
       Subí el resumen de tu broker.
     </EmptyState>,
   );
   expect(html).toContain(">Tu patrimonio, en un lugar</p>");
   expect(html).toContain("Subí el resumen de tu broker.");
-  expect(html).toContain('href="/import"');
+  expect(html).toContain(">Cargar</button>");
   expect(html).toContain('aria-hidden="true"');
 });

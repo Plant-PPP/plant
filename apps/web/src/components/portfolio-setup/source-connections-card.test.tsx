@@ -82,7 +82,7 @@ it("lists archived accounts in their own table with a restore button", () => {
   const archived = render({ active: [], archived: [second] });
   expect(archived).toMatch(/<caption[^>]*>Cuentas archivadas<\/caption>/);
   expect(archived).toContain('aria-label="Restaurar Broker Dos"');
-  expect(archived).toContain("Todavía no agregaste cuentas.");
+  expect(archived).toContain("Todavía no agregaste cuentas");
 });
 
 it("fades an account the server has not confirmed yet", () => {

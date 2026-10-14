@@ -204,7 +204,7 @@ describe("a refusal with a link", () => {
     const [text, options] = (toast.error as jest.Mock).mock.calls[0]!;
     expect(text).toBe(alert);
     expect(renderToStaticMarkup(options.action)).toBe(
-      '<a class="ml-auto text-sm font-medium underline" href="/accounts">Ir a Cuentas</a>',
+      '<a class="ml-auto text-sm font-medium" href="/accounts">Ir a Cuentas</a>',
     );
   });
 });

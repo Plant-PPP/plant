@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Inbox, Plus } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type * as React from "react";
@@ -11,6 +11,8 @@ import {
   type DataTableRow,
   rowActionButton,
 } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
 import { PendingButton } from "@/components/ui/pending-button";
 import type { ListView } from "@/lib/portfolio-setup/read";
 import type { NoticeLink } from "@/lib/portfolio-setup/messages";
@@ -157,6 +159,8 @@ export function SetupCard({
   addLabel,
   onAdd,
   secondary,
+  page = false,
+  filters,
   children,
 }: {
   heading: SetupCardState["heading"];
@@ -167,24 +171,48 @@ export function SetupCard({
   onAdd: () => void;
   // Another action beside the add button.
   secondary?: React.ReactNode;
+  // The page's only section: the breadcrumb already names it, so its heading
+  // and description are for screen readers, and its actions are the page's
+  // toolbar.
+  page?: boolean;
+  // The page's filters, left of its actions in the toolbar.
+  filters?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section data-slot="setup-section" className="grid gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="grid gap-1">
+    <section
+      data-slot="setup-section"
+      className={page ? "grid gap-4" : "grid gap-3"}
+    >
+      <div
+        className={
+          page
+            ? "flex min-h-7 flex-wrap items-center gap-2"
+            : "flex flex-wrap items-end justify-between gap-x-4 gap-y-2"
+        }
+      >
+        <div className={page ? "sr-only" : "grid gap-0.5"}>
           <h2
             ref={heading}
             tabIndex={-1}
-            className="text-lg leading-none font-semibold outline-none"
+            className="text-sm font-semibold outline-none"
           >
             {title}
           </h2>
-          <p className="text-muted-foreground text-sm">{description}</p>
+          <p className="text-muted-foreground text-xs">{description}</p>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        {filters && (
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {filters}
+          </div>
+        )}
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
           {secondary}
-          <PendingButton size="sm" pending={pending} onClick={onAdd}>
+          <PendingButton
+            className={PAGE_BUTTON_CLASS}
+            pending={pending}
+            onClick={onAdd}
+          >
             <Plus />
             {addLabel}
           </PendingButton>
@@ -201,19 +229,25 @@ export function ActiveList<Row extends DataTableRow>({
   view,
   title,
   emptyText,
+  emptyDescription,
+  emptyActions,
   truncatedText,
   columns,
 }: {
   view: ListView<Row>;
   title: string;
   emptyText: string;
+  emptyDescription?: string;
+  emptyActions?: React.ReactNode;
   truncatedText: string;
   columns: ColumnDef<Row>[];
 }) {
   return (
     <>
       {view.active.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
+        <EmptyState icon={Inbox} title={emptyText} actions={emptyActions}>
+          {emptyDescription}
+        </EmptyState>
       ) : (
         <DataTable columns={columns} data={view.active} caption={title} />
       )}
@@ -233,7 +267,7 @@ export function alertToast(text: string, link?: NoticeLink) {
   }
   toast.error(text, {
     action: (
-      <Link className="ml-auto text-sm font-medium underline" href={link.href}>
+      <Link className="ml-auto text-sm font-medium" href={link.href}>
         {link.label}
       </Link>
     ),
@@ -277,7 +311,7 @@ export function ArchivedList<Row extends DataTableRow>({
   function pageLink(href: string, text: string) {
     return (
       <Link
-        className="underline aria-disabled:opacity-50"
+        className="aria-disabled:opacity-50"
         href={href}
         aria-disabled={pending || undefined}
         onNavigate={(event) => {

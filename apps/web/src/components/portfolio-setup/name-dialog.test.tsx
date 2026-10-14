@@ -24,7 +24,7 @@ function render(retry: Retry<string> = {}) {
 it("opens again with the refused name and its alert", () => {
   const html = render({ initial: "Principal", initialError: "Ya existe" });
   expect(html).toMatch(/<input[^>]*aria-invalid="true"[^>]*value="Principal"/);
-  expect(html).toMatch(/<p[^>]*role="alert"[^>]*>Ya existe<\/p>/);
+  expect(html).toMatch(/<p[^>]*data-slot="form-alert"[^>]*>Ya existe<\/p>/);
 });
 
 it("names the field and points it at its alert", () => {
@@ -32,7 +32,9 @@ it("names the field and points it at its alert", () => {
   const inputId = /<label[^>]*for="([^"]+)"[^>]*>Nombre<\/label>/.exec(
     html,
   )?.[1];
-  const alertId = /<p[^>]*id="([^"]+)"[^>]*role="alert"/.exec(html)?.[1];
+  const alertId = /<p[^>]*id="([^"]+)"[^>]*data-slot="form-alert"/.exec(
+    html,
+  )?.[1];
   expect(inputId).toBeDefined();
   expect(alertId).toBeDefined();
   expect(html).toMatch(
@@ -43,7 +45,7 @@ it("names the field and points it at its alert", () => {
 it("opens empty with no alert", () => {
   const html = render();
   expect(html).toContain("Renombrar cartera");
-  expect(html).not.toContain('role="alert"');
+  expect(html).not.toContain('data-slot="form-alert"');
   expect(html).not.toContain("aria-invalid=");
   expect(html).toMatch(/<input[^>]*value=""/);
 });

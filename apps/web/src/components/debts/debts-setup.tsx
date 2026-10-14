@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   type Denominator,
   type LiabilitiesValue,
@@ -56,7 +57,8 @@ import {
   toLiabilityInput,
   unitOf,
 } from "./debt-fields";
-import { StatTile } from "@/components/ui/stat-tile";
+import { PageButton } from "@/components/ui/page-button";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 export type DebtActions = {
   create: (input: unknown) => Promise<WriteResult>;
@@ -238,67 +240,77 @@ export function DebtsSetup({
   const monthly = shown.active.filter((debt) => debt.installment);
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">Deudas</h1>
-          <p className="text-muted-foreground text-sm">
-            Lo que debés, en su moneda y en la que elijas
-          </p>
-        </div>
-        <UnitSelect
-          id={`${id}-unit`}
-          unit={unit}
-          referenceUnit={referenceUnit}
-          pending={pending}
-          onChange={(param) => url.set("unit", param)}
-        />
-      </div>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Total"
-          note={
-            valued.complete ? undefined : "Alguna deuda no tiene cotización"
-          }
-        >
-          <span className={pending ? "opacity-60" : undefined}>
-            {formatAmount(valued.total, unit)}
-          </span>
-        </StatTile>
-        <StatTile label="Deudas">{shown.active.length}</StatTile>
-        <StatTile label="Con cuota" note="Pagás cuota todos los meses">
-          {monthly.length}
-        </StatTile>
-        <StatTile
-          label="Próximo vencimiento"
-          note={
-            shown.active
-              .filter((debt) => debt.next_due_on)
-              .sort((a, b) => a.next_due_on!.localeCompare(b.next_due_on!))[0]
-              ?.label
-          }
-        >
-          {(() => {
-            const next = shown.active
-              .map((debt) => debt.next_due_on)
-              .filter((date): date is string => date !== null)
-              .sort()[0];
-            return next ? formatDate(next) : <MissingFigure text="Ninguno" />;
-          })()}
-        </StatTile>
-      </dl>
+    <div className="grid gap-4">
       <SetupCard
         heading={card.heading}
         pending={pending}
-        title="Tus deudas"
-        description="Préstamos, hipotecas, tarjetas y lo que le debas a alguien"
+        page
+        title="Deudas"
+        description="Lo que debés, en su moneda y en la que elijas"
+        filters={
+          shown.active.length > 0 && (
+            <UnitSelect
+              id={`${id}-unit`}
+              unit={unit}
+              referenceUnit={referenceUnit}
+              pending={pending}
+              onChange={(param) => url.set("unit", param)}
+            />
+          )
+        }
         addLabel="Agregar deuda"
         onAdd={() => !pending && setDialog({ kind: "create" })}
       >
+        {shown.active.length > 0 && (
+          <StatGrid>
+            <StatTile
+              label="Total"
+              note={
+                valued.complete ? undefined : "Alguna deuda no tiene cotización"
+              }
+            >
+              <span className={pending ? "opacity-60" : undefined}>
+                {formatAmount(valued.total, unit)}
+              </span>
+            </StatTile>
+            <StatTile label="Deudas">{shown.active.length}</StatTile>
+            <StatTile label="Con cuota" note="Pagás cuota todos los meses">
+              {monthly.length}
+            </StatTile>
+            <StatTile
+              label="Próximo vencimiento"
+              note={
+                shown.active
+                  .filter((debt) => debt.next_due_on)
+                  .sort((a, b) =>
+                    a.next_due_on!.localeCompare(b.next_due_on!),
+                  )[0]?.label
+              }
+            >
+              {(() => {
+                const next = shown.active
+                  .map((debt) => debt.next_due_on)
+                  .filter((date): date is string => date !== null)
+                  .sort()[0];
+                return next ? (
+                  formatDate(next)
+                ) : (
+                  <MissingFigure text="Ninguno" />
+                );
+              })()}
+            </StatTile>
+          </StatGrid>
+        )}
         <ActiveList
           view={shown}
           title="Deudas"
-          emptyText="Todavía no cargaste deudas."
+          emptyText="Todavía no cargaste deudas"
+          emptyDescription="Préstamos, hipotecas, tarjetas o lo que le debas a alguien: subí el resumen o agregalas a mano."
+          emptyActions={
+            <PageButton asChild>
+              <Link href="/import">Cargar un resumen</Link>
+            </PageButton>
+          }
           truncatedText=""
           columns={columns}
         />

@@ -1,9 +1,9 @@
 "use client";
 
+import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
 import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
 import {
-  CircleAlert,
   CircleCheck,
   KeyRound,
   ListOrdered,
@@ -197,10 +197,7 @@ export function ApiKeyCard({
             ? "Estamos leyendo tus operaciones."
             : "Estamos leyendo tus tenencias."}{" "}
           Cuando estén, revisalas y confirmalas en{" "}
-          <Link href="/import" className="underline underline-offset-4">
-            Cargar
-          </Link>
-          .
+          <Link href="/import">Cargar</Link>.
         </p>
       )}
       {error && <FormAlert>{error}</FormAlert>}
@@ -262,15 +259,14 @@ export function SyncStatus({
   }
   if (sync.status === "failed") {
     return (
-      <p className="text-destructive flex items-start gap-2 text-sm">
-        <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span>
-          La última sincronización falló ({when}).{" "}
-          {sync.failure
-            ? importFailureMessage(sync.failure, provider)
-            : SUPERSEDED_SYNC_MESSAGE}
-        </span>
-      </p>
+      <Notice
+        variant="error"
+        title={`La última sincronización falló (${when})`}
+      >
+        {sync.failure
+          ? importFailureMessage(sync.failure, provider)
+          : SUPERSEDED_SYNC_MESSAGE}
+      </Notice>
     );
   }
   return (
@@ -281,11 +277,7 @@ export function SyncStatus({
         {sync.status === "ready" && (
           <>
             {" "}
-            Revisala y confirmala en{" "}
-            <Link href="/import" className="underline underline-offset-4">
-              Cargar
-            </Link>
-            .
+            Revisala y confirmala en <Link href="/import">Cargar</Link>.
           </>
         )}
       </span>

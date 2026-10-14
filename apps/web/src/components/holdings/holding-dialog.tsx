@@ -324,10 +324,7 @@ export function HoldingDialog({
                     <dt className="text-muted-foreground">Origen</dt>
                     <dd>
                       {details.origin.kind === "import" ? (
-                        <ImportOrigin
-                          origin={details.origin}
-                          className="underline"
-                        />
+                        <ImportOrigin origin={details.origin} />
                       ) : (
                         originText(details.origin)
                       )}
@@ -470,9 +467,7 @@ export function HoldingDialog({
               {link && (
                 <>
                   {" "}
-                  <Link className="underline" href={link.href}>
-                    {link.label}
-                  </Link>
+                  <Link href={link.href}>{link.label}</Link>
                 </>
               )}
             </FormAlert>

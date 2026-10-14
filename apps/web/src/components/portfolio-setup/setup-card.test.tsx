@@ -18,7 +18,7 @@ function active(view: ListView<PortfolioRow>) {
     <ActiveList
       view={view}
       title="Carteras"
-      emptyText="No tenés carteras activas."
+      emptyText="No tenés carteras activas"
       truncatedText="Mostrando las 50 más recientes."
       columns={columns}
     />,
@@ -42,13 +42,13 @@ function archived(view: ListView<PortfolioRow>, pending = false) {
 describe("ActiveList", () => {
   it("says there are no rows instead of drawing an empty table", () => {
     const html = active(listView());
-    expect(html).toContain("No tenés carteras activas.");
+    expect(html).toContain("No tenés carteras activas");
     expect(html).not.toContain("<table");
   });
 
   it("draws the rows in a table named after the section", () => {
     const html = active(listView({ active: rows }));
-    expect(html).not.toContain("No tenés carteras activas.");
+    expect(html).not.toContain("No tenés carteras activas");
     expect(html).toMatch(/<caption[^>]*>Carteras<\/caption>/);
     expect(html).toContain("Principal");
     expect(html).toContain("Largo plazo");

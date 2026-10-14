@@ -223,7 +223,7 @@ export function InstrumentHistory({
             {origin?.kind === "import" && (
               <ImportOrigin
                 origin={origin}
-                className="block truncate text-xs text-muted-foreground underline"
+                className="block truncate text-xs text-muted-foreground"
               />
             )}
           </>

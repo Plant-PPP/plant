@@ -31,6 +31,6 @@ it("says the alerts could not be read, not that there are none", () => {
       onDelete={async () => true}
     />,
   );
-  expect(html).toContain('role="alert"');
+  expect(html).toContain('data-slot="form-alert"');
   expect(html).toContain("No pudimos leer tus alertas");
 });

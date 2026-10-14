@@ -1,13 +1,6 @@
-import { TriangleAlert } from "lucide-react";
+import { Notice } from "@/components/ui/notice";
 
+// What a reading left out of the document, above the rows to review.
 export function LeftOutNotice({ children }: { children: string }) {
-  return (
-    <p
-      role="status"
-      className="flex items-center gap-2 rounded-lg border border-amber-500/50 p-4 text-sm"
-    >
-      <TriangleAlert aria-hidden className="size-4 shrink-0 text-amber-600" />
-      {children}
-    </p>
-  );
+  return <Notice variant="warning">{children}</Notice>;
 }

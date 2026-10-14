@@ -14,6 +14,7 @@ import type {
 } from "@/components/portfolio-setup/setup-card";
 import type { ConfirmSpec } from "@/components/ui/confirm-dialog";
 import type { RowAction } from "@/components/ui/data-table";
+import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
 import { PendingButton } from "@/components/ui/pending-button";
 import {
   currencyOf,
@@ -391,8 +392,8 @@ export function useMovementDialogs({
   function addMovementButton(preset: OperationPreset = {}): ReactNode {
     return (
       <PendingButton
-        size="sm"
         variant="outline"
+        className={PAGE_BUTTON_CLASS}
         pending={pending}
         onClick={() =>
           openMovementDialog({

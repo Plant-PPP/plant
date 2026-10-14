@@ -179,7 +179,7 @@ describe("with details", () => {
       },
     });
     expect(html).toContain(
-      'class="underline" href="/import">Importada de resumen.pdf el 01/10/2026</a>',
+      'href="/import">Importada de resumen.pdf el 01/10/2026</a>',
     );
   });
 
@@ -196,7 +196,7 @@ describe("with details", () => {
       accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
     });
     expect(html).toContain(
-      '<a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
+      '<a href="/accounts">IOL</a> no se incluye en el reporte, así que esta tenencia tampoco.',
     );
     expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
   });
@@ -207,7 +207,7 @@ describe("with details", () => {
       accounts: [{ ...ACCOUNT, includeInTaxReport: false }],
     });
     expect(html).toMatch(
-      /<p id="[^"]*-tax-note"[^>]*>La cuenta <a class="underline" href="\/accounts">IOL<\/a> no se incluye en el reporte, así que esta tenencia tampoco\.<\/p>/,
+      /<p id="[^"]*-tax-note"[^>]*>La cuenta <a href="\/accounts">IOL<\/a> no se incluye en el reporte, así que esta tenencia tampoco\.<\/p>/,
     );
     expect(html).not.toContain("donde lo tenés");
   });
@@ -274,7 +274,7 @@ it("links an archived account's alert to Cuentas, inside the alert", () => {
     WRITE_MESSAGES.holdings.source_connection_archived,
   );
   expect(html).toMatch(
-    /<p[^>]*role="alert"[^>]*>Esa cuenta está archivada\. Restaurala en Cuentas primero\. <a class="underline" href="\/accounts">Ir a Cuentas<\/a><\/p>/,
+    /<p[^>]*data-slot="form-alert"[^>]*>Esa cuenta está archivada\. Restaurala en Cuentas primero\. <a href="\/accounts">Ir a Cuentas<\/a><\/p>/,
   );
 });
 

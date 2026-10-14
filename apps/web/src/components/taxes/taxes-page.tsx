@@ -1,7 +1,8 @@
 "use client";
 
+import { Notice } from "@/components/ui/notice";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Download, Info } from "lucide-react";
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 
@@ -140,19 +141,15 @@ export function TaxesPage({
         </div>
       </div>
 
-      <p
-        role="note"
-        className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      <Notice
+        variant="warning"
+        title="Es una estimación, no asesoramiento impositivo"
       >
-        <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span>
-          Esto es una estimación, no asesoramiento impositivo. Usa reglas
-          simplificadas: revisalo con tu contador antes de presentar tus
-          declaraciones juradas.
-          {report.provisional &&
-            ` ${report.year} está en curso: tus activos están valuados a hoy.`}
-        </span>
-      </p>
+        Usa reglas simplificadas: revisalo con tu contador antes de presentar
+        tus declaraciones juradas.
+        {report.provisional &&
+          ` ${report.year} está en curso: tus activos están valuados a hoy.`}
+      </Notice>
 
       <section className="grid gap-3" aria-labelledby={`${id}-wealth`}>
         <div className="flex flex-wrap items-center justify-between gap-2">

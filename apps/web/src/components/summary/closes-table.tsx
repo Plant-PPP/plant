@@ -39,10 +39,7 @@ export function ClosesTable({
       header: "Mes",
       cell: ({ row: { original: close } }) => (
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={href(close.period)}
-            className="font-medium underline-offset-2 hover:underline"
-          >
+          <Link href={href(close.period)} className="font-medium">
             {monthOf(close.period)}
           </Link>
           {(close.open || close.recalculatedOn) && (
@@ -95,10 +92,7 @@ export function ClosesTable({
         <TableRow>
           <TableCell>
             <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <Link
-                href={href(year.year)}
-                className="font-medium underline-offset-2 hover:underline"
-              >
+              <Link href={href(year.year)} className="font-medium">
                 {`Total ${year.year}`}
               </Link>
               {!year.complete && <PartialMark />}
