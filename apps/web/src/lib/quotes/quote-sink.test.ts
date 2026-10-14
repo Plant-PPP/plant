@@ -80,4 +80,34 @@ describe("priceAlertsSink", () => {
       "http://127.0.0.1:54321/rest/v1/rpc/meet_price_alerts",
     );
   });
+
+  it("names a request that never reached the database", async () => {
+    mockClient = createClient("http://127.0.0.1:54321", "test-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: async () => {
+          throw new TypeError("fetch failed");
+        },
+      },
+    });
+    await expect(priceAlertsSink().meet()).rejects.toThrow(
+      "price alerts: fetch_error",
+    );
+  });
+
+  it("names the database's code for a refused check", async () => {
+    mockClient = createClient("http://127.0.0.1:54321", "test-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: async () =>
+          new Response(JSON.stringify({ code: "42501", message: "denied" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      },
+    });
+    await expect(priceAlertsSink().meet()).rejects.toThrow(
+      "price alerts: 42501",
+    );
+  });
 });
