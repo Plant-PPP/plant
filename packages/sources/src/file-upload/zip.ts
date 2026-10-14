@@ -65,6 +65,12 @@ export function zipFitsLimit(bytes: Uint8Array): boolean {
     const offset = u32(at + 42);
     const next = at + 46 + nameLength + extraLength + u16(at + 32);
     if (!within(at, next - at)) return false;
+    // A Numbers package (.iwa entries) is opened by SheetJS with a Snappy
+    // decoder whose work grows with the square of its output.
+    const name = new TextDecoder()
+      .decode(bytes.subarray(at + 46, at + 46 + nameLength))
+      .toLowerCase();
+    if (name.endsWith(".iwa")) return false;
     const extra = bytes.subarray(
       at + 46 + nameLength,
       at + 46 + nameLength + extraLength,

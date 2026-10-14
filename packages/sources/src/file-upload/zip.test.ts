@@ -15,6 +15,7 @@ jest.mock("node:zlib", () => {
 });
 
 type Entry = {
+  name?: string;
   content: Uint8Array;
   // What the central directory and the local header declare, when not the
   // content's own size; a data descriptor leaves the local sizes at 0.
@@ -29,7 +30,7 @@ const zipOf = (entries: readonly Entry[]) => {
   const centrals: Uint8Array[] = [];
   let offset = 0;
   entries.forEach((entry, index) => {
-    const name = new TextEncoder().encode(`xl/part${index}.xml`);
+    const name = new TextEncoder().encode(entry.name ?? `xl/part${index}.xml`);
     const data = deflateRawSync(entry.content);
     const usize = entry.content.length;
     const local = new Uint8Array(30 + name.length + data.length);
@@ -167,6 +168,12 @@ describe("zipFitsLimit", () => {
       zipFitsLimit(
         zipOf([{ content: text(5000), descriptor: true, centralUsize: 100 }]),
       ),
+    ).toBe(false);
+  });
+
+  it("refuses a Numbers package", () => {
+    expect(
+      zipFitsLimit(zipOf([{ name: "Index/Document.IWA", content: text(10) }])),
     ).toBe(false);
   });
 
