@@ -55,6 +55,8 @@ const loadedSchema = z.union([
     source_connection_id: z.string(),
     provider: connectionProviderSchema,
     sync_draft: connectionDraftSchema.nullable(),
+    sync_from: z.iso.date().nullable(),
+    sync_to: z.iso.date().nullable(),
   }),
 ]);
 
@@ -136,7 +138,7 @@ export function createImportStore(client: Client): ImportStorePort {
       const result = await client
         .from("imports")
         .select(
-          "user_id, status, source_connection_id, provider, sync_draft, " +
+          "user_id, status, source_connection_id, provider, sync_draft, sync_from, sync_to, " +
             "document:uploaded_documents!imports_user_id_document_id_fkey(storage_path, mime_type)",
         )
         .eq("id", importId)
@@ -154,6 +156,7 @@ export function createImportStore(client: Client): ImportStorePort {
           accountId: found.source_connection_id,
           provider: found.provider,
           draft: found.sync_draft ?? "holdings",
+          period: { from: found.sync_from, to: found.sync_to },
         };
       }
       return {

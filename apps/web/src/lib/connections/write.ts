@@ -346,6 +346,16 @@ async function startJob(
   }
 }
 
+// The days a sync of operations reads; a null end leaves it open.
+const periodSchema = z
+  .object({ from: z.iso.date().nullable(), to: z.iso.date().nullable() })
+  .strict()
+  .refine(
+    ({ from, to }) =>
+      (from === null || from >= "2000-01-01") &&
+      (from === null || to === null || from <= to),
+  );
+
 // The account's sync still in flight, if any: queued (its job may never have
 // started) or being read.
 async function syncInFlight(
@@ -371,16 +381,23 @@ async function syncInFlight(
 // operations that the import job reads with the account's credentials and
 // leaves ready to review in Cargar. The database refuses an account with no
 // key and one already syncing; a sync still queued is started again
-// instead, so a lost job never locks the account.
+// instead, so a lost job never locks the account. A sync of operations reads
+// only the days of `period`, when one is given.
 export async function syncAccount(
   accountId: unknown,
   draft: unknown = "holdings",
+  period: unknown = null,
   adapters: ConnectionAdapters = connectionAdapters(),
 ): Promise<SyncResult> {
   const current = await line("sync");
   const parsed = z
-    .object({ accountId: z.uuid(), draft: connectionDraftSchema })
-    .safeParse({ accountId, draft });
+    .object({
+      accountId: z.uuid(),
+      draft: connectionDraftSchema,
+      period: periodSchema.nullable(),
+    })
+    .refine((input) => input.period === null || input.draft === "operations")
+    .safeParse({ accountId, draft, period });
   if (!parsed.success) {
     log(current, "invalid");
     return { ok: false, code: "invalid" };
@@ -425,6 +442,8 @@ export async function syncAccount(
         source_connection_id: id,
         provider: provider.data,
         sync_draft: kind,
+        sync_from: parsed.data.period?.from ?? null,
+        sync_to: parsed.data.period?.to ?? null,
       })
       .select("id");
     const refused = classifyPostgrestResult(started, 201);

@@ -26,6 +26,7 @@ import {
 } from "@/lib/imports/origin";
 import { ImportsReadError } from "@/lib/imports/read";
 import { writeImportOperations } from "@/lib/imports/confirm-operations";
+import { withoutLoaded } from "@/lib/imports/operations-loaded";
 import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
 import { LedgerReadError } from "@/lib/ledger/read";
 import {
@@ -292,8 +293,11 @@ export async function confirmImportOperations(
           dates,
         );
         if (truncated) throw new LedgerReadError("movements", "truncated");
-        const written = writeImportOperations(ledger, item, typed, () =>
-          crypto.randomUUID(),
+        const written = writeImportOperations(
+          ledger,
+          item,
+          withoutLoaded(ledger, item.accountId, typed),
+          () => crypto.randomUUID(),
         );
         if (!written.result.ok) {
           result = {

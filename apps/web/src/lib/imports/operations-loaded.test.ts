@@ -1,7 +1,7 @@
 import { ACCOUNT, emptyLedger } from "@/lib/ledger/ledger-fixture.test-support";
 
 import { writeImportOperations } from "./confirm-operations";
-import { markLoaded } from "./operations-loaded";
+import { markLoaded, withoutLoaded } from "./operations-loaded";
 import type { ImportOperationRow } from "./review";
 
 const row = (
@@ -92,5 +92,20 @@ it("sets aside the operations already loaded", () => {
   ).toEqual([
     ["old", true, true],
     ["new", false, false],
+  ]);
+});
+
+it("discards on confirm a numbered operation the account already holds, even one the review kept", () => {
+  const state = after([row("buy")]);
+  const kept = withoutLoaded(state, ACCOUNT, [
+    row("again", { quantity: "9" }),
+    row("other", { reference: "456" }),
+    row("unnumbered", { reference: null }),
+  ]);
+  expect(kept.map((each) => [each.id, each.discarded])).toEqual([
+    ["again", true],
+    ["other", false],
+    // With no number, the user decides whether it is the same one.
+    ["unnumbered", false],
   ]);
 });

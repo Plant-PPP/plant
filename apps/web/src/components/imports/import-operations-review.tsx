@@ -100,6 +100,11 @@ const finalOf = (row: EditedOperation): ImportOperationRow => ({
   discarded: row.discarded,
 });
 
+// An operation the account already holds under the same number: confirming
+// never writes it again, so the review does not offer to bring it back.
+const isLocked = (row: ImportOperationRow) =>
+  row.loaded === true && row.reference !== null;
+
 const MISSING = "Falta en el documento";
 const NOT_A_NUMBER = "Ingresá un número válido";
 
@@ -166,6 +171,10 @@ export function ImportOperationsReview({
   const [alert, setAlert] = useState<string>();
   const [refused, setRefused] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [kindShown, setKindShown] = useState<ImportOperationKind | "all">(
+    "all",
+  );
+  const [symbolShown, setSymbolShown] = useState("all");
 
   const finals = rows.map(finalOf);
   const missing = finals.map((row) => new Set(missingFields(row, today)));
@@ -183,6 +192,27 @@ export function ImportOperationsReview({
   const complete =
     operationsComplete(finals, today) &&
     invalidTyped.every((each) => each.size === 0);
+
+  // The rows the filters show; the choices apply to these only.
+  const shown = (row: EditedOperation) =>
+    (kindShown === "all" || row.kind === kindShown) &&
+    (symbolShown === "all" || row.symbol === symbolShown);
+  const symbols = [...new Set(rows.map((row) => row.symbol))]
+    .filter((symbol) => symbol !== "")
+    .sort();
+  const keptCount = rows.filter((row) => !row.discarded).length;
+  // Each shown row kept or discarded at once; one the account already holds
+  // under its number stays discarded, as confirming would drop it anyway.
+  const keepShown = (keep: boolean) => {
+    setRefused(undefined);
+    setRows((current) =>
+      current.map((row) =>
+        shown(row) && !(keep && isLocked(row))
+          ? { ...row, discarded: !keep }
+          : row,
+      ),
+    );
+  };
 
   const change = (id: string, patch: Partial<EditedOperation>) => {
     setRefused(undefined);
@@ -286,8 +316,71 @@ export function ImportOperationsReview({
             </span>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={kindShown}
+            onValueChange={(value) =>
+              setKindShown(value as ImportOperationKind | "all")
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Mostrar operaciones de tipo"
+              className="w-40"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los tipos</SelectItem>
+              {KINDS.map((kind) => (
+                <SelectItem key={kind} value={kind}>
+                  {MOVEMENT_KIND_LABELS[kind]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {symbols.length > 1 && (
+            <Select value={symbolShown} onValueChange={setSymbolShown}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Mostrar operaciones del activo"
+                className="w-40"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los activos</SelectItem>
+                {symbols.map((symbol) => (
+                  <SelectItem key={symbol} value={symbol}>
+                    {symbol}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => keepShown(true)}
+          >
+            Incluir las que se ven
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => keepShown(false)}
+          >
+            Descartar las que se ven
+          </Button>
+          <span role="status" className="text-muted-foreground text-xs">
+            {`${keptCount} de ${rows.length} para importar`}
+          </span>
+        </div>
         <ul className="grid gap-2">
           {rows.map((row, index) => {
+            if (!shown(row)) return null;
             const type = types.get(row.symbol);
             const trade = row.kind === "purchase" || row.kind === "sale";
             return (
@@ -336,6 +429,7 @@ export function ImportOperationsReview({
                     type="button"
                     size="sm"
                     variant="ghost"
+                    disabled={isLocked(row)}
                     aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la operación ${index + 1}`}
                     onClick={() =>
                       change(row.id, { discarded: !row.discarded })

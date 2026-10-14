@@ -9,6 +9,14 @@ export const CONNECTION_DRAFTS = ["holdings", "operations"] as const;
 export type ConnectionDraft = (typeof CONNECTION_DRAFTS)[number];
 export const connectionDraftSchema = z.enum(CONNECTION_DRAFTS);
 
+// The days a sync of operations reads, both ends included (YYYY-MM-DD); a
+// null end leaves it open.
+export type ReadPeriod = { from: string | null; to: string | null };
+
+const inPeriod = (date: string | null, { from, to }: ReadPeriod): boolean =>
+  date === null ||
+  ((from === null || date >= from) && (to === null || date <= to));
+
 // How a provider's credential is known to only read: the provider says what
 // it may do and the adapter checks it (checked), the credential cannot do
 // more by design (inherent), the provider does not say and the user confirms
@@ -42,9 +50,12 @@ export interface ConnectionProviderPort {
   check(raw: unknown): Promise<void>;
   // The account's holdings or operations as the draft a file yields. A
   // provider checks again what it can: the user may have widened the key.
+  // Operations are only those inside `period`, an operation with no date
+  // aside, whether or not the provider can ask for them by date.
   read(
     raw: unknown,
     draft: ConnectionDraft,
+    period?: ReadPeriod,
   ): Promise<HoldingsReading | OperationsReading>;
 }
 
@@ -59,6 +70,7 @@ type Spec<S extends z.ZodObject<Record<string, z.ZodString>>> = {
   read(
     credentials: z.infer<S>,
     draft: ConnectionDraft,
+    period: ReadPeriod,
   ): Promise<HoldingsReading | OperationsReading>;
 };
 
@@ -87,11 +99,19 @@ export function defineConnection<
       return result.success ? (result.data as Credentials) : null;
     },
     check: async (raw) => spec.check(parsed(raw)),
-    read: async (raw, draft) => {
+    read: async (raw, draft, period = { from: null, to: null }) => {
       if (!spec.drafts.includes(draft)) {
         throw new SourceError("unsupported", false);
       }
-      return spec.read(parsed(raw), draft);
+      const reading = await spec.read(parsed(raw), draft, period);
+      return "operations" in reading
+        ? {
+            ...reading,
+            operations: reading.operations.filter((each) =>
+              inPeriod(each.date, period),
+            ),
+          }
+        : reading;
     },
   };
 }

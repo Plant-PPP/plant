@@ -75,6 +75,8 @@ it("loads a sync with its account, provider and draft", async () => {
         source_connection_id: ACCOUNT,
         provider: "wallbit",
         sync_draft: "operations",
+        sync_from: "2026-01-01",
+        sync_to: null,
         document: null,
       },
     ],
@@ -86,6 +88,7 @@ it("loads a sync with its account, provider and draft", async () => {
     accountId: ACCOUNT,
     provider: "wallbit",
     draft: "operations",
+    period: { from: "2026-01-01", to: null },
   });
 });
 

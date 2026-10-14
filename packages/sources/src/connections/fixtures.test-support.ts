@@ -339,6 +339,45 @@ const iol: ProviderFixture = {
         ],
       });
     }
+    if (request.path === "/api/v2/operaciones") {
+      return json([
+        {
+          numero: 51234567,
+          fechaOrden: "2026-09-02T11:15:00",
+          tipo: "Compra",
+          estado: "terminada",
+          mercado: "bCBA",
+          simbolo: "AL30",
+          cantidad: 1000,
+          monto: 73400,
+          precio: 73.4,
+          fechaOperada: "2026-09-02T11:15:04",
+          cantidadOperada: 1000,
+          precioOperado: 73.4,
+          montoOperado: 73400,
+        },
+        {
+          numero: 51234890,
+          fechaOrden: "2026-09-20T14:02:00",
+          tipo: "Venta",
+          estado: "terminada",
+          mercado: "bCBA",
+          simbolo: "AAPL",
+          cantidad: 5,
+          precio: 18400,
+          fechaOperada: "2026-09-20T14:02:09",
+        },
+        {
+          numero: 51235001,
+          fechaOrden: "2026-09-25T10:00:00",
+          tipo: "Suscripción FCI",
+          estado: "terminada",
+          mercado: "bCBA",
+          simbolo: "PRPEDOB",
+          monto: 50000,
+        },
+      ]);
+    }
     return json({}, 404);
   },
   refuse: (request) =>

@@ -27,6 +27,7 @@ export async function disconnectApiKey(
 export async function syncAccount(
   accountId: unknown,
   draft: unknown,
+  period: unknown = null,
 ): Promise<SyncResult> {
-  return sync(accountId, draft);
+  return sync(accountId, draft, period);
 }

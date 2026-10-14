@@ -33,6 +33,7 @@ const SYNC = {
   draft: "holdings",
   accountId: ACCOUNT,
   provider: "binance",
+  period: { from: null, to: null },
 } as const;
 
 const DRAFT: ImportDraft = {
@@ -614,7 +615,10 @@ describe("a sync", () => {
     expect(await run()).toEqual({ outcome: "ready", rows: 1 });
     expect(store.reading).toHaveBeenCalledWith(IMPORT, USER);
     expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "binance");
-    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "holdings");
+    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "holdings", {
+      from: null,
+      to: null,
+    });
     expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
     expect(store.download).not.toHaveBeenCalled();
     expect(store.institution).not.toHaveBeenCalled();
@@ -702,13 +706,19 @@ describe("a sync", () => {
       .fn()
       .mockResolvedValue({ operations, read: { ...READ, reader: "api" } });
     const { store, run } = setUp({ exchangeRead });
+    const period = { from: "2026-01-01", to: "2026-06-30" };
     store.load.mockResolvedValue({
       ...SYNC,
       provider: "wallbit",
       draft: "operations",
+      period,
     });
     expect(await run()).toEqual({ outcome: "ready", rows: 1 });
-    expect(exchangeRead).toHaveBeenCalledWith(CREDENTIALS, "operations");
+    expect(exchangeRead).toHaveBeenCalledWith(
+      CREDENTIALS,
+      "operations",
+      period,
+    );
     expect(store.credentials).toHaveBeenCalledWith(USER, ACCOUNT, "wallbit");
     expect(store.saveOperations).toHaveBeenCalledWith(
       IMPORT,

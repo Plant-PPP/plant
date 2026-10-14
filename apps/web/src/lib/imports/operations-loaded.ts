@@ -90,3 +90,20 @@ export function markLoaded(
     return { ...row, discarded: true, loaded: true };
   });
 }
+
+// The reviewed operations with each one the account already holds under its
+// transaction number discarded, whatever the review sent: a second tab, or a
+// review read before another import was confirmed, never writes it twice. One
+// with no number stays as the user left it.
+export function withoutLoaded(
+  state: Ledger,
+  accountId: string,
+  rows: readonly ImportOperationRow[],
+): ImportOperationRow[] {
+  const marked = markLoaded(state, accountId, rows);
+  return rows.map((row, index) =>
+    row.reference !== null && marked[index]!.loaded && !row.discarded
+      ? { ...row, discarded: true }
+      : row,
+  );
+}
