@@ -11,7 +11,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
   Cash is written as of confirmation, with no history. Wallbit's USDC and USDT stay their own crypto rows.
 
-- **Balances Plant does not keep are counted.** For every exchange using `balanceRow`, and for IBKR, IOL and Nexo, a fiat Plant does not keep or a negative balance counts as a skipped row. One list of those fiat currencies (`OTHER_FIAT`) serves the exchanges and Wallbit, where it applies only to the checking account: the investment account's tickers that match a currency's code (COP, PEN) are stocks, and its `USD` is its dollars, added to checking's. Wallbit's trades still skip any currency's code, as a trade does not say whether it is an exchange. A figure a provider sends as a string with more than eight decimals is rounded, as a number is. Mercado Pago counts a skipped row only when the closing balance does not read. A sheet row whose currency comes from the model's default is medium confidence. A currency cell Plant does not recognise skips the row, and an average cost that also reads as thousands is flagged too.
+- **Balances Plant does not keep are counted.** For every exchange using `balanceRow`, and for IBKR, IOL and Nexo, a fiat Plant does not keep or a negative balance counts as a skipped row. One list of those fiat currencies (`OTHER_FIAT`) serves the exchanges; Wallbit's checking account keeps only ARS, USD, USDC and USDT and counts any other non-zero currency, one it does not list too, as skipped. Wallbit's investment account's tickers that match a currency's code (COP, PEN) are stocks, and its `USD` is its dollars, added to checking's. Wallbit's trades still skip any currency's code, as a trade does not say whether it is an exchange. A figure a provider sends as a string with more than eight decimals is rounded, as a number is. Mercado Pago counts a skipped row only when the closing balance does not read. A sheet row whose currency comes from the model's default is medium confidence. A currency cell Plant does not recognise skips the row, and an average cost that also reads as thousands is flagged too.
 - **Provider bodies are capped**: 2 MB of JSON, 20 MB for an IBKR statement and 5 MB for a Mercado Pago report. Past the cap the read fails for good.
 - **No cause crosses a job step.** Steps rethrow failures without their cause, and `SourceError` is never built with one, so the model's raw answer or a request's URL never reaches the run history. A store failure past retries logs at error level with `plant.import.store_step` and `plant.import.store_code`, carried in the error's message because Inngest drops custom error fields.
 - **The export asks for a recent sign-in and is audited.** `exportData` refuses a stale session (signing out, then `/login?next=/settings`, like turning TOTP off) and writes `data.exported` through `export-audit-sink.ts`: it takes the user from the session's verified claims and calls `public.audit_data_export`, a SECURITY DEFINER function only `service_role` executes, so a session cannot write its own rows with any outcome. `public.record_data_export` is no longer executable by anyone and goes in a later migration. Its outcomes are `denied`, `failure` and `success`. The tables are handed over only once the success row is written. Imports export up to `MAX_ROWS - 1`, and any table cut marks the file partial, which the card says.
@@ -27,6 +27,10 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **A provider's refusal of an AI call** is logged as `ai.call_failed` with its error type and HTTP status, never its message.
 - **Quote feeds declare whether they are listed** (`RawQuoteFeed.listed`). A listed feed's Friday price is the market's last on the weekend; shared code names no source.
 - **Indexes** on `uploaded_documents (delete_after) WHERE file_deleted_at IS NULL` for the file deletion job and on `uploaded_documents (storage_path)` for the orphan sweep.
+- **A spreadsheet past its row limit says so.** `readSheet` reads one raw row past `SHEET_ROW_LIMIT` (blank rows count) and marks the sheet `truncated`; `sheetToDraft` then counts at least one skipped row, since it cannot count the unread ones, and the review shows its notice.
+- **Operations and debts carry their skipped rows** to `imports.skipped_rows`, and their reviews say how many were left out, as the holdings review does.
+- **An import deleted after the job prepared it** (no row for its institution, or no file to download) is skipped as `gone` before any model call, never retried as a store failure.
+- **Uploading again a file whose import is still queued** starts its job as a retry, under a new event id, as a sync does.
 
 ## 2026-10-14 · Connectors: Roxom, Mercado Pago, Bitso and Ripio Trade (PLA-162)
 
@@ -233,7 +237,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **`delete-orphan-files` removes, once a day, every object of the `imports` bucket over a day old whose name no `uploaded_documents.storage_path` holds**: a signed upload whose `finishUpload` never ran, an object a user wrote straight into their folder, a file whose row the user deleted through the API, and the files of a deleted Auth user. The day keeps an upload whose finish has not run yet out of it. Uploads stay open to any name under `{uid}/imports/`, since the row is filed only after the server has read the file back.
 - **`public.orphan_import_files(p_limit, p_after)` finds them**, run as the caller: `service_role` already reads `storage.objects` and `storage_path`, so it needs no definer, and only `service_role` may execute it. It sits in `public` because PostgREST exposes no other schema and no API role uses `private`. The floor test pins its grant and form; it has its pentest spec.
-- **Batches are keyset by the object's id, not its name.** A step's result is stored by Inngest, so it carries only the count and the last id; a path, which a user may have named after themselves, never crosses a step. 100 per batch, at most 20 a run, and the next day's run takes the rest, as `delete-expired-files` does. The finder anti-joins the documents by path without an index: the quota bounds the table.
+- **Batches are keyset by the object's id, not its name.** A step's result is stored by Inngest, so it carries only the count and the last id; a path, which a user may have named after themselves, never crosses a step. 100 per batch, at most 20 a run, and the next day's run takes the rest, as `delete-expired-files` does. The finder anti-joins the documents by path without an index: the quota bounds the table (superseded by the `storage_path` index, see "Findings from a full-repository review").
 - **It registers with the other jobs** (`next dev`, or `PLANT_RUN_JOBS=1`), behind `OrphanFileStorePort`, with its store in `import-sink.ts`, which only the Inngest route imports.
 
 ## 2026-10-14 · A workbook's unzipped size is capped (PLA-142)
@@ -376,8 +380,8 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **20 imports a calendar month in Buenos Aires** for every user while everyone is on the beta plan. The database enforces it with a trigger on `imports`; the upload action checks it first so a user over it does not send the file.
 - **A file is deleted 30 days after its upload** by `delete-expired-files`, once a day. The row, its import and the draft stay, with `file_deleted_at` set, and each deletion writes an audit row.
-- **No index on the due files yet.** The quota bounds the table, and the job reads it once a day.
-- **The deletion job runs only under `next dev`**, like the other jobs, until PLA-73.
+- **No index on the due files yet.** The quota bounds the table, and the job reads it once a day (superseded by the `delete_after` index, see "Findings from a full-repository review").
+- **The deletion job runs only under `next dev`**, like the other jobs, until PLA-73 (superseded by `PLANT_RUN_JOBS=1`).
 
 ## 2026-10-13 · Reviewing and confirming an import (PLA-41, PLA-80)
 
@@ -392,7 +396,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **One reading, no consensus yet** (superseded by PLA-36). The job sends the file to `gemini-3.8-flash` once and checks each row against the draft's schema; a row that fails it is left out. Pre-analysis and consensus arrive with PLA-36 and PLA-37.
 - **The model reads PDFs and pictures; CSV and Excel fail as `unsupported`** until PLA-38 parses them in code.
 - **The event names the import and its user, and the job checks both** against the import before it reads the file: the import must be that user's, queued, with its file under that user's folder.
-- **The job runs only under `next dev`**, like the quotes job, until PLA-73 registers both on a deployment with the secret key there. On a deployment an upload stays queued.
+- **The job runs only under `next dev`**, like the quotes job, until PLA-73 registers both on a deployment with the secret key there. On a deployment an upload stays queued (superseded by `PLANT_RUN_JOBS=1`).
 - **A draft is replaced, not appended,** when a retried reading saves it again.
 - **The job's store is a sink** (`lib/imports/import-sink.ts`): only the Inngest route imports it, like the quote sink.
 
