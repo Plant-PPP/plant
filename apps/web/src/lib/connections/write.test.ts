@@ -48,6 +48,7 @@ jest.mock("@/lib/supabase/server", () => ({
           return builder;
         },
         is: () => builder,
+        order: () => builder,
         limit: () => builder,
         then: (resolve: (value: unknown) => unknown) =>
           resolve(answers[table]!(verb)),
@@ -67,6 +68,7 @@ import {
   SourceError,
 } from "@plant/sources";
 
+import { CONSENT_VERSION } from "@/lib/consent";
 import { captureServerLog } from "@/lib/log/capture-server-log";
 
 import {
@@ -125,6 +127,11 @@ beforeEach(() => {
           ? { status: 200, data: [], error: null }
           : { status: 200, data: [{ provider: "binance" }], error: null },
   );
+  answers.consents = answer(() => ({
+    status: 200,
+    data: [{ version: CONSENT_VERSION, granted: true }],
+    error: null,
+  }));
   // No sync in flight.
   answers.imports = answer((verb) =>
     verb === "insert"
@@ -770,6 +777,14 @@ describe("syncAccount", () => {
       userId: USER,
       retry: expect.any(String),
     });
+  });
+
+  it("waits for the terms in force before asking the provider for anything", async () => {
+    answers.consents = answer(() => ({ status: 200, data: [], error: null }));
+    expect(await syncAccount(ACCOUNT)).toEqual({ ok: false, code: "terms" });
+    expect(writes).toEqual([]);
+    expect(startImport).not.toHaveBeenCalled();
+    expect(lines.at(-1)).toMatchObject({ "plant.outcome": "terms" });
   });
 
   it("does not start on an account with no key", async () => {

@@ -28,6 +28,7 @@ import {
   type SyncResult,
   syncDraftOf,
 } from "@/lib/connections/api-key";
+import { consentsGiven } from "@/lib/consent-given";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -454,6 +455,11 @@ export async function syncAccount(
   }
   try {
     const client: Client = await createClient();
+    // A sync reads the account at its provider, never through the AI.
+    if (!(await consentsGiven(client, ["terms"]))) {
+      log(current, "terms");
+      return { ok: false, code: "terms" };
+    }
     const keys = await client
       .from("account_api_keys")
       .select("provider")
