@@ -35,6 +35,7 @@ const mockReadImports = jest.fn<Promise<unknown>, unknown[]>(async () => ({
       createdOn: "2026-10-10",
     },
   ],
+  truncated: false,
   used: 3,
 }));
 jest.mock("@/lib/imports/read", () => ({
@@ -287,6 +288,13 @@ it("gives the latest imports and the month's count", async () => {
     monthlyLimit: 20,
     imports: [{ status: "Con error", uploadedOn: "2026-10-10" }],
   });
+});
+
+it("says the imports are not all there when the list was cut", async () => {
+  const listed = (await mockReadImports()) as Record<string, unknown>;
+  mockReadImports.mockResolvedValueOnce({ ...listed, truncated: true });
+  expect(await data().importStatus()).toMatchObject({ complete: false });
+  expect(await data().importStatus()).toMatchObject({ complete: true });
 });
 
 it("reads everything through the session's client", async () => {
