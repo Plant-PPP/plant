@@ -1,5 +1,7 @@
 import type { QuoteRange, StoredQuotes } from "./contract/port";
 import {
+  feedDatesOn,
+  feedDaysOf,
   QUOTES_ON_CONCURRENCY,
   readQuotesOn,
   readSnapshot,
@@ -218,6 +220,46 @@ describe("readQuotesOn", () => {
         await readSnapshot({ read }, day, need),
       );
     }
+  });
+
+  it("dates each day's latest feed row at any age, as a read of that day would", async () => {
+    const stored = rows({
+      fxRates: [fx("2026-07-01", "1000"), fx("2026-09-10", "1150")],
+      prices: [price("BTC", "2026-08-05", "61000")],
+    });
+    // The store's contract: the range's rows and each key's latest before it.
+    const read = async (range: QuoteRange): Promise<StoredQuotes> => {
+      const latestBefore = <T>(keyed: T[], dateOf: (row: T) => string) =>
+        keyed
+          .filter((row) => dateOf(row) < range.from)
+          .sort((a, b) => (dateOf(a) < dateOf(b) ? 1 : -1))
+          .slice(0, 1);
+      const inRange = (date: string) => date >= range.from && date <= range.to;
+      return {
+        fxRates: [
+          ...stored.fxRates.filter((row) => inRange(row.rate_date)),
+          ...latestBefore(stored.fxRates, (row) => row.rate_date),
+        ],
+        prices: [
+          ...stored.prices.filter((row) => inRange(row.price_date)),
+          ...latestBefore(stored.prices, (row) => row.price_date),
+        ],
+      };
+    };
+    const days = ["2026-08-31", "2026-09-30"];
+    const all = await readQuotesOn({ read }, days, need);
+    const index = feedDaysOf(all);
+    for (const day of days) {
+      const own = await readSnapshot({ read }, day, need);
+      expect(snapshotOn(all, day, need)).toEqual(own);
+      expect(feedDatesOn(index, day, need)).toEqual(own.snapshot.feedDates);
+    }
+    expect(snapshotOn(all, "2026-09-30", need).snapshot).toEqual({
+      date: "2026-09-30",
+      fx: {},
+      prices: {},
+      feedDates: { fx: { mep: "2026-09-10" }, prices: { BTC: "2026-08-05" } },
+    });
   });
 
   it("runs a bounded number of reads at once", async () => {

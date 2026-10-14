@@ -1,6 +1,11 @@
 import "server-only";
-import type { QuoteRange, QuoteReaderPort } from "@plant/core";
-import { type Database, daysBetween } from "@plant/shared";
+import type {
+  FxRateKind,
+  QuoteRange,
+  QuoteReaderPort,
+  StoredQuotes,
+} from "@plant/core";
+import { type Currency, type Database, daysBetween } from "@plant/shared";
 import type {
   PostgrestSingleResponse,
   SupabaseClient,
@@ -58,6 +63,70 @@ function chunked<T>(items: readonly T[], size: number): T[][] {
   return chunks;
 }
 
+// quotes_before's rows: a dollar rate has a kind, a price a symbol and its
+// currency. The generated types call every column non-null.
+type QuoteBefore = {
+  kind: FxRateKind | null;
+  symbol: string | null;
+  quote_date: string;
+  amount: string;
+  currency: Currency | null;
+};
+
+// Each key's latest quote before `before`, at most one row per key, so a call
+// stays within MAX_ROWS by the keys it names.
+async function quotesBefore(
+  client: SupabaseClient<Database>,
+  before: string,
+  { fxKinds, symbols }: Pick<QuoteRange, "fxKinds" | "symbols">,
+): Promise<StoredQuotes> {
+  const calls =
+    symbols.length === 0
+      ? [{ fxKinds, symbols }]
+      : chunked(symbols, MAX_ROWS - fxKinds.length).map((chunk, index) => ({
+          fxKinds: index === 0 ? fxKinds : [],
+          symbols: chunk,
+        }));
+  const read = await Promise.all(
+    calls.map(async (keys) => {
+      const result = await postgrestCall(
+        (signal) =>
+          client
+            .rpc("quotes_before", {
+              p_before: before,
+              p_fx_kinds: [...keys.fxKinds],
+              p_symbols: [...keys.symbols],
+            })
+            .abortSignal(signal),
+        STORE_TIMEOUT_MS,
+        [200],
+      );
+      if ("code" in result) throw storeError(result);
+      const rows: readonly QuoteBefore[] = result.data ?? [];
+      return rows;
+    }),
+  );
+  const fxRates: StoredQuotes["fxRates"] = [];
+  const prices: StoredQuotes["prices"] = [];
+  for (const row of read.flat()) {
+    if (row.kind !== null) {
+      fxRates.push({
+        kind: row.kind,
+        rate_date: row.quote_date,
+        sell: row.amount,
+      });
+    } else if (row.symbol !== null && row.currency !== null) {
+      prices.push({
+        symbol: row.symbol,
+        price_date: row.quote_date,
+        price: row.amount,
+        currency: row.currency,
+      });
+    }
+  }
+  return { fxRates, prices };
+}
+
 // Reads with the caller's client, so RLS and the MFA gate apply. Amounts are
 // selected as text.
 export function createQuoteReader(
@@ -93,11 +162,15 @@ export function createQuoteReader(
               .lte("price_date", to),
           ),
       );
-      const [fxRows, priceRows] = await Promise.all([
+      const [fxRows, priceRows, before] = await Promise.all([
         fxRates,
         Promise.all(prices),
+        quotesBefore(client, from, { fxKinds, symbols }),
       ]);
-      return { fxRates: fxRows, prices: priceRows.flat() };
+      return {
+        fxRates: [...fxRows, ...before.fxRates],
+        prices: [...priceRows.flat(), ...before.prices],
+      };
     },
   };
 }

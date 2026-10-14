@@ -1,3 +1,4 @@
+import type { StoredQuotes } from "./contract/port";
 import type { QuoteSnapshot } from "./contract/quote";
 import {
   admitManualPrice,
@@ -7,6 +8,7 @@ import {
   withManualPrices,
   withManualRates,
 } from "./manual";
+import { snapshotOn } from "./snapshot";
 
 const SNAPSHOT: QuoteSnapshot = {
   date: "2026-10-12",
@@ -133,5 +135,47 @@ describe("withManualRates", () => {
       withManualRates(quoted, [rate("mep", "2026-10-13", "1")]).snapshot.fx.mep
         ?.sell,
     ).toBe("1200");
+  });
+});
+
+describe("a feed quote older than QUOTE_CARRY_DAYS", () => {
+  // The store reads each key's latest row before a range too.
+  const stored: StoredQuotes = {
+    fxRates: [{ kind: "mep", rate_date: "2026-09-01", sell: "1300" }],
+    prices: [
+      {
+        symbol: "KO",
+        price_date: "2026-09-01",
+        price: "9000",
+        currency: "ARS",
+      },
+    ],
+  };
+  const read = () =>
+    snapshotOn(stored, "2026-09-09", { fxKinds: ["mep"], symbols: ["KO"] })
+      .snapshot;
+
+  it("still holds back an older manual rate", () => {
+    const priced = withManualRates(read(), [
+      { kind: "mep", rate_date: "2026-03-01", sell: "1000" },
+    ]);
+    expect(priced.snapshot.fx.mep).toBeUndefined();
+    expect(priced.manual.has("mep")).toBe(false);
+  });
+
+  it("still holds back an older manual price", () => {
+    const priced = withManualPrices(read(), [
+      price("KO", "2026-03-01", "8000"),
+    ]);
+    expect(priced.snapshot.prices.KO).toBeUndefined();
+    expect(priceSource("KO", priced)).toBe("missing");
+  });
+
+  it("gives way to a newer manual value", () => {
+    const priced = withManualRates(read(), [
+      { kind: "mep", rate_date: "2026-09-05", sell: "1350" },
+    ]);
+    expect(priced.snapshot.fx.mep?.sell).toBe("1350");
+    expect(priced.manual.get("mep")).toBe("2026-09-05");
   });
 });

@@ -54,7 +54,8 @@ export interface QuoteStorePort {
 }
 
 // The stored quotes for every key a need names, dated from `from` to `to`
-// inclusive (YYYY-MM-DD).
+// inclusive (YYYY-MM-DD), and each key's latest one before `from`, at any
+// age, which only dates the feeds' last quote (QuoteSnapshot's feedDates).
 export type QuoteRange = QuoteNeed & { from: string; to: string };
 export type StoredQuotes = {
   fxRates: Pick<FxRate, "kind" | "rate_date" | "sell">[];

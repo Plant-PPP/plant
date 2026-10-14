@@ -9,6 +9,9 @@ import {
   chainedShare,
   compareMovements,
   type Denominator,
+  feedDatesOn,
+  type FeedDays,
+  feedDaysOf,
   holdingSchema,
   isYield,
   type Liability,
@@ -81,11 +84,12 @@ type HoldingLedger = {
 type TradeDay = { date: string; price: QuoteSnapshot["prices"][string] };
 
 // What every day's quotes are read from, built once per state: the stored
-// rows by day, each instrument's trading days, and each day's quotes once
-// read, which do not depend on the unit.
+// rows by day and each key's stored dates, each instrument's trading days,
+// and each day's quotes once read, which do not depend on the unit.
 type Pricing = {
   need: QuoteNeed;
   rowsByDay: Map<string, StoredQuotes>;
+  feedDays: FeedDays;
   trades: Map<string, TradeDay[]>;
   snapshots: Map<string, QuoteSnapshot>;
 };
@@ -177,6 +181,7 @@ function pricingOf(state: ClosesState): Pricing {
     pricing = {
       need: closesNeed(state),
       rowsByDay: rowsByDayOf(state.quotes),
+      feedDays: feedDaysOf(state.quotes),
       trades: tradeDaysOf(state),
       snapshots: new Map(),
     };
@@ -216,16 +221,20 @@ function pricedAt(state: ClosesState, date: string): QuoteSnapshot {
     rows.fxRates.push(...day.fxRates);
     rows.prices.push(...day.prices);
   }
-  const quoted = pricedSnapshotOf(
-    state,
-    snapshotOn(rows, date, pricing.need).snapshot,
-  ).snapshot;
+  const quoted = pricedSnapshotOf(state, {
+    ...snapshotOn(rows, date, pricing.need).snapshot,
+    feedDates: feedDatesOn(pricing.feedDays, date, pricing.need),
+  }).snapshot;
   const traded: QuoteSnapshot["prices"] = {};
   for (const [symbol, days] of pricing.trades) {
     const last = lastOnOrBefore(days, date);
     if (last >= 0) traded[symbol] = days[last]!.price;
   }
-  const snapshot = { ...quoted, prices: { ...traded, ...quoted.prices } };
+  const snapshot = {
+    date: quoted.date,
+    fx: quoted.fx,
+    prices: { ...traded, ...quoted.prices },
+  };
   pricing.snapshots.set(date, snapshot);
   return snapshot;
 }

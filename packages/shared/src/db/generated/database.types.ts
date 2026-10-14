@@ -526,6 +526,11 @@ isOneToOne: false
               "id": string,"name": string
             }[]
                            },
+"quotes_before":
+{ Args: { "p_before": string,"p_fx_kinds": (Database["public"]['Enums']["fx_rate_kind"])[],"p_symbols": (string)[] }; Returns: {
+              "amount": string,"currency": Database["public"]['Enums']["currency"],"kind": Database["public"]['Enums']["fx_rate_kind"],"quote_date": string,"symbol": string
+            }[]
+                           },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
                            } |
