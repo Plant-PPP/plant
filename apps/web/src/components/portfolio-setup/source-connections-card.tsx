@@ -12,6 +12,7 @@ import {
   toAssets,
   WRITE_MESSAGES,
 } from "@/lib/portfolio-setup/messages";
+import type { IconResult } from "@/lib/institutions/read-icon";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type {
   PortfolioRow,
@@ -59,6 +60,8 @@ export type SourceConnectionActions = {
   restore: (id: string, input: unknown) => Promise<WriteResult>;
   // A page that deletes accounts that never held anything.
   delete?: (id: string) => Promise<WriteResult>;
+  // A page that reads the icon of an institution's site.
+  readIcon?: (site: string) => Promise<IconResult>;
 };
 
 // Below @2xl the portfolio and report status take a muted second line; from
@@ -71,7 +74,7 @@ const COLUMNS: ColumnDef<SourceConnectionRow>[] = [
     cell: ({ row: { original: row } }) => (
       <>
         <span className="flex min-w-0 items-center gap-2">
-          <InstitutionIcon name={row.institution} />
+          <InstitutionIcon name={row.institution} icon={row.icon} />
           <span className="block truncate" title={row.institution}>
             {row.institution}
           </span>
@@ -194,6 +197,7 @@ export function SourceConnectionsCard({
       portfolios,
       returnFocusTo: card.focusHeading,
       onClose: () => setDialog(null),
+      readIcon: actions.readIcon,
     };
   }
 

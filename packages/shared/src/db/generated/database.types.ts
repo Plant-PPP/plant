@@ -373,14 +373,14 @@ isOneToOne: false
                   ]
                 },"source_connections": {
                   Row: {
-                    "archived_at": string | null,"created_at": string,"default_portfolio_id": string,"id": string,"include_in_tax_report": boolean,"institution": string,"updated_at": string,"user_id": string
+                    "archived_at": string | null,"created_at": string,"default_portfolio_id": string,"icon": string | null,"id": string,"include_in_tax_report": boolean,"institution": string,"updated_at": string,"user_id": string,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id": string,"id"?: string,"include_in_tax_report"?: boolean,"institution": string,"updated_at"?: string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id": string,"icon"?: string | null,"id"?: string,"include_in_tax_report"?: boolean,"institution": string,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Update: {
-                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id"?: string,"id"?: string,"include_in_tax_report"?: boolean,"institution"?: string,"updated_at"?: string,"user_id"?: string
+                    "archived_at"?: string | null,"created_at"?: string,"default_portfolio_id"?: string,"icon"?: string | null,"id"?: string,"include_in_tax_report"?: boolean,"institution"?: string,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Relationships: [
                     {

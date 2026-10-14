@@ -6,6 +6,7 @@ import {
   createSourceConnection,
   deletePortfolio,
   deleteSourceConnection,
+  readInstitutionIcon,
   renamePortfolio,
   restorePortfolio,
   restoreSourceConnection,
@@ -36,7 +37,7 @@ export default async function AccountsPage({
     return (
       <div>
         <h1 className="sr-only">{navTitle("/accounts")}</h1>
-        <PrototypeAccounts />
+        <PrototypeAccounts readIcon={readInstitutionIcon} />
       </div>
     );
   }
@@ -66,6 +67,7 @@ export default async function AccountsPage({
             archive: archiveSourceConnection,
             restore: restoreSourceConnection,
             delete: deleteSourceConnection,
+            readIcon: readInstitutionIcon,
           },
           portfolios: {
             create: createPortfolio,

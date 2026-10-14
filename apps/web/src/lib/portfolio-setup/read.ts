@@ -31,6 +31,9 @@ export type SourceConnectionRow = {
   institution: string;
   includeInTaxReport: boolean;
   portfolio: PortfolioRow & { archived: boolean };
+  // The institution's site and its icon, when the user gave one.
+  website?: string;
+  icon?: string;
 };
 
 export type ListView<Row> = {
@@ -254,13 +257,15 @@ export function readSourceConnections(
       table: "source_connections",
       param: "accounts",
       columns:
-        "id, institution, include_in_tax_report, " +
+        "id, institution, include_in_tax_report, website, icon, " +
         "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
       toRow: (data) => ({
         id: String(data.id),
         institution: String(data.institution),
         includeInTaxReport: data.include_in_tax_report === true,
         portfolio: linkedPortfolio(data.portfolio),
+        ...(typeof data.website === "string" && { website: data.website }),
+        ...(typeof data.icon === "string" && { icon: data.icon }),
       }),
     },
     context,
