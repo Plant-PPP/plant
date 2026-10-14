@@ -58,28 +58,28 @@ export function connectLookup(resolve: (host: string) => Promise<string[]>) {
     options: { all?: boolean },
     callback: LookupCallback,
   ): void => {
-    resolve(host).then(
-      (addresses) => {
-        if (addresses.length === 0) {
-          callback(
-            Object.assign(new Error("no address"), { code: "ENOTFOUND" }),
-            "",
-          );
-          return;
-        }
-        if (addresses.some(isPrivateAddress)) {
-          callback(new PrivateAddressError(), "");
-          return;
-        }
-        const found = addresses.map((address) => ({
-          address,
-          family: isIP(address.replace(/%.*$/, "")),
-        }));
-        if (options.all) callback(null, found);
-        else callback(null, found[0]!.address, found[0]!.family);
-      },
-      (error: Error) => callback(error, ""),
-    );
+    const answer = (addresses: string[]): Parameters<LookupCallback> => {
+      if (addresses.length === 0) {
+        return [
+          Object.assign(new Error("no address"), { code: "ENOTFOUND" }),
+          "",
+        ];
+      }
+      if (addresses.some(isPrivateAddress)) {
+        return [new PrivateAddressError(), ""];
+      }
+      const found = addresses.map((address) => ({
+        address,
+        family: isIP(address.replace(/%.*$/, "")),
+      }));
+      return options.all
+        ? [null, found]
+        : [null, found[0]!.address, found[0]!.family];
+    };
+    // The callback runs outside the promise, so nothing it throws is lost.
+    void resolve(host)
+      .then(answer, (error: Error): Parameters<LookupCallback> => [error, ""])
+      .then((args) => process.nextTick(() => callback(...args)));
   };
 }
 
