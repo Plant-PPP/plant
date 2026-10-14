@@ -1,6 +1,7 @@
 import type { DraftRow, ImportDraft } from "@plant/sources";
 
 import {
+  agreedDraft,
   compareReadings,
   disputeCount,
   settle,
@@ -133,19 +134,44 @@ describe("settle", () => {
     ]);
   });
 
-  it("matches the tiebreak's row to the disputed occurrence of an instrument listed twice", () => {
+  it("disputes every line of an instrument listed twice when one differs", () => {
     const first = draft([row("AL30", "10"), row("AL30", "20")]);
-    const second = draft([row("AL30", "10"), row("AL30", "25")]);
-    const tiebreak = draft([row("AL30", "25")]);
+    const second = draft([row("AL30", "10"), row("AL30", "10")]);
+    const compared = compareReadings(first, second);
+    expect(compared.disputes.rows).toEqual(["AL30|ARS#0", "AL30|ARS#1"]);
+    // The tiebreak lists every line of it, so its lines line up.
+    const settled = settle(
+      first,
+      second,
+      draft([row("AL30", "10"), row("AL30", "20")]),
+      compared,
+    );
+    expect(settled.rows.map((r) => [r.quantity, r.confidence])).toEqual([
+      ["10", "high"],
+      ["20", "high"],
+    ]);
+  });
+
+  it("keeps no more rows than a draft takes", () => {
+    const many = (n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => row(`${prefix}${i}`, "1"));
+    const first = draft(many(400, "A"));
+    const second = draft(many(400, "B"));
+    const tiebreak = draft([...many(400, "A"), ...many(400, "B")]);
     const settled = settle(
       first,
       second,
       tiebreak,
       compareReadings(first, second),
     );
-    expect(settled.rows.map((r) => [r.quantity, r.confidence])).toEqual([
-      ["10", "high"],
-      ["25", "high"],
+    expect(settled.rows).toHaveLength(500);
+  });
+
+  it("gives agreed rows the lower confidence of the two readings", () => {
+    const first = draft([row("AAPL", "5", { confidence: "high" })]);
+    const second = draft([row("AAPL", "5", { confidence: "low" })]);
+    expect(agreedDraft(first, compareReadings(first, second)).rows).toEqual([
+      row("AAPL", "5", { confidence: "low" }),
     ]);
   });
 

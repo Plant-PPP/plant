@@ -1,5 +1,9 @@
 import { compareDecimals, neutralizePromptText } from "@plant/shared";
-import type { DraftRow, ImportDraft } from "@plant/sources";
+import {
+  DRAFT_ROW_LIMIT,
+  type DraftRow,
+  type ImportDraft,
+} from "@plant/sources";
 
 // The figures two readings must agree on for a row to stand without a third.
 const FIGURES = ["quantity", "price", "value"] as const;
@@ -21,25 +25,6 @@ function keyed(rows: readonly DraftRow[]): Map<string, DraftRow> {
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
     out.set(`${base}#${n}`, row);
-  }
-  return out;
-}
-
-// The tiebreak lists only disputed rows, so its rows of one instrument take
-// that instrument's disputed occurrences in order, not their own positions.
-function keyedTo(
-  rows: readonly DraftRow[],
-  disputed: readonly string[],
-): Map<string, DraftRow> {
-  const slots = new Map<string, string[]>();
-  for (const key of disputed) {
-    const base = key.slice(0, key.lastIndexOf("#"));
-    slots.set(base, [...(slots.get(base) ?? []), key]);
-  }
-  const out = new Map<string, DraftRow>();
-  for (const row of rows) {
-    const key = slots.get(baseOf(row))?.shift();
-    if (key) out.set(key, row);
   }
   return out;
 }
@@ -77,12 +62,25 @@ export function compareReadings(
 ): { agreed: Map<string, DraftRow>; disputes: Disputes } {
   const a = keyed(first.rows);
   const b = keyed(second.rows);
+  const keys = [...new Set([...a.keys(), ...b.keys()])];
+  const instrumentOf = (key: string) => key.slice(0, key.lastIndexOf("#"));
+  // An instrument with one disputed line has all its lines disputed: the
+  // tiebreak lists every line of it, so its lines line up with the readers'.
+  const unsettled = new Set(
+    keys
+      .filter((key) => {
+        const x = a.get(key);
+        const y = b.get(key);
+        return !(x && y && FIGURES.every((f) => sameDecimal(x[f], y[f])));
+      })
+      .map(instrumentOf),
+  );
   const agreed = new Map<string, DraftRow>();
   const rows: string[] = [];
-  for (const key of new Set([...a.keys(), ...b.keys()])) {
+  for (const key of keys) {
     const x = a.get(key);
     const y = b.get(key);
-    if (x && y && FIGURES.every((f) => sameDecimal(x[f], y[f]))) {
+    if (x && y && !unsettled.has(instrumentOf(key))) {
       agreed.set(key, {
         ...x,
         confidence: lowerConfidence(x.confidence, y.confidence),
@@ -132,7 +130,7 @@ export function settle(
   const readings = [
     keyed(first.rows),
     keyed(second.rows),
-    keyedTo(tiebreak.rows, disputes.rows),
+    keyed(tiebreak.rows),
   ];
   const settled = new Map(agreed);
   for (const key of disputes.rows) {
@@ -192,8 +190,22 @@ export function settle(
     return amount ? [{ currency, amount }] : [];
   });
 
-  return { documentDate, rows, totals };
+  return { documentDate, rows: rows.slice(0, DRAFT_ROW_LIMIT), totals };
 }
+
+// The draft two agreeing readings make: the first's rows, each with the lower
+// confidence of the two.
+export const agreedDraft = (
+  first: ImportDraft,
+  { agreed }: ReturnType<typeof compareReadings>,
+): ImportDraft => ({ ...first, rows: [...agreed.values()] });
+
+// A reading the other reader could not check: every row is for the user to
+// check.
+export const unchecked = (draft: ImportDraft): ImportDraft => ({
+  ...draft,
+  rows: draft.rows.map((row) => ({ ...row, confidence: "low" })),
+});
 
 // Tells the tiebreak which parts to read again.
 export function tiebreakBrief(
@@ -214,7 +226,7 @@ export function tiebreakBrief(
   ];
   if (symbols.size > 0) {
     lines.push(
-      `Holdings: ${[...new Set(symbols.values())].join(", ")}. List each only if the statement holds it.`,
+      `Holdings: ${[...new Set(symbols.values())].join(", ")}. List every line the statement has of each, and none it does not hold.`,
     );
   }
   if (disputes.documentDate) lines.push("The statement's date.");

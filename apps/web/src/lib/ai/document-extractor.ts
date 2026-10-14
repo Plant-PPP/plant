@@ -11,14 +11,17 @@ import {
   DRAFT_ROW_LIMIT,
   type ImportDraft,
   importDraftSchema,
+  SourceError,
 } from "@plant/sources";
 import { z } from "zod";
 
 import {
+  agreedDraft,
   compareReadings,
   disputeCount,
   settle,
   tiebreakBrief,
+  unchecked,
 } from "./consensus";
 import type { ModelFactory } from "./costed-model";
 import { structuredCall } from "./structured-call";
@@ -151,24 +154,50 @@ export function documentExtractor({
         }),
       );
     const ask = "List the holdings in this statement.";
-    const [first, second] = await Promise.all([
+    const [one, two] = await Promise.allSettled([
       read(READERS[0], ask),
       read(READERS[1], ask),
     ]);
+    // One reader failing leaves the other's reading, every row for the user
+    // to check; both failing fails the reading, retryable if either may pass.
+    if (one.status === "rejected" || two.status === "rejected") {
+      const survivor = [one, two].find((r) => r.status === "fulfilled");
+      if (survivor?.status === "fulfilled") {
+        return {
+          draft: unchecked(survivor.value),
+          read: {
+            reader: "document",
+            mapping: "none",
+            skippedRows: 0,
+            disputes: 0,
+          },
+        };
+      }
+      const errors = [one, two].map((r) =>
+        r.status === "rejected" ? r.reason : null,
+      );
+      throw (
+        errors.find((e) => e instanceof SourceError && e.retryable) ?? errors[0]
+      );
+    }
+    const first = one.value;
+    const second = two.value;
     const compared = compareReadings(first, second);
     const disputed = disputeCount(compared.disputes);
-    const draft =
-      disputed === 0
-        ? first
-        : settle(
-            first,
-            second,
-            await read(
-              TIEBREAK_MODEL,
-              tiebreakBrief(compared.disputes, first, second),
-            ),
-            compared,
-          );
+    let draft = agreedDraft(first, compared);
+    if (disputed > 0) {
+      // A tiebreak that fails settles on the two readings alone: a row only
+      // one lists is left out, and a figure they differ on is marked low.
+      const tiebreak = await read(
+        TIEBREAK_MODEL,
+        tiebreakBrief(compared.disputes, first, second),
+      ).catch((): ImportDraft => ({
+        documentDate: null,
+        rows: [],
+        totals: [],
+      }));
+      draft = settle(first, second, tiebreak, compared);
+    }
     return {
       draft,
       read: {

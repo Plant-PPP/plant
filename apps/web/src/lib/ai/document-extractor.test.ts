@@ -269,11 +269,22 @@ it("asks a third model only about what the two readers disagree on", async () =>
   expect(ask?.text).not.toContain("AAPL");
 });
 
-it("fails the reading when either reader fails", async () => {
+it("keeps the other reading, every row low, when one reader fails", async () => {
   const [, lite31] = READERS;
   const { run } = byModel({
     [READERS[0]]: reading([row("AAPL", "5")]),
     [lite31]: "not json",
+  });
+  const { draft } = await run();
+  expect(draft.rows).toEqual([
+    expect.objectContaining({ symbol: "AAPL", confidence: "low" }),
+  ]);
+});
+
+it("fails the reading when both readers fail", async () => {
+  const { run } = byModel({
+    [READERS[0]]: "not json",
+    [READERS[1]]: "not json",
   });
   await expect(run()).rejects.toMatchObject({ code: "unreadable" });
 });
