@@ -262,8 +262,8 @@ SELECT set_eq(
   $$ SELECT unnest(enum_range(NULL::private.audit_action))::text $$,
   ARRAY['auth.session.created', 'auth.session.deleted', 'auth.mfa.verified',
         'auth.mfa.factor_verified', 'auth.mfa.factor_removed', 'imports.file.deleted',
-        'assistant.conversation.deleted'],
-  'the audit vocabulary is exactly the session, MFA, file deletion and conversation deletion actions'
+        'assistant.conversation.deleted', 'data.exported'],
+  'the audit vocabulary is exactly the session, MFA, file deletion, conversation deletion and data export actions'
 );
 
 SELECT * FROM finish();
