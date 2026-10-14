@@ -98,9 +98,10 @@ function amountOf(text: string, separator: string): string | null {
   else if (separator === ";" && text.includes(",") && ES_AR.test(text)) {
     decimal = text.replace(/\./g, "").replace(",", ".");
   }
-  if (decimal === null || decimalOf(decimal) === null) return null;
+  const rounded = decimal === null ? null : decimalOf(decimal);
+  if (rounded === null) return null;
   try {
-    return fromScaled(toScaled(decimal));
+    return fromScaled(toScaled(rounded));
   } catch {
     return null;
   }

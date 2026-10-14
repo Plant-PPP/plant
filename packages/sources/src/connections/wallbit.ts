@@ -64,14 +64,20 @@ const forbiddenSchema = z.object({
 // A symbol as Wallbit names an asset or a currency.
 const SYMBOL = /^[A-Z0-9.]{1,20}$/;
 
-// The currencies Wallbit's checking account holds, as its API lists them:
-// pesos, dollars, its stablecoins and fiat Plant does not keep. In a trade
-// they are a currency exchange, never an asset.
-const CURRENCIES: ReadonlySet<string> = new Set([
+// The checking account's currencies Plant keeps: pesos, dollars and Wallbit's
+// stablecoins.
+const KEPT_CURRENCIES: ReadonlySet<string> = new Set([
   "USD",
   "ARS",
   "USDC",
   "USDT",
+]);
+
+// The currencies Wallbit's checking account holds, as its API lists them:
+// the kept ones and fiat Plant does not keep. In a trade they are a currency
+// exchange, never an asset.
+const CURRENCIES: ReadonlySet<string> = new Set([
+  ...KEPT_CURRENCIES,
   ...OTHER_FIAT,
 ]);
 
@@ -115,9 +121,9 @@ export function wallbitConnection({
     if (!checking.success || !stocks.success) throw unavailable();
     // The investment account lists its dollars as the symbol USD, which adds
     // up with the checking account's into one cash row. Checking holds
-    // currencies, so its fiat Plant does not keep is left out; the
-    // investment account holds stocks, whose tickers may match a currency's
-    // code (COP, PEN).
+    // currencies, so any but the kept ones is left out, a code Wallbit adds
+    // later too; the investment account holds stocks, whose tickers may match
+    // a currency's code (COP, PEN).
     const held = new Map<string, unknown[]>();
     let skipped = 0;
     const add = (symbol: string, amount: unknown) => {
@@ -125,7 +131,7 @@ export function wallbitConnection({
       else held.set(symbol, [...(held.get(symbol) ?? []), amount]);
     };
     for (const { currency, balance } of checking.data.data) {
-      if (!OTHER_FIAT.has(currency)) add(currency, balance);
+      if (KEPT_CURRENCIES.has(currency)) add(currency, balance);
       else if (!isZero(decimalOf(balance))) skipped += 1;
     }
     for (const { symbol, shares } of stocks.data.data) add(symbol, shares);

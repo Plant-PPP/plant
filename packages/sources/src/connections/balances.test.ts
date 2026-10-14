@@ -161,6 +161,32 @@ describe("wallbit's stocks", () => {
   });
 });
 
+describe("wallbit's checking account", () => {
+  it("skips a currency Plant does not keep, even one it does not list", async () => {
+    fake.answer = (request) =>
+      request.path === "/api/public/v1/balance/checking"
+        ? {
+            status: 200,
+            body: {
+              data: [
+                { currency: "USD", balance: 10 },
+                { currency: "GBP", balance: 50 },
+                { currency: "CHF", balance: 0 },
+              ],
+            },
+          }
+        : request.path === "/api/public/v1/balance/stocks"
+          ? { status: 200, body: { data: [] } }
+          : PROVIDER_FIXTURES.wallbit.ok(request);
+    const reading = await wallbitConnection(deps()).read(
+      WALLBIT_CREDENTIALS,
+      "holdings",
+    );
+    expect(rowsOf(reading)).toEqual([["USD", "10", "USD", "cash"]]);
+    expect(holdings(reading).read.skippedRows).toBe(1);
+  });
+});
+
 describe("cash in several accounts of one currency", () => {
   it("adds up IOL's accounts in dollars into one cash row", async () => {
     fake.answer = (request) =>
