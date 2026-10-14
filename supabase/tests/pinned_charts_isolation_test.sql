@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(12);
+SELECT plan(14);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -137,6 +137,18 @@ SELECT is(
                         SELECT 'allocation', id FROM public.portfolios WHERE name = 'Cartera 4' $$),
   'P0001 pinned_charts_full',
   'and no more'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.pinned_charts (topic) VALUES ('net_worth') $$),
+  '23505',
+  'a chart already pinned is refused as already there, not as one too many'
+);
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.pinned_charts (topic, portfolio_id)
+                      SELECT 'allocation', id FROM public.portfolios WHERE name = 'Cartera 1' $$),
+  '23505',
+  'and so is one of a portfolio'
 );
 
 DELETE FROM public.pinned_charts;
