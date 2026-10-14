@@ -103,6 +103,8 @@ export async function ImportReviewView({ id }: { id: string }) {
               id: each.id,
               institution: each.institution,
               held: heldOn(state, each.id, heldDate),
+              defaultPortfolioId: each.portfolio.id,
+              elsewhere: heldElsewhere(state, each.id),
             }))
           : undefined
       }

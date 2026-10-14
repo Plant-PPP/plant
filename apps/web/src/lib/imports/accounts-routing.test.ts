@@ -13,6 +13,11 @@ it("names the user's account by its institution, case and accents aside", () => 
   expect(accountFor("BingX", ACCOUNTS)).toBeUndefined();
 });
 
+it("never names an account by a name too short to tell", () => {
+  expect(accountFor("BingX", [{ id: "a1", institution: "€" }])).toBeUndefined();
+  expect(accountFor("IB", [{ id: "a1", institution: "Ibkr" }])).toBeUndefined();
+});
+
 it("names none when several accounts would do", () => {
   expect(
     accountFor("Banco", [

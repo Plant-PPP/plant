@@ -4,7 +4,8 @@ import type { ImportRow } from "./review";
 
 // The user's account a document's account label names: the one whose
 // institution reads the same, or contains it, once case, accents and
-// punctuation are set aside; none when no account or several do.
+// punctuation are set aside; none when no account or several do. A name of
+// fewer than three letters only matches as a whole.
 export function accountFor(
   label: string,
   accounts: readonly { id: string; institution: string }[],
@@ -17,7 +18,10 @@ export function accountFor(
   if (same.length === 1) return same[0]!.id;
   const near = accounts.filter((each) => {
     const institution = normalizeSymbol(each.institution);
-    return institution.includes(key) || key.includes(institution);
+    return (
+      (key.length >= 3 && institution.includes(key)) ||
+      (institution.length >= 3 && key.includes(institution))
+    );
   });
   return near.length === 1 ? near[0]!.id : undefined;
 }

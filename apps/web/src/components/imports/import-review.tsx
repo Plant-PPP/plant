@@ -150,11 +150,17 @@ export function ImportReview({
   // What the account holds of each instrument now.
   held: ReadonlyMap<string, string>;
   // When the document lists several accounts: the user's accounts a row may
-  // go to, each with what it holds.
+  // go to, each with what it holds, its default portfolio and the user's
+  // other accounts holding each instrument.
   accounts?: readonly {
     id: string;
     institution: string;
     held: ReadonlyMap<string, string>;
+    defaultPortfolioId: string;
+    elsewhere: ReadonlyMap<
+      string,
+      readonly { id: string; institution: string }[]
+    >;
   }[];
   // On a page that lets a row choose where its units go: the portfolios, the
   // account's default one, and the user's other accounts holding each
@@ -205,6 +211,23 @@ export function ImportReview({
       ? held
       : (accounts?.find((each) => each.id === accountOf(row))?.held ??
         new Map<string, string>());
+  // Where a row's units may go, from the account it goes to.
+  const routingFor = (
+    row: EditedRow,
+    base: NonNullable<typeof routing>,
+  ): NonNullable<typeof routing> => {
+    const other =
+      accountOf(row) === item.accountId
+        ? undefined
+        : accounts?.find((each) => each.id === accountOf(row));
+    return other
+      ? {
+          ...base,
+          defaultPortfolioId: other.defaultPortfolioId,
+          elsewhere: other.elsewhere,
+        }
+      : base;
+  };
   const addsUnits = (row: EditedRow, quantity: string | null) => {
     const effect = rowChange(
       { quantity: quantity ?? "0", discarded: row.discarded },
@@ -571,7 +594,11 @@ export function ImportReview({
                       value={row.accountId ?? ""}
                       disabled={row.discarded}
                       onValueChange={(accountId) =>
-                        change(row.id, { accountId })
+                        change(row.id, {
+                          accountId,
+                          portfolioId: undefined,
+                          transferFrom: undefined,
+                        })
                       }
                     >
                       <SelectTrigger
@@ -666,7 +693,7 @@ export function ImportReview({
                       index={index}
                       row={row}
                       isNew={effect.kind === "new"}
-                      routing={routing}
+                      routing={routingFor(row, routing)}
                       onChange={(patch) => change(row.id, patch)}
                     />
                   )}

@@ -154,8 +154,20 @@ it("asks for the account of a row a document lists under one it cannot name", ()
       ]}
       held={new Map()}
       accounts={[
-        { id: "a2", institution: "Cocos", held: new Map() },
-        { id: "a3", institution: "Nexo", held: new Map() },
+        {
+          id: "a2",
+          institution: "Cocos",
+          held: new Map(),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
+        {
+          id: "a3",
+          institution: "Nexo",
+          held: new Map(),
+          defaultPortfolioId: "p1",
+          elsewhere: new Map(),
+        },
       ]}
       backHref="/import"
       doneHref="/import"
