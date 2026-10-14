@@ -579,6 +579,58 @@ describe("sheetToDraft", () => {
     ]);
   });
 
+  it("leaves a row whose currency the model guessed for the user to check", () => {
+    const { rows } = draftOf(
+      {
+        ...sheet,
+        rows: [
+          ["AAPL", "10", "230.5", "", ""],
+          ["GGAL", "10", "1.500,5", "ARS", ""],
+        ],
+      },
+      { ...mapping, currencyDefault: "USD" },
+      "2026-10-13",
+    );
+    expect(
+      rows.map((row) => [row.symbol, row.currency, row.confidence]),
+    ).toEqual([
+      ["AAPL", "USD", "medium"],
+      ["GGAL", "ARS", "high"],
+    ]);
+  });
+
+  it("leaves out, counted, a row in a currency it does not know, whatever the default", () => {
+    const { draft, skippedRows } = sheetToDraft(
+      sheet,
+      { ...mapping, currencyDefault: "USD" },
+      "2026-10-13",
+    );
+    expect(draft.rows.map((row) => row.symbol)).toEqual([
+      "AL30",
+      "AAPL",
+      "BMA",
+    ]);
+    // GD30 in euros and YPFD's negative quantity.
+    expect(skippedRows).toBe(2);
+  });
+
+  it("marks an average cost that also reads as thousands for the user to check", () => {
+    const { rows } = draftOf(
+      {
+        headers: ["Especie", "Cantidad", "PPC", "Moneda"],
+        rows: [["AAPL", "5", "1.500", "ARS"]],
+      },
+      {
+        ...mapping,
+        price: null,
+        cost: "PPC",
+        date: null,
+      },
+      "2026-10-13",
+    );
+    expect(rows).toEqual([expect.objectContaining({ confidence: "low" })]);
+  });
+
   it("has no date without a date column", () => {
     expect(
       draftOf(sheet, { ...mapping, date: null }, "2026-10-13").documentDate,
