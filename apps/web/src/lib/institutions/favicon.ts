@@ -12,6 +12,8 @@ import { ICON_MAX_BYTES, imageType } from "./icon-data";
 
 const PAGE_MAX_BYTES = 512 * 1024;
 const TIMEOUT_MS = 5_000;
+// The longest a whole read may take, lookups and redirects included.
+const TOTAL_MS = 15_000;
 const MAX_REDIRECTS = 3;
 const MAX_CANDIDATES = 4;
 
@@ -209,14 +211,36 @@ async function readCapped(
   return out;
 }
 
-async function checkHost(url: URL, deps: FaviconDeps) {
-  if (url.protocol !== "https:" || url.username || url.password) {
+// A promise that rejects once the read's deadline passes.
+function beforeDeadline<T>(promise: Promise<T>, deadline: AbortSignal) {
+  return new Promise<T>((resolve, reject) => {
+    if (deadline.aborted) {
+      reject(new FaviconError("unreachable"));
+      return;
+    }
+    const abort = () => reject(new FaviconError("unreachable"));
+    deadline.addEventListener("abort", abort, { once: true });
+    promise
+      .then(resolve, reject)
+      .finally(() => deadline.removeEventListener("abort", abort));
+  });
+}
+
+async function checkHost(url: URL, deps: FaviconDeps, deadline: AbortSignal) {
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    (url.port !== "" && url.port !== "443")
+  ) {
     throw new FaviconError("url");
   }
   const host = url.hostname.replace(/^\[|\]$/g, "");
   let addresses: string[];
   try {
-    addresses = isIP(host) ? [host] : await deps.lookup(host);
+    addresses = isIP(host)
+      ? [host]
+      : await beforeDeadline(deps.lookup(host), deadline);
   } catch {
     throw new FaviconError("unreachable");
   }
@@ -231,16 +255,17 @@ async function getPublic(
   cap: number,
   over: "cut" | "fail",
   deps: FaviconDeps,
+  deadline: AbortSignal,
 ): Promise<{ url: URL; type: string; bytes: Uint8Array }> {
   let url = start;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    await checkHost(url, deps);
+    await checkHost(url, deps, deadline);
     let response: Response;
     try {
       response = await deps.fetch(url, {
         redirect: "manual",
         cache: "no-store",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), deadline]),
         headers: { accept: "image/*,text/html;q=0.9,*/*;q=0.5" },
       });
     } catch {
@@ -280,45 +305,72 @@ async function getPublic(
 const dataUrl = (type: string, bytes: Uint8Array) =>
   `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
 
-// The icon of the site at `text`: the first image among the icons its page
-// names and /favicon.ico. A URL that is not public https, or a site that
-// gives no image, fails with why.
+// The icon of the site at `text`: the first image among the first icons its
+// page names and /favicon.ico, within TOTAL_MS. A URL that is not public
+// https, or a site that gives no image, fails with why.
 export async function fetchFavicon(
   text: string,
   deps: FaviconDeps,
+  deadline: AbortSignal = AbortSignal.timeout(TOTAL_MS),
 ): Promise<string> {
   const site = siteUrl(text);
   if (!site) throw new FaviconError("url");
   const root = new URL("/", site);
-  const candidates: URL[] = [];
+  const named: URL[] = [];
   let failure: FaviconError | null = null;
+  let imageAt: URL | null = null;
   try {
-    const page = await getPublic(root, PAGE_MAX_BYTES, "cut", deps);
-    const direct = imageType(page.bytes);
-    if (direct) return dataUrl(direct, page.bytes);
-    candidates.push(
-      ...iconLinks(new TextDecoder().decode(page.bytes), page.url),
-    );
+    const page = await getPublic(root, PAGE_MAX_BYTES, "cut", deps, deadline);
+    if (imageType(page.bytes)) imageAt = page.url;
+    else {
+      named.push(...iconLinks(new TextDecoder().decode(page.bytes), page.url));
+    }
   } catch (error) {
     if (!(error instanceof FaviconError)) throw error;
     // A private or malformed site gives nothing else to try.
     if (error.reason === "private" || error.reason === "url") throw error;
     failure = error;
   }
-  candidates.push(new URL("/favicon.ico", root));
-  const seen = new Set<string>();
+  if (imageAt) {
+    // A site whose page is an image: that image is its icon, within the cap.
+    const icon = await getPublic(
+      imageAt,
+      ICON_MAX_BYTES,
+      "fail",
+      deps,
+      deadline,
+    );
+    const type = imageType(icon.bytes);
+    if (type) return dataUrl(type, icon.bytes);
+    throw new FaviconError("not_image");
+  }
+  const favicon = new URL("/favicon.ico", root);
+  const candidates = [
+    ...new Map(
+      named
+        .filter((url) => url.href !== favicon.href)
+        .map((url) => [url.href, url]),
+    ).values(),
+  ]
+    .slice(0, MAX_CANDIDATES - 1)
+    .concat(favicon);
   for (const candidate of candidates) {
-    if (seen.has(candidate.href) || seen.size >= MAX_CANDIDATES) continue;
-    seen.add(candidate.href);
     try {
-      const icon = await getPublic(candidate, ICON_MAX_BYTES, "fail", deps);
+      const icon = await getPublic(
+        candidate,
+        ICON_MAX_BYTES,
+        "fail",
+        deps,
+        deadline,
+      );
       const type = imageType(icon.bytes);
       if (type) return dataUrl(type, icon.bytes);
       failure ??= new FaviconError("not_image");
     } catch (error) {
       if (!(error instanceof FaviconError)) throw error;
       if (error.reason === "private") throw error;
-      failure = error;
+      // An icon link the page names off https says nothing of the site.
+      if (error.reason !== "url") failure = error;
     }
   }
   throw failure ?? new FaviconError("not_image");

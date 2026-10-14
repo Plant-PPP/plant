@@ -142,6 +142,59 @@ it("reads the icon links at the start of a page too long to read whole", async (
   );
 });
 
+it("refuses a page that is an image over the cap", async () => {
+  const big = new Uint8Array(300 * 1024);
+  big.set(PNG);
+  const deps = web({ "https://brubank.com/": { body: big } });
+  await expect(fetchFavicon("brubank.com", deps)).rejects.toEqual(
+    new FaviconError("too_large"),
+  );
+});
+
+it("tries /favicon.ico even when the page names many icons", async () => {
+  const deps = web({
+    "https://brubank.com/": {
+      body: ["a", "b", "c", "d", "e"]
+        .map((name) => `<link rel="apple-touch-icon" href="/${name}.png">`)
+        .join(""),
+    },
+    "https://brubank.com/favicon.ico": { body: ICO },
+  });
+  expect(await fetchFavicon("brubank.com", deps)).toMatch(
+    /^data:image\/x-icon;base64,/,
+  );
+});
+
+it("refuses a redirect to another port", async () => {
+  const deps = web({
+    "https://brubank.com/": {
+      status: 302,
+      headers: { location: "https://brubank.com:8443/" },
+    },
+  });
+  await expect(fetchFavicon("brubank.com", deps)).rejects.toEqual(
+    new FaviconError("url"),
+  );
+  expect(deps.asked).toEqual(["https://brubank.com/"]);
+});
+
+it("refuses a host whose lookup answers a mapped or translated private address", async () => {
+  for (const address of ["::ffff:127.0.0.1", "64:ff9b::a9fe:a9fe", "FE80::1"]) {
+    const deps = web({}, { "brubank.com": [address] });
+    await expect(fetchFavicon("brubank.com", deps)).rejects.toEqual(
+      new FaviconError("private"),
+    );
+  }
+});
+
+it("gives up when the whole read passes its deadline", async () => {
+  const deps = web({});
+  deps.lookup = () => new Promise(() => undefined);
+  await expect(
+    fetchFavicon("brubank.com", deps, AbortSignal.timeout(50)),
+  ).rejects.toEqual(new FaviconError("unreachable"));
+});
+
 it("refuses a host that resolves to a private address", async () => {
   const deps = web(
     { "https://intranet.example.com/favicon.ico": { body: ICO } },

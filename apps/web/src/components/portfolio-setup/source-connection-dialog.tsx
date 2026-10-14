@@ -180,6 +180,8 @@ export function SourceConnectionDialog({
   const institutionTrigger = useRef<HTMLButtonElement>(null);
   const website = useRef<HTMLInputElement>(null);
   const [reading, startReading] = useTransition();
+  // Closed while the icon was read: the read saves nothing.
+  const closed = useRef(false);
   const otherInstitution = useRef<HTMLInputElement>(null);
   const portfolioTrigger = useRef<HTMLButtonElement>(null);
   const focus = useSavedFocus(returnFocusTo, savedRemovesOpener);
@@ -232,6 +234,7 @@ export function SourceConnectionDialog({
         ok: false,
         reason: "failed",
       }));
+      if (closed.current) return;
       if (!read.ok) {
         setAlert({ text: ICON_MESSAGES[read.reason], field: "website" });
         website.current?.focus();
@@ -249,7 +252,10 @@ export function SourceConnectionDialog({
 
   return (
     <AppDialog
-      onClose={onClose}
+      onClose={() => {
+        closed.current = true;
+        onClose();
+      }}
       title={title}
       description={description}
       returnFocusTo={focus.returnFocusTo}
