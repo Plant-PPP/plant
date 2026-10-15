@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(97);
+SELECT plan(98);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -415,6 +415,12 @@ SELECT lives_ok(
   $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label)
      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'other', 'ARS', '5000', '2026-10-01', 'Auto') $$,
   'another asset has a currency, a valuation date and a label'
+);
+
+SELECT lives_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'EUR', '2500') $$,
+  'cash is held in euros too'
 );
 
 SELECT throws_ok(

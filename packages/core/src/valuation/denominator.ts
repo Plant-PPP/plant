@@ -23,9 +23,10 @@ export const referenceUnit = (
   referenceDollar: ReferenceDollar,
 ): `usd_${ReferenceDollar}` => `usd_${referenceDollar}`;
 
-// Money a user holds, as a value in a view's unit. Pesos are pesos; a held
-// dollar becomes the dollar the view's entry names, so it keeps its face
-// value in any dollar view and an ARS view prices it at the reference dollar.
+// Money a user holds, as a value in a view's unit. Pesos are pesos and euros
+// are euros, converted through pesos at the official euro; a held dollar
+// becomes the dollar the view's entry names, so it keeps its face value in
+// any dollar view and an ARS view prices it at the reference dollar.
 export function lift(
   money: ExactMoney,
   view: Denominator,
@@ -33,6 +34,8 @@ export function lift(
 ): Value {
   if (money.currency === "ARS")
     return { amount: money.amount, denominator: "ars" };
+  if (money.currency === "EUR")
+    return { amount: money.amount, denominator: "eur" };
   if (money.currency !== "USD") {
     const currency: never = money.currency;
     throw new RangeError(`No unit holds ${String(currency)}`);

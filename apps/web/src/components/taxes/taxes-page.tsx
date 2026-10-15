@@ -116,7 +116,8 @@ export function TaxesPage({
   assetExclusion: boolean;
 }) {
   const router = useRouter();
-  const { wealth, gains, officialBuy } = report;
+  const { wealth, gains, officialBuy, euroBuy } = report;
+  const holdsEuros = wealth.lines.some((line) => line.currency === "EUR");
   const nothing = wealth.lines.length === 0 && gains.groups.length === 0;
 
   function download(index: number) {
@@ -205,6 +206,18 @@ export function TaxesPage({
               >
                 <AmountText amount={officialBuy?.buy ?? null} unit="ars" />
               </StatTile>
+              {holdsEuros && (
+                <StatTile
+                  label="Euro BNA comprador"
+                  note={
+                    euroBuy
+                      ? `Del ${formatDate(euroBuy.date)}`
+                      : "Sin cotización para ese día"
+                  }
+                >
+                  <AmountText amount={euroBuy?.buy ?? null} unit="ars" />
+                </StatTile>
+              )}
             </StatGrid>
             {wealth.lines.length === 0 ? (
               <p className="text-muted-foreground py-6 text-center text-xs">

@@ -18,6 +18,17 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Debts are valued in a proof type** (`LiabilityOnDate`), made only by `liabilitiesOn`, so a reader cannot value a stored row's opening balance as today's.
 - **A RAISE in a new migration keeps a literal message** (checked by `check-migrations.sh`); values go in a HINT code, since the message reaches the logs.
 
+## 2026-10-14 · Euros
+
+- **Euros are held, not viewed.** `EUR` is a currency (cash, placements, properties, other assets, debts, import rows) and `eur` a denominator priced at the official euro (BNA, dolarapi's `/v1/cotizaciones/eur`, read with the dollars). The units a user can view in are `VIEW_UNITS` (pesos, the three dollars and BTC): pickers, `?unit=` and the movements page take only those, so there is no euro view.
+- **Held euros go through pesos at the official euro**, whatever dollar the view is in: 100 euros in MEP dollars are 100 × official euro / MEP. The official euro is the only euro rate there is, so it sits beside MEP and CCL dollars without a euro MEP.
+- **Movements keep storing the three dollars' rates; only a movement in euros adds the euro's.** `UNIT_FX_KINDS` stays the dollars, so rows written before this read as they were and a backdated peso or dollar movement needs no euro rate. `admitMovement` refuses a euro movement without one (`no_rate`, now worded without naming the dollar).
+- **Every quote read asks for the euro too** (`VALUED_FX_KINDS`). With four kinds a stretch of `ledgerForDates` is `MAX_ROWS / 4` days, so one read stays under the row cap.
+- **The month's currency effect counts the euro** like the dollars: what held euros gained or lost as the euro moved is not a price result.
+- **Taxes value euros at the BNA euro's buying rate**, read like the dollar's; Impuestos shows it beside the dollar's when a euro asset is held.
+- **No euro history before launch**: dolarapi gives today's rate, so a euro holding has no value before the first daily read, and a euro movement dated earlier is refused.
+- **Out of scope**: a euro view unit, manual euro rates, instruments, prices and alerts in euros (alerts stay ARS and USD), a printed euro total on imports, and euros from connections (exchanges still count a euro balance as skipped).
+
 ## 2026-10-14 · Price alerts from an asset's page
 
 - **An instrument's alert is set from its page**, with the bell beside the unit select: on its price in its own currency, or, while the user holds it, on its gain or loss over their average cost. The bell shows whether or not the user holds it.

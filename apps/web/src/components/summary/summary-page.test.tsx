@@ -16,7 +16,7 @@ const LARGO = { id: "p2", name: "Largo plazo" };
 const cash = (
   id: string,
   portfolio: { id: string; name: string },
-  currency: "ARS" | "USD",
+  currency: "ARS" | "USD" | "EUR",
   amount: string,
 ): HoldingRow => ({
   id,
@@ -44,6 +44,7 @@ const SNAPSHOT: QuoteSnapshot = {
     mep: { sell: "1000", date: "2026-10-12" },
     ccl: { sell: "1000", date: "2026-10-12" },
     official: { sell: "1000", date: "2026-10-12" },
+    eur: { sell: "1100", date: "2026-10-12" },
   },
   prices: {},
 };
@@ -51,6 +52,7 @@ const SNAPSHOT: QuoteSnapshot = {
 const ROWS = [
   cash("h1", PRINCIPAL, "ARS", "1000"),
   cash("h2", LARGO, "USD", "3"),
+  cash("h3", LARGO, "EUR", "50"),
 ];
 
 const render = (
@@ -95,6 +97,12 @@ describe("every portfolio", () => {
     expect(html).toContain("Galicia");
     expect(html).toContain("En pesos");
     expect(html).toContain("En dólares");
+  });
+
+  it("values euros held at the official euro, in their own line", () => {
+    expect(html).toContain("En euros");
+    // 50 euros at 1100.
+    expect(html).toContain("$ 55.000,00");
   });
 
   it("offers the closes, which are of the whole", () => {

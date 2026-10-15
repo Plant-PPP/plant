@@ -14,6 +14,7 @@ const REPORT: TaxReport = {
   date: "2025-12-31",
   provisional: false,
   officialBuy: { buy: "1000", date: "2025-12-30" },
+  euroBuy: null,
   wealth: {
     lines: [
       {

@@ -17,6 +17,7 @@ import type { Sum } from "@/lib/holdings/valuation-view";
 const CURRENCY_NAMES: Record<Currency, string> = {
   ARS: "En pesos",
   USD: "En dólares",
+  EUR: "En euros",
 };
 
 type Line = { id: Currency; sum: Sum };

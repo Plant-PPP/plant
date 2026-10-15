@@ -13,6 +13,7 @@ jest.mock("@/lib/request-id-server", () => ({
 }));
 const quoteRead = jest.fn();
 jest.mock("@/lib/quotes/quote-reader", () => ({
+  MAX_ROWS: jest.requireActual("@/lib/quotes/quote-reader").MAX_ROWS,
   createQuoteReader: () => ({ read: quoteRead }),
 }));
 const rpc = jest.fn();
@@ -61,8 +62,10 @@ jest.mock("./read", () => ({
   readLedger: (...args: unknown[]) => readLedger(...args),
 }));
 
+import { addDays, daysBetween } from "@plant/shared";
 import { revalidatePath } from "next/cache";
 import { captureServerLog } from "@/lib/log/capture-server-log";
+import { MAX_ROWS } from "@/lib/quotes/quote-reader";
 
 import { suggestedTransferCost, writeOperation } from "./ledger";
 import {
@@ -607,5 +610,23 @@ describe("ledgerForDates", () => {
       ["2025-01-03", "2025-01-20"],
       ["2026-02-22", "2026-03-01"],
     ]);
+  });
+
+  it("keeps every stretch of every rate kind under the reader's row cap", async () => {
+    quoteRead.mockClear();
+    quoteRead.mockResolvedValue({ fxRates: [], prices: [] });
+    readLedger.mockResolvedValue({ ledger: emptyLedger(), truncated: false });
+    const { createClient } = jest.requireMock("@/lib/supabase/server");
+    const dates = Array.from({ length: 120 }, (_, index) =>
+      addDays("2023-01-01", index * 9),
+    );
+    await ledgerForDates(await createClient(), dates);
+    expect(quoteRead.mock.calls.length).toBeGreaterThan(1);
+    for (const [range] of quoteRead.mock.calls) {
+      expect(range.fxKinds).toEqual(["mep", "ccl", "official", "eur"]);
+      expect(
+        range.fxKinds.length * (daysBetween(range.from, range.to) + 1),
+      ).toBeLessThanOrEqual(MAX_ROWS);
+    }
   });
 });

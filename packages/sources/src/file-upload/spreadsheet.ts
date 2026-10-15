@@ -161,7 +161,7 @@ const ES_AR_ONLY = [
 const AMBIGUOUS = /^-?[1-9]\d{0,2}[.,]\d{3}$/;
 // The currency marks a number may start with; CURRENCY_TOKENS names the same
 // ones and more, for a whole cell.
-const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars)/i;
+const CURRENCY_PREFIX = /^(u\$s|us\$|ar\$|\$|usd|ars|€|eur)/i;
 
 const decimalOrNull = (text: string): string | null =>
   decimalStringSchema.safeParse(text).success ? text : null;
@@ -272,6 +272,10 @@ const CURRENCY_TOKENS: Record<string, Currency> = {
   mep: "USD",
   ccl: "USD",
   cable: "USD",
+  eur: "EUR",
+  euro: "EUR",
+  euros: "EUR",
+  "€": "EUR",
 };
 
 // The currency a cell names when every word in it names the same one: "USD",

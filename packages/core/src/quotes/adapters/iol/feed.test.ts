@@ -101,7 +101,7 @@ const feedWith = (
   catalog: readonly {
     symbol: string;
     type: "crypto" | IolInstrument["type"];
-    currency: "ARS" | "USD";
+    currency: IolInstrument["currency"];
   }[] = CATALOG,
 ) =>
   createIolFeed({

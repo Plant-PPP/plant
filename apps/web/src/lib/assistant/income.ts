@@ -11,6 +11,7 @@ import {
 } from "@plant/core";
 import {
   addDays,
+  type Currency,
   type Exact,
   exactOf,
   plus,
@@ -51,7 +52,7 @@ export function incomeCalendar(
 ): IncomeEvent[] {
   const names = instrumentNames(state.instruments);
   const until = addDays(state.today, CALENDAR_DAYS);
-  const inUnit = (amount: string, currency: "ARS" | "USD") => {
+  const inUnit = (amount: string, currency: Currency) => {
     const shown = express(
       { amount: exactOf(amount), currency },
       state.today,

@@ -28,7 +28,7 @@ import {
   type StoredQuotes,
   snapshotOn,
   takesUnits,
-  UNIT_FX_KINDS,
+  VALUED_FX_KINDS,
   valueHoldings,
   valueLiabilities,
 } from "@plant/core";
@@ -354,8 +354,8 @@ const firstDay = (
     .sort()
     .at(0) ?? today;
 
-// The quotes closes value holdings and debts at: every dollar kind and the
-// UVA, each instrument held and each instrument a debt is owed in.
+// The quotes closes value holdings and debts at: every dollar kind, the euro,
+// the UVA, each instrument held and each instrument a debt is owed in.
 export function closesNeed(state: ClosesState): QuoteNeed {
   const held = quotesNeeded(allRows(state).map((row) => row.holding));
   const owed = liabilityQuotesNeeded(state.liabilities);
@@ -698,7 +698,7 @@ export function changeBetween(
     const end = pricedAt(state, month.to);
     const start = pricedAt(state, month.from);
     const fx = { ...end.fx };
-    for (const kind of UNIT_FX_KINDS) {
+    for (const kind of VALUED_FX_KINDS) {
       const now = end.fx[kind];
       const was = start.fx[kind];
       if (now && was) fx[kind] = { ...now, sell: was.sell };

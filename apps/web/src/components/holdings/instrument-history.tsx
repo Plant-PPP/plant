@@ -334,12 +334,15 @@ export function InstrumentHistory({
           </p>
         )}
         <div className="ml-auto flex items-center gap-2" data-print="hidden">
-          <InstrumentAlert
-            symbol={instrument.symbol}
-            currency={instrument.currency}
-            held={shown.length > 0}
-            onCreate={onAlert}
-          />
+          {/* Alerts are in pesos or dollars. */}
+          {instrument.currency !== "EUR" && (
+            <InstrumentAlert
+              symbol={instrument.symbol}
+              currency={instrument.currency}
+              held={shown.length > 0}
+              onCreate={onAlert}
+            />
+          )}
           {shown.length > 0 && (
             <UnitSelect
               id={unitId}

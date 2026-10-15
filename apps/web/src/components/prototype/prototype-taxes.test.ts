@@ -13,6 +13,7 @@ it("estimates every year of the prototype's data", () => {
     const report = taxReport(state, {
       year,
       officialBuy: { buy: "1000", date: `${year}-12-30` },
+      euroBuy: { buy: "1100", date: `${year}-12-30` },
       leftOut: leftOutOf(state, state.outOfTaxReport),
       isPlazoFijo: () => true,
     });
@@ -21,6 +22,7 @@ it("estimates every year of the prototype's data", () => {
   const last = taxReport(state, {
     year: "2025",
     officialBuy: { buy: "1000", date: "2025-12-30" },
+    euroBuy: { buy: "1100", date: "2025-12-30" },
     leftOut: leftOutOf(state, state.outOfTaxReport),
     isPlazoFijo: () => true,
   });

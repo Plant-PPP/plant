@@ -1,5 +1,5 @@
 import { compareExact, exactOf, plus, stored, ZERO } from "@plant/shared";
-import { UNIT_FX_KINDS, type UnitFxKind } from "../valuation/denominators";
+import { UNIT_FX_KINDS, type ValuedFxKind } from "../valuation/denominators";
 import {
   type Movement,
   type MovementRates,
@@ -24,7 +24,7 @@ export const isOrderRefusal = (
 
 export type Admission =
   | { ok: true; quantity: string }
-  | { ok: false; code: MovementRefusal; missing?: UnitFxKind[] };
+  | { ok: false; code: MovementRefusal; missing?: ValuedFxKind[] };
 
 // The part of a holding's history a change can reach: the quantity before it
 // (null when the change can reach the very first movement) and every movement
@@ -70,7 +70,7 @@ export const quantityOn = (
   );
 
 // A new or edited movement, before its rates are known to be complete: the
-// dollar rates its date had may be missing some kind.
+// rates its date had may be missing some kind.
 export type MovementDraft = {
   [K in Movement["kind"]]: Omit<Extract<Movement, { kind: K }>, "rates"> & {
     rates: Partial<MovementRates>;
@@ -78,15 +78,17 @@ export type MovementDraft = {
 }[Movement["kind"]];
 
 // Whether a movement can join a holding's history. An edit passes the history
-// without the movement it replaces. Admitted, the movement's rates are
-// complete.
+// without the movement it replaces. Admitted, the movement has every dollar's
+// rate, and the euro's when it is in euros.
 export function admitMovement(
   window: MovementWindow,
   movement: MovementDraft,
   { today }: { today: string },
 ): Admission {
   if (movement.date > today) return { ok: false, code: "future_date" };
-  const missing = UNIT_FX_KINDS.filter((kind) => !movement.rates[kind]);
+  const needed: ValuedFxKind[] =
+    movement.currency === "EUR" ? [...UNIT_FX_KINDS, "eur"] : UNIT_FX_KINDS;
+  const missing = needed.filter((kind) => !movement.rates[kind]);
   if (missing.length > 0) return { ok: false, code: "no_rate", missing };
   return admitMovements({
     prior: window.prior,
