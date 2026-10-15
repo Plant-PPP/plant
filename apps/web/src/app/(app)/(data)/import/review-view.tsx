@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import {
+  assignImportAccount,
   confirmImport,
   confirmImportDebts,
   confirmImportOperations,
 } from "@/app/(app)/(data)/import/actions";
+import { ImportAccountChoice } from "@/components/imports/import-account-choice";
 import { ImportDebtsReview } from "@/components/imports/import-debts-review";
 import { ImportOperationsReview } from "@/components/imports/import-operations-review";
 import { ImportReview } from "@/components/imports/import-review";
@@ -88,12 +90,26 @@ export async function ImportReviewView({ id }: { id: string }) {
       .length,
   });
 
+  // A file uploaded to no account: holdings and operations go into one, so
+  // the review asks for it first. A card statement's debts need none.
+  const accountId = item.accountId;
+  if (accountId === null) {
+    return (
+      <ImportAccountChoice
+        item={item}
+        accounts={ledger.accounts}
+        backHref="/import"
+        actions={{ assign: assignImportAccount }}
+      />
+    );
+  }
+
   if (item.operations) {
     return (
       <ImportOperationsReview
         item={{
           ...item,
-          operations: markLoaded(state, item.accountId, item.operations),
+          operations: markLoaded(state, accountId, item.operations),
         }}
         institution={account?.institution ?? ""}
         instruments={ledger.instruments}
@@ -123,8 +139,8 @@ export async function ImportReviewView({ id }: { id: string }) {
       }
       institution={account?.institution ?? ""}
       instruments={ledger.instruments}
-      held={heldOn(state, item.accountId, heldDate)}
-      cash={cashIn(heldCash, item.accountId)}
+      held={heldOn(state, accountId, heldDate)}
+      cash={cashIn(heldCash, accountId)}
       heldCash={heldCash}
       accounts={
         several
@@ -142,7 +158,7 @@ export async function ImportReviewView({ id }: { id: string }) {
         account && {
           portfolios: ledger.portfolios,
           defaultPortfolioId: account.portfolio.id,
-          elsewhere: heldElsewhere(state, item.accountId),
+          elsewhere: heldElsewhere(state, accountId),
         }
       }
       backHref="/import"

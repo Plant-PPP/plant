@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
 import { PrototypeSettings } from "@/components/prototype/prototype-settings";
-import { buenosAiresDate } from "@plant/shared";
 
-import {
-  type AlertInstrument,
-  AlertsCard,
-} from "@/components/settings/alerts-card";
+import { AlertsCard } from "@/components/settings/alerts-card";
 import { ExportCard } from "@/components/settings/export-card";
 import { TwoFactorCard } from "@/components/settings/two-factor-card";
 import type { PriceAlert } from "@/lib/alerts/alerts";
-import { heldInstruments } from "@/lib/alerts/gain";
 import { readAlerts } from "@/lib/alerts/read";
 import { needsStepUp } from "@/lib/auth/sensitive-session";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { isProductionDeployment } from "@/lib/deployment";
-import { readLedger } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -25,24 +19,16 @@ import { createPriceAlert, deletePriceAlert, exportData } from "./actions";
 
 export const metadata: Metadata = { title: navTitle("/settings") };
 
-// The user's price alerts and the instruments they hold, which an alert can
-// watch; none, logged and flagged, when they could not be read.
+// The user's price alerts; none, logged and flagged, when they could not be
+// read.
 async function userAlerts(): Promise<{
   alerts: PriceAlert[];
-  instruments: AlertInstrument[];
   readFailed: boolean;
 }> {
   const claims = await getSessionClaims();
   try {
     const client = await createClient();
-    const [alerts, { ledger }] = await Promise.all([
-      readAlerts(client),
-      readLedger(client, {
-        today: buenosAiresDate(new Date()),
-        referenceDollar: "mep",
-      }),
-    ]);
-    return { alerts, instruments: heldInstruments(ledger), readFailed: false };
+    return { alerts: await readAlerts(client), readFailed: false };
   } catch (error) {
     serverLog.error(
       "alerts.read",
@@ -54,7 +40,7 @@ async function userAlerts(): Promise<{
       },
       error,
     );
-    return { alerts: [], instruments: [], readFailed: true };
+    return { alerts: [], readFailed: true };
   }
 }
 

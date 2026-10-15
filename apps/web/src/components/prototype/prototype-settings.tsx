@@ -9,7 +9,7 @@ import { DeleteAccountCard } from "@/components/settings/delete-account-card";
 import { ExportCard } from "@/components/settings/export-card";
 import { PreferencesCard } from "@/components/settings/preferences-card";
 import { RatesCard } from "@/components/settings/rates-card";
-import { heldInstruments, withGainFigures } from "@/lib/alerts/gain";
+import { withGainFigures } from "@/lib/alerts/gain";
 import { exportTables } from "@/lib/export/tables";
 
 import { usePrototype } from "./prototype-provider";
@@ -41,7 +41,6 @@ export function PrototypeSettings() {
       />
       <AlertsCard
         alerts={withGainFigures(state, state.priceAlerts)}
-        instruments={heldInstruments(state)}
         onCreate={actions.alerts.create}
         onDelete={actions.alerts.delete}
       />

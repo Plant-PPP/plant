@@ -139,7 +139,6 @@ const sites: {
     act: (reject) => {
       const tree = AlertsCard({
         alerts: [],
-        instruments: [],
         onCreate: reject,
         onDelete: async () => true,
       });
@@ -157,7 +156,6 @@ const sites: {
       click(
         AlertsCard({
           alerts: [alert],
-          instruments: [],
           onCreate: async () => "ok",
           onDelete: reject,
         }),

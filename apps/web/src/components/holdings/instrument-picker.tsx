@@ -1,9 +1,10 @@
 "use client";
 
-import type { Listing } from "@plant/core";
+import type { Listing, ListingMarket } from "@plant/core";
 import { ChevronDownIcon } from "lucide-react";
 import { Popover } from "radix-ui";
 import {
+  Fragment,
   type KeyboardEvent,
   useEffect,
   useRef,
@@ -20,18 +21,75 @@ import { cn } from "@/lib/utils";
 
 import { useInstrumentMarket } from "./instrument-market";
 
-type PickerInstrument = Pick<InstrumentRow, "symbol" | "name">;
+type PickerInstrument = Pick<InstrumentRow, "symbol" | "name"> &
+  Partial<Pick<InstrumentRow, "type" | "currency">>;
+
+// A dollar line of a CEDEAR or bond in pesos: D, MEP; C, cable. The same
+// instrument, traded in dollars.
+export type DollarLine = "D" | "C";
+const LINES: readonly DollarLine[] = ["D", "C"];
+const LINE_NOTES: Record<DollarLine | "", string> = {
+  "": "En pesos",
+  D: "En dólares MEP",
+  C: "En dólares cable",
+};
+
+const hasDollarLines = ({ type, currency }: Partial<Listing>) =>
+  (type === "cedear" || type === "bond") && currency === "ARS";
+
+// The line a value in `currency` is on: a CEDEAR or bond in pesos valued in
+// dollars is on its MEP line, as a dollar line's currency does not say which.
+export const lineOf = (
+  instrument: Partial<Pick<InstrumentRow, "type" | "currency">> | undefined,
+  currency: string,
+): DollarLine | null =>
+  instrument && hasDollarLines(instrument) && currency === "USD" ? "D" : null;
+
+// The currency a choice sets: a dollar line's dollars, else the instrument's.
+export const currencyOfLine = (
+  instrument: Pick<InstrumentRow, "currency"> | undefined,
+  line: DollarLine | null | undefined,
+) => (line ? "USD" : instrument?.currency);
+
+// One choice of the list: an instrument of the catalog or a market listing,
+// on its peso line or a dollar line, named as its market writes it (AAPLD).
+export type PickerOption = {
+  key: string;
+  symbol: string;
+  name: string;
+  line: DollarLine | null;
+  listing: Listing | null;
+};
+
+// Each instrument as the options the picker shows: itself, and with lines
+// its dollar lines.
+export function optionsOf(
+  each: PickerInstrument & { listing?: Listing },
+  lines: boolean,
+): PickerOption[] {
+  const listing = each.listing ?? null;
+  const base = { symbol: each.symbol, name: each.name, listing };
+  const options: PickerOption[] = [{ ...base, key: each.symbol, line: null }];
+  if (lines && hasDollarLines(listing ?? each)) {
+    for (const line of LINES) {
+      options.push({ ...base, key: `${each.symbol}${line}`, line });
+    }
+  }
+  return options;
+}
 
 // Whether an instrument's symbol or name holds the typed text, case and
-// accents ignored.
+// accents ignored, or the text names its dollar line (GOOGLD for GOOGL).
 export function matchesInstrument(
   instrument: PickerInstrument,
   query: string,
 ): boolean {
   const wanted = folded(query.trim());
+  const symbol = folded(instrument.symbol);
   return (
-    folded(instrument.symbol).includes(wanted) ||
-    folded(instrument.name).includes(wanted)
+    symbol.includes(wanted) ||
+    folded(instrument.name).includes(wanted) ||
+    (/[dc]$/.test(wanted) && symbol === wanted.slice(0, -1))
   );
 }
 
@@ -43,6 +101,23 @@ export const listingDetail = ({ type, currency, market }: Listing): string =>
     currency,
     market === "byma" ? "BYMA" : "Cripto",
   ].join(" · ");
+
+// What an option shows under its name: a market listing's type, currency
+// and market, and the currency of a line where the instrument has lines.
+export function optionDetail(
+  option: PickerOption,
+  lines: boolean,
+  instrument?: PickerInstrument,
+): string | null {
+  const { listing } = option;
+  const lined = lines && hasDollarLines(listing ?? instrument ?? {});
+  const note = lined ? LINE_NOTES[option.line ?? ""] : null;
+  if (!listing) return note;
+  const market = listing.market === "byma" ? "BYMA" : "Cripto";
+  return note
+    ? [HOLDING_CLASS_LABELS[listing.type], note, market].join(" · ")
+    : listingDetail(listing);
+}
 
 // The market listings the picker offers: those the catalog does not have yet.
 export const newListings = (
@@ -64,6 +139,8 @@ const MARKET_FAILURES: Record<string, string> = {
   invalid: "Escribí un símbolo o un nombre más corto.",
   not_listed: "Ese instrumento ya no figura en el mercado.",
   failed: "No pudimos agregarlo. Probá de nuevo más tarde.",
+  byma: "No pudimos buscar en BYMA. Probá de nuevo en un rato.",
+  crypto: "No pudimos buscar cripto. Probá de nuevo en un rato.",
   rejected: "No pudimos buscar en el mercado. Probá de nuevo en un rato.",
 };
 
@@ -140,6 +217,9 @@ export function InstrumentPicker({
   placeholder,
   autoFocus,
   onAdded,
+  lines = false,
+  line = null,
+  markets,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: PickerName & {
@@ -147,11 +227,22 @@ export function InstrumentPicker({
   instruments: readonly PickerInstrument[];
   value: string;
   // added is the instrument a listing just added, which the page's list does
-  // not hold yet.
-  onChange: (symbol: string, added?: InstrumentRow) => void;
+  // not hold yet; line the dollar line chosen, with lines.
+  onChange: (
+    symbol: string,
+    added?: InstrumentRow,
+    line?: DollarLine | null,
+  ) => void;
   placeholder: string;
   autoFocus?: boolean;
   onAdded?: (instrument: InstrumentRow) => void;
+  // Whether a CEDEAR or bond in pesos is offered on its dollar lines too,
+  // where the line sets the currency of what is typed (an operation).
+  lines?: boolean;
+  // The dollar line of the value, with lines.
+  line?: DollarLine | null;
+  // The markets the search looks in; all of them when not given.
+  markets?: readonly ListingMarket[];
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 }) {
@@ -167,14 +258,28 @@ export function InstrumentPicker({
   const [marketError, setMarketError] = useState<string | null>(null);
   const [adding, startAdding] = useTransition();
   const shown = open
-    ? instruments.filter((each) => matchesInstrument(each, query))
+    ? instruments
+        .filter((each) => matchesInstrument(each, query))
+        .flatMap((each) => optionsOf(each, lines))
     : [];
   const marketShown =
     open && searchMarket && market && market.query === query.trim()
-      ? newListings(market.listings, instruments)
+      ? newListings(market.listings, instruments).flatMap((listing) =>
+          optionsOf({ ...listing, listing }, lines),
+        )
       : [];
-  const optionCount = shown.length + marketShown.length;
+  const options = [...shown, ...marketShown];
+  const details = options.map((option) =>
+    optionDetail(
+      option,
+      lines,
+      instruments.find((each) => each.symbol === option.symbol),
+    ),
+  );
+  const optionCount = options.length;
   const chosen = instruments.find((each) => each.symbol === value);
+  const chosenKey = `${value}${line ?? ""}`;
+  const marketsKey = (markets ?? []).join(",");
 
   // The market is searched once typing pauses; an answer to an older text is
   // dropped.
@@ -183,12 +288,17 @@ export function InstrumentPicker({
     if (!open || !searchMarket || wanted.length < MARKET_QUERY_MIN) return;
     let current = true;
     const timer = setTimeout(() => {
-      void settle(searchMarket.search(wanted)).then((result) => {
+      const asked =
+        marketsKey === ""
+          ? undefined
+          : (marketsKey.split(",") as ListingMarket[]);
+      void settle(searchMarket.search(wanted, asked)).then((result) => {
         if (!current) return;
         if (result === "rejected") {
           setMarketError(MARKET_FAILURES.rejected!);
         } else if (result.ok) {
-          setMarketError(null);
+          const [failed] = result.failed;
+          setMarketError(failed ? (MARKET_FAILURES[failed] ?? null) : null);
           setMarket({ query: wanted, listings: result.listings });
         } else {
           setMarketError(MARKET_FAILURES[result.code] ?? null);
@@ -199,18 +309,14 @@ export function InstrumentPicker({
       current = false;
       clearTimeout(timer);
     };
-  }, [open, searchMarket, wanted]);
+  }, [open, searchMarket, wanted, marketsKey]);
   const valueId = `${id}-value`;
   const nameId = labelId ?? `${id}-label`;
   const listId = `${id}-list`;
-  const optionId = (symbol: string) => `${id}-${symbol}`;
-  const marketId = (symbol: string) => `${id}-market-${symbol}`;
-  const activeId =
-    active < shown.length
-      ? optionId(shown[active]!.symbol)
-      : marketShown[active - shown.length]
-        ? marketId(marketShown[active - shown.length]!.symbol)
-        : undefined;
+  const optionId = (option: PickerOption) =>
+    `${id}-${option.listing ? "market-" : ""}${option.key}`;
+  const activeOption = options[active];
+  const activeId = activeOption ? optionId(activeOption) : undefined;
 
   const searchInput = useRef<HTMLInputElement>(null);
   // How the active option scrolls into view: to the top on opening, as Radix
@@ -226,7 +332,9 @@ export function InstrumentPicker({
         Math.max(
           0,
           search === ""
-            ? instruments.findIndex((each) => each.symbol === value)
+            ? instruments
+                .flatMap((each) => optionsOf(each, lines))
+                .findIndex((each) => each.key === chosenKey)
             : 0,
         ),
       );
@@ -234,12 +342,16 @@ export function InstrumentPicker({
     setOpen(next);
   }
 
-  function choose(symbol: string) {
-    onChange(symbol);
+  function choose(option: PickerOption) {
+    if (option.listing) {
+      chooseListing(option.listing, option.line);
+      return;
+    }
+    onChange(option.symbol, undefined, option.line);
     setOpen(false);
   }
 
-  function chooseListing(listing: Listing) {
+  function chooseListing(listing: Listing, picked: DollarLine | null) {
     if (!onAdded || !searchMarket || adding) return;
     setMarketError(null);
     startAdding(async () => {
@@ -255,14 +367,9 @@ export function InstrumentPicker({
         return;
       }
       onAdded(result.instrument);
-      onChange(result.instrument.symbol, result.instrument);
+      onChange(result.instrument.symbol, result.instrument, picked);
       setOpen(false);
     });
-  }
-
-  function chooseAt(index: number) {
-    if (index < shown.length) choose(shown[index]!.symbol);
-    else chooseListing(marketShown[index - shown.length]!);
   }
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -273,7 +380,7 @@ export function InstrumentPicker({
       followActive.current = "nearest";
       setActive(action.active);
     }
-    if (action.kind === "choose") chooseAt(action.index);
+    if (action.kind === "choose") choose(options[action.index]!);
     if (action.kind === "close") setOpen(false);
   }
 
@@ -306,7 +413,9 @@ export function InstrumentPicker({
           </span>
         )}
         <span id={valueId} className="truncate">
-          {chosen ? instrumentLabel(chosen.symbol, chosen.name) : placeholder}
+          {chosen
+            ? instrumentLabel(`${chosen.symbol}${line ?? ""}`, chosen.name)
+            : placeholder}
         </span>
         <ChevronDownIcon
           aria-hidden
@@ -374,72 +483,57 @@ export function InstrumentPicker({
             // left, so the active option can scroll into view on opening.
             className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height,21rem)-3rem))] overflow-y-auto"
           >
-            {shown.map((each, index) => (
-              <li
-                key={each.symbol}
-                id={optionId(each.symbol)}
-                role="option"
-                aria-selected={each.symbol === value}
-                data-active={index === active || undefined}
-                // The active option scrolls into view once it is in the page,
-                // which the portal mounts a render after it opens.
-                ref={
-                  index === active
-                    ? (option) => {
-                        if (option && followActive.current) {
-                          option.scrollIntoView({
-                            block: followActive.current,
-                          });
-                          // To the top once per opening: a later render keeps
-                          // it in view without pulling it back up.
-                          followActive.current = "nearest";
+            {options.map((option, index) => (
+              <Fragment key={optionId(option)}>
+                {option.listing && index === shown.length && (
+                  <li
+                    role="presentation"
+                    className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground"
+                  >
+                    En el mercado
+                  </li>
+                )}
+                <li
+                  id={optionId(option)}
+                  role="option"
+                  aria-selected={!option.listing && option.key === chosenKey}
+                  aria-disabled={(option.listing && adding) || undefined}
+                  data-active={index === active || undefined}
+                  // The active option scrolls into view once it is in the
+                  // page, which the portal mounts a render after it opens.
+                  ref={
+                    index === active
+                      ? (element) => {
+                          if (element && followActive.current) {
+                            element.scrollIntoView({
+                              block: followActive.current,
+                            });
+                            // To the top once per opening: a later render
+                            // keeps it in view without pulling it back up.
+                            followActive.current = "nearest";
+                          }
                         }
-                      }
-                    : undefined
-                }
-                // Keeps focus in the search while the click picks.
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => {
-                  followActive.current = null;
-                  setActive(index);
-                }}
-                onClick={() => choose(each.symbol)}
-                className="cursor-default truncate rounded-sm px-2 py-1.5 text-sm aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
-              >
-                {instrumentLabel(each.symbol, each.name)}
-              </li>
-            ))}
-            {marketShown.length > 0 && (
-              <li
-                role="presentation"
-                className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground"
-              >
-                En el mercado
-              </li>
-            )}
-            {marketShown.map((listing, index) => (
-              <li
-                key={`market-${listing.symbol}`}
-                id={marketId(listing.symbol)}
-                role="option"
-                aria-selected={false}
-                aria-disabled={adding || undefined}
-                data-active={shown.length + index === active || undefined}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => {
-                  followActive.current = null;
-                  setActive(shown.length + index);
-                }}
-                onClick={() => chooseListing(listing)}
-                className="grid cursor-default rounded-sm px-2 py-1.5 text-sm data-active:bg-accent data-active:text-accent-foreground"
-              >
-                <span className="truncate">
-                  {instrumentLabel(listing.symbol, listing.name)}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {listingDetail(listing)}
-                </span>
-              </li>
+                      : undefined
+                  }
+                  // Keeps focus in the search while the click picks.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseMove={() => {
+                    followActive.current = null;
+                    setActive(index);
+                  }}
+                  onClick={() => choose(option)}
+                  className="grid cursor-default rounded-sm px-2 py-1.5 text-sm aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
+                >
+                  <span className="truncate">
+                    {instrumentLabel(option.key, option.name)}
+                  </span>
+                  {details[index] && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {details[index]}
+                    </span>
+                  )}
+                </li>
+              </Fragment>
             ))}
           </ul>
         </Popover.Content>

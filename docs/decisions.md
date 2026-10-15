@@ -13,6 +13,17 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **No euro history before launch**: dolarapi gives today's rate, so a euro holding has no value before the first daily read, and a euro movement dated earlier is refused.
 - **Out of scope**: a euro view unit, manual euro rates, instruments, prices and alerts in euros (alerts stay ARS and USD), a printed euro total on imports, and euros from connections (exchanges still count a euro balance as skipped).
 
+## 2026-10-14 · Price alerts from an asset's page
+
+- **An instrument's alert is set from its page**, with the bell beside the unit select: on its price in its own currency, or, while the user holds it, on its gain or loss over their average cost. The bell shows whether or not the user holds it.
+- **Ajustes' alerts card sets only a dollar's alert**, and lists and deletes every alert, a dollar's or an instrument's. Its select no longer offers instruments: with none held it showed only dollars while the card spoke of bonds and CEDEARs.
+
+## 2026-10-14 · Uploads with no account
+
+- **A file may be uploaded to no account.** A card statement or a loan's belongs to no broker account, so Cargar's account select starts at "Sin cuenta (deudas, tarjetas)" instead of the first account, and `uploaded_documents.source_connection_id` is nullable. The composite foreign key still holds an account, when there is one, to the document's user; the same file twice with no account is refused by a partial unique index, as it is in one account.
+- **The reading decides, not the upload.** A file with no account is read like any other, with no institution: a spreadsheet's column mapping is then made every time and never kept, since mappings are kept per institution. A card statement's debts are reviewed and confirmed as before, with no account.
+- **Holdings and operations from a file with no account ask for the account at their review**, before the usual review: the user picks one of their open accounts and the review goes on against it. The account is set once: `authenticated` may update only `source_connection_id`, and a trigger refuses changing one already set or taking it away (42501). An account that holds the same file already answers `duplicate`. Confirming holdings or operations of a file still without one answers `not_found`.
+
 ## 2026-10-14 · Findings from a full-repository review
 
 - **Imported cash is a cash holding.** A provider's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`), one per currency: balances of several accounts in a currency (IOL's, IBKR's) are added up. The review names it as Activos does ("Efectivo USD") with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the cash holdings the review read, which it sends back with the rows, so cash edited in between is refused as stale:
@@ -88,6 +99,13 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **An operation is imported once, by the provider's number.** Each operation carries the provider's id as its `reference` (IOL's order `numero`, Wallbit's `uuid`, IBKR's `tradeID` or `transactionID`). The review marks one the account already holds under that number and does not offer to bring it back, and confirming discards it again on the server, so a second tab or an overlapping period writes nothing twice. One with no number is matched by day, kind, instrument and units, and the user decides.
 - **IOL's operations**: executed buys and sells from `/api/v2/operaciones` (`filtro.estado=terminadas`), what IOL executed over what was ordered, the currency from the order or else its market; any other kind of order is skipped. Read at medium confidence: the fields come from IOL's documentation, not from an account that had operations.
 - **A provider's institution**: Binance, Wallbit, Interactive Brokers (or IBKR), Nexo, and IOL (or InvertirOnline) by the account's name; the server refuses credentials for an account of another institution.
+
+## 2026-10-14 · The market search by account, dollar lines and Kraken's pairs
+
+- **An account's institution picks the markets searched**: a crypto exchange (Binance, Nexo, Bitso, Ripio and the like) searches crypto, an Argentine broker (IOL, PPI, Balanz, Cocos and the like) BYMA, any other institution both (`lib/instruments/markets.ts`). A market whose provider did not answer is named under the results ("No pudimos buscar en BYMA") instead of leaving it out in silence.
+- **A crypto is offered only when Kraken trades it against the dollar**, read from Kraken's `AssetPairs` (kept six hours per instance), so CoinGecko's tokenized stocks and look-alike coins are left out and every crypto offered is one the quotes job can price.
+- **Where the line sets the currency, a CEDEAR or bond in pesos is offered on its dollar lines too**: AAPL, AAPLD (MEP) and AAPLC (cable), each the same instrument. An operation or an imported row picked on a dollar line is in dollars; MEP and cable both read as dollars, so a row in dollars shows as the MEP line. A new holding offers the instrument alone: its units are the same on every line. Typing a dollar line (GOOGLD) finds its instrument.
+- **Kraken asks each pair alone when it refuses the batch** with an error that is not transient (a pair it no longer lists), so one delisted coin leaves only itself unread.
 
 ## 2026-10-14 · Searching the market for instruments
 

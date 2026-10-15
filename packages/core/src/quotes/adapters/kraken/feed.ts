@@ -3,7 +3,9 @@ import { z } from "zod";
 
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import {
+  feedReadCode,
   parseResponse,
+  type QuoteFeedCode,
   QuoteFeedError,
   type RawQuoteRows,
 } from "../../contract/quote";
@@ -82,8 +84,29 @@ export function parse(
   };
 }
 
+async function readEach(
+  getJson: GetJson,
+  wanted: readonly string[],
+  now: Date,
+): Promise<RawQuoteRows> {
+  const prices: RawQuoteRows["prices"] = [];
+  const unread: { key: string; code: QuoteFeedCode }[] = [];
+  for (const symbol of wanted) {
+    try {
+      prices.push(
+        ...parse(await getJson(tickerUrl([symbol])), now, [symbol]).prices,
+      );
+    } catch (error) {
+      const code = feedReadCode(error);
+      if (code === null) throw error;
+      unread.push({ key: symbol, code });
+    }
+  }
+  return { fxRates: [], prices, unread };
+}
+
 // symbols are the catalog's crypto, which the server adds only once Kraken
-// quotes it in dollars: one pair Kraken does not know fails the request.
+// quotes it in dollars.
 export function createKrakenFeed(
   getJson: GetJson,
   symbols: () => Promise<readonly string[]>,
@@ -94,7 +117,20 @@ export function createKrakenFeed(
     async readRaw(now) {
       const wanted = [...new Set(await symbols())].sort();
       if (wanted.length === 0) return { fxRates: [], prices: [] };
-      return parse(await getJson(tickerUrl(wanted)), now, wanted);
+      try {
+        return parse(await getJson(tickerUrl(wanted)), now, wanted);
+      } catch (error) {
+        // One pair Kraken no longer knows refuses the whole request: each
+        // pair is then asked alone, and the ones it refuses are unread.
+        if (
+          wanted.length === 1 ||
+          !(error instanceof QuoteFeedError) ||
+          error.code !== "provider_error"
+        ) {
+          throw error;
+        }
+        return readEach(getJson, wanted, now);
+      }
     },
   };
 }

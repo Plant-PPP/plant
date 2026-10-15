@@ -3,6 +3,7 @@ import type { QuoteSnapshot } from "@plant/core";
 import {
   alertLine,
   alertQuote,
+  instrumentAlert,
   meets,
   newAlertSchema,
   type PriceAlert,
@@ -136,4 +137,33 @@ it("takes a gain alert with a percent, and a loss under 100 %", () => {
 
 it("never meets an alert with no figure yet", () => {
   expect(meets(waiting({ threshold: null }), "999999")).toBe(false);
+});
+
+describe("an instrument's alert from its page", () => {
+  const AL30 = { symbol: "AL30", currency: "USD" } as const;
+
+  it("watches its price in its own currency", () => {
+    expect(instrumentAlert("price", AL30, "below", "60.5")).toEqual({
+      subjectKind: "instrument",
+      subject: "AL30",
+      direction: "below",
+      threshold: "60.5",
+      currency: "USD",
+    });
+  });
+
+  it("watches its gain or loss in percent", () => {
+    expect(instrumentAlert("gain", AL30, "above", "20")).toEqual({
+      subjectKind: "gain",
+      subject: "AL30",
+      direction: "above",
+      percent: "20",
+    });
+  });
+
+  it("takes no figure that is not one, nor a loss of 100 % or more", () => {
+    expect(instrumentAlert("price", AL30, "above", null)).toBeNull();
+    expect(instrumentAlert("price", AL30, "above", "0")).toBeNull();
+    expect(instrumentAlert("gain", AL30, "below", "100")).toBeNull();
+  });
 });

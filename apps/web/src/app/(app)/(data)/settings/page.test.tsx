@@ -14,10 +14,6 @@ jest.mock("@/lib/request-id-server", () => ({
 jest.mock("@/lib/alerts/read", () => ({
   readAlerts: (...args: unknown[]) => readAlerts(...args),
 }));
-jest.mock("@/lib/ledger/read", () => ({
-  readLedger: async () => ({ ledger: {}, truncated: false }),
-}));
-jest.mock("@/lib/alerts/gain", () => ({ heldInstruments: () => [] }));
 jest.mock("./actions", () => ({}));
 jest.mock("@/components/settings/two-factor-card", () => ({
   TwoFactorCard: () => null,
