@@ -7,7 +7,9 @@ import {
   confirmImportRows as confirmRows,
 } from "@/lib/imports/confirm-write";
 import {
+  type AccountResult,
   acceptTerms as accept,
+  assignImportAccount as assign,
   type FinishResult,
   finishUpload as finish,
   type StartResult,
@@ -23,6 +25,12 @@ export async function startUpload(input: unknown): Promise<StartResult> {
 
 export async function finishUpload(input: unknown): Promise<FinishResult> {
   return finish(input);
+}
+
+export async function assignImportAccount(
+  input: unknown,
+): Promise<AccountResult> {
+  return assign(input);
 }
 
 export async function acceptTerms(): Promise<{ ok: boolean }> {

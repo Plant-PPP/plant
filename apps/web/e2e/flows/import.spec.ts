@@ -11,6 +11,10 @@ test("a file uploaded on Cargar is read, reviewed and confirmed", async ({
   await page.getByRole("link", { name: "Cargar" }).click();
   await expect(page).toHaveURL(/\/import$/);
 
+  // A broker's statement goes into an account; the select starts at none.
+  await page.getByRole("combobox", { name: "Cuenta" }).click();
+  await page.getByRole("option").nth(1).click();
+
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Elegir archivos" }).click();
   await (

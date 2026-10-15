@@ -228,7 +228,7 @@ export function exportTables(data: ExportData): ExportTable[] {
     rows: data.imports.map((item) => [
       item.createdOn,
       item.fileName,
-      account(item.accountId),
+      item.accountId === null ? null : account(item.accountId),
       IMPORT_STATUS_LABELS[item.status],
       item.documentDate,
     ]),

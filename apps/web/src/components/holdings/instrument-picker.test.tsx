@@ -1,8 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  currencyOfLine,
   InstrumentPicker,
+  lineOf,
   listingDetail,
+  optionDetail,
+  optionsOf,
   matchesInstrument,
   newListings,
   searchKey,
@@ -21,6 +25,12 @@ it.each([
   ["bonar", false],
 ])("matches %j against GD30: %s", (query, expected) => {
   expect(matchesInstrument(GD30, query)).toBe(expected);
+});
+
+it("matches an instrument by its dollar line", () => {
+  expect(matchesInstrument(GD30, "gd30d")).toBe(true);
+  expect(matchesInstrument(GD30, "GD30C")).toBe(true);
+  expect(matchesInstrument(GD30, "gd31d")).toBe(false);
 });
 
 it("ignores accents in the query and the name", () => {
@@ -251,4 +261,58 @@ it("offers only the listings the catalog does not have", () => {
   expect(newListings([GGAL, { ...GGAL, symbol: "GD30" }], [GD30, FCI])).toEqual(
     [GGAL],
   );
+});
+
+const AAPL = {
+  symbol: "AAPL",
+  name: "Apple",
+  type: "cedear",
+  currency: "ARS",
+} as const;
+
+it("offers a CEDEAR in pesos on its MEP and cable lines, with lines", () => {
+  expect(optionsOf(AAPL, true).map(({ key, line }) => [key, line])).toEqual([
+    ["AAPL", null],
+    ["AAPLD", "D"],
+    ["AAPLC", "C"],
+  ]);
+  expect(optionsOf(AAPL, false).map(({ key }) => key)).toEqual(["AAPL"]);
+});
+
+it("offers a dollar bond and a crypto on one line only", () => {
+  const GD30D = {
+    symbol: "GD30",
+    name: "Global 2030",
+    type: "bond",
+    currency: "USD",
+  } as const;
+  const BTC = {
+    symbol: "BTC",
+    name: "Bitcoin",
+    type: "crypto",
+    currency: "USD",
+  } as const;
+  expect(optionsOf(GD30D, true).map(({ key }) => key)).toEqual(["GD30"]);
+  expect(optionsOf(BTC, true).map(({ key }) => key)).toEqual(["BTC"]);
+});
+
+it("names each line's currency, and a market line's market", () => {
+  const [peso, mep, cable] = optionsOf(AAPL, true);
+  expect(optionDetail(peso!, true, AAPL)).toBe("En pesos");
+  expect(optionDetail(mep!, true, AAPL)).toBe("En dólares MEP");
+  expect(optionDetail(cable!, true, AAPL)).toBe("En dólares cable");
+  const listing = { ...AAPL, market: "byma" } as const;
+  const [, marketMep] = optionsOf({ ...listing, listing }, true);
+  expect(optionDetail(marketMep!, true)).toBe("CEDEAR · En dólares MEP · BYMA");
+  expect(
+    optionDetail(optionsOf({ ...listing, listing }, false)[0]!, false),
+  ).toBe("CEDEAR · ARS · BYMA");
+});
+
+it("reads a CEDEAR valued in dollars as its MEP line", () => {
+  expect(lineOf(AAPL, "USD")).toBe("D");
+  expect(lineOf(AAPL, "ARS")).toBeNull();
+  expect(lineOf({ type: "crypto", currency: "USD" }, "USD")).toBeNull();
+  expect(currencyOfLine(AAPL, "C")).toBe("USD");
+  expect(currencyOfLine(AAPL, null)).toBe("ARS");
 });

@@ -36,7 +36,7 @@ export function PrototypeImports() {
 export function PrototypeImportReview({ id }: { id: string }) {
   const { state, actions } = usePrototype();
   const item = state.imports.find((each) => each.id === id);
-  if (!item || item.status !== "ready") notFound();
+  if (!item || item.status !== "ready" || item.accountId === null) notFound();
   const account = state.accounts.find((each) => each.id === item.accountId);
   return (
     <ImportReview

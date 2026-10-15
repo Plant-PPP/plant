@@ -9,7 +9,11 @@ import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { useCatalog } from "@/components/holdings/instrument-market";
-import { InstrumentPicker } from "@/components/holdings/instrument-picker";
+import {
+  InstrumentPicker,
+  lineOf,
+} from "@/components/holdings/instrument-picker";
+import { marketsFor } from "@/lib/instruments/markets";
 import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
@@ -424,8 +428,29 @@ export function ImportOperationsReview({
                         aria-invalid={invalid(index, "symbol")}
                         instruments={instruments}
                         value={row.symbol}
-                        onChange={(symbol) => change(row.id, { symbol })}
+                        onChange={(symbol, added, line) => {
+                          const instrument =
+                            added ??
+                            instruments.find((each) => each.symbol === symbol);
+                          const currency = line
+                            ? "USD"
+                            : lineOf(instrument, "USD")
+                              ? instrument?.currency
+                              : undefined;
+                          change(row.id, {
+                            symbol,
+                            ...(currency && { currency }),
+                          });
+                        }}
                         onAdded={addToCatalog}
+                        markets={marketsFor(institution)}
+                        lines
+                        line={lineOf(
+                          instruments.find(
+                            (each) => each.symbol === row.symbol,
+                          ),
+                          row.currency,
+                        )}
                         placeholder="Elegí un activo"
                       />
                     ) : (
