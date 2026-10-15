@@ -68,7 +68,7 @@ it("creates a debt with the fields core admits", async () => {
     ["from", "liabilities"],
     ["insert", MORTGAGE],
   ]);
-  expect(revalidatePath).toHaveBeenCalledWith("/debts");
+  expect(revalidatePath).toHaveBeenCalledWith("/debts", "layout");
   expect(lines.at(-1)).toMatchObject({
     event: "liabilities.write",
     "plant.liability.action": "create_liability",
@@ -137,7 +137,7 @@ it("fails on anything else, and logs it", async () => {
     level: "error",
     "plant.outcome": "failed",
   });
-  expect(revalidatePath).toHaveBeenCalledWith("/debts");
+  expect(revalidatePath).toHaveBeenCalledWith("/debts", "layout");
 });
 
 it("reads a debt guard's refusal as invalid input, warned", async () => {

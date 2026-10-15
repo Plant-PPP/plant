@@ -7,6 +7,8 @@ import type { Currency } from "@plant/shared";
 
 import {
   amountInput,
+  formatAmount,
+  formatQuantity,
   parseAmountInput,
   percentInput,
   percentToFraction,
@@ -79,6 +81,7 @@ export function withKind(fields: DebtFields, kind: LiabilityKind): DebtFields {
     kind,
     currency: kind === "usd_debt" ? "USD" : fields.currency,
     uva: (kind === "mortgage" || kind === "personal_loan") && fields.uva,
+    accrues: kind === "crypto_loan" || fields.accrues,
   };
 }
 
@@ -123,3 +126,13 @@ export const unitOf = (
   debt: Pick<Liability, "currency" | "uva" | "instrument_symbol">,
 ): string =>
   debt.instrument_symbol ?? (debt.uva ? "UVA" : debt.currency) ?? "—";
+
+// An amount in a debt's own unit: "38.500 UVA", "US$ 3.000,00".
+export function debtAmount(
+  debt: Pick<Liability, "currency" | "uva" | "instrument_symbol">,
+  amount: string,
+): string {
+  return debt.currency !== null && !debt.uva
+    ? formatAmount(amount, debt.currency)
+    : `${formatQuantity(amount)} ${unitOf(debt)}`;
+}

@@ -3,6 +3,7 @@ import {
   type Charge,
   isTrade,
   type Liability,
+  type LiabilityEvent,
   type ManualPrice,
   type Movement,
   type MovementDraft,
@@ -40,6 +41,10 @@ export type Fixtures = {
   quotes: StoredQuotes;
   manualPrices: ManualPrice[];
   liabilities: Liability[];
+  // Each debt's events, by debt.
+  liabilityEvents?: Record<string, LiabilityEvent[]>;
+  // The holdings pledged for each debt, by debt.
+  liabilityCollateral?: Record<string, string[]>;
   // What each placement at a rate is, by holding id, when not a plazo fijo.
   placements?: Record<string, PlacementKind>;
   // Each property's sheet, by holding id.
@@ -548,7 +553,60 @@ const liabilitiesFor = (today: string): Liability[] => [
     opened_on: null,
     anchored_on: today,
   },
+  {
+    id: COLLATERAL_LOAN,
+    kind: "usd_debt",
+    label: "Préstamo con garantía",
+    lender: "Nexo",
+    currency: "USD",
+    uva: false,
+    instrument_symbol: null,
+    balance: "50000",
+    installment: null,
+    annual_rate: "0.12",
+    installments_left: null,
+    next_due_on: null,
+    matures_on: null,
+    accrues: true,
+    opened_on: addDays(today, -60),
+    anchored_on: addDays(today, -60),
+  },
 ];
+
+const COLLATERAL_LOAN = "e5000000-0000-4000-8000-000000000005";
+
+// The loan backed by bitcoin: its rate went up a month ago, and a payment
+// came from the dollars at Cocos ten days ago.
+const liabilityEventsFor = (
+  today: string,
+): Record<string, LiabilityEvent[]> => ({
+  [COLLATERAL_LOAN]: [
+    {
+      id: "e6000000-0000-4000-8000-000000000002",
+      liability_id: COLLATERAL_LOAN,
+      kind: "payment",
+      date: addDays(today, -10),
+      amount: "1000",
+      annual_rate: null,
+      cash_holding_id: "c2000000-0000-4000-8000-000000000002",
+      takes_cash: false,
+      settles: false,
+      created_at: `${addDays(today, -10)}T15:00:00.000Z`,
+    },
+    {
+      id: "e6000000-0000-4000-8000-000000000001",
+      liability_id: COLLATERAL_LOAN,
+      kind: "rate_change",
+      date: addDays(today, -30),
+      amount: null,
+      annual_rate: "0.15",
+      cash_holding_id: null,
+      takes_cash: false,
+      settles: false,
+      created_at: `${addDays(today, -30)}T15:00:00.000Z`,
+    },
+  ],
+});
 
 const OTHER_HOLDINGS: [id: string, columns: Record<string, unknown>, Placed][] =
   [
@@ -763,6 +821,10 @@ export function buildFixtures(today: string): Fixtures {
     quotes,
     manualPrices: manualPricesFor(today),
     liabilities: liabilitiesFor(today),
+    liabilityEvents: liabilityEventsFor(today),
+    liabilityCollateral: {
+      [COLLATERAL_LOAN]: ["c1000000-0000-4000-8000-000000000001"],
+    },
     placements: Object.fromEntries(
       PLACEMENTS.flatMap(([id, , , , kind]) =>
         kind === "fixed_term" ? [] : [[id, kind]],

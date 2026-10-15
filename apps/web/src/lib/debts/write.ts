@@ -110,6 +110,6 @@ export async function writeLiability(
   if (outcome === "failed") serverLog.error(DEBTS_WRITE_EVENT, line, failure);
   else if (outcome === "ok") serverLog.info(DEBTS_WRITE_EVENT, line);
   else serverLog.warn(DEBTS_WRITE_EVENT, line);
-  if (outcome !== "invalid") revalidatePath("/debts");
+  if (outcome !== "invalid") revalidatePath("/debts", "layout");
   return result;
 }

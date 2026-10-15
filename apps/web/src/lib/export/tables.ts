@@ -8,6 +8,7 @@ import {
 import { exactOf, plus, stored } from "@plant/shared";
 
 import { LIABILITY_KIND_LABELS, unitOf } from "@/components/debts/debt-fields";
+import { DEBT_EVENT_LABELS } from "@/lib/debts/labels";
 import {
   ASSET_CLASS_LABELS,
   MOVEMENT_KIND_LABELS,
@@ -47,12 +48,6 @@ export const EXPORT_KINDS = [
 ] as const;
 
 const [HOLDINGS, MOVEMENTS, DEBTS, DEBT_EVENTS, IMPORTS] = EXPORT_KINDS;
-
-const DEBT_EVENT_LABELS: Record<LiabilityEvent["kind"], string> = {
-  rate_change: "Cambio de tasa",
-  payment: "Pago",
-  adjustment: "Ajuste de saldo",
-};
 
 const yesNo = (on: boolean) => (on ? "Sí" : "No");
 

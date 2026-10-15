@@ -1,6 +1,10 @@
 "use client";
 
-import { LIABILITY_KINDS, liabilityInputSchema } from "@plant/core";
+import {
+  LIABILITY_KINDS,
+  liabilityFieldsFor,
+  liabilityInputSchema,
+} from "@plant/core";
 import { Constants } from "@plant/shared";
 import { Info, Landmark } from "lucide-react";
 import { useId, useState } from "react";
@@ -67,6 +71,8 @@ export function DebtDialog({
   const canUva =
     (fields.kind === "mortgage" || fields.kind === "personal_loan") &&
     fields.currency === "ARS";
+  const shown = liabilityFieldsFor(fields);
+  const accrues = shown.accrues && fields.accrues;
   const unit = unitOf({
     currency: crypto ? null : fields.currency,
     uva: canUva && fields.uva,
@@ -202,6 +208,39 @@ export function DebtDialog({
             required: true,
           })}
         </div>
+        {shown.accrues && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor={`${id}-accrues`}>Acumula interés</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info
+                    aria-label="Qué es"
+                    className="text-muted-foreground size-3.5"
+                  />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Para un préstamo sin cuota, como uno cripto o entre personas:
+                  el saldo crece todos los días con la tasa.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Switch
+              id={`${id}-accrues`}
+              checked={fields.accrues}
+              onCheckedChange={set("accrues")}
+            />
+          </div>
+        )}
+        {accrues && (
+          <div className="grid grid-cols-2 gap-4">
+            {text("openedOn", "Saldo al", { type: "date", required: true })}
+            {text("rate", "Tasa anual %", {
+              inputMode: "decimal",
+              required: true,
+            })}
+          </div>
+        )}
         {canUva && (
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1.5">
@@ -227,7 +266,11 @@ export function DebtDialog({
           </div>
         )}
         <MoreFields
-          label="Con quién, cuota, tasa y vencimientos"
+          label={
+            accrues
+              ? "Con quién y cuándo termina"
+              : "Con quién, cuota, tasa y vencimientos"
+          }
           defaultOpen={(
             [
               "lender",
@@ -236,23 +279,38 @@ export function DebtDialog({
               "installmentsLeft",
               "nextDueOn",
               "maturesOn",
+              "openedOn",
             ] as const
           ).some((key) => initial[key] !== "")}
         >
-          <div className="grid grid-cols-2 gap-4">
-            {text("lender", "Con quién", { placeholder: "Banco, persona…" })}
-            {text("installment", `Cuota (${unit})`, { inputMode: "decimal" })}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {text("rate", "Tasa anual %", { inputMode: "decimal" })}
-            {text("installmentsLeft", "Cuotas que quedan", {
-              inputMode: "numeric",
-            })}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {text("nextDueOn", "Próximo vencimiento", { type: "date" })}
-            {text("maturesOn", "Termina", { type: "date" })}
-          </div>
+          {accrues ? (
+            <div className="grid grid-cols-2 gap-4">
+              {text("lender", "Con quién", { placeholder: "Banco, persona…" })}
+              {text("maturesOn", "Termina", { type: "date" })}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                {text("lender", "Con quién", {
+                  placeholder: "Banco, persona…",
+                })}
+                {text("installment", `Cuota (${unit})`, {
+                  inputMode: "decimal",
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {text("rate", "Tasa anual %", { inputMode: "decimal" })}
+                {text("installmentsLeft", "Cuotas que quedan", {
+                  inputMode: "numeric",
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {text("nextDueOn", "Próximo vencimiento", { type: "date" })}
+                {text("maturesOn", "Termina", { type: "date" })}
+              </div>
+              {shown.accrues && text("openedOn", "Saldo al", { type: "date" })}
+            </>
+          )}
         </MoreFields>
         {alert && <FormAlert id={`${id}-alert`}>{alert}</FormAlert>}
         <DialogActions

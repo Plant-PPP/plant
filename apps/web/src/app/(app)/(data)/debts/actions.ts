@@ -4,6 +4,7 @@ import {
   type DebtEventResult,
   writeLiabilityEvent,
 } from "@/lib/debts/events-write";
+import { writeCollateral } from "@/lib/debts/collateral-write";
 import { writeLiability } from "@/lib/debts/write";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 
@@ -55,4 +56,11 @@ export async function deleteDebtEvent(
   eventId: unknown,
 ): Promise<DebtEventResult> {
   return writeLiabilityEvent({ action: "delete_liability_event", eventId });
+}
+
+export async function setDebtCollateral(
+  debtId: unknown,
+  holdingIds: unknown,
+): Promise<WriteResult> {
+  return writeCollateral(debtId, holdingIds);
 }

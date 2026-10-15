@@ -67,6 +67,8 @@ export type PrototypeState = Ledger & {
   liabilities: Liability[];
   // Each debt's events, by debt.
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
+  // The holdings pledged for each debt, by debt.
+  liabilityCollateral: ReadonlyMap<string, readonly string[]>;
   // Newest first.
   imports: ImportItem[];
   // The day of each upload, deleted accounts' included: the monthly limit
@@ -201,7 +203,10 @@ export function initialState(
     realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
-    liabilityEvents: new Map(),
+    liabilityEvents: new Map(Object.entries(fixtures.liabilityEvents ?? {})),
+    liabilityCollateral: new Map(
+      Object.entries(fixtures.liabilityCollateral ?? {}),
+    ),
     imports: [],
     uploadedOn: [],
     conversations: [],

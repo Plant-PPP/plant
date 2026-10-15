@@ -65,6 +65,47 @@ export async function readLiabilities(
   };
 }
 
+// One of the user's debts, or null when the id is not one of theirs.
+export async function readLiability(
+  client: Client,
+  id: string,
+): Promise<Liability | null> {
+  const result = await client
+    .from("liabilities")
+    .select(COLUMNS)
+    .eq("id", id)
+    .limit(1);
+  const failure = classifyPostgrestResult(
+    result as Parameters<typeof classifyPostgrestResult>[0],
+    200,
+  );
+  if (failure || !result.data) {
+    throw new DebtsReadError(failure?.code ?? "no_data");
+  }
+  const [row] = result.data as unknown[];
+  return row === undefined ? null : liabilitySchema.parse(row);
+}
+
+// The holdings pledged for one of the user's debts.
+export async function readCollateral(
+  client: Client,
+  liabilityId: string,
+): Promise<string[]> {
+  const result = await client
+    .from("liability_collateral")
+    .select("holding_id")
+    .eq("liability_id", liabilityId)
+    .order("created_at", { ascending: true });
+  const failure = classifyPostgrestResult(
+    result as Parameters<typeof classifyPostgrestResult>[0],
+    200,
+  );
+  if (failure || !result.data) {
+    throw new DebtsReadError(failure?.code ?? "no_data");
+  }
+  return result.data.map((row) => row.holding_id);
+}
+
 const EVENT_COLUMNS =
   "id, liability_id, kind, date, amount:amount::text, " +
   "annual_rate:annual_rate::text, cash_holding_id, takes_cash, settles, created_at";
