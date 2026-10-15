@@ -1,7 +1,7 @@
 "use client";
 
 import { Wallet } from "lucide-react";
-import { DialogActions } from "@/components/ui/dialog-actions";
+import { DialogActions, MoreFields } from "@/components/ui/dialog-actions";
 import type { Currency } from "@plant/shared";
 import Link from "next/link";
 
@@ -70,6 +70,10 @@ import { marketsFor } from "@/lib/instruments/markets";
 import { PlacementFigures, PlacementKindSelect } from "./placement-fields";
 
 // What the amount is, by class.
+// A property or an "other" asset is told apart by its name, so the field stays
+// in view; elsewhere it is an extra.
+const NAMED_CLASSES = new Set<AssetClass>(["real_estate", "other"]);
+
 const AMOUNT_LABELS: Record<AssetClass, string> = {
   instrument: "Cantidad",
   cash: "Monto",
@@ -443,7 +447,15 @@ export function HoldingDialog({
           {shown.has("valued_on") &&
             textField("valuedOn", "valuedOn", "Valuado el", { type: "date" })}
           {shown.has("label") &&
-            textField("label", "label", "Nombre", { autoComplete: "off" })}
+            (NAMED_CLASSES.has(fields.assetClass) ? (
+              textField("label", "label", "Nombre", { autoComplete: "off" })
+            ) : (
+              <MoreFields label="Nombre" defaultOpen={fields.label !== ""}>
+                {textField("label", "label", "Nombre", {
+                  autoComplete: "off",
+                })}
+              </MoreFields>
+            ))}
 
           {mode === "edit" && details && row && (
             <ReportSwitch

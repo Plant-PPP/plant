@@ -882,3 +882,8 @@ describe("saving an edit that leaves the report switch untouched", () => {
     });
   });
 });
+
+it("leaves a kind with nothing in it without a note", () => {
+  const tile = html.split(">Inversiones</dt>")[1]!.split("</div>")[0]!;
+  expect(tile.match(/<dd/g)).toHaveLength(1);
+});
