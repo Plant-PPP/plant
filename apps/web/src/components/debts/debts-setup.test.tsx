@@ -5,7 +5,7 @@ jest.mock("next/navigation", () => ({
 import { type Liability, type LiabilityOnDate } from "@plant/core";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { CALCULATING } from "@/components/holdings/sum-text";
+import { CALCULATING, NO_QUOTE } from "@/components/holdings/sum-text";
 import { formatFraction } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 
@@ -129,4 +129,10 @@ it("gives both reasons a total is incomplete", () => {
   );
   expect(html).toContain("Alguna deuda no tiene cotización");
   expect(html).toContain("Algún saldo no se pudo calcular completo");
+});
+
+it("shows no total when no debt has a quote", () => {
+  const html = render([debt({})], [{}]);
+  expect(tile(html, "Total")).toContain(NO_QUOTE);
+  expect(tile(html, "Total")).not.toContain("US$ 0,00");
 });

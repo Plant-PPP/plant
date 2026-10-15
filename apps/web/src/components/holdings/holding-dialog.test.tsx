@@ -88,7 +88,7 @@ it.each([
   [
     "cash",
     { currency: "USD" },
-    ["Tipo", "Cuenta", "Cartera", "Moneda", "Monto", "Nombre"],
+    ["Tipo", "Cuenta", "Cartera", "Moneda", "Monto"],
   ],
   [
     "fixed_term",
@@ -102,7 +102,6 @@ it.each([
       "TNA (%)",
       "Desde",
       "Vence",
-      "Nombre",
     ],
   ],
   [
@@ -121,6 +120,15 @@ it.each([
     ...extra,
   });
   expect(labels(html)).toEqual(expected);
+});
+
+it("folds an optional name away unless it names the asset", () => {
+  const cash = render("create", { assetClass: "cash", currency: "USD" });
+  expect(cash).toMatch(
+    /<button[^>]*aria-expanded="false"[^>]*>.*?Nombre<\/button>/,
+  );
+  const named = render("create", { assetClass: "cash", label: "Caja" });
+  expect(labels(named)).toContain("Nombre");
 });
 
 it("shows the class, the account and the instrument of an edit as text", () => {

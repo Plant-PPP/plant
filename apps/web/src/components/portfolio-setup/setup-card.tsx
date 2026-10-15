@@ -202,14 +202,13 @@ export function SetupCard({
           <p className="text-muted-foreground text-xs">{description}</p>
         </div>
         {filters && (
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {filters}
-          </div>
+          <div className="flex flex-wrap items-center gap-1.5">{filters}</div>
         )}
         <div className="ml-auto flex flex-wrap justify-end gap-2">
           {secondary}
           <PendingButton
             className={PAGE_BUTTON_CLASS}
+            variant={page ? "default" : "outline"}
             pending={pending}
             onClick={onAdd}
           >

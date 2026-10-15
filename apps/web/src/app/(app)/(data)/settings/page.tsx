@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PrototypeSettings } from "@/components/prototype/prototype-settings";
 
 import { AlertsCard } from "@/components/settings/alerts-card";
+import { FORM_TEXT } from "@/components/ui/form-text";
 import { ExportCard } from "@/components/settings/export-card";
 import { TwoFactorCard } from "@/components/settings/two-factor-card";
 import type { PriceAlert } from "@/lib/alerts/alerts";
@@ -11,6 +12,7 @@ import { getSessionClaims } from "@/lib/auth/session-claims";
 import { isProductionDeployment } from "@/lib/deployment";
 import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { createClient } from "@/lib/supabase/server";
@@ -49,7 +51,12 @@ async function userAlerts(): Promise<{
 // alerts and the export are the user's own.
 export default async function SettingsPage() {
   return (
-    <div className="grid gap-6">
+    <div
+      className={cn(
+        "grid gap-6 [&_[data-slot=card-content]_[data-slot=button]]:text-xs",
+        FORM_TEXT,
+      )}
+    >
       <h1 className="sr-only">{navTitle("/settings")}</h1>
       <TwoFactorCard stepUpNeeded={await needsStepUp()} />
       {isProductionDeployment() ? (
