@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { DialogActions } from "@/components/ui/dialog-actions";
+import { FormAlert } from "@/components/ui/form-alert";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
@@ -23,12 +24,14 @@ export type PledgeOption = {
 export function DebtCollateralDialog({
   options,
   initial,
+  initialError,
   returnFocusTo,
   onClose,
   onSubmit,
 }: {
   options: readonly PledgeOption[];
   initial: readonly string[];
+  initialError?: string;
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   onSubmit: (holdingIds: string[]) => boolean;
@@ -89,7 +92,13 @@ export function DebtCollateralDialog({
             ))}
           </ul>
         )}
-        <DialogActions submitLabel="Guardar" />
+        {initialError && (
+          <FormAlert id={`${id}-alert`}>{initialError}</FormAlert>
+        )}
+        <DialogActions
+          submitLabel="Guardar"
+          describedBy={initialError ? `${id}-alert` : undefined}
+        />
       </form>
     </AppDialog>
   );

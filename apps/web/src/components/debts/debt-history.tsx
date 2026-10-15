@@ -2,6 +2,9 @@
 
 import {
   admitLiabilityEvent,
+  admitLiabilityEventDeletion,
+  admitLiabilityUpdate,
+  compareLiabilityEvents,
   type Denominator,
   type Liability,
   type LiabilityEvent,
@@ -66,7 +69,7 @@ import { Section } from "@/components/ui/section";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 import { DEBT_EVENT_LABELS } from "@/lib/debts/labels";
 import type { DebtEventResult } from "@/lib/debts/events-write";
-import { formatAmount, formatFraction } from "@/lib/format/amount";
+import { amountInput, formatAmount, formatFraction } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
@@ -96,6 +99,7 @@ import {
 } from "./debt-event-fields";
 import {
   type DebtFields,
+  DEBT_DELETE_DESCRIPTION,
   debtAmount,
   debtFields,
   LIABILITY_KIND_LABELS,
@@ -125,6 +129,12 @@ export type DebtPageActions = {
 };
 
 type EventRow = LiabilityEvent & { unsaved?: true };
+
+const OPENED_AFTER_EVENTS =
+  "La fecha del saldo es posterior al primer movimiento: elegí una igual o anterior.";
+
+const REOPENING_KEPT =
+  "Este ajuste reabrió la deuda y hay movimientos después: borralos primero.";
 
 const COLLATERAL_MESSAGES: WriteMessages = {
   ...WRITE_MESSAGES.holdings,
@@ -163,6 +173,19 @@ function apply(state: State, change: Change): State {
       return { ...state, collateral: change.ids };
   }
 }
+
+// The debt as an edit leaves it, before the server answers: the fields the
+// form sends over the row, and the anchor the database keeps.
+export const editedDebt = (
+  debt: Liability,
+  input: ReturnType<typeof toLiabilityInput>,
+): Liability =>
+  ({
+    ...debt,
+    ...input,
+    id: debt.id,
+    anchored_on: input.opened_on ?? debt.anchored_on,
+  }) as Liability;
 
 // A dialog's write as the dialog gave it, and the event it shows meanwhile.
 function eventRow(
@@ -247,7 +270,9 @@ export function DebtHistory({
   const id = useId();
   const [eventDialog, setEventDialog] = useState<EventDialog | null>(null);
   const [debtDialog, setDebtDialog] = useState<Retry<DebtFields> | null>(null);
-  const [collateralOpen, setCollateralOpen] = useState(false);
+  const [collateralDialog, setCollateralDialog] = useState<Retry<
+    string[]
+  > | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<LiabilityEvent | null>(
     null,
   );
@@ -273,31 +298,16 @@ export function DebtHistory({
       ? loanToValue(value, pledgedValue)
       : null;
   const cashOf = new Map(cash.map((each) => [each.id, each]));
-  const rows = [...shown.events].sort((a, b) =>
-    a.date !== b.date
-      ? b.date.localeCompare(a.date)
-      : a.created_at < b.created_at
-        ? 1
-        : -1,
-  );
+  // Newest first, in the reverse of the order core applies them.
+  const rows = [...shown.events].sort((a, b) => compareLiabilityEvents(b, a));
 
   // What a debt's rules say about the event the dialog would write.
   const check = (dialog: EventDialog) => (fields: DebtEventFields) => {
-    const input = toEventInput(fields);
+    const row = eventRow(debt, fields, dialog.event);
     const hint = admitLiabilityEvent(
       debt,
       shown.events,
-      {
-        id: dialog.event?.id,
-        kind: fields.kind,
-        date: fields.date,
-        amount: "amount" in input ? String(input.amount) : null,
-        settles: fields.kind === "payment" && fields.settles,
-        cash_holding_id:
-          fields.kind === "payment" && fields.cashHoldingId
-            ? fields.cashHoldingId
-            : null,
-      },
+      { ...row, id: dialog.event?.id },
       today,
     );
     return hint === null ? null : DEBT_EVENT_MESSAGES[hint];
@@ -331,12 +341,30 @@ export function DebtHistory({
     );
   }
 
+  // What the debt's events say about an edit of its opening.
+  const checkDebt = (fields: DebtFields): string | null => {
+    const hint = admitLiabilityUpdate(
+      debt,
+      toLiabilityInput(fields),
+      shown.events,
+      // The day it was created, which the page knows only while the debt
+      // has no opening date of its own; otherwise the database decides.
+      debt.opened_on === null ? debt.anchored_on : "",
+      today,
+    );
+    return hint === null
+      ? null
+      : hint === "before_opening"
+        ? OPENED_AFTER_EVENTS
+        : DEBT_EVENT_MESSAGES[hint];
+  };
+
   function submitDebt(retry: Retry<DebtFields>, fields: DebtFields) {
     const input = toLiabilityInput(fields);
     return card.dialogAction(
       {
         kind: "debt",
-        debt: { ...(input as Omit<Liability, "id">), id: debt.id } as Liability,
+        debt: editedDebt(debt, input),
       },
       () => actions.debts.update(debt.id, input),
       DEBT_MESSAGES,
@@ -375,7 +403,8 @@ export function DebtHistory({
       event.settles ? "Cancela la deuda" : null,
       event.cash_holding_id
         ? `${event.takes_cash ? "Salió de" : "Desde"} ${
-            cashOf.get(event.cash_holding_id)?.label ?? "una cuenta"
+            cashOf.get(event.cash_holding_id)?.label ??
+            "una cuenta que ya no está activa"
           }`
         : null,
     ]
@@ -436,7 +465,15 @@ export function DebtHistory({
           tooltip: "Borrar",
           label: (event) =>
             `Borrar ${DEBT_EVENT_LABELS[event.kind].toLowerCase()} del ${formatDate(event.date)}`,
-          onClick: (event) => !busy && setDeletingEvent(event),
+          onClick: (event) => {
+            if (busy) return;
+            // Deleting what reopened a debt under a later event is refused.
+            if (admitLiabilityEventDeletion(shown.events, event.id)) {
+              toast.error(REOPENING_KEPT);
+              return;
+            }
+            setDeletingEvent(event);
+          },
         },
       ],
       { pending: busy },
@@ -487,7 +524,7 @@ export function DebtHistory({
                   className="text-xs"
                   onSelect={() =>
                     openEvent("payment", {
-                      amount: figure.balance,
+                      amount: amountInput(figure.balance),
                       settles: true,
                     })
                   }
@@ -498,7 +535,7 @@ export function DebtHistory({
               )}
               <DropdownMenuItem
                 className="text-xs"
-                onSelect={() => !busy && setCollateralOpen(true)}
+                onSelect={() => !busy && setCollateralDialog({})}
               >
                 <ShieldCheck />
                 Garantía
@@ -527,11 +564,13 @@ export function DebtHistory({
 
   const balanceNote = !complete
     ? "Puede faltar algún movimiento"
-    : !figure.open
-      ? "Cancelada"
-      : figure.estimated
-        ? "Estimado: crece con el interés de cada día"
-        : "Según el último saldo del acreedor";
+    : figure.overflow
+      ? "No se pudo calcular completo"
+      : !figure.open
+        ? "Cancelada"
+        : figure.estimated
+          ? "Estimado: crece con el interés de cada día"
+          : "Según el último saldo del acreedor";
 
   return (
     <div className="grid gap-8" data-slot="setup-section">
@@ -709,15 +748,17 @@ export function DebtHistory({
           instruments={instruments}
           returnFocusTo={() => card.focusHeading()}
           onClose={() => setDebtDialog(null)}
+          check={checkDebt}
           onSubmit={(fields) => submitDebt(debtDialog, fields)}
         />
       )}
-      {collateralOpen && (
+      {collateralDialog && (
         <DebtCollateralDialog
           options={pledgeOptions}
-          initial={shown.collateral}
+          initial={collateralDialog.initial ?? shown.collateral}
+          initialError={collateralDialog.initialError}
           returnFocusTo={() => card.focusHeading()}
-          onClose={() => setCollateralOpen(false)}
+          onClose={() => setCollateralDialog(null)}
           onSubmit={(ids) =>
             card.dialogAction(
               { kind: "collateral", ids },
@@ -725,7 +766,8 @@ export function DebtHistory({
               COLLATERAL_MESSAGES,
               {
                 done: "Guardaste la garantía",
-                reopen: () => setCollateralOpen(true),
+                reopen: (error) =>
+                  setCollateralDialog({ initial: ids, initialError: error }),
               },
             )
           }
@@ -764,7 +806,7 @@ export function DebtHistory({
       {deletingDebt && (
         <ConfirmDialog
           title={`¿Borrar ${debt.label}?`}
-          description="Se borran también sus movimientos. El efectivo que tomaron los pagos no vuelve a las cuentas."
+          description={DEBT_DELETE_DESCRIPTION}
           confirmLabel="Borrar"
           returnFocusTo={() => card.focusHeading()}
           onClose={() => setDeletingDebt(false)}

@@ -127,6 +127,10 @@ export const unitOf = (
 ): string =>
   debt.instrument_symbol ?? (debt.uva ? "UVA" : debt.currency) ?? "—";
 
+// What deleting a debt does, wherever it is deleted from.
+export const DEBT_DELETE_DESCRIPTION =
+  "Se borran también sus movimientos. El efectivo que tomaron los pagos no vuelve a las cuentas.";
+
 // An amount in a debt's own unit: "38.500 UVA", "US$ 3.000,00".
 export function debtAmount(
   debt: Pick<Liability, "currency" | "uva" | "instrument_symbol">,

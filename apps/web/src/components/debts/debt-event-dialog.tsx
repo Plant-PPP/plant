@@ -196,10 +196,15 @@ export function DebtEventDialog({
                           {`${each.label} · ${formatAmount(each.amount, each.currency)}`}
                         </SelectItem>
                       ))}
+                      {fields.cashHoldingId !== "" && !chosen && (
+                        <SelectItem value={fields.cashHoldingId}>
+                          Una cuenta que ya no está activa
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
-                {chosen && (
+                {fields.cashHoldingId !== "" && (
                   <div className="flex items-center justify-between gap-4">
                     <Label htmlFor={`${id}-take`}>
                       Descontar ahora de la cuenta

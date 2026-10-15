@@ -12,48 +12,48 @@ jest.mock("@/lib/request-id-server", () => ({
 
 const calls: string[] = [];
 let held: string[] = [];
+let debtExists = true;
 let insertError: { code: string } | null = null;
+const answer = (data: unknown, status: number) =>
+  Promise.resolve({ data, error: null, status });
 jest.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    from: () => {
-      const query = {
-        select: () => {
-          calls.push("select");
-          return Object.assign(
-            Promise.resolve({
-              data: held.map((holding_id) => ({ holding_id })),
-              error: null,
-              status: 200,
-            }),
-            query,
-          );
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => {
+          calls.push(`select ${table}`);
+          return table === "liabilities"
+            ? answer(debtExists ? [{ id: "d" }] : [], 200)
+            : answer(
+                held.map((holding_id) => ({ holding_id })),
+                200,
+              );
         },
-        delete: () => {
-          calls.push("delete");
-          return query;
-        },
-        eq: () =>
-          Object.assign(
-            Promise.resolve({
-              data: null,
-              error: null,
-              status: calls.at(-1) === "select" ? 200 : 204,
-            }),
-            query,
-          ),
-        not: (_column: string, _op: string, list: string) => {
-          calls.push(`keep ${list}`);
-          return Promise.resolve({ data: null, error: null, status: 204 });
-        },
-        insert: async (rows: { holding_id: string }[]) => {
-          calls.push(`insert ${rows.map((row) => row.holding_id).join(",")}`);
-          return insertError
-            ? { data: null, error: insertError, status: 409 }
-            : { data: null, error: null, status: 201 };
-        },
-      };
-      return query;
-    },
+      }),
+      delete: () => {
+        calls.push("delete");
+        const filtered = {
+          not: (_column: string, _op: string, list: string) => {
+            calls.push(`keep ${list}`);
+            return answer(null, 204);
+          },
+          then: (resolve: (value: unknown) => void) =>
+            resolve({ data: null, error: null, status: 204 }),
+        };
+        return { eq: () => filtered };
+      },
+      upsert: async (
+        rows: { holding_id: string }[],
+        options: { ignoreDuplicates: boolean },
+      ) => {
+        calls.push(
+          `upsert ${rows.map((row) => row.holding_id).join(",")} ${options.ignoreDuplicates}`,
+        );
+        return insertError
+          ? { data: null, error: insertError, status: 409 }
+          : { data: null, error: null, status: 201 };
+      },
+    }),
   }),
 }));
 
@@ -68,6 +68,7 @@ const B = "b1000000-0000-4000-8000-0000000000b1";
 beforeEach(() => {
   calls.length = 0;
   held = [];
+  debtExists = true;
   insertError = null;
   revalidatePath.mockClear();
 });
@@ -76,7 +77,13 @@ it("removes what is no longer pledged and adds what is new", async () => {
   const lines = captureServerLog();
   held = [A];
   expect(await writeCollateral(DEBT, [B])).toEqual({ ok: true, id: DEBT });
-  expect(calls).toEqual(["select", "delete", `keep (${B})`, `insert ${B}`]);
+  expect(calls).toEqual([
+    "select liabilities",
+    "select liability_collateral",
+    "delete",
+    `keep (${B})`,
+    `upsert ${B} true`,
+  ]);
   expect(revalidatePath).toHaveBeenCalledWith("/debts", "layout");
   expect(lines.at(-1)).toMatchObject({
     event: "liabilities.write",
@@ -104,4 +111,20 @@ it("refuses ids it cannot read", async () => {
     code: "invalid",
   });
   expect(calls).toEqual([]);
+});
+
+it("answers not found for a debt that is not the user's", async () => {
+  debtExists = false;
+  expect(await writeCollateral(DEBT, [])).toEqual({
+    ok: false,
+    code: "not_found",
+  });
+  expect(calls).not.toContain("delete");
+});
+
+it("removes every pledge when none is wanted", async () => {
+  held = [A];
+  expect(await writeCollateral(DEBT, [])).toEqual({ ok: true, id: DEBT });
+  expect(calls).toContain("delete");
+  expect(calls.some((call) => call.startsWith("keep"))).toBe(false);
 });

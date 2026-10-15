@@ -1,8 +1,11 @@
 import {
+  liabilitiesOn,
+  liabilityBalance,
   liabilityQuotesNeeded,
   quotesNeeded,
   readSnapshot,
   referenceUnit,
+  valueLiabilities,
 } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
 import type { Metadata } from "next";
@@ -59,7 +62,6 @@ export default async function DebtPage({
   if (!isProductionDeployment()) {
     return <PrototypeDebt id={id} params={query} />;
   }
-  if (!z.uuid().safeParse(id).success) notFound();
   const claims = await getSessionClaims();
   const client = await createClient();
   const context = {
@@ -68,6 +70,16 @@ export default async function DebtPage({
     page: "/debts" as const,
     params: query,
   };
+  // An id that is not one of the user's debts, malformed or another
+  // user's, answers alike.
+  const missing = (): never => {
+    serverLog.warn(DEBTS_VIEW_EVENT, {
+      ...contextFields(context),
+      "plant.outcome": "not_found",
+    });
+    notFound();
+  };
+  if (!z.uuid().safeParse(id).success) missing();
   const today = buenosAiresDate(new Date());
   const [debt, events, collateral, held, dollar, { ledger: read }] =
     await Promise.all([
@@ -78,7 +90,7 @@ export default async function DebtPage({
         assetsViewFailure(context, "debt_events", error),
       ),
       readCollateral(client, id).catch((error: unknown) =>
-        assetsViewFailure(context, "debts", error),
+        assetsViewFailure(context, "debt_collateral", error),
       ),
       readHoldings(client, context),
       readReferenceDollar(client, context),
@@ -86,7 +98,7 @@ export default async function DebtPage({
         (error: unknown) => assetsViewFailure(context, "ledger", error),
       ),
     ]);
-  if (!debt) notFound();
+  if (!debt) return missing();
   const ledger = { ...read, referenceDollar: dollar };
   const forHoldings = quotesNeeded(held.active.map((row) => row.holding));
   const forDebt = liabilityQuotesNeeded([debt]);
@@ -100,10 +112,20 @@ export default async function DebtPage({
     parseAssetsParams(query, { portfolioIds: [], tabs: TABS, salesYears: [] })
       .unit ?? reference;
   const debtEvents = events.byLiability.get(id) ?? [];
+  const figure = liabilityBalance(debt, debtEvents, today);
+  const valued = valueLiabilities(
+    liabilitiesOn([debt], new Map([[id, figure]])),
+    snapshot,
+    { denominator: unit, referenceDollar: dollar },
+  );
 
   serverLog.info(DEBTS_VIEW_EVENT, {
     ...contextFields(context),
-    "plant.outcome": events.cut ? "incomplete" : "ok",
+    "plant.outcome":
+      valued.complete && !events.cut && !figure.overflow ? "ok" : "incomplete",
+    "plant.liability.id": id,
+    "plant.liability.overflow_count": figure.overflow ? 1 : 0,
+    "plant.liability.missing_count": valued.complete ? 0 : 1,
     "plant.liability.event_count": debtEvents.length,
     "plant.liability.events_truncated": events.cut,
     "plant.liability.collateral_count": collateral.length,

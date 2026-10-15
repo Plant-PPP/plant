@@ -105,7 +105,7 @@ export function toCashInput(
 }
 
 export const DEBT_EVENT_INVALID =
-  "Revisá la fecha y el monto: un pago va mayor a 0 y una tasa hasta 1000 %.";
+  "Revisá la fecha y el monto o la tasa: un pago mayor a 0, una tasa de hasta 1000 %.";
 
 // The copy for each code an event write can be refused with.
 export const DEBT_EVENT_MESSAGES: Record<DebtEventCode, string> = {
@@ -126,7 +126,7 @@ export const DEBT_EVENT_MESSAGES: Record<DebtEventCode, string> = {
   source_connection_has_holdings: FAILED,
   source_connection_archived: "Esa cuenta está archivada.",
   not_found:
-    "Ese movimiento cambió hace un momento. Ya actualizamos la página.",
+    "La deuda, el movimiento o la cuenta cambió hace un momento. Ya actualizamos la página.",
   invalid: DEBT_EVENT_INVALID,
   retry: FAILED,
   failed: FAILED,

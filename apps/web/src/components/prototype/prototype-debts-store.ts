@@ -1,6 +1,7 @@
 import {
   admitLiabilityEvent,
   admitLiabilityEventDeletion,
+  admitLiabilityUpdate,
   cashAfter,
   type Liability,
   type LiabilityEvent,
@@ -8,7 +9,14 @@ import {
   liabilityEventSchema,
   liabilityInputSchema,
 } from "@plant/core";
-import { compareDecimals, exactOf, plus, stored } from "@plant/shared";
+import {
+  compareDecimals,
+  exactOf,
+  minus,
+  negated,
+  plus,
+  stored,
+} from "@plant/shared";
 import { z } from "zod";
 
 import type { DebtEventCode, DebtEventResult } from "@/lib/debts/events-write";
@@ -53,8 +61,22 @@ export function updateLiability(
 ): Write<WriteResult> {
   const parsed = liabilityInputSchema.safeParse(input);
   if (!parsed.success) return refusedWrite(state, "invalid");
-  if (!state.liabilities.some((each) => each.id === id)) {
-    return refusedWrite(state, "not_found");
+  const current = state.liabilities.find((each) => each.id === id);
+  if (!current) return refusedWrite(state, "not_found");
+  const anchorWhenCleared =
+    current.opened_on === null ? current.anchored_on : state.today;
+  // private.liability_guard's refusals, which the real writer reads as
+  // invalid.
+  if (
+    admitLiabilityUpdate(
+      current,
+      parsed.data,
+      state.liabilityEvents.get(id) ?? [],
+      anchorWhenCleared,
+      state.today,
+    )
+  ) {
+    return refusedWrite(state, "invalid");
   }
   return {
     state: {
@@ -67,9 +89,7 @@ export function updateLiability(
               // Without an opening day the anchor is the day it was created,
               // as private.liability_guard keeps it; the prototype keeps no
               // creation day, so clearing one anchors on today.
-              anchored_on:
-                parsed.data.opened_on ??
-                (each.opened_on === null ? each.anchored_on : state.today),
+              anchored_on: parsed.data.opened_on ?? anchorWhenCleared,
             }
           : each,
       ),
@@ -110,8 +130,9 @@ const cashLinkSchema = z
   .strict()
   .nullable();
 
-// Gives back what a payment took from its cash holding, as public.restore_cash
-// does: to the holding, opening it again when the payment had emptied it.
+// Gives back what a payment took from its cash holding, opening it again when
+// the payment had emptied it; public.restore_cash also tries the account's
+// other cash, which the prototype keeps none of.
 function restoreCash(
   state: PrototypeState,
   event: LiabilityEvent,
@@ -140,7 +161,8 @@ function restoreCash(
   };
 }
 
-// Takes a payment's amount from its cash holding, as public.move_cash does.
+// Takes `amount` from a payment's cash holding (gives it back when negative),
+// as public.move_cash does: nothing to move skips the stale check.
 function takeCash(
   state: PrototypeState,
   debt: Liability,
@@ -157,14 +179,19 @@ function takeCash(
   if (held.holding.currency !== debt.currency) {
     return { state, result: "currency" };
   }
-  if (amount === null) return { state, result: null };
+  if (amount === null || compareDecimals(amount, "0") === 0) {
+    return { state, result: null };
+  }
   if (
-    expected !== null &&
+    expected === null ||
     compareDecimals(expected, held.holding.amount) !== 0
   ) {
     return { state, result: "stale" };
   }
-  const after = cashAfter(held.holding.amount, `-${amount}`);
+  const after = cashAfter(
+    held.holding.amount,
+    stored(negated(exactOf(amount))),
+  );
   if (after === "insufficient_cash") return { state, result: after };
   return {
     state: {
@@ -227,16 +254,30 @@ export function writeLiabilityEvent(
     state.today,
   );
   if (hint) return refusedEvent(state, hint);
-  const restored = previous
-    ? restoreCash(state, previous)
-    : { state, restored: true };
+  // An edit that keeps taking from the same open holding moves it by the
+  // difference, as update_liability_event does.
+  const sameHolding =
+    previous?.takes_cash === true &&
+    link.data?.take === true &&
+    previous.cash_holding_id === link.data.holding_id &&
+    state.holdings.some(
+      (each) => each.holding.id === link.data!.holding_id && !each.closed,
+    );
+  const restored =
+    previous && !sameHolding
+      ? restoreCash(state, previous)
+      : { state, restored: true };
   const taken = link.data
     ? takeCash(
         restored.state,
         debt,
         link.data.holding_id,
         link.data.expected,
-        link.data.take ? amount : null,
+        link.data.take
+          ? sameHolding
+            ? stored(minus(exactOf(amount!), exactOf(previous!.amount!)))
+            : amount
+          : null,
       )
     : { state: restored.state, result: null };
   if (taken.result) return refusedEvent(state, taken.result);

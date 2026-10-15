@@ -10,7 +10,7 @@ import {
   updateLiability,
   writeLiabilityEvent,
 } from "./prototype-debts-store";
-import { initialState } from "./prototype-store";
+import { deleteHolding, initialState } from "./prototype-store";
 
 const TODAY = "2026-10-12";
 const fixtures = buildFixtures(TODAY);
@@ -169,23 +169,94 @@ describe("debt events", () => {
   });
 
   it("keeps a debt closed until an adjustment reopens it", () => {
-    const settled = record({ ...payment, settles: true }).state;
-    expect(
+    const yesterday = "2026-10-11";
+    const settled = record({
+      ...payment,
+      date: yesterday,
+      settles: true,
+    }).state;
+    const later = (s: typeof state, id: string, event: unknown) =>
       writeLiabilityEvent(
-        settled,
-        {
-          debtId: LOAN,
-          id: "e7000000-0000-4000-8000-000000000002",
-          createdAt: `${TODAY}T21:00:00.000Z`,
-        },
-        { kind: "rate_change", date: TODAY, annual_rate: "0.2" },
+        s,
+        { debtId: LOAN, id, createdAt: `${TODAY}T21:00:00.000Z` },
+        event,
         null,
-      ).result,
-    ).toEqual({
+      );
+    expect(
+      later(settled, "e7000000-0000-4000-8000-000000000002", payment).result,
+    ).toEqual({ ok: false, code: "settled" });
+    const reopened = later(settled, "e7000000-0000-4000-8000-000000000003", {
+      kind: "adjustment",
+      date: TODAY,
+      amount: "100",
+    }).state;
+    expect(
+      later(reopened, "e7000000-0000-4000-8000-000000000004", payment).result,
+    ).toMatchObject({ ok: true });
+    expect(
+      deleteLiabilityEvent(reopened, "e7000000-0000-4000-8000-000000000003")
+        .result,
+    ).toMatchObject({ ok: true });
+  });
+
+  it("edits a payment that took cash by the difference", () => {
+    const taken = record(payment, {
+      holding_id: USD_CASH,
+      take: true,
+      expected: "2500",
+    }).state;
+    const { state: after, result } = writeLiabilityEvent(
+      taken,
+      { eventId: "e7000000-0000-4000-8000-000000000001" },
+      { ...payment, amount: "600" },
+      { holding_id: USD_CASH, take: true, expected: "2000" },
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(cashOf(after).holding.amount).toBe("1900");
+  });
+
+  it("refuses a debt edit the debt guard refuses", () => {
+    const loan = state.liabilities.find((each) => each.id === LOAN)!;
+    const input = {
+      kind: loan.kind,
+      label: loan.label,
+      lender: loan.lender,
+      currency: loan.currency,
+      uva: loan.uva,
+      instrument_symbol: loan.instrument_symbol,
+      balance: loan.balance,
+      installment: loan.installment,
+      annual_rate: loan.annual_rate,
+      installments_left: loan.installments_left,
+      next_due_on: loan.next_due_on,
+      matures_on: loan.matures_on,
+      accrues: loan.accrues,
+      opened_on: loan.opened_on,
+    };
+    expect(updateLiability(state, LOAN, input).result).toMatchObject({
       ok: true,
-      id: "e7000000-0000-4000-8000-000000000002",
-      cashRestored: true,
     });
+    expect(
+      updateLiability(state, LOAN, { ...input, opened_on: TODAY }).result,
+    ).toEqual({ ok: false, code: "invalid" });
+    expect(
+      updateLiability(state, LOAN, {
+        ...input,
+        kind: "personal_loan",
+        currency: "ARS",
+      }).result,
+    ).toEqual({ ok: false, code: "invalid" });
+  });
+
+  it("drops a deleted holding from pledges and payment links", () => {
+    const pledged = setCollateral(state, LOAN, [USD_CASH]).state;
+    const { state: after } = deleteHolding(pledged, USD_CASH);
+    expect(after.liabilityCollateral.get(LOAN)).toEqual([]);
+    expect(
+      after.liabilityEvents
+        .get(LOAN)!
+        .every((event) => event.cash_holding_id === null),
+    ).toBe(true);
   });
 
   it("pledges the user's holdings and refuses one that does not exist", () => {

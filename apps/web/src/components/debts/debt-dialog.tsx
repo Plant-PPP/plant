@@ -51,6 +51,7 @@ export function DebtDialog({
   initialError,
   instruments,
   returnFocusTo,
+  check,
   onClose,
   onSubmit,
 }: {
@@ -59,6 +60,8 @@ export function DebtDialog({
   initialError?: string;
   instruments: InstrumentRow[];
   returnFocusTo: () => HTMLElement | null;
+  // The alert a debt's events raise for the fields, or null.
+  check?: (fields: DebtFields) => string | null;
   onClose: () => void;
   // False when the write could not start; the dialog stays open.
   onSubmit: (fields: DebtFields) => boolean;
@@ -89,6 +92,11 @@ export function DebtDialog({
   function submit() {
     if (!liabilityInputSchema.safeParse(toLiabilityInput(fields)).success) {
       setAlert(DEBT_INVALID);
+      return;
+    }
+    const refused = check?.(fields);
+    if (refused) {
+      setAlert(refused);
       return;
     }
     if (!onSubmit(fields)) return;

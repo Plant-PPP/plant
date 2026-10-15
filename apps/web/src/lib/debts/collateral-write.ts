@@ -21,8 +21,8 @@ const holdingIdsSchema = z.array(z.uuid()).max(PAGE_ROW_LIMIT);
 
 // Leaves exactly `holdingIds` pledged for one of the user's debts: removes
 // the rest, then adds what is missing. Each step stands on its own, so a
-// retry after a failure ends in the same set. Another user's debt or holding
-// is refused by the foreign keys as not found.
+// retry after a failure ends in the same set. A debt that is not the user's
+// (gone, or another user's) and another user's holding answer not found.
 export async function writeCollateral(
   debtId: unknown,
   holdingIds: unknown,
@@ -41,41 +41,58 @@ export async function writeCollateral(
   } else {
     const client: Client = await createClient();
     const wanted = [...new Set(ids.data)];
+    const debt = await client
+      .from("liabilities")
+      .select("id")
+      .eq("id", id.data);
     const current = await client
       .from("liability_collateral")
       .select("holding_id")
       .eq("liability_id", id.data);
+    const read =
+      classifyPostgrestResult(debt, 200) ??
+      classifyPostgrestResult(current, 200);
     const removed =
-      classifyPostgrestResult(current, 200) ??
-      classifyPostgrestResult(
-        await (wanted.length === 0
-          ? client
-              .from("liability_collateral")
-              .delete()
-              .eq("liability_id", id.data)
-          : client
-              .from("liability_collateral")
-              .delete()
-              .eq("liability_id", id.data)
-              .not("holding_id", "in", `(${wanted.join(",")})`)),
-        204,
-      );
-    const held = new Set((current.data ?? []).map((row) => row.holding_id));
-    const missing = wanted.filter((holding) => !held.has(holding));
-    const added =
-      removed ??
-      (missing.length === 0
+      read ??
+      (debt.data?.length === 0
         ? null
         : classifyPostgrestResult(
-            await client.from("liability_collateral").insert(
+            await (wanted.length === 0
+              ? client
+                  .from("liability_collateral")
+                  .delete()
+                  .eq("liability_id", id.data)
+              : client
+                  .from("liability_collateral")
+                  .delete()
+                  .eq("liability_id", id.data)
+                  .not("holding_id", "in", `(${wanted.join(",")})`)),
+            204,
+          ));
+    const held = new Set((current.data ?? []).map((row) => row.holding_id));
+    const missing = wanted.filter((holding) => !held.has(holding));
+    // A pledge another call added meanwhile is skipped, not refused, so the
+    // rest of the batch still lands.
+    const added =
+      removed ??
+      (missing.length === 0 || debt.data?.length === 0
+        ? null
+        : classifyPostgrestResult(
+            await client.from("liability_collateral").upsert(
               missing.map((holding) => ({
                 liability_id: id.data,
                 holding_id: holding,
               })),
+              {
+                onConflict: "user_id,liability_id,holding_id",
+                ignoreDuplicates: true,
+              },
             ),
             201,
           ));
-    if (added) {
+    if (debt.data?.length === 0 && !read) {
+      result = { ok: false, code: "not_found" };
+    } else if (added) {
       result = {
         ok: false,
         code: added.code === "23503" ? "not_found" : "failed",
@@ -91,8 +108,9 @@ export async function writeCollateral(
     [REQUEST_ID_FIELD]: requestId,
     "enduser.id": claims.sub,
     "plant.liability.action": "set_collateral",
+    "plant.liability.id": id.success ? id.data : undefined,
     "plant.liability.collateral_count": ids.success
-      ? ids.data.length
+      ? new Set(ids.data).size
       : undefined,
     "plant.liability.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,

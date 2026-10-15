@@ -7,7 +7,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { formatFraction } from "@/lib/format/amount";
 
-import { DebtHistory } from "./debt-history";
+import { DebtHistory, editedDebt } from "./debt-history";
+import { debtFields, toLiabilityInput } from "./debt-fields";
 
 const done = async () => ({ ok: true as const, id: "x", cashRestored: true });
 const ACTIONS = {
@@ -122,4 +123,15 @@ it("keeps a card to its statements, with no history", () => {
   const html = render({ ...loan, kind: "credit_card", accrues: false }, []);
   expect(html).not.toContain("Registrar pago");
   expect(html).toContain("Las tarjetas siguen su resumen");
+});
+
+it("keeps the anchor of a debt being edited, so its figures still compute", () => {
+  const edited = editedDebt(loan, toLiabilityInput(debtFields(loan)));
+  expect(edited.anchored_on).toBe("2026-01-01");
+  expect(() => render(edited, [event({})])).not.toThrow();
+  const moved = editedDebt(
+    loan,
+    toLiabilityInput({ ...debtFields(loan), openedOn: "2026-01-10" }),
+  );
+  expect(moved.anchored_on).toBe("2026-01-10");
 });

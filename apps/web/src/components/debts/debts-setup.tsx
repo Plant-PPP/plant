@@ -51,6 +51,7 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import { DEBT_INVALID, DebtDialog } from "./debt-dialog";
 import {
   type DebtFields,
+  DEBT_DELETE_DESCRIPTION,
   debtAmount,
   debtFields,
   LIABILITY_KIND_LABELS,
@@ -350,7 +351,7 @@ export function DebtsSetup({
       {deleting && (
         <ConfirmDialog
           title={`¿Borrar ${deleting.label}?`}
-          description="No se puede deshacer."
+          description={DEBT_DELETE_DESCRIPTION}
           confirmLabel="Borrar"
           returnFocusTo={card.focusHeading}
           onClose={() => setDeleting(null)}
