@@ -1,5 +1,6 @@
 "use client";
 
+import type { ListingMarket } from "@plant/core";
 import {
   createContext,
   type ReactNode,
@@ -18,7 +19,10 @@ import type { InstrumentRow } from "@/lib/holdings/read";
 // The server actions an instrument picker searches the market and adds a
 // listing with; absent, pickers search the catalog only.
 export type InstrumentMarket = {
-  search: (query: string) => Promise<SearchResult>;
+  search: (
+    query: string,
+    markets?: readonly ListingMarket[],
+  ) => Promise<SearchResult>;
   add: (symbol: string, market: string) => Promise<AddResult>;
 };
 

@@ -157,7 +157,9 @@ export function ImportDebtsReview({
       />
       <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="sr-only">Revisá las deudas que leímos</h1>
-        <p className="text-muted-foreground text-xs">{institution}</p>
+        {institution && (
+          <p className="text-muted-foreground text-xs">{institution}</p>
+        )}
       </div>
 
       {item.skippedRows > 0 && (

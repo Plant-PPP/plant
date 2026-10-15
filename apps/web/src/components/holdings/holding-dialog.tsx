@@ -66,6 +66,7 @@ import { type AssetClass, CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 import { ImportOrigin } from "./holding-cells";
 import { InstrumentPicker } from "./instrument-picker";
+import { marketsFor } from "@/lib/instruments/markets";
 import { PlacementFigures, PlacementKindSelect } from "./placement-fields";
 
 // What the amount is, by class.
@@ -373,6 +374,10 @@ export function HoldingDialog({
                 value={fields.instrument}
                 onChange={pick("instrument", set("instrument"))}
                 onAdded={addToCatalog}
+                markets={marketsFor(
+                  accounts.find(({ id }) => id === fields.accountId)
+                    ?.institution,
+                )}
                 placeholder="Elegí un instrumento"
               />
             </div>

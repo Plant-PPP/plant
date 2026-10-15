@@ -62,7 +62,8 @@ import {
   withShownPrice,
 } from "./movement-fields";
 import { useCatalog } from "./instrument-market";
-import { InstrumentPicker } from "./instrument-picker";
+import { currencyOfLine, InstrumentPicker, lineOf } from "./instrument-picker";
+import { marketsFor } from "@/lib/instruments/markets";
 
 const DIRECTION_LABELS = { in: "Entran unidades", out: "Salen unidades" };
 const YIELD_LABELS = { in: "Ganancia", out: "Pérdida" };
@@ -361,7 +362,15 @@ export function MovementDialog({
                   instruments={instruments}
                   value={fields.instrument}
                   onAdded={addToCatalog}
-                  onChange={(symbol, added) =>
+                  markets={marketsFor(origin?.institution)}
+                  lines
+                  line={lineOf(
+                    instruments.find(
+                      (each) => each.symbol === fields.instrument,
+                    ),
+                    fields.currency,
+                  )}
+                  onChange={(symbol, added, line) =>
                     pick("instrument", (value) => {
                       const instrument =
                         added ??
@@ -369,7 +378,8 @@ export function MovementDialog({
                       setFields((current) => ({
                         ...current,
                         instrument: value,
-                        currency: instrument?.currency ?? current.currency,
+                        currency:
+                          currencyOfLine(instrument, line) ?? current.currency,
                       }));
                     })(symbol)
                   }

@@ -36,3 +36,32 @@ it("shows the upload once the terms are accepted, or where none are asked", () =
     expect(html).toContain(">Cuenta</label>");
   }
 });
+
+it("uploads to no account unless one is chosen, and lists such a file as having none", () => {
+  const html = renderToStaticMarkup(
+    <ImportPage
+      accounts={[ACCOUNT]}
+      archivedAccounts={[]}
+      imports={[
+        {
+          id: "i1",
+          fileName: "tarjeta.pdf",
+          accountId: null,
+          status: "ready",
+          error: null,
+          documentDate: null,
+          documentTotals: [],
+          rows: [],
+          skippedRows: 0,
+          origin: "document",
+          createdOn: "2026-10-14",
+        },
+      ]}
+      used={0}
+      reviewHref={(id) => `/import/${id}`}
+      actions={{ upload: () => {} }}
+    />,
+  );
+  expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Elegir archivos/);
+  expect(html).toContain(">Sin cuenta</span>");
+});

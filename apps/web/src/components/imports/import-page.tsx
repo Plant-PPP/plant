@@ -38,10 +38,13 @@ import { cn } from "@/lib/utils";
 import { ConsentCard } from "./consent-card";
 
 export type ImportActions = {
-  // Starts reading each file into the account; each import's status then
-  // changes on its own.
-  upload: (files: readonly File[], accountId: string) => void;
+  // Starts reading each file into the account, or into none; each import's
+  // status then changes on its own.
+  upload: (files: readonly File[], accountId: string | null) => void;
 };
+
+// The select's value for a file that belongs to no account.
+const NO_ACCOUNT = "none";
 
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
@@ -73,7 +76,9 @@ function StatusBadge({ item }: { item: ImportItem }) {
 }
 
 // Upload a broker's statement, a screenshot or a spreadsheet into an account,
-// and follow each import until it is ready to review.
+// or a card statement or a loan's into none, and follow each import until it
+// is ready to review. A file of holdings or operations uploaded to no account
+// asks for its account at its review.
 export function ImportPage({
   accounts,
   archivedAccounts,
@@ -96,7 +101,9 @@ export function ImportPage({
   consent?: { accepted: boolean; accept: () => void };
 }) {
   const id = useId();
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [choice, setChoice] = useState(NO_ACCOUNT);
+  // An account archived since it was chosen is no choice any more.
+  const accountId = accounts.some((each) => each.id === choice) ? choice : null;
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
@@ -107,7 +114,7 @@ export function ImportPage({
       ?.institution ?? "";
 
   function send(list: FileList | null) {
-    if (!list || list.length === 0 || !accountId) return;
+    if (!list || list.length === 0) return;
     if (left === 0) {
       toast.error("Ya usaste las cargas de este mes.");
       return;
@@ -140,12 +147,15 @@ export function ImportPage({
       header: "Cuenta",
       size: 144,
       meta: { className: "hidden @2xl:table-cell" },
-      cell: ({ row: { original: item } }) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <InstitutionIcon name={institution(item.accountId)} />
-          <TruncatedText text={institution(item.accountId)} />
-        </span>
-      ),
+      cell: ({ row: { original: item } }) =>
+        item.accountId === null ? (
+          <span className="text-muted-foreground">Sin cuenta</span>
+        ) : (
+          <span className="flex min-w-0 items-center gap-2">
+            <InstitutionIcon name={institution(item.accountId)} />
+            <TruncatedText text={institution(item.accountId)} />
+          </span>
+        ),
     },
     {
       id: "date",
@@ -190,13 +200,16 @@ export function ImportPage({
             <div className="grid w-full gap-2 sm:w-64">
               <Label htmlFor={`${id}-account`}>Cuenta</Label>
               <Select
-                value={accountId}
-                onValueChange={(value) => value && setAccountId(value)}
+                value={accountId ?? NO_ACCOUNT}
+                onValueChange={(value) => value && setChoice(value)}
               >
                 <SelectTrigger id={`${id}-account`} className="w-full">
-                  <SelectValue placeholder="Elegí una cuenta" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_ACCOUNT}>
+                    Sin cuenta (deudas, tarjetas)
+                  </SelectItem>
                   {accounts.map((each) => (
                     <SelectItem key={each.id} value={each.id}>
                       {each.institution}
@@ -244,7 +257,7 @@ export function ImportPage({
               <Button
                 type="button"
                 size="sm"
-                disabled={left === 0 || !accountId}
+                disabled={left === 0}
                 onClick={() => files.current?.click()}
               >
                 Elegir archivos
@@ -256,7 +269,7 @@ export function ImportPage({
                 size="sm"
                 variant="outline"
                 className="hidden pointer-coarse:inline-flex"
-                disabled={left === 0 || !accountId}
+                disabled={left === 0}
                 onClick={() => camera.current?.click()}
               >
                 <Camera />

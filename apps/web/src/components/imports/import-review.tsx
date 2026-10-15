@@ -23,7 +23,12 @@ import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { useCatalog } from "@/components/holdings/instrument-market";
-import { InstrumentPicker } from "@/components/holdings/instrument-picker";
+import {
+  type DollarLine,
+  InstrumentPicker,
+  lineOf,
+} from "@/components/holdings/instrument-picker";
+import { marketsFor } from "@/lib/instruments/markets";
 import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import {
   holdingsCountText,
@@ -157,8 +162,9 @@ export function pickedInstrument(
   printed: ImportRow["currency"],
   symbol: string,
   instruments: readonly Pick<InstrumentRow, "symbol" | "currency">[],
+  line: DollarLine | null = null,
 ) {
-  const currency = currencyOf(instruments, symbol);
+  const currency = line ? "USD" : currencyOf(instruments, symbol);
   return {
     symbol,
     currency,
@@ -655,13 +661,20 @@ export function ImportReview({
                       )}
                       value={row.symbol}
                       onAdded={addToCatalog}
-                      onChange={(symbol, added) =>
+                      markets={marketsFor(institution)}
+                      lines
+                      line={lineOf(
+                        instruments.find((each) => each.symbol === row.symbol),
+                        row.currency,
+                      )}
+                      onChange={(symbol, added, line) =>
                         change(
                           row.id,
                           pickedInstrument(
                             row.currency,
                             symbol,
                             added ? [...instruments, added] : instruments,
+                            line,
                           ),
                         )
                       }

@@ -157,7 +157,8 @@ export function addSync(
 // the instruments Plant knows, at today's price.
 export function finishSync(state: PrototypeState, id: string): PrototypeState {
   const item = state.imports.find((each) => each.id === id);
-  const provider = item && state.apiKeys.get(item.accountId)?.provider;
+  const provider =
+    item?.accountId && state.apiKeys.get(item.accountId)?.provider;
   if (!item || !provider) return state;
   const rows: ImportRow[] = BALANCES[provider].flatMap(
     ({ symbol, quantity }, index) => {
