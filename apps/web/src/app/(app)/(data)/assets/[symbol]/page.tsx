@@ -17,6 +17,7 @@ import {
   transferCost,
   updateOperation,
 } from "@/app/(app)/(data)/assets/movement-actions";
+import { createPriceAlert } from "@/app/(app)/(data)/settings/actions";
 import { InstrumentHistory } from "@/components/holdings/instrument-history";
 import { PrototypeInstrument } from "@/components/prototype/prototype-instrument";
 import { getSessionClaims } from "@/lib/auth/session-claims";
@@ -144,6 +145,7 @@ export default async function InstrumentPage({
       portfolios={ledger.portfolios}
       instruments={ledger.instruments}
       today={today}
+      onAlert={createPriceAlert}
     />
   );
 }

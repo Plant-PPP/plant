@@ -25,7 +25,6 @@ it("says the alerts could not be read, not that there are none", () => {
   const html = renderToStaticMarkup(
     <AlertsCard
       alerts={[]}
-      instruments={[]}
       readFailed
       onCreate={async () => "ok"}
       onDelete={async () => true}

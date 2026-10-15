@@ -1,7 +1,9 @@
 "use client";
 
+import { InstrumentAlert } from "@/components/holdings/instrument-alert";
 import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { EmptyState } from "@/components/ui/empty-state";
+import type { AlertWriteResult, NewAlert } from "@/lib/alerts/alerts";
 import { routeItemForPath } from "@/lib/navigation";
 import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -116,6 +118,7 @@ export function InstrumentHistory({
   portfolios,
   instruments,
   today,
+  onAlert,
 }: {
   instrument: InstrumentRow;
   // One unit's price in the page's unit, and where it came from.
@@ -138,6 +141,8 @@ export function InstrumentHistory({
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
   today: string;
+  // Sets a price alert on this instrument, from the bell.
+  onAlert: (alert: NewAlert) => Promise<AlertWriteResult>;
 }) {
   const url = useAssetsUrl(params);
   const unitId = useId();
@@ -328,8 +333,14 @@ export function InstrumentHistory({
                 }`}
           </p>
         )}
-        {shown.length > 0 && (
-          <div className="ml-auto" data-print="hidden">
+        <div className="ml-auto flex items-center gap-2" data-print="hidden">
+          <InstrumentAlert
+            symbol={instrument.symbol}
+            currency={instrument.currency}
+            held={shown.length > 0}
+            onCreate={onAlert}
+          />
+          {shown.length > 0 && (
             <UnitSelect
               id={unitId}
               unit={unit}
@@ -338,8 +349,8 @@ export function InstrumentHistory({
               onChange={(param) => url.set("unit", param)}
               triggerClassName="w-auto"
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {shown.length === 0 ? (

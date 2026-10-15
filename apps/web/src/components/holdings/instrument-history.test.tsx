@@ -97,6 +97,7 @@ function render(
       actions={{ delete: async () => ({ ok: true, id: "x" }) }}
       details={extra.details}
       accounts={extra.accounts ?? []}
+      onAlert={async () => "ok"}
       portfolios={[]}
       instruments={[ETH]}
       today="2026-10-12"
@@ -134,6 +135,12 @@ it("starts a movement of the instrument on its open holdings only", () => {
     accountId: "a-e1",
     portfolioId: "p1",
   });
+});
+
+it("offers the bell to set an alert on the instrument, held or not", () => {
+  for (const holdings of [[held("e1", "IOL")], []]) {
+    expect(render(holdings)).toContain('aria-label="Crear una alerta de ETH"');
+  }
 });
 
 it("says the user holds none of it once the last holding is gone", () => {
