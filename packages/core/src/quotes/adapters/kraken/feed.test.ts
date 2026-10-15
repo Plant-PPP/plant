@@ -169,6 +169,45 @@ describe("createKrakenFeed", () => {
     expect(rows.prices).toHaveLength(5);
   });
 
+  it("asks each pair alone when Kraken refuses one, and keeps the rest", async () => {
+    const urls: string[] = [];
+    const feed = createKrakenFeed(
+      async (url) => {
+        urls.push(url);
+        if (url.endsWith("pair=LUNAUSD") || url.includes(",")) {
+          return { error: ["EQuery:Unknown asset pair"] };
+        }
+        return BODY;
+      },
+      async () => ["BTC", "LUNA"],
+    );
+    const rows = await feed.readRaw(NOW);
+    expect(urls).toEqual([
+      "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,LUNAUSD",
+      "https://api.kraken.com/0/public/Ticker?pair=XBTUSD",
+      "https://api.kraken.com/0/public/Ticker?pair=LUNAUSD",
+    ]);
+    expect(rows.prices.map(({ symbol, price }) => [symbol, price])).toEqual([
+      ["BTC", "112345.10000"],
+    ]);
+    expect(rows.unread).toEqual([{ key: "LUNA", code: "provider_error" }]);
+  });
+
+  it("fails the read when Kraken is busy, without asking pair by pair", async () => {
+    const urls: string[] = [];
+    const feed = createKrakenFeed(
+      async (url) => {
+        urls.push(url);
+        return { error: ["EService:Unavailable"] };
+      },
+      async () => SYMBOLS,
+    );
+    await expect(feed.readRaw(NOW)).rejects.toMatchObject({
+      code: "provider_busy",
+    });
+    expect(urls).toHaveLength(1);
+  });
+
   it("asks Kraken nothing when the catalog has no crypto", async () => {
     const urls: string[] = [];
     const rows = await feedOver([], urls).readRaw(NOW);

@@ -42,11 +42,22 @@ const COINS = {
   ],
 };
 
+// Kraken's dollar pairs: Bitcoin and Bitcoin Cash, not Wrapped Bitcoin.
+const KRAKEN_PAIRS = {
+  error: [],
+  result: {
+    XXBTZUSD: { wsname: "XBT/USD" },
+    BCHUSD: { wsname: "BCH/USD" },
+    BCHEUR: { wsname: "BCH/EUR" },
+    WBTCXBT: { wsname: "WBTC/XBT" },
+  },
+};
+
 function transport(
   overrides: {
     panel?: () => unknown;
     coins?: () => unknown;
-    ticker?: () => unknown;
+    pairs?: () => unknown;
   } = {},
 ) {
   const urls: string[] = [];
@@ -56,9 +67,7 @@ function transport(
       return overrides.coins ? overrides.coins() : COINS;
     }
     if (url.startsWith("https://api.kraken.com/")) {
-      return overrides.ticker
-        ? overrides.ticker()
-        : { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
+      return overrides.pairs ? overrides.pairs() : KRAKEN_PAIRS;
     }
     if (overrides.panel) return overrides.panel();
     const panel = /Cotizaciones\/(\w+)\//.exec(url)?.[1] ?? "";
@@ -143,6 +152,15 @@ describe("matchListings", () => {
     ).toEqual(["BTC", "WBTC"]);
   });
 
+  it("finds a CEDEAR by its dollar line", () => {
+    expect(
+      matchListings(listings, "googld", 5).map(({ symbol }) => symbol),
+    ).toEqual(["GOOGL"]);
+    expect(
+      matchListings(listings, "KOC", 5).map(({ symbol }) => symbol),
+    ).toEqual(["KO"]);
+  });
+
   it("finds nothing for a query with no letters or digits", () => {
     expect(matchListings(listings, " - ", 5)).toEqual([]);
   });
@@ -150,7 +168,10 @@ describe("matchListings", () => {
 
 describe("createCatalogSearch", () => {
   it("searches BYMA and crypto together", async () => {
-    const found = await searchWith(transport()).search("goog", 10);
+    const { listings: found } = await searchWith(transport()).search(
+      "goog",
+      10,
+    );
     expect(found.map(({ symbol, market }) => [symbol, market])).toEqual([
       ["GOOGL", "byma"],
     ]);
@@ -170,7 +191,7 @@ describe("createCatalogSearch", () => {
     expect(panelReads()).toBe(10);
   });
 
-  it("keeps crypto results when IOL fails", async () => {
+  it("keeps crypto results when IOL fails, and says BYMA failed", async () => {
     const found = await searchWith(
       transport({
         panel: () => {
@@ -178,7 +199,34 @@ describe("createCatalogSearch", () => {
         },
       }),
     ).search("bitcoin", 5);
-    expect(found.map(({ symbol }) => symbol)).toEqual(["BTC", "BCH", "WBTC"]);
+    expect(found.failed).toEqual(["byma"]);
+    expect(found.listings.map(({ symbol }) => symbol)).toEqual(["BTC", "BCH"]);
+  });
+
+  it("offers only the coins Kraken quotes in dollars", async () => {
+    const { listings } = await searchWith(transport()).search("bitcoin", 5, [
+      "crypto",
+    ]);
+    expect(listings.map(({ symbol }) => symbol)).toEqual(["BTC", "BCH"]);
+  });
+
+  it("searches only the markets asked for", async () => {
+    const t = transport();
+    const { listings } = await searchWith(t).search("ko", 5, ["byma"]);
+    expect(listings.map(({ symbol }) => symbol)).toEqual(["KO"]);
+    expect(t.urls.some((url) => url.includes("coingecko"))).toBe(false);
+  });
+
+  it("fails when every market asked for fails", async () => {
+    await expect(
+      searchWith(
+        transport({
+          panel: () => {
+            throw new QuoteFeedError("http_5xx");
+          },
+        }),
+      ).search("ko", 5, ["byma"]),
+    ).rejects.toMatchObject({ code: "http_5xx" });
   });
 
   it("verifies a BYMA symbol against IOL's own listing", async () => {
@@ -199,8 +247,8 @@ describe("createCatalogSearch", () => {
     });
     await expect(
       searchWith(
-        transport({ ticker: () => ({ error: ["EQuery:Unknown asset pair"] }) }),
-      ).verify("BCH", "crypto"),
+        transport({ pairs: () => ({ error: [], result: {} }) }),
+      ).verify("BTC", "crypto"),
     ).resolves.toBeNull();
   });
 
