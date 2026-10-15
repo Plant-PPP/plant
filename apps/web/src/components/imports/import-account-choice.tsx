@@ -1,11 +1,15 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
+import { PageCrumbs } from "@/components/layout/page-crumbs";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Notice } from "@/components/ui/notice";
+import { PageButton } from "@/components/ui/page-button";
+import { PageHeader } from "@/components/ui/page-header";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Label } from "@/components/ui/label";
 import {
@@ -65,59 +69,69 @@ export function ImportAccountChoice({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Cargar
-        </Link>
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">¿De qué cuenta es?</h1>
-          <p className="text-muted-foreground text-sm">
-            {`Leímos ${kind} de un broker en ${item.fileName}. Elegí la cuenta para revisarlas.`}
-          </p>
-        </div>
-      </div>
-
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[{ label: "Cargar", href: backHref }, { label: item.fileName }]}
+      />
       {accounts.length === 0 ? (
-        <p className="text-sm">
-          Todavía no tenés cuentas.{" "}
-          <Link href="/accounts" className="underline underline-offset-4">
-            Agregá una
-          </Link>{" "}
-          y volvé a esta carga.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="grid w-full gap-2 sm:w-64">
-            <Label htmlFor={`${id}-account`}>Cuenta</Label>
-            <Select
-              value={accountId}
-              onValueChange={(value) => value && setAccountId(value)}
-            >
-              <SelectTrigger id={`${id}-account`} className="w-full">
-                <SelectValue placeholder="Elegí una cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((each) => (
-                  <SelectItem key={each.id} value={each.id}>
-                    {each.institution}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            type="button"
-            disabled={!accountId || pending}
-            onClick={choose}
+        <>
+          <h1 className="sr-only">¿De qué cuenta es?</h1>
+          <EmptyState
+            icon={Building2}
+            title="Primero, una cuenta"
+            actions={
+              <PageButton asChild variant="default">
+                <Link href="/accounts">Agregar una cuenta</Link>
+              </PageButton>
+            }
           >
-            Seguir
-          </Button>
-        </div>
+            {`Leímos ${kind} de un broker en este archivo. Agregá la cuenta y volvé a esta carga para revisarlas.`}
+          </EmptyState>
+        </>
+      ) : (
+        <>
+          <PageHeader
+            title="¿De qué cuenta es?"
+            filters={
+              <>
+                <Label htmlFor={`${id}-account`} className="sr-only">
+                  Cuenta
+                </Label>
+                <Select
+                  value={accountId}
+                  onValueChange={(value) => value && setAccountId(value)}
+                >
+                  <SelectTrigger
+                    id={`${id}-account`}
+                    size="xs"
+                    className="sm:min-w-48"
+                  >
+                    <SelectValue placeholder="Elegí una cuenta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((each) => (
+                      <SelectItem key={each.id} value={each.id}>
+                        {each.institution}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            }
+            actions={
+              <PageButton
+                variant="default"
+                disabled={!accountId || pending}
+                onClick={choose}
+              >
+                Seguir
+              </PageButton>
+            }
+          />
+          <Notice title="¿De qué cuenta es?">
+            {`Leímos ${kind} de un broker en este archivo. Elegí la cuenta para revisarlas.`}
+          </Notice>
+        </>
       )}
       {alert && <FormAlert>{alert}</FormAlert>}
     </div>
