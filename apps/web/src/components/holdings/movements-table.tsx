@@ -185,12 +185,17 @@ export function MovementsTable({
         <DataTable columns={columns} data={loaded.rows} caption="Movimientos" />
       )}
       {loaded.kind === "loading" && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p
+          role="status"
+          className="text-muted-foreground py-6 text-center text-xs"
+        >
           Cargando movimientos…
         </p>
       )}
       {loaded.kind === "ready" && loaded.rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">Sin movimientos.</p>
+        <p className="text-muted-foreground py-6 text-center text-xs">
+          Sin movimientos.
+        </p>
       )}
       {loaded.kind === "failed" && (
         <FormAlert>
