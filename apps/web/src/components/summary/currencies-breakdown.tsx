@@ -7,6 +7,7 @@ import type { Sum } from "@/lib/holdings/valuation-view";
 const CURRENCY_NAMES: Record<Currency, string> = {
   ARS: "En pesos",
   USD: "En dólares",
+  EUR: "En euros",
 };
 
 // What is held in each currency, valued in the page's unit, with its share

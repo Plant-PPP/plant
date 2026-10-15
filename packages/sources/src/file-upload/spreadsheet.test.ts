@@ -253,6 +253,7 @@ describe("parseSheetDecimal", () => {
     ["1234.5", "1234.5"],
     ["$ 1.234,56", "1234.56"],
     ["US$ 10", "10"],
+    ["€ 1.234,56", "1234.56"],
     ["-3,5", "-3.5"],
     [0.1 + 0.2, "0.3"],
     [1234.5, "1234.5"],
@@ -343,16 +344,23 @@ describe("currencyOf", () => {
     ["DOLARES", "USD"],
     ["usd ccl", "USD"],
     ["Dólar (cable)", "USD"],
+    ["EUR", "EUR"],
+    ["Euros", "EUR"],
+    ["€", "EUR"],
   ])("reads %p as %p", (text, currency) => {
     expect(currencyOf(text)).toBe(currency);
   });
 
-  it.each([["EUR"], [""], ["pesos usd"], ["dolar blue"], ["mepa"]])(
-    "names no currency in %p",
-    (text) => {
-      expect(currencyOf(text)).toBeNull();
-    },
-  );
+  it.each([
+    ["GBP"],
+    [""],
+    ["pesos usd"],
+    ["dolar blue"],
+    ["mepa"],
+    ["usd eur"],
+  ])("names no currency in %p", (text) => {
+    expect(currencyOf(text)).toBeNull();
+  });
 });
 
 describe("columnMappingFor", () => {
@@ -375,7 +383,7 @@ describe("columnMappingFor", () => {
   it.each([
     ["a header the sheet lacks", { symbol: "Ticker" }],
     ["an empty header", { price: "" }],
-    ["a currency it does not know", { currencyDefault: "EUR" }],
+    ["a currency it does not know", { currencyDefault: "GBP" }],
     ["an extra field", { page: "Especie" }],
   ])("refuses %s", (_, patch) => {
     expect(
@@ -401,7 +409,7 @@ describe("sheetToDraft", () => {
     rows: [
       ["AL30", "1.234", "65.432,10", "Pesos", "30/09/2026"],
       ["AAPL", 10, 230.5, "u$s", 46200],
-      ["GD30", "5", "", "Euros", "15/10/2026"],
+      ["GD30", "5", "", "Libras", "15/10/2026"],
       ["", "5", "1", "ARS", ""],
       ["GGAL", "", "1", "ARS", ""],
       ["YPFD", "-2", "1", "ARS", ""],
@@ -455,7 +463,7 @@ describe("sheetToDraft", () => {
   });
 
   it("counts the holdings it leaves out, not a total without a symbol", () => {
-    // GD30 in euros and YPFD's negative quantity.
+    // GD30 in pounds and YPFD's negative quantity.
     expect(sheetToDraft(sheet, mapping, "2026-10-13").skippedRows).toBe(2);
   });
 
@@ -628,7 +636,7 @@ describe("sheetToDraft", () => {
       "AAPL",
       "BMA",
     ]);
-    // GD30 in euros and YPFD's negative quantity.
+    // GD30 in pounds and YPFD's negative quantity.
     expect(skippedRows).toBe(2);
   });
 

@@ -18,11 +18,13 @@ const AFFIXES = {
   usd_ccl: { prefix: "US$ ", suffix: "" },
   usd_official: { prefix: "US$ ", suffix: "" },
   btc: { prefix: "", suffix: " BTC" },
+  eur: { prefix: "€ ", suffix: "" },
   ARS: { prefix: "$ ", suffix: "" },
   USD: { prefix: "US$ ", suffix: "" },
+  EUR: { prefix: "€ ", suffix: "" },
 } satisfies Record<Unit, { prefix: string; suffix: string }>;
 
-// A currency's symbol, as its amounts start: $ or US$.
+// A currency's symbol, as its amounts start: $, US$ or €.
 export const currencySymbol = (currency: Currency): string =>
   AFFIXES[currency].prefix.trim();
 
@@ -70,7 +72,7 @@ function esAr(
 }
 
 // An amount in a unit as es-AR shows it: $ 1.234.567,89, US$ 12.345,67,
-// 0,50000000 BTC; a negative as -$ 1.234,50.
+// € 1.234,56, 0,50000000 BTC; a negative as -$ 1.234,50.
 export function formatAmount(decimal: string, unit: Unit): string {
   const { prefix, suffix } = AFFIXES[unit];
   const text = esAr(decimal, digitsOf(unit));

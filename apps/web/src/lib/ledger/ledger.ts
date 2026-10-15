@@ -43,7 +43,7 @@ import {
   referenceUnit,
   type StoredQuotes,
   snapshotOn,
-  UNIT_FX_KINDS,
+  VALUED_FX_KINDS,
 } from "@plant/core";
 import {
   compareExact,
@@ -966,10 +966,13 @@ export function writeOperation<S extends Ledger>(
   ) {
     return refused(state, { ok: false, code: "invalid" });
   }
-  const rates = snapshotOn(state.quotes, operation.date, {
-    fxKinds: UNIT_FX_KINDS,
+  // Every movement carries the dollars' rates; one in euros, the euro's too.
+  const { eur, ...dollarRates } = snapshotOn(state.quotes, operation.date, {
+    fxKinds: VALUED_FX_KINDS,
     symbols: [],
   }).snapshot.fx;
+  const rates =
+    operation.currency === "EUR" ? { ...dollarRates, eur } : dollarRates;
   // An edit first takes the operation's movements out of their holdings.
   const without = new Map<string, Movement[]>();
   for (const [holdingId, own] of state.movements) {

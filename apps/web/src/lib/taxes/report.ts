@@ -30,7 +30,7 @@ import {
 import { type ClosesState, heldOn } from "@/lib/summary/compute";
 
 // The Banco Nación buying rate a foreign-currency asset is valued at, with
-// the day it is from.
+// the day it is from: the dollar's for dollars, the euro's for euros.
 export type OfficialBuy = { buy: string; date: string };
 
 // One asset as the year ended: an instrument across every holding of it the
@@ -64,6 +64,7 @@ export type TaxReport = {
   date: string;
   provisional: boolean;
   officialBuy: OfficialBuy | null;
+  euroBuy: OfficialBuy | null;
   wealth: {
     lines: WealthLine[];
     taxable: string;
@@ -140,7 +141,7 @@ const sum = (values: readonly Exact[]): string => stored(plus(...values));
 function wealthOf(
   state: ClosesState,
   date: string,
-  officialBuy: OfficialBuy | null,
+  buys: Record<Exclude<Currency, "ARS">, OfficialBuy | null>,
   leftOut: (row: HoldingRow) => boolean,
   isPlazoFijo: (row: HoldingRow) => boolean,
 ) {
@@ -157,14 +158,16 @@ function wealthOf(
       continue;
     }
     const money = "missing" in value ? null : value.money;
+    const buy =
+      money === null || money.currency === "ARS" ? null : buys[money.currency];
     const ars =
       money === null
         ? null
         : money.currency === "ARS"
           ? money.amount
-          : officialBuy === null
+          : buy === null
             ? null
-            : times(money.amount, exactOf(officialBuy.buy));
+            : times(money.amount, exactOf(buy.buy));
     const kept = lines.get(key);
     if (kept) {
       kept.amount =
@@ -275,19 +278,22 @@ function gainsOf(
 }
 
 // A year's estimate for Bienes Personales and Ganancias, in pesos. Assets are
-// valued as the closes value them on the year's last day, a foreign-currency
-// one at `officialBuy`; results are the ledger's in pesos, each movement at
-// its own day's rates, and sales take the oldest units first.
+// valued as the closes value them on the year's last day, one in dollars at
+// `officialBuy` and one in euros at `euroBuy`; results are the ledger's in
+// pesos, each movement at its own day's rates, and sales take the oldest
+// units first.
 export function taxReport(
   state: ClosesState,
   {
     year,
     officialBuy,
+    euroBuy,
     leftOut,
     isPlazoFijo,
   }: {
     year: string;
     officialBuy: OfficialBuy | null;
+    euroBuy: OfficialBuy | null;
     leftOut: (row: HoldingRow) => boolean;
     isPlazoFijo: (row: HoldingRow) => boolean;
   },
@@ -296,7 +302,7 @@ export function taxReport(
   const { wealth, leftOut: leftOutCount } = wealthOf(
     state,
     date,
-    officialBuy,
+    { USD: officialBuy, EUR: euroBuy },
     leftOut,
     isPlazoFijo,
   );
@@ -305,6 +311,7 @@ export function taxReport(
     date,
     provisional: date === state.today,
     officialBuy,
+    euroBuy,
     wealth,
     gains: gainsOf(state, { from: `${year}-01-01`, to: date }, leftOut),
     leftOut: leftOutCount,

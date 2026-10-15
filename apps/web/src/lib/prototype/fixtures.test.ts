@@ -7,6 +7,7 @@ import {
   quotesNeeded,
   readSnapshot,
   replay,
+  valueHoldings,
 } from "@plant/core";
 import { z } from "zod";
 
@@ -97,7 +98,12 @@ it("reads today's rates and prices through the quote reader", async () => {
     quotesNeeded(fixtures.holdings.map((row) => row.holding)),
   );
   expect(invalidCount).toBe(0);
-  expect(Object.keys(snapshot.fx).sort()).toEqual(["ccl", "mep", "official"]);
+  expect(Object.keys(snapshot.fx).sort()).toEqual([
+    "ccl",
+    "eur",
+    "mep",
+    "official",
+  ]);
   expect(snapshot.fx.mep?.date).toBe(TODAY);
   expect(snapshot.prices.BTC?.date).toBe(TODAY);
   expect(snapshot.prices.KO).toBeUndefined();
@@ -191,4 +197,21 @@ describe("each instrument's currency", () => {
       expect(quote.currency).toBe(currencyOf(quote.symbol));
     }
   });
+});
+
+it("holds euros in cash, valued at today's official euro", async () => {
+  const holdings = fixtures.holdings.map((row) => row.holding);
+  const euros = holdings.filter((holding) => holding.currency === "EUR");
+  expect(euros).toHaveLength(1);
+  const { snapshot } = await readSnapshot(
+    createFixtureQuoteReader(fixtures.quotes),
+    TODAY,
+    quotesNeeded(holdings),
+  );
+  const value = valueHoldings(euros, snapshot, {
+    denominator: "ars",
+    referenceDollar: "mep",
+  });
+  expect(value.complete).toBe(true);
+  expect(compareDecimals(value.total, "0")).toBe(1);
 });

@@ -101,6 +101,31 @@ describe("admitMovement", () => {
     });
   });
 
+  it("needs the euro's rate only for a movement in euros", () => {
+    const inEuros = {
+      ...income("dividend", "3", { date: "2026-03-01", currency: "EUR" }),
+    };
+    expect(admitMovement(history, inEuros, { today: TODAY })).toEqual({
+      ok: false,
+      code: "no_rate",
+      missing: ["eur"],
+    });
+    const rated = {
+      ...inEuros,
+      rates: {
+        ...inEuros.rates,
+        eur: { sell: "1300", date: "2026-03-01" },
+      },
+    };
+    expect(admitMovement(history, rated, { today: TODAY })).toMatchObject({
+      ok: true,
+    });
+    const inPesos = income("dividend", "3", { date: "2026-03-01" });
+    expect(admitMovement(history, inPesos, { today: TODAY })).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("reads quantities only, so income never refuses", () => {
     const dividend = income("dividend", "3", { date: "2026-03-01" });
     expect(admitMovement(history, dividend, { today: TODAY })).toEqual({

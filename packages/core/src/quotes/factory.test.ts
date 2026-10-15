@@ -378,6 +378,7 @@ describe("quoteFeeds", () => {
       "official",
       "mep",
       "ccl",
+      "eur",
     ]);
     expect(batch.unread).toEqual(["blue:bad_shape"]);
   });

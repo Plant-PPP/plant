@@ -28,7 +28,7 @@ type Common = {
   id?: string;
   entry_order?: number;
   date: string;
-  currency?: "ARS" | "USD";
+  currency?: "ARS" | "USD" | "EUR";
   fees?: string;
   taxes?: string;
   rates?: MovementRates;

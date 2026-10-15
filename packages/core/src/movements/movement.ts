@@ -116,14 +116,23 @@ const KIND_FIELDS = {
 export const movementBranch = <K extends MovementKind>(kind: K) =>
   z.object({ kind: z.literal(kind), ...common, ...KIND_FIELDS[kind] });
 
+const movementRateSchema = z
+  .object({ sell: positiveDecimalSchema, date: holdingDateSchema })
+  .strict();
+
 // The selling rate of each dollar on the movement's date, so its amounts can
-// be expressed in any unit later.
-export const movementRatesSchema = z.record(
-  z.enum(UNIT_FX_KINDS),
-  z.object({ sell: positiveDecimalSchema, date: holdingDateSchema }).strict(),
-);
+// be expressed in any unit later, and the official euro's when the movement
+// is in euros.
+export const movementRatesSchema = z
+  .object({
+    ...(Object.fromEntries(
+      UNIT_FX_KINDS.map((kind) => [kind, movementRateSchema]),
+    ) as Record<UnitFxKind, typeof movementRateSchema>),
+    eur: movementRateSchema.optional(),
+  })
+  .strict();
 export type MovementRates = z.output<typeof movementRatesSchema>;
-export type MovementRate = MovementRates[UnitFxKind];
+export type MovementRate = z.output<typeof movementRateSchema>;
 
 // A movement is one holding's part of an operation: the operation's other
 // parts are the same movement in the account's other portfolios, or a

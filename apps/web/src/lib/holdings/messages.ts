@@ -36,11 +36,13 @@ export const UNIT_LABELS: Record<Denominator, string> = {
   usd_ccl: "Dólar CCL",
   usd_official: "Dólar oficial",
   btc: "Bitcoin",
+  eur: "Euro",
 };
 
 export const CURRENCY_LABELS: Record<Currency, string> = {
   ARS: "Pesos (ARS)",
   USD: "Dólares (USD)",
+  EUR: "Euros (EUR)",
 };
 
 export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
@@ -126,7 +128,7 @@ export const MOVEMENT_MESSAGES: Record<
   oversold: `Saldrían más unidades de las que tenías en ese momento. ${SAME_DAY_ORDER}`,
   opening_balance: `El saldo inicial va primero y una sola vez. Sin saldo inicial, la tenencia empieza con una compra, un ajuste de entrada o un traspaso desde otra cartera. ${SAME_DAY_ORDER}`,
   future_date: FUTURE_DATE_MESSAGE,
-  no_rate: "No hay cotización del dólar para esa fecha.",
+  no_rate: "No hay cotización para esa fecha.",
   same_balance:
     "Es el saldo que ya tenías ese día: no hay rendimiento para cargar.",
   opens_later:

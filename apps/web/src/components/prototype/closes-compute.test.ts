@@ -73,9 +73,10 @@ it(
 );
 
 // The closes of 20,000 movements over ten years in every unit and today's
-// quotes, as the implementation before PLA-139 computed them.
+// quotes, as the implementation before PLA-139 computed them, over the
+// prototype fixtures with euros held.
 const LARGE_DIGEST =
-  "78dd6dd2437bf93e0e44f6d78a05c43cc939f90e87cf9caea0fd5bca8a013bf4";
+  "590c521edfe3a7c9486b176b6e40eb438d47cc27e38fb995c10e005bc26f3dbf";
 
 it(
   "closes 20,000 movements as before, one unit in a few seconds",

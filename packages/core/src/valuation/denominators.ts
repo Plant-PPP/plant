@@ -4,7 +4,7 @@ import type { FxRateKind } from "../quotes/contract/quote";
 // is a member here and an entry in DENOMINATORS; a unit held as money (EUR)
 // also needs its currency and rate kind.
 export type Denominator =
-  "ars" | "usd_mep" | "usd_ccl" | "usd_official" | "btc";
+  "ars" | "usd_mep" | "usd_ccl" | "usd_official" | "btc" | "eur";
 
 // How many pesos one unit is: pesos themselves; a dollar at its rate's
 // selling price; or a unit priced in another (BTC is USD MEP times the BTC
@@ -13,7 +13,11 @@ export type Denominator =
 // named. scale is the digits a value in this unit is shown to.
 export type DenominatorSpec =
   | { scale: number; heldUsd: "reference" }
-  | { fx: Exclude<FxRateKind, "uva">; scale: number; heldUsd: "self" }
+  | {
+      fx: Exclude<FxRateKind, "uva">;
+      scale: number;
+      heldUsd: "self" | "reference";
+    }
   | { via: DollarUnit; priced: string; scale: number; heldUsd: DollarUnit };
 
 type DollarUnit = Extract<Denominator, `usd_${string}`>;
@@ -24,18 +28,40 @@ export const DENOMINATORS = {
   usd_ccl: { fx: "ccl", scale: 2, heldUsd: "self" },
   usd_official: { fx: "official", scale: 2, heldUsd: "self" },
   btc: { via: "usd_mep", priced: "BTC", scale: 8, heldUsd: "usd_mep" },
+  eur: { fx: "eur", scale: 2, heldUsd: "reference" },
 } as const satisfies Record<Denominator, DenominatorSpec>;
 
 export const isDenominator = (value: unknown): value is Denominator =>
   typeof value === "string" && Object.hasOwn(DENOMINATORS, value);
 
-type FxSpec = Extract<
-  (typeof DENOMINATORS)[keyof typeof DENOMINATORS],
-  { fx: string }
->;
+// The units a user can view their money in. EUR is a unit held money is
+// valued from, not one the app shows totals in.
+export const VIEW_UNITS = [
+  "ars",
+  "usd_mep",
+  "usd_ccl",
+  "usd_official",
+  "btc",
+] as const satisfies readonly Denominator[];
+export type ViewUnit = (typeof VIEW_UNITS)[number];
+
+export const isViewUnit = (value: unknown): value is ViewUnit =>
+  typeof value === "string" &&
+  (VIEW_UNITS as readonly string[]).includes(value);
+
+type FxSpec = Extract<(typeof DENOMINATORS)[ViewUnit], { fx: string }>;
 export type UnitFxKind = FxSpec["fx"];
 
-// The rate kinds the units are priced at: the rates a value in any unit needs.
-export const UNIT_FX_KINDS = Object.values(DENOMINATORS).flatMap(
-  (spec: DenominatorSpec) => ("fx" in spec ? [spec.fx] : []),
-) as [UnitFxKind, ...UnitFxKind[]];
+// The rate kinds the view units are priced at: the rates every movement
+// stores, and that a value in any view unit needs.
+export const UNIT_FX_KINDS = VIEW_UNITS.flatMap((unit) => {
+  const spec: DenominatorSpec = DENOMINATORS[unit];
+  return "fx" in spec ? [spec.fx] : [];
+}) as [UnitFxKind, ...UnitFxKind[]];
+
+// The rate kinds a held amount can need: the view units' and the euro's.
+export type ValuedFxKind = UnitFxKind | "eur";
+export const VALUED_FX_KINDS: [ValuedFxKind, ...ValuedFxKind[]] = [
+  ...UNIT_FX_KINDS,
+  "eur",
+];

@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(16);
+SELECT plan(17);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -91,6 +91,12 @@ SELECT results_eq(
   'a user writes their debts under their own id and reads only them'
 );
 
+SELECT lives_ok(
+  $$ INSERT INTO public.liabilities (kind, label, currency, balance)
+     VALUES ('personal_loan', 'Préstamo en euros', 'EUR', '1500') $$,
+  'a debt is owed in euros too'
+);
+
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.liabilities (kind, label, currency, balance)
                       VALUES ('usd_debt', 'Préstamo', 'ARS', '1') $$),
@@ -152,7 +158,7 @@ SELECT is(
 DELETE FROM public.liabilities WHERE kind = 'crypto_loan';
 SELECT is(
   (SELECT count(*)::int FROM public.liabilities),
-  1,
+  2,
   'a user deletes their own debt'
 );
 

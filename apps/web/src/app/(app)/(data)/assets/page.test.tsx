@@ -351,7 +351,10 @@ it("logs a failed valuation once and throws it as logged", async () => {
     list([
       {
         ...holding("h1", P1, "1"),
-        holding: { ...holding("h1", P1, "1").holding, currency: "EUR" },
+        holding: {
+          ...holding("h1", P1, "1").holding,
+          currency: "GBP" as "EUR",
+        },
       },
     ]),
   );

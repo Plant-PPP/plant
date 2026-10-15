@@ -283,7 +283,7 @@ describe("checkBatch", () => {
     ["a symbol with a dash", price({ symbol: "BTC-USD" })],
     ["a 16-character symbol", price({ symbol: "ABCDEFGHIJKLMNOP" })],
     ["an empty symbol", price({ symbol: "" })],
-    ["an unknown currency", price({ currency: "EUR" as RawPrice["currency"] })],
+    ["an unknown currency", price({ currency: "GBP" as RawPrice["currency"] })],
     ["a date that is not a day", price({ price_date: "2026-10-9" })],
     ["an empty price", price({ price: "" })],
     ["a NaN price", price({ price: "NaN" })],

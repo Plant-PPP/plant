@@ -35,7 +35,7 @@ describe("moneySchema", () => {
   it.each([
     ["an amount without its currency", { amount: "1" }],
     ["a null amount", { amount: null, currency: "ARS" }],
-    ["a currency outside the enum", { amount: "1", currency: "EUR" }],
+    ["a currency outside the enum", { amount: "1", currency: "GBP" }],
   ])("rejects %s", (_label, value) => {
     expect(moneySchema.safeParse(value).success).toBe(false);
   });

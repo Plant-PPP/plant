@@ -1,6 +1,6 @@
 "use client";
 
-import { DENOMINATORS, type Denominator } from "@plant/core";
+import { type Denominator, VIEW_UNITS } from "@plant/core";
 
 import {
   Select,
@@ -78,7 +78,7 @@ export function UnitSelect({
   id,
   unit,
   referenceUnit,
-  units = Object.keys(DENOMINATORS) as Denominator[],
+  units = VIEW_UNITS,
   pending,
   shownLabel,
   onChange,

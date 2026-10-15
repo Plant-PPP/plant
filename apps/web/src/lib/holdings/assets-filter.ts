@@ -1,4 +1,4 @@
-import { type Denominator, isDenominator } from "@plant/core";
+import { type Denominator, isViewUnit } from "@plant/core";
 
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
@@ -84,7 +84,7 @@ export type AssetsParam =
   "unit" | "portfolio" | "class" | "search" | "tab" | "year";
 
 // What the page's params ask for. An invalid value falls back to the default
-// and is flagged, so the page can log it: a unit outside DENOMINATORS, a
+// and is flagged, so the page can log it: a unit outside VIEW_UNITS, a
 // portfolio the user does not have active, an unknown class, a tab the page
 // does not offer, a year with no sales, or a search that is not one string of
 // at most SEARCH_MAX_LENGTH characters once trimmed. The year defaults to the
@@ -123,7 +123,7 @@ export function parseAssetsParams(
   const salesYear =
     typeof year === "string" && salesYears.includes(year) ? year : null;
   return {
-    unit: isDenominator(unit) ? unit : null,
+    unit: isViewUnit(unit) ? unit : null,
     tab: tabOf(tab, tabs),
     year: salesYear ?? salesYears[0] ?? null,
     filter: {
@@ -132,7 +132,7 @@ export function parseAssetsParams(
       search: search ?? "",
     },
     invalid: {
-      unit: unit !== undefined && !isDenominator(unit),
+      unit: unit !== undefined && !isViewUnit(unit),
       portfolio: portfolio !== undefined && portfolioId === null,
       class: holdingClass !== undefined && !isHoldingClass(holdingClass),
       search: search === null,

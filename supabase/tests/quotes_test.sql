@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(65);
+SELECT plan(66);
 
 -- A local database may hold rows from a cron or pentest run.
 DELETE FROM public.fx_rates;
@@ -283,6 +283,15 @@ SELECT lives_ok(
 
 SELECT lives_ok(
   $$ WITH ins AS (
+       INSERT INTO public.fx_rates (kind, rate_date, buy, sell, source, quoted_at, fetched_at)
+       VALUES ('eur', (SELECT today FROM day), 1670.5, 1690.25, 'dolarapi', now(), now())
+       ON CONFLICT (kind, rate_date) DO NOTHING RETURNING kind)
+     INSERT INTO returned SELECT 'first', kind::text FROM ins $$,
+  'the service role inserts today''s official euro'
+);
+
+SELECT lives_ok(
+  $$ WITH ins AS (
        INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
        VALUES ('BTC', (SELECT today FROM day), 1, 'USD', 'kraken', now(), now())
        ON CONFLICT (symbol, price_date) DO NOTHING RETURNING symbol)
@@ -388,14 +397,15 @@ RESET ROLE;
 
 SELECT set_eq(
   $$ SELECT attempt || ' ' || key FROM returned $$,
-  ARRAY['first mep', 'first uva', 'first BTC'],
+  ARRAY['first mep', 'first uva', 'first eur', 'first BTC'],
   'each insert returns its key the first time and nothing the second'
 );
 
 SELECT results_eq(
   $$ SELECT kind::text, buy, sell FROM public.fx_rates
      WHERE rate_date = (SELECT today FROM day) ORDER BY kind $$,
-  $$ VALUES ('mep'::text, 1180::numeric, 1200::numeric), ('uva', NULL, 1650.5) $$,
+  $$ VALUES ('eur'::text, 1670.5::numeric, 1690.25::numeric), ('mep', 1180, 1200),
+            ('uva', NULL, 1650.5) $$,
   'the second insert leaves today''s dollar rate unchanged'
 );
 
@@ -412,7 +422,7 @@ SELECT set_config('request.jwt.claims',
                     'aal', 'aal1', 'mfa_enrolled', false)::text, true);
 SET LOCAL ROLE authenticated;
 
-SELECT is((SELECT count(*)::int FROM public.fx_rates), 3, 'a user reads every dollar rate');
+SELECT is((SELECT count(*)::int FROM public.fx_rates), 4, 'a user reads every rate');
 SELECT is((SELECT count(*)::int FROM public.prices), 2, 'a user reads every price');
 
 SELECT throws_ok(

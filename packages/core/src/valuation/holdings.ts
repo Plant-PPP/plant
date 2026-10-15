@@ -5,7 +5,7 @@ import {
   DENOMINATORS,
   type Denominator,
   type DenominatorSpec,
-  UNIT_FX_KINDS,
+  VALUED_FX_KINDS,
 } from "./denominators";
 import { type Holding, valueHolding } from "./holding";
 
@@ -92,10 +92,10 @@ export function valueHoldings(
 const SPECS: readonly DenominatorSpec[] = Object.values(DENOMINATORS);
 
 // The quotes valuing these holdings in any unit can read: every unit's rate,
-// every priced unit, and each held instrument's price.
+// the official euro, every priced unit, and each held instrument's price.
 export function quotesNeeded(holdings: readonly Holding[]): QuoteNeed {
   return {
-    fxKinds: UNIT_FX_KINDS,
+    fxKinds: VALUED_FX_KINDS,
     symbols: [
       ...SPECS.flatMap((spec) => ("priced" in spec ? [spec.priced] : [])),
       ...holdings.flatMap((holding) =>

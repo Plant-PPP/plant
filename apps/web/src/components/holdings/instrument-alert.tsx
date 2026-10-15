@@ -1,6 +1,5 @@
 "use client";
 
-import type { Currency } from "@plant/shared";
 import { Bell } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -51,7 +50,7 @@ export function InstrumentAlert({
   onCreate,
 }: {
   symbol: string;
-  currency: Currency;
+  currency: "ARS" | "USD";
   held: boolean;
   onCreate: (alert: NewAlert) => Promise<AlertWriteResult>;
 }) {
@@ -92,7 +91,7 @@ function AlertForm({
   onDone,
 }: {
   symbol: string;
-  currency: Currency;
+  currency: "ARS" | "USD";
   held: boolean;
   onCreate: (alert: NewAlert) => Promise<AlertWriteResult>;
   onDone: () => void;
