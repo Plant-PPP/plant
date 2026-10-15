@@ -62,13 +62,13 @@ function otherField(html: string): string | undefined {
 }
 
 function alertId(html: string): string | undefined {
-  return /<p[^>]*id="([^"]+)"[^>]*role="alert"/.exec(html)?.[1];
+  return /<p[^>]*id="([^"]+)"[^>]*data-slot="form-alert"/.exec(html)?.[1];
 }
 
 it("opens again with the refused fields and the alert", () => {
   const html = render(MESSAGES.failed, { institution: "Mi broker" });
   expect(html).toMatch(
-    new RegExp(`<p[^>]*role="alert"[^>]*>${MESSAGES.failed}</p>`),
+    new RegExp(`<p[^>]*data-slot="form-alert"[^>]*>${MESSAGES.failed}</p>`),
   );
   expect(html).toMatch(/<input[^>]*value="Mi broker"/);
   expect(html).toMatch(
@@ -80,7 +80,7 @@ it("opens again with the refused fields and the alert", () => {
 
 it("opens with no alert, starting on the institution, when nothing was refused", () => {
   const html = render(undefined, { defaultPortfolioId: "" });
-  expect(html).not.toContain('role="alert"');
+  expect(html).not.toContain('data-slot="form-alert"');
   expect(marked(html, 'aria-invalid="true"')).toEqual([]);
   expect(marked(html, "autofocus")).toEqual(["Institución"]);
   expect(html).not.toMatch(/<button[^>]*type="submit"[^>]*aria-describedby=/);

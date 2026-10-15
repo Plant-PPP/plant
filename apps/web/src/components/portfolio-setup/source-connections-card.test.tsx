@@ -82,7 +82,7 @@ it("lists archived accounts in their own table with a restore button", () => {
   const archived = render({ active: [], archived: [second] });
   expect(archived).toMatch(/<caption[^>]*>Cuentas archivadas<\/caption>/);
   expect(archived).toContain('aria-label="Restaurar Broker Dos"');
-  expect(archived).toContain("Todavía no agregaste cuentas.");
+  expect(archived).toContain("Todavía no agregaste cuentas");
 });
 
 it("fades an account the server has not confirmed yet", () => {
@@ -94,7 +94,9 @@ it("fades an account the server has not confirmed yet", () => {
   expect(unsaved).toMatch(
     /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="c1"[^>]*aria-busy="true"/,
   );
-  expect(unsaved).toMatch(/<tr[^>]*class="border-b" data-row-id="c2">/);
+  expect(unsaved).toMatch(
+    /<tr[^>]*class="[^"]*border-b[^"]*" data-row-id="c2">/,
+  );
 });
 
 it("passes the page's pending to its archived list", () => {
@@ -126,9 +128,11 @@ it("offers delete only on the accounts a delete would go through for", () => {
       deletable={["c2", "c3"]}
     />,
   );
-  expect(markup).toContain('aria-label="Borrar Broker Dos"');
+  // An active account's three actions sit in its ⋯ menu; an archived one's
+  // two stay as icons.
+  expect(markup).toContain('aria-label="Acciones de Broker Dos"');
+  expect(markup).toContain('aria-label="Acciones de Banco Uno"');
   expect(markup).toContain('aria-label="Borrar Vieja"');
-  expect(markup).not.toContain('aria-label="Borrar Banco Uno"');
 });
 
 it("links each active account's name to its page once the server has it", () => {

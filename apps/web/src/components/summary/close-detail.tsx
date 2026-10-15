@@ -2,15 +2,10 @@
 
 import { type Denominator, isTrade } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { PageCrumbs } from "@/components/layout/page-crumbs";
 import type { ReactNode } from "react";
 
-import {
-  AmountText,
-  NUMBER_CELL,
-  SummaryTile,
-} from "@/components/holdings/sum-text";
+import { AmountText, NUMBER_CELL } from "@/components/holdings/sum-text";
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -28,6 +23,7 @@ import { type Benchmarks, beyond } from "@/lib/summary/benchmarks";
 
 import { ClosesTable } from "./closes-table";
 import { CloseStatus, ResultText, ShareText } from "./figures";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 type Figures = YearClose["totals"];
 
@@ -41,19 +37,15 @@ function Header({
   backHref: string;
 }) {
   return (
-    <div className="grid gap-3">
-      <Link
-        href={backHref}
-        className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-      >
-        <ArrowLeft aria-hidden className="size-4" />
-        Resumen
-      </Link>
-      <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
-        {title}
+    <>
+      <PageCrumbs
+        crumbs={[{ label: "Resumen", href: backHref }, { label: title }]}
+      />
+      <div className="flex min-h-7 items-center gap-2">
+        <h1 className="sr-only">{title}</h1>
         {status}
-      </h1>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -73,15 +65,15 @@ function CloseFigures({
   year?: boolean;
 }) {
   return (
-    <div className="grid gap-3">
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Patrimonio neto al inicio">
+    <div className="grid gap-2">
+      <StatGrid>
+        <StatTile label="Patrimonio neto al inicio">
           <AmountText amount={figures.startValue} unit={unit} />
-        </SummaryTile>
-        <SummaryTile label="Patrimonio neto al final">
+        </StatTile>
+        <StatTile label="Patrimonio neto al final">
           <AmountText amount={figures.endValue} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Resultado"
           note="Mercado más rentas menos gastos; el % no cuenta lo que pusiste"
         >
@@ -90,42 +82,42 @@ function CloseFigures({
             share={figures.share}
             unit={unit}
           />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Aportes netos"
           note={`Entró ${formatAmount(figures.paidIn, unit)} y salió ${formatAmount(figures.proceeds, unit)}`}
         >
           <AmountText amount={figures.contributed} unit={unit} />
-        </SummaryTile>
-      </dl>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Resultado de mercado" note="Precios y dólar">
+        </StatTile>
+      </StatGrid>
+      <StatGrid>
+        <StatTile label="Resultado de mercado" note="Precios y dólar">
           <ResultText amount={figures.market} share={null} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Dividendos, cupones y rendimientos"
           note="Antes de retenciones"
         >
           <AmountText amount={figures.income} unit={unit} />
-        </SummaryTile>
-        <SummaryTile label="Resultado realizado">
+        </StatTile>
+        <StatTile label="Resultado realizado">
           <AmountText amount={figures.realized} unit={unit} />
-        </SummaryTile>
-        <SummaryTile
+        </StatTile>
+        <StatTile
           label="Gastos"
           note="Comisiones, derechos, impuestos y retenciones"
         >
           <AmountText amount={figures.charges} unit={unit} />
-        </SummaryTile>
-      </dl>
+        </StatTile>
+      </StatGrid>
       {/* A return in pesos set against prices and the dollar; in dollars it
           already is one. */}
       {unit === "ars" && benchmarks && (
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryTile label="Inflación" note="Según la UVA, que sigue al IPC">
+        <StatGrid>
+          <StatTile label="Inflación" note="Según la UVA, que sigue al IPC">
             <ShareText share={benchmarks.inflation} />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Rendimiento real"
             note="Lo que ganaste por encima de la inflación"
           >
@@ -133,11 +125,11 @@ function CloseFigures({
               share={beyond(figures.share, benchmarks.inflation)}
               colored
             />
-          </SummaryTile>
-          <SummaryTile label="Dólar MEP">
+          </StatTile>
+          <StatTile label="Dólar MEP">
             <ShareText share={benchmarks.dollar} />
-          </SummaryTile>
-          <SummaryTile
+          </StatTile>
+          <StatTile
             label="Contra el dólar"
             note="Lo que ganaste por encima del dólar MEP"
           >
@@ -145,8 +137,8 @@ function CloseFigures({
               share={beyond(figures.share, benchmarks.dollar)}
               colored
             />
-          </SummaryTile>
-        </dl>
+          </StatTile>
+        </StatGrid>
       )}
       {unit === "ars" && !benchmarks && (
         <p className="text-muted-foreground text-xs">
@@ -241,7 +233,7 @@ export function MonthCloseDetail({
     },
   ];
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <Header
         title={`Cierre de ${monthInText(close.period)}`}
         status={<CloseStatus close={close} />}
@@ -254,7 +246,7 @@ export function MonthCloseDetail({
         benchmarks={close.benchmarks}
       />
       <section className="grid gap-3">
-        <h2 className="text-base font-semibold">Movimientos del mes</h2>
+        <h2 className="text-sm font-semibold">Movimientos del mes</h2>
         {lines.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No hubo movimientos este mes.
@@ -296,7 +288,7 @@ export function YearCloseDetail({
     (each: MonthClose) => each.recalculatedOn !== null,
   );
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <Header
         title={`Cierre de ${year.year}`}
         status={
@@ -322,7 +314,7 @@ export function YearCloseDetail({
         year
       />
       <section className="grid gap-3">
-        <h2 className="text-base font-semibold">Mes a mes</h2>
+        <h2 className="text-sm font-semibold">Mes a mes</h2>
         <ClosesTable
           year={year}
           unit={unit}

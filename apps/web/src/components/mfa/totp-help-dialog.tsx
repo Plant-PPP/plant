@@ -18,7 +18,7 @@ function AppLink({ href, children }: { href: string; children: ReactNode }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="underline underline-offset-4 hover:text-foreground"
+      className="hover:text-foreground"
     >
       {children}
     </a>
@@ -62,7 +62,7 @@ export function TotpHelpDialog({
           <section className="grid gap-1.5">
             <h3 className="flex items-center gap-1.5 font-medium">
               <TriangleAlert
-                className="size-3.5 shrink-0 text-amber-500"
+                className="text-warn size-3.5 shrink-0"
                 aria-hidden
               />
               Microsoft Authenticator

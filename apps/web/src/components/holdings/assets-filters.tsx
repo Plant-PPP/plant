@@ -100,12 +100,12 @@ export function AssetsFilters({
         </label>
         <Search
           aria-hidden
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2"
         />
         <Input
           id={ids.search}
           type="search"
-          className="h-8 pl-8"
+          className="h-7 pl-7 md:text-xs"
           placeholder="Buscar activo, ticker o cuenta"
           maxLength={SEARCH_MAX_LENGTH}
           value={search}

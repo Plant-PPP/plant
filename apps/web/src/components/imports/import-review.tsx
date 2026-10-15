@@ -1,5 +1,8 @@
 "use client";
 
+import { PageCrumbs } from "@/components/layout/page-crumbs";
+import { Notice } from "@/components/ui/notice";
+import { Badge } from "@/components/ui/badge";
 import {
   documentDateIssue,
   exactUnitPrice,
@@ -13,14 +16,7 @@ import {
   times,
   toDecimal,
 } from "@plant/shared";
-import {
-  ArrowLeft,
-  Check,
-  Plus,
-  RotateCcw,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+import { Check, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
@@ -508,28 +504,22 @@ export function ImportReview({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Cargar
-        </Link>
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">Revisá lo que leímos</h1>
-          <p className="text-muted-foreground text-sm">
-            {`${item.fileName} · ${institution}`}
-            {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[{ label: "Cargar", href: backHref }, { label: item.fileName }]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="sr-only">Revisá lo que leímos</h1>
+        <p className="text-muted-foreground text-xs">
+          {institution}
+          {item.documentDate && ` · al ${formatDate(item.documentDate)}`}
+        </p>
+        {dateIssue && (
+          <p className="flex items-center gap-1.5 text-xs">
+            <TriangleAlert aria-hidden className="text-warn size-3.5" />
+            {DATE_ISSUE_LABELS[dateIssue]}
           </p>
-          {dateIssue && (
-            <p className="flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300">
-              <TriangleAlert aria-hidden className="size-4" />
-              {DATE_ISSUE_LABELS[dateIssue]}
-            </p>
-          )}
-        </div>
+        )}
       </div>
 
       {item.skippedRows > 0 && (
@@ -537,28 +527,23 @@ export function ImportReview({
       )}
 
       {item.origin !== "sync" && (
-        <section
-          className={cn(
-            "grid gap-2 rounded-lg border p-4",
-            matches === true
-              ? "border-emerald-600/40"
-              : matches === false && "border-amber-500/50",
-          )}
+        <Notice
           aria-label="Totales"
-        >
-          <p className="flex items-center gap-2 text-sm font-medium">
-            {matches === true && (
-              <Check aria-hidden className="size-4 text-emerald-600" />
-            )}
-            {matches === false && (
-              <TriangleAlert aria-hidden className="size-4 text-amber-600" />
-            )}
-            {matches === "none"
+          variant={
+            matches === true
+              ? "success"
+              : matches === false
+                ? "warning"
+                : "info"
+          }
+          title={
+            matches === "none"
               ? `${item.origin === "sheet" ? "La planilla" : "El documento"} no muestra un total para comparar: revisá las filas.`
               : matches
                 ? `Lo leído suma lo mismo que ${noun}.`
-                : `Lo leído no suma lo mismo que ${noun}: revisá las filas dudosas.`}
-          </p>
+                : `Lo leído no suma lo mismo que ${noun}: revisá las filas dudosas.`
+          }
+        >
           <table className="w-fit text-sm tabular-nums">
             <caption className="sr-only">Totales por moneda</caption>
             <thead>
@@ -605,17 +590,17 @@ export function ImportReview({
               })}
             </tbody>
           </table>
-        </section>
+        </Notice>
       )}
 
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">
+          <h2 className="text-sm font-semibold">
             {holdingsCountText(rows.filter((row) => !row.discarded).length)}
             {doubtful > 0 && (
-              <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
+              <Badge variant="warning" className="ml-2 align-middle">
                 {countOf(doubtful, "dudosa", "dudosas")}
-              </span>
+              </Badge>
             )}
           </h2>
           <Button
@@ -662,7 +647,7 @@ export function ImportReview({
                   "grid gap-3 rounded-lg border p-3 @container sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end",
                   (row.confidence === "low" || issues[index]!.length > 0) &&
                     !row.discarded &&
-                    "border-amber-500/60 bg-amber-500/5",
+                    "border-warn/50 bg-warn/5",
                   row.discarded && "opacity-50",
                 )}
               >
@@ -714,15 +699,15 @@ export function ImportReview({
                   {issues[index]!.map((issue) => (
                     <span
                       key={issue}
-                      className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
+                      className="flex items-center gap-1 text-xs"
                     >
-                      <TriangleAlert aria-hidden className="size-3" />
+                      <TriangleAlert aria-hidden className="text-warn size-3" />
                       {issueLabel(issue, isCash(row))}
                     </span>
                   ))}
                   {!row.discarded && severalCash(row) && (
-                    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-                      <TriangleAlert aria-hidden className="size-3" />
+                    <span className="flex items-center gap-1 text-xs">
+                      <TriangleAlert aria-hidden className="text-warn size-3" />
                       Tenés varios saldos en esta moneda en la cuenta: descartá
                       la fila y actualizalos a mano.
                     </span>
@@ -854,7 +839,7 @@ export function ImportReview({
 
       {omitted.length > 0 && (
         <section className="grid gap-2" aria-labelledby={`${pickerId}-omitted`}>
-          <h2 id={`${pickerId}-omitted`} className="text-base font-semibold">
+          <h2 id={`${pickerId}-omitted`} className="text-sm font-semibold">
             {item.origin === "sync"
               ? "No vinieron en la sincronización"
               : item.origin === "sheet"

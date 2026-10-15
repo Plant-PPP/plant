@@ -1,5 +1,7 @@
 "use client";
 
+import { House } from "lucide-react";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import type { Denominator, RealEstateFigures } from "@plant/core";
 import { Constants, type Currency } from "@plant/shared";
 import { useId, useState } from "react";
@@ -10,8 +12,6 @@ import {
 } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -187,6 +187,7 @@ export function RealEstateDialog({
     <AppDialog
       onClose={onClose}
       title="Ficha del inmueble"
+      icon={House}
       description={name}
       returnFocusTo={focus.returnFocusTo}
     >
@@ -279,15 +280,10 @@ export function RealEstateDialog({
           inflación.
         </p>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            Guardar
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel="Guardar"
+          describedBy={alert ? alertId : undefined}
+        />
       </form>
     </AppDialog>
   );

@@ -200,12 +200,17 @@
 }
 
 /* Printing (Resumen's "Guardar en PDF"): the page alone, at its full length,
-   without the app's chrome or controls. */
+   without the app's chrome or controls, and every view a switcher offers. */
 @media print {
   [data-slot="sidebar"],
   [data-slot="sidebar-gap"],
   [data-print="hidden"] {
     display: none !important;
+  }
+
+  /* What a switcher hides on screen, as the views it does not show. */
+  [data-print="shown"] {
+    display: block !important;
   }
 
   [data-slot="sidebar-wrapper"],

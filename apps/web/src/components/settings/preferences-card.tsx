@@ -51,19 +51,19 @@ export function PreferencesCard({
   const save = (next: Preferences) =>
     void onChange(next).then((result) =>
       result.ok
-        ? toast.success("Guardamos tus preferencias.")
+        ? toast.success("Guardamos tus preferencias")
         : toast.error("No pudimos guardar. Probá de nuevo."),
     );
   const reference = UNIT_LABELS[referenceUnit(preferences.referenceDollar)];
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Cómo ves tu plata</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Cómo ves tu plata</CardTitle>
         <CardDescription>
           Un link que trae otra unidad la usa igual.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 sm:grid-cols-2">
+      <CardContent className="pt-6 grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor={`${id}-dollar`}>Dólar de referencia</Label>
           <Select

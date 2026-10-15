@@ -397,6 +397,10 @@ export function InstrumentPicker({
       <Popover.Trigger
         id={id}
         type="button"
+        // Read as a select by dialogs: its scale, and "nothing chosen" while
+        // it shows the placeholder.
+        data-slot="select-trigger"
+        data-placeholder={chosen ? undefined : ""}
         autoFocus={autoFocus}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
@@ -459,7 +463,7 @@ export function InstrumentPicker({
               setActive(0);
             }}
             onKeyDown={onSearchKeyDown}
-            className="h-8 w-full rounded-sm border-b bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
+            className="h-8 w-full rounded-sm border-b bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground"
           />
           {/* Always in the accessibility tree, so "Sin resultados" is announced
               when the list empties, not only when it mounts. */}
@@ -467,7 +471,7 @@ export function InstrumentPicker({
             role="status"
             className={
               optionCount === 0 || marketError || adding
-                ? "px-2 text-sm text-muted-foreground"
+                ? "px-2 text-xs text-muted-foreground"
                 : "sr-only"
             }
           >
@@ -522,7 +526,7 @@ export function InstrumentPicker({
                     setActive(index);
                   }}
                   onClick={() => choose(option)}
-                  className="grid cursor-default rounded-sm px-2 py-1.5 text-sm aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
+                  className="grid cursor-default rounded-sm px-2 py-1.5 text-xs aria-selected:font-medium data-active:bg-accent data-active:text-accent-foreground"
                 >
                   <span className="truncate">
                     {instrumentLabel(option.key, option.name)}

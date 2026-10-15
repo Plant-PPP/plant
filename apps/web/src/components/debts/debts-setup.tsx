@@ -13,13 +13,11 @@ import { useId, useState } from "react";
 
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { UnitSelect } from "@/components/holdings/filter-select";
-import { MepNotice } from "@/components/holdings/mep-notice";
 import {
   CALCULATING,
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
-  SummaryTile,
   VALUE_CELL,
 } from "@/components/holdings/sum-text";
 import {
@@ -61,6 +59,7 @@ import {
   toLiabilityInput,
   unitOf,
 } from "./debt-fields";
+import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
 export type DebtActions = {
   create: (input: unknown) => Promise<WriteResult>;
@@ -264,73 +263,77 @@ export function DebtsSetup({
   const monthly = live.filter((debt) => debt.installment);
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">Deudas</h1>
-          <p className="text-muted-foreground text-sm">
-            Lo que debés, en su moneda y en la que elijas
-          </p>
-        </div>
-        <UnitSelect
-          id={`${id}-unit`}
-          unit={unit}
-          referenceUnit={referenceUnit}
-          pending={pending}
-          onChange={(param) => url.set("unit", param)}
-        />
-      </div>
-      <MepNotice unit={unit} />
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile
-          label="Total"
-          note={
-            [
-              valued.complete ? null : "Alguna deuda no tiene cotización",
-              complete ? null : "Algún saldo no se pudo calcular completo",
-            ]
-              .filter((note) => note !== null)
-              .join(". ") || undefined
-          }
-        >
-          <span className={pending ? "opacity-60" : undefined}>
-            {formatAmount(valued.total, unit)}
-          </span>
-        </SummaryTile>
-        <SummaryTile label="Deudas">{live.length}</SummaryTile>
-        <SummaryTile label="Con cuota" note="Pagás cuota todos los meses">
-          {monthly.length}
-        </SummaryTile>
-        <SummaryTile
-          label="Próximo vencimiento"
-          note={
-            live
-              .filter((debt) => debt.next_due_on)
-              .sort((a, b) => a.next_due_on!.localeCompare(b.next_due_on!))[0]
-              ?.label
-          }
-        >
-          {(() => {
-            const next = live
-              .map((debt) => debt.next_due_on)
-              .filter((date): date is string => date !== null)
-              .sort()[0];
-            return next ? formatDate(next) : <MissingFigure text="Ninguno" />;
-          })()}
-        </SummaryTile>
-      </dl>
+    <div className="grid gap-4">
       <SetupCard
         heading={card.heading}
         pending={pending}
-        title="Tus deudas"
-        description="Préstamos, hipotecas, tarjetas y lo que le debas a alguien"
+        page
+        title="Deudas"
+        description="Lo que debés, en su moneda y en la que elijas"
+        filters={
+          shown.active.length > 0 && (
+            <UnitSelect
+              id={`${id}-unit`}
+              unit={unit}
+              referenceUnit={referenceUnit}
+              pending={pending}
+              onChange={(param) => url.set("unit", param)}
+            />
+          )
+        }
         addLabel="Agregar deuda"
         onAdd={() => !pending && setDialog({ kind: "create" })}
       >
+        {shown.active.length > 0 && (
+          <StatGrid>
+            <StatTile
+              label="Total"
+              note={
+                [
+                  valued.complete ? null : "Alguna deuda no tiene cotización",
+                  complete ? null : "Algún saldo no se pudo calcular completo",
+                ]
+                  .filter((note) => note !== null)
+                  .join(". ") || undefined
+              }
+            >
+              <span className={pending ? "opacity-60" : undefined}>
+                {formatAmount(valued.total, unit)}
+              </span>
+            </StatTile>
+            <StatTile label="Deudas">{live.length}</StatTile>
+            <StatTile label="Con cuota" note="Pagás cuota todos los meses">
+              {monthly.length}
+            </StatTile>
+            <StatTile
+              label="Próximo vencimiento"
+              note={
+                live
+                  .filter((debt) => debt.next_due_on)
+                  .sort((a, b) =>
+                    a.next_due_on!.localeCompare(b.next_due_on!),
+                  )[0]?.label
+              }
+            >
+              {(() => {
+                const next = live
+                  .map((debt) => debt.next_due_on)
+                  .filter((date): date is string => date !== null)
+                  .sort()[0];
+                return next ? (
+                  formatDate(next)
+                ) : (
+                  <MissingFigure text="Ninguno" />
+                );
+              })()}
+            </StatTile>
+          </StatGrid>
+        )}
         <ActiveList
           view={shown}
           title="Deudas"
-          emptyText="Todavía no cargaste deudas."
+          emptyText="Todavía no cargaste deudas"
+          emptyDescription="Agregá tu primera deuda: un préstamo, una hipoteca, una tarjeta o lo que le debas a alguien."
           truncatedText=""
           columns={columns}
         />

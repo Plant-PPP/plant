@@ -1,5 +1,7 @@
 "use client";
 
+import { Tag } from "lucide-react";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { type InstrumentType, manualPriceSchema } from "@plant/core";
 import type { Currency } from "@plant/shared";
 import { useId, useState } from "react";
@@ -8,7 +10,6 @@ import { useFieldAlert } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,6 +109,7 @@ export function PriceDialog({
     <AppDialog
       onClose={onClose}
       title={overrides ? "Corregir precio" : "Cargar precio"}
+      icon={Tag}
       description={`${instrumentLabel(instrument.symbol, instrument.name)}. ${
         overrides
           ? "Le gana a la cotización de ese día y sigue hasta que llegue una más nueva."
@@ -128,24 +130,27 @@ export function PriceDialog({
             <Label htmlFor={fieldId("price")}>
               {`Precio ${priceBasisLabel(instrument.type)}`}
             </Label>
-            <Input {...control("price")} inputMode="decimal" />
+            <Input {...control("price")} inputMode="decimal" required />
             <p className="text-muted-foreground text-xs">
               {CURRENCY_LABELS[instrument.currency]}
             </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("date")}>Fecha</Label>
-            <Input {...control("date")} type="date" max={today} />
+            <Input {...control("date")} type="date" max={today} required />
           </div>
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
-        <DialogFooter>
+        <DialogActions
+          submitLabel="Guardar"
+          describedBy={alert ? alertId : undefined}
+        >
           {onDelete && (
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className="text-destructive sm:mr-auto"
+              className="h-8 text-xs text-destructive sm:mr-auto"
               onClick={() => {
                 if (!onDelete()) return;
                 focus.markSaved();
@@ -155,14 +160,7 @@ export function PriceDialog({
               {overrides ? "Volver a la cotización" : "Borrar este precio"}
             </Button>
           )}
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            Guardar
-          </Button>
-        </DialogFooter>
+        </DialogActions>
       </form>
     </AppDialog>
   );

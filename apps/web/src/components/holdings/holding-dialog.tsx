@@ -1,5 +1,7 @@
 "use client";
 
+import { Wallet } from "lucide-react";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import type { Currency } from "@plant/shared";
 import Link from "next/link";
 
@@ -8,11 +10,9 @@ import type * as React from "react";
 import { useId, useState } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -244,6 +244,7 @@ export function HoldingDialog({
     <AppDialog
       onClose={onClose}
       title={mode === "create" ? "Agregar tenencia" : "Editar tenencia"}
+      icon={Wallet}
       description={
         mode === "create"
           ? "Contanos qué tenés y en qué cuenta."
@@ -325,10 +326,7 @@ export function HoldingDialog({
                     <dt className="text-muted-foreground">Origen</dt>
                     <dd>
                       {details.origin.kind === "import" ? (
-                        <ImportOrigin
-                          origin={details.origin}
-                          className="underline"
-                        />
+                        <ImportOrigin origin={details.origin} />
                       ) : (
                         originText(details.origin)
                       )}
@@ -409,6 +407,7 @@ export function HoldingDialog({
           )}
 
           {textField("amount", "amount", AMOUNT_LABELS[fields.assetClass], {
+            required: true,
             inputMode: "decimal",
             autoComplete: "off",
           })}
@@ -444,14 +443,7 @@ export function HoldingDialog({
           {shown.has("valued_on") &&
             textField("valuedOn", "valuedOn", "Valuado el", { type: "date" })}
           {shown.has("label") &&
-            textField(
-              "label",
-              "label",
-              fields.assetClass === "cash" || fields.assetClass === "fixed_term"
-                ? "Nombre (opcional)"
-                : "Nombre",
-              { autoComplete: "off" },
-            )}
+            textField("label", "label", "Nombre", { autoComplete: "off" })}
 
           {mode === "edit" && details && row && (
             <ReportSwitch
@@ -475,23 +467,16 @@ export function HoldingDialog({
               {link && (
                 <>
                   {" "}
-                  <Link className="underline" href={link.href}>
-                    {link.label}
-                  </Link>
+                  <Link href={link.href}>{link.label}</Link>
                 </>
               )}
             </FormAlert>
           )}
         </div>
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            {mode === "create" ? "Agregar" : "Guardar"}
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel={mode === "create" ? "Agregar" : "Guardar"}
+          describedBy={alert ? alertId : undefined}
+        />
       </form>
     </AppDialog>
   );

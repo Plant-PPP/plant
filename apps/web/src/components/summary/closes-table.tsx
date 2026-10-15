@@ -9,6 +9,7 @@ import {
   NUMBER_CELL,
   VALUE_CELL,
 } from "@/components/holdings/sum-text";
+import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { type MonthClose, monthOf, type YearClose } from "@/lib/summary/closes";
@@ -19,11 +20,7 @@ type Row = MonthClose & { id: string };
 
 // A close that left something out, as its detail explains.
 function PartialMark() {
-  return (
-    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
-      Parcial
-    </span>
-  );
+  return <Badge>Parcial</Badge>;
 }
 
 // A year's monthly closes, newest first, with the year's sum as the footer.
@@ -42,10 +39,7 @@ export function ClosesTable({
       header: "Mes",
       cell: ({ row: { original: close } }) => (
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={href(close.period)}
-            className="font-medium underline-offset-2 hover:underline"
-          >
+          <Link href={href(close.period)} className="font-medium">
             {monthOf(close.period)}
           </Link>
           {(close.open || close.recalculatedOn) && (
@@ -98,10 +92,7 @@ export function ClosesTable({
         <TableRow>
           <TableCell>
             <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <Link
-                href={href(year.year)}
-                className="font-medium underline-offset-2 hover:underline"
-              >
+              <Link href={href(year.year)} className="font-medium">
                 {`Total ${year.year}`}
               </Link>
               {!year.complete && <PartialMark />}

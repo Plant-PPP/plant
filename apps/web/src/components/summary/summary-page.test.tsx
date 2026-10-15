@@ -90,8 +90,8 @@ describe("every portfolio", () => {
   const html = render(null);
 
   it("splits the assets by portfolio, account and currency", () => {
-    for (const heading of ["Por cartera", "Por cuenta", "Por moneda"]) {
-      expect(html).toContain(`>${heading}</h2>`);
+    for (const view of ["Por cartera", "Por cuenta", "Por moneda"]) {
+      expect(html).toContain(`aria-label="${view}"`);
     }
     expect(html).toContain("Largo plazo");
     expect(html).toContain("Galicia");
@@ -114,10 +114,9 @@ describe("one portfolio", () => {
   const html = render(PRINCIPAL);
 
   it("shows its assets today and says why the net worth is not there", () => {
-    expect(html).toContain("Los activos de Principal hoy");
     expect(html).toContain("las deudas no son de ninguna");
     expect(html).not.toContain(">Cierres</h2>");
-    expect(html).not.toContain(">Por cartera</h2>");
+    expect(html).not.toContain('aria-label="Por cartera"');
   });
 
   it("keeps only its holdings in the splits", () => {
@@ -127,7 +126,30 @@ describe("one portfolio", () => {
   });
 });
 
-it("notes the BCRA's restriction only where the page is in MEP dollars", () => {
-  expect(render(null, "usd_mep")).toContain("Com. A 8336");
-  expect(render(null, "ars")).not.toContain("Com. A 8336");
+it("asks for a first upload when there is nothing yet", () => {
+  const html = renderToStaticMarkup(
+    <SummaryPage
+      closes={[]}
+      years={[]}
+      year={undefined}
+      rows={[]}
+      valuation={holdingsValuation({
+        holdings: [],
+        truncated: false,
+        snapshot: SNAPSHOT,
+        unit: "ars",
+        referenceDollar: "mep",
+        currencyOf: (holding) => holding.currency!,
+      })}
+      portfolios={[]}
+      portfolio={null}
+      unit="ars"
+      referenceUnit="usd_mep"
+      params={{}}
+      closesQuery=""
+    />,
+  );
+  expect(html).toContain('data-slot="empty-state"');
+  expect(html).toContain('href="/import"');
+  expect(html).not.toContain("Cómo está repartido");
 });

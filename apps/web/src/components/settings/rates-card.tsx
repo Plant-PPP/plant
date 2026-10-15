@@ -1,5 +1,8 @@
 "use client";
 
+import { Coins } from "lucide-react";
+import { DialogActions } from "@/components/ui/dialog-actions";
+import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import type { ManualRateKind } from "@plant/core";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -13,7 +16,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,16 +70,16 @@ export function RatesCard({
       ? toast.success(text)
       : toast.error("No pudimos guardar. Probá de nuevo.");
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dólar de hoy</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Dólar de hoy</CardTitle>
         <CardDescription>
           Con estas cotizaciones valuamos todo. Si una no te cierra, corregila:
           tu valor le gana a la cotización de ese día y sigue hasta que llegue
           una más nueva.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <ul className="grid gap-2">
           {rates.map((rate) => (
             <li
@@ -159,6 +161,8 @@ function RateDialog({
   onClose: () => void;
   onSubmit: (sell: string, date: string) => void;
 }) {
+  const [form, setForm] = useState<HTMLFormElement | null>(null);
+  useSubmitWhenValid(form);
   const id = useId();
   const [sell, setSell] = useState(rate.sell ? amountInput(rate.sell) : "");
   const [date, setDate] = useState(today);
@@ -167,10 +171,12 @@ function RateDialog({
     <AppDialog
       onClose={onClose}
       title={`Corregir el ${RATE_LABELS[rate.kind]}`}
+      icon={Coins}
       description="El valor de venta, en pesos por dólar."
       returnFocusTo={returnFocusTo}
     >
       <form
+        ref={setForm}
         className="grid gap-4"
         noValidate
         onSubmit={(event) => {
@@ -188,6 +194,7 @@ function RateDialog({
             <Input
               id={`${id}-sell`}
               inputMode="decimal"
+              required
               autoComplete="off"
               aria-invalid={alert === INVALID || undefined}
               value={sell}
@@ -200,6 +207,7 @@ function RateDialog({
               id={`${id}-date`}
               type="date"
               max={today}
+              required
               aria-invalid={alert === FUTURE || undefined}
               value={date}
               onChange={(event) => setDate(event.target.value)}
@@ -207,11 +215,7 @@ function RateDialog({
           </div>
         </div>
         {alert && <FormAlert>{alert}</FormAlert>}
-        <DialogFooter>
-          <Button type="submit" size="sm">
-            Guardar
-          </Button>
-        </DialogFooter>
+        <DialogActions submitLabel="Guardar" />
       </form>
     </AppDialog>
   );

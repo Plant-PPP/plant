@@ -7,8 +7,16 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import type { LucideIcon } from "lucide-react";
+import { type LucideIcon, MoreHorizontal } from "lucide-react";
 import type * as React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   Table,
@@ -89,7 +97,10 @@ function DataTable<T extends DataTableRow>({
       : "collapse border-b-0!";
 
   return (
-    <div data-slot="data-table" className="@container rounded-md border">
+    <div
+      data-slot="data-table"
+      className="@container overflow-hidden rounded-lg border"
+    >
       <Table className="table-fixed">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
@@ -165,49 +176,119 @@ type RowAction<T> = {
   variant?: (row: T) => { icon: LucideIcon; tooltip: string } | undefined;
 };
 
-// A row's icon actions, right-aligned. Sized to its buttons: each IconButton
-// is 28px, 4px apart, inside the cell's 12px side padding.
+// A row's actions, right-aligned: up to two as icons, sized to their buttons
+// (28px each, 4px apart, inside the cell's 12px side padding); three or more
+// behind one ⋯ menu, with a delete last after a separator.
 function actionsColumn<T>(
   actions: RowAction<T>[],
   { pending }: { pending: boolean },
 ): ColumnDef<T> {
+  const menu = actions.length > 2;
+  const shown = menu ? 1 : actions.length;
   return {
     id: ACTIONS_COLUMN,
-    size: actions.length * 28 + (actions.length - 1) * 4 + 24,
+    size: shown * 28 + (shown - 1) * 4 + 24,
     header: () => <span className="sr-only">Acciones</span>,
-    cell: ({ row }) => (
-      <span className="flex justify-end gap-1">
-        {actions.map((action) =>
-          action.hidden?.(row.original) ? (
-            <span key={action.id} aria-hidden className="size-7" />
-          ) : (
-            <IconButton
-              key={action.id}
-              actionId={action.id}
-              icon={action.variant?.(row.original)?.icon ?? action.icon}
-              tooltip={
-                action.variant?.(row.original)?.tooltip ?? action.tooltip
-              }
-              label={action.label(row.original)}
-              pending={pending}
-              onClick={() => action.onClick(row.original)}
-            />
-          ),
-        )}
-      </span>
-    ),
+    cell: ({ row }) =>
+      menu ? (
+        <span className="flex justify-end">
+          <RowActionsMenu
+            actions={actions}
+            row={row.original}
+            pending={pending}
+          />
+        </span>
+      ) : (
+        <span className="flex justify-end gap-1">
+          {actions.map((action) =>
+            action.hidden?.(row.original) ? (
+              <span key={action.id} aria-hidden className="size-7" />
+            ) : (
+              <IconButton
+                key={action.id}
+                actionId={action.id}
+                icon={action.variant?.(row.original)?.icon ?? action.icon}
+                tooltip={
+                  action.variant?.(row.original)?.tooltip ?? action.tooltip
+                }
+                label={action.label(row.original)}
+                pending={pending}
+                onClick={() => action.onClick(row.original)}
+              />
+            ),
+          )}
+        </span>
+      ),
   };
 }
 
+// The ⋯ menu of a row with three or more actions. Its accessible name is the
+// row's, taken from the first action's ("Editar IOL" names "IOL").
+function RowActionsMenu<T>({
+  actions,
+  row,
+  pending,
+}: {
+  actions: RowAction<T>[];
+  row: T;
+  pending: boolean;
+}) {
+  const shown = actions.filter((action) => !action.hidden?.(row));
+  const destructive = shown.filter((action) => action.id === "delete");
+  const rest = shown.filter((action) => action.id !== "delete");
+  const first = actions[0]!;
+  const name = first.label(row).slice(first.tooltip.length).trim();
+  const item = (action: RowAction<T>) => {
+    const Icon = action.variant?.(row)?.icon ?? action.icon;
+    return (
+      <DropdownMenuItem
+        key={action.id}
+        className={cn(
+          "text-xs",
+          action.id === "delete" && "text-destructive focus:text-destructive",
+        )}
+        onSelect={() => action.onClick(row)}
+      >
+        <Icon className={cn(action.id === "delete" && "text-destructive")} />
+        {action.variant?.(row)?.tooltip ?? action.tooltip}
+      </DropdownMenuItem>
+    );
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={pending}>
+        <Button
+          variant="ghost"
+          size="icon"
+          data-action="menu"
+          aria-label={`Acciones de ${name}`}
+          className="text-muted-foreground hover:text-foreground size-7"
+        >
+          <MoreHorizontal className="size-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {rest.map(item)}
+        {destructive.length > 0 && rest.length > 0 && <DropdownMenuSeparator />}
+        {destructive.map(item)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // A row's action button, found by the row and action ids `actionsColumn`
-// renders, so focus can return to it when the row comes back.
+// renders (or the row's ⋯ menu), so focus can return to it when the row comes
+// back.
 function rowActionButton(
   root: ParentNode,
   rowId: string,
   actionId: string,
 ): HTMLElement | null {
-  return root.querySelector<HTMLElement>(
-    `tr[data-row-id="${CSS.escape(rowId)}"] [data-action="${CSS.escape(actionId)}"]`,
+  const row = `tr[data-row-id="${CSS.escape(rowId)}"]`;
+  return (
+    root.querySelector<HTMLElement>(
+      `${row} [data-action="${CSS.escape(actionId)}"]`,
+    ) ?? root.querySelector<HTMLElement>(`${row} [data-action="menu"]`)
   );
 }
 

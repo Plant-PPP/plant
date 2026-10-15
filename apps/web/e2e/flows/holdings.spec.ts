@@ -4,7 +4,7 @@ import { signIn } from "./sign-in";
 
 test("a holding added by hand shows in Activos", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("link", { name: "Activos" }).click();
+  await page.getByRole("link", { name: "Activos", exact: true }).click();
   await expect(page).toHaveURL(/\/assets$/);
 
   await page.getByRole("button", { name: "Agregar tenencia" }).click();
@@ -16,9 +16,7 @@ test("a holding added by hand shows in Activos", async ({ page }) => {
   await dialog.getByRole("combobox", { name: "Moneda" }).click();
   await page.getByRole("option").first().click();
   await dialog.getByRole("textbox", { name: "Monto" }).fill("1234,5");
-  await dialog
-    .getByRole("textbox", { name: "Nombre (opcional)" })
-    .fill("Caja de prueba");
+  await dialog.getByRole("textbox", { name: "Nombre" }).fill("Caja de prueba");
   await dialog.getByRole("button", { name: "Agregar" }).click();
 
   await expect(dialog).toBeHidden();

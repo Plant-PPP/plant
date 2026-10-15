@@ -50,7 +50,7 @@ export function PrototypeSettings() {
       <DeleteAccountCard
         onDelete={() => {
           actions.deleteAccount();
-          toast.success("Borramos tu cuenta y todo lo que tenía.");
+          toast.success("Borramos tu cuenta y todo lo que tenía");
           router.push("/");
         }}
       />

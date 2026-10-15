@@ -65,20 +65,13 @@ export function ExcludedAccountsNote({
   const { noun, pronoun } = SUBJECTS[subject];
   return institutions.length === 1 ? (
     <>
-      La cuenta{" "}
-      <Link href="/accounts" className="underline">
-        {institutions[0]}
-      </Link>{" "}
-      no se incluye en el reporte, así que {noun} tampoco.
+      La cuenta <Link href="/accounts">{institutions[0]}</Link> no se incluye en
+      el reporte, así que {noun} tampoco.
     </>
   ) : (
     <>
-      Las{" "}
-      <Link href="/accounts" className="underline">
-        cuentas
-      </Link>{" "}
-      donde {pronoun} tenés no se incluyen en el reporte, así que {noun}{" "}
-      tampoco.
+      Las <Link href="/accounts">cuentas</Link> donde {pronoun} tenés no se
+      incluyen en el reporte, así que {noun} tampoco.
     </>
   );
 }

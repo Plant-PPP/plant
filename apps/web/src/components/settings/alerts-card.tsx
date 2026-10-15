@@ -1,5 +1,6 @@
 "use client";
 
+import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import { Trash2 } from "lucide-react";
 import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -81,7 +82,7 @@ export function AlertsCard({
         change({ add: pending });
         const settled = await settle(onCreate(alert));
         const result = settled === "rejected" ? "failed" : settled;
-        if (result === "ok") toast.success("Creaste la alerta.");
+        if (result === "ok") toast.success("Creaste la alerta");
         else toast.error(ALERT_REFUSED[result]);
         resolve(result === "ok");
       }),
@@ -96,16 +97,16 @@ export function AlertsCard({
     });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Alertas de precio</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Alertas de precio</CardTitle>
         <CardDescription>
           Te avisamos en el Resumen cuando un dólar llegue al precio que elijas.
           Para un activo, creá la alerta desde su página, con la campanita. Acá
           ves y borrás todas.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-4 pt-6">
         <AlertForm onCreate={create} />
         {readFailed && (
           <FormAlert>
@@ -151,6 +152,8 @@ function AlertForm({
 }: {
   onCreate: (alert: NewAlert, pending: PriceAlert) => Promise<boolean>;
 }) {
+  const [form, setForm] = useState<HTMLFormElement | null>(null);
+  useSubmitWhenValid(form);
   const id = useId();
   const [subject, setSubject] = useState<AlertDollar>("mep");
   const [direction, setDirection] = useState<"above" | "below">("above");
@@ -191,6 +194,7 @@ function AlertForm({
 
   return (
     <form
+      ref={setForm}
       className="grid gap-3"
       noValidate
       onSubmit={(event) => {
@@ -237,6 +241,7 @@ function AlertForm({
           <Input
             id={`${id}-figure`}
             inputMode="decimal"
+            required
             autoComplete="off"
             aria-invalid={alert !== null || undefined}
             value={figure}

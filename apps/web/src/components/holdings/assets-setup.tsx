@@ -10,10 +10,13 @@ import {
   House,
   Pencil,
   RefreshCw,
+  Wallet,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageButton } from "@/components/ui/page-button";
 import {
   dialogAnswer,
   type LinksFor,
@@ -118,7 +121,6 @@ import { InstitutionIcon } from "@/components/portfolio-setup/institution-field"
 import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
-import { MepNotice } from "./mep-notice";
 import { RealEstateDialog } from "./real-estate-dialog";
 import { type SheetFields, sheetFields } from "./real-estate-fields";
 import { RenewDialog } from "./renew-dialog";
@@ -148,6 +150,7 @@ import {
   CALCULATING,
   GainLossText,
   MissingFigure,
+  missingQuotesText,
   NO_QUOTE,
   NUMBER_CELL,
   PendingSum,
@@ -592,7 +595,7 @@ export function AssetsSetup({
             {figure}
             <button
               type="button"
-              className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
+              className="text-muted-foreground hover:text-foreground text-xs"
               aria-label={
                 manualDate
                   ? `Precio corregido a mano el ${formatDate(manualDate)} de ${symbol}. Cambiarlo`
@@ -927,10 +930,7 @@ export function AssetsSetup({
             {accounts.length === 0 ? (
               <>
                 Para cargar tenencias, primero agregá una cuenta en{" "}
-                <Link className="underline" href="/accounts">
-                  Cuentas
-                </Link>
-                .
+                <Link href="/accounts">Cuentas</Link>.
               </>
             ) : view.active.length > 0 ? (
               view.activeTruncated ? (
@@ -1034,62 +1034,89 @@ export function AssetsSetup({
       <SetupCard
         heading={card.heading}
         pending={pending}
+        page
         title="Activos"
         description="Lo que tenés en cada cuenta, valuado con la última cotización"
         addLabel="Agregar tenencia"
         onAdd={() => openDialog({ kind: "create" })}
         secondary={movement && dialogs.addMovementButton()}
       >
-        <AssetsSummary valuation={valuation} unit={unit} pending={pending} />
-        <AssetsTabs
-          url={url}
-          tabs={tabs}
-          idBase={tabsId}
-          counts={counts}
-          pending={pending}
-        />
-        <AssetsFilters
-          url={url}
-          tabs={tabs}
-          salesYears={movement?.input.years}
-          referenceUnit={referenceUnit}
-          filter={filter}
-          portfolios={portfolios}
-          classes={new Set(holdings.active.map(classOf))}
-          pending={pending}
-        />
-        <MepNotice unit={unit} />
-        <div
-          role="tabpanel"
-          id={panelId(tabsId)}
-          aria-labelledby={tabId(tabsId, tab)}
-          className="grid gap-4"
-        >
-          {panel()}
-          {tab !== "sales" && missing > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {/* The total is marked only when it values some holdings. */}
-              {missing < valuation.kinds.total.count && "* "}
-              {missing === 1
-                ? "A una tenencia le falta cotización; el total no la incluye."
-                : `A ${missing} tenencias les falta cotización; el total no las incluye.`}
-            </p>
-          )}
-          {tab !== "sales" && view.activeTruncated && shownRows.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {missing < valuation.kinds.total.count && "* "}
-              {`Mostrando las ${PAGE_ROW_LIMIT} más recientes; el total no incluye las demás.`}
-            </p>
-          )}
-        </div>
+        {view.active.length === 0 && view.archived.length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            title={
+              accounts.length === 0
+                ? "Primero, una cuenta"
+                : "Todavía no cargaste tenencias"
+            }
+            actions={
+              accounts.length === 0 && (
+                <PageButton asChild variant="default">
+                  <Link href="/accounts">Agregar una cuenta</Link>
+                </PageButton>
+              )
+            }
+          >
+            {accounts.length === 0
+              ? "Tus tenencias viven en las cuentas de tus brokers y bancos. Agregá la primera para empezar."
+              : "Agregá tu primera tenencia, o subí el resumen de tu broker en Cargar y las armamos solas."}
+          </EmptyState>
+        ) : (
+          <>
+            <AssetsSummary
+              valuation={valuation}
+              unit={unit}
+              pending={pending}
+            />
+            <AssetsTabs
+              url={url}
+              tabs={tabs}
+              idBase={tabsId}
+              counts={counts}
+              pending={pending}
+            />
+            <AssetsFilters
+              url={url}
+              tabs={tabs}
+              salesYears={movement?.input.years}
+              referenceUnit={referenceUnit}
+              filter={filter}
+              portfolios={portfolios}
+              classes={new Set(holdings.active.map(classOf))}
+              pending={pending}
+            />
+            <div
+              role="tabpanel"
+              id={panelId(tabsId)}
+              aria-labelledby={tabId(tabsId, tab)}
+              className="grid gap-4"
+            >
+              {panel()}
+              {tab !== "sales" && missing > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {/* The total is marked only when it values some holdings. */}
+                  {missing < valuation.kinds.total.count && "* "}
+                  {missingQuotesText(missing)}
+                </p>
+              )}
+              {tab !== "sales" &&
+                view.activeTruncated &&
+                shownRows.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {missing < valuation.kinds.total.count && "* "}
+                    {`Mostrando las ${PAGE_ROW_LIMIT} más recientes; el total no incluye las demás.`}
+                  </p>
+                )}
+            </div>
+          </>
+        )}
         {archivedColumns && (
           <ArchivedList
             view={view}
             title="Tenencias"
             label="Archivadas"
             emptyText="No hay más tenencias archivadas."
-            firstPageLabel="Ver las más recientes"
-            // Its links are built with the params of the page on screen, so
+            firstPageLabel="Ver las más recientes" // Its links are built with the params of the page on screen, so
             // they also wait for a filter, tab or unit that is loading.
             pending={pending || url.pending}
             columns={archivedColumns}

@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-// A row action shown as an icon only. The tooltip names the action and the
-// accessible name adds the row ("Archivar Principal").
+// An action shown as an icon only. The tooltip names the action and the
+// accessible name adds its object ("Archivar Principal"). A row's is ghost and
+// small; a toolbar's sits beside the page's selects at their height.
 function IconButton({
   icon: Icon,
   actionId,
@@ -18,6 +19,7 @@ function IconButton({
   label,
   onClick,
   pending = false,
+  size = "row",
   className,
 }: {
   icon: LucideIcon;
@@ -27,19 +29,22 @@ function IconButton({
   label: string;
   onClick: () => void;
   pending?: boolean;
+  size?: "row" | "toolbar";
   className?: string;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <PendingButton
-          variant="ghost"
+          variant={size === "row" ? "ghost" : "outline"}
           size="icon"
           aria-label={label}
           data-action={actionId}
           pending={pending}
           className={cn(
-            "size-7 text-muted-foreground hover:text-foreground",
+            size === "row"
+              ? "size-7 text-muted-foreground hover:text-foreground"
+              : "size-7",
             className,
           )}
           onClick={onClick}

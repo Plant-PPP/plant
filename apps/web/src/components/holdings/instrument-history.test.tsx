@@ -145,7 +145,7 @@ it("offers the bell to set an alert on the instrument, held or not", () => {
 
 it("says the user holds none of it once the last holding is gone", () => {
   const html = render([]);
-  expect(html).toContain("No tenés Ethereum en ninguna cuenta.");
+  expect(html).toContain("No tenés Ethereum");
   // No holding is left to value a unit of it.
   expect(html).not.toContain("Cripto ·");
   expect(html).not.toContain(">Historial<");
@@ -314,7 +314,7 @@ describe("with details", () => {
       accounts: [outOfReport("a-e1", "IOL")],
     });
     expect(html).toContain(
-      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+      'La cuenta <a href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
     );
   });
 
@@ -342,7 +342,7 @@ describe("with details", () => {
       },
     );
     expect(html).toContain(
-      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+      'La cuenta <a href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
     );
     expect(html).not.toContain("donde lo tenés no se incluyen");
   });
@@ -353,7 +353,7 @@ describe("with details", () => {
       accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "IOL")],
     });
     expect(html).toContain(
-      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+      '<a href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
     );
     expect(html).not.toContain("La cuenta <a");
   });
@@ -376,7 +376,7 @@ describe("with details", () => {
       accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "Binance")],
     });
     expect(html).toContain(
-      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
+      'La cuenta <a href="/accounts">IOL</a> no se incluye en el reporte, así que este activo tampoco.',
     );
     expect(html).not.toContain("donde lo tenés");
   });
@@ -391,7 +391,7 @@ describe("with details", () => {
     });
     expect(html).toMatch(/role="switch"[^>]*aria-describedby="[^"]*-tax-note"/);
     expect(html).toContain(
-      'La cuenta <a class="underline" href="/accounts">IOL</a> no se incluye en el reporte',
+      'La cuenta <a href="/accounts">IOL</a> no se incluye en el reporte',
     );
   });
 
@@ -411,7 +411,7 @@ describe("with details", () => {
       accounts: [outOfReport("a-e1", "IOL"), outOfReport("a-e2", "Binance")],
     });
     expect(html).toContain(
-      '<a class="underline" href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
+      '<a href="/accounts">cuentas</a> donde lo tenés no se incluyen en el reporte, así que este activo tampoco.',
     );
   });
 });

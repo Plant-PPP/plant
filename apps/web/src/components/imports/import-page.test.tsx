@@ -62,6 +62,8 @@ it("uploads to no account unless one is chosen, and lists such a file as having 
       actions={{ upload: () => {} }}
     />,
   );
-  expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Elegir archivos/);
+  expect(html).toMatch(
+    /<button(?![^>]*disabled="")[^>]*>(?:<svg.*?<\/svg>)?Elegir archivos/,
+  );
   expect(html).toContain(">Sin cuenta</span>");
 });

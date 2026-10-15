@@ -15,7 +15,7 @@ export function ConsentCard({ onAccept }: { onAccept: () => void }) {
       aria-labelledby={`${id}-title`}
       className="grid gap-3 rounded-lg border p-4"
     >
-      <h2 id={`${id}-title`} className="text-base font-semibold">
+      <h2 id={`${id}-title`} className="text-sm font-semibold">
         Antes de tu primer archivo
       </h2>
       <ul className="text-muted-foreground grid list-disc gap-1 pl-5 text-sm">

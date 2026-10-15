@@ -55,13 +55,15 @@ it("lists archived rows in their own table with only a restore button", () => {
   expect(html).toContain('aria-label="Restaurar Vieja"');
   expect(html).not.toContain('aria-label="Archivar Vieja"');
   expect(html).not.toContain('aria-label="Renombrar Vieja"');
-  expect(html).toContain("No tenés carteras activas.");
+  expect(html).toContain("No tenés carteras activas");
 });
 
 it("keeps the add button focusable while a write runs", () => {
   const html = render({}, true);
-  expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>.*Nueva cartera/);
-  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Nueva cartera/);
+  expect(html).toMatch(
+    /<button[^>]*aria-disabled="true"[^>]*>.*Agregar cartera/,
+  );
+  expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>.*Agregar cartera/);
 });
 
 it("fades a row the server has not confirmed yet", () => {
@@ -73,7 +75,7 @@ it("fades a row the server has not confirmed yet", () => {
   expect(html).toMatch(
     /<tr[^>]*class="[^"]*opacity-60[^"]*"[^>]*data-row-id="new-1"[^>]*aria-busy="true"/,
   );
-  expect(html).toMatch(/<tr[^>]*class="border-b" data-row-id="p1">/);
+  expect(html).toMatch(/<tr[^>]*class="[^"]*border-b[^"]*" data-row-id="p1">/);
 });
 
 it("passes the page's pending to its archived list", () => {
@@ -111,9 +113,10 @@ it("offers delete only on the rows a delete would go through for", () => {
       deletable={["p2", "p3"]}
     />,
   );
-  expect(html).toContain('aria-label="Borrar Largo plazo"');
+  // An active portfolio's actions sit in its ⋯ menu; an archived one's stay
+  // as icons.
+  expect(html).toContain('aria-label="Acciones de Largo plazo"');
   expect(html).toContain('aria-label="Borrar Vieja"');
-  expect(html).not.toContain('aria-label="Borrar Principal"');
   expect(html).not.toContain('aria-label="Borrar Usada"');
 });
 

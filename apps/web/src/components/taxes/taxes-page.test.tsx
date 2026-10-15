@@ -1,3 +1,7 @@
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { AssetKey } from "@/lib/holdings/assets-rows";
@@ -65,8 +69,8 @@ it("says it is an estimate and shows both reports in pesos", () => {
   expect(html).toContain("+$ 25.000,00");
   expect(html).toContain("Dejaste 2 activos fuera del reporte impositivo.");
   // The year it opens on has no ?year=.
-  expect(html).toContain('href="/taxes?year=2026"');
-  expect(html).toContain('href="/taxes"');
+  expect(html).toMatch(/role="tab" aria-selected="false"[^>]*>2026</);
+  expect(html).toMatch(/role="tab" aria-selected="true"[^>]*>2025</);
 });
 
 it("says when the year is still running or a figure is missing", () => {

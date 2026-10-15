@@ -71,6 +71,20 @@ const render = (
     />,
   );
 
+it("unfolds a move's fee, and what it costs, once there is one", () => {
+  const html = render(
+    {
+      ...moving,
+      charges: [{ kind: "commission", label: "", amount: "10" }],
+    },
+    "60000",
+  );
+  expect(html).toContain(">Gastos<");
+  expect(html).toContain(
+    "Se cobran en la cuenta de origen y cuentan como gasto del mes; no cambian el costo de las unidades.",
+  );
+});
+
 it("shows where the units leave from, the cost they carry and its fee", () => {
   const html = render(moving, "60000");
   expect(html).toContain("Desde");
@@ -81,10 +95,8 @@ it("shows where the units leave from, the cost they carry and its fee", () => {
   expect(html).toContain(
     "Si lo cambiás, entran con ese costo y la diferencia se ve en el resultado de la tenencia.",
   );
-  expect(html).toContain("Gastos (opcional)");
-  expect(html).toContain(
-    "Se cobran en la cuenta de origen y cuentan como gasto del mes; no cambian el costo de las unidades.",
-  );
+  // Its fee, with none yet, waits folded with the reference and the note.
+  expect(html).toContain("Gastos, referencia y nota");
   expect(html).not.toContain("Repartir en otra cartera");
 });
 

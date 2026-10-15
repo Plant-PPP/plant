@@ -1,22 +1,26 @@
 "use client";
 
+import { PageButton } from "@/components/ui/page-button";
+import { FilterSelect } from "@/components/holdings/filter-select";
+import { PageHeader } from "@/components/ui/page-header";
+import { Section } from "@/components/ui/section";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Camera, FileUp, LoaderCircle } from "lucide-react";
+import {
+  Camera,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  FileUp,
+  Files,
+  LoaderCircle,
+  Upload,
+} from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
-import { Button } from "@/components/ui/button";
 import { DataTable, TruncatedText } from "@/components/ui/data-table";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatDate } from "@/lib/format/date";
 import { leftThisMonth } from "@/lib/format/text";
 import {
@@ -40,19 +44,28 @@ const NO_ACCOUNT = "none";
 
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
+// An import's status as a row shows it: a colored icon and its label.
 function StatusBadge({ item }: { item: ImportItem }) {
   const busy = isBusy(item.status);
+  const Icon = busy
+    ? LoaderCircle
+    : item.status === "ready"
+      ? CircleDot
+      : item.status === "failed"
+        ? CircleAlert
+        : CircleCheck;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs",
-        item.status === "ready" && "bg-primary/15 text-foreground",
-        item.status === "failed" && "bg-destructive/15 text-destructive",
-        item.status === "confirmed" && "bg-muted text-muted-foreground",
-        busy && "bg-muted text-foreground",
-      )}
-    >
-      {busy && <LoaderCircle aria-hidden className="size-3 animate-spin" />}
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <Icon
+        aria-hidden
+        className={cn(
+          "size-3.5 shrink-0",
+          busy && "text-muted-foreground animate-spin",
+          item.status === "ready" && "text-primary",
+          item.status === "failed" && "text-destructive",
+          item.status === "confirmed" && "text-gain",
+        )}
+      />
       {IMPORT_STATUS_LABELS[item.status]}
     </span>
   );
@@ -118,7 +131,9 @@ export function ImportPage({
         <>
           <TruncatedText className="font-medium" text={item.fileName} />
           {item.error && (
-            <span className="text-destructive block text-xs">{item.error}</span>
+            <span className="text-muted-foreground block text-xs">
+              {item.error}
+            </span>
           )}
         </>
       ),
@@ -153,9 +168,9 @@ export function ImportPage({
         <span className="flex flex-wrap items-center justify-end gap-2">
           <StatusBadge item={item} />
           {item.status === "ready" && (
-            <Button asChild size="sm" variant="outline" className="h-7">
+            <PageButton asChild>
               <Link href={reviewHref(item.id)}>Revisar</Link>
-            </Button>
+            </PageButton>
           )}
         </span>
       ),
@@ -164,132 +179,123 @@ export function ImportPage({
   ];
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-1">
-        <h1 className="text-xl font-semibold">Cargar</h1>
-        <p className="text-muted-foreground text-sm">
-          Subí el resumen de tu broker, una captura o un Excel: lo leemos y lo
-          revisás antes de guardarlo.
-        </p>
-      </div>
+    <div className="grid gap-4">
+      <PageHeader
+        title="Cargar"
+        filters={
+          !(consent && !consent.accepted) && (
+            <FilterSelect
+              id={`${id}-account`}
+              label="Cuenta"
+              shownLabel
+              value={accountId ?? NO_ACCOUNT}
+              pending={false}
+              options={[
+                [NO_ACCOUNT, "Sin cuenta (deudas, tarjetas)"],
+                ...accounts.map((each) => [each.id, each.institution] as const),
+              ]}
+              onChange={setChoice}
+              triggerClassName="sm:min-w-48"
+            />
+          )
+        }
+        actions={
+          <div className="grid gap-1 text-right">
+            <span className="text-muted-foreground text-xs">
+              {leftThisMonth(left, IMPORTS_PER_MONTH, "cargas")}
+            </span>
+            <span className="bg-muted ml-auto h-1 w-32 overflow-hidden rounded-full">
+              <span
+                className="bg-primary block h-full"
+                style={{ width: `${(used / IMPORTS_PER_MONTH) * 100}%` }}
+              />
+            </span>
+          </div>
+        }
+      />
 
       {consent && !consent.accepted ? (
         <ConsentCard onAccept={consent.accept} />
       ) : (
-        <section className="grid gap-4 rounded-lg border p-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="grid w-full gap-2 sm:w-64">
-              <Label htmlFor={`${id}-account`}>Cuenta</Label>
-              <Select
-                value={accountId ?? NO_ACCOUNT}
-                onValueChange={(value) => value && setChoice(value)}
-              >
-                <SelectTrigger id={`${id}-account`} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_ACCOUNT}>
-                    Sin cuenta (deudas, tarjetas)
-                  </SelectItem>
-                  {accounts.map((each) => (
-                    <SelectItem key={each.id} value={each.id}>
-                      {each.institution}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-1 text-right">
-              <span className="text-muted-foreground text-xs">
-                {leftThisMonth(left, IMPORTS_PER_MONTH, "cargas")}
-              </span>
-              <span className="bg-muted h-1.5 w-40 overflow-hidden rounded-full">
-                <span
-                  className="bg-chart-3 block h-full"
-                  style={{ width: `${(used / IMPORTS_PER_MONTH) * 100}%` }}
-                />
-              </span>
-            </div>
-          </div>
-          <div
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              send(event.dataTransfer.files);
-            }}
-            className={cn(
-              "grid place-items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center",
-              dragging && "border-primary bg-primary/5",
-            )}
-          >
-            <FileUp aria-hidden className="text-muted-foreground size-8" />
-            <p className="text-sm">
+        <div
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            send(event.dataTransfer.files);
+          }}
+          className={cn(
+            "border-muted-foreground/25 grid place-items-center gap-3 rounded-lg border-2 border-dashed p-6 text-center md:p-10",
+            dragging && "border-primary bg-primary/5",
+          )}
+        >
+          <FileUp aria-hidden className="text-muted-foreground size-6" />
+          <p className="grid gap-1">
+            <span className="text-sm font-medium">
               Arrastrá acá uno o varios archivos
-              <span className="text-muted-foreground block text-xs">
-                PDF, fotos o capturas, CSV o Excel
-              </span>
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                disabled={left === 0}
-                onClick={() => files.current?.click()}
-              >
-                Elegir archivos
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={left === 0}
-                onClick={() => camera.current?.click()}
-              >
-                <Camera />
-                Sacar foto
-              </Button>
-            </div>
-            <input
-              ref={files}
-              type="file"
-              multiple
-              accept={ACCEPT}
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden
-              onChange={(event) => {
-                send(event.target.files);
-                event.target.value = "";
-              }}
-            />
-            <input
-              ref={camera}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden
-              onChange={(event) => {
-                send(event.target.files);
-                event.target.value = "";
-              }}
-            />
+            </span>
+            <span className="text-muted-foreground text-xs">
+              PDF, fotos o capturas, CSV o Excel
+            </span>
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <PageButton
+              type="button"
+              variant="default"
+              disabled={left === 0}
+              onClick={() => files.current?.click()}
+            >
+              <Upload />
+              Elegir archivos
+            </PageButton>
+            {/* A phone opens its camera; a computer would only open the
+                same file picker, so it gets no such button. */}
+            <PageButton
+              type="button"
+              className="hidden pointer-coarse:inline-flex"
+              disabled={left === 0}
+              onClick={() => camera.current?.click()}
+            >
+              <Camera />
+              Sacar foto
+            </PageButton>
           </div>
-        </section>
+          <input
+            ref={files}
+            type="file"
+            multiple
+            accept={ACCEPT}
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            onChange={(event) => {
+              send(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={camera}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            onChange={(event) => {
+              send(event.target.files);
+              event.target.value = "";
+            }}
+          />
+        </div>
       )}
 
-      <section className="grid gap-3" aria-labelledby={`${id}-imports`}>
-        <h2 id={`${id}-imports`} className="text-base font-semibold">
-          Tus cargas
-        </h2>
+      <Section title="Tus cargas" icon={Files}>
         {imports.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground py-6 text-center text-xs">
             Todavía no subiste nada.
           </p>
         ) : (
@@ -300,7 +306,7 @@ export function ImportPage({
         <p role="status" className="sr-only">
           {latestReady && `${latestReady.fileName} está lista para revisar.`}
         </p>
-      </section>
+      </Section>
     </div>
   );
 }

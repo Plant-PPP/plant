@@ -1,7 +1,8 @@
 "use client";
 
+import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { LIABILITY_LABEL_MAX } from "@plant/core";
-import { ArrowLeft, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
@@ -150,23 +151,15 @@ export function ImportDebtsReview({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Cargar
-        </Link>
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">
-            Revisá las deudas que leímos
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {[item.fileName, institution].filter(Boolean).join(" · ")}
-          </p>
-        </div>
+    <div className="grid gap-4">
+      <PageCrumbs
+        crumbs={[{ label: "Cargar", href: backHref }, { label: item.fileName }]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="sr-only">Revisá las deudas que leímos</h1>
+        {institution && (
+          <p className="text-muted-foreground text-xs">{institution}</p>
+        )}
       </div>
 
       {item.skippedRows > 0 && (
@@ -178,7 +171,7 @@ export function ImportDebtsReview({
       )}
 
       <section className="grid gap-3" aria-labelledby={`${listId}-list`}>
-        <h2 id={`${listId}-list`} className="text-base font-semibold">
+        <h2 id={`${listId}-list`} className="text-sm font-semibold">
           {countOf(rows.length, "deuda", "deudas")}
         </h2>
         <ul className="grid gap-2">
@@ -198,7 +191,7 @@ export function ImportDebtsReview({
                   "grid gap-3 rounded-lg border p-3",
                   !row.discarded &&
                     (missing[index]!.size > 0 || row.confidence === "low") &&
-                    "border-amber-500/60 bg-amber-500/5",
+                    "border-warn/50 bg-warn/5",
                   row.discarded && "opacity-50",
                 )}
               >
@@ -384,8 +377,8 @@ export function ImportDebtsReview({
 
 function Problem({ text }: { text: string }) {
   return (
-    <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-      <TriangleAlert aria-hidden className="size-3" />
+    <span className="flex items-center gap-1 text-xs">
+      <TriangleAlert aria-hidden className="text-warn size-3" />
       {text}
     </span>
   );

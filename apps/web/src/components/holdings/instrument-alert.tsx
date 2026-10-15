@@ -120,7 +120,7 @@ function AlertForm({
     setBusy(false);
     const result = settled === "rejected" ? "failed" : settled;
     if (result !== "ok") return setAlert(ALERT_REFUSED[result]);
-    toast.success("Creaste la alerta.");
+    toast.success("Creaste la alerta");
     onDone();
   };
 

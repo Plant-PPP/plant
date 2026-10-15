@@ -1,6 +1,7 @@
 import type { Denominator } from "@plant/core";
 
 import { GainLossText } from "@/components/holdings/sum-text";
+import { Badge } from "@/components/ui/badge";
 import { formatFraction, percentOf } from "@/lib/format/amount";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format/date";
@@ -60,16 +61,12 @@ export function CloseStatus({
       ? `Recalculado el ${formatDate(close.recalculatedOn)}`
       : "Cerrado";
   return (
-    <span
-      className={
-        close.open
-          ? "bg-primary/15 text-foreground rounded px-1.5 py-0.5 text-xs"
-          : close.recalculatedOn
-            ? "rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-300"
-            : "bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+    <Badge
+      variant={
+        close.open ? "info" : close.recalculatedOn ? "warning" : "neutral"
       }
     >
       {text}
-    </span>
+    </Badge>
   );
 }

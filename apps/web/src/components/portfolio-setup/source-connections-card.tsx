@@ -218,7 +218,8 @@ export function SourceConnectionsCard({
       <ActiveList
         view={view}
         title="Cuentas"
-        emptyText="Todavía no agregaste cuentas."
+        emptyText="Todavía no agregaste cuentas"
+        emptyDescription="Agregá el broker, el banco o la billetera donde tenés tus inversiones."
         truncatedText={`Mostrando las ${PAGE_ROW_LIMIT} más recientes.`}
         columns={[
           ...columns(href),

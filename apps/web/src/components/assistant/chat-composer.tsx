@@ -1,13 +1,8 @@
 "use client";
 
+import { isAssistantShortcut, useMac } from "@/lib/platform";
 import { ArrowUp, Square } from "lucide-react";
-import {
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { type ReactNode, type RefObject, useEffect, useState } from "react";
 
 import {
   InputGroup,
@@ -18,14 +13,6 @@ import {
 } from "@/components/ui/input-group";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
-
-const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
-const never = () => () => {};
-
-// Whether the shortcut is ⌘K rather than Ctrl+K; the server renders Ctrl.
-function useMac(): boolean {
-  return useSyncExternalStore(never, isMac, () => false);
-}
 
 // Where a question is written: the field, the unit the answer comes in, and
 // sending. It keeps the draft, so typing re-renders only itself; ⌘K (Ctrl+K)
@@ -56,14 +43,11 @@ export function ChatComposer({
   const [draft, setDraft] = useState("");
   const mac = useMac();
 
-  // Its own listener rather than one shared with the sidebar's ⌘B, which is
-  // vendored shadcn; a third shortcut is the time for a shared hook.
+  // On this page ⌘K focuses the field; elsewhere the sidebar's Asistente
+  // link takes it here.
   useEffect(() => {
     function focus(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.isComposing) return;
-      if (event.key !== "k" || !(isMac() ? event.metaKey : event.ctrlKey)) {
-        return;
-      }
+      if (!isAssistantShortcut(event)) return;
       event.preventDefault();
       textareaRef.current?.focus();
     }

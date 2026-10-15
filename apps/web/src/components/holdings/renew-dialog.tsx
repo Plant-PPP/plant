@@ -1,5 +1,7 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { type Placement, placementFigures } from "@plant/core";
 import { addDays, daysBetween } from "@plant/shared";
 import { useId, useState } from "react";
@@ -7,8 +9,6 @@ import { useId, useState } from "react";
 import { useFieldAlert } from "@/components/portfolio-setup/field-alert";
 import { useSavedFocus } from "@/components/portfolio-setup/saved-focus";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Button } from "@/components/ui/button";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,6 +134,7 @@ export function RenewDialog({
     <AppDialog
       onClose={onClose}
       title="Renovar"
+      icon={RefreshCw}
       description={`${name}. Se coloca de nuevo con ${formatAmount(maturityAmount, placement.currency)}: el capital más el interés.`}
       returnFocusTo={focus.returnFocusTo}
     >
@@ -148,27 +149,22 @@ export function RenewDialog({
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label htmlFor={fieldId("startedOn")}>Desde</Label>
-            <Input {...control("startedOn")} type="date" />
+            <Input {...control("startedOn")} type="date" required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("maturesOn")}>Vence</Label>
-            <Input {...control("maturesOn")} type="date" />
+            <Input {...control("maturesOn")} type="date" required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor={fieldId("rate")}>TNA (%)</Label>
-            <Input {...control("rate")} inputMode="decimal" />
+            <Input {...control("rate")} inputMode="decimal" required />
           </div>
         </div>
         {alert && <FormAlert id={alertId}>{alert.text}</FormAlert>}
-        <DialogFooter>
-          <Button
-            type="submit"
-            size="sm"
-            aria-describedby={alert ? alertId : undefined}
-          >
-            Renovar
-          </Button>
-        </DialogFooter>
+        <DialogActions
+          submitLabel="Renovar"
+          describedBy={alert ? alertId : undefined}
+        />
       </form>
     </AppDialog>
   );

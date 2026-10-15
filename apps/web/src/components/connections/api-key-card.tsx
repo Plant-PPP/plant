@@ -1,9 +1,11 @@
 "use client";
 
+import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
+import { DialogActions } from "@/components/ui/dialog-actions";
+import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
 import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
 import {
-  CircleAlert,
   CircleCheck,
   KeyRound,
   ListOrdered,
@@ -16,7 +18,6 @@ import { useId, useRef, useState, useTransition } from "react";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DialogFooter } from "@/components/ui/dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,18 +115,18 @@ export function ApiKeyCard({
   return (
     <section
       aria-labelledby={headingId}
-      className="grid gap-3 rounded-xl border p-4"
+      className="border-primary/15 bg-muted/40 grid gap-3 rounded-lg border p-3"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="grid gap-0.5">
           <h2
             id={headingId}
-            className="flex items-center gap-2 text-base font-semibold"
+            className="flex items-center gap-2 text-sm font-medium"
           >
-            <KeyRound aria-hidden className="size-4" />
+            <KeyRound aria-hidden className="text-primary size-4" />
             Conexión con {form.name}
           </h2>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-xs">
             {apiKey
               ? `${form.hint}: …${apiKey.keyHint} · conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee: nunca opera ni retira.`
               : `Conectá tu cuenta de ${form.name} para traer tus tenencias sin subir archivos. Plant solo lee: nunca opera ni retira.`}
@@ -136,7 +137,7 @@ export function ApiKeyCard({
             <>
               <PendingButton
                 type="button"
-                size="sm"
+                className={PAGE_BUTTON_CLASS}
                 pending={pending}
                 onClick={() => sync("holdings")}
               >
@@ -147,8 +148,8 @@ export function ApiKeyCard({
                 <PendingButton
                   ref={operationsOpener}
                   type="button"
-                  size="sm"
                   variant="outline"
+                  className={PAGE_BUTTON_CLASS}
                   pending={pending}
                   onClick={() => setDialog("operations")}
                 >
@@ -159,8 +160,8 @@ export function ApiKeyCard({
               <Button
                 ref={opener}
                 type="button"
-                size="sm"
                 variant="outline"
+                className={PAGE_BUTTON_CLASS}
                 onClick={() => setDialog("disconnect")}
               >
                 Desconectar
@@ -170,7 +171,8 @@ export function ApiKeyCard({
             <Button
               ref={opener}
               type="button"
-              size="sm"
+              variant="outline"
+              className={PAGE_BUTTON_CLASS}
               onClick={() => setDialog("connect")}
             >
               Conectar {form.name}
@@ -179,14 +181,10 @@ export function ApiKeyCard({
         </div>
       </div>
       {connected && (
-        <p
-          role="status"
-          className="border-gain/30 bg-gain/10 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-        >
-          <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+        <Notice variant="success">
           Conectamos tu cuenta de {form.name}. Sincronizala para traer tus
           tenencias.
-        </p>
+        </Notice>
       )}
       {!synced && !connected && apiKey?.lastSync && (
         <SyncStatus sync={apiKey.lastSync} provider={form.name} />
@@ -197,10 +195,7 @@ export function ApiKeyCard({
             ? "Estamos leyendo tus operaciones."
             : "Estamos leyendo tus tenencias."}{" "}
           Cuando estén, revisalas y confirmalas en{" "}
-          <Link href="/import" className="underline underline-offset-4">
-            Cargar
-          </Link>
-          .
+          <Link href="/import">Cargar</Link>.
         </p>
       )}
       {error && <FormAlert>{error}</FormAlert>}
@@ -262,15 +257,14 @@ export function SyncStatus({
   }
   if (sync.status === "failed") {
     return (
-      <p className="text-destructive flex items-start gap-2 text-sm">
-        <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span>
-          La última sincronización falló ({when}).{" "}
-          {sync.failure
-            ? importFailureMessage(sync.failure, provider)
-            : SUPERSEDED_SYNC_MESSAGE}
-        </span>
-      </p>
+      <Notice
+        variant="error"
+        title={`La última sincronización falló (${when})`}
+      >
+        {sync.failure
+          ? importFailureMessage(sync.failure, provider)
+          : SUPERSEDED_SYNC_MESSAGE}
+      </Notice>
     );
   }
   return (
@@ -281,11 +275,7 @@ export function SyncStatus({
         {sync.status === "ready" && (
           <>
             {" "}
-            Revisala y confirmala en{" "}
-            <Link href="/import" className="underline underline-offset-4">
-              Cargar
-            </Link>
-            .
+            Revisala y confirmala en <Link href="/import">Cargar</Link>.
           </>
         )}
       </span>
@@ -322,6 +312,7 @@ function OperationsDialog({
       onClose={onClose}
       returnFocusTo={returnFocusTo}
       title={`Traer operaciones de ${name}`}
+      icon={ListOrdered}
       description="Elegí desde y hasta qué día. Después revisás cada operación en Cargar y elegís cuáles importar; las que ya están en la cuenta aparecen marcadas."
     >
       <form
@@ -360,14 +351,7 @@ function OperationsDialog({
           </div>
         </div>
         {error && <FormAlert>{error}</FormAlert>}
-        <DialogFooter>
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" size="sm">
-            Traer operaciones
-          </Button>
-        </DialogFooter>
+        <DialogActions submitLabel="Traer operaciones" />
       </form>
     </AppDialog>
   );
@@ -411,6 +395,7 @@ function ConnectDialog({
     <AppDialog
       onClose={onClose}
       title={`Conectar ${form.name}`}
+      icon={KeyRound}
       description={form.help}
     >
       <form
@@ -476,14 +461,7 @@ function ConnectDialog({
           </label>
         )}
         {error && <FormAlert id={alertId}>{error}</FormAlert>}
-        <DialogFooter>
-          <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <PendingButton type="submit" size="sm" pending={pending}>
-            Conectar
-          </PendingButton>
-        </DialogFooter>
+        <DialogActions submitLabel="Conectar" pending={pending} />
       </form>
     </AppDialog>
   );

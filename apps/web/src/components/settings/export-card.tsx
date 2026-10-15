@@ -61,16 +61,16 @@ export function ExportCard({ load }: { load: () => Promise<ExportAnswer> }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Tus datos</CardTitle>
+    <Card className="max-w-3xl gap-0">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Tus datos</CardTitle>
         <CardDescription>
           {stepUp
             ? "Por seguridad, volvé a ingresar para bajar tus datos. Vamos a cerrar tu sesión en este dispositivo."
             : "Bajá todo lo que cargaste en un Excel, o en archivos CSV que abre cualquier planilla."}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-2">
+      <CardContent className="pt-6 flex flex-wrap gap-2">
         {stepUp ? (
           <Button
             type="button"

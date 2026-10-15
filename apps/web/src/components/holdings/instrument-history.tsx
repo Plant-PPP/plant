@@ -1,11 +1,13 @@
 "use client";
 
 import { InstrumentAlert } from "@/components/holdings/instrument-alert";
+import { PageCrumbs } from "@/components/layout/page-crumbs";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { AlertWriteResult, NewAlert } from "@/lib/alerts/alerts";
+import { routeItemForPath } from "@/lib/navigation";
 import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, ArrowLeftRight } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeftRight, Wallet } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
 
@@ -72,8 +74,8 @@ import {
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
-  SummaryTile,
 } from "./sum-text";
+import { StatTile } from "@/components/ui/stat-tile";
 
 type Row = ShownInstrumentHolding & { id: string };
 
@@ -228,7 +230,7 @@ export function InstrumentHistory({
             {origin?.kind === "import" && (
               <ImportOrigin
                 origin={origin}
-                className="block truncate text-xs text-muted-foreground underline"
+                className="block truncate text-xs text-muted-foreground"
               />
             )}
           </>
@@ -297,70 +299,68 @@ export function InstrumentHistory({
   ];
 
   return (
-    <div className="grid gap-6" data-slot="setup-section">
+    <div className="grid gap-4" data-slot="setup-section">
       <p role="status" className="sr-only">
         {pending ? "Guardando…" : ""}
       </p>
-      <div className="grid gap-3">
-        <Link
-          href={backHref}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Activos
-        </Link>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <h1
-              ref={heading}
-              tabIndex={-1}
-              className="flex items-center gap-2 text-xl font-semibold outline-none"
-            >
-              {instrument.name}
-              <TickerChip ticker={instrument.symbol} />
-            </h1>
-            {/* The line is the class and price; the page values the price from a
-                holding of it, so the line goes with the last one. */}
-            {shown.length > 0 && (
-              <p className="text-muted-foreground text-sm">
-                {HOLDING_CLASS_LABELS[instrument.type]} ·{" "}
-                {price.value === null
-                  ? NO_QUOTE
-                  : `${formatQuotedPrice(price.value, unit, instrument.type)} ${
-                      price.source === "manual" && price.date
-                        ? `(manual, ${formatDate(price.date)})`
-                        : price.date
-                          ? `al ${formatDate(price.date)}`
-                          : ""
-                    }`}
-              </p>
-            )}
-          </div>
-          <div className="flex items-end gap-2">
-            {/* Alerts are in pesos or dollars. */}
-            {instrument.currency !== "EUR" && (
-              <InstrumentAlert
-                symbol={instrument.symbol}
-                currency={instrument.currency}
-                held={shown.length > 0}
-                onCreate={onAlert}
-              />
-            )}
+      <PageCrumbs
+        crumbs={[
+          {
+            label: routeItemForPath(backHref)?.title ?? "Activos",
+            href: backHref,
+          },
+          { label: instrument.name },
+        ]}
+      />
+      <div className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 ref={heading} tabIndex={-1} className="sr-only">
+          {instrument.name}
+        </h1>
+        <TickerChip ticker={instrument.symbol} />
+        {/* The class and price; the page values the price from a holding of
+            it, so the line goes with the last one. */}
+        {shown.length > 0 && (
+          <p className="text-muted-foreground text-xs">
+            {HOLDING_CLASS_LABELS[instrument.type]} ·{" "}
+            {price.value === null
+              ? NO_QUOTE
+              : `${formatQuotedPrice(price.value, unit, instrument.type)} ${
+                  price.source === "manual" && price.date
+                    ? `(manual, ${formatDate(price.date)})`
+                    : price.date
+                      ? `al ${formatDate(price.date)}`
+                      : ""
+                }`}
+          </p>
+        )}
+        <div className="ml-auto flex items-center gap-2" data-print="hidden">
+          {/* Alerts are in pesos or dollars. */}
+          {instrument.currency !== "EUR" && (
+            <InstrumentAlert
+              symbol={instrument.symbol}
+              currency={instrument.currency}
+              held={shown.length > 0}
+              onCreate={onAlert}
+            />
+          )}
+          {shown.length > 0 && (
             <UnitSelect
               id={unitId}
               unit={unit}
               referenceUnit={referenceUnit}
               pending={pending}
               onChange={(param) => url.set("unit", param)}
+              triggerClassName="w-auto"
             />
-          </div>
+          )}
         </div>
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {`No tenés ${instrument.name} en ninguna cuenta.`}
-        </p>
+        <EmptyState icon={Wallet} title={`No tenés ${instrument.name}`}>
+          Cuando lo compres o lo cargues en alguna cuenta, vas a ver acá cuánto
+          tenés y su historial.
+        </EmptyState>
       ) : (
         <>
           {page.inTaxReport !== null && (
@@ -388,13 +388,13 @@ export function InstrumentHistory({
             aria-busy={pending || undefined}
           >
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <SummaryTile
+              <StatTile
                 label="Valor actual"
                 note={`${formatQuantity(summary.quantity)} ${instrument.symbol}`}
               >
                 {money(summary.value, unit)}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="Resultado total"
                 note={
                   returns?.share == null
@@ -410,8 +410,8 @@ export function InstrumentHistory({
                 ) : (
                   <MissingFigure text="Sin resultado" />
                 )}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="Rendimiento anual (TIR)"
                 note={
                   returns && returns.annual === null
@@ -424,27 +424,25 @@ export function InstrumentHistory({
                 ) : (
                   <MissingFigure text="Sin rendimiento anual" />
                 )}
-              </SummaryTile>
-              <SummaryTile
+              </StatTile>
+              <StatTile
                 label="G/P no realizada"
                 note="De lo que tenés hoy, sobre su costo"
               >
                 <GainLossText gain={summary.unrealized} unit={unit} />
-              </SummaryTile>
+              </StatTile>
             </dl>
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <SummaryTile label="Costo de lo que tenés">
+              <StatTile label="Costo de lo que tenés">
                 {money(summary.cost, unit)}
-              </SummaryTile>
-              <SummaryTile label="Resultado realizado">
+              </StatTile>
+              <StatTile label="Resultado realizado">
                 {money(summary.realized, unit)}
-              </SummaryTile>
-              <SummaryTile label="Dividendos, cupones y rendimientos">
+              </StatTile>
+              <StatTile label="Dividendos, cupones y rendimientos">
                 {money(summary.income, unit)}
-              </SummaryTile>
-              <SummaryTile label="Gastos">
-                {money(summary.charges, unit)}
-              </SummaryTile>
+              </StatTile>
+              <StatTile label="Gastos">{money(summary.charges, unit)}</StatTile>
             </dl>
             {returns && (
               <p className="text-muted-foreground text-xs">
@@ -458,10 +456,10 @@ export function InstrumentHistory({
 
           <section className="grid gap-3" aria-labelledby={`${unitId}-where`}>
             <div className="grid gap-1">
-              <h2 id={`${unitId}-where`} className="text-lg font-semibold">
+              <h2 id={`${unitId}-where`} className="text-sm font-semibold">
                 Dónde lo tenés
               </h2>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs">
                 Cuánto tenés en cada cuenta y cartera.
               </p>
             </div>
@@ -475,10 +473,10 @@ export function InstrumentHistory({
           <section className="grid gap-3" aria-labelledby={`${unitId}-history`}>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="grid gap-1">
-                <h2 id={`${unitId}-history`} className="text-lg font-semibold">
+                <h2 id={`${unitId}-history`} className="text-sm font-semibold">
                   Historial
                 </h2>
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-xs">
                   Cada compra, venta, rendimiento y traspaso, el más reciente
                   primero.
                 </p>
