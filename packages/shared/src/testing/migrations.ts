@@ -13,9 +13,9 @@ export function migrations(): { file: string; sql: string }[] {
     .map((file) => ({ file, sql: readFileSync(join(DIR, file), "utf8") }));
 }
 
-// The body of each private function whose name matches `name`, as the
-// migrations, in order, last leave it: a later replace wins and a
-// `DROP FUNCTION private.<name>()` removes it. Each group name appears once,
+// The body of each function in public or private whose name matches `name`,
+// as the migrations, in order, last leave it: a later replace wins and a
+// `DROP FUNCTION <schema>.<name>(...)` removes it. Each group name appears once,
 // since Node 22 rejects a repeated one. The gap before the body holds no `;`,
 // so a function quoted any other way never runs on into the next statement;
 // such a function throws, since a stale body would leave its readers checking
@@ -25,16 +25,16 @@ export function functionBodies(
   name: RegExp,
 ): Map<string, string> {
   const pattern = new RegExp(
-    `CREATE (?:OR REPLACE )?FUNCTION private\\.(?<created>${name.source})\\(\\)[^;]*?\\$\\$(?<body>[\\s\\S]*?)\\$\\$` +
-      `|DROP FUNCTION (?:IF EXISTS )?private\\.(?<dropped>${name.source})\\(\\)` +
-      `|CREATE (?:OR REPLACE )?FUNCTION private\\.(?<unread>${name.source})\\(\\)`,
+    `CREATE (?:OR REPLACE )?FUNCTION (?:public|private)\\.(?<created>${name.source})\\([^)]*\\)[^;]*?\\$\\$(?<body>[\\s\\S]*?)\\$\\$` +
+      `|DROP FUNCTION (?:IF EXISTS )?(?:public|private)\\.(?<dropped>${name.source})\\([^)]*\\)` +
+      `|CREATE (?:OR REPLACE )?FUNCTION (?<schema>public|private)\\.(?<unread>${name.source})\\([^)]*\\)`,
     "gi",
   );
   const bodies = new Map<string, string>();
   for (const sql of sqls) {
     for (const { groups } of sql.matchAll(pattern)) {
       if (groups?.unread)
-        throw new Error(`no $$ body for private.${groups.unread}()`);
+        throw new Error(`no $$ body for ${groups.schema}.${groups.unread}()`);
       if (groups?.dropped) bodies.delete(groups.dropped);
       else if (groups?.created && groups.body)
         bodies.set(groups.created, groups.body);

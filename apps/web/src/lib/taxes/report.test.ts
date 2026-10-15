@@ -135,6 +135,7 @@ function ledger(): ClosesState {
       },
     ],
     liabilities: [],
+    liabilityEvents: new Map(),
     recalculated: new Map(),
   };
 }

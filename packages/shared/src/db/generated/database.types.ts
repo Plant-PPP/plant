@@ -263,14 +263,14 @@ isOneToOne: false
                   ]
                 },"liabilities": {
                   Row: {
-                    "annual_rate": number | null,"balance": number,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"installment": number | null,"installments_left": number | null,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender": string | null,"matures_on": string | null,"next_due_on": string | null,"updated_at": string,"user_id": string,"uva": boolean
+                    "accrues": boolean,"anchored_on": string,"annual_rate": number | null,"balance": number,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"installment": number | null,"installments_left": number | null,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender": string | null,"matures_on": string | null,"next_due_on": string | null,"opened_on": string | null,"updated_at": string,"user_id": string,"uva": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "annual_rate"?: number | null,"balance": number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance": number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
                   }
                   Update: {
-                    "annual_rate"?: number | null,"balance"?: number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"],"label"?: string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance"?: number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"],"label"?: string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
                   }
                   Relationships: [
                     {
@@ -279,6 +279,58 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "instruments"
       referencedColumns: ["symbol"]
+    }
+                  ]
+                },"liability_collateral": {
+                  Row: {
+                    "created_at": string,"holding_id": string,"id": string,"liability_id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"holding_id": string,"id"?: string,"liability_id": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"holding_id"?: string,"id"?: string,"liability_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "liability_collateral_user_id_holding_id_fkey"
+      columns: ["user_id","holding_id"]
+isOneToOne: false
+      referencedRelation: "holdings"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "liability_collateral_user_id_liability_id_fkey"
+      columns: ["user_id","liability_id"]
+isOneToOne: false
+      referencedRelation: "liabilities"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"liability_events": {
+                  Row: {
+                    "amount": number | null,"annual_rate": number | null,"cash_holding_id": string | null,"created_at": string,"date": string,"id": string,"kind": Database["public"]['Enums']["liability_event_kind"],"liability_id": string,"settles": boolean,"takes_cash": boolean,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: number | null,"annual_rate"?: number | null,"cash_holding_id"?: string | null,"created_at"?: string,"date": string,"id"?: string,"kind": Database["public"]['Enums']["liability_event_kind"],"liability_id": string,"settles"?: boolean,"takes_cash"?: boolean,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number | null,"annual_rate"?: number | null,"cash_holding_id"?: string | null,"created_at"?: string,"date"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["liability_event_kind"],"liability_id"?: string,"settles"?: boolean,"takes_cash"?: boolean,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "liability_events_user_id_cash_holding_id_fkey"
+      columns: ["user_id","cash_holding_id"]
+isOneToOne: false
+      referencedRelation: "holdings"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "liability_events_user_id_liability_id_fkey"
+      columns: ["user_id","liability_id"]
+isOneToOne: false
+      referencedRelation: "liabilities"
+      referencedColumns: ["user_id","id"]
     }
                   ]
                 },"manual_prices": {
@@ -515,11 +567,17 @@ isOneToOne: false
 "confirm_import_debts":
 { Args: { "p_debts": Json,"p_import_id": string }; Returns: string
                            },
+"delete_liability_event":
+{ Args: { "p_event_id": string }; Returns: boolean
+                           },
 "imports_used_this_month":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "meet_price_alerts":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"move_cash":
+{ Args: { "p_currency": Database["public"]['Enums']["currency"],"p_delta": number,"p_expected": number,"p_holding_id": string }; Returns: undefined
                            },
 "orphan_import_files":
 { Args: { "p_after"?: string,"p_limit": number }; Returns: {
@@ -531,8 +589,17 @@ isOneToOne: false
               "amount": string,"currency": Database["public"]['Enums']["currency"],"kind": Database["public"]['Enums']["fx_rate_kind"],"quote_date": string,"symbol": string
             }[]
                            },
+"record_liability_event":
+{ Args: { "p_cash": Json,"p_event": Json,"p_liability_id": string }; Returns: string
+                           },
+"restore_cash":
+{ Args: { "p_amount": number,"p_currency": Database["public"]['Enums']["currency"],"p_holding_id": string }; Returns: string
+                           },
 "supersede_queued_sync":
 { Args: { "p_provider": string,"p_queued_id": string,"p_source_connection_id": string,"p_sync_draft": string,"p_sync_from"?: string,"p_sync_to"?: string }; Returns: string
+                           },
+"update_liability_event":
+{ Args: { "p_cash": Json,"p_event": Json,"p_event_id": string }; Returns: boolean
                            },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
@@ -541,7 +608,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages"|"connection_rejected"|"connection_not_read_only","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"stock"|"bond"|"fci","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages"|"connection_rejected"|"connection_not_read_only","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"stock"|"bond"|"fci","liability_event_kind": "rate_change"|"payment"|"adjustment","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -657,7 +724,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages", "connection_rejected", "connection_not_read_only"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "stock", "bond", "fci"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages", "connection_rejected", "connection_not_read_only"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "stock", "bond", "fci"],"liability_event_kind": ["rate_change", "payment", "adjustment"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

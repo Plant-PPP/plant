@@ -86,7 +86,7 @@ export function DebtDialog({
   }
 
   const text = (
-    key: Exclude<keyof DebtFields, "kind" | "currency" | "uva">,
+    key: Exclude<keyof DebtFields, "kind" | "currency" | "uva" | "accrues">,
     label: string,
     props: React.ComponentProps<typeof Input> = {},
   ) => (

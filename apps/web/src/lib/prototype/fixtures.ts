@@ -487,6 +487,9 @@ const liabilitiesFor = (today: string): Liability[] => [
     installments_left: 214,
     next_due_on: addDays(today, 9),
     matures_on: addDays(today, 214 * 30),
+    accrues: false,
+    opened_on: null,
+    anchored_on: today,
   },
   {
     id: "e5000000-0000-4000-8000-000000000002",
@@ -502,6 +505,9 @@ const liabilitiesFor = (today: string): Liability[] => [
     installments_left: null,
     next_due_on: addDays(today, 6),
     matures_on: null,
+    accrues: false,
+    opened_on: null,
+    anchored_on: today,
   },
   {
     id: "e5000000-0000-4000-8000-000000000003",
@@ -517,6 +523,9 @@ const liabilitiesFor = (today: string): Liability[] => [
     installments_left: 14,
     next_due_on: addDays(today, 12),
     matures_on: addDays(today, 14 * 30),
+    accrues: false,
+    opened_on: null,
+    anchored_on: today,
   },
   {
     id: "e5000000-0000-4000-8000-000000000004",
@@ -532,6 +541,9 @@ const liabilitiesFor = (today: string): Liability[] => [
     installments_left: null,
     next_due_on: null,
     matures_on: null,
+    accrues: false,
+    opened_on: null,
+    anchored_on: today,
   },
 ];
 

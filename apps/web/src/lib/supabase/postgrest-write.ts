@@ -35,6 +35,23 @@ export function classifyPostgrestResult(
   };
 }
 
+// A guard's hint, read only against the guards' known lists for their
+// SQLSTATE, since an unknown hint could carry any text.
+export function knownHint<
+  G extends { sqlstate: string; hints: readonly string[] },
+>(
+  guards: readonly G[],
+  { code }: Pick<PostgrestFailure, "code">,
+  hint: unknown,
+): G["hints"][number] | undefined {
+  for (const guard of guards) {
+    if (code !== guard.sqlstate) continue;
+    const known = guard.hints.find((each) => each === hint);
+    if (known !== undefined) return known;
+  }
+  return undefined;
+}
+
 // A query raced against a timer: it resolves with the answer when its status
 // is one of `expected`, else as a PostgrestFailure (a timeout too); a query
 // that rejects or throws still rejects. `count` is the total PostgREST counted

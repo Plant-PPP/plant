@@ -1,4 +1,4 @@
-import { type QuoteSnapshot, valueLiabilities } from "@plant/core";
+import { isOwed, type QuoteSnapshot, valueLiabilities } from "@plant/core";
 import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
 import {
@@ -31,6 +31,7 @@ import { monthName, monthOf } from "@/lib/summary/closes";
 import {
   changeBetween,
   closesOf,
+  debtsToday,
   pricedToday,
   yearsOfCloses,
 } from "@/lib/summary/compute";
@@ -266,7 +267,7 @@ function scenarioAnswer(
   }
   const outcome = scenarioOf({
     holdings,
-    liabilities: state.liabilities,
+    liabilities: debtsToday(state),
     snapshot,
     unit,
     referenceDollar: state.referenceDollar,
@@ -491,27 +492,28 @@ export function prototypeAnswer(
   }
 
   if (/deud|debo|hipotec|prestamo|tarjeta/.test(asked)) {
-    const owed = valueLiabilities(state.liabilities, snapshot, {
+    const owed = valueLiabilities(debtsToday(state), snapshot, {
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });
-    if (state.liabilities.length === 0) {
+    const live = debtsToday(state).filter(isOwed);
+    if (live.length === 0) {
       return {
         ...base,
-        text: "No tenés deudas cargadas en Plant.",
+        text: "No tenés deudas pendientes en Plant.",
         charts: [],
         sources: [SOURCES.debts],
       };
     }
     const byId = new Map(owed.items.map((item) => [item.id, item.value]));
     // Only the debts with a value in the unit are ranked and drawn.
-    const valued = state.liabilities
+    const valued = live
       .flatMap((debt) => {
         const value = byId.get(debt.id);
         return value ? [{ label: debt.label, value }] : [];
       })
       .sort((a, b) => compareDecimals(b.value, a.value));
-    const count = state.liabilities.length;
+    const count = live.length;
     return {
       ...base,
       text: `Debés ${formatAmount(owed.total, unit)}${owed.complete ? "" : WITHOUT_PRICE} en ${countOf(count, "deuda", "deudas")}.${
@@ -597,7 +599,7 @@ export function prototypeAnswer(
       unit,
       referenceDollar: state.referenceDollar,
     });
-    const owed = valueLiabilities(state.liabilities, snapshot, {
+    const owed = valueLiabilities(debtsToday(state), snapshot, {
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });

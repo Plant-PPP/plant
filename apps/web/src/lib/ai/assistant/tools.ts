@@ -122,7 +122,7 @@ export function assistantTools(
     }),
     getLiabilities: tool({
       description:
-        "Las deudas del usuario con su saldo, su cuota, sus cuotas restantes y su próximo vencimiento, y el total que debe.",
+        "Las deudas del usuario con su saldo de hoy, su tasa nominal anual de hoy en porcentaje (annualRate), si acumula interés día a día (accrues), su cuota, sus cuotas restantes y su próximo vencimiento, y el total que debe. Una deuda saldada no aparece.",
       inputSchema: z.object({}),
       execute: guarded("getLiabilities", () => data.liabilities()),
     }),

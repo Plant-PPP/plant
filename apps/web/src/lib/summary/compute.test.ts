@@ -7,6 +7,7 @@ describe("a feed rate older than QUOTE_CARRY_DAYS", () => {
   const state: ClosesState = {
     ...emptyLedger(),
     liabilities: [],
+    liabilityEvents: new Map(),
     recalculated: new Map(),
     quotes: {
       fxRates: [{ kind: "mep", rate_date: "2026-10-01", sell: "1300" }],

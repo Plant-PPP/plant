@@ -113,8 +113,41 @@ it("answers about debts with none loaded", () => {
     "usd_mep",
     snapshot,
   );
-  expect(answer.text).toBe("No tenés deudas cargadas en Plant.");
+  expect(answer.text).toBe("No tenés deudas pendientes en Plant.");
   expect(answer.charts).toEqual([]);
+});
+
+it("answers about debts that are all paid off as owing none", () => {
+  const [first] = state.liabilities;
+  const answer = prototypeAnswer(
+    {
+      ...state,
+      liabilities: [first!],
+      liabilityEvents: new Map([
+        [
+          first!.id,
+          [
+            {
+              id: "e1",
+              liability_id: first!.id,
+              kind: "payment" as const,
+              date: first!.anchored_on,
+              amount: "1",
+              annual_rate: null,
+              cash_holding_id: null,
+              takes_cash: false,
+              settles: true,
+              created_at: `${first!.anchored_on}T12:00:00Z`,
+            },
+          ],
+        ],
+      ]),
+    },
+    "¿Cuánto debo?",
+    "usd_mep",
+    snapshot,
+  );
+  expect(answer.text).toBe("No tenés deudas pendientes en Plant.");
 });
 
 it("draws an instrument's result as bars that add up to it", () => {
