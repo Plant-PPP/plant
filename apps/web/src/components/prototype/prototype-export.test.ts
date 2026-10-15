@@ -1,3 +1,5 @@
+import type { LiabilityEvent } from "@plant/core";
+
 import { toCsv } from "@/lib/export/csv";
 import { EXPORT_KINDS, exportTables } from "@/lib/export/tables";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -61,4 +63,73 @@ describe("a deleted account", () => {
     expect(fresh.instruments).toBe(state.instruments);
     expect(fresh.quotes).toBe(state.quotes);
   });
+});
+
+it("writes a debt's figures today and its events in the order they apply", () => {
+  const debt = {
+    id: "d1",
+    kind: "mortgage" as const,
+    label: "Hipoteca",
+    lender: null,
+    currency: "ARS" as const,
+    uva: true,
+    instrument_symbol: null,
+    balance: "1000",
+    installment: null,
+    annual_rate: "0.1",
+    installments_left: null,
+    next_due_on: null,
+    matures_on: null,
+    accrues: false,
+    opened_on: "2026-01-01",
+    anchored_on: "2026-01-01",
+  };
+  const base = {
+    liability_id: "d1",
+    cash_holding_id: null,
+    takes_cash: false as const,
+  };
+  const events: LiabilityEvent[] = [
+    {
+      ...base,
+      id: "e1",
+      kind: "payment",
+      date: "2026-03-02",
+      amount: "1000",
+      annual_rate: null,
+      settles: true,
+      created_at: "2026-03-02T10:00:00Z",
+    },
+    {
+      ...base,
+      id: "e2",
+      kind: "adjustment",
+      date: "2026-03-02",
+      amount: "1000",
+      annual_rate: null,
+      settles: false,
+      created_at: "2026-03-02T11:00:00Z",
+    },
+    {
+      ...base,
+      id: "e3",
+      kind: "rate_change",
+      date: "2026-03-01",
+      amount: null,
+      annual_rate: "0.2",
+      settles: false,
+      created_at: "2026-03-01T10:00:00Z",
+    },
+  ];
+  const withDebt = {
+    ...state,
+    liabilities: [debt],
+    liabilityEvents: new Map([["d1", events]]),
+  };
+  expect(linesOf(file("eventos-de-deudas", withDebt)).slice(1)).toEqual([
+    "Hipoteca,2026-03-01,Cambio de tasa,UVA,,0.2,No",
+    "Hipoteca,2026-03-02,Ajuste de saldo,UVA,1000,,No",
+    "Hipoteca,2026-03-02,Pago,UVA,1000,,Sí",
+  ]);
+  expect(file("deudas", withDebt)).toContain(",0,1000,2026-01-01,No,,0.2,0.1,");
 });

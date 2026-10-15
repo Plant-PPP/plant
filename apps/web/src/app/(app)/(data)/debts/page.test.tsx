@@ -16,6 +16,7 @@ jest.mock("@/lib/holdings/read", () => ({
 jest.mock("@/lib/debts/read", () => ({
   ...jest.requireActual("@/lib/debts/read"),
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
+  readLiabilityEvents: async () => ({ byLiability: new Map(), cut: false }),
 }));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
@@ -63,6 +64,9 @@ const UVA_LOAN = {
   installments_left: null,
   next_due_on: null,
   matures_on: null,
+  accrues: false,
+  opened_on: null,
+  anchored_on: "2026-01-01",
 };
 
 let lines: Record<string, unknown>[];

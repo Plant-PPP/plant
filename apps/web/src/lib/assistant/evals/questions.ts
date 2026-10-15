@@ -171,6 +171,13 @@ export const DATA_QUESTIONS: readonly DataQuestion[] = [
     chart: "allocation",
   },
   {
+    question: "¿Qué tasa tienen mis deudas?",
+    unit: "ars",
+    tools: ["getLiabilities"],
+    currency: "ARS",
+    chart: null,
+  },
+  {
     question: "¿Cuánto debo en total?",
     unit: "ars",
     tools: ["getLiabilities", "getPortfolioSummary"],

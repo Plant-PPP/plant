@@ -46,6 +46,8 @@ const MORTGAGE = {
   installments_left: 240,
   next_due_on: "2026-11-10",
   matures_on: null,
+  accrues: false,
+  opened_on: null,
 };
 
 let lines: Record<string, unknown>[];
@@ -136,4 +138,20 @@ it("fails on anything else, and logs it", async () => {
     "plant.outcome": "failed",
   });
   expect(revalidatePath).toHaveBeenCalledWith("/debts");
+});
+
+it("reads a debt guard's refusal as invalid input, warned", async () => {
+  response.mockReturnValue({
+    data: null,
+    error: { code: "PT409", message: "x", hint: "has_history" },
+    status: 409,
+  });
+  expect(await writeLiability("update_liability", ID, MORTGAGE)).toEqual({
+    ok: false,
+    code: "invalid",
+  });
+  expect(lines.at(-1)).toMatchObject({
+    level: "warn",
+    "plant.outcome": "invalid",
+  });
 });

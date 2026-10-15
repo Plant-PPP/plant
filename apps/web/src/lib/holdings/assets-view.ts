@@ -16,6 +16,7 @@ export type AssetsRead =
   | "valuation"
   | "ledger"
   | "debts"
+  | "debt_events"
   | "api_key"
   | "taxes";
 

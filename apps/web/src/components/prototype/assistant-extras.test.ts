@@ -12,7 +12,12 @@ import {
 } from "@/lib/assistant/scenario";
 import { formatPercent } from "@/lib/format/amount";
 import { buildFixtures } from "@/lib/prototype/fixtures";
-import { changeBetween, closesOf, pricedToday } from "@/lib/summary/compute";
+import {
+  changeBetween,
+  closesOf,
+  debtsToday,
+  pricedToday,
+} from "@/lib/summary/compute";
 
 import { prototypeAnswer } from "./prototype-assistant";
 import { holdingsView, initialState } from "./prototype-store";
@@ -102,7 +107,7 @@ describe("scenarioOf", () => {
   ) =>
     scenarioOf({
       holdings,
-      liabilities: state.liabilities,
+      liabilities: debtsToday(state),
       snapshot: priced,
       unit,
       referenceDollar: state.referenceDollar,
@@ -245,7 +250,7 @@ describe("review fixes", () => {
   it("says a dollar nothing depends on changes nothing", () => {
     const outcome = scenarioOf({
       holdings,
-      liabilities: state.liabilities,
+      liabilities: debtsToday(state),
       snapshot: priced,
       unit: "usd_mep",
       referenceDollar: state.referenceDollar,

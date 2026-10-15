@@ -18,7 +18,14 @@ export function createLiability(
   return {
     state: {
       ...state,
-      liabilities: [{ id, ...parsed.data }, ...state.liabilities],
+      liabilities: [
+        {
+          id,
+          ...parsed.data,
+          anchored_on: parsed.data.opened_on ?? state.today,
+        },
+        ...state.liabilities,
+      ],
     },
     result: { ok: true, id },
   };
@@ -38,7 +45,18 @@ export function updateLiability(
     state: {
       ...state,
       liabilities: state.liabilities.map((each) =>
-        each.id === id ? { id, ...parsed.data } : each,
+        each.id === id
+          ? {
+              id,
+              ...parsed.data,
+              // Without an opening day the anchor is the day it was created,
+              // as private.liability_guard keeps it; the prototype keeps no
+              // creation day, so clearing one anchors on today.
+              anchored_on:
+                parsed.data.opened_on ??
+                (each.opened_on === null ? each.anchored_on : state.today),
+            }
+          : each,
       ),
     },
     result: { ok: true, id },

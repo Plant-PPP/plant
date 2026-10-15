@@ -2,6 +2,8 @@
 
 import { valueLiabilities } from "@plant/core";
 
+import { debtsToday } from "@/lib/summary/compute";
+
 import { DebtsSetup } from "@/components/debts/debts-setup";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import type { KeysetParams } from "@/lib/supabase/keyset";
@@ -26,7 +28,9 @@ export function PrototypeDebts({ params }: { params: KeysetParams }) {
         archivedFirstHref: null,
         archivedNextHref: null,
       }}
-      valued={valueLiabilities(state.liabilities, snapshot, {
+      owed={debtsToday(state)}
+      complete
+      valued={valueLiabilities(debtsToday(state), snapshot, {
         denominator: unit,
         referenceDollar: state.referenceDollar,
       })}

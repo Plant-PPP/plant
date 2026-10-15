@@ -1,7 +1,13 @@
-import { isTrade, type Liability } from "@plant/core";
+import {
+  compareLiabilityEvents,
+  isTrade,
+  type Liability,
+  type LiabilityEvent,
+  liabilitiesToday,
+} from "@plant/core";
 import { exactOf, plus, stored } from "@plant/shared";
 
-import { LIABILITY_KIND_LABELS } from "@/components/debts/debt-fields";
+import { LIABILITY_KIND_LABELS, unitOf } from "@/components/debts/debt-fields";
 import {
   ASSET_CLASS_LABELS,
   MOVEMENT_KIND_LABELS,
@@ -18,6 +24,7 @@ import type { ExportTable } from "./csv";
 export type ExportData = Ledger & {
   otherHoldings?: readonly HoldingRow[];
   liabilities: readonly Liability[];
+  liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
   imports: readonly ImportItem[];
 };
 
@@ -35,10 +42,17 @@ export const EXPORT_KINDS = [
   { name: "tenencias", label: "Tenencias" },
   { name: "movimientos", label: "Movimientos" },
   { name: "deudas", label: "Deudas" },
+  { name: "eventos-de-deudas", label: "Eventos de deudas" },
   { name: "cargas", label: "Cargas" },
 ] as const;
 
-const [HOLDINGS, MOVEMENTS, DEBTS, IMPORTS] = EXPORT_KINDS;
+const [HOLDINGS, MOVEMENTS, DEBTS, DEBT_EVENTS, IMPORTS] = EXPORT_KINDS;
+
+const DEBT_EVENT_LABELS: Record<LiabilityEvent["kind"], string> = {
+  rate_change: "Cambio de tasa",
+  payment: "Pago",
+  adjustment: "Ajuste de saldo",
+};
 
 const yesNo = (on: boolean) => (on ? "Sí" : "No");
 
@@ -136,6 +150,11 @@ export function exportTables(data: ExportData): ExportTable[] {
       }),
   };
 
+  const today = new Map(
+    liabilitiesToday(data.liabilities, data.liabilityEvents, data.today).map(
+      (debt) => [debt.id, debt],
+    ),
+  );
   const debts: ExportTable = {
     ...DEBTS,
     header: [
@@ -145,9 +164,13 @@ export function exportTables(data: ExportData): ExportTable[] {
       "Moneda",
       "UVA",
       "Instrumento",
-      "Saldo",
+      "Saldo hoy",
+      "Saldo inicial",
+      "Saldo al",
+      "Acumula interés",
       "Cuota",
-      "Tasa anual",
+      "Tasa hoy",
+      "Tasa inicial",
       "Cuotas restantes",
       "Próximo vencimiento",
       "Vence",
@@ -159,13 +182,44 @@ export function exportTables(data: ExportData): ExportTable[] {
       debt.currency,
       yesNo(debt.uva),
       debt.instrument_symbol,
+      today.get(debt.id)!.balance,
       debt.balance,
+      debt.anchored_on,
+      yesNo(debt.accrues),
       debt.installment,
+      today.get(debt.id)!.annual_rate,
       debt.annual_rate,
       debt.installments_left === null ? null : String(debt.installments_left),
       debt.next_due_on,
       debt.matures_on,
     ]),
+  };
+
+  const debtEvents: ExportTable = {
+    ...DEBT_EVENTS,
+    header: [
+      "Deuda",
+      "Fecha",
+      "Evento",
+      "Unidad",
+      "Monto",
+      "Tasa anual",
+      "Cancela la deuda",
+    ],
+    // Each debt's events in the order they apply, debts as the sheet lists them.
+    rows: data.liabilities.flatMap((debt) =>
+      [...(data.liabilityEvents.get(debt.id) ?? [])]
+        .sort(compareLiabilityEvents)
+        .map((event) => [
+          debt.label,
+          event.date,
+          DEBT_EVENT_LABELS[event.kind],
+          unitOf(debt),
+          event.amount,
+          event.annual_rate,
+          yesNo(event.settles),
+        ]),
+    ),
   };
 
   const imports: ExportTable = {
@@ -180,5 +234,5 @@ export function exportTables(data: ExportData): ExportTable[] {
     ]),
   };
 
-  return [holdings, movements, debts, imports];
+  return [holdings, movements, debts, debtEvents, imports];
 }
