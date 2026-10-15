@@ -25,7 +25,7 @@ export const UPLOAD_MESSAGES: Record<UploadCode, string> = {
   size: "tiene que pesar entre 1 byte y 20 MB.",
   terms: "aceptá los términos antes de subir archivos.",
   not_found: "esa cuenta ya no está disponible.",
-  duplicate: "ya lo subiste a esta cuenta.",
+  duplicate: "ya lo subiste.",
   quota: "ya usaste las cargas de este mes.",
   failed: "no pudimos subirlo. Probá de nuevo.",
 };
@@ -41,7 +41,7 @@ export type UploadActions = {
 // fails reads as "failed".
 export async function uploadOne(
   file: File,
-  accountId: string,
+  accountId: string | null,
   actions: Pick<UploadActions, "start" | "finish">,
   put: (
     path: string,
@@ -125,7 +125,7 @@ export function UploadImports({
     };
   }, [following, userId, router]);
 
-  function upload(files: readonly File[], accountId: string) {
+  function upload(files: readonly File[], accountId: string | null) {
     startTransition(async () => {
       let sent = 0;
       for (const file of files) {

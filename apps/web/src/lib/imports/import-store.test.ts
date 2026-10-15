@@ -138,12 +138,20 @@ it("reads the institution of the import's account, as that import's user", async
     status: 200,
     body: [{ document: { account: { institution: "IOL" } } }],
   }));
-  expect(await store.institution(IMPORT, USER)).toBe("IOL");
+  expect(await store.institution(IMPORT, USER)).toEqual({ institution: "IOL" });
   expect(calls[0]!.url.searchParams.get("id")).toBe(`eq.${IMPORT}`);
   expect(calls[0]!.url.searchParams.get("user_id")).toBe(`eq.${USER}`);
 });
 
-it("refuses an import with no account to read the institution of", async () => {
+it("reads no institution for a file uploaded to no account", async () => {
+  const { store } = storeWith(() => ({
+    status: 200,
+    body: [{ document: { account: null } }],
+  }));
+  expect(await store.institution(IMPORT, USER)).toEqual({ institution: null });
+});
+
+it("refuses an import with no file to read the institution of", async () => {
   const { store } = storeWith(() => ({
     status: 200,
     body: [{ document: null }],

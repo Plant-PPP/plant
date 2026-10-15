@@ -200,4 +200,5 @@ export {
   LISTING_MARKETS,
   type Listing,
   type ListingMarket,
+  type SearchFound,
 } from "./catalog/listings";

@@ -62,7 +62,8 @@ const importSchema = importOriginSchema.extend({
 
 // The user's import, when it is ready to confirm: its account, the date its
 // holdings are at (today when the document printed none, never a later
-// day), and its file's name.
+// day), and its file's name. A file uploaded to no account gets its account
+// at its review before its holdings or operations confirm.
 async function readyImport(
   client: Client,
   id: string,
@@ -83,6 +84,7 @@ async function readyImport(
   if (found.status !== "ready") return null;
   const printed = found.document_date;
   const { accountId, fileName } = importOrigin(found);
+  if (accountId === null) return null;
   return {
     id: found.id,
     accountId,

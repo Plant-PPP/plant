@@ -164,7 +164,7 @@ export function ImportDebtsReview({
             Revisá las deudas que leímos
           </h1>
           <p className="text-muted-foreground text-sm">
-            {`${item.fileName} · ${institution}`}
+            {[item.fileName, institution].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>

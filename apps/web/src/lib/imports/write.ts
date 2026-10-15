@@ -32,8 +32,8 @@ const EVENT = "imports.upload";
 // Why an upload was refused: input that does not parse, a type Cargar does
 // not take or bytes that are not of the type the name says, a file too big
 // or empty, terms not accepted, an account the user does not have open, the
-// same file already uploaded to that account, the month's imports used up, or
-// a failure.
+// same file already uploaded to that account (or to none), the month's
+// imports used up, or a failure.
 export type UploadCode =
   | "invalid"
   | "type"
@@ -63,7 +63,8 @@ const startSchema = z
   .object({
     fileName: z.string().min(1).max(1024),
     size: z.number().int(),
-    accountId: z.uuid(),
+    // None for a file that belongs to no account: a card statement, a loan.
+    accountId: z.uuid().nullable(),
   })
   .strict();
 
@@ -72,12 +73,14 @@ const finishSchema = z
     uploadId: z.uuid(),
     path: z.string().max(200),
     fileName: z.string().min(1).max(1024),
-    accountId: z.uuid(),
+    accountId: z.uuid().nullable(),
   })
   .strict();
 
+const accountSchema = z.object({ importId: z.uuid(), accountId: z.uuid() });
+
 type Line = {
-  step: "start" | "finish" | "terms" | "job";
+  step: "start" | "finish" | "terms" | "job" | "account";
   userId: string;
   requestId: string | undefined;
   started: number;
@@ -178,7 +181,7 @@ export async function startUpload(input: unknown): Promise<StartResult> {
       log(line, "terms");
       return { ok: false, code: "terms" };
     }
-    if (!(await accountOpen(client, accountId))) {
+    if (accountId !== null && !(await accountOpen(client, accountId))) {
       log(line, "not_found");
       return { ok: false, code: "not_found" };
     }
@@ -238,7 +241,7 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
   try {
     // The terms or the account may have changed since the upload started.
     if (!(await termsAccepted(client))) return await refuse("terms");
-    if (!(await accountOpen(client, accountId))) {
+    if (accountId !== null && !(await accountOpen(client, accountId))) {
       return await refuse("not_found");
     }
     const { data: blob, error } = await bucket.download(path);
@@ -258,11 +261,15 @@ export async function finishUpload(input: unknown): Promise<FinishResult> {
     // with its import and its file, and this one is read; one still queued,
     // whose job may never have started or ended without settling it, is
     // started again as a retry and this upload goes.
-    const earlier = await client
+    const same = client
       .from("uploaded_documents")
       .select("id, storage_path, file_deleted_at, imports(id, status)")
-      .eq("user_id", claims.sub)
-      .eq("source_connection_id", accountId)
+      .eq("user_id", claims.sub);
+    const earlier = await (
+      accountId === null
+        ? same.is("source_connection_id", null)
+        : same.eq("source_connection_id", accountId)
+    )
       .eq("sha256", sha256)
       .limit(1);
     if (classifyPostgrestResult(earlier, 200)) {
@@ -365,6 +372,77 @@ async function startJob(
     log({ ...line, importId }, "ok");
   } catch (error) {
     log({ ...line, importId }, "failed", error);
+  }
+}
+
+export type AccountResult = { ok: true } | { ok: false; code: UploadCode };
+
+// Sets the account of a ready import's file uploaded to no account, once its
+// reading turned out to be holdings or operations: one of the user's open
+// accounts, which may not hold the same file already. The database refuses
+// a file that has an account already.
+export async function assignImportAccount(
+  input: unknown,
+): Promise<AccountResult> {
+  const claims = await getSessionClaims();
+  const line: Line = {
+    step: "account",
+    userId: claims.sub,
+    requestId: await currentRequestId(),
+    started: performance.now(),
+  };
+  const parsed = accountSchema.safeParse(input);
+  if (!parsed.success) {
+    log(line, "invalid");
+    return { ok: false, code: "invalid" };
+  }
+  const { importId, accountId } = parsed.data;
+  line.importId = importId;
+  try {
+    const client: Client = await createClient();
+    if (!(await accountOpen(client, accountId))) {
+      log(line, "not_found");
+      return { ok: false, code: "not_found" };
+    }
+    const found = await client
+      .from("imports")
+      .select("document_id")
+      .eq("id", importId)
+      .eq("status", "ready")
+      .not("document_id", "is", null)
+      .limit(1);
+    if (classifyPostgrestResult(found, 200) || !found.data) {
+      throw found.error ?? new Error("import not read");
+    }
+    const documentId = found.data[0]?.document_id;
+    if (!documentId) {
+      log(line, "not_found");
+      return { ok: false, code: "not_found" };
+    }
+    const updated = await client
+      .from("uploaded_documents")
+      .update({ source_connection_id: accountId })
+      .eq("id", documentId)
+      .is("source_connection_id", null)
+      .select("id");
+    const refused = classifyPostgrestResult(updated, 200);
+    const code =
+      refused?.code === "23505"
+        ? "duplicate"
+        : refused?.code === "23503" || (!refused && updated.data?.length !== 1)
+          ? "not_found"
+          : null;
+    if (code) {
+      log(line, code);
+      return { ok: false, code };
+    }
+    if (refused) throw updated.error ?? new Error("account not set");
+    log(line, "ok");
+    revalidatePath("/import");
+    return { ok: true };
+  } catch (error) {
+    log(line, "failed", error);
+    return { ok: false, code: "failed" };
   }
 }
 

@@ -1,6 +1,11 @@
 "use server";
 
-import { INSTRUMENT_TYPES, type Listing } from "@plant/core";
+import {
+  INSTRUMENT_TYPES,
+  type Listing,
+  LISTING_MARKETS,
+  type ListingMarket,
+} from "@plant/core";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
@@ -19,7 +24,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export type SearchCode = "invalid" | "limited" | "unavailable";
 export type SearchResult =
-  { ok: true; listings: Listing[] } | { ok: false; code: SearchCode };
+  | { ok: true; listings: Listing[]; failed: ListingMarket[] }
+  | { ok: false; code: SearchCode };
+
+const marketsSchema = z.array(z.enum(LISTING_MARKETS)).min(1).max(2).optional();
 
 export type AddResult =
   | { ok: true; instrument: InstrumentRow }
@@ -32,18 +40,23 @@ const RESULTS = 20;
 // memory, per serverless instance.
 const searchLimit = userLimiter({ perUser: 30 });
 
-// What the providers list for the text a signed-in user types. The text is
-// not logged.
-export async function searchInstruments(query: unknown): Promise<SearchResult> {
+// What the providers of the given markets (all, when none) list for the
+// text a signed-in user types. The text is not logged.
+export async function searchInstruments(
+  query: unknown,
+  markets?: unknown,
+): Promise<SearchResult> {
   const claims = await getSessionClaims();
   const requestId = await currentRequestId();
   const started = performance.now();
   let result: SearchResult;
   let failure: unknown;
+  const asked = marketsSchema.safeParse(markets);
   if (
     typeof query !== "string" ||
     query.trim() === "" ||
-    query.length > QUERY_MAX
+    query.length > QUERY_MAX ||
+    !asked.success
   ) {
     result = { ok: false, code: "invalid" };
   } else if (!searchLimit(claims.sub)) {
@@ -52,7 +65,7 @@ export async function searchInstruments(query: unknown): Promise<SearchResult> {
     try {
       result = {
         ok: true,
-        listings: await catalogSearch().search(query, RESULTS),
+        ...(await catalogSearch().search(query, RESULTS, asked.data)),
       };
     } catch (error) {
       failure = error;
@@ -64,6 +77,7 @@ export async function searchInstruments(query: unknown): Promise<SearchResult> {
     "enduser.id": claims.sub,
     "plant.outcome": result.ok ? "ok" : result.code,
     "plant.count": result.ok ? result.listings.length : 0,
+    "plant.instruments.failed": result.ok ? result.failed.join(",") : "",
     "plant.duration_ms": Math.round(performance.now() - started),
   };
   if (failure) serverLog.error("instruments.search", line, failure);
