@@ -2,8 +2,10 @@
 
 import {
   type Denominator,
+  isOwed,
   type LiabilitiesValue,
   type Liability,
+  type LiabilityOnDate,
 } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
@@ -12,6 +14,7 @@ import { useId, useState } from "react";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { UnitSelect } from "@/components/holdings/filter-select";
 import {
+  CALCULATING,
   MissingFigure,
   NO_QUOTE,
   NUMBER_CELL,
@@ -64,7 +67,7 @@ export type DebtActions = {
   delete: (id: string) => Promise<WriteResult>;
 };
 
-// Debts have no guard of their own: a write is invalid, lost or failed.
+// A debt's guard refusal reads as invalid, like a field the form missed.
 const MESSAGES: WriteMessages = {
   ...WRITE_MESSAGES.holdings,
   duplicate: FAILED,
@@ -90,6 +93,8 @@ function owed(debt: Liability, amount: string): string {
 // total and the installments due each month.
 export function DebtsSetup({
   debts,
+  owed: owedToday,
+  complete,
   valued,
   unit,
   referenceUnit,
@@ -98,6 +103,10 @@ export function DebtsSetup({
   actions,
 }: {
   debts: ListView<Liability>;
+  // Each debt's balance and rate today, in its own unit.
+  owed: readonly LiabilityOnDate[];
+  // Whether every debt's history was read and computed in full.
+  complete: boolean;
   // Each debt's balance and the total in the page's unit.
   valued: LiabilitiesValue;
   unit: Denominator;
@@ -116,6 +125,16 @@ export function DebtsSetup({
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [deleting, setDeleting] = useState<Liability | null>(null);
   const values = new Map(valued.items.map((item) => [item.id, item.value]));
+  const computed = new Map(owedToday.map((debt) => [debt.id, debt]));
+  // A row being written has no figures today until the page reloads them.
+  const todayOf = (debt: Row) =>
+    debt.unsaved ? undefined : computed.get(debt.id);
+  // A paid-off debt stays listed at 0 but no longer counts as owed; an edit
+  // keeps counting as it was.
+  const live = shown.active.filter((debt) => {
+    const figure = computed.get(debt.id);
+    return figure === undefined || isOwed(figure);
+  });
 
   function submit(state: DialogState, fields: DebtFields): boolean {
     const input = toLiabilityInput(fields);
@@ -159,7 +178,10 @@ export function DebtsSetup({
       header: "Saldo",
       size: 152,
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original: debt } }) => owed(debt, debt.balance),
+      cell: ({ row: { original: debt } }) => {
+        const today = todayOf(debt);
+        return today ? owed(debt, today.balance) : CALCULATING;
+      },
     },
     {
       id: "installment",
@@ -185,12 +207,15 @@ export function DebtsSetup({
       header: "Tasa",
       size: 88,
       meta: { className: `hidden @4xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original: debt } }) =>
-        debt.annual_rate === null ? (
+      cell: ({ row: { original: debt } }) => {
+        const today = todayOf(debt);
+        if (!today) return CALCULATING;
+        return today.annual_rate === null ? (
           <MissingFigure text="Sin tasa" />
         ) : (
-          formatFraction(debt.annual_rate)
-        ),
+          formatFraction(today.annual_rate)
+        );
+      },
     },
     {
       id: "due",
@@ -205,7 +230,7 @@ export function DebtsSetup({
       header: UNIT_LABELS[unit],
       meta: { className: VALUE_CELL },
       cell: ({ row: { original: debt } }) => {
-        if (debt.unsaved) return "Calculando…";
+        if (debt.unsaved) return CALCULATING;
         const value = values.get(debt.id);
         return value == null ? (
           <MissingFigure text={NO_QUOTE} />
@@ -235,7 +260,7 @@ export function DebtsSetup({
     ),
   ];
 
-  const monthly = shown.active.filter((debt) => debt.installment);
+  const monthly = live.filter((debt) => debt.installment);
 
   return (
     <div className="grid gap-4">
@@ -260,24 +285,30 @@ export function DebtsSetup({
         onAdd={() => !pending && setDialog({ kind: "create" })}
       >
         {shown.active.length > 0 && (
-          <StatGrid className="lg:grid-cols-3">
+          <StatGrid>
             <StatTile
               label="Total"
               note={
-                valued.complete ? undefined : "Alguna deuda no tiene cotización"
+                [
+                  valued.complete ? null : "Alguna deuda no tiene cotización",
+                  complete ? null : "Algún saldo no se pudo calcular completo",
+                ]
+                  .filter((note) => note !== null)
+                  .join(". ") || undefined
               }
             >
               <span className={pending ? "opacity-60" : undefined}>
                 {formatAmount(valued.total, unit)}
               </span>
             </StatTile>
+            <StatTile label="Deudas">{live.length}</StatTile>
             <StatTile label="Con cuota" note="Pagás cuota todos los meses">
               {monthly.length}
             </StatTile>
             <StatTile
               label="Próximo vencimiento"
               note={
-                shown.active
+                live
                   .filter((debt) => debt.next_due_on)
                   .sort((a, b) =>
                     a.next_due_on!.localeCompare(b.next_due_on!),
@@ -285,7 +316,7 @@ export function DebtsSetup({
               }
             >
               {(() => {
-                const next = shown.active
+                const next = live
                   .map((debt) => debt.next_due_on)
                   .filter((date): date is string => date !== null)
                   .sort()[0];

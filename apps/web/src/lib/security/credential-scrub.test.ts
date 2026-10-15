@@ -473,6 +473,9 @@ describe("isSensitiveKey", () => {
     "plant.holding.value",
     "plant.fx.rate",
     "plant.holding.label",
+    "plant.liability.principal",
+    "plant.liability.interest_month",
+    "plant.liability.ltv",
   ])("masks %s", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
@@ -493,6 +496,13 @@ describe("isSensitiveKey", () => {
     "plant.assets.class",
     "plant.quotes.fx_rate_count",
     "plant.value.id",
+    "plant.liability.events_truncated",
+    "plant.liability.overflow_count",
+    "plant.liability.event_kind",
+    "plant.liability.cash_link",
+    "plant.liability.cash_taken",
+    "plant.liability.cash_restored",
+    "plant.liability.id",
   ])("passes %s", (key) => {
     expect(isSensitiveKey(key)).toBe(false);
   });

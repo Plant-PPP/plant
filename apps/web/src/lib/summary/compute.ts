@@ -15,6 +15,9 @@ import {
   holdingSchema,
   isYield,
   type Liability,
+  type LiabilityEvent,
+  type LiabilityOnDate,
+  liabilitiesToday,
   liabilityQuotesNeeded,
   type Movement,
   type QuoteNeed,
@@ -66,12 +69,29 @@ import {
 } from "@/lib/summary/closes";
 
 // What closes are computed from: the ledger, with stored quotes covering
-// every day closeDates names, the debts, and the closed months a write
-// changed, by period, with the day it did.
+// every day closeDates names, the debts and their events, and the closed
+// months a write changed, by period, with the day it did.
 export type ClosesState = Ledger & {
   liabilities: readonly Liability[];
+  liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
   recalculated: ReadonlyMap<string, string>;
 };
+
+const owedCache = new WeakMap<ClosesState, LiabilityOnDate[]>();
+
+// The debts as they stand today, computed once per state.
+export function debtsToday(state: ClosesState): LiabilityOnDate[] {
+  let owed = owedCache.get(state);
+  if (!owed) {
+    owed = liabilitiesToday(
+      state.liabilities,
+      state.liabilityEvents,
+      state.today,
+    );
+    owedCache.set(state, owed);
+  }
+  return owed;
+}
 
 type HoldingLedger = {
   row: HoldingRow;
@@ -381,8 +401,8 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
   const ledgers = ledgersOf(state, unit);
   const first = firstDay(ledgers, state.today);
   // Net worth: what is held less what is owed. A debt keeps today's balance
-  // on every past day, in its own unit, until debts have a history. A
-  // month's end is the next one's start, so each day is valued once.
+  // on every past day, in its own unit, as cash does (PLA-164). A month's end
+  // is the next one's start, so each day is valued once.
   const values = new Map<
     string,
     { value: string; held: string; complete: boolean }
@@ -400,7 +420,7 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       snapshot,
       options,
     );
-    const owed = valueLiabilities(state.liabilities, snapshot, options);
+    const owed = valueLiabilities(debtsToday(state), snapshot, options);
     const value = {
       value: difference(held.total, owed.total),
       held: held.total,
@@ -665,7 +685,7 @@ export function changeBetween(
       snapshot,
       options,
     );
-    const owed = valueLiabilities(state.liabilities, snapshot, options);
+    const owed = valueLiabilities(debtsToday(state), snapshot, options);
     return {
       value: exactOf(difference(held.total, owed.total)),
       complete: held.complete && owed.complete,

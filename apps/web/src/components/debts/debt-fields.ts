@@ -1,4 +1,8 @@
-import type { Liability, LiabilityKind } from "@plant/core";
+import {
+  type Liability,
+  liabilityFieldsFor,
+  type LiabilityKind,
+} from "@plant/core";
 import type { Currency } from "@plant/shared";
 
 import {
@@ -24,6 +28,8 @@ export type DebtFields = {
   installmentsLeft: string;
   nextDueOn: string;
   maturesOn: string;
+  accrues: boolean;
+  openedOn: string;
 };
 
 export function debtFields(debt: Liability | null): DebtFields {
@@ -41,6 +47,8 @@ export function debtFields(debt: Liability | null): DebtFields {
       installmentsLeft: "",
       nextDueOn: "",
       maturesOn: "",
+      accrues: false,
+      openedOn: "",
     };
   }
   return {
@@ -58,6 +66,8 @@ export function debtFields(debt: Liability | null): DebtFields {
       : "",
     nextDueOn: debt.next_due_on ?? "",
     maturesOn: debt.matures_on ?? "",
+    accrues: debt.accrues,
+    openedOn: debt.opened_on ?? "",
   };
 }
 
@@ -82,7 +92,10 @@ const parsedOr = (text: string, parse: (text: string) => string | null) =>
 // for the schema to refuse; a field left empty goes as null.
 export function toLiabilityInput(fields: DebtFields) {
   const crypto = fields.kind === "crypto_loan";
-  const left = optional(fields.installmentsLeft);
+  const shown = liabilityFieldsFor(fields);
+  const accrues = shown.accrues && fields.accrues;
+  // The installment fields a debt that accrues hides go as null.
+  const left = shown.installments ? optional(fields.installmentsLeft) : null;
   return {
     kind: fields.kind,
     label: fields.label,
@@ -91,11 +104,15 @@ export function toLiabilityInput(fields: DebtFields) {
     uva: !crypto && fields.currency === "ARS" && fields.uva,
     instrument_symbol: crypto ? optional(fields.instrument) : null,
     balance: parseAmountInput(fields.balance),
-    installment: parsedOr(fields.installment, parseAmountInput),
+    installment: shown.installments
+      ? parsedOr(fields.installment, parseAmountInput)
+      : null,
     annual_rate: parsedOr(fields.rate, percentToFraction),
     installments_left: left === null ? null : Number(left),
-    next_due_on: optional(fields.nextDueOn),
+    next_due_on: shown.installments ? optional(fields.nextDueOn) : null,
     matures_on: optional(fields.maturesOn),
+    accrues,
+    opened_on: optional(fields.openedOn),
   };
 }
 

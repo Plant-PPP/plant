@@ -130,6 +130,9 @@ const VALUE_SEGMENTS = new Set([
   "worth",
   "debt",
   "debts",
+  "principal",
+  "interest",
+  "ltv",
 ]);
 
 // Identity numbers, contacts and credentials: masked whatever the suffix.

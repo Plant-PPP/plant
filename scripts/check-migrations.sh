@@ -136,6 +136,22 @@ not_atomic() {
     }'
 }
 
+# Prints a RAISE whose message is built from values, or nothing. A raised
+# message reaches the app's logs as the error's message, so it stays a static
+# literal; values go in a HINT code. Split on `;` as not_atomic does, and read
+# from the RAISE on, so a `%` earlier in the statement (a LIKE) never counts.
+dynamic_raise() {
+  sed "1s/^$bom//; s/--.*\$//" | awk 'BEGIN { RS = ";" }
+    {
+      s = toupper($0)
+      i = match(s, /(^|[^A-Z0-9_])RAISE[ \t\r\n]/)
+      if (!i) next
+      r = substr(s, i)
+      if (r ~ /^[^\047]*\047[^\047]*%/ || r ~ /USING[ \t\r\n]+MESSAGE/ || r ~ /FORMAT[ \t\r\n]*\(/) found = 1
+    }
+    END { if (found) print "a RAISE builds its message from values; keep it a literal and put values in a HINT" }'
+}
+
 # bash 3.2 (macOS) has no mapfile, and with `set -u` it fails on an empty array.
 files=()
 cr=$'\r'
@@ -161,6 +177,11 @@ while IFS= read -r file; do
   reason="$(not_atomic <"$file")"
   if [ -n "$reason" ]; then
     echo "::error::$file would not apply all-or-nothing: $reason."
+    errors=$((errors + 1))
+  fi
+  reason="$(dynamic_raise <"$file")"
+  if [ -n "$reason" ]; then
+    echo "::error::$file: $reason."
     errors=$((errors + 1))
   fi
   # An exemption names its rule and sits on the statement it covers.

@@ -2,6 +2,22 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-15 · Debts with a history (PLA-163)
+
+- **A debt's row is its opening**: `balance` and `annual_rate` are those of its anchor day, `opened_on` or, when the user gives none, the Buenos Aires day it was created (`anchored_on`, kept by the `liabilities_guard` trigger). Everything after it is a dated event in `liability_events`: a rate change, a payment or an adjustment to the lender's figure.
+- **Card debts keep following their statements** and take no events, so `confirm_import_debts` is unchanged; old production code reads and writes debts as before.
+- **A debt that accrues compounds daily** at the rate in force, the new rate from the day after a rate change, on fixed-point integers rounded to 8 decimals only at events, so today's balance is the same whichever days are asked for. Accrual stops where a balance would no longer fit `numeric(20, 8)`. A placement's simple interest (`interestTo`) is a different rule and stays apart.
+- **A day's events apply in the order they were entered, a settling payment last**; an adjustment sets the balance to the lender's figure and, for a debt that accrues, the gap counts as interest, of either sign, as does what a settle closes or a payment beyond the balance. A debt that does not accrue takes payments one for one: an excess is an overpayment, not interest, and its installments left are not counted down.
+- **A debt closes with a settling payment or an adjustment to 0, and only an adjustment above 0 reopens it**: after any write, no payment or rate change may apply after a close (nor a second settle share its day) without a reopening applied in between (`settled`), in the order a day's events apply, so deleting or moving the adjustment that reopened a debt under a later payment is refused too. `private.liability_history_guard` checks the whole history after the write and core's `admitLiabilityEvent` mirrors it. The lender's 0 entered on the day of a settle is refused too: the settle applies after it, so it would close the debt the settle then pays.
+- **A paid-off debt stays listed at 0** but no longer counts as owed: not in Deudas' counters or next due date, nor in the assistant's count and list.
+- **Readers show a debt's rate today**, the last rate change's; the export keeps the opening one beside it ("Tasa inicial").
+- **Everything stays editable**: the opening balance, rate, date and accrual, and every event in place (keeping its id and its place in the day); every figure is recomputed. A debt's kind and unit are fixed once it has events (`has_history`), and its anchor never moves past its first event (`before_opening`).
+- **A payment can name the cash holding it came from**, of the debt's currency and not for a crypto-unit or UVA debt, and can take the amount from it now (`move_cash`, all or nothing with the event). Cash keeps no history, so the cash change is today's. Editing or deleting the payment gives the cash back to the holding, to the active cash of its account and portfolio in that currency when it was archived, or reactivates it while that account and portfolio are active; when none of that is possible it says so and does not refuse (`restore_cash`, which returns the holding it credited). An edit that keeps the payment's link follows the cash to that holding and checks it against what the database holds then, since the caller could not have read it. A link that took nothing stays on its holding even once archived, but not once that holding is in another currency (`currency`).
+- **Events are written only through their RPCs**, which the `private.written_through` trigger enforces, as it now does for the ledger.
+- **Collateral** names whole holdings pledged for a debt, for an informational loan-to-value; nothing liquidates.
+- **Debts are valued in a proof type** (`LiabilityOnDate`), made only by `liabilitiesOn`, so a reader cannot value a stored row's opening balance as today's.
+- **A RAISE in a new migration keeps a literal message** (checked by `check-migrations.sh`); values go in a HINT code, since the message reaches the logs.
+
 ## 2026-10-14 · Price alerts from an asset's page
 
 - **An instrument's alert is set from its page**, with the bell beside the unit select: on its price in its own currency, or, while the user holds it, on its gain or loss over their average cost. The bell shows whether or not the user holds it.
@@ -466,13 +482,13 @@ Decisions that are not in the plan, or that detail it. Newest first.
 
 - **Closes are computed by the code the prototype runs**, moved to `lib/summary/compute.ts` over the ledger plus the debts. The real Resumen and a close's page read the whole ledger, every open holding and the debts, and compute every month from the first movement's to today on each request.
 - **A day's quotes are the stored ones of the week up to it**, read only for the days a close values at (`closeDates`: each month's start and end, and each day units came in already held or left without a trade) through `readQuotesOn`, which shares a read between nearby days. A day no feed or manual price covers takes the instrument's last trade price, as in the prototype.
-- **A holding with no movements counts at today's amount on every past day, and a debt at today's balance**, as in the prototype, until they have a history.
+- **A holding with no movements counts at today's amount on every past day, and a debt at today's balance**, as in the prototype, until they have a history. A debt's balance today is computed from its events (see "Debts with a history"); cash and debts get dated history in the closes together (PLA-164).
 - **No closed month is marked recalculated in production.** Nothing keeps a close's figures to compare a write against; the figures are recomputed on every read, so a close always reflects its movements.
 
 ## 2026-10-13 · Debts in the database (PLA-77, PLA-31)
 
 - **A debt is a row of `liabilities`, with core's fields as its columns**: kind, label, lender, currency, `uva`, instrument, balance, installment, rate, installments left and two dates. Core's unit rule is the `liabilities_unit` CHECK: a crypto loan is owed in its instrument and no currency, a debt in dollars in dollars, and only a peso debt in UVA.
-- **A debt is deleted, never archived.** Nothing points at it yet; the property sheet's link to the debt that paid for it arrives with the sheet's table.
+- **A debt is deleted, never archived.** Deleting it deletes its events and collateral; cash a payment took does not go back. The property sheet's link to the debt that paid for it arrives with the sheet's table.
 - **Debts belong to no account or portfolio**, as in the prototype.
 - **The Deudas page values each debt at today's stored quotes**, the UVA's included when a debt is in UVA (`liabilityQuotesNeeded`).
 - **Debts write through their own server actions** (`lib/debts/write.ts`), not portfolio setup's runner: they take no portfolio setup lock or guard, and the runner's table list is pinned to those tables' checks.
@@ -659,7 +675,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## 2026-10-11 · Debts and net worth (PLA-113)
 
 - **A debt is owed in its own unit:** pesos or dollars, UVA units (a mortgage or personal loan in pesos, owed at the UVA of the day) or units of an instrument (a crypto loan, at its price). Core values each in any unit the page shows (`liabilityValue`); a debt it cannot value is listed without a value and leaves the total incomplete, never counted at 0. A debt with no currency and no instrument is never valued as pesos.
-- **Net worth is assets less debts**, in Resumen, its chart and its closes. Debts have no history yet, so a past month counts today's balance at that month's rates. A debt write changes no movement, so it marks no close. A month's return is what was held made, on what was held, with the same flows: a debt counts in net worth but earns nothing, and its balance moving is not a return.
+- **Net worth is assets less debts**, in Resumen, its chart and its closes. Closes keep each debt at today's computed balance on every past day, at that month's rates, so a month's change leaves the interest a debt accrued out until PLA-164. A debt write changes no movement, so it marks no close. A month's return is what was held made, on what was held, with the same flows: a debt counts in net worth but earns nothing, and its balance moving is not a return.
 - **The yearly rate follows the holdings' rule** (a fraction from 0 to 10), and a typed cuota or rate the page cannot read is refused, never saved as empty.
 
 ## 2026-10-11 · Resumen and closes (PLA-112)

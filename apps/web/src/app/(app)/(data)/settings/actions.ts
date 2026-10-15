@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { type AlertWriteResult, newAlertSchema } from "@/lib/alerts/alerts";
 import { createAlert, deleteAlert, markAlertSeen } from "@/lib/alerts/read";
-import { readLiabilities } from "@/lib/debts/read";
+import { readLiabilities, readLiabilityEvents } from "@/lib/debts/read";
 import { auditedExport } from "@/lib/export/export-audit-sink";
 import type { ExportTable } from "@/lib/export/csv";
 import { EXPORT_IMPORTS_LIMIT, readOtherHoldings } from "@/lib/export/read";
@@ -50,26 +50,30 @@ export async function disableTotp(factorId: unknown): Promise<DisableResult> {
 async function readExport(
   client: Awaited<ReturnType<typeof createClient>>,
 ): Promise<{ tables: ExportTable[]; truncated: boolean }> {
-  const [{ ledger, truncated }, other, debts, imports] = await Promise.all([
-    readLedger(client, {
-      today: buenosAiresDate(new Date()),
-      referenceDollar: "mep",
-    }),
-    readOtherHoldings(client),
-    readLiabilities(client),
-    readImports(client, { limit: EXPORT_IMPORTS_LIMIT }),
-  ]);
+  const [{ ledger, truncated }, other, debts, events, imports] =
+    await Promise.all([
+      readLedger(client, {
+        today: buenosAiresDate(new Date()),
+        referenceDollar: "mep",
+      }),
+      readOtherHoldings(client),
+      readLiabilities(client),
+      readLiabilityEvents(client),
+      readImports(client, { limit: EXPORT_IMPORTS_LIMIT }),
+    ]);
   return {
     tables: exportTables({
       ...ledger,
       otherHoldings: other.rows,
       liabilities: debts.active,
+      liabilityEvents: events.byLiability,
       imports: imports.items,
     }),
     truncated:
       truncated ||
       other.truncated ||
       debts.activeTruncated ||
+      events.cut ||
       imports.truncated,
   };
 }
