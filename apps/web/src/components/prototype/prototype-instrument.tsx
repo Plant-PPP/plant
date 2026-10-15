@@ -79,6 +79,7 @@ export function PrototypeInstrument({
       }}
       movementActions={actions.movements}
       actions={actions.holdings}
+      onAlert={actions.alerts.create}
       details={details}
       accounts={state.accounts}
       portfolios={state.portfolios}

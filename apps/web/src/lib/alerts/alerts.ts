@@ -100,6 +100,35 @@ export const newAlertSchema = z
   .readonly();
 export type NewAlert = z.infer<typeof newAlertSchema>;
 
+// An instrument's alert from its page's form: on its price in its own
+// currency, or on its gain or loss in percent; null when the figure does not
+// read as one.
+export function instrumentAlert(
+  kind: "price" | "gain",
+  instrument: { symbol: string; currency: "ARS" | "USD" },
+  direction: "above" | "below",
+  figure: string | null,
+): NewAlert | null {
+  if (figure === null) return null;
+  const parsed = newAlertSchema.safeParse(
+    kind === "gain"
+      ? {
+          subjectKind: "gain",
+          subject: instrument.symbol,
+          direction,
+          percent: figure,
+        }
+      : {
+          subjectKind: "instrument",
+          subject: instrument.symbol,
+          direction,
+          threshold: figure,
+          currency: instrument.currency,
+        },
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 // What an alert watches, inside a sentence or starting it: "el dólar MEP",
 // "El dólar MEP", "AL30".
 const subjectOf = (
