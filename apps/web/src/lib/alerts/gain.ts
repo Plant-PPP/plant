@@ -43,31 +43,6 @@ export function averageCost(
   return average !== null && exactOf(average).n > 0n ? average : null;
 }
 
-// The instruments the user holds, by symbol, each with the currency it is
-// quoted in: what an instrument's alert can watch.
-export function heldInstruments(
-  ledger: Ledger,
-): { symbol: string; currency: Currency }[] {
-  const closed = new Set(
-    ledger.holdings
-      .filter((each) => each.closed)
-      .map((each) => each.holding.id),
-  );
-  const symbols = new Set(
-    allRows(ledger).flatMap((row) =>
-      row.holding.asset_class === "instrument" &&
-      row.holding.instrument_symbol &&
-      !closed.has(row.id)
-        ? [row.holding.instrument_symbol]
-        : [],
-    ),
-  );
-  return ledger.instruments
-    .filter((each) => symbols.has(each.symbol))
-    .map(({ symbol, currency }) => ({ symbol, currency }))
-    .sort((a, b) => a.symbol.localeCompare(b.symbol));
-}
-
 // The price that meets a gain alert: the cost moved up (above) or down
 // (below) by the percent.
 export function gainThreshold(

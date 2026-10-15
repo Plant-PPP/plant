@@ -37,6 +37,7 @@ import {
 
 import * as holdingActions from "@/app/(app)/(data)/assets/actions";
 import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
+import * as alertActions from "@/app/(app)/(data)/settings/actions";
 import { nonActionFunctions } from "@/test/client-props";
 
 import InstrumentPage from "./page";
@@ -86,7 +87,11 @@ it("shows the history of an instrument the user holds, in the reference dollar",
 it("hands the history only data and server actions", async () => {
   const page = await render("aapl");
   expect(
-    nonActionFunctions(page.props, [holdingActions, movementActions]),
+    nonActionFunctions(page.props, [
+      holdingActions,
+      movementActions,
+      alertActions,
+    ]),
   ).toEqual([]);
 });
 

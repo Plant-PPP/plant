@@ -1,5 +1,7 @@
 "use client";
 
+import { InstrumentAlert } from "@/components/holdings/instrument-alert";
+import type { AlertWriteResult, NewAlert } from "@/lib/alerts/alerts";
 import { type Denominator, type PriceSource } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, ArrowLeftRight } from "lucide-react";
@@ -114,6 +116,7 @@ export function InstrumentHistory({
   portfolios,
   instruments,
   today,
+  onAlert,
 }: {
   instrument: InstrumentRow;
   // One unit's price in the page's unit, and where it came from.
@@ -136,6 +139,8 @@ export function InstrumentHistory({
   portfolios: PortfolioRow[];
   instruments: InstrumentRow[];
   today: string;
+  // Sets a price alert on this instrument, from the bell.
+  onAlert: (alert: NewAlert) => Promise<AlertWriteResult>;
 }) {
   const url = useAssetsUrl(params);
   const unitId = useId();
@@ -331,13 +336,21 @@ export function InstrumentHistory({
               </p>
             )}
           </div>
-          <UnitSelect
-            id={unitId}
-            unit={unit}
-            referenceUnit={referenceUnit}
-            pending={pending}
-            onChange={(param) => url.set("unit", param)}
-          />
+          <div className="flex items-end gap-2">
+            <InstrumentAlert
+              symbol={instrument.symbol}
+              currency={instrument.currency}
+              held={shown.length > 0}
+              onCreate={onAlert}
+            />
+            <UnitSelect
+              id={unitId}
+              unit={unit}
+              referenceUnit={referenceUnit}
+              pending={pending}
+              onChange={(param) => url.set("unit", param)}
+            />
+          </div>
         </div>
       </div>
 
