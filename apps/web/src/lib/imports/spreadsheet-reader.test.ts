@@ -90,6 +90,24 @@ it("maps a format's columns once, then reads the same format without the model",
   expect(mapColumns).toHaveBeenCalledTimes(2);
 });
 
+it("maps a file uploaded to no account every time, keeping no mapping", async () => {
+  const { port, kept } = memoryMappings();
+  const mapColumns = jest.fn().mockResolvedValue(MAPPING);
+  const read = spreadsheetReader({ mappings: port, mapColumns, now });
+  const input = {
+    bytes: STATEMENT,
+    mimeType: CSV,
+    userId: "u1",
+    importId: "i1",
+    lastAttempt: false,
+    institution: null,
+  };
+  expect((await read(input)).read.mapping).toBe("miss");
+  expect((await read(input)).read.mapping).toBe("miss");
+  expect(mapColumns).toHaveBeenCalledTimes(2);
+  expect(kept.size).toBe(0);
+});
+
 it("keeps no mapping that reads no rows", async () => {
   const { port, kept } = memoryMappings();
   const read = spreadsheetReader({

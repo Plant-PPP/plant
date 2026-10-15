@@ -44,6 +44,8 @@ function looksRight({
 // Reads a spreadsheet's holdings in code. The model maps a format's columns
 // only the first time; the mapping is saved per user, account institution and
 // headers once a reading with it looks right, so a wrong one is asked again.
+// A file uploaded to no account has no institution to keep it under, so its
+// columns are mapped every time.
 export function spreadsheetReader({
   mappings,
   mapColumns,
@@ -60,13 +62,15 @@ export function spreadsheetReader({
   return async ({ importId, bytes, mimeType, userId, institution }) => {
     const sheet = readSheet(bytes, mimeType);
     const stored = columnMappingFor(sheet.headers).safeParse(
-      await mappings.get(userId, institution, sheet.headers),
+      institution === null
+        ? null
+        : await mappings.get(userId, institution, sheet.headers),
     );
     const mapping = stored.success
       ? stored.data
       : await mapColumns({ sheet, userId, importId });
     const reading = sheetToDraft(sheet, mapping, buenosAiresDate(now()));
-    if (!stored.success && looksRight(reading)) {
+    if (institution !== null && !stored.success && looksRight(reading)) {
       await mappings
         .save(userId, institution, sheet.headers, mapping)
         .catch((error: unknown) =>

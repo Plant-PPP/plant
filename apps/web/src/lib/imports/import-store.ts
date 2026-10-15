@@ -61,7 +61,9 @@ const loadedSchema = z.union([
 ]);
 
 const institutionSchema = z.object({
-  document: z.object({ account: z.object({ institution: z.string() }) }),
+  document: z.object({
+    account: z.object({ institution: z.string() }).nullable(),
+  }),
 });
 
 function checked(
@@ -233,7 +235,7 @@ export function createImportStore(client: Client): ImportStorePort {
       if (row === undefined) return null;
       const parsed = institutionSchema.safeParse(row);
       if (!parsed.success) throw new ImportStoreError("institution", "no_data");
-      return parsed.data.document.account.institution;
+      return { institution: parsed.data.document.account?.institution ?? null };
     },
 
     async saveDraft(importId, userId, draft, skippedRows) {

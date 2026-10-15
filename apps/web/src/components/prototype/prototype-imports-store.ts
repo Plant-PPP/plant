@@ -34,7 +34,7 @@ export function addImport(
     id,
     fileName,
     accountId,
-  }: { id: string; fileName: string; accountId: string },
+  }: { id: string; fileName: string; accountId: string | null },
 ): Write<{ ok: true; id: string }> {
   const item: ImportItem = {
     id,
@@ -93,7 +93,12 @@ export function finishReading(
     }));
   }
   const documentDate = documentDateOf(item.fileName, state.today);
-  const held = heldOn(state, item.accountId, documentDate);
+  // Made-up holdings are the account's, so a file uploaded to no account
+  // reads none.
+  const held =
+    item.accountId === null
+      ? new Map<string, string>()
+      : heldOn(state, item.accountId, documentDate);
   if (held.size === 0 || /vac[ií]o|empty/i.test(item.fileName)) {
     return withImport(state, id, (each) => ({
       ...each,
@@ -184,7 +189,7 @@ export function confirmImport(
   newId: () => string,
 ): Write<MovementResult> {
   const item = state.imports.find((each) => each.id === id);
-  if (!item || item.status !== "ready") {
+  if (!item || item.status !== "ready" || item.accountId === null) {
     return { state, result: { ok: false, code: "not_found" } };
   }
   const written = writeImport(

@@ -85,7 +85,7 @@ function setUp({
     }),
     download: jest.fn().mockResolvedValue(BYTES),
     reading: jest.fn().mockResolvedValue(true),
-    institution: jest.fn().mockResolvedValue("IOL"),
+    institution: jest.fn().mockResolvedValue({ institution: "IOL" }),
     credentials: jest.fn().mockResolvedValue(CREDENTIALS),
     saveDraft: jest.fn().mockResolvedValue(true),
     saveOperations: jest.fn().mockResolvedValue(true),
@@ -263,6 +263,25 @@ it("skips, before reading the file, an import deleted meanwhile", async () => {
       }),
     },
   ]);
+});
+
+it("reads a file uploaded to no account with no institution, into whichever draft it is", async () => {
+  const debts = [{}];
+  const { deps, store, run } = setUp({
+    read: jest
+      .fn()
+      .mockResolvedValueOnce({ debts, read: READ })
+      .mockResolvedValueOnce({ draft: DRAFT, read: READ }),
+  });
+  store.institution.mockResolvedValue({ institution: null });
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(deps.source.read).toHaveBeenCalledWith(
+    expect.objectContaining({ institution: null }),
+  );
+  expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, debts, 0);
+  // A statement of holdings is saved too: its review asks for the account.
+  expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+  expect(store.saveDraft).toHaveBeenCalledWith(IMPORT, USER, DRAFT, 0);
 });
 
 it("fails as unreadable an import whose file is gone while the import is not", async () => {

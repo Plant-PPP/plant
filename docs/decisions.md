@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-14 · Uploads with no account
+
+- **A file may be uploaded to no account.** A card statement or a loan's belongs to no broker account, so Cargar's account select starts at "Sin cuenta (deudas, tarjetas)" instead of the first account, and `uploaded_documents.source_connection_id` is nullable. The composite foreign key still holds an account, when there is one, to the document's user; the same file twice with no account is refused by a partial unique index, as it is in one account.
+- **The reading decides, not the upload.** A file with no account is read like any other, with no institution: a spreadsheet's column mapping is then made every time and never kept, since mappings are kept per institution. A card statement's debts are reviewed and confirmed as before, with no account.
+- **Holdings and operations from a file with no account ask for the account at their review**, before the usual review: the user picks one of their open accounts and the review goes on against it. The account is set once: `authenticated` may update only `source_connection_id`, and a trigger refuses changing one already set or taking it away (42501). An account that holds the same file already answers `duplicate`. Confirming holdings or operations of a file still without one answers `not_found`.
+
 ## 2026-10-14 · Findings from a full-repository review
 
 - **Imported cash is a cash holding.** A provider's draft row can be cash (`assetClass: "cash"`, `import_items.asset_class`), one per currency: balances of several accounts in a currency (IOL's, IBKR's) are added up. The review names it as Activos does ("Efectivo USD") with its amount and no price or portfolio. `confirm_import` takes it as the account's whole cash in that currency, checked against the cash holdings the review read, which it sends back with the rows, so cash edited in between is refused as stale:

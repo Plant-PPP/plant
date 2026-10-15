@@ -53,9 +53,13 @@ export interface ImportStorePort {
   // Moves a queued import to reading, claimed by the run: true when this
   // call moved it, or when that run claimed it already.
   reading(importId: string, userId: string, runId: string): Promise<boolean>;
-  // The institution of the account the import's file was uploaded to; null
-  // when the import was deleted meanwhile.
-  institution(importId: string, userId: string): Promise<string | null>;
+  // The institution of the account the import's file was uploaded to, null
+  // for a file uploaded to no account; null in place of the whole when the
+  // import was deleted meanwhile.
+  institution(
+    importId: string,
+    userId: string,
+  ): Promise<{ institution: string | null } | null>;
   // The credentials of that provider the user's account holds, out of
   // Vault, as stored (the provider's adapter parses them); null when
   // it holds none any more.
@@ -288,8 +292,8 @@ export async function runImportDocument(
             prepared.period,
           );
         } else {
-          const institution = await deps.store.institution(importId, userId);
-          if (institution === null) return { gone: true };
+          const account = await deps.store.institution(importId, userId);
+          if (account === null) return { gone: true };
           const bytes = await deps.store.download(prepared.path, userId);
           // The import is still there, so its file is lost, not deleted.
           if (bytes === null) throw new SourceError("unreadable", false);
@@ -298,7 +302,7 @@ export async function runImportDocument(
             bytes,
             mimeType: prepared.mimeType,
             userId,
-            institution,
+            institution: account.institution,
             lastAttempt: attempt >= IMPORT_RETRIES,
           });
         }
