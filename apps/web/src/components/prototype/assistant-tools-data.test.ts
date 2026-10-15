@@ -1,4 +1,4 @@
-import { snapshotOn } from "@plant/core";
+import { type LiabilityEvent, snapshotOn } from "@plant/core";
 
 import { holdingsView, initialState } from "./prototype-store";
 import { buildFixtures } from "@/lib/prototype/fixtures";
@@ -12,6 +12,7 @@ const read: ClosesRead = {
   holdings: holdingsView(state),
   ledgerTruncated: false,
   debtsTruncated: false,
+  debtEventsTruncated: false,
 };
 
 jest.mock("server-only", () => ({}), { virtual: true });
@@ -243,6 +244,9 @@ it("names a crypto loan's installment in what was borrowed", async () => {
           installments_left: 50,
           next_due_on: null,
           matures_on: null,
+          accrues: false,
+          opened_on: null,
+          anchored_on: TODAY,
         },
       ],
     },
@@ -252,6 +256,88 @@ it("names a crypto loan's installment in what was borrowed", async () => {
     installment: "0.01",
     installmentCurrency: "BTC",
   });
+});
+
+it("marks the net worth and the debts incomplete when debt events were cut", async () => {
+  expect(await data().portfolioSummary()).toMatchObject({ complete: true });
+  expect(await data().liabilities()).toMatchObject({ complete: true });
+  for (const flags of [
+    { debtEventsTruncated: true },
+    { debtsTruncated: true },
+  ]) {
+    mockReadCloses.mockResolvedValueOnce({ ...read, ...flags });
+    expect(await data().portfolioSummary()).toMatchObject({ complete: false });
+    mockReadCloses.mockResolvedValueOnce({ ...read, ...flags });
+    expect(await data().liabilities()).toMatchObject({ complete: false });
+  }
+});
+
+it("leaves paid-off debts out and gives each debt's rate today", async () => {
+  const loan = {
+    kind: "usd_debt" as const,
+    lender: null,
+    currency: "USD" as const,
+    uva: false,
+    instrument_symbol: null,
+    balance: "1000",
+    installment: null,
+    annual_rate: "0.1",
+    installments_left: null,
+    next_due_on: null,
+    matures_on: null,
+    accrues: false,
+    opened_on: "2026-01-01",
+    anchored_on: "2026-01-01",
+  };
+  const event = {
+    date: "2026-02-01",
+    created_at: "2026-02-01T12:00:00Z",
+    cash_holding_id: null,
+    takes_cash: false as const,
+  };
+  mockReadCloses.mockResolvedValueOnce({
+    ...read,
+    state: {
+      ...read.state,
+      liabilities: [
+        { ...loan, id: "paid", label: "Pagada" },
+        { ...loan, id: "open", label: "Abierta" },
+      ],
+      liabilityEvents: new Map<string, LiabilityEvent[]>([
+        [
+          "paid",
+          [
+            {
+              ...event,
+              id: "e1",
+              liability_id: "paid",
+              kind: "payment" as const,
+              amount: "1000",
+              annual_rate: null,
+              settles: true,
+            },
+          ],
+        ],
+        [
+          "open",
+          [
+            {
+              ...event,
+              id: "e2",
+              liability_id: "open",
+              kind: "rate_change" as const,
+              amount: null,
+              annual_rate: "0.2",
+              settles: false,
+            },
+          ],
+        ],
+      ]),
+    },
+  });
+  const debts = await data().liabilities();
+  expect(debts.count).toBe(1);
+  expect(debts.debts).toMatchObject([{ name: "Abierta", annualRate: "20" }]);
 });
 
 it("quotes a bond per 100 nominal, as the pages show it", async () => {

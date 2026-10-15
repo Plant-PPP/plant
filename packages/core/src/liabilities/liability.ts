@@ -37,7 +37,8 @@ const label = z.string().trim().min(1).max(LIABILITY_LABEL_MAX);
 
 // A debt by the column names it is stored under. Its balance and installment
 // are in its unit: the currency, UVA units when `uva`, or units of
-// `instrument_symbol`. The rate is a yearly fraction.
+// `instrument_symbol`. The balance and rate are those of its anchor day
+// (opened_on, or the day it was created); the rate is a yearly fraction.
 export const liabilityFields = {
   kind: z.enum(LIABILITY_KINDS),
   label,
@@ -51,6 +52,8 @@ export const liabilityFields = {
   installments_left: z.number().int().positive().max(600).nullable(),
   next_due_on: holdingDateSchema.nullable(),
   matures_on: holdingDateSchema.nullable(),
+  accrues: z.boolean(),
+  opened_on: holdingDateSchema.nullable(),
 };
 
 type UnitColumns = {
@@ -70,6 +73,26 @@ export const unitsAgree = (debt: UnitColumns): boolean =>
       (!debt.uva || debt.currency === "ARS") &&
       (debt.kind !== "usd_debt" || debt.currency === "USD");
 
+type AccrualColumns = {
+  kind: LiabilityKind;
+  accrues: boolean;
+  opened_on: string | null;
+  installment: string | null;
+  installments_left: number | null;
+  next_due_on: string | null;
+};
+
+// A debt that accrues names the day of its balance and has no installment; a
+// card never accrues (the liabilities_accrues_* and liabilities_card_plain
+// CHECKs).
+export const accrualAgrees = (debt: AccrualColumns): boolean =>
+  !debt.accrues ||
+  (debt.kind !== "credit_card" &&
+    debt.opened_on !== null &&
+    debt.installment === null &&
+    debt.installments_left === null &&
+    debt.next_due_on === null);
+
 export const liabilityInputSchema = z
   .object(liabilityFields)
   .strict()
@@ -77,13 +100,29 @@ export const liabilityInputSchema = z
     message: "The unit does not fit the kind",
     path: ["currency"],
     when: fieldsPassed,
+  })
+  .refine(accrualAgrees, {
+    message: "A debt that accrues has a start date and no installment",
+    path: ["accrues"],
+    when: fieldsPassed,
   });
 
 export const liabilitySchema = z
-  .object({ id: z.string(), ...liabilityFields })
+  .object({
+    id: z.string(),
+    anchored_on: holdingDateSchema,
+    ...liabilityFields,
+  })
   .strict()
-  .refine(unitsAgree, { message: "The unit does not fit the kind" });
+  .refine(unitsAgree, { message: "The unit does not fit the kind" })
+  .refine(accrualAgrees, { message: "The accrual does not fit the debt" });
 export type Liability = z.output<typeof liabilitySchema>;
+
+declare const onDate: unique symbol;
+
+// A debt whose balance is the one computed for a day from its events, the only
+// form a debt is valued in; liabilitiesOn makes it.
+export type LiabilityOnDate = Liability & { readonly [onDate]: true };
 
 // A debt's balance in a view's unit, with the date of the oldest quote used:
 // the UVA's day for a UVA debt, a price's for a crypto loan.
@@ -94,6 +133,8 @@ export function liabilityValue(
   referenceDollar: ReferenceDollar,
 ): { value: Exact; asOf: string } | Missing {
   const balance = exactOf(debt.balance);
+  // Owing nothing needs no quote: a paid-off debt is 0 in any unit.
+  if (balance.n === 0n) return { value: balance, asOf: snapshot.date };
   if (debt.instrument_symbol !== null) {
     const one = instrumentValue(
       debt.instrument_symbol,
@@ -133,7 +174,7 @@ export type LiabilitiesValue = {
 // Every debt's balance in one unit and their sum; a debt with no quote is
 // listed, left out of the sum and makes it incomplete.
 export function valueLiabilities(
-  debts: readonly Liability[],
+  debts: readonly LiabilityOnDate[],
   snapshot: QuoteSnapshot,
   {
     denominator,

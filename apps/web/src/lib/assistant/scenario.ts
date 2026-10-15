@@ -1,6 +1,6 @@
 import {
   type Holding,
-  type Liability,
+  type LiabilityOnDate,
   type QuoteSnapshot,
   type ReferenceDollar,
   UNIT_FX_KINDS,
@@ -149,7 +149,7 @@ export function scenarioOf({
   shock,
 }: {
   holdings: readonly Holding[];
-  liabilities: readonly Liability[];
+  liabilities: readonly LiabilityOnDate[];
   snapshot: QuoteSnapshot;
   unit: ChatUnit;
   referenceDollar: ReferenceDollar;

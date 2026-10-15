@@ -1,4 +1,7 @@
+import { lastConstraint } from "@plant/shared/testing";
+
 import type { QuoteSnapshot } from "../quotes/contract/quote";
+import { liabilitiesToday } from "./history";
 import {
   type Liability,
   liabilityInputSchema,
@@ -30,6 +33,9 @@ const debt = (fields: Partial<Liability>): Liability => ({
   installments_left: null,
   next_due_on: null,
   matures_on: null,
+  accrues: false,
+  opened_on: null,
+  anchored_on: "2026-01-01",
   ...fields,
 });
 
@@ -68,16 +74,20 @@ it("owes a crypto loan at its instrument's price", () => {
 
 it("sums the debts and marks the sum incomplete without a quote", () => {
   const valued = valueLiabilities(
-    [
-      debt({ id: "a" }),
-      debt({ id: "b", uva: true }),
-      debt({
-        id: "c",
-        kind: "crypto_loan",
-        currency: null,
-        instrument_symbol: "ETH",
-      }),
-    ],
+    liabilitiesToday(
+      [
+        debt({ id: "a" }),
+        debt({ id: "b", uva: true }),
+        debt({
+          id: "c",
+          kind: "crypto_loan",
+          currency: null,
+          instrument_symbol: "ETH",
+        }),
+      ],
+      new Map(),
+      SNAPSHOT.date,
+    ),
     SNAPSHOT,
     { denominator: "ars", referenceDollar: "mep" },
   );
@@ -90,6 +100,7 @@ it("refuses a unit that does not fit the kind", () => {
   const input = (fields: Partial<Liability>) => {
     const row: Partial<Liability> = debt(fields);
     delete row.id;
+    delete row.anchored_on;
     return liabilityInputSchema.safeParse(row).success;
   };
   expect(input({})).toBe(true);
@@ -122,4 +133,79 @@ it("needs the UVA only for a UVA debt, and each loaned instrument's price", () =
   ]);
   expect(need.fxKinds).toEqual([...none.fxKinds, "uva"]);
   expect(need.symbols).toEqual([...none.symbols, "ETH"]);
+});
+
+describe("accrual, as the liabilities CHECKs hold it", () => {
+  it("pins the CHECKs accrualAgrees mirrors", () => {
+    expect(lastConstraint("liabilities", "liabilities_accrues_opened")).toBe(
+      "NOT accrues OR opened_on IS NOT NULL",
+    );
+    expect(lastConstraint("liabilities", "liabilities_accrues_fields")).toBe(
+      "NOT accrues OR (installment IS NULL AND installments_left IS NULL\n                           AND next_due_on IS NULL)",
+    );
+    expect(lastConstraint("liabilities", "liabilities_card_plain")).toBe(
+      "kind <> 'credit_card' OR NOT accrues",
+    );
+  });
+
+  it.each([
+    [{}, true],
+    [{ accrues: true, opened_on: "2026-01-01" }, true],
+    [{ accrues: true }, false],
+    [{ accrues: true, opened_on: "2026-01-01", installment: "10" }, false],
+    [{ accrues: true, opened_on: "2026-01-01", installments_left: 3 }, false],
+    [
+      { accrues: true, opened_on: "2026-01-01", next_due_on: "2026-11-01" },
+      false,
+    ],
+    [
+      { kind: "credit_card" as const, accrues: true, opened_on: "2026-01-01" },
+      false,
+    ],
+  ])("takes %j: %s", (fields, valid) => {
+    const row: Partial<Liability> = debt(fields);
+    delete row.id;
+    delete row.anchored_on;
+    expect(liabilityInputSchema.safeParse(row).success).toBe(valid);
+  });
+});
+
+it("values a paid-off debt at 0 without a quote", () => {
+  const valued = valueLiabilities(
+    liabilitiesToday(
+      [
+        debt({
+          id: "c",
+          kind: "crypto_loan",
+          currency: null,
+          instrument_symbol: "NOPE",
+          balance: "1",
+        }),
+      ],
+      new Map([
+        [
+          "c",
+          [
+            {
+              id: "e1",
+              liability_id: "c",
+              kind: "payment",
+              date: SNAPSHOT.date,
+              amount: "1",
+              annual_rate: null,
+              cash_holding_id: null,
+              takes_cash: false,
+              settles: true,
+              created_at: `${SNAPSHOT.date}T12:00:00Z`,
+            },
+          ],
+        ],
+      ]),
+      SNAPSHOT.date,
+    ),
+    SNAPSHOT,
+    { denominator: "ars", referenceDollar: "mep" },
+  );
+  expect(valued.complete).toBe(true);
+  expect(valued.total).toBe("0");
 });

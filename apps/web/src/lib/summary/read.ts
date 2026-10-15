@@ -3,7 +3,7 @@ import { readQuotesOn, type ReferenceDollar } from "@plant/core";
 import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { readLiabilities } from "@/lib/debts/read";
+import { readLiabilities, readLiabilityEvents } from "@/lib/debts/read";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
 import { type HoldingsView, readHoldings } from "@/lib/holdings/read";
 import { MANUAL, type StoredHolding } from "@/lib/ledger/ledger";
@@ -26,6 +26,7 @@ export type ClosesRead = {
   holdings: HoldingsView;
   ledgerTruncated: boolean;
   debtsTruncated: boolean;
+  debtEventsTruncated: boolean;
 };
 
 // The user's ledger with every open holding (a holding that is not an
@@ -41,13 +42,16 @@ export async function readCloses(
     referenceDollar,
   }: { today: string; referenceDollar: ReferenceDollar },
 ): Promise<ClosesRead> {
-  const [holdings, read, debts] = await Promise.all([
+  const [holdings, read, debts, events] = await Promise.all([
     readHoldings(client, context),
     readLedger(client, { today, referenceDollar }).catch((error: unknown) =>
       assetsViewFailure(context, "ledger", error),
     ),
     readLiabilities(client).catch((error: unknown) =>
       assetsViewFailure(context, "debts", error),
+    ),
+    readLiabilityEvents(client).catch((error: unknown) =>
+      assetsViewFailure(context, "debt_events", error),
     ),
   ]);
   const others: StoredHolding[] = holdings.active
@@ -63,6 +67,7 @@ export async function readCloses(
     ...read.ledger,
     holdings: [...read.ledger.holdings, ...others],
     liabilities: debts.active,
+    liabilityEvents: events.byLiability,
     recalculated: new Map(),
   };
   const quotes = await readQuotesOn(
@@ -75,5 +80,6 @@ export async function readCloses(
     holdings,
     ledgerTruncated: read.truncated,
     debtsTruncated: debts.activeTruncated,
+    debtEventsTruncated: events.cut,
   };
 }

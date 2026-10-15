@@ -154,7 +154,7 @@ SELECT results_eq(
      ORDER BY t.tgname $$,
   ARRAY[
     'O CREATE TRIGGER holdings_set_updated_at BEFORE UPDATE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.set_updated_at()',
-    'O CREATE TRIGGER holdings_units_written_by_write_operation BEFORE INSERT OR UPDATE OF amount ON public.holdings FOR EACH ROW WHEN ((new.asset_class = ''instrument''::asset_class)) EXECUTE FUNCTION private.ledger_written_by_write_operation()',
+    'O CREATE TRIGGER holdings_units_written_by_write_operation BEFORE INSERT OR UPDATE OF amount ON public.holdings FOR EACH ROW WHEN ((new.asset_class = ''instrument''::asset_class)) EXECUTE FUNCTION private.written_through(''plant.write_operation'')',
     'O CREATE TRIGGER holdings_without_transfers BEFORE DELETE ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.holding_without_transfers()',
     'O CREATE TRIGGER portfolio_setup_1_lock BEFORE INSERT OR UPDATE OF portfolio_id, archived_at ON public.holdings FOR EACH ROW EXECUTE FUNCTION private.lock_portfolio_setup()',
     'O CREATE TRIGGER portfolio_setup_1_lock_reopen BEFORE UPDATE OF amount ON public.holdings FOR EACH ROW WHEN (((old.amount = (0)::numeric) AND (new.amount > (0)::numeric))) EXECUTE FUNCTION private.lock_portfolio_setup()',

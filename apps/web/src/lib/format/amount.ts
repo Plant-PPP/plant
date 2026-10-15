@@ -163,9 +163,13 @@ export const percentOf = (fraction: string): string =>
 export const formatFraction = (fraction: string): string =>
   formatShare(percentOf(fraction));
 
+// A fraction in percent as stored, unrounded: "0.3525" is "35.25".
+export const exactPercentOf = (fraction: string): string =>
+  toDecimal(times(exactOf(fraction), HUNDRED), 6);
+
 // A fraction as a form field starts with it, in percent: "0.355" is 35,5.
 export function percentInput(fraction: string): string {
-  return amountInput(toDecimal(times(exactOf(fraction), HUNDRED), 6));
+  return amountInput(exactPercentOf(fraction));
 }
 
 // A typed percent as the fraction stored, or null: "35,5" is "0.355". A

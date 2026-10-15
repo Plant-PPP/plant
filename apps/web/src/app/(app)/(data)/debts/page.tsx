@@ -1,4 +1,6 @@
 import {
+  liabilitiesOn,
+  liabilityBalances,
   liabilityQuotesNeeded,
   readSnapshot,
   referenceUnit,
@@ -11,7 +13,11 @@ import { createDebt, deleteDebt, updateDebt } from "./actions";
 import { DebtsSetup } from "@/components/debts/debts-setup";
 import { PrototypeDebts } from "@/components/prototype/prototype-debts";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { DEBTS_VIEW_EVENT, readLiabilities } from "@/lib/debts/read";
+import {
+  DEBTS_VIEW_EVENT,
+  readLiabilities,
+  readLiabilityEvents,
+} from "@/lib/debts/read";
 import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
@@ -48,9 +54,12 @@ export default async function DebtsPage({
     params,
   };
   const today = buenosAiresDate(new Date());
-  const [debts, instruments, dollar, { ledger }] = await Promise.all([
+  const [debts, events, instruments, dollar, { ledger }] = await Promise.all([
     readLiabilities(client).catch((error: unknown) =>
       assetsViewFailure(context, "debts", error),
+    ),
+    readLiabilityEvents(client).catch((error: unknown) =>
+      assetsViewFailure(context, "debt_events", error),
     ),
     readInstruments(client, context),
     readReferenceDollar(client, context),
@@ -68,8 +77,13 @@ export default async function DebtsPage({
   const unit =
     parseAssetsParams(params, { portfolioIds: [], tabs: TABS, salesYears: [] })
       .unit ?? reference;
+  const figures = liabilityBalances(debts.active, events.byLiability, today);
+  const owed = liabilitiesOn(debts.active, figures);
+  const overflowCount = [...figures.values()].filter(
+    (figure) => figure.overflow,
+  ).length;
   const valued = valueLiabilities(
-    debts.active,
+    owed,
     pricedSnapshotOf(ledger, quotes.snapshot).snapshot,
     {
       denominator: unit,
@@ -79,9 +93,14 @@ export default async function DebtsPage({
 
   serverLog.info(DEBTS_VIEW_EVENT, {
     ...contextFields(context),
-    "plant.outcome": valued.complete ? "ok" : "incomplete",
+    "plant.outcome":
+      valued.complete && !events.cut && overflowCount === 0
+        ? "ok"
+        : "incomplete",
     "plant.liability.count": debts.active.length,
     "plant.liability.truncated": debts.activeTruncated,
+    "plant.liability.events_truncated": events.cut,
+    "plant.liability.overflow_count": overflowCount,
     "plant.liability.missing_count": valued.items.filter(
       (item) => item.value === null,
     ).length,
@@ -94,6 +113,8 @@ export default async function DebtsPage({
       <h1 className="sr-only">{navTitle("/debts")}</h1>
       <DebtsSetup
         debts={debts}
+        owed={owed}
+        complete={!events.cut && overflowCount === 0}
         valued={valued}
         unit={unit}
         referenceUnit={reference}

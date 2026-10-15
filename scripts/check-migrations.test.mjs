@@ -340,6 +340,33 @@ test("a literal or comment mentioning a concurrent index passes", () => {
   }
 });
 
+test("a RAISE that builds its message from values fails", () => {
+  for (const statement of [
+    "DO $$ BEGIN RAISE EXCEPTION '% failed', 'x'; END $$",
+    "DO $$ BEGIN RAISE EXCEPTION\n  'balance % too low', 1; END $$",
+    "DO $$ BEGIN RAISE USING MESSAGE = 'x'; END $$",
+    "DO $$ BEGIN RAISE EXCEPTION USING MESSAGE = format('%s', 1); END $$",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${VALID}\n${statement};\n`),
+    );
+    assert.equal(code, 1, statement);
+    assert.match(output, /builds its message from values/);
+  }
+});
+
+test("a static RAISE passes, with a % before it in the statement", () => {
+  for (const statement of [
+    "DO $$ BEGIN RAISE EXCEPTION 'no user' USING ERRCODE = '42501'; END $$",
+    "DO $$ BEGIN IF 'a' LIKE 'a%' THEN RAISE EXCEPTION 'static' USING HINT = 'x'; END IF; END $$",
+  ]) {
+    const { code, output } = check(({ write }) =>
+      write(`${MIGRATIONS}/20260106000000_new.sql`, `${VALID}\n${statement};\n`),
+    );
+    assert.equal(code, 0, `${statement}\n${output}`);
+  }
+});
+
 test("a lone concurrent index drop passes", () => {
   const { code, output } = check(({ write }) =>
     write(

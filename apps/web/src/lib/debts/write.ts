@@ -1,6 +1,6 @@
 import "server-only";
 import { liabilityInputSchema } from "@plant/core";
-import type { Database } from "@plant/shared";
+import { type Database, LIABILITY_EVENT_GUARD } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -13,7 +13,10 @@ import type {
 } from "@/lib/portfolio-setup/write-result";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
-import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
+import {
+  classifyPostgrestResult,
+  knownHint,
+} from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 
 type Client = SupabaseClient<Database>;
@@ -22,7 +25,7 @@ type Row = Database["public"]["Tables"]["liabilities"]["Insert"];
 export type DebtAction =
   "create_liability" | "update_liability" | "delete_liability";
 
-const EVENT = "liabilities.write";
+export const DEBTS_WRITE_EVENT = "liabilities.write";
 
 // A CHECK or an instrument that does not exist: the input core admitted
 // still broke a rule only the database holds.
@@ -78,9 +81,13 @@ export async function writeLiability(
     );
     const rows = response.data ?? [];
     if (refused) {
-      const code: WriteResultCode = REFUSED.has(refused.code)
-        ? "invalid"
-        : "failed";
+      // A refusal of private.liability_guard's reads as invalid too.
+      const code: WriteResultCode =
+        REFUSED.has(refused.code) ||
+        knownHint([LIABILITY_EVENT_GUARD], refused, response.error?.hint) !==
+          undefined
+          ? "invalid"
+          : "failed";
       result = { ok: false, code };
       if (code === "failed") failure = response.error;
     } else if (rows.length === 1) {
@@ -100,9 +107,9 @@ export async function writeLiability(
     "plant.liability.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
-  if (outcome === "failed") serverLog.error(EVENT, line, failure);
-  else if (outcome === "ok") serverLog.info(EVENT, line);
-  else serverLog.warn(EVENT, line);
+  if (outcome === "failed") serverLog.error(DEBTS_WRITE_EVENT, line, failure);
+  else if (outcome === "ok") serverLog.info(DEBTS_WRITE_EVENT, line);
+  else serverLog.warn(DEBTS_WRITE_EVENT, line);
   if (outcome !== "invalid") revalidatePath("/debts");
   return result;
 }

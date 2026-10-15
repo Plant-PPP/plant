@@ -3,6 +3,7 @@ import type { ChartTopic } from "./chat";
 import {
   DENOMINATORS,
   type InstrumentType,
+  isOwed,
   type QuoteSnapshot,
   quotedPrice,
   rate,
@@ -23,7 +24,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { LIABILITY_KIND_LABELS } from "@/lib/debts/labels";
-import { percentOf } from "@/lib/format/amount";
+import { exactPercentOf, percentOf } from "@/lib/format/amount";
 import { HOLDING_CLASS_GROUP_LABELS } from "@/lib/holdings/classes";
 import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import { MOVEMENT_KIND_LABELS } from "@/lib/holdings/messages";
@@ -35,7 +36,12 @@ import { IMPORT_STATUS_LABELS, IMPORTS_PER_MONTH } from "@/lib/imports/review";
 import { allRows } from "@/lib/ledger/ledger";
 import type { ReadContext } from "@/lib/portfolio-setup/read";
 import { monthName, monthOf } from "@/lib/summary/closes";
-import { changeBetween, closesOf, yearsOfCloses } from "@/lib/summary/compute";
+import {
+  changeBetween,
+  closesOf,
+  debtsToday,
+  yearsOfCloses,
+} from "@/lib/summary/compute";
 import { type ClosesRead, readCloses } from "@/lib/summary/read";
 import { pricedToday, summaryValuation } from "@/lib/summary/valuation";
 
@@ -69,7 +75,12 @@ const IMPORTS_LISTED = 10;
 // What every result says about itself, as an answer does, and which reads
 // were cut short.
 type Meta = AnswerMetadata & {
-  truncated: { holdings: boolean; debts: boolean; ledger: boolean };
+  truncated: {
+    holdings: boolean;
+    debts: boolean;
+    debtEvents: boolean;
+    ledger: boolean;
+  };
 };
 
 export type ToolFailure = {
@@ -119,6 +130,7 @@ export function assistantData({
     truncated: {
       holdings: read.holdings.activeTruncated,
       debts: read.debtsTruncated,
+      debtEvents: read.debtEventsTruncated,
       ledger: read.ledgerTruncated,
     },
   });
@@ -201,7 +213,7 @@ export function assistantData({
       // The assets of the same valuation listHoldings and allocation answer
       // from, so the tools add up.
       const { valuation } = summaryValuation(read, { unit, portfolioId: null });
-      const owed = valueLiabilities(read.state.liabilities, snapshot, {
+      const owed = valueLiabilities(debtsToday(read.state), snapshot, {
         denominator: unit,
         referenceDollar: read.state.referenceDollar,
       });
@@ -210,12 +222,15 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.holdings, SOURCES.debts, SOURCES.quotes],
-          valuation.kinds.total.complete && owed.complete,
+          valuation.kinds.total.complete &&
+            owed.complete &&
+            !read.debtsTruncated &&
+            !read.debtEventsTruncated,
         ),
         unit,
         ...worthOfAssets(valuation.kinds.total.value, owed.total),
         missingPrices: valuation.kinds.total.missing,
-        debtCount: read.state.liabilities.length,
+        debtCount: debtsToday(read.state).filter(isOwed).length,
       };
     },
 
@@ -416,12 +431,14 @@ export function assistantData({
     async liabilities() {
       const read = await load();
       const snapshot = pricedToday(read);
-      const owed = valueLiabilities(read.state.liabilities, snapshot, {
+      const today = debtsToday(read.state);
+      const owed = valueLiabilities(today, snapshot, {
         denominator: unit,
         referenceDollar: read.state.referenceDollar,
       });
       const values = new Map(owed.items.map((item) => [item.id, item.value]));
-      const debts = read.state.liabilities
+      const debts = today
+        .filter(isOwed)
         .map((debt) => ({ debt, value: values.get(debt.id) ?? null }))
         .sort((a, b) => compareDecimals(b.value ?? "0", a.value ?? "0"));
       return {
@@ -429,7 +446,7 @@ export function assistantData({
           read,
           snapshot,
           [SOURCES.debts, SOURCES.quotes],
-          owed.complete && !read.debtsTruncated,
+          owed.complete && !read.debtsTruncated && !read.debtEventsTruncated,
         ),
         unit,
         total: owed.total,
@@ -440,6 +457,9 @@ export function assistantData({
           lender: debt.lender === null ? null : named(debt.lender),
           uva: debt.uva,
           value,
+          annualRate:
+            debt.annual_rate === null ? null : exactPercentOf(debt.annual_rate),
+          accrues: debt.accrues,
           installment: debt.installment,
           installmentCurrency: debt.uva
             ? "UVA"
@@ -592,7 +612,7 @@ export function assistantData({
           : read.state.instruments.find((each) => each.symbol === symbol)!.name;
       const outcome = scenarioOf({
         holdings,
-        liabilities: read.state.liabilities,
+        liabilities: debtsToday(read.state),
         snapshot,
         unit,
         referenceDollar: read.state.referenceDollar,
