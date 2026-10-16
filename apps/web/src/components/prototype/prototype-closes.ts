@@ -15,10 +15,10 @@ import { groupKey, type PrototypeState } from "./prototype-store";
 
 // What a write to a month or an earlier one changes in its close. A write
 // moves no quote, so every value that moved, moved because of it: the
-// month's figures to the cent (so how a figure splits across portfolios does
-// not show), plus its own movements and the units held at its end, per
-// account and instrument so moving a holding to another portfolio changes
-// nothing.
+// month's figures to the cent, debts' balances and interest included (so
+// how a figure splits across portfolios does not show), plus its own
+// movements and the units held at its end, per account and instrument so
+// moving a holding to another portfolio changes nothing.
 function movedBy(state: PrototypeState, close: MonthClose): string {
   const own = new Map<string, Exact[]>();
   const held = new Map<string, Exact>();
@@ -79,7 +79,13 @@ export function markRecalculated(
   before: PrototypeState,
   after: PrototypeState,
 ): PrototypeState {
-  if (before.movements === after.movements) return after;
+  if (
+    before.movements === after.movements &&
+    before.liabilities === after.liabilities &&
+    before.liabilityEvents === after.liabilityEvents
+  ) {
+    return after;
+  }
   const changed = new Set<string>();
   for (const unit of CLOSE_UNITS) {
     const was = new Map(

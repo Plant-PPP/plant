@@ -206,7 +206,9 @@ function wealthOf(
       lines: list,
       taxable: sum(known(false)),
       exempt: sum(known(true)),
-      complete: list.every((line) => line.ars !== null),
+      // Cash on the day counts what debt payments took after it, so a cut
+      // read (ClosesState.partial) leaves it unsure.
+      complete: !state.partial && list.every((line) => line.ars !== null),
     },
     leftOut: leftOutCount,
   };

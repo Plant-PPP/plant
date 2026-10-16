@@ -1,5 +1,8 @@
 // The closes as they were computed before PLA-139, kept verbatim as the
-// oracle the optimized ones must match.
+// oracle the optimized ones must match. What the debts owed on a day, what
+// they did over a month and the cash their payments took come from compute
+// itself: this checks the holdings' replay, and those rules have their own
+// tests (compute-debts.test.ts).
 import {
   type CashFlow,
   cashFlowsOf,
@@ -51,7 +54,9 @@ import {
 import {
   type ClosesState,
   closesNeed,
-  debtsToday,
+  debtFlowsOf,
+  debtsOn,
+  otherAt,
 } from "@/lib/summary/compute";
 
 type HoldingLedger = {
@@ -114,8 +119,8 @@ const rowAt = (row: HoldingRow, quantity: string): HoldingRow => ({
 });
 
 // The holdings as they stood at the end of `date`: an instrument holding with
-// what its movements up to then left, and every other holding with today's
-// amount on every past day, until those holdings have a history.
+// what its movements up to then left, and every other holding as otherAt
+// says.
 function holdingsAt(
   state: ClosesState,
   ledgers: readonly HoldingLedger[],
@@ -124,7 +129,7 @@ function holdingsAt(
   const byId = new Map(ledgers.map((ledger) => [ledger.row.id, ledger]));
   return allRows(state).flatMap((row) => {
     const ledger = byId.get(row.id);
-    if (!ledger) return [row];
+    if (!ledger) return otherAt(state, row, date);
     let last = -1;
     while (
       last + 1 < ledger.movements.length &&
@@ -229,11 +234,10 @@ export function closesOf(
     }).kinds.total;
     return { value: total.value, complete: total.complete, snapshot };
   };
-  // Net worth: what is held less what is owed. A debt keeps today's balance
-  // on every past day, in its own unit, as cash does.
+  // Net worth: what is held less what is owed, each as it stood that day.
   const valueAt = (date: string) => {
     const held = valued(holdingsAt(state, ledgers, date), date);
-    const owed = valueLiabilities(debtsToday(state), held.snapshot, {
+    const owed = valueLiabilities(debtsOn(state, date), held.snapshot, {
       denominator: unit,
       referenceDollar: state.referenceDollar,
     });
@@ -303,11 +307,14 @@ export function closesOf(
         realized.push(ledger.realized[index]!);
       });
     }
+    const debts = debtFlowsOf(state, unit, month, snapshotAt(month.to));
     return {
       ...month,
       figures: {
         ...periodResult({
           ...period,
+          flows: [...flows, ...debts.flows],
+          interest: stored(debts.interest),
           startValue: start.value,
           endValue: end.value,
         }),
@@ -315,12 +322,18 @@ export function closesOf(
         // earns nothing, and its balance moving is not a return.
         share: periodResult({
           ...period,
+          flows: [...flows, ...debts.held],
           startValue: start.held,
           endValue: end.held,
         }).share,
       },
       realized: sumOrNull(realized),
-      complete: start.complete && end.complete && known,
+      complete:
+        start.complete &&
+        end.complete &&
+        known &&
+        debts.known &&
+        !state.partial,
       endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
     };

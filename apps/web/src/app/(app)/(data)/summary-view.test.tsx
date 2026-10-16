@@ -1,5 +1,6 @@
 const readLedger = jest.fn();
 const readHoldings = jest.fn();
+const readArchivedCash = jest.fn(async () => []);
 const readLiabilities = jest.fn();
 const read = jest.fn();
 const notFound = jest.fn(() => {
@@ -17,6 +18,7 @@ jest.mock("@/lib/request-id-server", () => ({
 }));
 jest.mock("@/lib/holdings/read", () => ({
   readHoldings: (...args: unknown[]) => readHoldings(...args),
+  readArchivedCash: () => readArchivedCash(),
   readReferenceDollar: async () => "ccl",
 }));
 jest.mock("@/lib/ledger/read", () => ({
@@ -190,6 +192,8 @@ describe("Resumen", () => {
       "plant.outcome": "ok",
       "plant.closes.month_count": 2,
       "plant.assets.holding_count": 2,
+      "plant.closes.archived_cash_count": 0,
+      "plant.closes.cash_take_skipped_count": 0,
     });
   });
 

@@ -11,6 +11,7 @@ import type { ReadContext } from "@/lib/portfolio-setup/read";
 import { assetsViewFailure } from "./assets-view";
 import {
   INSTRUMENT_LIMIT,
+  readArchivedCash,
   readHoldings,
   readInstruments,
   readReferenceDollar,
@@ -48,6 +49,7 @@ function fakeClient(...responses: Response[]) {
         "limit",
         "single",
         "filter",
+        "in",
       ]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
@@ -254,6 +256,55 @@ describe("readInstruments", () => {
       }),
     ]);
     expect(JSON.stringify(lines)).not.toContain("secret");
+  });
+});
+
+describe("readArchivedCash", () => {
+  it("reads the user's archived cash among the ids, a hundred at a time", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `h${i}`);
+    const { client, calls } = fakeClient(ok([HOLDING]), ok([]));
+    const rows = await readArchivedCash(client, CONTEXT, ids);
+    expect(rows.map((row) => row.id)).toEqual(["h1"]);
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call).toContainEqual(["eq", "user_id", USER]);
+      expect(call).toContainEqual(["eq", "asset_class", "cash"]);
+      expect(call).toContainEqual(["not", "archived_at", "is", null]);
+    }
+    expect(calls[0]).toContainEqual(["in", "id", ids.slice(0, 100)]);
+    expect(calls[1]).toContainEqual(["in", "id", ids.slice(100)]);
+  });
+
+  it("logs a failed read once and throws it as logged", async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: { code: "57014", message: "secret" },
+      status: 500,
+    });
+    const error: unknown = await readArchivedCash(client, CONTEXT, [
+      "h1",
+    ]).catch((e: unknown) => e);
+    expect(isLoggedError(error)).toBe(true);
+    expect(lines).toEqual([
+      expect.objectContaining({
+        level: "error",
+        event: "assets.view",
+        "plant.assets.read": "archived_cash",
+        "plant.outcome": "error",
+      }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain("secret");
+  });
+
+  it("logs a row the schema refuses", async () => {
+    const { client } = fakeClient(ok([{ ...HOLDING, amount: "-1" }]));
+    const error: unknown = await readArchivedCash(client, CONTEXT, [
+      "h1",
+    ]).catch((e: unknown) => e);
+    expect(isLoggedError(error)).toBe(true);
+    expect(lines).toEqual([
+      expect.objectContaining({ "plant.assets.read": "archived_cash" }),
+    ]);
   });
 });
 

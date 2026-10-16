@@ -11,6 +11,7 @@ import type {
   SupabaseClient,
 } from "@supabase/supabase-js";
 
+import { chunked } from "@/lib/chunked";
 import { STORE_TIMEOUT_MS, storeError } from "@/lib/quotes/store-error";
 import { postgrestCall } from "@/lib/supabase/postgrest-write";
 
@@ -53,14 +54,6 @@ async function capped<T>(
   if (result.count === null) throw new QuoteReadTruncated("uncounted");
   if (result.count > data.length) throw new QuoteReadTruncated("cut");
   return data;
-}
-
-function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let start = 0; start < items.length; start += size) {
-    chunks.push(items.slice(start, start + size));
-  }
-  return chunks;
 }
 
 // quotes_before's rows: a dollar rate has a kind, a price a symbol and its

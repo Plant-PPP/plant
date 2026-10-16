@@ -7,7 +7,7 @@ import { readReferenceDollar } from "@/lib/holdings/read";
 import { serverLog } from "@/lib/log/server-log";
 import { contextFields, type ReadContext } from "@/lib/portfolio-setup/read";
 import { currentRequestId } from "@/lib/request-id-server";
-import { readCloses } from "@/lib/summary/read";
+import { closesReadFields, readCloses } from "@/lib/summary/read";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -74,8 +74,7 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
     "plant.taxes.asset_count": report.wealth.lines.length,
     "plant.taxes.left_out_count": report.leftOut,
     "plant.taxes.gains_group_count": report.gains.groups.length,
-    "plant.ledger.truncated": read.ledgerTruncated,
-    "plant.assets.truncated": read.holdings.activeTruncated,
+    ...closesReadFields(read),
   });
 
   return (

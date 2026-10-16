@@ -6,6 +6,7 @@ import {
 import {
   type CashFlow,
   cashFlowsOf,
+  cashTakenFrom,
   chainedShare,
   compareMovements,
   type Denominator,
@@ -17,9 +18,13 @@ import {
   type Liability,
   type LiabilityEvent,
   type LiabilityOnDate,
-  liabilitiesToday,
+  type LiabilityBalance,
+  liabilitiesOn,
+  liabilityBalances,
+  liabilityChange,
   liabilityQuotesNeeded,
   type Movement,
+  paysFromCash,
   type QuoteNeed,
   type QuoteSnapshot,
   periodResult,
@@ -52,6 +57,7 @@ import { holdingName, instrumentNames } from "@/lib/holdings/holding-name";
 import type { HoldingRow } from "@/lib/holdings/read";
 import {
   allRows,
+  closedIds,
   difference,
   type Ledger,
   lineOf,
@@ -62,6 +68,7 @@ import {
   stepsOf,
 } from "@/lib/ledger/ledger";
 import {
+  type Month,
   type MonthClose,
   type MonthDetail,
   monthsBetween,
@@ -69,29 +76,132 @@ import {
 } from "@/lib/summary/closes";
 
 // What closes are computed from: the ledger, with stored quotes covering
-// every day closeDates names, the debts and their events, and the closed
-// months a write changed, by period, with the day it did.
+// every day closeDates names, the debts and their events, the closed months
+// a write changed, by period, with the day it did, and whether a read the
+// past closes depend on was cut (the ledger, debts, their events or
+// holdings).
 export type ClosesState = Ledger & {
   liabilities: readonly Liability[];
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
   recalculated: ReadonlyMap<string, string>;
+  partial: boolean;
 };
 
-const owedCache = new WeakMap<ClosesState, LiabilityOnDate[]>();
+type DebtPayment = { date: string; amount: Exact; fromCash: boolean };
 
-// The debts as they stand today, computed once per state.
-export function debtsToday(state: ClosesState): LiabilityOnDate[] {
-  let owed = owedCache.get(state);
+// The debts' payments as the closes use them, built once per state: each
+// debt's payments up to today by period, each one from cash when it took its
+// amount from an open or closed cash holding in the debt's currency, which
+// then held it until that day; and, per such holding, its payments by date
+// with what the ones from each on add up to. Any other payment, a link that
+// only names an account included, was money from outside.
+type DebtPayments = {
+  byDebt: Map<string, Map<string, DebtPayment[]>>;
+  taken: Map<string, { dates: { date: string }[]; from: Exact[] }>;
+  closed: Set<string>;
+  // Payments that took cash from a holding the closes cannot give it back
+  // to.
+  skipped: number;
+};
+
+const paymentsCache = new WeakMap<ClosesState, DebtPayments>();
+
+function debtPaymentsOf(state: ClosesState): DebtPayments {
+  const kept = paymentsCache.get(state);
+  if (kept) return kept;
+  const holdings = new Map(allRows(state).map((row) => [row.id, row.holding]));
+  const byDebt = new Map<string, Map<string, DebtPayment[]>>();
+  const byHolding = new Map<string, { date: string; amount: Exact }[]>();
+  let skipped = 0;
+  for (const debt of state.liabilities) {
+    const periods = new Map<string, DebtPayment[]>();
+    for (const event of state.liabilityEvents.get(debt.id) ?? []) {
+      if (event.kind !== "payment" || event.date > state.today) continue;
+      const id = cashTakenFrom(event, state.today);
+      const holding = id === null ? undefined : holdings.get(id);
+      const fromCash = holding !== undefined && paysFromCash(debt, holding);
+      if (event.takes_cash && !fromCash) skipped += 1;
+      const amount = exactOf(event.amount);
+      const period = event.date.slice(0, 7);
+      const own = periods.get(period) ?? [];
+      own.push({ date: event.date, amount, fromCash });
+      periods.set(period, own);
+      if (fromCash) {
+        const taken = byHolding.get(id!) ?? [];
+        taken.push({ date: event.date, amount });
+        byHolding.set(id!, taken);
+      }
+    }
+    byDebt.set(debt.id, periods);
+  }
+  const taken = new Map(
+    [...byHolding].map(([id, payments]) => {
+      const dates = payments.sort((a, b) =>
+        a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+      );
+      const from: Exact[] = [];
+      let sum = ZERO;
+      for (let index = dates.length - 1; index >= 0; index -= 1) {
+        sum = plus(sum, dates[index]!.amount);
+        from[index] = sum;
+      }
+      return [id, { dates, from }];
+    }),
+  );
+  const payments = { byDebt, taken, closed: closedIds(state), skipped };
+  paymentsCache.set(state, payments);
+  return payments;
+}
+
+// How many payments took cash from a holding the closes cannot give it back
+// to: in another currency, not cash, deleted since or not read.
+export const skippedCashPayments = (state: ClosesState): number =>
+  debtPaymentsOf(state).skipped;
+
+const figuresCache = new WeakMap<
+  ClosesState,
+  Map<string, Map<string, LiabilityBalance>>
+>();
+
+// Each debt's figures at the end of `date`, computed once per state and day.
+function debtFiguresOn(
+  state: ClosesState,
+  date: string,
+): Map<string, LiabilityBalance> {
+  let byDate = figuresCache.get(state);
+  if (!byDate) {
+    byDate = new Map();
+    figuresCache.set(state, byDate);
+  }
+  let figures = byDate.get(date);
+  if (!figures) {
+    figures = liabilityBalances(state.liabilities, state.liabilityEvents, date);
+    byDate.set(date, figures);
+  }
+  return figures;
+}
+
+const owedCache = new WeakMap<ClosesState, Map<string, LiabilityOnDate[]>>();
+
+// The debts as they stood at the end of `date`, computed once per state and
+// day.
+export function debtsOn(state: ClosesState, date: string): LiabilityOnDate[] {
+  let byDate = owedCache.get(state);
+  if (!byDate) {
+    byDate = new Map();
+    owedCache.set(state, byDate);
+  }
+  let owed = byDate.get(date);
   if (!owed) {
-    owed = liabilitiesToday(
-      state.liabilities,
-      state.liabilityEvents,
-      state.today,
-    );
-    owedCache.set(state, owed);
+    owed = liabilitiesOn(state.liabilities, debtFiguresOn(state, date));
+    byDate.set(date, owed);
   }
   return owed;
 }
+
+// The debts as they stand today.
+export const debtsToday = (state: ClosesState): LiabilityOnDate[] =>
+  debtsOn(state, state.today);
 
 type HoldingLedger = {
   row: HoldingRow;
@@ -295,18 +405,41 @@ const rowAt = (row: HoldingRow, quantity: string): HoldingRow => ({
   holding: holdingSchema.parse({ ...row.holding, amount: quantity }),
 });
 
+// A holding that is not an instrument as it stood at the end of `date`, at
+// today's amount; a cash one also with what debt payments after that day
+// took from it, nothing of its own once closed (archiving keeps the amount
+// it had).
+export function otherAt(
+  state: ClosesState,
+  row: HoldingRow,
+  date: string,
+): HoldingRow[] {
+  const { taken, closed } = debtPaymentsOf(state);
+  const payments = taken.get(row.id);
+  const after =
+    payments?.from[lastOnOrBefore(payments.dates, date) + 1] ?? ZERO;
+  if (row.holding.asset_class === "cash" && closed.has(row.id)) {
+    return after.n === 0n ? [] : [rowAt(row, stored(after))];
+  }
+  if (after.n === 0n) return [row];
+  return [rowAt(row, stored(plus(exactOf(row.holding.amount), after)))];
+}
+
 // The holdings as they stood at the end of `date`: an instrument holding with
-// what its movements up to then left, and every other holding with today's
-// amount on every past day, until those holdings have a history.
+// what its movements up to then left, a cash holding with today's amount
+// plus what debt payments after that day took from it, and every other
+// holding with today's amount on every past day; those that are not
+// instruments as they stood at the end of `othersOn` when it is given.
 function holdingsAt(
   state: ClosesState,
   ledgers: readonly HoldingLedger[],
   date: string,
+  othersOn = date,
 ): HoldingRow[] {
   const byId = new Map(ledgers.map((ledger) => [ledger.row.id, ledger]));
   return allRows(state).flatMap((row) => {
     const ledger = byId.get(row.id);
-    if (!ledger) return [row];
+    if (!ledger) return otherAt(state, row, othersOn);
     const last = lastOnOrBefore(ledger.movements, date);
     const quantity = last < 0 ? "0" : ledger.quantities[last]!;
     return exactOf(quantity).n === 0n ? [] : [rowAt(row, quantity)];
@@ -387,6 +520,72 @@ export function closeDates(state: ClosesState): string[] {
   return [...new Set(days)].sort();
 }
 
+// What the debts did over a month, in `unit`, valued with its end quotes:
+// the interest they accrued (a charge, out of the market result), and as
+// flows dated at its end the payments no cash holding of the user's gave
+// (money put in) and the rest of each change, new principal or a lender's
+// correction (money taken out, or put in when it lowered the debt), so the
+// market result keeps only what quotes did. A payment a cash holding gave
+// leaves net worth as it was, and leaves what was held, so `held` pays it
+// out on its day.
+export function debtFlowsOf(
+  state: ClosesState,
+  unit: Denominator,
+  month: Month,
+  snapshot: QuoteSnapshot,
+): { flows: CashFlow[]; held: CashFlow[]; interest: Exact; known: boolean } {
+  const start = debtFiguresOn(state, month.from);
+  const end = debtFiguresOn(state, month.to);
+  const { byDebt } = debtPaymentsOf(state);
+  const flows: CashFlow[] = [];
+  const held: CashFlow[] = [];
+  let interest = ZERO;
+  let known = true;
+  const flow = (kind: CashFlow["kind"], amount: Exact, date = month.to) => ({
+    kind,
+    date,
+    amount: stored(amount),
+    charges: "0",
+  });
+  for (const debt of state.liabilities) {
+    // At the unit's precision, as net worth is.
+    const valued = (amount: Exact): Exact => {
+      if (amount.n === 0n) return ZERO;
+      const value = valueLiabilities(
+        liabilitiesOn(
+          [debt],
+          new Map([
+            [debt.id, { ...end.get(debt.id)!, balance: stored(amount) }],
+          ]),
+        ),
+        snapshot,
+        { denominator: unit, referenceDollar: state.referenceDollar },
+      );
+      if (!value.complete) known = false;
+      return exactOf(value.total);
+    };
+    let paid = ZERO;
+    let outside = ZERO;
+    for (const payment of byDebt.get(debt.id)?.get(month.period) ?? []) {
+      paid = plus(paid, payment.amount);
+      if (!payment.fromCash) outside = plus(outside, payment.amount);
+      else held.push(flow("sell", valued(payment.amount), payment.date));
+    }
+    const change = liabilityChange(
+      start.get(debt.id)!,
+      end.get(debt.id)!,
+      stored(paid),
+    );
+    interest = plus(interest, valued(exactOf(change.interest)));
+    if (outside.n !== 0n) flows.push(flow("buy", negated(valued(outside))));
+    const principal = exactOf(change.principal);
+    if (principal.n !== 0n) {
+      flows.push(flow(principal.n > 0n ? "sell" : "buy", valued(principal)));
+    }
+  }
+  return { flows, held, interest, known };
+}
+
 // Every month's close in `unit`, oldest first, from the month of the first
 // movement to the one in progress.
 export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
@@ -400,9 +599,8 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
 
   const ledgers = ledgersOf(state, unit);
   const first = firstDay(ledgers, state.today);
-  // Net worth: what is held less what is owed. A debt keeps today's balance
-  // on every past day, in its own unit, as cash does (PLA-164). A month's end
-  // is the next one's start, so each day is valued once.
+  // Net worth: what is held less what is owed, each as it stood that day. A
+  // month's end is the next one's start, so each day is valued once.
   const values = new Map<
     string,
     { value: string; held: string; complete: boolean }
@@ -420,7 +618,7 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       snapshot,
       options,
     );
-    const owed = valueLiabilities(debtsToday(state), snapshot, options);
+    const owed = valueLiabilities(debtsOn(state, date), snapshot, options);
     const value = {
       value: difference(held.total, owed.total),
       held: held.total,
@@ -499,11 +697,14 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
       } else known = false;
       realized.push(ledger.realized[index]!);
     }
+    const debts = debtFlowsOf(state, unit, month, pricedAt(state, month.to));
     return {
       ...month,
       figures: {
         ...periodResult({
           ...period,
+          flows: [...flows, ...debts.flows],
+          interest: stored(debts.interest),
           startValue: start.value,
           endValue: end.value,
         }),
@@ -511,12 +712,18 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
         // earns nothing, and its balance moving is not a return.
         share: periodResult({
           ...period,
+          flows: [...flows, ...debts.held],
           startValue: start.held,
           endValue: end.held,
         }).share,
       },
       realized: sumOrNull(realized),
-      complete: start.complete && end.complete && known,
+      complete:
+        start.complete &&
+        end.complete &&
+        known &&
+        debts.known &&
+        !state.partial,
       endComplete: end.complete,
       recalculatedOn: state.recalculated.get(month.period) ?? null,
       // A month that started with nothing held measures its return on part
@@ -636,14 +843,15 @@ export function monthDetail(
 }
 
 // Where net worth's change over consecutive months came from, in one unit:
-// what was put in (or taken out), what prices did, what the dollar did and
-// what yields added, which add up to the change exactly. The dollar's part is
-// what the holdings and debts at each month's end were worth at its end quotes
-// less what they were worth with the dollar rates of its start and the same
-// prices; the prices' part is the rest of the market result, so a peso price
-// that follows the dollar (a CEDEAR) counts as price. Income paid out
-// (dividends, coupons and rents, without yields) and charges are listed
-// apart.
+// what was put in (or taken out), what prices did, what the dollar did, what
+// yields added and what the debts' interest cost (negative), which add up to
+// the change exactly. The dollar's part is what the instruments held at
+// each month's end, and the debts and the cash their payments took at its
+// start, were worth at its end quotes less what they were worth with the
+// dollar rates of its start and the same prices; the prices' part is the
+// rest of the market result, so a peso price that follows the dollar (a
+// CEDEAR) counts as price. Income paid out (dividends, coupons and rents,
+// without yields) and charges are listed apart.
 export type ChangeBetween = {
   from: string;
   to: string;
@@ -655,6 +863,9 @@ export type ChangeBetween = {
   prices: string;
   dollar: string;
   yields: string;
+  // What the debts' interest cost, negative; a close's figures carry it
+  // positive, inside charges.
+  interest: string;
   income: string;
   charges: string;
   result: string;
@@ -679,13 +890,16 @@ export function changeBetween(
   if (months.length === 0) return null;
   const ledgers = ledgersOf(state, unit);
   const options = { denominator: unit, referenceDollar: state.referenceDollar };
-  const worthAt = (date: string, snapshot: QuoteSnapshot) => {
+  // The debts, and the cash their payments took, as they stood at the month's
+  // start: their flows are valued with its end quotes, so only those amounts
+  // moved with the dollar.
+  const worthAt = (date: string, owedOn: string, snapshot: QuoteSnapshot) => {
     const held = valueHoldings(
-      holdingsAt(state, ledgers, date).map((row) => row.holding),
+      holdingsAt(state, ledgers, date, owedOn).map((row) => row.holding),
       snapshot,
       options,
     );
-    const owed = valueLiabilities(debtsToday(state), snapshot, options);
+    const owed = valueLiabilities(debtsOn(state, owedOn), snapshot, options);
     return {
       value: exactOf(difference(held.total, owed.total)),
       complete: held.complete && owed.complete,
@@ -704,8 +918,8 @@ export function changeBetween(
       if (now && was) fx[kind] = { ...now, sell: was.sell };
       else if (now) known = false;
     }
-    const atEnd = worthAt(month.to, end);
-    const atStartRates = worthAt(month.to, { ...end, fx });
+    const atEnd = worthAt(month.to, month.from, end);
+    const atStartRates = worthAt(month.to, month.from, { ...end, fx });
     if (!atEnd.complete || !atStartRates.complete) known = false;
     dollar = plus(dollar, minus(atEnd.value, atStartRates.value));
     const { startValue, endValue, contributed, market } = month.figures;
@@ -720,6 +934,12 @@ export function changeBetween(
   const sum = (
     key: "contributed" | "market" | "income" | "charges" | "result",
   ) => plus(...months.map((each) => exactOf(each.figures[key])));
+  // The debts' interest lowered net worth without being in the market
+  // result, so the residual holds it too; it is shown apart, as a cost.
+  const interest = negated(
+    plus(...months.map((each) => exactOf(each.figures.interest))),
+  );
+  yields = minus(yields, interest);
   // Over the months whose return could be measured and that started with
   // something held, as a year's are.
   const measured = months.flatMap((each) =>
@@ -736,6 +956,7 @@ export function changeBetween(
     prices: stored(minus(sum("market"), dollar)),
     dollar: stored(dollar),
     yields: stored(yields),
+    interest: stored(interest),
     // What was paid out; what yields added is in `yields`, not here too.
     income: stored(minus(sum("income"), yields)),
     charges: stored(sum("charges")),

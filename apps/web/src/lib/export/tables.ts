@@ -16,7 +16,7 @@ import {
 import type { HoldingRow } from "@/lib/holdings/read";
 import type { ImportItem } from "@/lib/imports/review";
 import { IMPORT_STATUS_LABELS } from "@/lib/imports/review";
-import { allRows, type Ledger } from "@/lib/ledger/ledger";
+import { allRows, closedIds, type Ledger } from "@/lib/ledger/ledger";
 
 import type { ExportTable } from "./csv";
 
@@ -60,9 +60,7 @@ export function exportTables(data: ExportData): ExportTable[] {
     data.accounts.find((each) => each.id === id)?.institution ??
     data.archivedAccounts.find((each) => each.id === id)?.institution ??
     null;
-  const closed = new Set(
-    data.holdings.filter((each) => each.closed).map((each) => each.holding.id),
-  );
+  const closed = closedIds(data);
 
   const holdings: ExportTable = {
     ...HOLDINGS,

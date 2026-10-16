@@ -333,6 +333,15 @@ function monthAnswer(
     ...(shownSign(change.yields, unit) === 0
       ? []
       : [`los rendimientos sumaron ${formatAmount(change.yields, unit)}`]),
+    ...(shownSign(change.interest, unit) === 0
+      ? []
+      : [
+          bySign(change.interest, unit, {
+            down: (size) => `los intereses de tus deudas restaron ${size}`,
+            up: (size) => `una corrección de tus deudas sumó ${size}`,
+            even: "",
+          }),
+        ]),
   ];
   const total = stored(
     minus(exactOf(change.endValue), exactOf(change.startValue)),

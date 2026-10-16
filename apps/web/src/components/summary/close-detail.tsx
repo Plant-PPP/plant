@@ -75,7 +75,7 @@ function CloseFigures({
         </StatTile>
         <StatTile
           label="Resultado"
-          note="Mercado más rentas menos gastos; el % no cuenta lo que pusiste"
+          note="Mercado más rentas menos gastos; el % no cuenta lo que pusiste ni tus deudas"
         >
           <ResultText
             amount={figures.result}
@@ -105,7 +105,7 @@ function CloseFigures({
         </StatTile>
         <StatTile
           label="Gastos"
-          note="Comisiones, derechos, impuestos y retenciones"
+          note="Comisiones, derechos, impuestos, retenciones e intereses de deudas"
         >
           <AmountText amount={figures.charges} unit={unit} />
         </StatTile>
@@ -151,7 +151,7 @@ function CloseFigures({
           Faltó algún dato: la cotización de un activo o una deuda al inicio o
           al final, un movimiento que no se puede pasar a esta moneda o el
           precio de un saldo inicial o un ajuste de salida ese día, que cuentan
-          a su costo
+          a su costo, o no pudimos leer todas tus tenencias o deudas
           {year && ", o el rendimiento de algún mes, que no se pudo medir"}.
         </p>
       )}
@@ -249,7 +249,7 @@ export function MonthCloseDetail({
         <h2 className="text-sm font-semibold">Movimientos del mes</h2>
         {lines.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No hubo movimientos este mes.
+            No hubo movimientos de tus activos este mes.
           </p>
         ) : (
           <>

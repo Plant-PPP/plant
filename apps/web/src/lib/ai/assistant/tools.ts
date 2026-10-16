@@ -182,7 +182,7 @@ export function assistantTools(
     }),
     getMonthSummary: tool({
       description:
-        "El resumen de un mes cerrado, o de varios seguidos: cómo empezó y terminó el patrimonio neto, de dónde sale el cambio (lo que puso o sacó, los precios, el dólar y los rendimientos), el resultado, lo que cobró, los gastos y cómo le fue contra la inflación y el dólar. Muestra un gráfico de cascada. Sin meses, el último mes cerrado.",
+        "El resumen de un mes cerrado, o de varios seguidos: cómo empezó y terminó el patrimonio neto, de dónde sale el cambio (lo que puso o sacó, los precios, el dólar, los rendimientos y los intereses de sus deudas), el resultado, lo que cobró, los gastos y cómo le fue contra la inflación y el dólar. Muestra un gráfico de cascada. Sin meses, el último mes cerrado.",
       inputSchema: z.object({
         from: month.optional().describe("El primer mes: 2026-06."),
         to: month
