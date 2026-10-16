@@ -101,10 +101,19 @@ export const paysFromCash = (
   holding.asset_class === "cash" &&
   holding.currency === debt.currency;
 
+// The holding a payment took its cash from, up to `today`, or null.
+export const cashTakenFrom = (
+  event: LiabilityEvent,
+  today: string,
+): string | null =>
+  event.kind === "payment" && event.takes_cash && event.date <= today
+    ? event.cash_holding_id
+    : null;
+
 // How a debt's balance moved between two days, in its unit: the interest it
 // accrued (`end`'s of the month, so `start` is the end of the month before,
-// less what closing it forgave or paid off), and the rest after `paid`, new
-// principal or a lender's correction, negative when it lowered the debt.
+// less the gap closing it left), and the rest after `paid`: new principal,
+// a lender's correction or that gap, negative when it lowered the debt.
 export function liabilityChange(
   start: Pick<LiabilityBalance, "balance">,
   end: Pick<
@@ -325,8 +334,8 @@ export type LiabilityBalance = {
   // What accrued since the month started, plus the gaps the lender's figures
   // and a settle explained as interest; 0 unless it accrues.
   interestThisMonth: string;
-  // The part of interestThisMonth a settle or the lender's 0 closed: what
-  // was forgiven, or paid off, rather than accrued.
+  // The part of interestThisMonth a settle or the lender's 0 closed the
+  // debt with, beyond or short of its balance, rather than accrued.
   closingThisMonth: string;
   open: boolean;
   // Today's balance is a projection: it accrues and no figure of the lender's
@@ -407,7 +416,7 @@ export function liabilityBalance(
       if (balance < 0n) {
         // Paid beyond the balance: for a debt that accrues, the difference
         // was interest; otherwise an overpayment.
-        if (debt.accrues) gap(event.date, -balance);
+        if (debt.accrues) gap(event.date, -balance, event.settles);
         else overpaid = true;
         balance = 0n;
       }

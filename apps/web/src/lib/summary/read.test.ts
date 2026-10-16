@@ -62,6 +62,7 @@ const debt = { id: "d1" } as Liability;
 const take = (holding: string | null, takes = true) =>
   ({
     kind: "payment",
+    date: "2026-09-01",
     cash_holding_id: holding,
     takes_cash: takes,
   }) as LiabilityEvent;

@@ -1,12 +1,5 @@
 import { isOwed, type QuoteSnapshot, valueLiabilities } from "@plant/core";
-import {
-  compareDecimals,
-  exactOf,
-  minus,
-  negated,
-  plus,
-  stored,
-} from "@plant/shared";
+import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
 
 import {
   formatAmount,
@@ -343,10 +336,11 @@ function monthAnswer(
     ...(shownSign(change.interest, unit) === 0
       ? []
       : [
-          `los intereses de tus deudas restaron ${formatAmount(
-            stored(negated(exactOf(change.interest))),
-            unit,
-          )}`,
+          bySign(change.interest, unit, {
+            down: (size) => `los intereses de tus deudas restaron ${size}`,
+            up: (size) => `los intereses de tus deudas sumaron ${size}`,
+            even: "",
+          }),
         ]),
   ];
   const total = stored(

@@ -6,6 +6,7 @@ import {
 import {
   type CashFlow,
   cashFlowsOf,
+  cashTakenFrom,
   chainedShare,
   compareMovements,
   type Denominator,
@@ -76,8 +77,8 @@ import {
 
 // What closes are computed from: the ledger, with stored quotes covering
 // every day closeDates names, the debts and their events, the closed months
-// a write changed, by period, with the day it did, and whether a read past
-// closes depend on was cut (debts, their events or holdings).
+// a write changed, by period, with the day it did, and whether a read the
+// past closes depend on was cut (debts, their events or holdings).
 export type ClosesState = Ledger & {
   liabilities: readonly Liability[];
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
@@ -115,7 +116,7 @@ function debtPaymentsOf(state: ClosesState): DebtPayments {
     const periods = new Map<string, DebtPayment[]>();
     for (const event of state.liabilityEvents.get(debt.id) ?? []) {
       if (event.kind !== "payment" || event.date > state.today) continue;
-      const id = event.takes_cash ? event.cash_holding_id : null;
+      const id = cashTakenFrom(event, state.today);
       const holding = id === null ? undefined : holdings.get(id);
       const fromCash = holding !== undefined && paysFromCash(debt, holding);
       if (event.takes_cash && !fromCash) skipped += 1;
@@ -842,12 +843,13 @@ export function monthDetail(
 // Where net worth's change over consecutive months came from, in one unit:
 // what was put in (or taken out), what prices did, what the dollar did, what
 // yields added and what the debts' interest cost (negative), which add up to
-// the change exactly. The dollar's part is what the holdings at each month's
-// end and the debts at its start were worth at its end quotes less what they
-// were worth with the dollar rates of its start and the same prices; the prices' part is the rest of the market result, so a peso price
-// that follows the dollar (a CEDEAR) counts as price. Income paid out
-// (dividends, coupons and rents, without yields) and charges are listed
-// apart.
+// the change exactly. The dollar's part is what the instruments held at
+// each month's end, and the debts and the cash their payments took at its
+// start, were worth at its end quotes less what they were worth with the
+// dollar rates of its start and the same prices; the prices' part is the
+// rest of the market result, so a peso price that follows the dollar (a
+// CEDEAR) counts as price. Income paid out (dividends, coupons and rents,
+// without yields) and charges are listed apart.
 export type ChangeBetween = {
   from: string;
   to: string;

@@ -1,6 +1,6 @@
 const readLedger = jest.fn();
 const readHoldings = jest.fn();
-const readArchivedCash = jest.fn(async () => ({ rows: [], truncated: false }));
+const readArchivedCash = jest.fn(async () => []);
 const readLiabilities = jest.fn();
 const read = jest.fn();
 const notFound = jest.fn(() => {

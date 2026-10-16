@@ -207,6 +207,7 @@ export {
   admitLiabilityUpdate,
   anchorOf,
   cashAfter,
+  cashTakenFrom,
   compareLiabilityEvents,
   defaultAccrues,
   LIABILITY_EVENT_KINDS,

@@ -1,5 +1,5 @@
 import "server-only";
-import { readQuotesOn, type ReferenceDollar } from "@plant/core";
+import { cashTakenFrom, readQuotesOn, type ReferenceDollar } from "@plant/core";
 import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -18,6 +18,7 @@ import {
   type ClosesState,
   closeDates,
   closesNeed,
+  skippedCashPayments,
 } from "@/lib/summary/compute";
 
 type Client = SupabaseClient<Database>;
@@ -33,6 +34,17 @@ export type ClosesRead = {
   debtEventsTruncated: boolean;
   archivedCashCount: number;
 };
+
+// What a closes read cut or left out, for the lines its pages log: flags
+// and counts only.
+export const closesReadFields = (read: ClosesRead) => ({
+  "plant.ledger.truncated": read.ledgerTruncated,
+  "plant.liability.truncated": read.debtsTruncated,
+  "plant.liability.events_truncated": read.debtEventsTruncated,
+  "plant.assets.truncated": read.holdings.activeTruncated,
+  "plant.closes.archived_cash_count": read.archivedCashCount,
+  "plant.closes.cash_take_skipped_count": skippedCashPayments(read.state),
+});
 
 // The user's ledger with every open holding and the archived cash holdings a
 // debt payment may have emptied (a holding that is not an instrument has no
@@ -65,17 +77,14 @@ export async function readCloses(
     .filter((row) => row.holding.asset_class !== "instrument")
     .map((row) => storedOf(row, false));
   const open = new Set(others.map((each) => each.holding.id));
-  // The holdings payments of the debts read took cash from that are not
-  // open: an emptied one was archived.
+  // Holdings the debts' payments took cash from that are not open: one a
+  // payment emptied was archived.
   const taken = new Set(
     debts.active.flatMap((debt) =>
-      (events.byLiability.get(debt.id) ?? []).flatMap((event) =>
-        event.takes_cash &&
-        event.cash_holding_id !== null &&
-        !open.has(event.cash_holding_id)
-          ? [event.cash_holding_id]
-          : [],
-      ),
+      (events.byLiability.get(debt.id) ?? []).flatMap((event) => {
+        const id = cashTakenFrom(event, today);
+        return id === null || open.has(id) ? [] : [id];
+      }),
     ),
   );
   const emptied =

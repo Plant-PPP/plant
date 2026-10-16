@@ -287,13 +287,10 @@ describe("debts and cash in the closes", () => {
       [],
     );
     // 50 000 × (1 + 0.12/365)^91 less the same over 60 days.
-    expect(Number(month(state, "2026-08").figures.interest)).toBeCloseTo(
-      522.31,
-      2,
+    expect(month(state, "2026-08").figures.interest).toBe("522.31");
+    expect(changeBetween(state, "ars", "2026-08", "2026-08")!.interest).toBe(
+      "-522.31",
     );
-    expect(
-      Number(changeBetween(state, "ars", "2026-08", "2026-08")!.interest),
-    ).toBeCloseTo(-522.31, 2);
   });
 
   it("counts what settling an accruing loan for less forgave as put in", () => {
@@ -314,12 +311,12 @@ describe("debts and cash in the closes", () => {
       ],
     );
     const { figures } = month(state, "2026-08");
-    // Only what accrued up to the settle is interest.
-    expect(Number(figures.interest)).toBeGreaterThan(0);
-    expect(Number(figures.interest)).toBeLessThan(200);
+    // Only what accrued up to the settle is interest; what was owed then
+    // was paid, 40 000 of it and the rest forgiven, as money put in.
+    expect(figures.interest).toBe("167.91");
+    expect(figures.contributed).toBe("51163.83");
     // Each part is valued to the cent, so a cent may be left over.
     expect(Math.abs(Number(figures.market))).toBeLessThanOrEqual(0.01);
-    expect(Number(figures.contributed)).toBeGreaterThan(50000);
   });
 
   it("counts a take it cannot give back as money from outside", () => {

@@ -32,14 +32,10 @@ import {
   type MonthDetail,
   type YearClose,
 } from "@/lib/summary/closes";
-import {
-  closesOf,
-  monthDetail,
-  skippedCashPayments,
-  yearsOfCloses,
-} from "@/lib/summary/compute";
+import { closesOf, monthDetail, yearsOfCloses } from "@/lib/summary/compute";
 import {
   type ClosesRead,
+  closesReadFields,
   readCloses,
   SUMMARY_VIEW_EVENT,
 } from "@/lib/summary/read";
@@ -88,12 +84,7 @@ const closesFields = ({
   ...contextFields(context),
   "plant.assets.unit": unit,
   "plant.closes.month_count": closes.length,
-  "plant.ledger.truncated": read.ledgerTruncated,
-  "plant.liability.truncated": read.debtsTruncated,
-  "plant.liability.events_truncated": read.debtEventsTruncated,
-  "plant.assets.truncated": read.holdings.activeTruncated,
-  "plant.closes.archived_cash_count": read.archivedCashCount,
-  "plant.closes.cash_take_skipped_count": skippedCashPayments(read.state),
+  ...closesReadFields(read),
 });
 
 // The price alerts the quotes met that the user has not seen; none, logged

@@ -105,8 +105,8 @@ export function readHoldings(
 // Ids a single PostgREST filter names, short of a URL's limit.
 const IDS_PER_READ = 100;
 
-// The user's archived cash holdings among `ids`: the ones debt payments took
-// cash from, which the closes give back what payments took after a day.
+// The user's archived cash holdings among `ids`, the ones debt payments took
+// cash from, so the closes can give back what those payments took.
 export async function readArchivedCash(
   client: Client,
   context: ReadContext,

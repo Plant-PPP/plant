@@ -85,7 +85,7 @@ function CloseFigures({
         </StatTile>
         <StatTile
           label="Aportes netos"
-          note={`Entró ${formatAmount(figures.paidIn, unit)} y salió ${formatAmount(figures.proceeds, unit)}, con las deudas pagadas o tomadas por fuera`}
+          note={`Entró ${formatAmount(figures.paidIn, unit)} y salió ${formatAmount(figures.proceeds, unit)}, con deudas pagadas con plata de afuera y deudas nuevas`}
         >
           <AmountText amount={figures.contributed} unit={unit} />
         </StatTile>
@@ -151,7 +151,7 @@ function CloseFigures({
           Faltó algún dato: la cotización de un activo o una deuda al inicio o
           al final, un movimiento que no se puede pasar a esta moneda o el
           precio de un saldo inicial o un ajuste de salida ese día, que cuentan
-          a su costo, o deudas o tenencias que no pudimos leer todas
+          a su costo, o no pudimos leer todas tus deudas o tenencias
           {year && ", o el rendimiento de algún mes, que no se pudo medir"}.
         </p>
       )}

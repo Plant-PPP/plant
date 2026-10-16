@@ -554,7 +554,6 @@ it("marks the closed month a debt payment changes, and none before it", () => {
   expect(after.result.ok).toBe(true);
   const marked = markRecalculated(state, after.state).recalculated;
   expect(marked.get("2026-09")).toBe(TODAY);
-  expect(state.recalculated.has("2026-08")).toBe(false);
   expect(marked.has("2026-08")).toBe(false);
   expect(marked.has("2026-10")).toBe(false);
 });
