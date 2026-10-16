@@ -135,3 +135,26 @@ it("keeps the anchor of a debt being edited, so its figures still compute", () =
   );
   expect(moved.anchored_on).toBe("2026-01-10");
 });
+
+it("lists a pledge on a holding no longer held, with no value", () => {
+  const html = renderToStaticMarkup(
+    <DebtHistory
+      debt={loan}
+      events={[]}
+      collateral={["gone"]}
+      complete
+      today="2026-10-15"
+      snapshot={SNAPSHOT}
+      unit="usd_mep"
+      referenceUnit="usd_mep"
+      referenceDollar="mep"
+      params={{}}
+      instruments={[]}
+      cash={[]}
+      pledgeOptions={[]}
+      actions={ACTIONS}
+    />,
+  );
+  expect(html).toContain("Garantía");
+  expect(html).toContain("Sin cotización de algún activo");
+});

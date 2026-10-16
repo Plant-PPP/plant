@@ -48,6 +48,7 @@ export function DebtEventDialog({
   mode,
   initial,
   initialError,
+  tookFrom = null,
   unit,
   cash,
   cashNote,
@@ -59,6 +60,8 @@ export function DebtEventDialog({
   mode: "create" | "edit";
   initial: DebtEventFields;
   initialError?: string;
+  // The holding the stored payment took its cash from, if any.
+  tookFrom?: string | null;
   // The debt's unit, as amounts are typed in it.
   unit: string;
   // The cash holdings a payment can come from; null when the debt takes no
@@ -208,8 +211,7 @@ export function DebtEventDialog({
                     already took from it can still give the cash back. */}
                 {(chosen ||
                   (fields.cashHoldingId !== "" &&
-                    initial.take &&
-                    initial.cashHoldingId === fields.cashHoldingId)) && (
+                    tookFrom === fields.cashHoldingId)) && (
                   <div className="flex items-center justify-between gap-4">
                     <Label htmlFor={`${id}-take`}>
                       Descontar ahora de la cuenta

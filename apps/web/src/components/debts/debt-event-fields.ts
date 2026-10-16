@@ -110,7 +110,8 @@ export const DEBT_EVENT_INVALID =
 // The copy for each code an event write can be refused with.
 export const DEBT_EVENT_MESSAGES: Record<DebtEventCode, string> = {
   future_date: "La fecha es posterior a hoy.",
-  has_history: "Esta deuda ya tiene movimientos y no cambia de moneda.",
+  has_history:
+    "Esta deuda ya tiene movimientos: no cambia de tipo ni de moneda.",
   before_opening: "La fecha es anterior al inicio de la deuda.",
   no_history: "Las tarjetas siguen su resumen y no llevan movimientos.",
   no_cash_link: "Esta deuda no se paga desde una cuenta.",

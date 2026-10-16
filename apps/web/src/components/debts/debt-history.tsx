@@ -133,9 +133,6 @@ type EventRow = LiabilityEvent & { unsaved?: true };
 const OPENED_AFTER_EVENTS =
   "La fecha del saldo es posterior al primer movimiento: elegí una igual o anterior.";
 
-const KEEPS_UNIT =
-  "Esta deuda ya tiene movimientos: no cambia de tipo ni de moneda.";
-
 const REOPENING_KEPT =
   "Este ajuste reabrió la deuda y hay movimientos después: borralos primero.";
 
@@ -293,9 +290,21 @@ export function DebtHistory({
     referenceDollar,
   });
   const value = valued.items[0]?.value ?? null;
-  const pledged = pledgeOptions.filter((each) =>
-    shown.collateral.includes(each.id),
-  );
+  // A pledged holding the user no longer holds stays listed, so it can be
+  // unpledged; it has no value to count.
+  const known = new Set(pledgeOptions.map((each) => each.id));
+  const options: PledgeOption[] = [
+    ...pledgeOptions,
+    ...shown.collateral
+      .filter((id) => !known.has(id))
+      .map((id) => ({
+        id,
+        label: "Un activo que ya no tenés",
+        place: "Ya no está en tus cuentas",
+        value: null,
+      })),
+  ];
+  const pledged = options.filter((each) => shown.collateral.includes(each.id));
   const pledgedValue = sumOrNull(pledged.map((each) => each.value));
   const ltv =
     value !== null && pledgedValue !== null && pledged.length > 0
@@ -360,9 +369,7 @@ export function DebtHistory({
       ? null
       : hint === "before_opening"
         ? OPENED_AFTER_EVENTS
-        : hint === "has_history"
-          ? KEEPS_UNIT
-          : DEBT_EVENT_MESSAGES[hint];
+        : DEBT_EVENT_MESSAGES[hint];
   };
 
   function submitDebt(retry: Retry<DebtFields>, fields: DebtFields) {
@@ -727,6 +734,11 @@ export function DebtHistory({
         <DebtEventDialog
           key={eventDialog.event?.id ?? eventDialog.kind}
           mode={eventDialog.event ? "edit" : "create"}
+          tookFrom={
+            eventDialog.event?.takes_cash
+              ? eventDialog.event.cash_holding_id
+              : null
+          }
           initial={
             eventDialog.initial ??
             eventFields(
@@ -760,7 +772,7 @@ export function DebtHistory({
       )}
       {collateralDialog && (
         <DebtCollateralDialog
-          options={pledgeOptions}
+          options={options}
           initial={collateralDialog.initial ?? shown.collateral}
           initialError={collateralDialog.initialError}
           returnFocusTo={() => card.focusHeading()}

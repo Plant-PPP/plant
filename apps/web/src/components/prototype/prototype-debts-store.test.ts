@@ -231,6 +231,33 @@ describe("debt events", () => {
     expect(cashOf(after).closed).toBe(true);
   });
 
+  it("keeps a reference link to a closed holding, not one in another currency", () => {
+    const [latest] = state.liabilityEvents.get(LOAN)!;
+    const closed = {
+      ...state,
+      holdings: state.holdings.map((each) =>
+        each.holding.id === USD_CASH ? { ...each, closed: true } : each,
+      ),
+    };
+    const edit = (s: typeof state) =>
+      writeLiabilityEvent(
+        s,
+        { eventId: latest!.id },
+        { kind: "payment", date: latest!.date, amount: "900", settles: false },
+        { holding_id: USD_CASH, take: false, expected: null },
+      ).result;
+    expect(edit(closed)).toMatchObject({ ok: true });
+    const pesos = {
+      ...closed,
+      holdings: closed.holdings.map((each) =>
+        each.holding.id === USD_CASH
+          ? { ...each, holding: { ...each.holding, currency: "ARS" as const } }
+          : each,
+      ),
+    };
+    expect(edit(pesos)).toEqual({ ok: false, code: "currency" });
+  });
+
   it("refuses a debt edit the debt guard refuses", () => {
     const loan = state.liabilities.find((each) => each.id === LOAN)!;
     const input = {
