@@ -167,7 +167,9 @@ export function DebtsSetup({
           />
           {/* The balance's own column shows only on a wide table. */}
           <span className="text-muted-foreground block text-xs tabular-nums @2xl:hidden">
-            {todayOf(debt) ? owed(debt, todayOf(debt)!.balance) : CALCULATING}
+            {todayOf(debt)
+              ? debtAmount(debt, todayOf(debt)!.balance)
+              : CALCULATING}
           </span>
         </>
       ),
