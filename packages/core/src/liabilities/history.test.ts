@@ -3,6 +3,7 @@ import { lastFunctionBodies } from "@plant/shared/testing";
 import {
   admitLiabilityEvent,
   admitLiabilityEventDeletion,
+  admitLiabilityUpdate,
   anchorOf,
   cashAfter,
   isOwed,
@@ -597,5 +598,71 @@ describe("helpers", () => {
     expect(closed!.balance).toBe("0");
     expect(loanToValue("50", "100")).toBe("0.5");
     expect(loanToValue("50", "0")).toBeNull();
+  });
+});
+
+describe("admitLiabilityUpdate", () => {
+  const today = "2026-10-15";
+  const events = [event({ kind: "payment", date: "2026-02-01", amount: "1" })];
+  const debt = loan();
+
+  it("refuses what private.liability_guard refuses", () => {
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, opened_on: "2026-10-16" },
+        [],
+        debt.anchored_on,
+        today,
+      ),
+    ).toBe("future_date");
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, kind: "personal_loan" },
+        events,
+        debt.anchored_on,
+        today,
+      ),
+    ).toBe("has_history");
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, opened_on: "2026-03-01" },
+        events,
+        debt.anchored_on,
+        today,
+      ),
+    ).toBe("before_opening");
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, opened_on: null },
+        events,
+        "2026-05-01",
+        today,
+      ),
+    ).toBe("before_opening");
+  });
+
+  it("takes any edit of a debt with no events, and a label on one with", () => {
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, kind: "personal_loan", currency: "ARS" },
+        [],
+        debt.anchored_on,
+        today,
+      ),
+    ).toBeNull();
+    expect(
+      admitLiabilityUpdate(
+        debt,
+        { ...debt, opened_on: "2026-01-15" },
+        events,
+        debt.anchored_on,
+        today,
+      ),
+    ).toBeNull();
   });
 });

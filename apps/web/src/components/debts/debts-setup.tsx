@@ -12,6 +12,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import { useAssetsUrl } from "@/components/holdings/assets-url";
+import { NameLink } from "@/components/holdings/holding-cells";
 import { UnitSelect } from "@/components/holdings/filter-select";
 import {
   CALCULATING,
@@ -38,11 +39,7 @@ import {
 } from "@/components/portfolio-setup/setup-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TruncatedText, actionsColumn } from "@/components/ui/data-table";
-import {
-  formatAmount,
-  formatFraction,
-  formatQuantity,
-} from "@/lib/format/amount";
+import { formatAmount, formatFraction } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { UNIT_LABELS } from "@/lib/holdings/messages";
@@ -54,10 +51,11 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 import { DEBT_INVALID, DebtDialog } from "./debt-dialog";
 import {
   type DebtFields,
+  DEBT_DELETE_DESCRIPTION,
+  debtAmount,
   debtFields,
   LIABILITY_KIND_LABELS,
   toLiabilityInput,
-  unitOf,
 } from "./debt-fields";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 
@@ -68,7 +66,7 @@ export type DebtActions = {
 };
 
 // A debt's guard refusal reads as invalid, like a field the form missed.
-const MESSAGES: WriteMessages = {
+export const DEBT_MESSAGES: WriteMessages = {
   ...WRITE_MESSAGES.holdings,
   duplicate: FAILED,
   invalid: DEBT_INVALID,
@@ -81,13 +79,6 @@ type Row = Liability & { unsaved?: true };
 type DialogState =
   | ({ kind: "create" } & Retry<DebtFields>)
   | ({ kind: "edit"; row: Liability } & Retry<DebtFields>);
-
-// A debt's balance in its own unit: "38.500 UVA", "US$ 3.000,00".
-function owed(debt: Liability, amount: string): string {
-  return debt.currency !== null && !debt.uva
-    ? formatAmount(amount, debt.currency)
-    : `${formatQuantity(amount)} ${unitOf(debt)}`;
-}
 
 // What a user owes, each debt in its own unit and in the page's, with the
 // total and the installments due each month.
@@ -148,7 +139,7 @@ export function DebtsSetup({
         state.kind === "edit"
           ? actions.update(state.row.id, input)
           : actions.create(input),
-      MESSAGES,
+      DEBT_MESSAGES,
       {
         done: `${state.kind === "edit" ? "Guardaste" : "Agregaste"} ${fields.label.trim()}`,
         reopen: (error) =>
@@ -163,7 +154,11 @@ export function DebtsSetup({
       header: "Deuda",
       cell: ({ row: { original: debt } }) => (
         <>
-          <TruncatedText className="font-medium" text={debt.label} />
+          <NameLink
+            className="font-medium"
+            text={debt.label}
+            href={debt.unsaved ? null : `/debts/${debt.id}`}
+          />
           <TruncatedText
             className="text-muted-foreground text-xs"
             text={[LIABILITY_KIND_LABELS[debt.kind], debt.lender]
@@ -172,7 +167,9 @@ export function DebtsSetup({
           />
           {/* The balance's own column shows only on a wide table. */}
           <span className="text-muted-foreground block text-xs tabular-nums @2xl:hidden">
-            {todayOf(debt) ? owed(debt, todayOf(debt)!.balance) : CALCULATING}
+            {todayOf(debt)
+              ? debtAmount(debt, todayOf(debt)!.balance)
+              : CALCULATING}
           </span>
         </>
       ),
@@ -184,7 +181,7 @@ export function DebtsSetup({
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: debt } }) => {
         const today = todayOf(debt);
-        return today ? owed(debt, today.balance) : CALCULATING;
+        return today ? debtAmount(debt, today.balance) : CALCULATING;
       },
     },
     {
@@ -195,7 +192,7 @@ export function DebtsSetup({
       cell: ({ row: { original: debt } }) =>
         debt.installment ? (
           <span>
-            {owed(debt, debt.installment)}
+            {debtAmount(debt, debt.installment)}
             {debt.installments_left && (
               <span className="text-muted-foreground block text-xs">
                 {`${debt.installments_left === 1 ? "Queda" : "Quedan"} ${debt.installments_left}`}
@@ -368,7 +365,7 @@ export function DebtsSetup({
       {deleting && (
         <ConfirmDialog
           title={`¿Borrar ${deleting.label}?`}
-          description="No se puede deshacer."
+          description={DEBT_DELETE_DESCRIPTION}
           confirmLabel="Borrar"
           returnFocusTo={card.focusHeading}
           onClose={() => setDeleting(null)}
@@ -376,7 +373,7 @@ export function DebtsSetup({
             card.rowAction(
               { kind: "delete", id: deleting.id },
               () => actions.delete(deleting.id),
-              (result) => dialogAnswer(result, MESSAGES),
+              (result) => dialogAnswer(result, DEBT_MESSAGES),
               {
                 done: `Borraste ${deleting.label}`,
                 rowId: deleting.id,

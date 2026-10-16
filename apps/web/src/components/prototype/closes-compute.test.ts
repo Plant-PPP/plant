@@ -76,7 +76,7 @@ it(
 // quotes, as the implementation before PLA-139 computed them, over the
 // prototype fixtures with euros held.
 const LARGE_DIGEST =
-  "590c521edfe3a7c9486b176b6e40eb438d47cc27e38fb995c10e005bc26f3dbf";
+  "00101b5641152fc4e74d5b9dceb023ca6ca701366c1081bf7eb225b7921c1a7c";
 
 it(
   "closes 20,000 movements as before, one unit in a few seconds",

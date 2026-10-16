@@ -876,7 +876,7 @@ function withMovements<S extends Ledger>(
 
 // The refusal for an account or portfolio the user archived, the account's
 // first; null when neither is archived.
-function archivedCode(
+export function archivedCode(
   state: Ledger,
   { accountId, portfolioId }: { accountId?: string; portfolioId?: string },
 ): "source_connection_archived" | "portfolio_archived" | null {

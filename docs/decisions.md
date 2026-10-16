@@ -16,6 +16,9 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Events are written only through their RPCs**, which the `private.written_through` trigger enforces, as it now does for the ledger.
 - **Collateral** names whole holdings pledged for a debt, for an informational loan-to-value; nothing liquidates.
 - **Debts are valued in a proof type** (`LiabilityOnDate`), made only by `liabilitiesOn`, so a reader cannot value a stored row's opening balance as today's.
+- **Each debt has its own page** (`/debts/<id>`, linked from Deudas): its balance and rate today, interest per day and this month for a debt that accrues (its installment otherwise), what is pledged for it and its history, with "Registrar pago" as the one primary action and changing the rate, adjusting the balance, paying it off, the collateral, editing and deleting behind ⋯. A card shows no history: it keeps following its statements.
+- **The page reads every event of the debt** (up to the events limit, saying so when cut) and lists them all: the balance needs every one, so paging the table would read nothing less. The figures are computed in the browser from the events shown, so a recorded, edited or deleted event moves them at once, before the server answers.
+- **A payment's account is one of the user's open cash holdings in the debt's currency**, and the page checks a debt's rules before sending, with core's `admitLiabilityEvent`, `admitLiabilityEventDeletion` and `admitLiabilityUpdate` (the last for an edit of the debt itself). Any open holding can be pledged; the collateral is saved as the set the user picked, removing the rest and adding what is new, so a retry after a failure ends in the same set.
 - **A RAISE in a new migration keeps a literal message** (checked by `check-migrations.sh`); values go in a HINT code, since the message reaches the logs.
 
 ## 2026-10-14 · Euros

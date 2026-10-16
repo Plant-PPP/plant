@@ -204,6 +204,7 @@ export {
 export {
   admitLiabilityEvent,
   admitLiabilityEventDeletion,
+  admitLiabilityUpdate,
   anchorOf,
   cashAfter,
   compareLiabilityEvents,

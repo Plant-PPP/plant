@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  type LiabilitiesValue,
   type Liability,
   type LiabilityEvent,
   liabilityEventSchema,
@@ -20,6 +21,25 @@ import {
 type Client = SupabaseClient<Database>;
 
 export const DEBTS_VIEW_EVENT = "liabilities.view";
+
+// What a debts view's line says about its figures, one rule for the list and
+// a debt's page: complete only with every quote, every event and no balance
+// past the limit.
+export function debtsViewOutcome(
+  valued: LiabilitiesValue,
+  cut: boolean,
+  overflowCount: number,
+) {
+  return {
+    "plant.outcome":
+      valued.complete && !cut && overflowCount === 0 ? "ok" : "incomplete",
+    "plant.liability.events_truncated": cut,
+    "plant.liability.overflow_count": overflowCount,
+    "plant.liability.missing_count": valued.items.filter(
+      (item) => item.value === null,
+    ).length,
+  };
+}
 
 export class DebtsReadError extends Error {
   constructor(readonly code: string) {
@@ -63,6 +83,47 @@ export async function readLiabilities(
     archivedFirstHref: null,
     archivedNextHref: null,
   };
+}
+
+// One of the user's debts, or null when the id is not one of theirs.
+export async function readLiability(
+  client: Client,
+  id: string,
+): Promise<Liability | null> {
+  const result = await client
+    .from("liabilities")
+    .select(COLUMNS)
+    .eq("id", id)
+    .limit(1);
+  const failure = classifyPostgrestResult(
+    result as Parameters<typeof classifyPostgrestResult>[0],
+    200,
+  );
+  if (failure || !result.data) {
+    throw new DebtsReadError(failure?.code ?? "no_data");
+  }
+  const [row] = result.data as unknown[];
+  return row === undefined ? null : liabilitySchema.parse(row);
+}
+
+// The holdings pledged for one of the user's debts.
+export async function readCollateral(
+  client: Client,
+  liabilityId: string,
+): Promise<string[]> {
+  const result = await client
+    .from("liability_collateral")
+    .select("holding_id")
+    .eq("liability_id", liabilityId)
+    .order("created_at", { ascending: true });
+  const failure = classifyPostgrestResult(
+    result as Parameters<typeof classifyPostgrestResult>[0],
+    200,
+  );
+  if (failure || !result.data) {
+    throw new DebtsReadError(failure?.code ?? "no_data");
+  }
+  return result.data.map((row) => row.holding_id);
 }
 
 const EVENT_COLUMNS =

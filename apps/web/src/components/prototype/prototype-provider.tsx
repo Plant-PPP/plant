@@ -25,6 +25,10 @@ import {
   type PinResult,
 } from "@/lib/assistant/chat";
 import type { HoldingDetails } from "@/components/holdings/assets-setup";
+import type {
+  DebtEventActions,
+  DebtPageActions,
+} from "@/components/debts/debt-history";
 import type { DebtActions } from "@/components/debts/debts-setup";
 import type { ImportActions } from "@/components/imports/import-page";
 import type { ApiKeyActions } from "@/lib/connections/api-key";
@@ -93,6 +97,8 @@ type Prototype = {
     sourceConnections: SourceConnectionActions;
     portfolios: PortfolioActions;
     debts: DebtActions;
+    debtEvents: DebtEventActions;
+    debtCollateral: DebtPageActions["collateral"];
     imports: ImportActions & ReviewActions;
     apiKeys: ApiKeyActions;
     assistant: AssistantActions;
@@ -462,6 +468,26 @@ export function PrototypeProvider({
       update: (id, input) => write((s) => debts.updateLiability(s, id, input)),
       delete: (id) => write((s) => debts.deleteLiability(s, id)),
     },
+    debtEvents: {
+      record: (debtId, event, cash) =>
+        write((s) =>
+          debts.writeLiabilityEvent(
+            s,
+            {
+              debtId,
+              id: crypto.randomUUID(),
+              createdAt: new Date().toISOString(),
+            },
+            event,
+            cash,
+          ),
+        ),
+      update: (eventId, event, cash) =>
+        write((s) => debts.writeLiabilityEvent(s, { eventId }, event, cash)),
+      delete: (eventId) => write((s) => debts.deleteLiabilityEvent(s, eventId)),
+    },
+    debtCollateral: (debtId, holdingIds) =>
+      write((s) => debts.setCollateral(s, debtId, holdingIds)),
     portfolios: {
       create: (input) =>
         write((s) => accounts.createPortfolio(s, input, crypto.randomUUID())),

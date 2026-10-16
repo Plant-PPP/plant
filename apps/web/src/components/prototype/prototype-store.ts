@@ -67,6 +67,8 @@ export type PrototypeState = Ledger & {
   liabilities: Liability[];
   // Each debt's events, by debt.
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
+  // The holdings pledged for each debt, by debt.
+  liabilityCollateral: ReadonlyMap<string, readonly string[]>;
   // Newest first.
   imports: ImportItem[];
   // The day of each upload, deleted accounts' included: the monthly limit
@@ -91,8 +93,9 @@ export type PrototypeState = Ledger & {
 export type Write<R> = LedgerWrite<R, PrototypeState>;
 
 // What the prototype keeps of a holding goes with it: its placement, its
-// property sheet, and its asset's report choice with the asset's last
-// holding.
+// property sheet, its asset's report choice with the asset's last holding,
+// and its pledges; a payment that named it keeps its record without the link,
+// as the foreign keys do.
 function forgetGone(state: PrototypeState): PrototypeState {
   const ids = new Set(state.holdings.map((each) => each.holding.id));
   const keys = new Set(state.holdings.map((each) => assetKey(each.holding)));
@@ -105,11 +108,44 @@ function forgetGone(state: PrototypeState): PrototypeState {
   const realEstate = [...state.realEstate.keys()].every((id) => ids.has(id))
     ? state.realEstate
     : new Map([...state.realEstate].filter(([id]) => ids.has(id)));
+  const pledged = [...state.liabilityCollateral.values()].flat();
+  const liabilityCollateral = pledged.every((id) => ids.has(id))
+    ? state.liabilityCollateral
+    : new Map(
+        [...state.liabilityCollateral].map(([debt, holdings]) => [
+          debt,
+          holdings.filter((id) => ids.has(id)),
+        ]),
+      );
+  const linked = [...state.liabilityEvents.values()]
+    .flat()
+    .flatMap((event) => event.cash_holding_id ?? []);
+  const liabilityEvents = linked.every((id) => ids.has(id))
+    ? state.liabilityEvents
+    : new Map(
+        [...state.liabilityEvents].map(([debt, events]) => [
+          debt,
+          events.map((event) =>
+            event.cash_holding_id !== null && !ids.has(event.cash_holding_id)
+              ? { ...event, cash_holding_id: null }
+              : event,
+          ),
+        ]),
+      );
   return outOfTaxReport === state.outOfTaxReport &&
     placements === state.placements &&
-    realEstate === state.realEstate
+    realEstate === state.realEstate &&
+    liabilityCollateral === state.liabilityCollateral &&
+    liabilityEvents === state.liabilityEvents
     ? state
-    : { ...state, outOfTaxReport, placements, realEstate };
+    : {
+        ...state,
+        outOfTaxReport,
+        placements,
+        realEstate,
+        liabilityCollateral,
+        liabilityEvents,
+      };
 }
 
 const forgetting =
@@ -201,7 +237,10 @@ export function initialState(
     realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
     liabilities: fixtures.liabilities,
-    liabilityEvents: new Map(),
+    liabilityEvents: new Map(Object.entries(fixtures.liabilityEvents ?? {})),
+    liabilityCollateral: new Map(
+      Object.entries(fixtures.liabilityCollateral ?? {}),
+    ),
     imports: [],
     uploadedOn: [],
     conversations: [],

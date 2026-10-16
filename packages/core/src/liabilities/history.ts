@@ -202,6 +202,40 @@ export function admitLiabilityEventDeletion(
     : "settled";
 }
 
+// Whether a debt with these events takes an edit of its row, by the rules
+// private.liability_guard enforces: a debt opens today or earlier; once it
+// has events its kind and unit stay, and it opens on or before its first
+// event. `anchorWhenCleared` is the day the anchor falls back to when the edit
+// clears the opening date (the day the debt was created).
+export function admitLiabilityUpdate(
+  debt: Pick<Liability, "kind" | "currency" | "uva" | "instrument_symbol">,
+  next: Pick<
+    Liability,
+    "kind" | "currency" | "uva" | "instrument_symbol" | "opened_on"
+  >,
+  events: readonly Pick<LiabilityEvent, "date">[],
+  anchorWhenCleared: string,
+  today: string,
+): LiabilityEventGuardHint | null {
+  if (next.opened_on !== null && next.opened_on > today) return "future_date";
+  if (events.length === 0) return null;
+  if (
+    next.kind !== debt.kind ||
+    next.currency !== debt.currency ||
+    next.uva !== debt.uva ||
+    next.instrument_symbol !== debt.instrument_symbol
+  ) {
+    return "has_history";
+  }
+  const first = events.reduce(
+    (earliest, event) => (event.date < earliest ? event.date : earliest),
+    events[0]!.date,
+  );
+  return (next.opened_on ?? anchorWhenCleared) > first
+    ? "before_opening"
+    : null;
+}
+
 // A cash holding's amount after a payment takes `delta` from it: archived at
 // 0, refused below it, as public.move_cash does.
 export function cashAfter(

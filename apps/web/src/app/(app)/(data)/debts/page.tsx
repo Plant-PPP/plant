@@ -15,6 +15,7 @@ import { PrototypeDebts } from "@/components/prototype/prototype-debts";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import {
   DEBTS_VIEW_EVENT,
+  debtsViewOutcome,
   readLiabilities,
   readLiabilityEvents,
 } from "@/lib/debts/read";
@@ -93,17 +94,9 @@ export default async function DebtsPage({
 
   serverLog.info(DEBTS_VIEW_EVENT, {
     ...contextFields(context),
-    "plant.outcome":
-      valued.complete && !events.cut && overflowCount === 0
-        ? "ok"
-        : "incomplete",
+    ...debtsViewOutcome(valued, events.cut, overflowCount),
     "plant.liability.count": debts.active.length,
     "plant.liability.truncated": debts.activeTruncated,
-    "plant.liability.events_truncated": events.cut,
-    "plant.liability.overflow_count": overflowCount,
-    "plant.liability.missing_count": valued.items.filter(
-      (item) => item.value === null,
-    ).length,
     "plant.assets.unit": unit,
     "plant.quotes.dropped_count": quotes.invalidCount,
   });
