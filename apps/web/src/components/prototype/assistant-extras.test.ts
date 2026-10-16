@@ -48,6 +48,7 @@ describe("changeBetween", () => {
           change.prices,
           change.dollar,
           change.yields,
+          change.interest,
         ),
       ).toBe(stored(exactOf(change.endValue)));
       const close = closesOf(state, unit).find((each) => each.period === last)!;
@@ -69,7 +70,13 @@ describe("changeBetween", () => {
     const months = closes
       .slice(-4, -1)
       .map((each) => changeBetween(state, "ars", each.period, each.period)!);
-    for (const key of ["contributed", "prices", "dollar", "yields"] as const) {
+    for (const key of [
+      "contributed",
+      "prices",
+      "dollar",
+      "yields",
+      "interest",
+    ] as const) {
       expect(whole[key]).toBe(sum(...months.map((each) => each[key])));
     }
     expect(whole.startValue).toBe(months[0]!.startValue);
@@ -84,6 +91,11 @@ describe("changeBetween", () => {
     const change = changeBetween(state, "ars", last, last)!;
     const chart = changeChart(change, "ars");
     expect(chart.template).toBe("waterfall");
+    // The fixture's loan accrues, so its interest has a bar of its own.
+    expect(chart.points).toContainEqual({
+      label: "Intereses de deudas",
+      value: change.interest,
+    });
     expect(chart.points[0]).toEqual({
       label: "Al empezar",
       value: change.startValue,

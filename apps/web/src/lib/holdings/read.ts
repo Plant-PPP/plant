@@ -10,8 +10,10 @@ import type { Currency, Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { chunked } from "@/lib/chunked";
 import { PortfolioSetupError } from "@/lib/portfolio-setup/errors";
 import {
+  type ListOptions,
   type ListView,
   type ReadContext,
   readList,
@@ -84,6 +86,7 @@ export function holdingRowOf(data: Record<string, unknown>): HoldingRow {
 export function readHoldings(
   client: Client,
   context: ReadContext,
+  options?: ListOptions,
 ): Promise<HoldingsView> {
   return readList(
     client,
@@ -95,7 +98,49 @@ export function readHoldings(
       toRow: holdingRowOf,
     },
     context,
+    options,
   );
+}
+
+// Ids a single PostgREST filter names, short of a URL's limit.
+const IDS_PER_READ = 100;
+
+// The user's archived cash holdings among `ids`: the ones debt payments took
+// cash from, which the closes give back what payments took after a day.
+export async function readArchivedCash(
+  client: Client,
+  context: ReadContext,
+  ids: readonly string[],
+): Promise<HoldingRow[]> {
+  const results = await Promise.all(
+    chunked(ids, IDS_PER_READ).map((chunk) =>
+      client
+        .from("holdings")
+        .select(HOLDING_COLUMNS)
+        .eq("user_id", context.userId)
+        .in("id", chunk)
+        .eq("asset_class", "cash")
+        .not("archived_at", "is", null),
+    ),
+  );
+  const rows: Record<string, unknown>[] = [];
+  for (const result of results) {
+    const failure = classifyPostgrestResult(result, 200);
+    if (failure) {
+      assetsViewFailure(
+        context,
+        "archived_cash",
+        new PortfolioSetupError(failure.code),
+      );
+    }
+    // The select is built from strings, so the client cannot type its rows.
+    rows.push(...((result.data ?? []) as unknown as Record<string, unknown>[]));
+  }
+  try {
+    return rows.map(holdingRowOf);
+  } catch (error) {
+    return assetsViewFailure(context, "archived_cash", error);
+  }
 }
 
 // More than a dialog's list can hold; past it the list is cut and logged.

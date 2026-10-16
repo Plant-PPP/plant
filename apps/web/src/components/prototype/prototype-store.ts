@@ -33,7 +33,7 @@ import {
   createHolding,
   deleteOperation as ledgerDeleteOperation,
   type Ledger,
-  MANUAL,
+  storedOf,
   refused,
   refusedWrite,
   updateHolding,
@@ -63,6 +63,8 @@ export type PrototypeState = Ledger & {
   realEstate: ReadonlyMap<string, RealEstateSheet>;
   // The closed months a write changed, by period, with the day it did.
   recalculated: ReadonlyMap<string, string>;
+  // Every debt event and holding is in the store.
+  partial: false;
   // Newest first.
   liabilities: Liability[];
   // Each debt's events, by debt.
@@ -216,13 +218,9 @@ export function initialState(
     portfolios: fixtures.portfolios,
     archivedAccounts: [],
     archivedPortfolios: [],
-    holdings: fixtures.holdings.map((row) => ({
-      holding: row.holding,
-      accountId: row.account.id,
-      portfolioId: row.portfolio.id,
-      closed: fixtures.closed.includes(row.id),
-      origin: MANUAL,
-    })),
+    holdings: fixtures.holdings.map((row) =>
+      storedOf(row, fixtures.closed.includes(row.id)),
+    ),
     movements,
     nextEntryOrder:
       Math.max(-1, ...fixtures.movements.map((each) => each.entry_order)) + 1,
@@ -236,6 +234,7 @@ export function initialState(
     renewals: new Map(),
     realEstate: new Map(Object.entries(fixtures.realEstate ?? {})),
     recalculated: new Map(),
+    partial: false,
     liabilities: fixtures.liabilities,
     liabilityEvents: new Map(Object.entries(fixtures.liabilityEvents ?? {})),
     liabilityCollateral: new Map(

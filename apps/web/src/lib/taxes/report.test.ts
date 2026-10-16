@@ -137,6 +137,7 @@ function ledger(): ClosesState {
     liabilities: [],
     liabilityEvents: new Map(),
     recalculated: new Map(),
+    partial: false,
   };
 }
 
@@ -405,4 +406,66 @@ it("counts no placement left out that started after the year ended", () => {
     isPlazoFijo: () => true,
   });
   expect(report.leftOut).toBe(0);
+});
+
+it("counts the dollars a debt payment took after the year's end", () => {
+  const base = ledger();
+  const state: ClosesState = {
+    ...base,
+    liabilities: [
+      {
+        id: "d1",
+        kind: "usd_debt",
+        label: "Préstamo",
+        lender: null,
+        currency: "USD",
+        uva: false,
+        instrument_symbol: null,
+        balance: "500",
+        installment: null,
+        annual_rate: null,
+        installments_left: null,
+        next_due_on: null,
+        matures_on: null,
+        accrues: false,
+        opened_on: null,
+        anchored_on: "2025-11-01",
+      },
+    ],
+    liabilityEvents: new Map([
+      [
+        "d1",
+        [
+          {
+            id: "e1",
+            liability_id: "d1",
+            created_at: "2026-02-01T12:00:00Z",
+            kind: "payment",
+            date: "2026-02-01",
+            amount: "40",
+            annual_rate: null,
+            cash_holding_id: CASH.id,
+            takes_cash: true,
+            settles: false,
+          },
+        ],
+      ],
+    ]),
+  };
+  const options = {
+    year: "2025",
+    officialBuy: OFFICIAL_BUY,
+    euroBuy: null,
+    leftOut: leftOutOf(state, NONE),
+    isPlazoFijo: () => true,
+  };
+  const { wealth } = taxReport(state, options);
+  expect(wealth.complete).toBe(true);
+  // 100 dollars today and 40 a payment took in February, at 1000.
+  expect(wealth.lines.find((line) => line.name === "Efectivo USD")?.ars).toBe(
+    "140000",
+  );
+  expect(taxReport({ ...state, partial: true }, options).wealth.complete).toBe(
+    false,
+  );
 });

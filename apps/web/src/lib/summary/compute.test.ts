@@ -9,6 +9,7 @@ describe("a feed rate older than QUOTE_CARRY_DAYS", () => {
     liabilities: [],
     liabilityEvents: new Map(),
     recalculated: new Map(),
+    partial: false,
     quotes: {
       fxRates: [{ kind: "mep", rate_date: "2026-10-01", sell: "1300" }],
       prices: [],

@@ -4,6 +4,7 @@ import { buildFixtures } from "@/lib/prototype/fixtures";
 import { closesOf, monthDetail, yearsOfCloses } from "@/lib/summary/compute";
 
 import { markRecalculated } from "./prototype-closes";
+import { writeLiabilityEvent } from "./prototype-debts-store";
 import {
   deleteHolding,
   deleteOperation,
@@ -540,4 +541,20 @@ describe("the closes' manual prices", () => {
     const unpriced = { ...state, manualPrices: [] };
     expect(closesOf(unpriced, "ars")).not.toEqual(closesOf(state, "ars"));
   });
+});
+
+it("marks the closed month a debt payment changes, and none before it", () => {
+  const loan = "e5000000-0000-4000-8000-000000000005";
+  const after = writeLiabilityEvent(
+    state,
+    { debtId: loan, id: crypto.randomUUID(), createdAt: `${TODAY}T12:00:00Z` },
+    { kind: "payment", date: "2026-09-15", amount: "500", settles: false },
+    null,
+  );
+  expect(after.result.ok).toBe(true);
+  const marked = markRecalculated(state, after.state).recalculated;
+  expect(marked.get("2026-09")).toBe(TODAY);
+  expect(state.recalculated.has("2026-08")).toBe(false);
+  expect(marked.has("2026-08")).toBe(false);
+  expect(marked.has("2026-10")).toBe(false);
 });

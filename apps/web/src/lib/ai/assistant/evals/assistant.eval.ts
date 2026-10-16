@@ -22,6 +22,7 @@ const read: ClosesRead = {
   ledgerTruncated: false,
   debtsTruncated: false,
   debtEventsTruncated: false,
+  archivedCashCount: 0,
 };
 
 jest.mock("server-only", () => ({}), { virtual: true });

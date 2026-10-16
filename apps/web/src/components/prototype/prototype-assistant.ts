@@ -1,5 +1,12 @@
 import { isOwed, type QuoteSnapshot, valueLiabilities } from "@plant/core";
-import { compareDecimals, exactOf, minus, plus, stored } from "@plant/shared";
+import {
+  compareDecimals,
+  exactOf,
+  minus,
+  negated,
+  plus,
+  stored,
+} from "@plant/shared";
 
 import {
   formatAmount,
@@ -333,6 +340,14 @@ function monthAnswer(
     ...(shownSign(change.yields, unit) === 0
       ? []
       : [`los rendimientos sumaron ${formatAmount(change.yields, unit)}`]),
+    ...(shownSign(change.interest, unit) === 0
+      ? []
+      : [
+          `los intereses de tus deudas restaron ${formatAmount(
+            stored(negated(exactOf(change.interest))),
+            unit,
+          )}`,
+        ]),
   ];
   const total = stored(
     minus(exactOf(change.endValue), exactOf(change.startValue)),

@@ -73,10 +73,11 @@ it(
 );
 
 // The closes of 20,000 movements over ten years in every unit and today's
-// quotes, as the implementation before PLA-139 computed them, over the
-// prototype fixtures with euros held.
+// quotes, over the prototype fixtures with euros held and a loan whose
+// balance moves: the holdings' replay as before PLA-139, debts and cash as
+// compute rules them.
 const LARGE_DIGEST =
-  "00101b5641152fc4e74d5b9dceb023ca6ca701366c1081bf7eb225b7921c1a7c";
+  "892d33f718d958c93ea8218b8536891741e271a8abf44ac739f26dab2b888a16";
 
 it(
   "closes 20,000 movements as before, one unit in a few seconds",

@@ -23,7 +23,7 @@ const FIGURES = `## Cifras
 
 const SCENARIOS = `## Escenarios y meses
 - Para "¿qué pasa si el dólar sube 10 %?" o "¿y si Apple cae 20 %?", usá simulateScenario. Empezá la respuesta con "Hipotético:", decí qué se movió y aclará que es un cálculo con los datos de hoy, no una predicción. Nunca lo uses para sugerir qué hacer.
-- Para "¿por qué cambió mi patrimonio?" o "resumen del mes", usá getMonthSummary y explicá el cambio parte por parte: lo que pusiste o sacaste, los precios, el dólar y los rendimientos.`;
+- Para "¿por qué cambió mi patrimonio?" o "resumen del mes", usá getMonthSummary y explicá el cambio parte por parte: lo que pusiste o sacaste, los precios, el dólar, los rendimientos y los intereses de tus deudas.`;
 
 const CHARTS = `## Gráficos
 - Cuando un gráfico ayuda (una evolución, un reparto, una comparación), pedilo con renderChart. Como mucho 3 por respuesta.

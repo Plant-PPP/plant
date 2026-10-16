@@ -12,6 +12,7 @@ it("counts money put in as a contribution, not a gain", () => {
   expect(result).toMatchObject({
     paidIn: "500",
     contributed: "500",
+    interest: "0",
     market: "0",
     result: "0",
     share: "0",
@@ -140,4 +141,21 @@ it("has no return for a loss beyond the money at work", () => {
     flows: [{ date: "2026-09-30", amount: "-1000", kind: "buy", charges: "0" }],
   });
   expect(result.share).toBeNull();
+});
+
+it("charges debts' interest without counting it in the market result", () => {
+  const result = periodResult({
+    ...MONTH,
+    startValue: "1000",
+    endValue: "990",
+    flows: [],
+    interest: "10",
+  });
+  expect(result).toMatchObject({
+    charges: "10",
+    interest: "10",
+    income: "0",
+    market: "0",
+    result: "-10",
+  });
 });

@@ -27,7 +27,12 @@ import {
   type HoldingsValuation,
   holdingsValuation,
 } from "@/lib/holdings/valuation-view";
-import { allRows, positionsOf, pricedSnapshotOf } from "@/lib/ledger/ledger";
+import {
+  allRows,
+  closedIds,
+  positionsOf,
+  pricedSnapshotOf,
+} from "@/lib/ledger/ledger";
 import { readLedger } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
 import { contextFields } from "@/lib/portfolio-setup/read";
@@ -96,11 +101,7 @@ export async function ScopeView({
   const inScope = (row: HoldingRow) =>
     kind === "account" ? row.account.id === id : row.portfolio.id === id;
   const rows = holdings.active.filter(inScope);
-  const closed = new Set(
-    ledger.holdings
-      .filter((each) => each.closed)
-      .map((each) => each.holding.id),
-  );
+  const closed = closedIds(ledger);
   const soldRows = allRows(ledger).filter(
     (row) => inScope(row) && closed.has(row.id),
   );

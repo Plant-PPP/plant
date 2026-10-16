@@ -1,3 +1,4 @@
+import { fromScaled, toScaled } from "@plant/shared";
 import { lastFunctionBodies } from "@plant/shared/testing";
 
 import {
@@ -10,8 +11,10 @@ import {
   type LiabilityEvent,
   liabilityBalance,
   liabilitiesOn,
+  liabilityChange,
   liabilityFieldsFor,
   loanToValue,
+  paysFromCash,
 } from "./history";
 import type { Liability } from "./liability";
 
@@ -664,5 +667,63 @@ describe("admitLiabilityUpdate", () => {
         today,
       ),
     ).toBeNull();
+  });
+});
+
+describe("liabilityChange", () => {
+  it("splits a month's change into its interest and the rest", () => {
+    const debt = loan();
+    const events = [
+      event({ kind: "payment", date: "2026-03-10", amount: "1000" }),
+      event({ kind: "adjustment", date: "2026-03-20", amount: "60000" }),
+    ];
+    const start = liabilityBalance(debt, events, "2026-02-28");
+    const end = liabilityBalance(debt, events, "2026-03-31");
+    const { interest, principal } = liabilityChange(start, end, "1000");
+    expect(interest).toBe(end.interestThisMonth);
+    // A debt that accrues explains a lender's figure as interest.
+    expect(principal).toBe("0");
+    const card = loan({ accrues: false, annual_rate: null });
+    const owed = liabilityChange(
+      liabilityBalance(card, events, "2026-02-28"),
+      liabilityBalance(card, events, "2026-03-31"),
+      "1000",
+    );
+    expect(owed).toEqual({ interest: "0", principal: "11000" });
+  });
+});
+
+describe("liabilityChange of a closed debt", () => {
+  it("counts what closing forgave as principal, not interest", () => {
+    const debt = loan();
+    const events = [
+      event({ kind: "adjustment", date: "2026-03-15", amount: "0" }),
+    ];
+    const start = liabilityBalance(debt, events, "2026-02-28");
+    const end = liabilityBalance(debt, events, "2026-03-31");
+    const accrued = liabilityBalance(debt, [], "2026-03-15");
+    const { interest, principal } = liabilityChange(start, end, "0");
+    expect(interest).toBe(accrued.interestThisMonth);
+    expect(principal).toBe(
+      fromScaled(-toScaled(start.balance) - toScaled(interest)),
+    );
+  });
+});
+
+describe("paysFromCash", () => {
+  it("takes cash in the debt's own currency only", () => {
+    const cash = { asset_class: "cash", currency: "USD" };
+    expect(paysFromCash(loan(), cash)).toBe(true);
+    expect(paysFromCash(loan(), { ...cash, currency: "ARS" })).toBe(false);
+    expect(paysFromCash(loan(), { ...cash, asset_class: "instrument" })).toBe(
+      false,
+    );
+    expect(paysFromCash(loan({ uva: true, currency: "ARS" }), cash)).toBe(
+      false,
+    );
+    expect(paysFromCash(loan({ currency: null }), cash)).toBe(false);
+    expect(
+      paysFromCash(loan({ currency: "EUR" }), { ...cash, currency: "EUR" }),
+    ).toBe(true);
   });
 });

@@ -213,6 +213,7 @@ export {
   type LiabilityBalance,
   liabilityBalance,
   liabilityBalances,
+  liabilityChange,
   type LiabilityEvent,
   type LiabilityEventInput,
   type LiabilityEventKind,
@@ -223,6 +224,7 @@ export {
   liabilitiesOn,
   liabilitiesToday,
   loanToValue,
+  paysFromCash,
   takesCashLink,
   takesEvents,
 } from "./liabilities/history";

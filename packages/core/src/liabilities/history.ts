@@ -91,6 +91,41 @@ export const takesCashLink = (
   debt: Pick<Liability, "currency" | "uva">,
 ): boolean => debt.currency !== null && !debt.uva;
 
+// Whether a payment of `debt` can have come from `holding`: cash in the
+// debt's currency, as move_cash requires.
+export const paysFromCash = (
+  debt: Pick<Liability, "currency" | "uva">,
+  holding: { asset_class: string; currency: string | null },
+): boolean =>
+  takesCashLink(debt) &&
+  holding.asset_class === "cash" &&
+  holding.currency === debt.currency;
+
+// How a debt's balance moved between two days, in its unit: the interest it
+// accrued (`end`'s of the month, so `start` is the end of the month before,
+// less what closing it forgave or paid off), and the rest after `paid`, new
+// principal or a lender's correction, negative when it lowered the debt.
+export function liabilityChange(
+  start: Pick<LiabilityBalance, "balance">,
+  end: Pick<
+    LiabilityBalance,
+    "balance" | "interestThisMonth" | "closingThisMonth"
+  >,
+  paid: string,
+): { interest: string; principal: string } {
+  const interest =
+    toScaled(end.interestThisMonth) - toScaled(end.closingThisMonth);
+  return {
+    interest: fromScaled(interest),
+    principal: fromScaled(
+      toScaled(end.balance) -
+        toScaled(start.balance) +
+        toScaled(paid) -
+        interest,
+    ),
+  };
+}
+
 // The fields a debt's form shows: a card never accrues, and a debt that
 // accrues has no installment (the CHECKs accrualAgrees mirrors).
 export function liabilityFieldsFor(debt: {
@@ -290,6 +325,9 @@ export type LiabilityBalance = {
   // What accrued since the month started, plus the gaps the lender's figures
   // and a settle explained as interest; 0 unless it accrues.
   interestThisMonth: string;
+  // The part of interestThisMonth a settle or the lender's 0 closed: what
+  // was forgiven, or paid off, rather than accrued.
+  closingThisMonth: string;
   open: boolean;
   // Today's balance is a projection: it accrues and no figure of the lender's
   // or settle closes it today.
@@ -300,8 +338,8 @@ export type LiabilityBalance = {
   overflow: boolean;
 };
 
-// A debt's figures today from its row (the balance and rate on its anchor
-// day) and its events.
+// A debt's figures on a day from its row (the balance and rate on its anchor
+// day) and its events; on a day before the anchor, the row's balance.
 export function liabilityBalance(
   debt: Pick<Liability, "balance" | "annual_rate" | "accrues" | "anchored_on">,
   events: readonly LiabilityEvent[],
@@ -336,8 +374,13 @@ export function liabilityBalance(
       inMonth: atMonthEnd === null ? 0n : value - accrued(balance, atMonthEnd),
     };
   };
-  const gap = (date: string, amount: bigint) => {
-    if (debt.accrues && date > monthEnd) interest += amount;
+  // What closing the debt forgave or settled within the month, part of
+  // `interest` but not interest a period result counts.
+  let closing = 0n;
+  const gap = (date: string, amount: bigint, closes = false) => {
+    if (!debt.accrues || date <= monthEnd) return;
+    interest += amount;
+    if (closes) closing += amount;
   };
 
   const sorted = [...events]
@@ -356,7 +399,7 @@ export function liabilityBalance(
     } else if (event.kind === "adjustment") {
       const figure = toScaled(event.amount);
       // Reopening a closed debt is new principal, not interest.
-      if (open) gap(event.date, figure - balance);
+      if (open) gap(event.date, figure - balance, figure === 0n);
       balance = figure;
       open = figure > 0n;
     } else {
@@ -369,7 +412,7 @@ export function liabilityBalance(
         balance = 0n;
       }
       if (event.settles) {
-        gap(event.date, -balance);
+        gap(event.date, -balance, true);
         balance = 0n;
       }
       open = balance > 0n;
@@ -389,6 +432,7 @@ export function liabilityBalance(
     rate: rateText,
     dailyInterest: fromScaled(dailyInterest),
     interestThisMonth: fromScaled(debt.accrues ? interest : 0n),
+    closingThisMonth: fromScaled(closing),
     open,
     estimated: debt.accrues && open && !closedToday,
     overpaid,
@@ -413,7 +457,7 @@ export function liabilitiesOn(
   });
 }
 
-// Each debt's figures today, from every event read.
+// Each debt's figures on a day, from every event read.
 export function liabilityBalances(
   debts: readonly Liability[],
   events: ReadonlyMap<string, readonly LiabilityEvent[]>,

@@ -23,7 +23,10 @@ const ONE: Exact = { n: 1n, d: 1n };
 // - proceeds: sales before charges, and adjustments out;
 // - income: dividends and coupons before withholding, and what yields earned
 //   or lost;
-// - charges: commissions, fees (a transfer's too), taxes and withholding;
+// - charges: commissions, fees (a transfer's too), taxes and withholding,
+//   and the interest debts accrued;
+// - interest: the part of charges that is debts' interest, which lowered
+//   the value without being a flow;
 // - contributed: paidIn less proceeds, what the user put in net;
 // - market: the change in value not explained by what was put in or taken
 //   out or by what yields brought, from prices and the dollar alone;
@@ -40,6 +43,7 @@ export type PeriodResult = {
   proceeds: string;
   income: string;
   charges: string;
+  interest: string;
   contributed: string;
   market: string;
   result: string;
@@ -53,9 +57,12 @@ export function periodResult({
   startValue,
   endValue,
   flows,
+  interest: owed = "0",
 }: {
   from: string;
   to: string;
+  // What debts accrued over the period, which lowered `endValue`.
+  interest?: string;
   startValue: string;
   endValue: string;
   flows: readonly CashFlow[];
@@ -114,8 +121,13 @@ export function periodResult({
     );
     atWork = minus(atWork, times(amount, weight));
   }
+  const interest = exactOf(owed);
+  charges = plus(charges, interest);
   const contributed = minus(paidIn, proceeds);
-  const market = minus(minus(minus(end, start), contributed), yields);
+  const market = plus(
+    minus(minus(minus(end, start), contributed), yields),
+    interest,
+  );
   const result = minus(plus(market, income), charges);
   return {
     startValue: stored(start),
@@ -124,6 +136,7 @@ export function periodResult({
     proceeds: stored(proceeds),
     income: stored(income),
     charges: stored(charges),
+    interest: stored(interest),
     contributed: stored(contributed),
     market: stored(market),
     result: stored(result),

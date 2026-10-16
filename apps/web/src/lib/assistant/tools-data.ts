@@ -646,7 +646,8 @@ export function assistantData({
     },
 
     // A month's close, or several months' together, and where net worth's
-    // change came from: what was put in, prices, the dollar and yields.
+    // change came from: what was put in, prices, the dollar, yields and the
+    // debts' interest.
     async monthSummary({ from, to }: { from?: string; to?: string }) {
       const read = await load();
       const snapshot = pricedToday(read);
@@ -688,6 +689,7 @@ export function assistantData({
           prices: change.prices,
           dollar: change.dollar,
           yields: change.yields,
+          interest: change.interest,
         },
         result: change.result,
         income: change.income,
@@ -696,7 +698,7 @@ export function assistantData({
         share: fraction(change.share),
         inflation: fraction(change.benchmarks.inflation),
         dollarMove: fraction(change.benchmarks.dollar),
-        note: "contributed es lo que puso neto (negativo si sacó); prices y dollar, lo que hicieron los precios y el dólar con lo que tenía; yields, lo que sumaron los rendimientos que se suman a la tenencia. income son los dividendos, cupones y rentas que cobró aparte, antes de retenciones, sin contar yields; charges, comisiones e impuestos. share es el rendimiento sin contar lo que puso; inflation y dollarMove, cuánto subieron la inflación y el dólar MEP en el mismo período.",
+        note: "contributed es lo que puso neto (negativo si sacó); prices y dollar, lo que hicieron los precios y el dólar con lo que tenía; yields, lo que sumaron los rendimientos que se suman a la tenencia; interest, lo que costaron los intereses de sus deudas (negativo). Pagar una deuda con plata de una cuenta no cambia nada; pagarla con plata de afuera cuenta en contributed, y tomar deuda nueva, como plata que sacó. income son los dividendos, cupones y rentas que cobró aparte, antes de retenciones, sin contar yields; charges, comisiones, impuestos e intereses de deudas (interest ya está adentro). share es el rendimiento sin contar lo que puso; inflation y dollarMove, cuánto subieron la inflación y el dólar MEP en el mismo período.",
         chart: changeChart(change, unit),
       };
     },

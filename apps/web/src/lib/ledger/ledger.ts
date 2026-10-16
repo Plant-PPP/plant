@@ -166,11 +166,24 @@ export function allRows(state: Ledger): HoldingRow[] {
   return state.holdings.flatMap((stored) => rowOfStored(state, stored) ?? []);
 }
 
-// The open holdings, as the real page's read returns them.
-export function holdingsView(state: Ledger): HoldingsView {
-  const closed = new Set(
+// A holding row as the ledger stores it.
+export const storedOf = (row: HoldingRow, closed: boolean): StoredHolding => ({
+  holding: row.holding,
+  accountId: row.account.id,
+  portfolioId: row.portfolio.id,
+  closed,
+  origin: MANUAL,
+});
+
+// The ids of the holdings that are closed.
+export const closedIds = (state: Ledger): Set<string> =>
+  new Set(
     state.holdings.filter((each) => each.closed).map((each) => each.holding.id),
   );
+
+// The open holdings, as the real page's read returns them.
+export function holdingsView(state: Ledger): HoldingsView {
+  const closed = closedIds(state);
   return {
     active: allRows(state).filter((row) => !closed.has(row.id)),
     activeTruncated: false,
@@ -537,9 +550,7 @@ export function instrumentHoldings(
   flows: CashFlow[] | null;
   value: string | null;
 } {
-  const closed = new Set(
-    state.holdings.filter((each) => each.closed).map((each) => each.holding.id),
-  );
+  const closed = closedIds(state);
   const rows = allRows(state).filter((row) => inScope(row, { symbol }));
   const open = rows.filter((row) => !closed.has(row.id));
   const { values, instruments } = holdingsValuation({

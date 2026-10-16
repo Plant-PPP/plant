@@ -13,6 +13,7 @@ const read: ClosesRead = {
   ledgerTruncated: false,
   debtsTruncated: false,
   debtEventsTruncated: false,
+  archivedCashCount: 0,
 };
 
 jest.mock("server-only", () => ({}), { virtual: true });
@@ -462,9 +463,11 @@ it("summarizes the last closed month with a waterfall that adds up", async () =>
     inProgress: false,
     sources: ["Cierres", "Movimientos", "Cotizaciones"],
   });
-  const { contributed, prices, dollar, yields } = month.breakdown;
+  const { contributed, prices, dollar, yields, interest } = month.breakdown;
+  // The fixture's loan accrues, so its interest is a part of its own.
+  expect(Number(interest)).toBeLessThan(0);
   expect(
-    [contributed, prices, dollar, yields].reduce(
+    [contributed, prices, dollar, yields, interest].reduce(
       (sum, each) => sum + Number(each),
       0,
     ),
