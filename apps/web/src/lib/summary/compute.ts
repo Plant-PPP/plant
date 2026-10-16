@@ -427,7 +427,7 @@ export function otherAt(
 
 // The holdings as they stood at the end of `date`: an instrument holding with
 // what its movements up to then left, a cash holding with today's amount
-// plus what debt payments after that day took from it, and every other open
+// plus what debt payments after that day took from it, and every other
 // holding with today's amount on every past day; those that are not
 // instruments as they stood at the end of `othersOn` when it is given.
 function holdingsAt(

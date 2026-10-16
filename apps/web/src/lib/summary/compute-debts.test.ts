@@ -362,7 +362,7 @@ describe("debts and cash in the closes", () => {
     expect(cashOn(state, "2026-07-31")).toBeUndefined();
   });
 
-  it("keeps a closed placement at its amount, as before", () => {
+  it("keeps a closed placement at its amount", () => {
     const state = ledger(
       [],
       [],
@@ -432,6 +432,8 @@ describe("a dollar debt seen in pesos", () => {
     expect(changeBetween(state, "ars", "2026-08", "2026-08")).toMatchObject({
       dollar: "-5000",
       prices: "0",
+      yields: "0",
+      interest: "0",
     });
   });
 });
