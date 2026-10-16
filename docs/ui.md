@@ -17,9 +17,9 @@ Every screen is built from the same pieces in `apps/web/src/components/ui`, so t
 
 - **No visible title.** The header's breadcrumb names the page; the page keeps an `sr-only` `h1`. A detail page names itself with `PageCrumbs` (`components/layout/page-crumbs.tsx`): `Activos › Bitcoin`, `Cuentas › IOL`, `Cargar › resumen.pdf`. The parent crumb is the way back, so pages have no back links.
 - **The first row is the toolbar** (`PageHeader`): filters on the left, actions on the right. It renders nothing visible when it has neither, so the content starts at the top. Page actions are outline `PageButton`s with at most one primary; anything else goes behind an icon (`IconButton size="toolbar"`) or a `⋯` menu.
-- A page whose only content is one list (Activos, Deudas) puts the list's add button in that toolbar (`SetupCard page`); a page with several lists (Cuentas) keeps each list's heading and button on its own row.
+- A page whose only content is one list (Activos, Deudas) puts the list's add button in that toolbar (`SetupCard page`) as its primary action; a page with several lists (Cuentas) keeps each list's heading and an outline add button on its own row.
 - **Sections are flat** (`Section`): a small heading with an optional icon, a one-line description, its actions on the same row, and the content below bringing its own surface (a table, a chart). A card is used only for an object in itself (a pinned chart, a settings group).
-- **Figures** are `StatTile`s in a `StatGrid`: a bordered tile with a muted label, the figure `text-2xl`, and a note that wraps. A row's figures line up whether or not their tiles carry a note.
+- **Figures** are `StatTile`s in a `StatGrid`: a bordered tile with a muted label, the figure `text-2xl`, and a note that wraps. A row's figures line up whether or not their tiles carry a note. A sum of nothing reads "—" with no note, and a sum where nothing has a quote reads "—" too, never a zero.
 - A switch between views of the same data (Cartera · Cuenta · Moneda, the years) is a `Segmented` tablist. A view switch that narrows the data is kept in the URL; one that only picks among tables already on screen stays in the page, and printing shows every view.
 
 ## Empty pages and lists
@@ -39,6 +39,7 @@ Every screen is built from the same pieces in `apps/web/src/components/ui`, so t
 
 ## Forms and dialogs
 
+- Forms share one scale (`FORM_TEXT`, `components/ui/form-text.ts`), in a dialog or in a settings card.
 - **Every form opens in a centered `AppDialog`**, never a `Sheet` (`ui/sheet.tsx` is only for the sidebar on mobile). The title carries an optional icon and a one-line description; labels and fields are `text-xs` from `md` (phones keep 16px inputs so iOS does not zoom).
 - **Only what the form needs is on view.** Optional fields go in a `MoreFields` disclosure named by what it holds ("Con quién, cuota, tasa y vencimientos"), open from the start when any of them has a value. Labels never say "(opcional)". An explanation goes behind an info icon with a tooltip beside its label.
 - Fields stack as `Label` over the control (`grid gap-2`), two per row (`grid grid-cols-2 gap-4`).

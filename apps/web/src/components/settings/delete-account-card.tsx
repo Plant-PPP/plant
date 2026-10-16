@@ -30,6 +30,7 @@ export function DeleteAccountCard({ onDelete }: { onDelete: () => void }) {
         <Button
           ref={button}
           type="button"
+          size="sm"
           variant="destructive"
           onClick={() => setAsking(true)}
         >

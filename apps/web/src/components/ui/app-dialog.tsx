@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FORM_TEXT } from "@/components/ui/form-text";
 import { useSubmitWhenValid } from "@/components/ui/use-submit-when-valid";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +54,8 @@ function AppDialog({
         className={cn(
           // The overlay scale: labels and fields at text-xs from md, where a
           // phone's 16px input font (which stops iOS zooming in) is not needed.
-          "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md [&_[data-slot=label]]:text-xs [&_[data-slot=select-trigger]]:text-xs md:[&_input]:text-xs md:[&_textarea]:text-xs",
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md",
+          FORM_TEXT,
           className,
         )}
         onCloseAutoFocus={(event) => {

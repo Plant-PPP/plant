@@ -84,8 +84,8 @@ export function AssetsSummary({
                     ? ` · ${kinds.total.missing} sin cotización`
                     : ""
                 }`
-              ) : kinds[kind].count > 0 &&
-                kinds[kind].missing === kinds[kind].count ? (
+              ) : kinds[kind].count === 0 ? undefined : kinds[kind].missing ===
+                kinds[kind].count ? (
                 NO_QUOTE
               ) : (
                 <ShareText

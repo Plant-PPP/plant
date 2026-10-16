@@ -165,6 +165,10 @@ export function DebtsSetup({
               .filter(Boolean)
               .join(" · ")}
           />
+          {/* The balance's own column shows only on a wide table. */}
+          <span className="text-muted-foreground block text-xs tabular-nums @2xl:hidden">
+            {todayOf(debt) ? owed(debt, todayOf(debt)!.balance) : CALCULATING}
+          </span>
         </>
       ),
     },
@@ -273,6 +277,7 @@ export function DebtsSetup({
               referenceUnit={referenceUnit}
               pending={pending}
               onChange={(param) => url.set("unit", param)}
+              triggerClassName="w-auto"
             />
           )
         }
@@ -292,9 +297,16 @@ export function DebtsSetup({
                   .join(". ") || undefined
               }
             >
-              <span className={pending ? "opacity-60" : undefined}>
-                {formatAmount(valued.total, unit)}
-              </span>
+              {live.length > 0 &&
+              live.every(
+                (debt) => !("unsaved" in debt) && values.get(debt.id) == null,
+              ) ? (
+                <MissingFigure text={NO_QUOTE} />
+              ) : (
+                <span className={pending ? "opacity-60" : undefined}>
+                  {formatAmount(valued.total, unit)}
+                </span>
+              )}
             </StatTile>
             <StatTile label="Deudas">{live.length}</StatTile>
             <StatTile label="Con cuota" note="Pagás cuota todos los meses">
