@@ -247,15 +247,71 @@ describe("debt events", () => {
         { holding_id: USD_CASH, take: false, expected: null },
       ).result;
     expect(edit(closed)).toMatchObject({ ok: true });
-    const pesos = {
+    const pesos: typeof state = {
       ...closed,
       holdings: closed.holdings.map((each) =>
         each.holding.id === USD_CASH
-          ? { ...each, holding: { ...each.holding, currency: "ARS" as const } }
+          ? ({
+              ...each,
+              holding: { ...each.holding, currency: "ARS" },
+            } as typeof each)
           : each,
       ),
     };
     expect(edit(pesos)).toEqual({ ok: false, code: "currency" });
+  });
+
+  it("gives no cash back to a closed holding in an archived account", () => {
+    const emptied = record(
+      { ...payment, amount: "2500" },
+      { holding_id: USD_CASH, take: true, expected: "2500" },
+    ).state;
+    const account = cashOf(emptied).accountId;
+    const archived: typeof state = {
+      ...emptied,
+      accounts: emptied.accounts.filter((each) => each.id !== account),
+      archivedAccounts: [
+        ...emptied.archivedAccounts,
+        emptied.accounts.find((each) => each.id === account)!,
+      ],
+    };
+    const { state: after, result } = deleteLiabilityEvent(
+      archived,
+      "e7000000-0000-4000-8000-000000000001",
+    );
+    expect(result).toMatchObject({ ok: true, cashRestored: false });
+    expect(cashOf(after).closed).toBe(true);
+  });
+
+  it("gives no cash back to a holding now in another currency", () => {
+    const taken = record(payment, {
+      holding_id: USD_CASH,
+      take: true,
+      expected: "2500",
+    }).state;
+    const pesos: typeof state = {
+      ...taken,
+      holdings: taken.holdings.map((each) =>
+        each.holding.id === USD_CASH
+          ? ({
+              ...each,
+              holding: { ...each.holding, currency: "ARS" },
+            } as typeof each)
+          : each,
+      ),
+    };
+    const { state: after, result } = deleteLiabilityEvent(
+      pesos,
+      "e7000000-0000-4000-8000-000000000001",
+    );
+    expect(result).toMatchObject({ ok: true, cashRestored: false });
+    expect(cashOf(after).holding.amount).toBe("2000");
+  });
+
+  it("drops a deleted debt's history and pledges", () => {
+    const { state: after } = deleteLiability(state, LOAN);
+    expect(after.liabilityEvents.has(LOAN)).toBe(false);
+    expect(after.liabilityCollateral.has(LOAN)).toBe(false);
   });
 
   it("refuses a debt edit the debt guard refuses", () => {

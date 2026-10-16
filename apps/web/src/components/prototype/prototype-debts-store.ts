@@ -20,10 +20,8 @@ import {
 import { z } from "zod";
 
 import type { DebtEventCode, DebtEventResult } from "@/lib/debts/events-write";
+import { archivedCode } from "@/lib/ledger/ledger";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
-
-const addDecimals = (a: string, b: string): string =>
-  stored(plus(exactOf(a), exactOf(b)));
 
 import {
   type PrototypeState,
@@ -105,10 +103,17 @@ export function deleteLiability(
   if (!state.liabilities.some((each) => each.id === id)) {
     return refusedWrite(state, "not_found");
   }
+  // Its history and pledges go with it, as the foreign keys cascade.
+  const liabilityEvents = new Map(state.liabilityEvents);
+  liabilityEvents.delete(id);
+  const liabilityCollateral = new Map(state.liabilityCollateral);
+  liabilityCollateral.delete(id);
   return {
     state: {
       ...state,
       liabilities: state.liabilities.filter((each) => each.id !== id),
+      liabilityEvents,
+      liabilityCollateral,
     },
     result: { ok: true, id },
   };
@@ -135,19 +140,28 @@ const cashLinkSchema = z
 // other cash first, which the prototype skips.
 function restoreCash(
   state: PrototypeState,
+  debt: Liability,
   event: LiabilityEvent,
 ): { state: PrototypeState; restored: boolean } {
   if (!event.takes_cash) return { state, restored: true };
   const held = state.holdings.find(
     (each) => each.holding.id === event.cash_holding_id,
   );
-  if (!held || held.holding.asset_class !== "cash" || !event.amount) {
+  if (
+    !held ||
+    held.holding.asset_class !== "cash" ||
+    held.holding.currency !== debt.currency ||
+    !event.amount ||
+    // A closed holding comes back only while its account and portfolio are
+    // open.
+    (held.closed && archivedCode(state, held) !== null)
+  ) {
     return { state, restored: false };
   }
   // A closed holding keeps the amount it had before it was emptied.
   const amount = held.closed
     ? event.amount
-    : addDecimals(held.holding.amount, event.amount);
+    : stored(plus(exactOf(held.holding.amount), exactOf(event.amount)));
   return {
     state: {
       ...state,
@@ -265,7 +279,7 @@ export function writeLiabilityEvent(
     );
   const restored =
     previous && !sameHolding
-      ? restoreCash(state, previous)
+      ? restoreCash(state, debt, previous)
       : { state, restored: true };
   // A link kept on the holding the old payment's cash went back to is checked
   // against what that holding holds now, which the caller could not read.
@@ -345,7 +359,9 @@ export function deleteLiabilityEvent(
   if (admitLiabilityEventDeletion(all, eventId)) {
     return refusedEvent(state, "settled");
   }
-  const restored = restoreCash(state, event);
+  const debt = state.liabilities.find((each) => each.id === event.liability_id);
+  if (!debt) return refusedEvent(state, "not_found");
+  const restored = restoreCash(state, debt, event);
   const liabilityEvents = new Map(restored.state.liabilityEvents);
   liabilityEvents.set(
     event.liability_id,

@@ -52,24 +52,21 @@ export async function writeCollateral(
     const read =
       classifyPostgrestResult(debt, 200) ??
       classifyPostgrestResult(current, 200);
+    const held = new Set((current.data ?? []).map((row) => row.holding_id));
+    // What is pledged now and no longer wanted: bounded by the pledges.
+    const dropped = [...held].filter((holding) => !wanted.includes(holding));
     const removed =
       read ??
-      (debt.data?.length === 0
+      (debt.data?.length === 0 || dropped.length === 0
         ? null
         : classifyPostgrestResult(
-            await (wanted.length === 0
-              ? client
-                  .from("liability_collateral")
-                  .delete()
-                  .eq("liability_id", id.data)
-              : client
-                  .from("liability_collateral")
-                  .delete()
-                  .eq("liability_id", id.data)
-                  .not("holding_id", "in", `(${wanted.join(",")})`)),
+            await client
+              .from("liability_collateral")
+              .delete()
+              .eq("liability_id", id.data)
+              .in("holding_id", dropped),
             204,
           ));
-    const held = new Set((current.data ?? []).map((row) => row.holding_id));
     const missing = wanted.filter((holding) => !held.has(holding));
     // A pledge another call added meanwhile is skipped, not refused, so the
     // rest of the batch still lands.

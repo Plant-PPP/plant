@@ -32,15 +32,14 @@ jest.mock("@/lib/supabase/server", () => ({
       }),
       delete: () => {
         calls.push("delete");
-        const filtered = {
-          not: (_column: string, _op: string, list: string) => {
-            calls.push(`keep ${list}`);
-            return answer(null, 204);
-          },
-          then: (resolve: (value: unknown) => void) =>
-            resolve({ data: null, error: null, status: 204 }),
+        return {
+          eq: () => ({
+            in: (_column: string, list: string[]) => {
+              calls.push(`drop ${list.join(",")}`);
+              return answer(null, 204);
+            },
+          }),
         };
-        return { eq: () => filtered };
       },
       upsert: async (
         rows: { holding_id: string }[],
@@ -81,7 +80,7 @@ it("removes what is no longer pledged and adds what is new", async () => {
     "select liabilities",
     "select liability_collateral",
     "delete",
-    `keep (${B})`,
+    `drop ${A}`,
     `upsert ${B} true`,
   ]);
   expect(revalidatePath).toHaveBeenCalledWith("/debts", "layout");
@@ -125,8 +124,7 @@ it("answers not found for a debt that is not the user's", async () => {
 it("removes every pledge when none is wanted", async () => {
   held = [A];
   expect(await writeCollateral(DEBT, [])).toEqual({ ok: true, id: DEBT });
-  expect(calls).toContain("delete");
-  expect(calls.some((call) => call.startsWith("keep"))).toBe(false);
+  expect(calls).toContain(`drop ${A}`);
 });
 
 it("pledges a holding named twice once, and logs the debt", async () => {
