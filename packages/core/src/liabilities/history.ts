@@ -334,8 +334,9 @@ export type LiabilityBalance = {
   // What accrued since the month started, plus the gaps the lender's figures
   // and a settle explained as interest; 0 unless it accrues.
   interestThisMonth: string;
-  // The part of interestThisMonth a settle or the lender's 0 closed the
-  // debt with, beyond or short of its balance, rather than accrued.
+  // The part of interestThisMonth a settle for less or the lender's 0 closed
+  // the debt with: what the lender let go, rather than accrued. Paying more
+  // than the balance is interest the estimate missed.
   closingThisMonth: string;
   open: boolean;
   // Today's balance is a projection: it accrues and no figure of the lender's
@@ -416,7 +417,7 @@ export function liabilityBalance(
       if (balance < 0n) {
         // Paid beyond the balance: for a debt that accrues, the difference
         // was interest; otherwise an overpayment.
-        if (debt.accrues) gap(event.date, -balance, event.settles);
+        if (debt.accrues) gap(event.date, -balance);
         else overpaid = true;
         balance = 0n;
       }

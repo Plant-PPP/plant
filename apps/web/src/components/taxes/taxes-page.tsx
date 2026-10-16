@@ -257,7 +257,8 @@ export function TaxesPage({
                 Los inmuebles y otros activos van al valor que cargaste, no a su
                 valuación fiscal. Los plazos fijos de años pasados van con el
                 monto de hoy, porque no tienen historia; el efectivo, con el de
-                hoy más lo que pagaste de deudas con ese efectivo después.
+                hoy más lo que usaste para pagar deudas después del 31 de
+                diciembre.
               </li>
               <li>No restamos deudas ni calculamos el impuesto a pagar.</li>
             </ul>
@@ -315,8 +316,8 @@ export function TaxesPage({
             <Notice variant="warning" title="Faltó algún dato">
               Un activo sin cotización ese día, el dólar comprador, un
               movimiento que no se puede pasar a pesos, o no pudimos leer todas
-              tus tenencias o pagos de deudas. Los totales dejan afuera lo que
-              no tiene valor.
+              tus tenencias o deudas. Los totales dejan afuera lo que no tiene
+              valor.
             </Notice>
           )}
           {report.leftOut > 0 && (

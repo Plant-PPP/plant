@@ -710,6 +710,56 @@ describe("liabilityChange of a closed debt", () => {
   });
 });
 
+describe("liabilityChange of a settle", () => {
+  it("counts paying beyond the balance as interest", () => {
+    const debt = loan();
+    const owed = liabilityBalance(debt, [], "2026-03-15");
+    const paid = fromScaled(toScaled(owed.balance) + toScaled("500"));
+    const events = [
+      event({
+        kind: "payment",
+        date: "2026-03-15",
+        amount: paid,
+        settles: true,
+      }),
+    ];
+    const end = liabilityBalance(debt, events, "2026-03-31");
+    expect(end.closingThisMonth).toBe("0");
+    const { interest, principal } = liabilityChange(
+      liabilityBalance(debt, events, "2026-02-28"),
+      end,
+      paid,
+    );
+    expect(interest).toBe(
+      fromScaled(toScaled(owed.interestThisMonth) + toScaled("500")),
+    );
+    expect(principal).toBe("0");
+  });
+
+  it("counts settling for less as principal", () => {
+    const debt = loan();
+    const owed = liabilityBalance(debt, [], "2026-03-15");
+    const paid = fromScaled(toScaled(owed.balance) - toScaled("500"));
+    const events = [
+      event({
+        kind: "payment",
+        date: "2026-03-15",
+        amount: paid,
+        settles: true,
+      }),
+    ];
+    const end = liabilityBalance(debt, events, "2026-03-31");
+    expect(end.closingThisMonth).toBe("-500");
+    const { interest, principal } = liabilityChange(
+      liabilityBalance(debt, events, "2026-02-28"),
+      end,
+      paid,
+    );
+    expect(interest).toBe(owed.interestThisMonth);
+    expect(principal).toBe("-500");
+  });
+});
+
 describe("paysFromCash", () => {
   it("takes cash in the debt's own currency only", () => {
     const cash = { asset_class: "cash", currency: "USD" };

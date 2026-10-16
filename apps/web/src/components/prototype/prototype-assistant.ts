@@ -338,7 +338,7 @@ function monthAnswer(
       : [
           bySign(change.interest, unit, {
             down: (size) => `los intereses de tus deudas restaron ${size}`,
-            up: (size) => `los intereses de tus deudas sumaron ${size}`,
+            up: (size) => `una corrección de tus deudas sumó ${size}`,
             even: "",
           }),
         ]),
