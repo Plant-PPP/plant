@@ -128,3 +128,13 @@ it("removes every pledge when none is wanted", async () => {
   expect(calls).toContain("delete");
   expect(calls.some((call) => call.startsWith("keep"))).toBe(false);
 });
+
+it("pledges a holding named twice once, and logs the debt", async () => {
+  const lines = captureServerLog();
+  expect(await writeCollateral(DEBT, [B, B])).toEqual({ ok: true, id: DEBT });
+  expect(calls).toContain(`upsert ${B} true`);
+  expect(lines.at(-1)).toMatchObject({
+    "plant.liability.id": DEBT,
+    "plant.liability.collateral_count": 1,
+  });
+});

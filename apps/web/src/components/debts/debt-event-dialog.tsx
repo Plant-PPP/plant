@@ -204,7 +204,12 @@ export function DebtEventDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                {fields.cashHoldingId !== "" && (
+                {/* An inactive holding takes nothing new; a payment that
+                    already took from it can still give the cash back. */}
+                {(chosen ||
+                  (fields.cashHoldingId !== "" &&
+                    initial.take &&
+                    initial.cashHoldingId === fields.cashHoldingId)) && (
                   <div className="flex items-center justify-between gap-4">
                     <Label htmlFor={`${id}-take`}>
                       Descontar ahora de la cuenta

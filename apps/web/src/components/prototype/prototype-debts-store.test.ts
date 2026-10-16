@@ -215,6 +215,22 @@ describe("debt events", () => {
     expect(cashOf(after).holding.amount).toBe("1900");
   });
 
+  it("edits a payment that emptied its cash holding", () => {
+    const emptied = record(
+      { ...payment, amount: "2500" },
+      { holding_id: USD_CASH, take: true, expected: "2500" },
+    ).state;
+    expect(cashOf(emptied).closed).toBe(true);
+    const { state: after, result } = writeLiabilityEvent(
+      emptied,
+      { eventId: "e7000000-0000-4000-8000-000000000001" },
+      { ...payment, date: "2026-10-11", amount: "2500" },
+      { holding_id: USD_CASH, take: true, expected: null },
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(cashOf(after).closed).toBe(true);
+  });
+
   it("refuses a debt edit the debt guard refuses", () => {
     const loan = state.liabilities.find((each) => each.id === LOAN)!;
     const input = {

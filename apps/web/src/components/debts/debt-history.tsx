@@ -133,6 +133,9 @@ type EventRow = LiabilityEvent & { unsaved?: true };
 const OPENED_AFTER_EVENTS =
   "La fecha del saldo es posterior al primer movimiento: elegí una igual o anterior.";
 
+const KEEPS_UNIT =
+  "Esta deuda ya tiene movimientos: no cambia de tipo ni de moneda.";
+
 const REOPENING_KEPT =
   "Este ajuste reabrió la deuda y hay movimientos después: borralos primero.";
 
@@ -175,7 +178,8 @@ function apply(state: State, change: Change): State {
 }
 
 // The debt as an edit leaves it, before the server answers: the fields the
-// form sends over the row, and the anchor the database keeps.
+// form sends over the row. An emptied opening date keeps the old anchor until
+// the page reloads the day the database falls back to.
 export const editedDebt = (
   debt: Liability,
   input: ReturnType<typeof toLiabilityInput>,
@@ -356,7 +360,9 @@ export function DebtHistory({
       ? null
       : hint === "before_opening"
         ? OPENED_AFTER_EVENTS
-        : DEBT_EVENT_MESSAGES[hint];
+        : hint === "has_history"
+          ? KEEPS_UNIT
+          : DEBT_EVENT_MESSAGES[hint];
   };
 
   function submitDebt(retry: Retry<DebtFields>, fields: DebtFields) {

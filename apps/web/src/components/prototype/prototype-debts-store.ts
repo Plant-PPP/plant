@@ -132,7 +132,7 @@ const cashLinkSchema = z
 
 // Gives back what a payment took from its cash holding, opening it again when
 // the payment had emptied it; public.restore_cash also tries the account's
-// other cash, which the prototype keeps none of.
+// other cash first, which the prototype skips.
 function restoreCash(
   state: PrototypeState,
   event: LiabilityEvent,
@@ -267,19 +267,47 @@ export function writeLiabilityEvent(
     previous && !sameHolding
       ? restoreCash(state, previous)
       : { state, restored: true };
-  const taken = link.data
-    ? takeCash(
-        restored.state,
-        debt,
-        link.data.holding_id,
-        link.data.expected,
-        link.data.take
-          ? sameHolding
-            ? stored(minus(exactOf(amount!), exactOf(previous!.amount!)))
-            : amount
-          : null,
-      )
-    : { state: restored.state, result: null };
+  // A link kept on the holding the old payment's cash went back to is checked
+  // against what that holding holds now, which the caller could not read.
+  const keptAfterRestore =
+    previous?.takes_cash === true &&
+    !sameHolding &&
+    previous.cash_holding_id === link.data?.holding_id;
+  const expected = keptAfterRestore
+    ? (restored.state.holdings.find(
+        (each) => each.holding.id === link.data!.holding_id,
+      )?.holding.amount ?? null)
+    : (link.data?.expected ?? null);
+  // A kept link that takes nothing is only a reference: its holding may have
+  // been closed since, but not moved to another currency.
+  const referenceKept =
+    link.data !== null &&
+    !link.data.take &&
+    previous?.cash_holding_id === link.data.holding_id;
+  const reference = referenceKept
+    ? state.holdings.find((each) => each.holding.id === link.data!.holding_id)
+    : undefined;
+  if (
+    referenceKept &&
+    (reference?.holding.asset_class !== "cash" ||
+      reference.holding.currency !== debt.currency)
+  ) {
+    return refusedEvent(state, "currency");
+  }
+  const taken =
+    link.data && !referenceKept
+      ? takeCash(
+          restored.state,
+          debt,
+          link.data.holding_id,
+          expected,
+          link.data.take
+            ? sameHolding
+              ? stored(minus(exactOf(amount!), exactOf(previous!.amount!)))
+              : amount
+            : null,
+        )
+      : { state: restored.state, result: null };
   if (taken.result) return refusedEvent(state, taken.result);
   const row = liabilityEventSchema.parse({
     id: previous?.id ?? (call as { id: string }).id,

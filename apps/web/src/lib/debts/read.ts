@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  type LiabilitiesValue,
   type Liability,
   type LiabilityEvent,
   liabilityEventSchema,
@@ -20,6 +21,25 @@ import {
 type Client = SupabaseClient<Database>;
 
 export const DEBTS_VIEW_EVENT = "liabilities.view";
+
+// What a debts view's line says about its figures, one rule for the list and
+// a debt's page: complete only with every quote, every event and no balance
+// past the limit.
+export function debtsViewOutcome(
+  valued: LiabilitiesValue,
+  cut: boolean,
+  overflowCount: number,
+) {
+  return {
+    "plant.outcome":
+      valued.complete && !cut && overflowCount === 0 ? "ok" : "incomplete",
+    "plant.liability.events_truncated": cut,
+    "plant.liability.overflow_count": overflowCount,
+    "plant.liability.missing_count": valued.items.filter(
+      (item) => item.value === null,
+    ).length,
+  };
+}
 
 export class DebtsReadError extends Error {
   constructor(readonly code: string) {

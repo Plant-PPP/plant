@@ -26,6 +26,7 @@ import { getSessionClaims } from "@/lib/auth/session-claims";
 import { debtPageInputs } from "@/lib/debts/page-inputs";
 import {
   DEBTS_VIEW_EVENT,
+  debtsViewOutcome,
   readCollateral,
   readLiability,
   readLiabilityEvents,
@@ -76,6 +77,8 @@ export default async function DebtPage({
     serverLog.warn(DEBTS_VIEW_EVENT, {
       ...contextFields(context),
       "plant.outcome": "not_found",
+      // Only a well-formed id: anything else is text the user typed.
+      "plant.liability.id": z.uuid().safeParse(id).success ? id : undefined,
     });
     notFound();
   };
@@ -121,13 +124,9 @@ export default async function DebtPage({
 
   serverLog.info(DEBTS_VIEW_EVENT, {
     ...contextFields(context),
-    "plant.outcome":
-      valued.complete && !events.cut && !figure.overflow ? "ok" : "incomplete",
+    ...debtsViewOutcome(valued, events.cut, figure.overflow ? 1 : 0),
     "plant.liability.id": id,
-    "plant.liability.overflow_count": figure.overflow ? 1 : 0,
-    "plant.liability.missing_count": valued.complete ? 0 : 1,
     "plant.liability.event_count": debtEvents.length,
-    "plant.liability.events_truncated": events.cut,
     "plant.liability.collateral_count": collateral.length,
     "plant.assets.unit": unit,
     "plant.quotes.dropped_count": quotes.invalidCount,
