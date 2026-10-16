@@ -78,7 +78,8 @@ import {
 // What closes are computed from: the ledger, with stored quotes covering
 // every day closeDates names, the debts and their events, the closed months
 // a write changed, by period, with the day it did, and whether a read the
-// past closes depend on was cut (debts, their events or holdings).
+// past closes depend on was cut (the ledger, debts, their events or
+// holdings).
 export type ClosesState = Ledger & {
   liabilities: readonly Liability[];
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
@@ -404,9 +405,10 @@ const rowAt = (row: HoldingRow, quantity: string): HoldingRow => ({
   holding: holdingSchema.parse({ ...row.holding, amount: quantity }),
 });
 
-// A holding that is not an instrument as it stood at the end of `date`: an
-// open one with today's amount, a closed one with nothing, and a cash one
-// also with what debt payments after that day took from it.
+// A holding that is not an instrument as it stood at the end of `date`, at
+// today's amount; a cash one also with what debt payments after that day
+// took from it, nothing of its own once closed (archiving keeps the amount
+// it had).
 export function otherAt(
   state: ClosesState,
   row: HoldingRow,
@@ -416,7 +418,7 @@ export function otherAt(
   const payments = taken.get(row.id);
   const after =
     payments?.from[lastOnOrBefore(payments.dates, date) + 1] ?? ZERO;
-  if (closed.has(row.id)) {
+  if (row.holding.asset_class === "cash" && closed.has(row.id)) {
     return after.n === 0n ? [] : [rowAt(row, stored(after))];
   }
   if (after.n === 0n) return [row];

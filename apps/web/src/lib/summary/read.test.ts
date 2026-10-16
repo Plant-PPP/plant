@@ -10,6 +10,7 @@ const readHoldings = jest.fn();
 const readArchivedCash = jest.fn();
 const readLiabilities = jest.fn();
 const readLiabilityEvents = jest.fn();
+const readLedger = jest.fn();
 
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("@/lib/holdings/read", () => ({
@@ -18,11 +19,7 @@ jest.mock("@/lib/holdings/read", () => ({
 }));
 jest.mock("@/lib/ledger/read", () => ({
   ...jest.requireActual("@/lib/ledger/read"),
-  readLedger: async () => ({
-    ledger: emptyLedger(),
-    truncated: false,
-    symbolOf: new Map(),
-  }),
+  readLedger: () => readLedger(),
 }));
 jest.mock("@/lib/debts/read", () => ({
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
@@ -80,6 +77,11 @@ const read = () =>
   });
 
 beforeEach(() => {
+  readLedger.mockResolvedValue({
+    ledger: emptyLedger(),
+    truncated: false,
+    symbolOf: new Map(),
+  });
   readHoldings.mockResolvedValue({
     active: [cash(OPEN, "100")],
     activeTruncated: false,
@@ -123,6 +125,7 @@ it("reads no archived holding when no payment took cash", async () => {
 });
 
 it.each([
+  ["ledger", { ledger: true }],
   ["events", { events: true }],
   ["debts", { debts: true }],
   ["holdings", { holdings: true }],
@@ -138,6 +141,11 @@ it.each([
   readHoldings.mockResolvedValue({
     active: [],
     activeTruncated: "holdings" in cut,
+  });
+  readLedger.mockResolvedValue({
+    ledger: emptyLedger(),
+    truncated: "ledger" in cut,
+    symbolOf: new Map(),
   });
   expect((await read()).state.partial).toBe(true);
 });

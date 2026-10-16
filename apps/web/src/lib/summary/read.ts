@@ -99,7 +99,11 @@ export async function readCloses(
     liabilities: debts.active,
     liabilityEvents: events.byLiability,
     recalculated: new Map(),
-    partial: events.cut || debts.activeTruncated || holdings.activeTruncated,
+    partial:
+      read.truncated ||
+      events.cut ||
+      debts.activeTruncated ||
+      holdings.activeTruncated,
   };
   const quotes = await readQuotesOn(
     createQuoteReader(client),

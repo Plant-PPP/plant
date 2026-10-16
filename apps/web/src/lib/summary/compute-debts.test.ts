@@ -194,13 +194,15 @@ describe("debts and cash in the closes", () => {
   });
 
   it("gives an emptied archived holding back only what payments took", () => {
+    // Archiving keeps the amount the holding had before the last payment.
     const state = ledger(
       [loan()],
-      [payment("2026-08-10", "1000", true)],
-      { amount: "1000" },
+      [payment("2026-08-05", "600", true), payment("2026-08-10", "400", true)],
+      { amount: "400" },
       true,
     );
     expect(cashOn(state, "2026-07-31")).toBe("1000");
+    expect(cashOn(state, "2026-08-05")).toBe("400");
     expect(cashOn(state, "2026-08-10")).toBeUndefined();
     expect(month(state, "2026-08").figures.result).toBe("0");
   });
@@ -359,15 +361,30 @@ describe("debts and cash in the closes", () => {
     const state = ledger([loan()], [], {}, true);
     expect(cashOn(state, "2026-07-31")).toBeUndefined();
   });
+
+  it("keeps a closed placement at its amount, as before", () => {
+    const state = ledger(
+      [],
+      [],
+      {
+        asset_class: "fixed_term",
+        annual_rate: "0.3",
+        started_on: "2026-01-02",
+        matures_on: "2026-07-01",
+      },
+      true,
+    );
+    expect(cashOn(state, "2026-03-31")).toBe("7000");
+  });
 });
 
 describe("a dollar debt seen in pesos", () => {
   // 100 dollars owed, 10 of them paid on 2026-08-10 from 60 in cash, as the
   // dollar went from 1000 to 1100 pesos in August.
-  function dollars(): ClosesState {
+  function dollars(fromCash = true): ClosesState {
     const base = ledger(
       [loan({ kind: "usd_debt", currency: "USD", balance: "100" })],
-      [payment("2026-08-10", "10", true)],
+      [payment("2026-08-10", "10", fromCash)],
       { currency: "USD", amount: "50" },
     );
     return {
@@ -400,6 +417,21 @@ describe("a dollar debt seen in pesos", () => {
       prices: "0",
       yields: "0",
       interest: "0",
+    });
+  });
+
+  it("moves a debt with the dollar from its balance at the start", () => {
+    // Paid from outside: cash stays at 50, the debt goes from 100 to 90.
+    const state = dollars(false);
+    expect(month(state, "2026-08").figures).toMatchObject({
+      startValue: "-40000",
+      endValue: "-34000",
+      contributed: "11000",
+      market: "-5000",
+    });
+    expect(changeBetween(state, "ars", "2026-08", "2026-08")).toMatchObject({
+      dollar: "-5000",
+      prices: "0",
     });
   });
 });

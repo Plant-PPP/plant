@@ -257,8 +257,8 @@ export function TaxesPage({
                 Los inmuebles y otros activos van al valor que cargaste, no a su
                 valuación fiscal. Los plazos fijos de años pasados van con el
                 monto de hoy, porque no tienen historia; el efectivo, con el de
-                hoy más lo que usaste para pagar deudas después del 31 de
-                diciembre.
+                hoy más lo que sacaste de ese efectivo para pagar deudas después
+                del 31 de diciembre.
               </li>
               <li>No restamos deudas ni calculamos el impuesto a pagar.</li>
             </ul>
