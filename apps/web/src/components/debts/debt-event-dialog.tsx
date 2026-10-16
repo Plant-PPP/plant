@@ -48,6 +48,7 @@ export function DebtEventDialog({
   mode,
   initial,
   initialError,
+  linkedTo = null,
   tookFrom = null,
   unit,
   cash,
@@ -60,7 +61,8 @@ export function DebtEventDialog({
   mode: "create" | "edit";
   initial: DebtEventFields;
   initialError?: string;
-  // The holding the stored payment took its cash from, if any.
+  // The holding the stored payment names, and the one it took its cash from.
+  linkedTo?: string | null;
   tookFrom?: string | null;
   // The debt's unit, as amounts are typed in it.
   unit: string;
@@ -199,11 +201,12 @@ export function DebtEventDialog({
                           {`${each.label} · ${formatAmount(each.amount, each.currency)}`}
                         </SelectItem>
                       ))}
-                      {fields.cashHoldingId !== "" && !chosen && (
-                        <SelectItem value={fields.cashHoldingId}>
-                          Una cuenta que ya no está activa
-                        </SelectItem>
-                      )}
+                      {linkedTo !== null &&
+                        !cash.some((each) => each.id === linkedTo) && (
+                          <SelectItem value={linkedTo}>
+                            Una cuenta que ya no está activa
+                          </SelectItem>
+                        )}
                     </SelectContent>
                   </Select>
                 </div>

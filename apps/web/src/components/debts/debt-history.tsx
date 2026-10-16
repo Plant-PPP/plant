@@ -290,8 +290,8 @@ export function DebtHistory({
     referenceDollar,
   });
   const value = valued.items[0]?.value ?? null;
-  // A pledged holding the user no longer holds stays listed, so it can be
-  // unpledged; it has no value to count.
+  // A pledged holding the user no longer holds stays in the dialog, so it can
+  // be unpledged, and out of the figures: it has no value to count.
   const known = new Set(pledgeOptions.map((each) => each.id));
   const options: PledgeOption[] = [
     ...pledgeOptions,
@@ -304,7 +304,9 @@ export function DebtHistory({
         value: null,
       })),
   ];
-  const pledged = options.filter((each) => shown.collateral.includes(each.id));
+  const pledged = pledgeOptions.filter((each) =>
+    shown.collateral.includes(each.id),
+  );
   const pledgedValue = sumOrNull(pledged.map((each) => each.value));
   const ltv =
     value !== null && pledgedValue !== null && pledged.length > 0
@@ -734,6 +736,7 @@ export function DebtHistory({
         <DebtEventDialog
           key={eventDialog.event?.id ?? eventDialog.kind}
           mode={eventDialog.event ? "edit" : "create"}
+          linkedTo={eventDialog.event?.cash_holding_id ?? null}
           tookFrom={
             eventDialog.event?.takes_cash
               ? eventDialog.event.cash_holding_id

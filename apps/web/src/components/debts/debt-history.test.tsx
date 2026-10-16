@@ -155,6 +155,7 @@ it("lists a pledge on a holding no longer held, with no value", () => {
       actions={ACTIONS}
     />,
   );
-  expect(html).toContain("Garantía");
-  expect(html).toContain("Sin cotización de algún activo");
+  // Nothing it can value is pledged, so no coverage tile shows.
+  expect(html).not.toContain("Préstamo sobre garantía");
+  expect(html).not.toContain("Sin cotización de algún activo");
 });

@@ -19,9 +19,10 @@ type Client = SupabaseClient<Database>;
 
 const holdingIdsSchema = z.array(z.uuid()).max(PAGE_ROW_LIMIT);
 
-// Leaves exactly `holdingIds` pledged for one of the user's debts: removes
-// the rest, then adds what is missing. Each step stands on its own, so a
-// retry after a failure ends in the same set. A debt that is not the user's
+// Saves the holdings pledged for one of the user's debts: removes the pledges
+// it read that are no longer wanted, then adds what is missing. Each step
+// stands on its own, so a retry after a failure ends in the set asked for; a
+// pledge another call added meanwhile is kept. A debt that is not the user's
 // (gone, or another user's) and another user's holding answer not found.
 export async function writeCollateral(
   debtId: unknown,
