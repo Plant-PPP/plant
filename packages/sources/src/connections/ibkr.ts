@@ -102,14 +102,31 @@ const FLEX_RANGE_DAYS = 365;
 const FLEX_RANGES_MAX = 10;
 // IBKR answers 1018 to requests that come too close together.
 const FLEX_RANGE_PAUSE_MS = 1_000;
-// What IBKR answers for a range before the account existed.
+// What IBKR answers for a range that starts on a day with no statement: a
+// holiday or weekend (January 1st), or before the account existed.
 const NO_STATEMENT = "1003";
+// A range's start is moved this many days at most past a holiday: each try
+// IBKR refuses counts toward its lockout for too many failed requests (1025).
+const START_SHIFTS_MAX = 3;
 
 class NoStatement extends Error {}
 
 type FlexRange = { fd: string; td: string };
 
 const flexDay = (day: string) => day.replaceAll("-", "");
+
+// The day itself, or the Monday after a weekend: IBKR has no statement that
+// starts on a Saturday or a Sunday.
+function nextWeekday(day: string): string {
+  const weekDay = new Date(`${day}T12:00:00Z`).getUTCDay();
+  return weekDay === 6
+    ? addDays(day, 2)
+    : weekDay === 0
+      ? addDays(day, 1)
+      : day;
+}
+const isoOfFlexDay = (day: string) =>
+  `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`;
 
 // The date ranges a period of operations is asked in, up to yesterday; none
 // when it has no start, so the query's own period applies.
@@ -122,7 +139,8 @@ export function flexRanges(period: ReadPeriod, today: string): FlexRange[] {
   while (to >= period.from && ranges.length < FLEX_RANGES_MAX) {
     const start = addDays(to, -(FLEX_RANGE_DAYS - 1));
     const from = start < period.from ? period.from : start;
-    ranges.push({ fd: flexDay(from), td: flexDay(to) });
+    const weekday = nextWeekday(from);
+    if (weekday <= to) ranges.push({ fd: flexDay(weekday), td: flexDay(to) });
     to = addDays(from, -1);
   }
   return ranges;
@@ -334,18 +352,27 @@ export function ibkrConnection({
       if (ranges.length === 0) {
         return operations([await statement(credentials)]);
       }
-      // A year IBKR has no statement for is before the account opened: the
-      // older ones are too, so the read stops there with what it has.
+      // A range IBKR has no statement for starts on a day without one: it is
+      // asked again from the next days. One that still has none is before
+      // the account opened, as the older ones are, so the read stops there
+      // with what it has.
       const statements: string[] = [];
-      for (const [index, range] of ranges.entries()) {
-        if (index > 0) await sleep(FLEX_RANGE_PAUSE_MS);
-        try {
-          statements.push(await statement(credentials, range));
-        } catch (error) {
-          if (!(error instanceof NoStatement)) throw error;
-          if (statements.length === 0) throw unavailable();
-          break;
+      let asked = 0;
+      years: for (const range of ranges) {
+        for (let shift = 0; shift <= START_SHIFTS_MAX; shift += 1) {
+          const fd = flexDay(addDays(isoOfFlexDay(range.fd), shift));
+          if (fd > range.td) break;
+          if (asked > 0) await sleep(FLEX_RANGE_PAUSE_MS);
+          asked += 1;
+          try {
+            statements.push(await statement(credentials, { ...range, fd }));
+            continue years;
+          } catch (error) {
+            if (!(error instanceof NoStatement)) throw error;
+          }
         }
+        if (statements.length === 0) throw unavailable();
+        break;
       }
       return operations(statements);
     },
