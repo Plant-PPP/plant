@@ -307,8 +307,8 @@ SELECT is(
   pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
                       WHERE source_connection_id = 'a5000000-0000-4000-8000-0000000000a5'
                         AND status = 'reading' $$),
-  '42501',
-  'but not a sync being read'
+  NULL,
+  'and cancels a sync being read'
 );
 
 -- Beto's: Ana's file imports would count against her month's quota below.
@@ -329,8 +329,8 @@ SELECT is(
   pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
                       WHERE id = 'b9000000-0000-4000-8000-0000000000f1'
                         AND status = 'queued' $$),
-  '42501',
-  'nor their own queued file import'
+  NULL,
+  'and their own queued file import'
 );
 
 RESET ROLE;

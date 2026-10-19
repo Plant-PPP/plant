@@ -1,4 +1,6 @@
 import {
+  addDays,
+  buenosAiresDate,
   type Currency,
   PLANT_USER_AGENT,
   usListingSymbol,
@@ -20,7 +22,7 @@ import {
   rejected,
   unavailable,
 } from "./http";
-import { type ConnectionDeps, defineConnection } from "./port";
+import { type ConnectionDeps, defineConnection, type ReadPeriod } from "./port";
 import { elements, textOf } from "./xml";
 
 export const IBKR_FLEX_BASE_URL =
@@ -93,6 +95,57 @@ const absolute = (value: string | null) =>
 const atLevel = (row: Record<string, string>, level: string) =>
   row.levelOfDetail === undefined || row.levelOfDetail.toUpperCase() === level;
 
+// The Flex Web Service reads at most 365 days per request; a longer period is
+// asked a year at a time, newest first, up to ten years, one request after
+// another: IBKR throttles a token's requests.
+const FLEX_RANGE_DAYS = 365;
+const FLEX_RANGES_MAX = 10;
+// IBKR answers 1018 to requests that come too close together.
+const FLEX_RANGE_PAUSE_MS = 1_000;
+// What IBKR answers for a range that starts on a day with no statement: a
+// holiday or weekend (January 1st), or before the account existed.
+const NO_STATEMENT = "1003";
+// A range's start is moved this many days at most past a holiday: each try
+// IBKR refuses counts toward its lockout for too many failed requests (1025).
+const START_SHIFTS_MAX = 3;
+
+class NoStatement extends Error {}
+
+type FlexRange = { fd: string; td: string };
+
+const flexDay = (day: string) => day.replaceAll("-", "");
+
+// The day itself, or the Monday after a weekend: IBKR has no statement that
+// starts on a Saturday or a Sunday.
+function nextWeekday(day: string): string {
+  const weekDay = new Date(`${day}T12:00:00Z`).getUTCDay();
+  return weekDay === 6
+    ? addDays(day, 2)
+    : weekDay === 0
+      ? addDays(day, 1)
+      : day;
+}
+const isoOfFlexDay = (day: string) =>
+  `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`;
+
+// The date ranges a period of operations is asked in, up to yesterday; none
+// when it has no start, so the query's own period applies.
+export function flexRanges(period: ReadPeriod, today: string): FlexRange[] {
+  if (!period.from) return [];
+  const ranges: FlexRange[] = [];
+  // Today's statement does not exist until the day closes (1003).
+  const yesterday = addDays(today, -1);
+  let to = period.to && period.to < yesterday ? period.to : yesterday;
+  while (to >= period.from && ranges.length < FLEX_RANGES_MAX) {
+    const start = addDays(to, -(FLEX_RANGE_DAYS - 1));
+    const from = start < period.from ? period.from : start;
+    const weekday = nextWeekday(from);
+    if (weekday <= to) ranges.push({ fd: flexDay(weekday), td: flexDay(to) });
+    to = addDays(from, -1);
+  }
+  return ranges;
+}
+
 // Interactive Brokers through the Flex Web Service: a Flex token only runs
 // the user's Flex queries, so it cannot trade. Plant asks for the query's
 // statement (SendRequest), then fetches it (GetStatement), waiting while
@@ -126,16 +179,26 @@ export function ibkrConnection({
   };
 
   // The reference of the statement IBKR is generating for the query.
-  const request = async ({ token, queryId }: IbkrCredentials) => {
-    const xml = await flex("SendRequest", { t: token, q: queryId });
+  const request = async (
+    { token, queryId }: IbkrCredentials,
+    range?: FlexRange,
+  ) => {
+    const xml = await flex("SendRequest", {
+      t: token,
+      q: queryId,
+      ...range,
+    });
     const reference = textOf(xml, "ReferenceCode");
     if (textOf(xml, "Status") === "Success" && reference) return reference;
+    if (range && textOf(xml, "ErrorCode") === NO_STATEMENT) {
+      throw new NoStatement();
+    }
     throw failureOf(xml);
   };
 
-  const statement = async (credentials: IbkrCredentials) => {
+  const statement = async (credentials: IbkrCredentials, range?: FlexRange) => {
     budget.start();
-    const reference = await request(credentials);
+    const reference = await request(credentials, range);
     const xml = await budget.poll([0, ...STATEMENT_WAITS_MS], async () => {
       const answer = await flex("GetStatement", {
         t: credentials.token,
@@ -199,63 +262,74 @@ export function ibkrConnection({
     return reading;
   };
 
-  const operations = (xml: string) => {
+  // Each statement's operations, the same one read in two ranges once.
+  const operations = (statements: readonly string[]) => {
     const found: DraftOperation[] = [];
+    const seen = new Set<string>();
     let skipped = 0;
-    for (const each of elements(xml, "Trade")) {
-      if (!atLevel(each, "EXECUTION")) continue;
-      const side = each.buySell?.toUpperCase();
-      const quantity = absolute(decimalOf(each.quantity));
-      const currency = currencyOf(each.currency);
-      const symbol = symbolOf(each);
-      if (
-        (side !== "BUY" && side !== "SELL") ||
-        !positive(quantity) ||
-        currency === null ||
-        symbol === null
-      ) {
-        skipped += 1;
-        continue;
+    const add = (operation: DraftOperation) => {
+      const key =
+        operation.reference && `${operation.kind}:${operation.reference}`;
+      if (key && seen.has(key)) return;
+      if (key) seen.add(key);
+      found.push(operation);
+    };
+    for (const xml of statements) {
+      for (const each of elements(xml, "Trade")) {
+        if (!atLevel(each, "EXECUTION")) continue;
+        const side = each.buySell?.toUpperCase();
+        const quantity = absolute(decimalOf(each.quantity));
+        const currency = currencyOf(each.currency);
+        const symbol = symbolOf(each);
+        if (
+          (side !== "BUY" && side !== "SELL") ||
+          !positive(quantity) ||
+          currency === null ||
+          symbol === null
+        ) {
+          skipped += 1;
+          continue;
+        }
+        const price = decimalOf(each.tradePrice);
+        const amount = absolute(decimalOf(each.proceeds));
+        const charges = absolute(decimalOf(each.ibCommission));
+        add({
+          date: isoDate(each.tradeDate ?? each.dateTime),
+          kind: side === "BUY" ? "purchase" : "sale",
+          symbol,
+          quantity,
+          price: positive(price) ? price : null,
+          amount: positive(amount) ? amount : null,
+          charges,
+          reference: (each.tradeID ?? "").slice(0, 40) || null,
+          currency,
+          confidence: "high",
+          page: null,
+        });
       }
-      const price = decimalOf(each.tradePrice);
-      const amount = absolute(decimalOf(each.proceeds));
-      const charges = absolute(decimalOf(each.ibCommission));
-      found.push({
-        date: isoDate(each.tradeDate ?? each.dateTime),
-        kind: side === "BUY" ? "purchase" : "sale",
-        symbol,
-        quantity,
-        price: positive(price) ? price : null,
-        amount: positive(amount) ? amount : null,
-        charges,
-        reference: (each.tradeID ?? "").slice(0, 40) || null,
-        currency,
-        confidence: "high",
-        page: null,
-      });
-    }
-    for (const each of elements(xml, "CashTransaction")) {
-      if (each.type !== "Dividends" || !atLevel(each, "DETAIL")) continue;
-      const amount = decimalOf(each.amount);
-      const currency = currencyOf(each.currency);
-      const symbol = symbolOf(each);
-      if (!positive(amount) || currency === null || symbol === null) {
-        skipped += 1;
-        continue;
+      for (const each of elements(xml, "CashTransaction")) {
+        if (each.type !== "Dividends" || !atLevel(each, "DETAIL")) continue;
+        const amount = decimalOf(each.amount);
+        const currency = currencyOf(each.currency);
+        const symbol = symbolOf(each);
+        if (!positive(amount) || currency === null || symbol === null) {
+          skipped += 1;
+          continue;
+        }
+        add({
+          date: isoDate(each.dateTime ?? each.settleDate ?? each.reportDate),
+          kind: "dividend",
+          symbol,
+          quantity: null,
+          price: null,
+          amount,
+          charges: null,
+          reference: (each.transactionID ?? "").slice(0, 40) || null,
+          currency,
+          confidence: "high",
+          page: null,
+        });
       }
-      found.push({
-        date: isoDate(each.dateTime ?? each.settleDate ?? each.reportDate),
-        kind: "dividend",
-        symbol,
-        quantity: null,
-        price: null,
-        amount,
-        charges: null,
-        reference: (each.transactionID ?? "").slice(0, 40) || null,
-        currency,
-        confidence: "high",
-        page: null,
-      });
     }
     return operationsReading(found, skipped);
   };
@@ -272,9 +346,35 @@ export function ibkrConnection({
       budget.start();
       await request(credentials);
     },
-    async read(credentials, draft) {
-      const xml = await statement(credentials);
-      return draft === "holdings" ? holdings(xml) : operations(xml);
+    async read(credentials, draft, period) {
+      if (draft === "holdings") return holdings(await statement(credentials));
+      const ranges = flexRanges(period, buenosAiresDate(now()));
+      if (ranges.length === 0) {
+        return operations([await statement(credentials)]);
+      }
+      // A range IBKR has no statement for starts on a day without one: it is
+      // asked again from the next days. One that still has none is before
+      // the account opened, as the older ones are, so the read stops there
+      // with what it has.
+      const statements: string[] = [];
+      let asked = 0;
+      years: for (const range of ranges) {
+        for (let shift = 0; shift <= START_SHIFTS_MAX; shift += 1) {
+          const fd = flexDay(addDays(isoOfFlexDay(range.fd), shift));
+          if (fd > range.td) break;
+          if (asked > 0) await sleep(FLEX_RANGE_PAUSE_MS);
+          asked += 1;
+          try {
+            statements.push(await statement(credentials, { ...range, fd }));
+            continue years;
+          } catch (error) {
+            if (!(error instanceof NoStatement)) throw error;
+          }
+        }
+        if (statements.length === 0) throw unavailable();
+        break;
+      }
+      return operations(statements);
     },
   });
 }

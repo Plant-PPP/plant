@@ -7,8 +7,9 @@ jest.mock("@/lib/request-id-server", () => ({
   currentRequestId: async () => undefined,
 }));
 const startImport = jest.fn();
+const cancelImport = jest.fn();
 jest.mock("@plant/jobs", () => ({
-  inngestJobRunner: () => ({ startImport }),
+  inngestJobRunner: () => ({ startImport, cancelImport }),
 }));
 
 type Answer = {
@@ -45,6 +46,15 @@ jest.mock("@/lib/supabase/server", () => ({
           writes.push({ table, verb });
           return builder;
         },
+        update: (body: unknown) => {
+          verb = "update";
+          writes.push({ table, verb, body });
+          return builder;
+        },
+        in: (column: string, values: unknown) => {
+          filters[column] = values;
+          return builder;
+        },
         eq: (column: string, value: unknown) => {
           filters[column] = value;
           return builder;
@@ -71,7 +81,7 @@ import { captureServerLog } from "@/lib/log/capture-server-log";
 import { CONSENT_VERSION } from "@/lib/consent";
 
 import { IMPORTS_PER_MONTH } from "./review";
-import { acceptTerms, finishUpload, startUpload } from "./write";
+import { acceptTerms, discardImport, finishUpload, startUpload } from "./write";
 
 const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n");
 const blobOf = (bytes: Uint8Array) => new Blob([new Uint8Array(bytes)]);
@@ -463,5 +473,46 @@ describe("acceptTerms", () => {
         })),
       },
     ]);
+  });
+});
+
+describe("discardImport", () => {
+  it("fails a ready import or one in flight with no failure, and stops its read", async () => {
+    writes.length = 0;
+    cancelImport.mockReset();
+    let asked: Filters = {};
+    answers.imports = jest.fn((_verb: string, filters: Filters) => {
+      asked = filters;
+      return { status: 200, data: [{ id: UPLOAD }] };
+    }) as unknown as jest.Mock<Answer>;
+    expect(await discardImport(UPLOAD)).toEqual({ ok: true });
+    expect(writes).toEqual([
+      { table: "imports", verb: "update", body: { status: "failed" } },
+    ]);
+    expect(asked).toEqual({
+      id: UPLOAD,
+      status: ["ready", "queued", "reading"],
+    });
+    expect(cancelImport).toHaveBeenCalledWith({
+      importId: UPLOAD,
+      userId: USER,
+    });
+  });
+
+  it("finds nothing to discard in one already confirmed or gone", async () => {
+    cancelImport.mockReset();
+    answers.imports = jest.fn(() => ({
+      status: 200,
+      data: [],
+    })) as unknown as jest.Mock<Answer>;
+    expect(await discardImport(UPLOAD)).toEqual({
+      ok: false,
+      code: "not_found",
+    });
+    expect(cancelImport).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id that is not one", async () => {
+    expect(await discardImport("x")).toEqual({ ok: false, code: "invalid" });
   });
 });

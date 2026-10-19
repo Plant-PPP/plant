@@ -449,8 +449,9 @@ export async function assignImportAccount(
 export type DiscardResult =
   { ok: true } | { ok: false; code: "invalid" | "not_found" | "failed" };
 
-// Discards one of the user's ready imports they will not confirm: it is failed
-// with no failure, and leaves the list.
+// Discards one of the user's imports: a ready one they will not confirm, or
+// one still queued or being read, whose read is cancelled. It is failed with
+// no failure and leaves the list; the read, if it runs on, writes nothing.
 export async function discardImport(importId: unknown): Promise<DiscardResult> {
   const claims = await getSessionClaims();
   const line: Line = {
@@ -471,7 +472,7 @@ export async function discardImport(importId: unknown): Promise<DiscardResult> {
       .from("imports")
       .update({ status: "failed" })
       .eq("id", parsed.data)
-      .eq("status", "ready")
+      .in("status", ["ready", "queued", "reading"])
       .select("id");
     if (classifyPostgrestResult(updated, 200)) {
       throw updated.error ?? new Error("import not discarded");
@@ -479,6 +480,16 @@ export async function discardImport(importId: unknown): Promise<DiscardResult> {
     if (updated.data?.length !== 1) {
       log(line, "not_found");
       return { ok: false, code: "not_found" };
+    }
+    // A run still reading it stops at its next step; one that has ended
+    // ignores the event.
+    try {
+      await inngestJobRunner().cancelImport({
+        importId: parsed.data,
+        userId: line.userId,
+      });
+    } catch (error) {
+      log({ ...line, step: "job" }, "failed", error);
     }
     log(line, "ok");
     revalidatePath("/import");

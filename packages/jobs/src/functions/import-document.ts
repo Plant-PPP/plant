@@ -21,6 +21,9 @@ import { inngest } from "../client";
 export const IMPORT_RETRIES = 3;
 
 export const IMPORT_REQUESTED_EVENT = "plant/import.requested";
+// The user cancelled the import: its run stops at its next step, freeing the
+// user's one read at a time for the next import.
+export const IMPORT_CANCELLED_EVENT = "plant/import.cancelled";
 
 // An import as the job reads it: whose it is, where it stands, and what it
 // reads: an uploaded file, or an account's holdings or operations at its
@@ -436,6 +439,7 @@ export const importDocument = (deps: ImportJobDeps) =>
       // One file at a time per user, so one user's statements do not hold
       // everyone else's.
       concurrency: { key: "event.data.userId", limit: 1 },
+      cancelOn: [{ event: IMPORT_CANCELLED_EVENT, match: "data.importId" }],
       retries: IMPORT_RETRIES,
       onFailure: ({ event }) =>
         failAbandonedImport(deps, event.data.event.data),

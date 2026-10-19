@@ -1,5 +1,8 @@
 import { inngest } from "./client";
-import { IMPORT_REQUESTED_EVENT } from "./functions/import-document";
+import {
+  IMPORT_CANCELLED_EVENT,
+  IMPORT_REQUESTED_EVENT,
+} from "./functions/import-document";
 
 // What the web app asks of the background jobs; it never names the engine.
 export interface JobRunner {
@@ -13,6 +16,8 @@ export interface JobRunner {
     userId: string;
     retry?: string;
   }): Promise<void>;
+  // Stops the read of an import the user cancelled, if one is running.
+  cancelImport(input: { importId: string; userId: string }): Promise<void>;
 }
 
 export function inngestJobRunner(client = inngest): JobRunner {
@@ -21,6 +26,12 @@ export function inngestJobRunner(client = inngest): JobRunner {
       await client.send({
         id: retry ? `import-${importId}-${retry}` : `import-${importId}`,
         name: IMPORT_REQUESTED_EVENT,
+        data: { importId, userId },
+      });
+    },
+    async cancelImport({ importId, userId }) {
+      await client.send({
+        name: IMPORT_CANCELLED_EVENT,
         data: { importId, userId },
       });
     },

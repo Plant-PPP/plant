@@ -80,6 +80,9 @@ export type ApiKeyActions = {
     draft: ConnectionDraft,
     period?: ReadPeriod,
   ) => Promise<SyncResult>;
+  // Cancels the sync still running, by its import; where none is given, a
+  // running sync cannot be stopped from the card.
+  cancel?: (importId: string) => Promise<{ ok: boolean }>;
 };
 
 // ── The registry ────────────────────────────────────────────────────────────
