@@ -370,7 +370,7 @@ describe("readImportForReview", () => {
     expect(read!.rows[1]).not.toHaveProperty("assetClass");
   });
 
-  it("labels a synced balance by the sync, not a document", async () => {
+  it("gives a synced balance no source, since the whole sync is the account", async () => {
     const read = await readImportForReview(
       clientWith(
         [
@@ -397,10 +397,10 @@ describe("readImportForReview", () => {
       "i1",
       INSTRUMENTS,
     );
-    expect(read!.rows[0]!.source).toBe("De la sincronización");
+    expect(read!.rows[0]!.source).toBe("");
   });
 
-  it("labels a synced holding by the sync, not a document", async () => {
+  it("gives a synced holding no source", async () => {
     const read = await readImportForReview(
       clientWith(
         [
@@ -417,7 +417,7 @@ describe("readImportForReview", () => {
       "i1",
       INSTRUMENTS,
     );
-    expect(read!.rows[0]!.source).toBe("De la sincronización");
+    expect(read!.rows[0]!.source).toBe("");
   });
 
   it("leaves the price of a dollar line of a dollar bond for the user", async () => {
@@ -563,7 +563,7 @@ describe("readImportForReview", () => {
       },
     ]);
   });
-  it("labels a synced operation and debt by the sync, not a document", async () => {
+  it("gives a synced operation and debt no source, unless it names no instrument", async () => {
     const SYNC = {
       ...IMPORT,
       document: null,
@@ -623,12 +623,10 @@ describe("readImportForReview", () => {
       INSTRUMENTS,
     );
     expect(read?.operations?.map(({ source }) => source)).toEqual([
-      "De la sincronización",
+      "",
       "La sincronización no dice qué activo es",
     ]);
-    expect(read?.debts?.map(({ source }) => source)).toEqual([
-      "De la sincronización",
-    ]);
+    expect(read?.debts?.map(({ source }) => source)).toEqual([""]);
   });
 
   it("keeps the currency of an operation named by an alias ending in D", async () => {
