@@ -1,3 +1,7 @@
+import { buenosAiresDate } from "@plant/shared";
+
+const TODAY = buenosAiresDate(new Date());
+
 const getSessionClaims = jest.fn();
 const readHoldings = jest.fn();
 const readInstruments = jest.fn();
@@ -124,8 +128,8 @@ beforeEach(() => {
   );
   read.mockResolvedValue({
     fxRates: [
-      { kind: "mep", rate_date: "2026-10-09", sell: "1200" },
-      { kind: "ccl", rate_date: "2026-10-09", sell: "1250" },
+      { kind: "mep", rate_date: TODAY, sell: "1200" },
+      { kind: "ccl", rate_date: TODAY, sell: "1250" },
     ],
     prices: [],
   });
