@@ -2,7 +2,7 @@
 
 import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { Badge } from "@/components/ui/badge";
-import { exactUnitPrice } from "@plant/core";
+import { exactUnitPrice, type Listing, normalizeSymbol } from "@plant/core";
 import {
   buenosAiresDate,
   type Currency,
@@ -13,11 +13,15 @@ import {
 import { Pencil, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { useCatalog } from "@/components/holdings/instrument-market";
 import {
+  useCatalog,
+  useInstrumentMarket,
+} from "@/components/holdings/instrument-market";
+import {
+  type DollarLine,
   InstrumentPicker,
   lineOf,
 } from "@/components/holdings/instrument-picker";
@@ -214,7 +218,7 @@ export function ImportOperationsReview({
   );
   const [symbolShown, setSymbolShown] = useState("all");
   const [editing, setEditing] = useState<string | null>(null);
-  const [attention] = useState(
+  const [attention, setAttention] = useState(
     () =>
       new Set(
         (item.operations ?? [])
@@ -275,6 +279,70 @@ export function ImportOperationsReview({
       current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
   };
+
+  // An instrument the sync or the document named but the catalog lacks is
+  // looked up in the market once: an exact listing is added and chosen, so
+  // only what the market does not list is left to pick.
+  const market = useInstrumentMarket();
+  const looked = useRef(false);
+  useEffect(() => {
+    if (looked.current || !market) return;
+    looked.current = true;
+    const unknown = [
+      ...new Set(
+        (item.operations ?? []).flatMap((row) =>
+          row.symbol === "" && row.unknownSymbol ? [row.unknownSymbol] : [],
+        ),
+      ),
+    ];
+    for (const called of unknown) {
+      void (async () => {
+        const found = await settle(
+          market.search(called, marketsFor(institution)),
+        );
+        if (found === "rejected" || !found.ok) return;
+        const exact = exactListing(found.listings, called);
+        if (!exact) return;
+        const added = await settle(
+          market.add(exact.listing.symbol, exact.listing.market),
+        );
+        if (added === "rejected" || !added.ok) return;
+        addToCatalog(added.instrument);
+        const currency = exact.line ? "USD" : added.instrument.currency;
+        const resolved = (row: EditedOperation) =>
+          row.symbol === "" &&
+          item.operations?.find((each) => each.id === row.id)?.unknownSymbol ===
+            called;
+        const next = (item.operations ?? [])
+          .map(edited)
+          .map((row) =>
+            resolved(row)
+              ? { ...row, symbol: added.instrument.symbol, currency }
+              : row,
+          );
+        setRows((current) =>
+          current.map((row) =>
+            resolved(row)
+              ? { ...row, symbol: added.instrument.symbol, currency }
+              : row,
+          ),
+        );
+        // One the market completed goes to the table with the rest.
+        const done = new Set(
+          next
+            .filter(
+              (row) =>
+                row.symbol === added.instrument.symbol &&
+                missingFields(finalOf(row), today).length === 0,
+            )
+            .map((row) => row.id),
+        );
+        setAttention(
+          (current) => new Set([...current].filter((id) => !done.has(id))),
+        );
+      })();
+    }
+  }, [market, item.operations, institution, addToCatalog, today]);
 
   function confirm() {
     if (!complete) return;
@@ -427,7 +495,7 @@ export function ImportOperationsReview({
             </Button>
           )}
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Tipo</span>
             <Select
@@ -438,6 +506,7 @@ export function ImportOperationsReview({
               }
             >
               <SelectTrigger
+                className="w-full"
                 aria-label={`Tipo de la operación ${index + 1}`}
                 aria-invalid={invalid(index, "kind")}
               >
@@ -488,7 +557,10 @@ export function ImportOperationsReview({
                 change(row.id, { currency: currency as Currency })
               }
             >
-              <SelectTrigger aria-label={`Moneda de la operación ${index + 1}`}>
+              <SelectTrigger
+                className="w-full"
+                aria-label={`Moneda de la operación ${index + 1}`}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -508,12 +580,7 @@ export function ImportOperationsReview({
             Elegí el tipo para completar el resto.
           </p>
         ) : (
-          <div
-            className={cn(
-              "grid gap-3",
-              trade ? "sm:grid-cols-4" : "sm:grid-cols-3",
-            )}
-          >
+          <div className={cn("grid gap-3", "sm:grid-cols-4")}>
             {trade ? (
               <>
                 <Figure
@@ -823,6 +890,24 @@ export function ImportOperationsReview({
       </div>
     </div>
   );
+}
+
+// The market's listing for exactly what an import called an instrument: its
+// own symbol, or one of its dollar lines (GOGLD is GOOGL's MEP line).
+export function exactListing(
+  listings: readonly Listing[],
+  called: string,
+): { listing: Listing; line: DollarLine | null } | null {
+  const wanted = normalizeSymbol(called);
+  for (const listing of listings) {
+    if (normalizeSymbol(listing.symbol) === wanted) {
+      return { listing, line: null };
+    }
+    if (listing.lines?.some((each) => normalizeSymbol(each) === wanted)) {
+      return { listing, line: wanted.endsWith("C") ? "C" : "D" };
+    }
+  }
+  return null;
 }
 
 // A figure as the table shows it, or a dash where there is none.
