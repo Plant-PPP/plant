@@ -29,7 +29,7 @@ The export is text from the user's browser, up to 5 MB, parsed on the server (`r
 |       | Vector                                                                                | Control                                                                                           |
 | ----- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | **S** | Writing as another user                                                               | Session claims; RLS and composite keys bind every row to `auth.uid()`                             |
-| **T** | Pointing a movement at another user's holding or operation; forging the amount column | Composite foreign keys; the RPC alone writes and moves the amount; `user_id` not granted          |
+| **T** | Pointing a movement at another user's holding or operation; forging the amount column | Composite foreign keys; the RPC alone writes movements; `user_id` not granted                     |
 | **R** | Denying an import                                                                     | Each write is logged with the request id, user and counts                                         |
 | **I** | Reading another user's history                                                        | RLS; pentest spec reads B's rows as A                                                             |
 | **D** | A huge or crafted file                                                                | 5 MB and 5000-row caps before parsing; linear regular expressions; at most 2000 rows per RPC call |
@@ -44,4 +44,4 @@ The export is text from the user's browser, up to 5 MB, parsed on the server (`r
 
 ## Residual risk
 
-A sync or a hand edit that sets a cash amount shifts that cash's past days, as before cash had a history; accepted, since today's balance comes from the broker. The import is not atomic across operations and cash: a failure part way leaves what was written, and reading the file again completes it without writing anything twice.
+The user can still set their own cash amount directly (the column grant the edit form uses; the form leaves it alone once the cash has a history): it only misstates their own figures. A sync or a hand edit that sets a cash amount shifts that cash's past days, as before cash had a history; accepted, since today's balance comes from the broker. The import is not atomic across operations and cash: a failure part way leaves what was written, and reading the file again completes it without writing anything twice.
