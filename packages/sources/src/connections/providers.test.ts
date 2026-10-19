@@ -18,7 +18,7 @@ import {
   ROXOM_CREDENTIALS,
   WALLBIT_CREDENTIALS,
 } from "./fixtures.test-support";
-import { ibkrConnection } from "./ibkr";
+import { flexRanges, ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
 import { balanceOf, mercadoPagoConnection } from "./mercadopago";
 import { nexoConnection } from "./nexo";
@@ -228,6 +228,45 @@ describe("ibkr's period", () => {
     expect(reading.operations).toHaveLength(100);
     expect(reading.operations[0]!.date).toBe(day(99));
     expect(reading.read.skippedRows).toBe(0);
+  });
+});
+
+describe("ibkr's ranges", () => {
+  it("asks a year at a time, newest first, up to two years, from the period's start", () => {
+    expect(flexRanges({ from: "2025-01-01", to: null }, "2026-10-19")).toEqual([
+      { fd: "20251020", td: "20261019" },
+      { fd: "20250101", td: "20251019" },
+    ]);
+    expect(
+      flexRanges({ from: "2018-01-01", to: "2026-10-19" }, "2026-10-19"),
+    ).toHaveLength(2);
+    expect(flexRanges({ from: null, to: null }, "2026-10-19")).toEqual([]);
+  });
+
+  it("asks IBKR for each range and reads every operation once", async () => {
+    fake.answer = (request) => ({
+      status: 200,
+      type: "xml",
+      body: request.path.endsWith("/SendRequest")
+        ? "<FlexStatementResponse><Status>Success</Status><ReferenceCode>1</ReferenceCode></FlexStatementResponse>"
+        : `<FlexQueryResponse><FlexStatements count="1"><FlexStatement toDate="20261019"><Trades><Trade currency="USD" symbol="AAPL" tradeDate="20251020" quantity="1" tradePrice="100" proceeds="-100" ibCommission="0" buySell="BUY" tradeID="7" levelOfDetail="EXECUTION" /></Trades></FlexStatement></FlexStatements></FlexQueryResponse>`,
+    });
+    const reading = (await ibkrConnection({
+      ...deps(),
+      now: () => new Date("2026-10-19T15:00:00Z"),
+      sleep: async () => undefined,
+    }).read(IBKR_CREDENTIALS, "operations", {
+      from: "2025-01-01",
+      to: null,
+    })) as OperationsReading;
+    const asked = fake.requests
+      .filter((each) => each.path.endsWith("/SendRequest"))
+      .map((each) => [each.query.get("fd"), each.query.get("td")]);
+    expect(asked).toEqual([
+      ["20251020", "20261019"],
+      ["20250101", "20251019"],
+    ]);
+    expect(reading.operations).toHaveLength(1);
   });
 });
 
