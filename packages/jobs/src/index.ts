@@ -2,6 +2,10 @@ import type { ServeHandlerOptions } from "inngest";
 
 import { DEV_SERVER_MODE, inngest } from "./client";
 import {
+  backfillFxRates,
+  type FxBackfillJobDeps,
+} from "./functions/backfill-fx-rates";
+import {
   deleteExpiredFiles,
   type FileDeletionJobDeps,
 } from "./functions/delete-expired-files";
@@ -32,6 +36,10 @@ export type {
   ImportToRead,
 } from "./functions/import-document";
 export type { PriceAlertsPort, QuoteJobDeps } from "./functions/refresh-quotes";
+export type {
+  FxBackfillJobDeps,
+  FxHistoryStorePort,
+} from "./functions/backfill-fx-rates";
 export { inngestJobRunner, type JobRunner } from "./job-runner";
 
 const DEV_SERVE_ORIGIN = "http://127.0.0.1:3000";
@@ -44,13 +52,14 @@ const RUNS_JOBS = DEV_SERVER_MODE || process.env.PLANT_RUN_JOBS === "1";
 // Vercel integration are signed, so they keep working. `satisfies` makes a
 // misspelled option a type error instead of a silent default.
 //
-// refresh-quotes, import-document, delete-expired-files and
-// delete-orphan-files register in dev-server mode, and on a deployment only
+// refresh-quotes, backfill-fx-rates, import-document, delete-expired-files
+// and delete-orphan-files register in dev-server mode, and on a deployment only
 // where PLANT_RUN_JOBS is "1" (the one environment whose Supabase they may
 // write); only then are their dependencies built. Dev mode checks no signature, so its registered URL is
 // the loopback `next dev` binds, never the request's Host.
 export function createServeOptions(opts: {
   quotes?: () => QuoteJobDeps;
+  fxHistory?: () => FxBackfillJobDeps;
   imports?: () => ImportJobDeps;
   files?: () => FileDeletionJobDeps;
   orphans?: () => OrphanFileJobDeps;
@@ -61,6 +70,7 @@ export function createServeOptions(opts: {
       ? [
           ping,
           ...(opts.quotes ? [refreshQuotes(opts.quotes())] : []),
+          ...(opts.fxHistory ? [backfillFxRates(opts.fxHistory())] : []),
           ...(opts.imports ? [importDocument(opts.imports())] : []),
           ...(opts.files ? [deleteExpiredFiles(opts.files())] : []),
           ...(opts.orphans ? [deleteOrphanFiles(opts.orphans())] : []),

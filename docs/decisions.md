@@ -2,6 +2,14 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-19 · IOL syncs in review, and the dollar's history
+
+- **Past dollar rates come from ArgentinaDatos' daily series**, official (`oficial`), MEP (`bolsa`) and CCL (`contadoconliqui`), so an operation dated before the quotes job ran can be written: every movement carries those three rates of its day. The `backfill-fx-rates` job runs daily at 06:40 in Buenos Aires (and on the event `plant/quotes.fx_backfill`), reads the three series whole and hands the days before today to `backfill_fx_rates`, a thousand rows at a time.
+- **`backfill_fx_rates` only fills gaps**: SECURITY DEFINER, executed only by the service role, it inserts official, MEP and CCL rows dated before today with source `argentinadatos` and `ON CONFLICT DO NOTHING`, so a rate the hourly job saved is never replaced. The insert guard lets a past day in only while that function runs (a transaction-local flag it sets and clears, checked together with `current_user = 'postgres'`), so the service role still cannot insert a past day directly. A buying rate above the selling one, which old official days print, is dropped, as `fx_rates` refuses it.
+- **An IOL trade takes its currency and its charges from its detail** (`/api/v2/operaciones/{numero}`), which the list leaves out; the charges are the net and VAT in the trade's currency, and a charge in the other one (the market fee in pesos on a dollar trade) is left for the user. A dividend or rent payment is read from the row that names the currency it was paid in (`NVDA US$`); its twin with no amount is dropped.
+- **IOL's panels name a line's currency by code** (`"1"` pesos, `"2"` dollars) as well as by name, and a dollar line's symbol and description may differ from its peso line's (GOGLD, "Cedear Google Inc.", for GOOGL, "Cedear Alphabet Inc. Cl. A"). A dollar line goes with the peso line of the same symbol without its D or C, else the same description, else the one peso symbol its stem spells in order; a search for the line finds the CEDEAR, and the review looks up every instrument an import named but the catalog lacks, adding and choosing an exact listing by itself.
+- **A ready import can be discarded**, and a new sync of an account replaces its syncs of the same kind still waiting for review: both are failed with no failure and leave the list and the account card.
+
 ## 2026-10-16 · Debt and cash history in the closes (PLA-164)
 
 - **Each close values a debt at its balance that day**, computed from its events; before its anchor it keeps its row's balance, even before `opened_on`: cash has no history, so a loan whose money sits in cash stays neutral before it was taken.

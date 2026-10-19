@@ -9,7 +9,12 @@ jest.mock("@/lib/supabase/service-role", () => ({
 import { QuoteStoreError } from "@plant/core";
 import { Constants } from "@plant/shared";
 
-import { priceAlertsSink, quotedInstruments, quoteSink } from "./quote-sink";
+import {
+  fxHistorySink,
+  priceAlertsSink,
+  quotedInstruments,
+  quoteSink,
+} from "./quote-sink";
 
 const [, , SOURCE] = Constants.public.Enums.quote_source;
 
@@ -109,6 +114,43 @@ describe("priceAlertsSink", () => {
     await expect(priceAlertsSink().meet()).rejects.toThrow(
       "price alerts: 42501",
     );
+  });
+});
+
+describe("fxHistorySink", () => {
+  it("fails without the secret key, so the job logs it", async () => {
+    mockClient = null;
+    await expect(fxHistorySink().backfill([])).rejects.toThrow("unconfigured");
+  });
+
+  it("sends the rows to the backfill function as the service role", async () => {
+    const fetch = jest.fn<
+      Promise<Response>,
+      [string | URL | Request, RequestInit?]
+    >(
+      async () =>
+        new Response("1", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    mockClient = createClient("http://127.0.0.1:54321", "test-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch },
+    });
+    const row = {
+      kind: "mep",
+      rate_date: "2026-07-01",
+      buy: null,
+      sell: "1190.25",
+    } as const;
+    expect(await fxHistorySink().backfill([row])).toBe(1);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      "http://127.0.0.1:54321/rest/v1/rpc/backfill_fx_rates",
+    );
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+      p_rows: [row],
+    });
   });
 });
 
