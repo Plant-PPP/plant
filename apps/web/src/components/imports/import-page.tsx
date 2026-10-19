@@ -9,7 +9,6 @@ import {
   Camera,
   CircleAlert,
   CircleCheck,
-  CircleDot,
   FileUp,
   Files,
   LoaderCircle,
@@ -52,26 +51,40 @@ const NO_ACCOUNT = "none";
 
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
-// An import's status as a row shows it: a colored icon and its label.
-function StatusBadge({ item }: { item: ImportItem }) {
-  const busy = isBusy(item.status);
-  const Icon = busy
-    ? LoaderCircle
-    : item.status === "ready"
-      ? CircleDot
-      : item.status === "failed"
-        ? CircleAlert
-        : CircleCheck;
+// An import's status as its row's action: a disabled button while it is
+// read, the button to review it once it is ready, and a quiet line once it is
+// confirmed or failed.
+function StatusAction({
+  item,
+  reviewHref,
+}: {
+  item: ImportItem;
+  reviewHref: (id: string) => string;
+}) {
+  if (isBusy(item.status)) {
+    return (
+      <PageButton type="button" disabled>
+        <LoaderCircle aria-hidden className="animate-spin" />
+        Analizando
+      </PageButton>
+    );
+  }
+  if (item.status === "ready") {
+    return (
+      <PageButton asChild>
+        <Link href={reviewHref(item.id)}>Revisar</Link>
+      </PageButton>
+    );
+  }
+  const failed = item.status === "failed";
+  const Icon = failed ? CircleAlert : CircleCheck;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
+    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
       <Icon
         aria-hidden
         className={cn(
           "size-3.5 shrink-0",
-          busy && "text-muted-foreground animate-spin",
-          item.status === "ready" && "text-primary",
-          item.status === "failed" && "text-destructive",
-          item.status === "confirmed" && "text-gain",
+          failed ? "text-destructive" : "text-gain",
         )}
       />
       {IMPORT_STATUS_LABELS[item.status]}
@@ -172,15 +185,10 @@ export function ImportPage({
     {
       id: "status",
       header: "Estado",
-      size: 248,
+      size: 136,
       cell: ({ row: { original: item } }) => (
-        <span className="flex items-center justify-end gap-3 whitespace-nowrap">
-          <StatusBadge item={item} />
-          {item.status === "ready" && (
-            <PageButton asChild>
-              <Link href={reviewHref(item.id)}>Revisar</Link>
-            </PageButton>
-          )}
+        <span className="flex justify-end whitespace-nowrap">
+          <StatusAction item={item} reviewHref={reviewHref} />
         </span>
       ),
       meta: { className: "text-right" },
