@@ -7,7 +7,7 @@ import {
 } from "@/lib/ledger/ledger-fixture.test-support";
 
 const readHoldings = jest.fn();
-const readArchivedCash = jest.fn();
+const readUnlistedCash = jest.fn();
 const readLiabilities = jest.fn();
 const readLiabilityEvents = jest.fn();
 const readLedger = jest.fn();
@@ -15,7 +15,7 @@ const readLedger = jest.fn();
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("@/lib/holdings/read", () => ({
   readHoldings: (...args: unknown[]) => readHoldings(...args),
-  readArchivedCash: (...args: unknown[]) => readArchivedCash(...args),
+  readUnlistedCash: (...args: unknown[]) => readUnlistedCash(...args),
 }));
 jest.mock("@/lib/ledger/read", () => ({
   ...jest.requireActual("@/lib/ledger/read"),
@@ -24,6 +24,9 @@ jest.mock("@/lib/ledger/read", () => ({
 jest.mock("@/lib/debts/read", () => ({
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
   readLiabilityEvents: (...args: unknown[]) => readLiabilityEvents(...args),
+}));
+jest.mock("@/lib/cash/read", () => ({
+  readCashMovements: async () => ({ byHolding: new Map(), cut: false }),
 }));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({
@@ -86,7 +89,7 @@ beforeEach(() => {
     active: [cash(OPEN, "100")],
     activeTruncated: false,
   });
-  readArchivedCash.mockResolvedValue([cash(EMPTIED, "50")]);
+  readUnlistedCash.mockResolvedValue([cash(EMPTIED, "50")]);
   readLiabilities.mockResolvedValue({
     active: [debt],
     activeTruncated: false,
@@ -102,7 +105,7 @@ beforeEach(() => {
 
 it("reads the archived holdings only the debts' payments took cash from", async () => {
   const { state, archivedCashCount } = await read();
-  expect(readArchivedCash).toHaveBeenCalledWith({}, context, [EMPTIED]);
+  expect(readUnlistedCash).toHaveBeenCalledWith({}, context, [EMPTIED]);
   expect(readHoldings).toHaveBeenCalledWith({}, context, { archived: false });
   expect(archivedCashCount).toBe(1);
   expect(
@@ -119,9 +122,9 @@ it("reads no archived holding when no payment took cash", async () => {
     byLiability: new Map([["d1", [take(EMPTIED, false)]]]),
     cut: false,
   });
-  readArchivedCash.mockClear();
+  readUnlistedCash.mockClear();
   expect((await read()).archivedCashCount).toBe(0);
-  expect(readArchivedCash).not.toHaveBeenCalled();
+  expect(readUnlistedCash).not.toHaveBeenCalled();
 });
 
 it.each([

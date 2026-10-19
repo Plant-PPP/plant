@@ -27,9 +27,13 @@ const ONE: Exact = { n: 1n, d: 1n };
 //   and the interest debts accrued;
 // - interest: the part of charges that is debts' interest, which lowered
 //   the value without being a flow;
+// - kept: what operations settled in cash the user held left in the
+//   holdings, their income less their charges, which moved the value
+//   without being money put in or taken out;
 // - contributed: paidIn less proceeds, what the user put in net;
 // - market: the change in value not explained by what was put in or taken
-//   out or by what yields brought, from prices and the dollar alone;
+//   out or by what yields and settled flows brought, from prices and the
+//   dollar alone;
 // - result: market plus income less charges;
 // - share: result over the money at work, each flow weighted by the part of
 //   the period it was in (the modified Dietz return), so putting money in
@@ -44,6 +48,7 @@ export type PeriodResult = {
   income: string;
   charges: string;
   interest: string;
+  kept: string;
   contributed: string;
   market: string;
   result: string;
@@ -89,6 +94,7 @@ export function periodResult({
   let income = ZERO;
   let charges = ZERO;
   let yields = ZERO;
+  let kept = ZERO;
   // The money at work: the start value, plus each flow in for the part of
   // the period from the start of its day, less each flow out for the part
   // after the end of its day, since the money worked the day it left. An
@@ -109,6 +115,11 @@ export function periodResult({
       yields = plus(yields, amount);
       continue;
     }
+    if (flow.kind === "settled") {
+      income = plus(income, amount, paid);
+      kept = plus(kept, amount);
+      continue;
+    }
     if (flow.kind === "buy") {
       paidIn = plus(paidIn, negated(amount), negated(paid));
     } else proceeds = plus(proceeds, amount, paid);
@@ -125,7 +136,7 @@ export function periodResult({
   charges = plus(charges, interest);
   const contributed = minus(paidIn, proceeds);
   const market = plus(
-    minus(minus(minus(end, start), contributed), yields),
+    minus(minus(minus(minus(end, start), contributed), yields), kept),
     interest,
   );
   const result = minus(plus(market, income), charges);
@@ -137,6 +148,7 @@ export function periodResult({
     income: stored(income),
     charges: stored(charges),
     interest: stored(interest),
+    kept: stored(kept),
     contributed: stored(contributed),
     market: stored(market),
     result: stored(result),

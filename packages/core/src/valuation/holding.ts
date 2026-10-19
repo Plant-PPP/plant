@@ -153,10 +153,11 @@ export function classBranch<
   ) as unknown as Branch<C, L, O>;
 }
 
-// The same rule as the holdings_class_fields CHECK, per class.
+// The same rule as the holdings_class_fields CHECK, per class. Cash with a
+// history may stand at 0, as the holdings_amount_at_least_zero CHECK allows.
 export const holdingSchema = z.discriminatedUnion("asset_class", [
   classBranch("instrument").extend(common),
-  classBranch("cash").extend(common),
+  classBranch("cash").extend({ ...common, amount: nonNegativeDecimalSchema }),
   classBranch("fixed_term").extend(common),
   classBranch("real_estate").extend(common),
   classBranch("other").extend(common),

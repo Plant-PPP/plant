@@ -20,11 +20,14 @@ import type { LedgerStep } from "./replay";
 // the cost it takes, an income less its withholding). Its kind says which,
 // and `charges` what of it went to commissions, fees and taxes. A yield is
 // what the holding earned (positive) or lost (negative) in its own units,
-// valued that day: a return, never money paid in or out.
+// valued that day: a return, never money paid in or out. A settled flow is
+// what an operation or a cash movement left in the user's holdings, paid in
+// cash they already held: its income less its charges, `charges` of it what
+// went to commissions, fees and taxes; never money paid in or out either.
 export type CashFlow = {
   date: string;
   amount: string;
-  kind: "buy" | "sell" | "income" | "yield";
+  kind: "buy" | "sell" | "income" | "yield" | "settled";
   charges: string;
 };
 
@@ -100,7 +103,9 @@ export function returnsOf(
   all: readonly CashFlow[],
   { date, value }: { date: string; value: string },
 ): Returns {
-  const flows = all.filter((flow) => flow.kind !== "yield");
+  const flows = all.filter(
+    (flow) => flow.kind !== "yield" && flow.kind !== "settled",
+  );
   let paidIn = ZERO;
   let paidOut = ZERO;
   for (const flow of flows) {

@@ -21,7 +21,8 @@ export const lastClosed = (
 
 // Where a change came from, as a waterfall: net worth at the start, each
 // part, and net worth at the end. The parts add up to the end exactly; what
-// yields added and what the debts' interest cost show only when nonzero.
+// yields added, what operations settled in cash left and what the debts'
+// interest cost show only when nonzero.
 export function changeChart(change: ChangeBetween, unit: ChatUnit): ChartPart {
   const contributed = exactOf(change.contributed).n;
   const title =
@@ -44,6 +45,9 @@ export function changeChart(change: ChangeBetween, unit: ChatUnit): ChartPart {
       ...(exactOf(change.yields).n === 0n
         ? []
         : [{ label: "Rendimientos", value: change.yields }]),
+      ...(exactOf(change.kept).n === 0n
+        ? []
+        : [{ label: "Cobros y gastos en efectivo", value: change.kept }]),
       ...(exactOf(change.interest).n === 0n
         ? []
         : [{ label: "Intereses de deudas", value: change.interest }]),

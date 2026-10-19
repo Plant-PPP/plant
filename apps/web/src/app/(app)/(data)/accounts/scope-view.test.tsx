@@ -11,6 +11,7 @@ jest.mock("@/lib/auth/session-claims", () => ({
   getSessionClaims: async () => ({ sub: "u1" }),
 }));
 jest.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
+jest.mock("@/lib/cash/view", () => ({ accountCash: async () => [] }));
 jest.mock("@/lib/request-id-server", () => ({
   currentRequestId: async () => undefined,
 }));
@@ -35,6 +36,7 @@ jest.mock("@/lib/connections/write", () => ({
 import type * as React from "react";
 
 import * as apiKeyActions from "@/app/(app)/(data)/accounts/api-key-actions";
+import * as cashActions from "@/app/(app)/(data)/accounts/cash-actions";
 import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsView, writeOperation } from "@/lib/ledger/ledger";
@@ -131,10 +133,12 @@ it("lists a holding sold out apart from the open ones", async () => {
 
 it("hands the page and the connection card only data and server actions", async () => {
   const page = await render("account", ACCOUNT);
-  const { connection, ...props } = page.props as typeof page.props & {
+  const { connection, cash, ...props } = page.props as typeof page.props & {
     connection: React.ReactElement<Record<string, unknown>>;
+    cash: React.ReactElement<Record<string, unknown>>;
   };
   expect(nonActionFunctions(props, [movementActions])).toEqual([]);
+  expect(nonActionFunctions(cash.props, [cashActions])).toEqual([]);
   // The account is at IOL, which connects by API.
   expect(connection.props.form).toMatchObject({ provider: "iol" });
   expect(nonActionFunctions(connection.props, [apiKeyActions])).toEqual([]);

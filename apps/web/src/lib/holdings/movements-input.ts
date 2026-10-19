@@ -121,6 +121,9 @@ export type MovementResult =
         // An import confirmed against cash or holdings that changed after
         // the review read them.
         | "stale"
+        // An edit of an operation its account's cash settled, whose legs
+        // would no longer match it.
+        | "settled"
         | Extract<
             PortfolioSetupGuardHint,
             "portfolio_archived" | "source_connection_archived"

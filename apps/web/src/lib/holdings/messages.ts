@@ -135,6 +135,8 @@ export const MOVEMENT_MESSAGES: Record<
     "El resumen es anterior a un saldo que ya tenés de ese instrumento en esta cuenta (otro resumen o un saldo inicial). Descartá esa fila, o cargá los resúmenes del más viejo al más nuevo.",
   stale:
     "Cambió el efectivo o las tenencias de la cuenta. Revisá y confirmá de nuevo.",
+  settled:
+    "Esta operación movió el efectivo de la cuenta: para cambiarla, borrala y volvé a importar los movimientos.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

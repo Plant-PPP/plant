@@ -22,6 +22,7 @@ const read: ClosesRead = {
   ledgerTruncated: false,
   debtsTruncated: false,
   debtEventsTruncated: false,
+  cashTruncated: false,
   archivedCashCount: 0,
 };
 

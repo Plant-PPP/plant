@@ -3,11 +3,12 @@ import { cashTakenFrom, readQuotesOn, type ReferenceDollar } from "@plant/core";
 import type { Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { readCashMovements } from "@/lib/cash/read";
 import { readLiabilities, readLiabilityEvents } from "@/lib/debts/read";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
 import {
   type HoldingsView,
-  readArchivedCash,
+  readUnlistedCash,
   readHoldings,
 } from "@/lib/holdings/read";
 import { type StoredHolding, storedOf } from "@/lib/ledger/ledger";
@@ -32,6 +33,7 @@ export type ClosesRead = {
   ledgerTruncated: boolean;
   debtsTruncated: boolean;
   debtEventsTruncated: boolean;
+  cashTruncated: boolean;
   archivedCashCount: number;
 };
 
@@ -41,16 +43,18 @@ export const closesReadFields = (read: ClosesRead) => ({
   "plant.ledger.truncated": read.ledgerTruncated,
   "plant.liability.truncated": read.debtsTruncated,
   "plant.liability.events_truncated": read.debtEventsTruncated,
+  "plant.cash.truncated": read.cashTruncated,
   "plant.assets.truncated": read.holdings.activeTruncated,
   "plant.closes.archived_cash_count": read.archivedCashCount,
   "plant.closes.cash_take_skipped_count": skippedCashPayments(read.state),
 });
 
 // The user's ledger with every open holding and the archived cash holdings a
-// debt payment may have emptied (a holding that is not an instrument has no
-// movements: its amount today, plus what payments took from cash, stands for
-// every past day), their debts, and the stored quotes of every day the closes
-// value at.
+// debt payment may have emptied or that have a history (a holding that is not
+// an instrument has no movements: its amount today, plus what payments took
+// from cash and less what a cash history added after, stands for every past
+// day), their debts, the cash histories, and the stored quotes of every day
+// the closes value at.
 // No closed month is marked recalculated: nothing keeps a close's figures to
 // compare a write against.
 export async function readCloses(
@@ -61,7 +65,7 @@ export async function readCloses(
     referenceDollar,
   }: { today: string; referenceDollar: ReferenceDollar },
 ): Promise<ClosesRead> {
-  const [holdings, read, debts, events] = await Promise.all([
+  const [holdings, read, debts, events, cash] = await Promise.all([
     readHoldings(client, context, { archived: false }),
     readLedger(client, { today, referenceDollar }).catch((error: unknown) =>
       assetsViewFailure(context, "ledger", error),
@@ -72,6 +76,9 @@ export async function readCloses(
     readLiabilityEvents(client).catch((error: unknown) =>
       assetsViewFailure(context, "debt_events", error),
     ),
+    readCashMovements(client).catch((error: unknown) =>
+      assetsViewFailure(context, "cash_movements", error),
+    ),
   ]);
   const others: StoredHolding[] = holdings.active
     .filter((row) => row.holding.asset_class !== "instrument")
@@ -79,18 +86,19 @@ export async function readCloses(
   const open = new Set(others.map((each) => each.holding.id));
   // Holdings the debts' payments took cash from that are not open: one a
   // payment emptied was archived.
-  const taken = new Set(
-    debts.active.flatMap((debt) =>
+  const taken = new Set([
+    ...debts.active.flatMap((debt) =>
       (events.byLiability.get(debt.id) ?? []).flatMap((event) => {
         const id = cashTakenFrom(event, today);
         return id === null || open.has(id) ? [] : [id];
       }),
     ),
-  );
+    ...[...cash.byHolding.keys()].filter((id) => !open.has(id)),
+  ]);
   const emptied =
     taken.size === 0
       ? []
-      : (await readArchivedCash(client, context, [...taken])).map((row) =>
+      : (await readUnlistedCash(client, context, [...taken])).map((row) =>
           storedOf(row, true),
         );
   const unquoted: ClosesState = {
@@ -98,10 +106,12 @@ export async function readCloses(
     holdings: [...read.ledger.holdings, ...others, ...emptied],
     liabilities: debts.active,
     liabilityEvents: events.byLiability,
+    cashMovements: cash.byHolding,
     recalculated: new Map(),
     partial:
       read.truncated ||
       events.cut ||
+      cash.cut ||
       debts.activeTruncated ||
       holdings.activeTruncated,
   };
@@ -116,6 +126,7 @@ export async function readCloses(
     ledgerTruncated: read.truncated,
     debtsTruncated: debts.activeTruncated,
     debtEventsTruncated: events.cut,
+    cashTruncated: cash.cut,
     archivedCashCount: emptied.length,
   };
 }

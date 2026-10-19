@@ -104,9 +104,10 @@ export function readHoldings(
 // Ids a single PostgREST filter names, short of a URL's limit.
 const IDS_PER_READ = 100;
 
-// The user's archived cash holdings among `ids`, the ones debt payments took
-// cash from, so the closes can give back what those payments took.
-export async function readArchivedCash(
+// The user's cash holdings among `ids` that the holdings list leaves out:
+// archived, or at 0 with a history. Debt payments took cash from them, or
+// their history values them on past days.
+export async function readUnlistedCash(
   client: Client,
   context: ReadContext,
   ids: readonly string[],
@@ -118,8 +119,7 @@ export async function readArchivedCash(
         .select(HOLDING_COLUMNS)
         .eq("user_id", context.userId)
         .in("id", chunk)
-        .eq("asset_class", "cash")
-        .not("archived_at", "is", null),
+        .eq("asset_class", "cash"),
     ),
   );
   const rows: Record<string, unknown>[] = [];
