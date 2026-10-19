@@ -318,7 +318,7 @@ describe("iol operations", () => {
         charges: null,
         reference: "51234890",
         currency: "ARS",
-        confidence: "medium",
+        confidence: "high",
         page: null,
       },
       {
@@ -331,7 +331,7 @@ describe("iol operations", () => {
         charges: null,
         reference: "51234567",
         currency: "ARS",
-        confidence: "medium",
+        confidence: "high",
         page: null,
       },
     ]);
@@ -380,11 +380,50 @@ describe("iol operations", () => {
         charges: null,
         reference: "7000",
         currency: "USD",
-        confidence: "medium",
+        confidence: "high",
         page: null,
       },
     ]);
     expect(reading.read.skippedRows).toBe(0);
+  });
+
+  it("takes each trade's currency and its charges in that currency from its detail", async () => {
+    fake.answer = (request) =>
+      request.path === "/api/v2/operaciones/51234890"
+        ? {
+            status: 200,
+            body: {
+              numero: 51234890,
+              moneda: "dolar_Estadounidense",
+              aranceles: [
+                {
+                  tipo: "Derechos De Mercado",
+                  neto: 856.69,
+                  iva: 179.9,
+                  moneda: "PESO_ARGENTINO",
+                },
+                {
+                  tipo: "Comisión",
+                  neto: 7.95,
+                  iva: 1.67,
+                  moneda: "DOLARES_USA",
+                },
+              ],
+            },
+          }
+        : PROVIDER_FIXTURES.iol.ok(request);
+    const reading = (await iolConnection(deps()).read(
+      IOL_CREDENTIALS,
+      "operations",
+    )) as OperationsReading;
+    const sale = operationsOf(reading).find(
+      (each) => each.reference === "51234890",
+    );
+    expect(sale).toMatchObject({ currency: "USD", charges: "9.62" });
+    const purchase = operationsOf(reading).find(
+      (each) => each.reference === "51234567",
+    );
+    expect(purchase).toMatchObject({ currency: "ARS", charges: null });
   });
 
   it("asks IOL for the executed orders of the period, and keeps only those inside it", async () => {

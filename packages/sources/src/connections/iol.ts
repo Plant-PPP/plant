@@ -1,4 +1,10 @@
-import type { Currency } from "@plant/shared";
+import {
+  type Currency,
+  DECIMAL_SCALE_DIGITS,
+  exactOf,
+  plus,
+  toDecimal,
+} from "@plant/shared";
 import { z } from "zod";
 
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
@@ -62,6 +68,45 @@ const orderSchema = z.object({
   montoOperado: z.unknown().optional(),
 });
 const ordersSchema = z.array(orderSchema);
+
+// An order's detail: the currency it traded in and each charge IOL took, net
+// and VAT, in its own currency.
+const detailSchema = z.object({
+  moneda: z.string().optional(),
+  aranceles: z
+    .array(
+      z.object({
+        neto: z.unknown().optional(),
+        iva: z.unknown().optional(),
+        moneda: z.string().optional(),
+      }),
+    )
+    .nullish(),
+});
+
+const DETAILS_AT_ONCE = 4;
+
+// IOL names a charge's currency in other words than an order's.
+const CHARGE_CURRENCY: Record<string, "ARS" | "USD"> = {
+  peso_argentino: "ARS",
+  dolares_usa: "USD",
+};
+
+// A trade's charges in its own currency, net and VAT added up; null when it
+// shows none. A charge in another currency (the market fee in pesos on a
+// dollar trade) is left for the user to add.
+function chargesIn(
+  detail: z.infer<typeof detailSchema> | undefined,
+  currency: "ARS" | "USD",
+): string | null {
+  const parts = (detail?.aranceles ?? [])
+    .filter((each) => CHARGE_CURRENCY[plain(each.moneda)] === currency)
+    .flatMap((each) => [decimalOf(each.neto), decimalOf(each.iva)])
+    .filter((each): each is string => each !== null);
+  if (parts.length === 0) return null;
+  const total = toDecimal(plus(...parts.map(exactOf)), DECIMAL_SCALE_DIGITS);
+  return positive(total) ? total : null;
+}
 
 // IOL names an order's kind in Spanish words; trades and the income it pays
 // are operations.
@@ -164,6 +209,30 @@ export function iolConnection({
       await read(`/api/v2/operaciones?${query}`, bearer),
     );
     if (!orders.success) throw unavailable();
+    // Each trade's detail names its currency and its charges, which the list
+    // leaves out; a few at a time, and a detail that does not come back
+    // leaves the trade as the list has it.
+    const details = new Map<string, z.infer<typeof detailSchema>>();
+    const trades = orders.data.filter((order) => {
+      const kind = KINDS[plain(order.tipo)];
+      return kind === "purchase" || kind === "sale";
+    });
+    for (let start = 0; start < trades.length; start += DETAILS_AT_ONCE) {
+      await Promise.all(
+        trades.slice(start, start + DETAILS_AT_ONCE).map(async (order) => {
+          const number = String(order.numero).trim();
+          if (!/^\d+$/.test(number)) return;
+          try {
+            const detail = detailSchema.safeParse(
+              await read(`/api/v2/operaciones/${number}`, bearer),
+            );
+            if (detail.success) details.set(number, detail.data);
+          } catch {
+            // The list's figures stand.
+          }
+        }),
+      );
+    }
     const found: DraftOperation[] = [];
     let skipped = 0;
     for (const order of orders.data) {
@@ -175,11 +244,13 @@ export function iolConnection({
       const date = (order.fechaOperada ?? order.fechaOrden ?? "").match(
         DAY,
       )?.[0];
+      const detail = details.get(String(order.numero).trim());
       const currency = paidIn
         ? paidIn[2] === "US$"
           ? "USD"
           : "ARS"
-        : (currencyOf(order.moneda) ?? MARKET_CURRENCY[plain(order.mercado)]);
+        : (currencyOf(detail?.moneda ?? order.moneda) ??
+          MARKET_CURRENCY[plain(order.mercado)]);
       const quantity = decimalOf(order.cantidadOperada ?? order.cantidad);
       const price = decimalOf(order.precioOperado ?? order.precio);
       const amount = decimalOf(order.montoOperado ?? order.monto);
@@ -195,12 +266,10 @@ export function iolConnection({
         quantity: positive(quantity) ? quantity : null,
         price: positive(price) ? price : null,
         amount: positive(amount) ? amount : null,
-        charges: null,
+        charges: currency ? chargesIn(detail, currency) : null,
         reference: String(order.numero).trim().slice(0, 40) || null,
         currency,
-        // The order fields come from IOL's documentation, not from a live
-        // account: the review asks the user to look.
-        confidence: "medium",
+        confidence: "high",
         page: null,
       });
     }
