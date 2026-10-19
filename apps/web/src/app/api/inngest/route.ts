@@ -21,6 +21,7 @@ import { serverLog } from "@/lib/log/server-log";
 import { getJson, postForm } from "@/lib/quotes/get-json";
 import { iolCredentials } from "@/lib/quotes/iol-credentials";
 import {
+  fxHistorySink,
   priceAlertsSink,
   quotedInstruments,
   quoteSink,
@@ -40,6 +41,12 @@ export const { GET, POST, PUT } = serve(
       }),
       store: quoteSink(),
       alerts: priceAlertsSink(),
+      log: serverLog,
+      now: () => new Date(),
+    }),
+    fxHistory: () => ({
+      getJson,
+      store: fxHistorySink(),
       log: serverLog,
       now: () => new Date(),
     }),

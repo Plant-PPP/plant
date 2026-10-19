@@ -9,6 +9,7 @@ const sync = (change: Partial<LastSync>): string =>
     <SyncStatus
       provider="Bitso"
       sync={{
+        importId: "import-1",
         status: "ready",
         failure: null,
         on: "2026-10-14",
@@ -18,17 +19,17 @@ const sync = (change: Partial<LastSync>): string =>
     />,
   );
 
-it("sends a sync read and waiting to Cargar, in the gain color", () => {
+it("links a sync read and waiting to its review, in the gain color", () => {
   const html = sync({ status: "ready" });
   expect(html).toContain("Última sincronización: 14/10/2026 a las 12:31.");
-  expect(html).toContain('href="/import"');
+  expect(html).toContain('href="/import/import-1"');
   expect(html).toContain("text-gain");
 });
 
-it("shows a confirmed sync without sending it to Cargar", () => {
+it("shows a confirmed sync without a link to review it", () => {
   const html = sync({ status: "confirmed" });
   expect(html).toContain("Última sincronización: 14/10/2026 a las 12:31.");
-  expect(html).not.toContain('href="/import"');
+  expect(html).not.toContain('href="/import');
 });
 
 it.each(["queued", "reading"] as const)(

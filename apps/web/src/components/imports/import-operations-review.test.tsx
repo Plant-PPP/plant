@@ -6,7 +6,10 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-import { ImportOperationsReview } from "./import-operations-review";
+import {
+  exactListing,
+  ImportOperationsReview,
+} from "./import-operations-review";
 
 const operation = (
   extra: Partial<ImportOperationRow> = {},
@@ -59,12 +62,27 @@ const render = (operations: ImportOperationRow[]) =>
 const confirmButton = (html: string) =>
   /<button[^>]*>Confirmar operaciones<\/button>/.exec(html)![0];
 
-it("lets a complete operation be confirmed", () => {
+it("lists a complete operation in the table, ready to confirm", () => {
   const html = render([operation()]);
   expect(html).toContain("Revisá las operaciones que leímos");
-  expect(html).toContain("N° 123");
+  expect(html).toContain('aria-label="Incluir la operación 1"');
+  expect(html).toContain('aria-label="Editar la operación 1"');
+  expect(html).toContain("$ 90.000,00");
+  expect(html).not.toContain("Para completar");
   expect(html).not.toContain("Falta en el documento");
   expect(confirmButton(html)).not.toContain(' disabled=""');
+});
+
+it("puts the operations to complete above the table", () => {
+  const html = render([
+    operation({ id: "o2", kind: null }),
+    operation({ reference: "124" }),
+  ]);
+  expect(html).toContain("Para completar (1)");
+  expect(html).toContain("Listas para importar (1)");
+  expect(html.indexOf("Para completar")).toBeLessThan(
+    html.indexOf("Listas para importar"),
+  );
 });
 
 it("asks for what the document does not say, and holds the confirm", () => {
@@ -114,7 +132,9 @@ it("says an operation already in the account is loaded, set aside", () => {
   ]);
   expect(html).toContain("Ya está cargada");
   expect(html).toContain("1 ya estaba cargada");
-  expect(html).toContain("Recuperar");
+  expect(html).toMatch(
+    /<input[^>]*aria-label="Incluir la operación 1"(?![^>]*checked)/,
+  );
 });
 
 it("says how many operations the reading left out", () => {
@@ -145,8 +165,7 @@ it("counts the operations it will import, and filters them by kind and asset", (
   ]);
   expect(html).toContain("1 de 2 para importar");
   expect(html).toContain('aria-label="Mostrar operaciones de tipo"');
-  expect(html).toContain(">Incluir las que se ven</button>");
-  expect(html).toContain(">Descartar las que se ven</button>");
+  expect(html).toContain('aria-label="Incluir todas las que se ven"');
 });
 
 it("filters by asset only when the operations name more than one", () => {
@@ -164,14 +183,14 @@ it("never brings back an operation the account holds under its number", () => {
     operation({ id: "o2", reference: "124" }),
   ]);
   expect(locked).toMatch(
-    /<button[^>]*disabled=""[^>]*aria-label="Recuperar la operación 1"/,
+    /<input[^>]*aria-label="Incluir la operación 1"[^>]*disabled=""/,
   );
   const unnumbered = render([
     operation({ reference: null, discarded: true, loaded: true }),
     operation({ id: "o2", reference: "124" }),
   ]);
   expect(unnumbered).not.toMatch(
-    /<button[^>]*disabled=""[^>]*aria-label="Recuperar la operación 1"/,
+    /<input[^>]*aria-label="Incluir la operación 1"[^>]*disabled=""/,
   );
 });
 
@@ -206,4 +225,22 @@ it("asks for figures above 0 when the reading has a 0", () => {
   ]);
   expect(income).toContain("Ingresá un monto mayor a 0");
   expect(income).not.toContain("Falta en el documento");
+});
+
+it("takes the market's listing for exactly what the import named, or a dollar line of it", () => {
+  const googl = {
+    symbol: "GOOGL",
+    name: "Cedear Alphabet Inc. Cl. A",
+    type: "cedear",
+    currency: "ARS",
+    market: "byma",
+    lines: ["GOGLD", "GOGLC"],
+  } as const;
+  expect(exactListing([googl], "gogld")).toEqual({ listing: googl, line: "D" });
+  expect(exactListing([googl], "GOGLC")).toEqual({ listing: googl, line: "C" });
+  expect(exactListing([googl], "GOOGL")).toEqual({
+    listing: googl,
+    line: null,
+  });
+  expect(exactListing([googl], "GOOG")).toBeNull();
 });

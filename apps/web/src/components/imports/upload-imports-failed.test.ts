@@ -51,6 +51,7 @@ it("tells which files failed when the server could not be reached, and goes on w
     start: jest.fn().mockRejectedValue(new Error("network")),
     finish: jest.fn(),
     acceptTerms: jest.fn(),
+    discard: jest.fn(),
   };
   page(actions).actions.upload(
     [new File(["a"], "uno.pdf"), new File(["b"], "dos.pdf")],
@@ -70,6 +71,7 @@ it("reads an acceptance that could not reach the server as not saved", async () 
     start: jest.fn(),
     finish: jest.fn(),
     acceptTerms: jest.fn().mockRejectedValue(new Error("network")),
+    discard: jest.fn(),
   };
   page(actions).consent!.accept();
   await expect(Promise.all(mockTransitions)).resolves.toBeDefined();

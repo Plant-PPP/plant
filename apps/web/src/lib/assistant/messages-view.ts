@@ -19,7 +19,9 @@ export type MessageLike = {
   metadata?: unknown;
 };
 
-// The text of a message's parts, joined; its tool calls and steps are left out.
+// The text of a message's parts, a paragraph each; its tool calls and steps
+// are left out. Each step of a turn writes a part of its own, so they never
+// run together.
 export const textOf = (parts: readonly unknown[]) =>
   parts
     .flatMap((part) =>
@@ -32,7 +34,9 @@ export const textOf = (parts: readonly unknown[]) =>
         ? [part.text]
         : [],
     )
-    .join("");
+    .map((text) => text.trim())
+    .filter((text) => text !== "")
+    .join("\n\n");
 
 const isText = (value: unknown): value is string => typeof value === "string";
 

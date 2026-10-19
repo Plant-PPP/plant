@@ -14,8 +14,9 @@ it("shows a question's text and an answer's text with what it read", () => {
         parts: [
           { type: "step-start" },
           { type: "tool-getPortfolioSummary", output: { assets: "1" } },
-          { type: "text", text: "Debés " },
-          { type: "text", text: "US$ 100." },
+          { type: "text", text: "Necesito ver tus deudas." },
+          { type: "step-start" },
+          { type: "text", text: "Debés US$ 100." },
         ],
         metadata: {
           asOf: "2026-10-13",
@@ -30,7 +31,7 @@ it("shows a question's text and an answer's text with what it read", () => {
     {
       id: "a",
       role: "assistant",
-      text: "Debés US$ 100.",
+      text: "Necesito ver tus deudas.\n\nDebés US$ 100.",
       charts: [],
       table: null,
       sources: ["Deudas"],

@@ -80,7 +80,7 @@ const finishSchema = z
 const accountSchema = z.object({ importId: z.uuid(), accountId: z.uuid() });
 
 type Line = {
-  step: "start" | "finish" | "terms" | "job" | "account";
+  step: "start" | "finish" | "terms" | "job" | "account" | "discard";
   userId: string;
   requestId: string | undefined;
   started: number;
@@ -437,6 +437,49 @@ export async function assignImportAccount(
       return { ok: false, code };
     }
     if (refused) throw updated.error ?? new Error("account not set");
+    log(line, "ok");
+    revalidatePath("/import");
+    return { ok: true };
+  } catch (error) {
+    log(line, "failed", error);
+    return { ok: false, code: "failed" };
+  }
+}
+
+export type DiscardResult =
+  { ok: true } | { ok: false; code: "invalid" | "not_found" | "failed" };
+
+// Discards one of the user's ready imports they will not confirm: it is failed
+// with no failure, and leaves the list.
+export async function discardImport(importId: unknown): Promise<DiscardResult> {
+  const claims = await getSessionClaims();
+  const line: Line = {
+    step: "discard",
+    userId: claims.sub,
+    requestId: await currentRequestId(),
+    started: performance.now(),
+  };
+  const parsed = z.uuid().safeParse(importId);
+  if (!parsed.success) {
+    log(line, "invalid");
+    return { ok: false, code: "invalid" };
+  }
+  line.importId = parsed.data;
+  try {
+    const client: Client = await createClient();
+    const updated = await client
+      .from("imports")
+      .update({ status: "failed" })
+      .eq("id", parsed.data)
+      .eq("status", "ready")
+      .select("id");
+    if (classifyPostgrestResult(updated, 200)) {
+      throw updated.error ?? new Error("import not discarded");
+    }
+    if (updated.data?.length !== 1) {
+      log(line, "not_found");
+      return { ok: false, code: "not_found" };
+    }
     log(line, "ok");
     revalidatePath("/import");
     return { ok: true };

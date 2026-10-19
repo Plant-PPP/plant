@@ -425,6 +425,7 @@ export function PrototypeProvider({
           );
         });
       },
+      discard: (id) => void write((s) => imports.discardImport(s, id)),
       confirm: (id, rows) =>
         write((s) =>
           imports.confirmImport(s, id, rows, () => crypto.randomUUID()),

@@ -213,6 +213,8 @@ export type ImportOperationRow = {
   discarded: boolean;
   // Already in the account: it starts discarded.
   loaded?: boolean;
+  // What the document called an instrument Plant does not know.
+  unknownSymbol?: string;
 };
 
 // What a card statement says is owed in one currency, as the review shows

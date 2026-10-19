@@ -1041,7 +1041,10 @@ export function AssetsSetup({
         onAdd={() => openDialog({ kind: "create" })}
         secondary={movement && dialogs.addMovementButton()}
       >
-        {view.active.length === 0 && view.archived.length === 0 ? (
+        {view.active.length === 0 &&
+        view.archived.length === 0 &&
+        // Everything sold still leaves its sales to show.
+        (movement?.input.sales.totals.count ?? 0) === 0 ? (
           <EmptyState
             icon={Wallet}
             title={

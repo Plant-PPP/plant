@@ -102,8 +102,9 @@ export const listingDetail = ({ type, currency, market }: Listing): string =>
     market === "byma" ? "BYMA" : "Cripto",
   ].join(" · ");
 
-// What an option shows under its name: a market listing's type, currency
-// and market, and the currency of a line where the instrument has lines.
+// What an option shows under its name: its type, a market listing's
+// currency and market, and the currency of a line where the instrument has
+// lines.
 export function optionDetail(
   option: PickerOption,
   lines: boolean,
@@ -112,7 +113,12 @@ export function optionDetail(
   const { listing } = option;
   const lined = lines && hasDollarLines(listing ?? instrument ?? {});
   const note = lined ? LINE_NOTES[option.line ?? ""] : null;
-  if (!listing) return note;
+  if (!listing) {
+    const type = instrument?.type
+      ? HOLDING_CLASS_LABELS[instrument.type]
+      : null;
+    return [type, note].filter(Boolean).join(" · ") || null;
+  }
   const market = listing.market === "byma" ? "BYMA" : "Cripto";
   return note
     ? [HOLDING_CLASS_LABELS[listing.type], note, market].join(" · ")
@@ -220,6 +226,7 @@ export function InstrumentPicker({
   lines = false,
   line = null,
   markets,
+  suggestion,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: PickerName & {
@@ -243,6 +250,9 @@ export function InstrumentPicker({
   line?: DollarLine | null;
   // The markets the search looks in; all of them when not given.
   markets?: readonly ListingMarket[];
+  // The text the search starts with while nothing is chosen: what an import
+  // called an instrument Plant does not know.
+  suggestion?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 }) {
@@ -324,7 +334,8 @@ export function InstrumentPicker({
   // never on hover, which would scroll the list under the pointer.
   const followActive = useRef<ScrollLogicalPosition | null>(null);
 
-  function openWith(next: boolean, search = "") {
+  function openWith(next: boolean, typed = "") {
+    const search = typed === "" && value === "" ? (suggestion ?? "") : typed;
     if (next) {
       followActive.current = "start";
       setQuery(search);

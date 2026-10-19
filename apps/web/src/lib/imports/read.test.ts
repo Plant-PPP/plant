@@ -3,12 +3,14 @@ jest.mock("server-only", () => ({}), { virtual: true });
 import { IMPORTS_LISTED, readImportForReview, readImports } from "./read";
 
 const rpcs: string[] = [];
+const filters: string[] = [];
 // The list answers at most the rows asked for, as PostgREST does.
 const clientOf = (list: unknown, used: number | null) => ({
   from: () => {
     let limit = Infinity;
     const builder = {
       select: () => builder,
+      or: (filter: string) => (filters.push(filter), builder),
       order: () => builder,
       limit: (rows: number) => ((limit = rows), builder),
       then: (resolve: (value: unknown) => unknown) =>
@@ -157,25 +159,10 @@ it("lists a sync by its provider and says why it failed in its own words", async
   ]);
 });
 
-it("says a sync failed for another one replaced it", async () => {
-  const read = await readImports(
-    clientOf(
-      [
-        {
-          id: "s1",
-          status: "failed",
-          failure: null,
-          document_date: null,
-          created_at: "2026-10-12T15:00:00+00:00",
-          source_connection_id: "a1",
-          provider: "binance",
-          document: null,
-        },
-      ],
-      0,
-    ) as never,
-  );
-  expect(read.items[0]!.error).toBe("La reemplazaste por otra sincronización.");
+it("leaves out imports the user discarded or a later sync replaced", async () => {
+  filters.length = 0;
+  await readImports(clientOf([], 0) as never);
+  expect(filters).toEqual(["status.neq.failed,failure.not.is.null"]);
 });
 
 describe("with 51 imports", () => {
@@ -238,6 +225,7 @@ describe("readImportForReview", () => {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        or: () => builder,
         limit: () => builder,
         order: () => builder,
         then: (resolve: (value: unknown) => unknown) =>
@@ -382,7 +370,7 @@ describe("readImportForReview", () => {
     expect(read!.rows[1]).not.toHaveProperty("assetClass");
   });
 
-  it("labels a synced balance by the sync, not a document", async () => {
+  it("gives a synced balance no source, since the whole sync is the account", async () => {
     const read = await readImportForReview(
       clientWith(
         [
@@ -409,10 +397,10 @@ describe("readImportForReview", () => {
       "i1",
       INSTRUMENTS,
     );
-    expect(read!.rows[0]!.source).toBe("De la sincronización");
+    expect(read!.rows[0]!.source).toBe("");
   });
 
-  it("labels a synced holding by the sync, not a document", async () => {
+  it("gives a synced holding no source", async () => {
     const read = await readImportForReview(
       clientWith(
         [
@@ -429,7 +417,7 @@ describe("readImportForReview", () => {
       "i1",
       INSTRUMENTS,
     );
-    expect(read!.rows[0]!.source).toBe("De la sincronización");
+    expect(read!.rows[0]!.source).toBe("");
   });
 
   it("leaves the price of a dollar line of a dollar bond for the user", async () => {
@@ -575,7 +563,7 @@ describe("readImportForReview", () => {
       },
     ]);
   });
-  it("labels a synced operation and debt by the sync, not a document", async () => {
+  it("gives a synced operation and debt no source, unless it names no instrument", async () => {
     const SYNC = {
       ...IMPORT,
       document: null,
@@ -635,12 +623,10 @@ describe("readImportForReview", () => {
       INSTRUMENTS,
     );
     expect(read?.operations?.map(({ source }) => source)).toEqual([
-      "De la sincronización",
+      "",
       "La sincronización no dice qué activo es",
     ]);
-    expect(read?.debts?.map(({ source }) => source)).toEqual([
-      "De la sincronización",
-    ]);
+    expect(read?.debts?.map(({ source }) => source)).toEqual([""]);
   });
 
   it("keeps the currency of an operation named by an alias ending in D", async () => {

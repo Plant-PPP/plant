@@ -61,6 +61,9 @@ const lineSymbol = ({ symbol, currency }: IolInstrument) =>
 export const MONEDA: Readonly<Record<string, Currency>> = {
   peso_Argentino: "ARS",
   dolar_Estadounidense: "USD",
+  // The quote panels name it by its code.
+  "1": "ARS",
+  "2": "USD",
 };
 
 const tokenSchema = z.object({

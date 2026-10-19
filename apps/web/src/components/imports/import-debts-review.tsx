@@ -201,8 +201,10 @@ export function ImportDebtsReview({
                       {`${(item.debts ?? [])[index]?.label ?? "Tarjeta"} · ${CURRENCY_LABELS[row.currency]}`}
                     </span>
                     <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
-                      <span>{row.source}</span>
-                      <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
+                      {row.source && <span>{row.source}</span>}
+                      {item.origin !== "sync" && (
+                        <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
+                      )}
                     </span>
                   </div>
                   <Button

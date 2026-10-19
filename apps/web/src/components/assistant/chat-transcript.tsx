@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { LoaderCircle } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 
@@ -36,6 +38,20 @@ function useRevealed(text: string, animate: boolean): string {
   return words.slice(0, shown).join(" ");
 }
 
+// The answer as written, its **bold** spans bold: the model marks figures
+// that way, and the rest of Markdown is not used.
+export function emphasized(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*)/).map((piece, index) =>
+    /^\*\*[^*\n]+\*\*$/.test(piece) ? (
+      <strong key={index} className="font-semibold">
+        {piece.slice(2, -2)}
+      </strong>
+    ) : (
+      piece
+    ),
+  );
+}
+
 const Answer = memo(function Answer({
   message,
   animate,
@@ -47,9 +63,9 @@ const Answer = memo(function Answer({
   const done = text.length === message.text.length;
   return (
     <div className="grid w-full gap-3 py-2 text-[13px]">
-      <p className="leading-relaxed">
+      <p className="leading-relaxed whitespace-pre-wrap">
         <span className="sr-only">Plant: </span>
-        {text}
+        {emphasized(text)}
       </p>
       {done && message.table && <AnswerTable table={message.table} />}
       {done &&

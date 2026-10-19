@@ -189,6 +189,7 @@ export async function ScopeView({
       connection={
         provider && (
           <ApiKeyCard
+            key="connection"
             accountId={id}
             form={connectionForm(provider)}
             apiKey={apiKey}
