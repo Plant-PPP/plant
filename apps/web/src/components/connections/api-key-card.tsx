@@ -14,7 +14,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { useId, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,8 @@ import {
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
+
+const FOLLOW_MS = 2000;
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
 
@@ -91,7 +94,7 @@ export function ApiKeyCard({
     "connect" | "disconnect" | "operations" | null
   >(null);
   const operationsOpener = useRef<HTMLButtonElement>(null);
-  const [synced, setSynced] = useState<ConnectionDraft | null>(null);
+  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -99,17 +102,24 @@ export function ApiKeyCard({
   const sync = (draft: ConnectionDraft, period?: ReadPeriod) =>
     startTransition(async () => {
       setError(null);
-      setSynced(null);
       setConnected(false);
       const failure = await syncFailure(actions.sync(accountId, draft, period));
       if (failure) setError(failure);
-      else setSynced(draft);
+      else router.refresh();
     });
+
+  // While the latest sync is queued or being read, the card asks the server
+  // again until it is ready or failed.
+  const following = apiKey?.lastSync ? isBusy(apiKey.lastSync.status) : false;
+  useEffect(() => {
+    if (!following) return;
+    const timer = setInterval(() => router.refresh(), FOLLOW_MS);
+    return () => clearInterval(timer);
+  }, [following, router]);
 
   const disconnect = () =>
     startTransition(async () => {
       setError(null);
-      setSynced(null);
       setConnected(false);
       setError(await disconnectFailure(actions.disconnect(accountId)));
     });
@@ -197,24 +207,8 @@ export function ApiKeyCard({
           tenencias.
         </Notice>
       )}
-      {!synced && !connected && apiKey?.lastSync && (
+      {!connected && apiKey?.lastSync && (
         <SyncStatus sync={apiKey.lastSync} provider={form.name} />
-      )}
-      {synced && (
-        <div className="flex flex-wrap items-center gap-3">
-          <p role="status" className="text-sm">
-            {synced === "operations"
-              ? "Estamos leyendo tus operaciones."
-              : "Estamos leyendo tus tenencias."}{" "}
-            Cuando estén, las revisás y confirmás en Cargar.
-          </p>
-          <PageButton asChild>
-            <Link href="/import">
-              Ir a Cargar
-              <ArrowRight aria-hidden />
-            </Link>
-          </PageButton>
-        </div>
       )}
       {error && <FormAlert>{error}</FormAlert>}
       {dialog === "operations" && (
@@ -235,7 +229,6 @@ export function ApiKeyCard({
           connect={actions.connect}
           onConnected={() => {
             setError(null);
-            setSynced(null);
             setConnected(true);
           }}
           onClose={() => setDialog(null)}
