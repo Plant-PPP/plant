@@ -473,18 +473,7 @@ export function ImportOperationsReview({
               />
             )}
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={isLocked(row)}
-            aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la operación ${index + 1}`}
-            onClick={() => change(row.id, { discarded: !row.discarded })}
-          >
-            {row.discarded ? <RotateCcw /> : <X />}
-            {row.discarded ? "Recuperar" : "Descartar"}
-          </Button>
-          {editing === row.id && (
+          {editing === row.id ? (
             <Button
               type="button"
               size="sm"
@@ -492,6 +481,18 @@ export function ImportOperationsReview({
               onClick={() => setEditing(null)}
             >
               Listo
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={isLocked(row)}
+              aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la operación ${index + 1}`}
+              onClick={() => change(row.id, { discarded: !row.discarded })}
+            >
+              {row.discarded ? <RotateCcw /> : <X />}
+              {row.discarded ? "Recuperar" : "Descartar"}
             </Button>
           )}
         </div>
