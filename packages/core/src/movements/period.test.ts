@@ -159,3 +159,44 @@ it("charges debts' interest without counting it in the market result", () => {
     result: "-10",
   });
 });
+
+it("keeps what an operation paid in held cash inside the value", () => {
+  // 1000 in cash buys units worth 900 for 910: the 10 is a charge, not a
+  // market loss, and nothing was put in.
+  const result = periodResult({
+    ...MONTH,
+    startValue: "1000",
+    endValue: "990",
+    flows: [
+      { date: "2026-09-10", amount: "-10", kind: "settled", charges: "10" },
+    ],
+  });
+  expect(result).toMatchObject({
+    paidIn: "0",
+    proceeds: "0",
+    income: "0",
+    charges: "10",
+    kept: "-10",
+    contributed: "0",
+    market: "0",
+    result: "-10",
+    share: "-0.01",
+  });
+});
+
+it("counts a dividend collected in held cash as income, not money put in", () => {
+  const result = periodResult({
+    ...MONTH,
+    startValue: "1000",
+    endValue: "1007",
+    flows: [{ date: "2026-09-10", amount: "7", kind: "settled", charges: "3" }],
+  });
+  expect(result).toMatchObject({
+    income: "10",
+    charges: "3",
+    kept: "7",
+    contributed: "0",
+    market: "0",
+    result: "7",
+  });
+});

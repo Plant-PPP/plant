@@ -23,6 +23,7 @@ export const OWNED_KEYS = {
   ai_costs: "id",
   ai_messages: "user_id,id",
   ai_questions: "user_id,id",
+  cash_movements: "id",
   column_mappings: "id",
   consents: "id",
   holdings: "id",
@@ -55,6 +56,7 @@ export const OWNED_KEYS = {
 export const DELETE_GRANTED: ReadonlySet<OwnedTable> = new Set<OwnedTable>([
   "account_api_keys",
   "ai_conversations",
+  "cash_movements",
   "holdings",
   "liabilities",
   "liability_collateral",

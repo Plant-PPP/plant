@@ -25,6 +25,12 @@ export {
   type FileUploadType,
   fileUploadSource,
 } from "./file-upload/adapter";
+export {
+  type IolMovementKind,
+  type IolMovementRow,
+  type IolMovements,
+  readIolMovements,
+} from "./file-upload/iol-movements";
 export { PDF_PAGE_LIMIT, pdfPageCount } from "./file-upload/pdf";
 export {
   createSourceForConnection,

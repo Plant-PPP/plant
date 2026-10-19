@@ -8,10 +8,16 @@ import {
   disconnectApiKey,
   syncAccount,
 } from "@/app/(app)/(data)/accounts/api-key-actions";
+import {
+  importAccountStatement,
+  writeAccountCash,
+} from "@/app/(app)/(data)/accounts/cash-actions";
 import { loadMovements } from "@/app/(app)/(data)/assets/movement-actions";
+import { CashHistory } from "@/components/holdings/cash-history";
 import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { accountCash } from "@/lib/cash/view";
 import { connectionForm, providerOf } from "@/lib/connections/api-key";
 import { readApiKey } from "@/lib/connections/write";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
@@ -94,6 +100,12 @@ export async function ScopeView({
           assetsViewFailure(context, "api_key", error),
         )
       : null;
+  const cash =
+    scope.kind === "account"
+      ? await accountCash(client, id, ledger).catch((error: unknown) =>
+          assetsViewFailure(context, "cash_movements", error),
+        )
+      : null;
   const provider =
     apiKey?.provider ??
     (scope.kind === "account" ? providerOf(scope.institution) : null);
@@ -161,6 +173,19 @@ export async function ScopeView({
         .map((row) => ledger.revisions.get(row.id) ?? 0)
         .join(".")}
       loadMovements={loadMovements}
+      cash={
+        cash && (
+          <CashHistory
+            accountId={id}
+            sides={cash}
+            today={today}
+            actions={{
+              write: writeAccountCash,
+              importStatement: importAccountStatement,
+            }}
+          />
+        )
+      }
       connection={
         provider && (
           <ApiKeyCard

@@ -1,6 +1,6 @@
 const readLedger = jest.fn();
 const readHoldings = jest.fn();
-const readArchivedCash = jest.fn(async () => []);
+const readUnlistedCash = jest.fn(async () => []);
 const readLiabilities = jest.fn();
 const read = jest.fn();
 const notFound = jest.fn(() => {
@@ -8,6 +8,9 @@ const notFound = jest.fn(() => {
 });
 
 jest.mock("server-only", () => ({}), { virtual: true });
+jest.mock("@/lib/cash/read", () => ({
+  readCashMovements: async () => ({ byHolding: new Map(), cut: false }),
+}));
 jest.mock("next/navigation", () => ({ notFound: () => notFound() }));
 jest.mock("@/lib/auth/session-claims", () => ({
   getSessionClaims: async () => ({ sub: "u1" }),
@@ -18,7 +21,7 @@ jest.mock("@/lib/request-id-server", () => ({
 }));
 jest.mock("@/lib/holdings/read", () => ({
   readHoldings: (...args: unknown[]) => readHoldings(...args),
-  readArchivedCash: () => readArchivedCash(),
+  readUnlistedCash: () => readUnlistedCash(),
   readReferenceDollar: async () => "ccl",
 }));
 jest.mock("@/lib/ledger/read", () => ({

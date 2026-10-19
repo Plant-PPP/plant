@@ -1,5 +1,6 @@
 import {
   compareExact,
+  type Currency,
   DECIMAL_SCALE_DIGITS,
   type Exact,
   exactOf,
@@ -20,6 +21,7 @@ import {
   isTrade,
   isYield,
   type Movement,
+  type MovementRates,
   takesUnits,
 } from "./movement";
 import { compareInReplay } from "./order";
@@ -87,21 +89,21 @@ const moneyText = (money: Money): PositionMoney => ({
 export const chargesOf = (movement: Movement): Exact =>
   plus(...movement.charges.map((charge) => exactOf(charge.amount)));
 
-// How many of the view's unit one unit of the movement's currency was worth on
-// its date, from the rates it carries.
-function factorOf(
-  movement: Movement,
+// How many of the view's unit one unit of a dated amount's currency was worth
+// on its date, from the rates it carries (a movement's, a cash movement's).
+export function unitFactor(
+  dated: { date: string; currency: Currency; rates: MovementRates },
   view: Denominator,
   referenceDollar: ReferenceDollar,
 ): Exact | null {
   const snapshot: QuoteSnapshot = {
-    date: movement.date,
-    fx: movement.rates,
+    date: dated.date,
+    fx: dated.rates,
     prices: {},
   };
   const one = express(
-    { amount: { n: 1n, d: 1n }, currency: movement.currency },
-    movement.date,
+    { amount: { n: 1n, d: 1n }, currency: dated.currency },
+    dated.date,
     view,
     snapshot,
     referenceDollar,
@@ -220,7 +222,7 @@ function stepOf(
   referenceDollar: ReferenceDollar,
   carried: Map<string, Lot[]>,
 ): LedgerStep {
-  const factor = held.money && factorOf(movement, view, referenceDollar);
+  const factor = held.money && unitFactor(movement, view, referenceDollar);
   if (!factor) held.money = null;
   const money = held.money;
   const inView = (amount: Exact) => times(amount, factor ?? ZERO);

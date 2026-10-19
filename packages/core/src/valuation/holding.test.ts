@@ -298,11 +298,24 @@ describe("holdingSchema", () => {
     expect(
       holdingSchema.safeParse({
         ...base,
+        asset_class: "other",
+        amount,
+        currency: "ARS",
+        valued_on: "2026-10-01",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes cash at 0, which a history may leave, but not below", () => {
+    const cash = (amount: string) =>
+      holdingSchema.safeParse({
+        ...base,
         asset_class: "cash",
         amount,
         currency: "ARS",
-      }).success,
-    ).toBe(false);
+      }).success;
+    expect(cash("0")).toBe(true);
+    expect(cash("-1")).toBe(false);
   });
 
   it("refuses a fixed term that matures before it starts", () => {

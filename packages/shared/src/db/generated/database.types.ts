@@ -87,6 +87,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"cash_movements": {
+                  Row: {
+                    "amount": number,"created_at": string,"date": string,"holding_id": string,"id": string,"kind": Database["public"]['Enums']["cash_movement_kind"],"note": string | null,"operation_id": string | null,"rates": NonNullable<Json>,"reference": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"date": string,"holding_id": string,"id"?: string,"kind": Database["public"]['Enums']["cash_movement_kind"],"note"?: string | null,"operation_id"?: string | null,"rates": NonNullable<Json>,"reference"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"date"?: string,"holding_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["cash_movement_kind"],"note"?: string | null,"operation_id"?: string | null,"rates"?: NonNullable<Json>,"reference"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cash_movements_user_id_holding_id_fkey"
+      columns: ["user_id","holding_id"]
+isOneToOne: false
+      referencedRelation: "holdings"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "cash_movements_user_id_operation_id_fkey"
+      columns: ["user_id","operation_id"]
+isOneToOne: false
+      referencedRelation: "operations"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"column_mappings": {
                   Row: {
                     "created_at": string,"header_signature": string,"id": string,"institution": string,"mapping": NonNullable<Json>,"user_id": string
@@ -601,6 +627,9 @@ isOneToOne: false
 "update_liability_event":
 { Args: { "p_cash": Json,"p_event": Json,"p_event_id": string }; Returns: boolean
                            },
+"write_cash_movements":
+{ Args: { "p_deletes": (string)[],"p_holding_id": string,"p_inserts": Json }; Returns: (string)[]
+                           },
 "write_operation":
 { Args: { "p_expected": Json,"p_operation_id": string,"p_parts": Json }; Returns: string
                            } |
@@ -608,7 +637,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD"|"EUR","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"eur"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages"|"connection_rejected"|"connection_not_read_only","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"stock"|"bond"|"fci","liability_event_kind": "rate_change"|"payment"|"adjustment","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
+            "ai_cost_type": "import_extraction"|"import_column_mapping"|"assistant_chat","asset_class": "instrument"|"cash"|"fixed_term"|"real_estate"|"other","cash_movement_kind": "opening_balance"|"deposit"|"withdrawal"|"settlement"|"income"|"charge","chat_unit": "ars"|"usd_mep"|"usd_ccl","consent_kind": "terms"|"privacy"|"ai_providers","currency": "ARS"|"USD"|"EUR","fx_rate_kind": "official"|"mep"|"ccl"|"blue"|"eur"|"uva","import_confidence": "high"|"medium"|"low","import_failure": "unsupported"|"unreadable"|"nothing_found"|"extraction_failed"|"too_many_pages"|"connection_rejected"|"connection_not_read_only","import_status": "queued"|"reading"|"ready"|"failed"|"confirmed","instrument_type": "crypto"|"cedear"|"stock"|"bond"|"fci","liability_event_kind": "rate_change"|"payment"|"adjustment","liability_kind": "personal_loan"|"mortgage"|"credit_card"|"usd_debt"|"crypto_loan","manual_rate_kind": "mep"|"ccl"|"official","movement_direction": "in"|"out","movement_kind": "opening_balance"|"purchase"|"sale"|"dividend"|"coupon"|"adjustment"|"transfer"|"yield","quote_source": "dolarapi"|"argentinadatos"|"kraken"|"iol","reference_dollar": "mep"|"ccl"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -724,7 +753,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD", "EUR"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "eur", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages", "connection_rejected", "connection_not_read_only"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "stock", "bond", "fci"],"liability_event_kind": ["rate_change", "payment", "adjustment"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
+            "ai_cost_type": ["import_extraction", "import_column_mapping", "assistant_chat"],"asset_class": ["instrument", "cash", "fixed_term", "real_estate", "other"],"cash_movement_kind": ["opening_balance", "deposit", "withdrawal", "settlement", "income", "charge"],"chat_unit": ["ars", "usd_mep", "usd_ccl"],"consent_kind": ["terms", "privacy", "ai_providers"],"currency": ["ARS", "USD", "EUR"],"fx_rate_kind": ["official", "mep", "ccl", "blue", "eur", "uva"],"import_confidence": ["high", "medium", "low"],"import_failure": ["unsupported", "unreadable", "nothing_found", "extraction_failed", "too_many_pages", "connection_rejected", "connection_not_read_only"],"import_status": ["queued", "reading", "ready", "failed", "confirmed"],"instrument_type": ["crypto", "cedear", "stock", "bond", "fci"],"liability_event_kind": ["rate_change", "payment", "adjustment"],"liability_kind": ["personal_loan", "mortgage", "credit_card", "usd_debt", "crypto_loan"],"manual_rate_kind": ["mep", "ccl", "official"],"movement_direction": ["in", "out"],"movement_kind": ["opening_balance", "purchase", "sale", "dividend", "coupon", "adjustment", "transfer", "yield"],"quote_source": ["dolarapi", "argentinadatos", "kraken", "iol"],"reference_dollar": ["mep", "ccl"]
           }
         }
 } as const

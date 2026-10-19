@@ -57,7 +57,18 @@ function fakeClient(...responses: Response[]) {
     calls.push(["select", ...args]);
     const response = responses.shift();
     if (!response) throw new Error("no response left");
-    return Promise.resolve(response);
+    // A read filters after its select.
+    const answer: Promise<Response> & Record<string, unknown> = Object.assign(
+      Promise.resolve(response),
+      {},
+    );
+    for (const method of ["eq", "limit"]) {
+      answer[method] = (...args: unknown[]) => {
+        calls.push([method, ...args]);
+        return answer;
+      };
+    }
+    return answer;
   };
   createClient.mockResolvedValue(builder);
   return calls;
@@ -73,6 +84,14 @@ const refused = (status: number, code: string): Response => ({
   error: { code, message: SENTINEL, details: SENTINEL, hint: SENTINEL },
   status,
 });
+
+const NO_HISTORY: Response = { data: [], error: null, status: 200 };
+const HISTORY_READ = [
+  ["from", "cash_movements"],
+  ["select", "id"],
+  ["eq", "holding_id", ID],
+  ["limit", 1],
+];
 
 const CASH = {
   asset_class: "cash",
@@ -186,13 +205,14 @@ describe("updateHolding", () => {
   const edit = without(CASH, "instrument_symbol");
 
   it("updates the columns of an active holding of that class, by the user", async () => {
-    const calls = fakeClient(ok());
+    const calls = fakeClient(NO_HISTORY, ok());
     await expect(updateHolding(ID, edit)).resolves.toEqual({
       ok: true,
       id: ID,
     });
     const columns = without(edit, "asset_class");
     expect(calls).toEqual([
+      ...HISTORY_READ,
       ["from", "holdings"],
       ["update", columns],
       ["eq", "user_id", USER],
@@ -219,10 +239,19 @@ describe("updateHolding", () => {
     ]);
   });
 
+  it("never writes the amount of cash with a history, which its movements leave", async () => {
+    const calls = fakeClient(ok(), ok());
+    await updateHolding(ID, edit);
+    expect(calls[HISTORY_READ.length + 1]).toEqual([
+      "update",
+      expect.not.objectContaining({ amount: expect.anything() }),
+    ]);
+  });
+
   it("moves a holding to another portfolio", async () => {
-    const calls = fakeClient(ok());
+    const calls = fakeClient(NO_HISTORY, ok());
     await updateHolding(ID, { ...edit, portfolio_id: PORTFOLIO });
-    expect(calls[1]).toEqual([
+    expect(calls[HISTORY_READ.length + 1]).toEqual([
       "update",
       expect.objectContaining({ portfolio_id: PORTFOLIO }),
     ]);
@@ -250,7 +279,7 @@ describe("updateHolding", () => {
   });
 
   it("reads no row as not_found", async () => {
-    fakeClient({ data: [], error: null, status: 200 });
+    fakeClient(NO_HISTORY, { data: [], error: null, status: 200 });
     await expect(updateHolding(ID, edit)).resolves.toEqual({
       ok: false,
       code: "not_found",
