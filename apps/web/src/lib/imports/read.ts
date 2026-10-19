@@ -1,4 +1,6 @@
 import "server-only";
+
+import { SHOWN_IMPORTS } from "./shown";
 import {
   type InstrumentType,
   quotedPrice,
@@ -67,10 +69,6 @@ const importError = (
     : row.status === "failed" && origin === "sync"
       ? SUPERSEDED_SYNC_MESSAGE
       : null;
-
-// An import failed with no failure was discarded by the user or replaced by
-// a later sync: it leaves the list.
-export const SHOWN_IMPORTS = "status.neq.failed,failure.not.is.null";
 
 // The user's latest `limit` imports, newest first, whether there were more,
 // and how many they started this month (in Buenos Aires), deleted ones

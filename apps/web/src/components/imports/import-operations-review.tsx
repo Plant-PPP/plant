@@ -10,7 +10,7 @@ import {
   times,
   toDecimal,
 } from "@plant/shared";
-import { RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Pencil, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
@@ -27,6 +27,15 @@ import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -36,8 +45,11 @@ import {
 import {
   amountInput,
   formatAmount,
+  formatPrice,
+  formatQuantity,
   parseAmountInput,
 } from "@/lib/format/amount";
+import { formatDate } from "@/lib/format/date";
 import { countOf } from "@/lib/format/text";
 import { instrumentLabel, instrumentNames } from "@/lib/holdings/holding-name";
 import {
@@ -201,6 +213,23 @@ export function ImportOperationsReview({
     "all",
   );
   const [symbolShown, setSymbolShown] = useState("all");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [attention] = useState(
+    () =>
+      new Set(
+        (item.operations ?? [])
+          .map(edited)
+          .filter((row) => {
+            if (row.discarded || isLocked(row)) return false;
+            return (
+              row.confidence === "low" ||
+              missingFields(finalOf(row), today).length > 0 ||
+              typedInvalid(row, types.get(row.symbol)).size > 0
+            );
+          })
+          .map((row) => row.id),
+      ),
+  );
 
   const finals = rows.map(finalOf);
   const missing = finals.map((row) => new Set(missingFields(row, today)));
@@ -270,6 +299,7 @@ export function ImportOperationsReview({
       }
       const at = rows.findIndex((row) => row.id === result.rowId);
       setRefused(result.rowId);
+      setEditing(result.rowId ?? null);
       if (at === -1) {
         // Refused before any operation: the import is no longer ready.
         setAlert(
@@ -299,6 +329,253 @@ export function ImportOperationsReview({
       figure,
     );
   };
+
+  // One operation as a form, for the rows to complete and the one being
+  // edited.
+  const card = (row: EditedOperation, index: number) => {
+    const type = types.get(row.symbol);
+    const trade = row.kind === "purchase" || row.kind === "sale";
+    return (
+      <li
+        key={row.id}
+        aria-label={`Operación ${index + 1}`}
+        className={cn(
+          "grid gap-3 rounded-lg border p-3",
+          !row.discarded &&
+            (missing[index]!.size > 0 || row.confidence === "low") &&
+            "border-warn/50 bg-warn/5",
+          refused === row.id && "border-destructive",
+          row.discarded && "opacity-50",
+        )}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="grid min-w-0 gap-1">
+            {row.picks ? (
+              <InstrumentPicker
+                id={`${pickerId}-${row.id}`}
+                aria-label={`Activo de la operación ${index + 1}`}
+                aria-invalid={invalid(index, "symbol")}
+                instruments={instruments}
+                value={row.symbol}
+                onChange={(symbol, added, line) => {
+                  const instrument =
+                    added ?? instruments.find((each) => each.symbol === symbol);
+                  const currency = line
+                    ? "USD"
+                    : lineOf(instrument, "USD")
+                      ? instrument?.currency
+                      : undefined;
+                  change(row.id, {
+                    symbol,
+                    ...(currency && { currency }),
+                  });
+                }}
+                onAdded={addToCatalog}
+                markets={marketsFor(institution)}
+                lines
+                line={lineOf(
+                  instruments.find((each) => each.symbol === row.symbol),
+                  row.currency,
+                )}
+                placeholder="Elegí un activo"
+              />
+            ) : (
+              <span className="truncate font-medium">
+                {instrumentLabel(row.symbol, names.get(row.symbol))}
+              </span>
+            )}
+            <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
+              {row.source && <span>{row.source}</span>}
+              {item.origin !== "sync" && (
+                <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
+              )}
+              {row.reference && <span>{`N° ${row.reference}`}</span>}
+              {row.loaded && (
+                <span className="text-foreground">Ya está cargada</span>
+              )}
+            </span>
+            {!row.discarded && missing[index]!.has("symbol") && (
+              <ProblemText
+                text={
+                  item.operations?.[index]?.unknownSymbol
+                    ? "No lo encontramos entre los activos: elegilo en la lista"
+                    : missingCopy
+                }
+              />
+            )}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={isLocked(row)}
+            aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la operación ${index + 1}`}
+            onClick={() => change(row.id, { discarded: !row.discarded })}
+          >
+            {row.discarded ? <RotateCcw /> : <X />}
+            {row.discarded ? "Recuperar" : "Descartar"}
+          </Button>
+          {editing === row.id && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditing(null)}
+            >
+              Listo
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="grid gap-1 text-xs">
+            <span className="text-muted-foreground">Tipo</span>
+            <Select
+              value={row.kind ?? ""}
+              disabled={row.discarded}
+              onValueChange={(kind) =>
+                change(row.id, { kind: kind as ImportOperationKind })
+              }
+            >
+              <SelectTrigger
+                aria-label={`Tipo de la operación ${index + 1}`}
+                aria-invalid={invalid(index, "kind")}
+              >
+                <SelectValue placeholder="Elegí el tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {KINDS.map((kind) => (
+                  <SelectItem key={kind} value={kind}>
+                    {MOVEMENT_KIND_LABELS[kind]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!row.discarded && missing[index]!.has("kind") && (
+              <ProblemText text={missingCopy} />
+            )}
+          </label>
+          <label className="grid gap-1 text-xs">
+            <span className="text-muted-foreground">Fecha</span>
+            <Input
+              type="date"
+              max={today}
+              value={row.date ?? ""}
+              aria-label={`Fecha de la operación ${index + 1}`}
+              aria-invalid={invalid(index, "date")}
+              disabled={row.discarded}
+              onChange={(event) =>
+                change(row.id, { date: event.target.value || null })
+              }
+            />
+            {!row.discarded && missing[index]!.has("date") && (
+              <ProblemText
+                text={lackingDate(
+                  row.date,
+                  item.operations?.[index]?.date ?? null,
+                  item.origin,
+                  today,
+                )}
+              />
+            )}
+          </label>
+          <label className="grid gap-1 text-xs">
+            <span className="text-muted-foreground">Moneda</span>
+            <Select
+              value={row.currency}
+              disabled={row.discarded}
+              onValueChange={(currency) =>
+                change(row.id, { currency: currency as Currency })
+              }
+            >
+              <SelectTrigger aria-label={`Moneda de la operación ${index + 1}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(CURRENCY_LABELS) as Currency[]).map(
+                  (currency) => (
+                    <SelectItem key={currency} value={currency}>
+                      {CURRENCY_LABELS[currency]}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectContent>
+            </Select>
+          </label>
+        </div>
+        {row.kind === null ? (
+          <p className="text-muted-foreground text-xs">
+            Elegí el tipo para completar el resto.
+          </p>
+        ) : (
+          <div
+            className={cn(
+              "grid gap-3",
+              trade ? "sm:grid-cols-4" : "sm:grid-cols-3",
+            )}
+          >
+            {trade ? (
+              <>
+                <Figure
+                  label="Cantidad"
+                  aria={`Cantidad de la operación ${index + 1}`}
+                  value={row.quantityText}
+                  disabled={row.discarded}
+                  problem={problem(index, "quantity")}
+                  onChange={(quantityText) => change(row.id, { quantityText })}
+                />
+                <Figure
+                  label={
+                    type
+                      ? `Precio ${priceBasisLabel(type)} (${row.currency})`
+                      : `Precio (${row.currency})`
+                  }
+                  aria={`Precio de la operación ${index + 1}`}
+                  value={row.priceText}
+                  disabled={row.discarded}
+                  problem={problem(index, "price")}
+                  onChange={(priceText) => change(row.id, { priceText })}
+                />
+              </>
+            ) : (
+              <Figure
+                label={`Monto (${row.currency})`}
+                aria={`Monto de la operación ${index + 1}`}
+                value={row.amountText}
+                disabled={row.discarded}
+                problem={problem(index, "amount")}
+                onChange={(amountText) => change(row.id, { amountText })}
+              />
+            )}
+            <Figure
+              label={`Gastos (${row.currency}) · Opcional`}
+              aria={`Gastos de la operación ${index + 1}`}
+              value={row.chargesText}
+              disabled={row.discarded}
+              problem={problem(index, "charges")}
+              onChange={(chargesText) => change(row.id, { chargesText })}
+            />
+            {trade && (
+              <div className="grid gap-1 text-xs">
+                <span className="text-muted-foreground">{`Total (${row.currency})`}</span>
+                <span className="flex h-9 items-center text-sm font-medium tabular-nums">
+                  {tradeTotal(row, type, row.currency)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </li>
+    );
+  };
+
+  // The rows that needed something when the review opened stay on top until
+  // it is confirmed, so completing one does not move it; the rest go in the
+  // table.
+  const listed = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => shown(row));
+  const attentionRows = listed.filter(({ row }) => attention.has(row.id));
+  const readyRows = listed.filter(({ row }) => !attention.has(row.id));
 
   return (
     <div className="grid gap-4">
@@ -381,269 +658,149 @@ export function ImportOperationsReview({
               </SelectContent>
             </Select>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => keepShown(true)}
-          >
-            Incluir las que se ven
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => keepShown(false)}
-          >
-            Descartar las que se ven
-          </Button>
           <span role="status" className="text-muted-foreground text-xs">
             {`${keptCount} de ${rows.length} para importar`}
           </span>
         </div>
-        <ul className="grid gap-2">
-          {rows.map((row, index) => {
-            if (!shown(row)) return null;
-            const type = types.get(row.symbol);
-            const trade = row.kind === "purchase" || row.kind === "sale";
-            return (
-              <li
-                key={row.id}
-                aria-label={`Operación ${index + 1}`}
-                className={cn(
-                  "grid gap-3 rounded-lg border p-3",
-                  !row.discarded &&
-                    (missing[index]!.size > 0 || row.confidence === "low") &&
-                    "border-warn/50 bg-warn/5",
-                  refused === row.id && "border-destructive",
-                  row.discarded && "opacity-50",
-                )}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="grid min-w-0 gap-1">
-                    {row.picks ? (
-                      <InstrumentPicker
-                        id={`${pickerId}-${row.id}`}
-                        aria-label={`Activo de la operación ${index + 1}`}
-                        aria-invalid={invalid(index, "symbol")}
-                        instruments={instruments}
-                        value={row.symbol}
-                        onChange={(symbol, added, line) => {
-                          const instrument =
-                            added ??
-                            instruments.find((each) => each.symbol === symbol);
-                          const currency = line
-                            ? "USD"
-                            : lineOf(instrument, "USD")
-                              ? instrument?.currency
-                              : undefined;
-                          change(row.id, {
-                            symbol,
-                            ...(currency && { currency }),
-                          });
-                        }}
-                        onAdded={addToCatalog}
-                        markets={marketsFor(institution)}
-                        lines
-                        line={lineOf(
-                          instruments.find(
-                            (each) => each.symbol === row.symbol,
-                          ),
-                          row.currency,
-                        )}
-                        placeholder="Elegí un activo"
+        {attentionRows.length > 0 && (
+          <section className="grid gap-2" aria-labelledby={`${pickerId}-todo`}>
+            <h3 id={`${pickerId}-todo`} className="text-xs font-medium">
+              {`Para completar (${attentionRows.length})`}
+            </h3>
+            <ul className="grid gap-2">
+              {attentionRows.map(({ row, index }) => card(row, index))}
+            </ul>
+          </section>
+        )}
+        {readyRows.length > 0 && (
+          <section className="grid gap-2" aria-labelledby={`${pickerId}-ready`}>
+            {attentionRows.length > 0 && (
+              <h3 id={`${pickerId}-ready`} className="text-xs font-medium">
+                {`Listas para importar (${readyRows.length})`}
+              </h3>
+            )}
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableCaption className="sr-only">
+                  Operaciones listas para importar
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Incluir todas las que se ven"
+                        className="accent-primary size-4 align-middle"
+                        checked={readyRows.every(({ row }) => !row.discarded)}
+                        onChange={(event) => keepShown(event.target.checked)}
                       />
+                    </TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Activo</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Precio</TableHead>
+                    <TableHead className="text-right">Gastos</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="w-10">
+                      <span className="sr-only">Editar</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {readyRows.map(({ row, index }) =>
+                    editing === row.id ? (
+                      <TableRow key={row.id} className="hover:bg-transparent">
+                        <TableCell colSpan={9} className="p-2">
+                          <ul>{card(row, index)}</ul>
+                        </TableCell>
+                      </TableRow>
                     ) : (
-                      <span className="truncate font-medium">
-                        {instrumentLabel(row.symbol, names.get(row.symbol))}
-                      </span>
-                    )}
-                    <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
-                      {row.source && <span>{row.source}</span>}
-                      {item.origin !== "sync" && (
-                        <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
-                      )}
-                      {row.reference && <span>{`N° ${row.reference}`}</span>}
-                      {row.loaded && (
-                        <span className="text-foreground">Ya está cargada</span>
-                      )}
-                    </span>
-                    {!row.discarded && missing[index]!.has("symbol") && (
-                      <ProblemText
-                        text={
-                          item.operations?.[index]?.unknownSymbol
-                            ? "No lo encontramos entre los activos: elegilo en la lista"
-                            : missingCopy
-                        }
-                      />
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={isLocked(row)}
-                    aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la operación ${index + 1}`}
-                    onClick={() =>
-                      change(row.id, { discarded: !row.discarded })
-                    }
-                  >
-                    {row.discarded ? <RotateCcw /> : <X />}
-                    {row.discarded ? "Recuperar" : "Descartar"}
-                  </Button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="grid gap-1 text-xs">
-                    <span className="text-muted-foreground">Tipo</span>
-                    <Select
-                      value={row.kind ?? ""}
-                      disabled={row.discarded}
-                      onValueChange={(kind) =>
-                        change(row.id, { kind: kind as ImportOperationKind })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={`Tipo de la operación ${index + 1}`}
-                        aria-invalid={invalid(index, "kind")}
-                      >
-                        <SelectValue placeholder="Elegí el tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {KINDS.map((kind) => (
-                          <SelectItem key={kind} value={kind}>
-                            {MOVEMENT_KIND_LABELS[kind]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!row.discarded && missing[index]!.has("kind") && (
-                      <ProblemText text={missingCopy} />
-                    )}
-                  </label>
-                  <label className="grid gap-1 text-xs">
-                    <span className="text-muted-foreground">Fecha</span>
-                    <Input
-                      type="date"
-                      max={today}
-                      value={row.date ?? ""}
-                      aria-label={`Fecha de la operación ${index + 1}`}
-                      aria-invalid={invalid(index, "date")}
-                      disabled={row.discarded}
-                      onChange={(event) =>
-                        change(row.id, { date: event.target.value || null })
-                      }
-                    />
-                    {!row.discarded && missing[index]!.has("date") && (
-                      <ProblemText
-                        text={lackingDate(
-                          row.date,
-                          item.operations?.[index]?.date ?? null,
-                          item.origin,
-                          today,
+                      <TableRow
+                        key={row.id}
+                        aria-label={`Operación ${index + 1}`}
+                        className={cn(
+                          "text-xs",
+                          row.discarded && "text-muted-foreground",
                         )}
-                      />
-                    )}
-                  </label>
-                  <label className="grid gap-1 text-xs">
-                    <span className="text-muted-foreground">Moneda</span>
-                    <Select
-                      value={row.currency}
-                      disabled={row.discarded}
-                      onValueChange={(currency) =>
-                        change(row.id, { currency: currency as Currency })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={`Moneda de la operación ${index + 1}`}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(CURRENCY_LABELS) as Currency[]).map(
-                          (currency) => (
-                            <SelectItem key={currency} value={currency}>
-                              {CURRENCY_LABELS[currency]}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
-                {row.kind === null ? (
-                  <p className="text-muted-foreground text-xs">
-                    Elegí el tipo para completar el resto.
-                  </p>
-                ) : (
-                  <div
-                    className={cn(
-                      "grid gap-3",
-                      trade ? "sm:grid-cols-4" : "sm:grid-cols-3",
-                    )}
-                  >
-                    {trade ? (
-                      <>
-                        <Figure
-                          label="Cantidad"
-                          aria={`Cantidad de la operación ${index + 1}`}
-                          value={row.quantityText}
-                          disabled={row.discarded}
-                          problem={problem(index, "quantity")}
-                          onChange={(quantityText) =>
-                            change(row.id, { quantityText })
-                          }
-                        />
-                        <Figure
-                          label={
-                            type
-                              ? `Precio ${priceBasisLabel(type)} (${row.currency})`
-                              : `Precio (${row.currency})`
-                          }
-                          aria={`Precio de la operación ${index + 1}`}
-                          value={row.priceText}
-                          disabled={row.discarded}
-                          problem={problem(index, "price")}
-                          onChange={(priceText) =>
-                            change(row.id, { priceText })
-                          }
-                        />
-                      </>
-                    ) : (
-                      <Figure
-                        label={`Monto (${row.currency})`}
-                        aria={`Monto de la operación ${index + 1}`}
-                        value={row.amountText}
-                        disabled={row.discarded}
-                        problem={problem(index, "amount")}
-                        onChange={(amountText) =>
-                          change(row.id, { amountText })
-                        }
-                      />
-                    )}
-                    <Figure
-                      label={`Gastos (${row.currency}) · Opcional`}
-                      aria={`Gastos de la operación ${index + 1}`}
-                      value={row.chargesText}
-                      disabled={row.discarded}
-                      problem={problem(index, "charges")}
-                      onChange={(chargesText) =>
-                        change(row.id, { chargesText })
-                      }
-                    />
-                    {trade && (
-                      <div className="grid gap-1 text-xs">
-                        <span className="text-muted-foreground">{`Total (${row.currency})`}</span>
-                        <span className="flex h-9 items-center text-sm font-medium tabular-nums">
-                          {tradeTotal(row, type, row.currency)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            aria-label={`Incluir la operación ${index + 1}`}
+                            className="accent-primary size-4 align-middle"
+                            checked={!row.discarded}
+                            disabled={isLocked(row)}
+                            onChange={(event) =>
+                              change(row.id, {
+                                discarded: !event.target.checked,
+                              })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {row.date ? formatDate(row.date) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {row.kind ? MOVEMENT_KIND_LABELS[row.kind] : "—"}
+                        </TableCell>
+                        <TableCell className="max-w-48">
+                          <span
+                            className="block truncate font-medium"
+                            title={names.get(row.symbol)}
+                          >
+                            {row.symbol}
+                          </span>
+                          {row.loaded && (
+                            <span className="text-muted-foreground block">
+                              Ya está cargada
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {figureText(finals[index]!.quantity, formatQuantity)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {figureText(finals[index]!.price, (price) =>
+                            formatPrice(price, row.currency),
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {figureText(finals[index]!.charges, (charges) =>
+                            formatAmount(charges, row.currency),
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {row.kind === "purchase" || row.kind === "sale"
+                            ? tradeTotal(
+                                row,
+                                types.get(row.symbol),
+                                row.currency,
+                              )
+                            : figureText(finals[index]!.amount, (amount) =>
+                                formatAmount(amount, row.currency),
+                              )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-foreground size-7"
+                            aria-label={`Editar la operación ${index + 1}`}
+                            onClick={() => setEditing(row.id)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ),
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        )}
       </section>
 
       {alert && <FormAlert>{alert}</FormAlert>}
@@ -666,6 +823,12 @@ export function ImportOperationsReview({
     </div>
   );
 }
+
+// A figure as the table shows it, or a dash where there is none.
+const figureText = (
+  value: string | null,
+  format: (value: string) => string,
+): string => (value === null ? "—" : format(value));
 
 // A trade's quantity times its unit price as typed; the broker's own total
 // when the instrument, and so how its price is quoted, is not known yet.

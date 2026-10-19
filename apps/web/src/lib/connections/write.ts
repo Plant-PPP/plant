@@ -30,7 +30,7 @@ import {
   syncDraftOf,
 } from "@/lib/connections/api-key";
 import { consentsGiven } from "@/lib/consent-given";
-import { SHOWN_IMPORTS } from "@/lib/imports/read";
+import { SHOWN_IMPORTS } from "@/lib/imports/shown";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
