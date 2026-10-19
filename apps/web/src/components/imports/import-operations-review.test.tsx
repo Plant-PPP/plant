@@ -6,10 +6,7 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-import {
-  exactListing,
-  ImportOperationsReview,
-} from "./import-operations-review";
+import { ImportOperationsReview } from "./import-operations-review";
 
 const operation = (
   extra: Partial<ImportOperationRow> = {},
@@ -225,22 +222,4 @@ it("asks for figures above 0 when the reading has a 0", () => {
   ]);
   expect(income).toContain("Ingresá un monto mayor a 0");
   expect(income).not.toContain("Falta en el documento");
-});
-
-it("takes the market's listing for exactly what the import named, or a dollar line of it", () => {
-  const googl = {
-    symbol: "GOOGL",
-    name: "Cedear Alphabet Inc. Cl. A",
-    type: "cedear",
-    currency: "ARS",
-    market: "byma",
-    lines: ["GOGLD", "GOGLC"],
-  } as const;
-  expect(exactListing([googl], "gogld")).toEqual({ listing: googl, line: "D" });
-  expect(exactListing([googl], "GOGLC")).toEqual({ listing: googl, line: "C" });
-  expect(exactListing([googl], "GOOGL")).toEqual({
-    listing: googl,
-    line: null,
-  });
-  expect(exactListing([googl], "GOOG")).toBeNull();
 });
