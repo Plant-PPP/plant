@@ -1,5 +1,5 @@
--- Discarding an import: a user fails their own ready import, never another
--- user's, never one being read, and never a confirmed one.
+-- Discarding or cancelling an import: a user fails their own ready import or
+-- one still being read, never another user's, and never a confirmed one.
 --
 -- Run with: pnpm exec supabase test db --local
 
@@ -79,8 +79,8 @@ SELECT is(
 SELECT is(
   pg_temp.error_of($$ UPDATE public.imports SET status = 'failed'
                       WHERE id = 'a9000000-0000-4000-8000-0000000000a2' $$),
-  '42501',
-  'never one still being read'
+  NULL,
+  'and cancels one still being read'
 );
 
 SELECT is(

@@ -13,6 +13,7 @@ import {
   writeAccountCash,
 } from "@/app/(app)/(data)/accounts/cash-actions";
 import { loadMovements } from "@/app/(app)/(data)/assets/movement-actions";
+import { discardImport } from "@/app/(app)/(data)/import/actions";
 import { CashHistory } from "@/components/holdings/cash-history";
 import { ApiKeyCard } from "@/components/connections/api-key-card";
 import { type Scope, ScopePage } from "@/components/holdings/scope-page";
@@ -197,6 +198,7 @@ export async function ScopeView({
               connect: connectApiKey,
               disconnect: disconnectApiKey,
               sync: syncAccount,
+              cancel: discardImport,
             }}
           />
         )

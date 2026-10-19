@@ -12,6 +12,7 @@ import {
   ListOrdered,
   LoaderCircle,
   RefreshCw,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -208,7 +209,24 @@ export function ApiKeyCard({
         </Notice>
       )}
       {!connected && apiKey?.lastSync && (
-        <SyncStatus sync={apiKey.lastSync} provider={form.name} />
+        <SyncStatus
+          sync={apiKey.lastSync}
+          provider={form.name}
+          onCancel={
+            actions.cancel &&
+            (() => {
+              const cancel = actions.cancel!;
+              const importId = apiKey.lastSync!.importId;
+              startTransition(async () => {
+                const result = await settle(cancel(importId));
+                if (result === "rejected" || !result.ok) {
+                  setError("No pudimos cancelar la sincronización.");
+                }
+                router.refresh();
+              });
+            })
+          }
+        />
       )}
       {error && <FormAlert>{error}</FormAlert>}
       {dialog === "operations" && (
@@ -253,17 +271,27 @@ export function ApiKeyCard({
 export function SyncStatus({
   sync,
   provider,
+  onCancel,
 }: {
   sync: LastSync;
   provider: string;
+  onCancel?: () => void;
 }) {
   const when = `${formatDate(sync.on)} a las ${sync.at}`;
   if (isBusy(sync.status)) {
     return (
-      <p className="flex items-center gap-2 text-sm">
-        <LoaderCircle aria-hidden className="text-warn size-4 animate-spin" />
-        Sincronizando desde el {when}.
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="flex items-center gap-2 text-sm">
+          <LoaderCircle aria-hidden className="text-warn size-4 animate-spin" />
+          Sincronizando desde el {when}.
+        </p>
+        {onCancel && (
+          <PageButton type="button" variant="ghost" onClick={onCancel}>
+            <X aria-hidden />
+            Cancelar
+          </PageButton>
+        )}
+      </div>
     );
   }
   if (sync.status === "failed") {

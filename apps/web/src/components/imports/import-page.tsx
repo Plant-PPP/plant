@@ -14,6 +14,7 @@ import {
   LoaderCircle,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
@@ -199,9 +200,12 @@ export function ImportPage({
           id: "delete",
           icon: Trash2,
           tooltip: "Descartar",
-          label: (item) => `Descartar ${item.fileName}`,
+          label: (item) =>
+            `${isBusy(item.status) ? "Cancelar" : "Descartar"} ${item.fileName}`,
           onClick: setDiscarding,
-          hidden: (item) => item.status !== "ready",
+          hidden: (item) => item.status !== "ready" && !isBusy(item.status),
+          variant: (item) =>
+            isBusy(item.status) ? { icon: X, tooltip: "Cancelar" } : undefined,
         },
       ],
       { pending: false },
@@ -340,9 +344,17 @@ export function ImportPage({
 
       {discarding && (
         <ConfirmDialog
-          title="Descartar la carga"
-          description={`Sacamos "${discarding.fileName}" de tus cargas sin guardar nada de lo que leímos.`}
-          confirmLabel="Descartar"
+          {...(isBusy(discarding.status)
+            ? {
+                title: "Cancelar la carga",
+                description: `Dejamos de leer "${discarding.fileName}" y la sacamos de tus cargas.`,
+                confirmLabel: "Cancelar la carga",
+              }
+            : {
+                title: "Descartar la carga",
+                description: `Sacamos "${discarding.fileName}" de tus cargas sin guardar nada de lo que leímos.`,
+                confirmLabel: "Descartar",
+              })}
           returnFocusTo={() => null}
           onClose={() => setDiscarding(null)}
           onConfirm={() => {
