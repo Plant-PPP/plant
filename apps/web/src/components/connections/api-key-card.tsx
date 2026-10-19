@@ -373,6 +373,19 @@ function OperationsDialog({
             />
           </div>
         </div>
+        {!periodFailure(from, to, today) && (
+          <p className="text-muted-foreground text-sm">
+            Vamos a traer las operaciones del{" "}
+            <span className="text-foreground font-medium">
+              {formatDate(from)}
+            </span>{" "}
+            al{" "}
+            <span className="text-foreground font-medium">
+              {formatDate(to)}
+            </span>
+            .
+          </p>
+        )}
         {error && <FormAlert>{error}</FormAlert>}
         <DialogActions submitLabel="Traer operaciones" />
       </form>
