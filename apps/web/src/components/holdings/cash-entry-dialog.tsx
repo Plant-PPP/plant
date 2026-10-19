@@ -19,7 +19,11 @@ import {
 } from "@/components/ui/select";
 import { parseAmountInput } from "@/lib/format/amount";
 import { type CashEntryKind, CASH_ENTRY_KINDS } from "@/lib/cash/input";
-import { CASH_ENTRY_LABELS, CASH_MESSAGES } from "@/lib/cash/messages";
+import {
+  CASH_ENTRY_LABELS,
+  CASH_MESSAGES,
+  CURRENCY_IN_TEXT,
+} from "@/lib/cash/messages";
 import { CURRENCY_LABELS } from "@/lib/holdings/messages";
 
 export type CashEntryFields = {
@@ -32,15 +36,15 @@ export type CashEntryFields = {
 
 export const CASH_CURRENCIES: readonly Currency[] = ["ARS", "USD"];
 
-// One movement of an account's cash typed by hand: its opening balance, a
-// deposit or a withdrawal, in pesos or dollars. A currency with no history
-// takes only an opening balance first. It hands its fields to `onSubmit` as
-// it closes, and a refused write opens it again with them and the alert.
+// One movement of an account's cash typed by hand: the opening balance of
+// one currency (`opening`), or a deposit or a withdrawal in pesos or dollars.
+// It hands its fields to `onSubmit` as it closes, and a refused write opens
+// it again with them and the alert.
 export function CashEntryDialog({
   initial,
   initialError,
   today,
-  opened,
+  opening,
   returnFocusTo,
   onClose,
   onSubmit,
@@ -48,8 +52,8 @@ export function CashEntryDialog({
   initial: CashEntryFields;
   initialError?: string;
   today: string;
-  // The currencies whose cash already has an opening balance.
-  opened: ReadonlySet<Currency>;
+  // Whether it states the opening balance of the initial currency.
+  opening: boolean;
   returnFocusTo: () => HTMLElement | null;
   onClose: () => void;
   onSubmit: (fields: CashEntryFields, amount: string) => boolean;
@@ -59,11 +63,7 @@ export function CashEntryDialog({
   const [fields, setFields] = useState(initial);
   const [alert, setAlert] = useState(initialError);
   const focus = useSavedFocus(returnFocusTo, false);
-  const kinds = CASH_ENTRY_KINDS.filter((kind) =>
-    opened.has(fields.currency)
-      ? kind !== "opening_balance"
-      : kind === "opening_balance",
-  );
+  const kinds = CASH_ENTRY_KINDS.filter((kind) => kind !== "opening_balance");
 
   function submit() {
     const amount = parseAmountInput(fields.amount);
@@ -91,27 +91,23 @@ export function CashEntryDialog({
   }
 
   const set = (patch: Partial<CashEntryFields>) => {
-    setFields((current) => {
-      const next = { ...current, ...patch };
-      // A currency with no opening balance takes it first, and one with it
-      // takes no other.
-      const open = opened.has(next.currency);
-      if (open && next.kind === "opening_balance") next.kind = "deposit";
-      if (!open) next.kind = "opening_balance";
-      return next;
-    });
+    setFields((current) => ({ ...current, ...patch }));
     setAlert(undefined);
   };
 
   return (
     <AppDialog
       onClose={onClose}
-      title="Registrar movimiento de efectivo"
+      title={
+        opening
+          ? `Saldo inicial en ${CURRENCY_IN_TEXT[fields.currency]}`
+          : "Registrar movimiento de efectivo"
+      }
       icon={Banknote}
       description={
-        opened.has(fields.currency)
-          ? "Lo que pusiste o sacaste de la cuenta. Las compras, ventas y dividendos mueven el efectivo solos cuando los importás."
-          : "El historial del efectivo empieza con lo que había en la cuenta ese día."
+        opening
+          ? "Lo que había en la cuenta ese día, antes de todo lo que cargues después. No cuenta como plata que pusiste."
+          : "Lo que pusiste o sacaste de la cuenta. Las compras, ventas y dividendos mueven el efectivo solos cuando los importás."
       }
       returnFocusTo={focus.returnFocusTo}
     >
@@ -124,42 +120,50 @@ export function CashEntryDialog({
         }}
       >
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor={`${id}-currency`}>Moneda</Label>
-            <Select
-              value={fields.currency}
-              onValueChange={(value) => set({ currency: value as Currency })}
-            >
-              <SelectTrigger id={`${id}-currency`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CASH_CURRENCIES.map((currency) => (
-                  <SelectItem key={currency} value={currency}>
-                    {CURRENCY_LABELS[currency]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={`${id}-kind`}>Movimiento</Label>
-            <Select
-              value={fields.kind}
-              onValueChange={(value) => set({ kind: value as CashEntryKind })}
-            >
-              <SelectTrigger id={`${id}-kind`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {kinds.map((kind) => (
-                  <SelectItem key={kind} value={kind}>
-                    {CASH_ENTRY_LABELS[kind]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!opening && (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor={`${id}-currency`}>Moneda</Label>
+                <Select
+                  value={fields.currency}
+                  onValueChange={(value) =>
+                    set({ currency: value as Currency })
+                  }
+                >
+                  <SelectTrigger id={`${id}-currency`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CASH_CURRENCIES.map((currency) => (
+                      <SelectItem key={currency} value={currency}>
+                        {CURRENCY_LABELS[currency]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`${id}-kind`}>Movimiento</Label>
+                <Select
+                  value={fields.kind}
+                  onValueChange={(value) =>
+                    set({ kind: value as CashEntryKind })
+                  }
+                >
+                  <SelectTrigger id={`${id}-kind`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kinds.map((kind) => (
+                      <SelectItem key={kind} value={kind}>
+                        {CASH_ENTRY_LABELS[kind]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
           <div className="grid gap-2">
             <Label htmlFor={`${id}-amount`}>Monto</Label>
             <Input
@@ -185,16 +189,18 @@ export function CashEntryDialog({
             />
           </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor={`${id}-note`}>Nota (opcional)</Label>
-          <Input
-            id={`${id}-note`}
-            autoComplete="off"
-            maxLength={200}
-            value={fields.note}
-            onChange={(event) => set({ note: event.target.value })}
-          />
-        </div>
+        {!opening && (
+          <div className="grid gap-2">
+            <Label htmlFor={`${id}-note`}>Nota (opcional)</Label>
+            <Input
+              id={`${id}-note`}
+              autoComplete="off"
+              maxLength={200}
+              value={fields.note}
+              onChange={(event) => set({ note: event.target.value })}
+            />
+          </div>
+        )}
         {alert && <FormAlert id={alertId}>{alert}</FormAlert>}
         <DialogActions
           submitLabel="Guardar"

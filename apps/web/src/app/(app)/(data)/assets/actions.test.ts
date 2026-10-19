@@ -58,10 +58,8 @@ function fakeClient(...responses: Response[]) {
     const response = responses.shift();
     if (!response) throw new Error("no response left");
     // A read filters after its select.
-    const answer: Promise<Response> & Record<string, unknown> = Object.assign(
-      Promise.resolve(response),
-      {},
-    );
+    const answer = Promise.resolve(response) as Promise<Response> &
+      Record<string, unknown>;
     for (const method of ["eq", "limit"]) {
       answer[method] = (...args: unknown[]) => {
         calls.push([method, ...args]);

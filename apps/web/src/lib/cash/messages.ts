@@ -1,4 +1,5 @@
 import type { CashMovementKind } from "@plant/core";
+import type { Currency } from "@plant/shared";
 
 import { FAILED } from "@/lib/portfolio-setup/messages";
 
@@ -44,4 +45,11 @@ export const STATEMENT_MESSAGES: Record<
   too_large: "El archivo es demasiado grande.",
   negative_cash:
     "El archivo saca más efectivo del que la cuenta tiene hoy: revisá que cubra todo el período o cargá el saldo inicial a mano.",
+};
+
+// A currency in a sentence: "Saldo inicial en dólares".
+export const CURRENCY_IN_TEXT: Record<Currency, string> = {
+  ARS: "pesos",
+  USD: "dólares",
+  EUR: "euros",
 };

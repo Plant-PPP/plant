@@ -32,8 +32,12 @@ import type {
   StatementResult,
   StatementSummary,
 } from "@/lib/cash/input";
-import { CASH_KIND_LABELS, CASH_MESSAGES } from "@/lib/cash/messages";
-import { formatAmount } from "@/lib/format/amount";
+import {
+  CASH_KIND_LABELS,
+  CASH_MESSAGES,
+  CURRENCY_IN_TEXT,
+} from "@/lib/cash/messages";
+import { amountInput, formatAmount } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
 import { CURRENCY_LABELS } from "@/lib/holdings/messages";
 import { FAILED } from "@/lib/portfolio-setup/messages";
@@ -72,7 +76,8 @@ export type CashActions = {
 };
 
 type Change =
-  | { kind: "add"; currency: Currency; line: CashLine }
+  // An opening balance that `replaces` the one before takes its place.
+  | { kind: "add"; currency: Currency; line: CashLine; replaces?: CashLine }
   | { kind: "delete"; currency: Currency; id: string };
 
 function apply(sides: CashSideView[], change: Change): CashSideView[] {
@@ -83,18 +88,17 @@ function apply(sides: CashSideView[], change: Change): CashSideView[] {
   return all.map((side) => {
     if (side.currency !== change.currency) return side;
     if (change.kind === "add") {
+      const { line, replaces } = change;
+      // A first opening balance starts the cash from 0.
+      const base =
+        line.kind === "opening_balance" && !replaces
+          ? exactOf("0")
+          : minus(exactOf(side.balance), exactOf(replaces?.amount ?? "0"));
       return {
         ...side,
-        balance: stored(
-          plus(
-            change.line.kind === "opening_balance"
-              ? exactOf("0")
-              : exactOf(side.balance),
-            exactOf(change.line.amount),
-          ),
-        ),
-        lines: [change.line, ...side.lines].sort((a, b) =>
-          b.date.localeCompare(a.date),
+        balance: stored(plus(base, exactOf(line.amount))),
+        lines: [line, ...side.lines.filter((each) => each !== replaces)].sort(
+          (a, b) => b.date.localeCompare(a.date),
         ),
       };
     }
@@ -136,26 +140,24 @@ export function CashHistory({
   const [entry, setEntry] = useState<{
     initial: CashEntryFields;
     initialError?: string;
+    // An opening balance, and the one it replaces.
+    opening?: { replaces: CashLine | null };
   } | null>(null);
   const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<{
     currency: Currency;
     line: CashLine;
   } | null>(null);
-  const opened = new Set(
+  const openingOf = (currency: Currency) =>
     shown
-      .filter((side) =>
-        side.lines.some((line) => line.kind === "opening_balance"),
-      )
-      .map((side) => side.currency),
-  );
+      .find((side) => side.currency === currency)
+      ?.lines.find((line) => line.kind === "opening_balance") ?? null;
 
   function openEntry() {
-    const currency = CASH_CURRENCIES[0]!;
     setEntry({
       initial: {
-        kind: opened.has(currency) ? "deposit" : "opening_balance",
-        currency,
+        kind: "deposit",
+        currency: CASH_CURRENCIES[0]!,
         date: today,
         amount: "",
         note: "",
@@ -163,7 +165,25 @@ export function CashHistory({
     });
   }
 
-  function submit(fields: CashEntryFields, amount: string): boolean {
+  function openOpening(currency: Currency) {
+    const replaces = openingOf(currency);
+    setEntry({
+      initial: {
+        kind: "opening_balance",
+        currency,
+        date: replaces?.date ?? today,
+        amount: replaces ? amountInput(replaces.amount) : "",
+        note: "",
+      },
+      opening: { replaces },
+    });
+  }
+
+  function submit(
+    fields: CashEntryFields,
+    amount: string,
+    replaces: CashLine | null = null,
+  ): boolean {
     const signed =
       fields.kind === "withdrawal" ? stored(negated(exactOf(amount))) : amount;
     return card.dialogAction(
@@ -178,6 +198,7 @@ export function CashHistory({
           detail: fields.note.trim() || null,
           unsaved: true,
         },
+        ...(replaces && { replaces }),
       },
       () =>
         actions.write({
@@ -191,12 +212,19 @@ export function CashHistory({
               note: fields.note.trim() || null,
             },
           ],
-          deletes: [],
+          deletes: replaces ? [replaces.id] : [],
         }),
       { ...CASH_MESSAGES, failed: FAILED },
       {
-        done: ADDED[fields.kind],
-        reopen: (error) => setEntry({ initial: fields, initialError: error }),
+        done: replaces ? "Cambiaste el saldo inicial" : ADDED[fields.kind],
+        reopen: (error) =>
+          setEntry({
+            initial: fields,
+            initialError: error,
+            ...(fields.kind === "opening_balance" && {
+              opening: { replaces },
+            }),
+          }),
       },
     );
   }
@@ -265,10 +293,39 @@ export function CashHistory({
         </PageButton>
       }
     >
+      <div className="grid gap-2 sm:grid-cols-2">
+        {CASH_CURRENCIES.map((currency) => {
+          const opening = openingOf(currency);
+          return (
+            <div
+              key={currency}
+              className="bg-card flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+            >
+              <div className="grid gap-0.5">
+                <p className="text-xs font-medium">
+                  {`Saldo inicial en ${CURRENCY_IN_TEXT[currency]}`}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {opening
+                    ? `${formatAmount(opening.amount, currency)} al ${formatDate(opening.date)}`
+                    : "Sin cargar: lo que había en la cuenta cuando empezás a seguirla"}
+                </p>
+              </div>
+              <PageButton
+                variant={opening ? "outline" : "default"}
+                disabled={pending}
+                onClick={() => openOpening(currency)}
+              >
+                {opening ? "Cambiar" : "Cargar"}
+              </PageButton>
+            </div>
+          );
+        })}
+      </div>
       {shown.length === 0 ? (
         <p className="text-muted-foreground text-xs">
-          Todavía no tiene historial: cargá el saldo inicial o importá los
-          movimientos de la cuenta.
+          Todavía no tiene movimientos: cargá el saldo inicial o importá los de
+          la cuenta.
         </p>
       ) : (
         shown.map((side) => (
@@ -277,7 +334,7 @@ export function CashHistory({
               {`${CURRENCY_LABELS[side.currency]} · hoy ${formatAmount(side.balance, side.currency)}`}
             </p>
             <DataTable
-              caption={`Movimientos del efectivo en ${CURRENCY_LABELS[side.currency].toLowerCase()}`}
+              caption={`Movimientos del efectivo en ${CURRENCY_IN_TEXT[side.currency]}`}
               columns={columns(side.currency)}
               data={side.lines}
             />
@@ -289,10 +346,12 @@ export function CashHistory({
           initial={entry.initial}
           initialError={entry.initialError}
           today={today}
-          opened={opened}
+          opening={entry.opening !== undefined}
           returnFocusTo={() => card.focusHeading()}
           onClose={() => setEntry(null)}
-          onSubmit={submit}
+          onSubmit={(fields, amount) =>
+            submit(fields, amount, entry.opening?.replaces ?? null)
+          }
         />
       )}
       {importing && (
