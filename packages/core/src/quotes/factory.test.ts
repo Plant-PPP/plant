@@ -322,6 +322,7 @@ describe("quoteFeeds", () => {
   const CATALOG = [
     { symbol: "AAPL", type: "cedear", currency: "ARS" },
     { symbol: "BTC", type: "crypto", currency: "USD" },
+    { symbol: "VOO.US", type: "etf", currency: "USD" },
   ] as const;
   const instruments = async () => CATALOG;
 
@@ -352,6 +353,27 @@ describe("quoteFeeds", () => {
     }
     if (hostname === "api.argentinadatos.com") {
       return [{ fecha: "2026-10-09", valor: 1603.33 }];
+    }
+    if (hostname === "query1.finance.yahoo.com") {
+      return {
+        spark: {
+          result: [
+            {
+              symbol: "VOO",
+              response: [
+                {
+                  meta: {
+                    currency: "USD",
+                    regularMarketPrice: 705.21,
+                    regularMarketTime:
+                      Date.parse("2026-10-09T20:00:00Z") / 1000,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
     }
     return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
   };
@@ -454,6 +476,68 @@ describe("quoteFeeds", () => {
     });
     for (const feed of feeds) await feed.read(NOW);
     expect(reads).toBe(1);
+  });
+
+  it("reads the catalog again once it is five minutes old or failed", async () => {
+    let reads = 0;
+    let at = 0;
+    const feeds = quoteFeeds({
+      getJson: async (url) => answer(url),
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
+      instruments: async () => {
+        reads += 1;
+        if (reads === 2) throw new Error("down");
+        return CATALOG;
+      },
+      now: () => at,
+    });
+    const yahoo = feeds.find((feed) => feed.id === "yahoo")!;
+    await yahoo.read(NOW);
+    at = 5 * 60_000 - 1;
+    await yahoo.read(NOW);
+    expect(reads).toBe(1);
+    at = 5 * 60_000;
+    await expect(yahoo.read(NOW)).rejects.toThrow("down");
+    await yahoo.read(NOW);
+    expect(reads).toBe(3);
+  });
+
+  it("quotes a US listing from Yahoo, never from IOL", async () => {
+    const urls: string[] = [];
+    const feeds = quoteFeeds({
+      getJson: async (url) => {
+        urls.push(url);
+        return answer(url);
+      },
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
+      instruments,
+    });
+    const read = async (id: string) =>
+      (await feeds.find((feed) => feed.id === id)!.read(NOW)).prices.map(
+        ({ symbol, price }) => [symbol, price],
+      );
+    expect(await read("yahoo")).toEqual([["VOO.US", "705.21"]]);
+    expect(await read("iol")).toEqual([["AAPL", "1"]]);
+    expect(
+      urls
+        .filter((url) => url.includes("VOO"))
+        .every((url) => url.includes("yahoo")),
+    ).toBe(true);
+  });
+
+  it("reads a feed with nothing to quote as idle, not empty", async () => {
+    const feeds = quoteFeeds({
+      getJson: async (url) => answer(url),
+      postForm: async () => TOKEN,
+      iol: CREDENTIALS,
+      instruments: async () => [],
+    });
+    for (const id of ["yahoo", "iol", "kraken"]) {
+      const batch = await feeds.find((feed) => feed.id === id)!.read(NOW);
+      expect([batch.prices, batch.idle, batch.unread]).toEqual([[], true, []]);
+    }
   });
 
   it("stamps every row with the feed that read it and the read instant", async () => {

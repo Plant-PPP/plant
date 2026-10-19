@@ -15,6 +15,7 @@ import {
   buenosAiresDate,
   Constants,
   type Database,
+  INSTRUMENT_SYMBOL_PATTERN,
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
@@ -283,7 +284,7 @@ const scopeSchema: z.ZodType<MovementScope> = z.union([
   z.object({ holdingId: z.uuid() }).strict(),
   z.object({ accountId: z.uuid() }).strict(),
   z.object({ portfolioId: z.uuid() }).strict(),
-  z.object({ symbol: z.string().regex(/^[A-Z0-9]{1,15}$/) }).strict(),
+  z.object({ symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN) }).strict(),
 ]);
 
 const cursorSchema: z.ZodType<MovementCursor> = z
@@ -370,7 +371,7 @@ export async function suggestTransferCost(
 
 const quoteQuerySchema = z
   .object({
-    symbol: z.string().regex(/^[A-Z0-9]{1,15}$/),
+    symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
     currency: z.enum(Constants.public.Enums.currency),
     date: z.iso.date(),
   })
@@ -498,7 +499,7 @@ export async function deleteManualPrice(
   };
   const key = z
     .object({
-      symbol: z.string().regex(/^[A-Z0-9]{1,15}$/),
+      symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
       date: z.iso.date(),
     })
     .safeParse({ symbol, date });

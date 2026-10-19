@@ -2,7 +2,7 @@
 
 import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { Badge } from "@/components/ui/badge";
-import { exactUnitPrice, type Listing, normalizeSymbol } from "@plant/core";
+import { exactUnitPrice } from "@plant/core";
 import {
   buenosAiresDate,
   type Currency,
@@ -21,10 +21,10 @@ import {
   useInstrumentMarket,
 } from "@/components/holdings/instrument-market";
 import {
-  type DollarLine,
   InstrumentPicker,
   lineOf,
 } from "@/components/holdings/instrument-picker";
+import { lookUpNames } from "@/components/holdings/market-lookup";
 import { marketsFor } from "@/lib/instruments/markets";
 import { LeftOutNotice } from "@/components/imports/left-out-notice";
 import { Button } from "@/components/ui/button";
@@ -295,53 +295,46 @@ export function ImportOperationsReview({
         ),
       ),
     ];
-    for (const called of unknown) {
-      void (async () => {
-        const found = await settle(
-          market.search(called, marketsFor(institution)),
+    const resolve = (
+      called: string,
+      instrument: InstrumentRow,
+      usd: boolean,
+    ) => {
+      addToCatalog(instrument);
+      const currency = usd ? "USD" : instrument.currency;
+      const resolved = (row: EditedOperation) =>
+        row.symbol === "" &&
+        item.operations?.find((each) => each.id === row.id)?.unknownSymbol ===
+          called;
+      const next = (item.operations ?? [])
+        .map(edited)
+        .map((row) =>
+          resolved(row) ? { ...row, symbol: instrument.symbol, currency } : row,
         );
-        if (found === "rejected" || !found.ok) return;
-        const exact = exactListing(found.listings, called);
-        if (!exact) return;
-        const added = await settle(
-          market.add(exact.listing.symbol, exact.listing.market),
-        );
-        if (added === "rejected" || !added.ok) return;
-        addToCatalog(added.instrument);
-        const currency = exact.line ? "USD" : added.instrument.currency;
-        const resolved = (row: EditedOperation) =>
-          row.symbol === "" &&
-          item.operations?.find((each) => each.id === row.id)?.unknownSymbol ===
-            called;
-        const next = (item.operations ?? [])
-          .map(edited)
-          .map((row) =>
-            resolved(row)
-              ? { ...row, symbol: added.instrument.symbol, currency }
-              : row,
-          );
-        setRows((current) =>
-          current.map((row) =>
-            resolved(row)
-              ? { ...row, symbol: added.instrument.symbol, currency }
-              : row,
-          ),
-        );
-        // One the market completed goes to the table with the rest.
-        const done = new Set(
-          next
-            .filter(
-              (row) =>
-                row.symbol === added.instrument.symbol &&
-                missingFields(finalOf(row), today).length === 0,
-            )
-            .map((row) => row.id),
-        );
-        setAttention(
-          (current) => new Set([...current].filter((id) => !done.has(id))),
-        );
-      })();
-    }
+      setRows((current) =>
+        current.map((row) =>
+          resolved(row) ? { ...row, symbol: instrument.symbol, currency } : row,
+        ),
+      );
+      // One the market completed goes to the table with the rest.
+      const done = new Set(
+        next
+          .filter(
+            (row) =>
+              row.symbol === instrument.symbol &&
+              missingFields(finalOf(row), today).length === 0,
+          )
+          .map((row) => row.id),
+      );
+      setAttention(
+        (current) => new Set([...current].filter((id) => !done.has(id))),
+      );
+    };
+    void lookUpNames(unknown, marketsFor(institution), market, resolve).then(
+      (left) => {
+        if (left > 0) toast.info(leftToPick(left));
+      },
+    );
   }, [market, item.operations, institution, addToCatalog, today]);
 
   function confirm() {
@@ -893,23 +886,8 @@ export function ImportOperationsReview({
   );
 }
 
-// The market's listing for exactly what an import called an instrument: its
-// own symbol, or one of its dollar lines (GOGLD is GOOGL's MEP line).
-export function exactListing(
-  listings: readonly Listing[],
-  called: string,
-): { listing: Listing; line: DollarLine | null } | null {
-  const wanted = normalizeSymbol(called);
-  for (const listing of listings) {
-    if (normalizeSymbol(listing.symbol) === wanted) {
-      return { listing, line: null };
-    }
-    if (listing.lines?.some((each) => normalizeSymbol(each) === wanted)) {
-      return { listing, line: wanted.endsWith("C") ? "C" : "D" };
-    }
-  }
-  return null;
-}
+const leftToPick = (count: number) =>
+  `No pudimos buscar ${countOf(count, "activo", "activos")} en el mercado: elegilos en la lista.`;
 
 // A figure as the table shows it, or a dash where there is none.
 const figureText = (

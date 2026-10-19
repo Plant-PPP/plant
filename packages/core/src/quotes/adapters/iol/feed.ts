@@ -226,7 +226,13 @@ export function createIolSession(deps: { postForm: PostForm }): IolSession {
         );
       } catch (error) {
         const code = feedReadCode(error);
-        if (code !== "http_4xx" && code !== "unauthorized") throw error;
+        if (
+          code !== "http_4xx" &&
+          code !== "http_404" &&
+          code !== "unauthorized"
+        ) {
+          throw error;
+        }
       }
     }
     session ??= await grant(
@@ -293,7 +299,8 @@ export function createIolFeed(deps: IolDeps): RawQuoteFeed {
       const instruments = (await deps.instruments()).filter(
         (instrument): instrument is IolInstrument => isIolType(instrument.type),
       );
-      if (instruments.length === 0) return { fxRates: [], prices: [] };
+      if (instruments.length === 0)
+        return { fxRates: [], prices: [], idle: true };
       const wanted = [
         ...new Set(instruments.flatMap(({ type }) => PANELS[type])),
       ];

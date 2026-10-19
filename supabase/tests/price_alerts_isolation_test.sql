@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(17);
+SELECT plan(18);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -28,7 +28,18 @@ CREATE FUNCTION pg_temp.acl(rel regclass, role regrole) RETURNS SETOF text LANGU
   WHERE a.attrelid = rel AND acl.grantee = role
 $f$;
 
+-- PTRBK: the statement ran and was rolled back.
+CREATE FUNCTION pg_temp.rolled_back(statement text) RETURNS text LANGUAGE plpgsql AS $f$
+BEGIN
+  EXECUTE statement;
+  RAISE EXCEPTION USING ERRCODE = 'PTRBK';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE;
+END
+$f$;
+
 GRANT EXECUTE ON FUNCTION pg_temp.error_of(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.rolled_back(text) TO authenticated;
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
@@ -127,6 +138,15 @@ SELECT is(
                       SELECT 'dollar', 'mep', 'above', n, 'ARS' FROM generate_series(1, 47) n $$),
   'P0001',
   'a user keeps at most 50 alerts'
+);
+
+SELECT is(
+  ARRAY(SELECT pg_temp.rolled_back(format(
+    $$ INSERT INTO public.price_alerts (subject_kind, subject, direction, threshold, currency)
+       VALUES ('instrument', %L, 'above', 1, 'USD') $$, s))
+    FROM unnest(ARRAY['VOO.US', 'BRK-B.US', 'VOO.us', 'VOO.BA', '.US']) s),
+  ARRAY['PTRBK', 'PTRBK', '23514', '23514', '23514'],
+  'an alert is on a US listing''s symbol or a bare ticker, nothing else'
 );
 
 -- ── The quotes job ──────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import "server-only";
 import { LISTING_MARKETS } from "@plant/core";
+import { INSTRUMENT_SYMBOL_PATTERN } from "@plant/shared";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
@@ -21,7 +22,7 @@ export type AddInstrumentResult =
   { ok: true; symbol: string } | { ok: false; code: AddInstrumentCode };
 
 const inputSchema = z.object({
-  symbol: z.string().regex(/^[A-Z0-9]{1,15}$/),
+  symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
   market: z.enum(LISTING_MARKETS),
 });
 

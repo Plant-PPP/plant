@@ -480,3 +480,20 @@ it("summarizes the last closed month with a waterfall that adds up", async () =>
     error: "unknown_month",
   });
 });
+
+it("names a US listing by its bare ticker when only one matches", async () => {
+  const voo = {
+    symbol: "VOO.US",
+    name: "Vanguard S&P 500 ETF",
+    type: "etf" as const,
+    currency: "USD" as const,
+    aliases: [],
+  };
+  mockReadCloses.mockResolvedValueOnce({
+    ...read,
+    state: { ...read.state, instruments: [...read.state.instruments, voo] },
+  });
+  const found = await data().transactions("voo");
+  expect(found).not.toHaveProperty("error");
+  expect(found).toMatchObject({ total: 0 });
+});

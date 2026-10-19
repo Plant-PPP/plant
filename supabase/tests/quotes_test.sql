@@ -6,7 +6,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(66);
+SELECT plan(68);
 
 -- A local database may hold rows from a cron or pentest run.
 DELETE FROM public.fx_rates;
@@ -121,7 +121,7 @@ SELECT set_eq(
         'fx_rates PRIMARY KEY (kind, rate_date)',
         'prices CHECK ((price > (0)::numeric))',
         $q$prices CHECK ((price <> 'NaN'::numeric))$q$,
-        $q$prices CHECK ((symbol ~ '^[A-Z0-9]{1,15}$'::text))$q$,
+        $q$prices CHECK ((symbol ~ '^([A-Z0-9]{1,15}|[A-Z0-9]{1,10}(-[A-Z0-9]{1,2})?\.US)$'::text))$q$,
         'prices PRIMARY KEY (symbol, price_date)'],
   'each quote table has exactly its constraints'
 );
@@ -236,6 +236,34 @@ SELECT throws_ok(
      VALUES ('ETH', (SELECT today FROM day) - 1, 3000, 'USD', 'kraken', now(), now()) $$,
   'PT403', 'a quote is dated today',
   'with the guard back on, the owner cannot insert a past price either'
+);
+
+-- A symbol is a BYMA or crypto ticker, or a US listing's ticker with .US.
+-- PTRBK: the statement ran and was rolled back.
+CREATE FUNCTION pg_temp.rolled_back(statement text) RETURNS text LANGUAGE plpgsql AS $f$
+BEGIN
+  EXECUTE statement;
+  RAISE EXCEPTION USING ERRCODE = 'PTRBK';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE;
+END
+$f$;
+
+SELECT is(
+  ARRAY(SELECT pg_temp.rolled_back(format(
+    $$ INSERT INTO public.instruments (symbol, name, type, currency) VALUES (%L, 'x', 'etf', 'USD') $$, s))
+    FROM unnest(ARRAY['VOO.US', 'BRK-B.US', 'ABCDEFGHIJKLMNO', 'VOO.us', 'VOO.BA', '.US', 'BRK-BBB.US', 'ABCDEFGHIJK.US']) s),
+  ARRAY['PTRBK', 'PTRBK', 'PTRBK', '23514', '23514', '23514', '23514', '23514'],
+  'the catalog takes a US listing''s symbol and refuses any other form'
+);
+
+SELECT is(
+  ARRAY(SELECT pg_temp.rolled_back(format(
+    $$ INSERT INTO public.prices (symbol, price_date, price, currency, source, quoted_at, fetched_at)
+       VALUES (%L, (SELECT today FROM day), 1, 'USD', 'yahoo', now(), now()) $$, s))
+    FROM unnest(ARRAY['VOO.US', 'BRK-B.US', 'VOO.us', 'VOO.BA', '.US']) s),
+  ARRAY['PTRBK', 'PTRBK', '23514', '23514', '23514'],
+  'a price takes a US listing''s symbol and refuses any other form'
 );
 
 -- ── The service role (the daily job's writer) ───────────────────────────────

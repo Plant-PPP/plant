@@ -13,9 +13,9 @@ The browser sends search text, and a symbol and market to add. The providers' an
 ## Data flow
 
 1. The picker calls `searchInstruments(query)` (`apps/web`, server action) after a pause in typing.
-2. The action checks the session (`getSessionClaims`) and the per-user limit, then `catalogSearch().search` reads IOL's panels with Plant's token (kept six hours per instance) and asks CoinGecko, and returns matching listings.
-3. Picking a listing calls `addInstrument(symbol, market)`, which calls `addListedInstrument` (the instrument catalog sink).
-4. The sink checks the session and its own limit, parses the symbol against the catalog's format and the market against `byma` or `crypto`, asks the provider again (`verify`: the BYMA panel lists it, or CoinGecko names it and Kraken quotes it in dollars), and inserts the provider's symbol, name, type and currency with the service role, `ON CONFLICT DO NOTHING`.
+2. The action checks the session (`getSessionClaims`) and the per-user limit, then `catalogSearch().search` reads IOL's panels with Plant's token (kept six hours per instance) and asks Yahoo Finance's search and CoinGecko, and returns matching listings.
+3. Picking a listing, or the operations review finding an import's instrument in the market, calls `addInstrument(symbol, market)`, which calls `addListedInstrument` (the instrument catalog sink).
+4. The sink checks the session and its own limit, parses the symbol against the catalog's format and the market against `byma`, `us` or `crypto`, asks the provider again (`verify`: the BYMA panel lists it, Yahoo lists it on a US exchange as a stock or ETF, or CoinGecko names it and Kraken quotes it in dollars), and inserts the provider's symbol, name, type and currency with the service role, `ON CONFLICT DO NOTHING`.
 5. The action reads the row back with the user's client (RLS) and returns it.
 6. The quotes job reads `symbol, type, currency` of every instrument with the service role and prices them.
 

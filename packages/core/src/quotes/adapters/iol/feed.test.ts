@@ -514,7 +514,7 @@ describe("iol over the catalog", () => {
     const rows = await feedWith(t, [
       { symbol: "BTC", type: "crypto", currency: "USD" },
     ]).readRaw(NOW);
-    expect(rows).toEqual({ fxRates: [], prices: [] });
+    expect(rows).toEqual({ fxRates: [], prices: [], idle: true });
     expect([t.gets, t.posts]).toEqual([[], []]);
   });
 

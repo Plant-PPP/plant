@@ -1,4 +1,8 @@
-import type { Currency } from "@plant/shared";
+import {
+  type Currency,
+  PLANT_USER_AGENT,
+  usListingSymbol,
+} from "@plant/shared";
 import { z } from "zod";
 
 import type { DraftOperation, DraftRow } from "../file-upload/draft";
@@ -52,6 +56,27 @@ const currencyOf = (code: string | undefined): "ARS" | "USD" | null =>
 
 const SYMBOL = /^[A-Za-z0-9. /-]{1,30}$/;
 
+// The listing exchanges of a US share or ETF, as Flex names them.
+const US_EXCHANGES = new Set(["NYSE", "NASDAQ", "ARCA", "AMEX", "BATS", "IEX"]);
+
+// A row's instrument as the catalog names it: a stock or ETF listed in the
+// US (or, when the query leaves out its exchange, one traded in dollars) as
+// its US listing (VOO.US, BRK-B.US), anything else as Flex writes it. Null
+// for a row with no symbol Plant reads, or a US ticker the catalog cannot
+// hold.
+function symbolOf(row: Record<string, string>): string | null {
+  const symbol = row.symbol?.trim() ?? "";
+  if (!SYMBOL.test(symbol)) return null;
+  const category = row.assetCategory?.toUpperCase();
+  const exchange = row.listingExchange?.toUpperCase();
+  const us =
+    (category === undefined || category === "STK") &&
+    (exchange === undefined || exchange === ""
+      ? row.currency === "USD"
+      : US_EXCHANGES.has(exchange));
+  return us ? usListingSymbol(symbol) : symbol;
+}
+
 // A Flex date (yyyyMMdd, yyyy-MM-dd, or either with a time after a `;`)
 // as an ISO date, or null.
 function isoDate(text: string | undefined): string | null {
@@ -86,7 +111,9 @@ export function ibkrConnection({
     const response = await call(
       get,
       `${baseUrl}/${path}?${new URLSearchParams({ ...query, v: "3" })}`,
-      { headers: { "User-Agent": "Plant/1.0", Accept: "application/xml" } },
+      {
+        headers: { "User-Agent": PLANT_USER_AGENT, Accept: "application/xml" },
+      },
       budget.requestTimeout(),
     );
     if (!response.ok) throw unavailable();
@@ -131,8 +158,8 @@ export function ibkrConnection({
       if (!atLevel(each, "SUMMARY")) continue;
       const quantity = decimalOf(each.position);
       const currency = currencyOf(each.currency);
-      const symbol = each.symbol?.trim() ?? "";
-      if (!positive(quantity) || currency === null || !SYMBOL.test(symbol)) {
+      const symbol = symbolOf(each);
+      if (!positive(quantity) || currency === null || symbol === null) {
         skipped += 1;
         continue;
       }
@@ -180,12 +207,12 @@ export function ibkrConnection({
       const side = each.buySell?.toUpperCase();
       const quantity = absolute(decimalOf(each.quantity));
       const currency = currencyOf(each.currency);
-      const symbol = each.symbol?.trim() ?? "";
+      const symbol = symbolOf(each);
       if (
         (side !== "BUY" && side !== "SELL") ||
         !positive(quantity) ||
         currency === null ||
-        !SYMBOL.test(symbol)
+        symbol === null
       ) {
         skipped += 1;
         continue;
@@ -211,8 +238,8 @@ export function ibkrConnection({
       if (each.type !== "Dividends" || !atLevel(each, "DETAIL")) continue;
       const amount = decimalOf(each.amount);
       const currency = currencyOf(each.currency);
-      const symbol = each.symbol?.trim() ?? "";
-      if (!positive(amount) || currency === null || !SYMBOL.test(symbol)) {
+      const symbol = symbolOf(each);
+      if (!positive(amount) || currency === null || symbol === null) {
         skipped += 1;
         continue;
       }

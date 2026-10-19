@@ -38,3 +38,6 @@ export async function readCappedBytes(
   }
   return bytes;
 }
+
+// How Plant names itself to the services it reads.
+export const PLANT_USER_AGENT = "Plant/1.0";

@@ -19,6 +19,7 @@ import {
   stored,
   times,
   toDecimal,
+  usTicker,
   ZERO,
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -145,15 +146,20 @@ export function assistantData({
   };
 
   // An instrument named by the model: its symbol or its name, in the
-  // catalog; null when none matches.
+  // catalog, else the one US listing of a bare ticker (VOO for VOO.US); null
+  // when none matches.
   const symbolOf = (read: ClosesRead, wanted: string) => {
     const key = wanted.trim().toLowerCase();
-    return (
-      read.state.instruments.find(
-        (each) =>
-          each.symbol.toLowerCase() === key || each.name.toLowerCase() === key,
-      )?.symbol ?? null
+    const { instruments } = read.state;
+    const named = instruments.find(
+      (each) =>
+        each.symbol.toLowerCase() === key || each.name.toLowerCase() === key,
     );
+    if (named) return named.symbol;
+    const listed = instruments.filter(
+      (each) => usTicker(each.symbol)?.toLowerCase() === key,
+    );
+    return listed.length === 1 ? listed[0]!.symbol : null;
   };
 
   const unknownInstrument = (read: ClosesRead) => ({

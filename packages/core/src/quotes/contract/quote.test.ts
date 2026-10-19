@@ -1,4 +1,8 @@
-import { BUENOS_AIRES_TZ, Constants } from "@plant/shared";
+import {
+  BUENOS_AIRES_TZ,
+  Constants,
+  INSTRUMENT_SYMBOL_PATTERN,
+} from "@plant/shared";
 import {
   lastConstraint,
   lastFunctionBodies,
@@ -23,9 +27,9 @@ import {
   quoteFailureOf,
   QuoteStoreError,
   quoteWindow,
+  readParts,
   type RawFxRate,
   type RawPrice,
-  SYMBOL_PATTERN,
 } from "./quote";
 
 // 2026-10-09 18:30 in Buenos Aires.
@@ -651,7 +655,7 @@ describe("feedErrorForStatus", () => {
     [400, "http_4xx", false],
     [401, "unauthorized", false],
     [403, "unauthorized", false],
-    [404, "http_4xx", false],
+    [404, "http_404", false],
     [429, "http_429", true],
     [499, "http_4xx", false],
     [500, "http_5xx", true],
@@ -665,15 +669,18 @@ describe("feedErrorForStatus", () => {
 });
 
 describe("the quotes migrations", () => {
-  it("give prices.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
-    expect(tableSql("prices")).toContain(
-      `CHECK (symbol ~ '${SYMBOL_PATTERN.source}')`,
+  it.each([
+    ["prices", "prices_symbol_pattern"],
+    ["instruments", "instruments_symbol_pattern"],
+  ])("give %s the symbol CHECK the shared pattern mirrors", (table, name) => {
+    expect(lastConstraint(table, name)).toBe(
+      `symbol ~ '${INSTRUMENT_SYMBOL_PATTERN.source}'`,
     );
   });
 
-  it("give instruments.symbol the CHECK SYMBOL_PATTERN mirrors", () => {
-    expect(lastConstraint("instruments", "instruments_symbol_pattern")).toBe(
-      `symbol ~ '${SYMBOL_PATTERN.source}'`,
+  it("give price_alerts an instrument subject the shared pattern mirrors", () => {
+    expect(lastConstraint("price_alerts", "price_alerts_subject")).toContain(
+      `subject_kind = 'instrument' AND subject ~ '${INSTRUMENT_SYMBOL_PATTERN.source}'`,
     );
   });
 
@@ -745,5 +752,53 @@ describe("the quotes migrations", () => {
     );
     expect(zones.length).toBeGreaterThanOrEqual(2);
     expect(new Set(zones)).toEqual(new Set([BUENOS_AIRES_TZ]));
+  });
+});
+
+describe("readParts", () => {
+  const price = (symbol: string) => ({
+    symbol,
+    price_date: "2026-10-09",
+    price: "1",
+    currency: "USD" as const,
+    quoted_at: NOW.toISOString(),
+  });
+  const failing = (codes: Record<string, string>) => async (part: string) => {
+    const code = codes[part];
+    if (code === "bug") throw new Error("bug");
+    if (code) throw new QuoteFeedError(code as never);
+    return { prices: [price(part)], unread: [] };
+  };
+
+  it("leaves a failed part unread and reads the rest", async () => {
+    const read = await readParts(
+      ["A", "B", "C"],
+      (p) => [p],
+      failing({ B: "http_404" }),
+    );
+    expect(read.prices.map(({ symbol }) => symbol)).toEqual(["A", "C"]);
+    expect(read.unread).toEqual([{ key: "B", code: "http_404" }]);
+  });
+
+  it.each(["http_429", "http_5xx", "timeout", "provider_busy", "fetch_error"])(
+    "stops at a part that failed %s",
+    async (code) => {
+      const read = await readParts(
+        ["A", "B", "C"],
+        (p) => [p],
+        failing({ B: code }),
+      );
+      expect(read.prices.map(({ symbol }) => symbol)).toEqual(["A"]);
+      expect(read.unread).toEqual([
+        { key: "B", code },
+        { key: "C", code },
+      ]);
+    },
+  );
+
+  it("lets a bug through", async () => {
+    await expect(
+      readParts(["A"], (p) => [p], failing({ A: "bug" })),
+    ).rejects.toThrow("bug");
   });
 });

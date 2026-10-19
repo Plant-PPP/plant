@@ -275,9 +275,9 @@ describe("balances a draft cannot hold", () => {
     // Pesos at zero are cash at zero, which the review brings to zero.
     expect(reading.draft.rows.map((row) => [row.symbol, row.quantity])).toEqual(
       [
-        ["AAPL", "10"],
+        ["AAPL.US", "10"],
         ["ARS", "0"],
-        ["SPY", "2.5"],
+        ["SPY.US", "2.5"],
       ],
     );
     // The euro position, the negative dollars and the euros.

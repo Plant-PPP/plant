@@ -2,18 +2,19 @@ import {
   Constants,
   type Currency,
   currencySchema,
+  INSTRUMENT_SYMBOL_PATTERN,
   positiveDecimalSchema,
 } from "@plant/shared";
 import { z } from "zod";
 
 import { holdingDateSchema } from "../valuation/holding";
-import { SYMBOL_PATTERN, type QuoteSnapshot } from "./contract/quote";
+import type { QuoteSnapshot } from "./contract/quote";
 
 // A price the user states for an instrument: per unit, in the instrument's
 // currency, as of its date.
 export const manualPriceSchema = z
   .object({
-    symbol: z.string().regex(SYMBOL_PATTERN),
+    symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
     price_date: holdingDateSchema,
     price: positiveDecimalSchema,
     currency: currencySchema,

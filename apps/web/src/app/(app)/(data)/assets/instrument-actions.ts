@@ -6,6 +6,7 @@ import {
   LISTING_MARKETS,
   type ListingMarket,
 } from "@plant/core";
+import { logList } from "@plant/shared";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
@@ -27,7 +28,11 @@ export type SearchResult =
   | { ok: true; listings: Listing[]; failed: ListingMarket[] }
   | { ok: false; code: SearchCode };
 
-const marketsSchema = z.array(z.enum(LISTING_MARKETS)).min(1).max(2).optional();
+const marketsSchema = z
+  .array(z.enum(LISTING_MARKETS))
+  .min(1)
+  .max(LISTING_MARKETS.length)
+  .optional();
 
 export type AddResult =
   | { ok: true; instrument: InstrumentRow }
@@ -51,6 +56,7 @@ export async function searchInstruments(
   const started = performance.now();
   let result: SearchResult;
   let failure: unknown;
+  let failedCodes: string[] = [];
   const asked = marketsSchema.safeParse(markets);
   if (
     typeof query !== "string" ||
@@ -63,9 +69,12 @@ export async function searchInstruments(
     result = { ok: false, code: "limited" };
   } else {
     try {
+      const found = await catalogSearch().search(query, RESULTS, asked.data);
+      failedCodes = found.failed.map(({ market, code }) => `${market}:${code}`);
       result = {
         ok: true,
-        ...(await catalogSearch().search(query, RESULTS, asked.data)),
+        listings: found.listings,
+        failed: found.failed.map(({ market }) => market),
       };
     } catch (error) {
       failure = error;
@@ -77,12 +86,13 @@ export async function searchInstruments(
     "enduser.id": claims.sub,
     "plant.outcome": result.ok ? "ok" : result.code,
     "plant.count": result.ok ? result.listings.length : 0,
-    "plant.instruments.failed": result.ok ? result.failed.join(",") : "",
+    "plant.instruments.failed_codes": logList(failedCodes),
     "plant.duration_ms": Math.round(performance.now() - started),
   };
   if (failure) serverLog.error("instruments.search", line, failure);
-  else if (result.ok) serverLog.info("instruments.search", line);
-  else serverLog.warn("instruments.search", line);
+  else if (result.ok && failedCodes.length === 0) {
+    serverLog.info("instruments.search", line);
+  } else serverLog.warn("instruments.search", line);
   return result;
 }
 

@@ -71,9 +71,9 @@ export function tableSql(table: string): string {
   return [create[1], ...alters].join("\n");
 }
 
-// The parenthesized expression of a named CHECK on a table, as last written.
-// No migration yet drops or renames a constraint a test reads; the first one
-// that does teaches this reader to follow it.
+// The parenthesized expression of a named CHECK on a table, as last written:
+// a constraint dropped and added again under its name reads as the new one.
+// A renamed one is read under its new name.
 export function lastConstraint(table: string, name: string): string {
   const sql = tableSql(table);
   const start = sql.lastIndexOf(`CONSTRAINT ${name} CHECK (`);

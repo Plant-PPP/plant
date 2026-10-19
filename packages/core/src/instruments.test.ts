@@ -5,6 +5,7 @@ import {
   normalizeSymbol,
   quotedPrice,
   resolveSymbol,
+  symbolKey,
   unitPrice,
 } from "./instruments";
 
@@ -106,5 +107,34 @@ describe("resolveSymbol", () => {
     expect(resolve("ZZZ")).toBeNull();
     expect(resolve(".BA")).toBeNull();
     expect(resolve("D")).toBeNull();
+  });
+});
+
+describe("US listings", () => {
+  const index = instrumentIndex([
+    { symbol: "AUS", type: "stock", currency: "ARS", aliases: ["Agilent"] },
+    { symbol: "VOO.US", type: "etf", currency: "USD", aliases: [] },
+    { symbol: "BRK-B.US", type: "stock", currency: "USD", aliases: [] },
+  ]);
+  const resolve = (text: string) => resolveSymbol(text, index)?.symbol ?? null;
+
+  it("keeps a US listing apart from a bare symbol that reads the same", () => {
+    expect(symbolKey("A.US")).toBe("A.US");
+    expect(symbolKey("AUS")).toBe("AUS");
+    expect(symbolKey("brk-b.us")).toBe("BRKB.US");
+  });
+
+  it("finds a US listing by its symbol, whatever its case", () => {
+    expect(resolve("voo.us")).toBe("VOO.US");
+    expect(resolve("BRK-B.US")).toBe("BRK-B.US");
+  });
+
+  it("never reads a US listing as a BYMA symbol or an alias", () => {
+    expect(resolve("A.US")).toBeNull();
+    expect(resolve("AUS")).toBe("AUS");
+  });
+
+  it("never reads a bare ticker as its US listing", () => {
+    expect(resolve("VOO")).toBeNull();
   });
 });
