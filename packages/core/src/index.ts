@@ -172,8 +172,10 @@ export {
   normalizeSymbol,
   type PricingBasis,
   quotedPrice,
+  type DollarLine,
   type ResolvedSymbol,
   resolveSymbol,
+  symbolKey,
   unitPrice,
 } from "./instruments";
 export {
@@ -248,11 +250,13 @@ export {
   takesCashLink,
   takesEvents,
 } from "./liabilities/history";
+export { marketSearch } from "./catalog/factory";
 export {
   type CatalogSearch,
-  createCatalogSearch,
+  exactListing,
   LISTING_MARKETS,
   type Listing,
   type ListingMarket,
+  type MarketFailure,
   type SearchFound,
 } from "./catalog/listings";

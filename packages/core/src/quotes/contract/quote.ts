@@ -6,6 +6,7 @@ import {
   Constants,
   type Currency,
   fieldsPassed,
+  INSTRUMENT_SYMBOL_PATTERN,
   positiveDecimalSchema,
 } from "@plant/shared";
 import { z } from "zod";
@@ -15,9 +16,6 @@ const { currency, fx_rate_kind, quote_source } = Constants.public.Enums;
 const quoteSourceSchema = z.enum(quote_source);
 export type QuoteSource = (typeof quote_source)[number];
 export type FxRateKind = (typeof fx_rate_kind)[number];
-
-// The prices.symbol CHECK in the quotes migration uses the same pattern.
-export const SYMBOL_PATTERN = /^[A-Z0-9]{1,15}$/;
 
 // Dollar rates and prices are kept from this hour on, Buenos Aires time, so a
 // day keeps its closing value; MEP and CCL close at 17:00.
@@ -61,7 +59,7 @@ const fxRateSchema = z
 export type FxRate = z.output<typeof fxRateSchema>;
 
 const priceSchema = z.object({
-  symbol: z.string().regex(SYMBOL_PATTERN),
+  symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
   price_date: z.iso.date(),
   price: positiveDecimalSchema,
   currency: z.enum(currency),
@@ -110,16 +108,19 @@ export const QUOTE_KEYS = {
 export type RawFxRate = Omit<FxRate, "source" | "fetched_at">;
 export type RawPrice = Omit<Price, "source" | "fetched_at">;
 // unread: the parts of a source that failed while the rest answered, keyed
-// like the rows they would have been.
+// like the rows they would have been. idle: the feed had nothing to quote
+// (the catalog holds none of its instruments), which is not a failure.
 export type RawQuoteRows = {
   fxRates: RawFxRate[];
   prices: RawPrice[];
   unread?: { key: string; code: QuoteFeedCode }[];
+  idle?: true;
 };
 
 // Why a row was not kept:
 // - early: read before the close hour, when nothing traded is due yet;
-// - closed: the dollar market's or BYMA's Friday quote, read on the weekend;
+// - closed: the Friday quote of the dollar market or of an exchange that
+//   closes on weekends, read on the weekend;
 // - stale: dated any other day than today;
 // - invalid: failed the schemas, shares its primary key with a later kept
 //   row, or was never read.
@@ -133,6 +134,7 @@ export type QuoteBatch = {
   prices: Price[];
   refused: Record<Refusal, string[]>;
   unread: string[];
+  idle?: true;
 };
 
 // Each code with whether a retry can help.
@@ -143,6 +145,7 @@ export const QUOTE_FEED_CODES = {
   http_5xx: true,
   provider_busy: true,
   empty: true,
+  http_404: false,
   http_4xx: false,
   unauthorized: false,
   too_large: false,
@@ -250,10 +253,49 @@ export function feedReadCode(error: unknown): QuoteFeedCode | null {
   return known && stage === "read" ? (code as QuoteFeedCode) : null;
 }
 
+// A part that failed with a code a retry can help (the source is down,
+// slow or limiting) leaves the parts after it unasked: they would fail alike.
+const halts = (code: QuoteFeedCode) =>
+  QUOTE_FEED_CODES[code] && code !== "empty";
+
+export type PartsRead = {
+  prices: RawPrice[];
+  unread: { key: string; code: QuoteFeedCode }[];
+};
+
+// Reads each part in order and merges what each read. A part that fails
+// with a feed code leaves its keys unread with that code, and with a code
+// that halts, every later part's too. Any other error is a bug and passes
+// through.
+export async function readParts<P>(
+  parts: readonly P[],
+  keysOf: (part: P) => readonly string[],
+  read: (part: P) => Promise<PartsRead>,
+): Promise<PartsRead> {
+  const prices: RawPrice[] = [];
+  const unread: PartsRead["unread"] = [];
+  for (const [at, part] of parts.entries()) {
+    try {
+      const done = await read(part);
+      prices.push(...done.prices);
+      unread.push(...done.unread);
+    } catch (error) {
+      const code = feedReadCode(error);
+      if (code === null) throw error;
+      const failed = halts(code) ? parts.slice(at) : [part];
+      unread.push(...failed.flatMap(keysOf).map((key) => ({ key, code })));
+      if (halts(code)) break;
+    }
+  }
+  return { prices, unread };
+}
+
 // The contract's code table applied to an HTTP status, for the reader the
-// composition root injects. 401 and 403 are a refused credential.
+// composition root injects. 401 and 403 are a refused credential; 404 is
+// apart, as a source may answer it for a key it does not know.
 export function feedErrorForStatus(status: number): QuoteFeedError {
   if (status === 429) return new QuoteFeedError("http_429");
+  if (status === 404) return new QuoteFeedError("http_404");
   if (status === 401 || status === 403) {
     return new QuoteFeedError("unauthorized");
   }
@@ -276,7 +318,8 @@ function weekendFriday(date: string): string | null {
   return addDays(date, weekday === 6 ? -1 : -2);
 }
 
-// Crypto trades every day; the dollar market and BYMA close on the weekend.
+// Crypto trades every day; the dollar market and the exchanges close on the
+// weekend.
 type WindowKind = FxRateKind | "price" | "listed";
 const closesOnWeekends = (kind: WindowKind): boolean =>
   kind === "listed" || (kind !== "price" && !isDailyIndex(kind));
@@ -347,7 +390,8 @@ function checkTable<T>(
   return [...kept];
 }
 
-// listed: the feed's prices are of instruments listed on BYMA (RawQuoteFeed).
+// listed: the feed's prices are of instruments listed on an exchange that
+// closes on weekends (RawQuoteFeed).
 export function checkBatch(
   raw: RawQuoteRows,
   now: Date,

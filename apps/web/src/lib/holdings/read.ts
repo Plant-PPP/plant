@@ -6,11 +6,10 @@ import {
   type InstrumentType,
   type ReferenceDollar,
 } from "@plant/core";
-import type { Currency, Database } from "@plant/shared";
+import { chunked, type Currency, type Database } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { chunked } from "@/lib/chunked";
 import { PortfolioSetupError } from "@/lib/portfolio-setup/errors";
 import {
   type ListOptions,

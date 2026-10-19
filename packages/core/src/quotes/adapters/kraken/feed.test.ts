@@ -211,7 +211,7 @@ describe("createKrakenFeed", () => {
   it("asks Kraken nothing when the catalog has no crypto", async () => {
     const urls: string[] = [];
     const rows = await feedOver([], urls).readRaw(NOW);
-    expect([urls, rows]).toEqual([[], { fxRates: [], prices: [] }]);
+    expect([urls, rows]).toEqual([[], { fxRates: [], prices: [], idle: true }]);
   });
 });
 

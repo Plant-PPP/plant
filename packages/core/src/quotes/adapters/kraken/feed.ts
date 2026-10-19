@@ -3,11 +3,10 @@ import { z } from "zod";
 
 import type { GetJson, RawQuoteFeed } from "../../contract/port";
 import {
-  feedReadCode,
   parseResponse,
-  type QuoteFeedCode,
   QuoteFeedError,
   type RawQuoteRows,
+  readParts,
 } from "../../contract/quote";
 
 const TICKER_URL = "https://api.kraken.com/0/public/Ticker";
@@ -89,19 +88,14 @@ async function readEach(
   wanted: readonly string[],
   now: Date,
 ): Promise<RawQuoteRows> {
-  const prices: RawQuoteRows["prices"] = [];
-  const unread: { key: string; code: QuoteFeedCode }[] = [];
-  for (const symbol of wanted) {
-    try {
-      prices.push(
-        ...parse(await getJson(tickerUrl([symbol])), now, [symbol]).prices,
-      );
-    } catch (error) {
-      const code = feedReadCode(error);
-      if (code === null) throw error;
-      unread.push({ key: symbol, code });
-    }
-  }
+  const { prices, unread } = await readParts(
+    wanted,
+    (symbol) => [symbol],
+    async (symbol) => ({
+      prices: parse(await getJson(tickerUrl([symbol])), now, [symbol]).prices,
+      unread: [],
+    }),
+  );
   return { fxRates: [], prices, unread };
 }
 
@@ -116,7 +110,7 @@ export function createKrakenFeed(
     listed: false,
     async readRaw(now) {
       const wanted = [...new Set(await symbols())].sort();
-      if (wanted.length === 0) return { fxRates: [], prices: [] };
+      if (wanted.length === 0) return { fxRates: [], prices: [], idle: true };
       try {
         return parse(await getJson(tickerUrl(wanted)), now, wanted);
       } catch (error) {

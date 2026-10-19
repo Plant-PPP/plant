@@ -1,8 +1,10 @@
 import type { GetJson } from "../quotes/contract/port";
 import { QuoteFeedError } from "../quotes/contract/quote";
+import { marketSearch } from "./factory";
 import {
   coinGeckoListings,
-  createCatalogSearch,
+  exactListing,
+  type Listing,
   matchListings,
   panelListings,
 } from "./listings";
@@ -53,11 +55,36 @@ const KRAKEN_PAIRS = {
   },
 };
 
+// Yahoo's search answer for VOO, cut to what Plant reads.
+const YAHOO_VOO = {
+  quotes: [
+    {
+      symbol: "VOO",
+      longname: "Vanguard S&P 500 ETF",
+      quoteType: "ETF",
+      exchange: "PCX",
+    },
+    {
+      symbol: "VOOG",
+      longname: "Vanguard S&P 500 Growth ETF",
+      quoteType: "ETF",
+      exchange: "PCX",
+    },
+    {
+      symbol: "VOO.MX",
+      longname: "Vanguard S&P 500 ETF",
+      quoteType: "ETF",
+      exchange: "MEX",
+    },
+  ],
+};
+
 function transport(
   overrides: {
     panel?: () => unknown;
     coins?: () => unknown;
     pairs?: () => unknown;
+    yahoo?: (url: string) => unknown;
   } = {},
 ) {
   const urls: string[] = [];
@@ -69,6 +96,10 @@ function transport(
     if (url.startsWith("https://api.kraken.com/")) {
       return overrides.pairs ? overrides.pairs() : KRAKEN_PAIRS;
     }
+    if (url.startsWith("https://query1.finance.yahoo.com/")) {
+      if (overrides.yahoo) return overrides.yahoo(url);
+      return url.includes("q=VOO&") ? YAHOO_VOO : { quotes: [] };
+    }
     if (overrides.panel) return overrides.panel();
     const panel = /Cotizaciones\/(\w+)\//.exec(url)?.[1] ?? "";
     return { titulos: PANEL_LINES[panel] ?? [] };
@@ -77,7 +108,7 @@ function transport(
 }
 
 const searchWith = (t: ReturnType<typeof transport>, now = () => 0) =>
-  createCatalogSearch({
+  marketSearch({
     getJson: t.getJson,
     postForm: async () => ({ access_token: "made-up-access", expires_in: 899 }),
     iol: { username: "plant-test", password: "made-up" },
@@ -214,7 +245,7 @@ describe("matchListings", () => {
 });
 
 describe("createCatalogSearch", () => {
-  it("searches BYMA and crypto together", async () => {
+  it("searches every market together", async () => {
     const { listings: found } = await searchWith(transport()).search(
       "goog",
       10,
@@ -246,7 +277,7 @@ describe("createCatalogSearch", () => {
         },
       }),
     ).search("bitcoin", 5);
-    expect(found.failed).toEqual(["byma"]);
+    expect(found.failed).toEqual([{ market: "byma", code: "http_5xx" }]);
     expect(found.listings.map(({ symbol }) => symbol)).toEqual(["BTC", "BCH"]);
   });
 
@@ -303,5 +334,128 @@ describe("createCatalogSearch", () => {
     const t = transport();
     await expect(searchWith(t).verify("bad sym", "crypto")).resolves.toBeNull();
     expect(t.urls).toEqual([]);
+  });
+
+  it("finds a US listing by its ticker or its catalog symbol", async () => {
+    const t = transport();
+    const search = searchWith(t);
+    for (const query of ["VOO", "VOO.US"]) {
+      const { listings } = await search.search(query, 5, ["us"]);
+      expect(listings[0]).toEqual({
+        symbol: "VOO.US",
+        name: "Vanguard S&P 500 ETF",
+        type: "etf",
+        currency: "USD",
+        market: "us",
+      });
+    }
+    expect(t.urls.every((url) => url.includes("?q=VOO&"))).toBe(true);
+  });
+
+  it("verifies a US listing against Yahoo's own", async () => {
+    const t = transport();
+    const search = searchWith(t);
+    await expect(search.verify("VOO.US", "us")).resolves.toMatchObject({
+      symbol: "VOO.US",
+      type: "etf",
+    });
+    await expect(search.verify("VOOX.US", "us")).resolves.toBeNull();
+    await expect(search.verify("VOO", "us")).resolves.toBeNull();
+    await expect(search.verify("VOO.US", "byma")).resolves.toBeNull();
+    await expect(search.verify("voo.us", "us")).resolves.toBeNull();
+  });
+
+  it("names the code a market failed with", async () => {
+    const found = await searchWith(
+      transport({
+        yahoo: () => {
+          throw new QuoteFeedError("http_429");
+        },
+      }),
+    ).search("bitcoin", 5, ["us", "crypto"]);
+    expect(found.failed).toEqual([{ market: "us", code: "http_429" }]);
+  });
+});
+
+describe("exactListing", () => {
+  const listing = (
+    symbol: string,
+    type: Listing["type"],
+    lines?: string[],
+  ): Listing => ({
+    symbol,
+    name: symbol,
+    type,
+    currency: "ARS",
+    market: "byma",
+    ...(lines && { lines }),
+  });
+  const googl = listing("GOOGL", "cedear", ["GOGLD", "GOGLC"]);
+
+  it("finds a listing by its symbol or a dollar line", () => {
+    expect(exactListing([googl], "gogld")).toEqual({
+      listing: googl,
+      line: "D",
+    });
+    expect(exactListing([googl], "GOGLC")).toEqual({
+      listing: googl,
+      line: "C",
+    });
+    expect(exactListing([googl], "GOOGL")).toEqual({
+      listing: googl,
+      line: null,
+    });
+    expect(exactListing([googl], "GOOG")).toBeNull();
+  });
+
+  it("reads a bond's D line as the bond in dollars", () => {
+    const al30 = listing("AL30", "bond");
+    expect(exactListing([al30], "AL30D")).toEqual({ listing: al30, line: "D" });
+    expect(exactListing([listing("GGAL", "stock")], "GGALD")).toBeNull();
+  });
+
+  it("never takes a bare symbol for a US listing that reads the same", () => {
+    const aus = listing("AUS", "stock");
+    const agilent = { ...listing("A.US", "stock"), market: "us" as const };
+    expect(exactListing([aus, agilent], "A.US")).toEqual({
+      listing: agilent,
+      line: null,
+    });
+    expect(exactListing([aus], "A.US")).toBeNull();
+    expect(exactListing([agilent], "A")).toBeNull();
+  });
+});
+
+describe("matchListings for US listings", () => {
+  it("ranks a ticker's US listing first", () => {
+    const listings: Listing[] = [
+      {
+        symbol: "VOOG.US",
+        name: "Vanguard Growth",
+        type: "etf",
+        currency: "USD",
+        market: "us",
+      },
+      {
+        symbol: "VOO.US",
+        name: "Vanguard S&P 500 ETF",
+        type: "etf",
+        currency: "USD",
+        market: "us",
+      },
+      {
+        symbol: "BRK-B.US",
+        name: "Berkshire Hathaway",
+        type: "stock",
+        currency: "USD",
+        market: "us",
+      },
+    ];
+    expect(
+      matchListings(listings, "VOO", 5).map(({ symbol }) => symbol),
+    ).toEqual(["VOO.US", "VOOG.US"]);
+    expect(
+      matchListings(listings, "brk b", 5).map(({ symbol }) => symbol),
+    ).toEqual(["BRK-B.US"]);
   });
 });

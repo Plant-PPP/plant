@@ -29,6 +29,7 @@ const CLASS_COLORS: Record<HoldingClass, string> = {
   crypto: "bg-chart-2",
   cedear: "bg-chart-5",
   stock: "bg-chart-5/60",
+  etf: "bg-chart-5/30",
   bond: "bg-chart-6",
   fci: "bg-chart-7",
   cash: "bg-chart-3",

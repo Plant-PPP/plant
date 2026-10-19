@@ -1,6 +1,6 @@
 "use client";
 
-import type { Listing, ListingMarket } from "@plant/core";
+import type { DollarLine, Listing, ListingMarket } from "@plant/core";
 import { ChevronDownIcon } from "lucide-react";
 import { Popover } from "radix-ui";
 import {
@@ -26,7 +26,6 @@ type PickerInstrument = Pick<InstrumentRow, "symbol" | "name"> &
 
 // A dollar line of a CEDEAR or bond in pesos: D, MEP; C, cable. The same
 // instrument, traded in dollars.
-export type DollarLine = "D" | "C";
 const LINES: readonly DollarLine[] = ["D", "C"];
 const LINE_NOTES: Record<DollarLine | "", string> = {
   "": "En pesos",
@@ -93,14 +92,16 @@ export function matchesInstrument(
   );
 }
 
+const MARKET_LABELS: Record<ListingMarket, string> = {
+  byma: "BYMA",
+  us: "EE.UU.",
+  crypto: "Cripto",
+};
+
 // What a market listing shows besides its name: its type, currency and
 // market, as "Acción · ARS · BYMA".
 export const listingDetail = ({ type, currency, market }: Listing): string =>
-  [
-    HOLDING_CLASS_LABELS[type],
-    currency,
-    market === "byma" ? "BYMA" : "Cripto",
-  ].join(" · ");
+  [HOLDING_CLASS_LABELS[type], currency, MARKET_LABELS[market]].join(" · ");
 
 // What an option shows under its name: its type, a market listing's
 // currency and market, and the currency of a line where the instrument has
@@ -119,7 +120,7 @@ export function optionDetail(
       : null;
     return [type, note].filter(Boolean).join(" · ") || null;
   }
-  const market = listing.market === "byma" ? "BYMA" : "Cripto";
+  const market = MARKET_LABELS[listing.market];
   return note
     ? [HOLDING_CLASS_LABELS[listing.type], note, market].join(" · ")
     : listingDetail(listing);
@@ -139,15 +140,20 @@ export const newListings = (
 export const MARKET_QUERY_MIN = 2;
 const MARKET_DELAY_MS = 300;
 
-const MARKET_FAILURES: Record<string, string> = {
+const ACTION_FAILURES: Record<string, string> = {
   limited: "Buscaste muchas veces seguidas. Esperá un minuto.",
   unavailable: "No pudimos buscar en el mercado. Probá de nuevo en un rato.",
   invalid: "Escribí un símbolo o un nombre más corto.",
   not_listed: "Ese instrumento ya no figura en el mercado.",
   failed: "No pudimos agregarlo. Probá de nuevo más tarde.",
-  byma: "No pudimos buscar en BYMA. Probá de nuevo en un rato.",
-  crypto: "No pudimos buscar cripto. Probá de nuevo en un rato.",
   rejected: "No pudimos buscar en el mercado. Probá de nuevo en un rato.",
+};
+
+// A market that did not answer while the others did.
+const MARKET_FAILURES: Record<ListingMarket, string> = {
+  byma: "No pudimos buscar en BYMA. Probá de nuevo en un rato.",
+  us: "No pudimos buscar en EE.UU. Probá de nuevo en un rato.",
+  crypto: "No pudimos buscar cripto. Probá de nuevo en un rato.",
 };
 
 // What a key in the search does: move the active option (wrapping), pick it,
@@ -305,13 +311,13 @@ export function InstrumentPicker({
       void settle(searchMarket.search(wanted, asked)).then((result) => {
         if (!current) return;
         if (result === "rejected") {
-          setMarketError(MARKET_FAILURES.rejected!);
+          setMarketError(ACTION_FAILURES.rejected!);
         } else if (result.ok) {
           const [failed] = result.failed;
-          setMarketError(failed ? (MARKET_FAILURES[failed] ?? null) : null);
+          setMarketError(failed ? MARKET_FAILURES[failed] : null);
           setMarket({ query: wanted, listings: result.listings });
         } else {
-          setMarketError(MARKET_FAILURES[result.code] ?? null);
+          setMarketError(ACTION_FAILURES[result.code] ?? null);
         }
       });
     }, MARKET_DELAY_MS);
@@ -370,11 +376,11 @@ export function InstrumentPicker({
         searchMarket.add(listing.symbol, listing.market),
       );
       if (result === "rejected") {
-        setMarketError(MARKET_FAILURES.failed!);
+        setMarketError(ACTION_FAILURES.failed!);
         return;
       }
       if (!result.ok) {
-        setMarketError(MARKET_FAILURES[result.code] ?? null);
+        setMarketError(ACTION_FAILURES[result.code] ?? null);
         return;
       }
       onAdded(result.instrument);

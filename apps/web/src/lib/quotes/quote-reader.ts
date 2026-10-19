@@ -5,13 +5,17 @@ import type {
   QuoteReaderPort,
   StoredQuotes,
 } from "@plant/core";
-import { type Currency, type Database, daysBetween } from "@plant/shared";
+import {
+  chunked,
+  type Currency,
+  type Database,
+  daysBetween,
+} from "@plant/shared";
 import type {
   PostgrestSingleResponse,
   SupabaseClient,
 } from "@supabase/supabase-js";
 
-import { chunked } from "@/lib/chunked";
 import { STORE_TIMEOUT_MS, storeError } from "@/lib/quotes/store-error";
 import { postgrestCall } from "@/lib/supabase/postgrest-write";
 

@@ -7,6 +7,7 @@ import {
   over,
   stored,
   times,
+  usTicker,
   withoutAccents,
 } from "@plant/shared";
 
@@ -24,6 +25,7 @@ export const INSTRUMENT_PRICING: Record<
   crypto: { basis: 1 },
   cedear: { basis: 1 },
   stock: { basis: 1 },
+  etf: { basis: 1 },
   bond: { basis: 100 },
   fci: { basis: 1 },
 };
@@ -61,6 +63,15 @@ export const normalizeSymbol = (text: string): string =>
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 
+// A symbol as the catalog tells instruments apart: normalized, and a US
+// listing keeps its .US, so A.US is never the BYMA symbol AUS.
+export function symbolKey(text: string): string {
+  const ticker = usTicker(text);
+  return ticker === null
+    ? normalizeSymbol(text)
+    : `${normalizeSymbol(ticker)}.US`;
+}
+
 export type CatalogInstrument = {
   symbol: string;
   type: InstrumentType;
@@ -79,7 +90,7 @@ export function instrumentIndex(
   const bySymbol = new Map<string, CatalogInstrument>();
   const byAlias = new Map<string, CatalogInstrument>();
   for (const instrument of catalog) {
-    const key = normalizeSymbol(instrument.symbol);
+    const key = symbolKey(instrument.symbol);
     if (!bySymbol.has(key)) bySymbol.set(key, instrument);
     for (const alias of instrument.aliases) {
       const aliasKey = normalizeSymbol(alias);
@@ -114,19 +125,29 @@ const resolved = (
 
 const DOLLAR_LINE_TYPES: readonly InstrumentType[] = ["bond", "cedear"];
 
+// A bond's or CEDEAR's dollar line: D for MEP, C for cable.
+export type DollarLine = "D" | "C";
+
+// The dollar line a normalized symbol's last letter names, else null.
+export const dollarLineOf = (key: string): DollarLine | null =>
+  key.endsWith("D") ? "D" : key.endsWith("C") ? "C" : null;
+
 // The catalog instrument a document's text names, or null. An exact symbol
 // wins, so a catalog symbol ending in D or C is never read as a dollar line.
 export function resolveSymbol(
   text: string,
   index: InstrumentIndex,
 ): ResolvedSymbol | null {
-  const exact = index.bySymbol.get(normalizeSymbol(text));
+  const exact = index.bySymbol.get(symbolKey(text));
   if (exact) return resolved(exact);
+  // A US listing is that listing or none: never a BYMA line or an alias.
+  if (usTicker(text) !== null) return null;
   const key = normalizeSymbol(text.trim().replace(/\.BA$/i, ""));
   if (key === "") return null;
   const local = index.bySymbol.get(key);
   if (local) return resolved(local);
-  const base = /[DC]$/.test(key) ? index.bySymbol.get(key.slice(0, -1)) : null;
+  const base =
+    dollarLineOf(key) === null ? null : index.bySymbol.get(key.slice(0, -1));
   if (base && DOLLAR_LINE_TYPES.includes(base.type)) {
     return resolved(base, true);
   }

@@ -4,6 +4,7 @@ import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { Notice } from "@/components/ui/notice";
 import { Badge } from "@/components/ui/badge";
 import {
+  type DollarLine,
   documentDateIssue,
   exactUnitPrice,
   type InstrumentType,
@@ -24,7 +25,6 @@ import { toast } from "sonner";
 
 import { useCatalog } from "@/components/holdings/instrument-market";
 import {
-  type DollarLine,
   InstrumentPicker,
   lineOf,
 } from "@/components/holdings/instrument-picker";

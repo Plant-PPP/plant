@@ -20,7 +20,8 @@ import {
   runRefreshQuotes,
 } from "./refresh-quotes";
 
-const [DOLLARS, INDEX, CRYPTO, LISTED] = Constants.public.Enums.quote_source;
+const [DOLLARS, INDEX, CRYPTO, LISTED, US] =
+  Constants.public.Enums.quote_source;
 const RETRIES = 2;
 const RUN_ID = "01M8Z3K4567890QWERTYXABCDE";
 
@@ -181,6 +182,7 @@ const RUN_FIELDS = [
   "plant.quotes.early_keys",
   "plant.quotes.failed_codes",
   "plant.quotes.fx_rate_count",
+  "plant.quotes.idle_feeds",
   "plant.quotes.invalid_count",
   "plant.quotes.invalid_keys",
   "plant.quotes.price_count",
@@ -206,6 +208,19 @@ const index = () => batch({ fxRates: [fxRate("uva", TODAY)] });
 const crypto = () => batch({ prices: [price("BTC"), price("ETH")] });
 
 describe("runRefreshQuotes", () => {
+  it("names the feeds that had nothing to quote, and stays ok", async () => {
+    const d = deps([
+      feed(DOLLARS, ok(dollars())),
+      feed(US, ok({ ...batch(), idle: true })),
+    ]);
+    const { result } = await drive(d);
+    expect(result).toMatchObject({ outcome: "ok" });
+    expect(runLines(d.lines)[0]?.fields).toMatchObject({
+      "plant.quotes.idle_feeds": US,
+      "plant.quotes.failed_codes": "",
+    });
+  });
+
   it("saves every feed and writes one ok line at info", async () => {
     const d = deps([
       feed(DOLLARS, ok(dollars())),
@@ -228,6 +243,7 @@ describe("runRefreshQuotes", () => {
       "plant.quotes.price_count": 2,
       "plant.quotes.invalid_count": 0,
       "plant.quotes.unread": "",
+      "plant.quotes.idle_feeds": "",
       "plant.quotes.failed_codes": "",
       "plant.quotes.stage": undefined,
       "error.type": undefined,
@@ -726,6 +742,7 @@ const CATALOG = [
   { symbol: "AAPL", type: "cedear", currency: "ARS" },
   { symbol: "GD30", type: "bond", currency: "USD" },
   { symbol: "BTC", type: "crypto", currency: "USD" },
+  { symbol: "VOO.US", type: "etf", currency: "USD" },
 ] as const;
 const instruments = async () => CATALOG;
 
@@ -750,7 +767,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     return { feeds, reads };
   };
   const everyFeed = (code: string) =>
-    [DOLLARS, INDEX, CRYPTO, LISTED]
+    [DOLLARS, INDEX, CRYPTO, LISTED, US]
       .map((id) => `${id}:read:${code}`)
       .sort()
       .join(",");
@@ -761,9 +778,9 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const d = deps(feeds);
     const { thrown } = await drive(d);
     expect(thrown).toBeInstanceOf(NonRetriableError);
-    expect([...reads.values()]).toEqual([1, 1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1]);
     expect(feedLines(d.lines).map((line) => [line.level, line.error])).toEqual(
-      [DOLLARS, INDEX, CRYPTO, LISTED].map(() => ["error", bug]),
+      [DOLLARS, INDEX, CRYPTO, LISTED, US].map(() => ["error", bug]),
     );
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
@@ -778,7 +795,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(forged);
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual([1, 1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1]);
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
       "plant.quotes.unread": "",
@@ -799,7 +816,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(new QuoteFeedError("timeout"));
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual(Array(4).fill(RETRIES + 1));
+    expect([...reads.values()]).toEqual(Array(5).fill(RETRIES + 1));
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("timeout"),
       "plant.quotes.stage": "read",
@@ -818,6 +835,27 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     }
     if (hostname === "api.argentinadatos.com") {
       return [{ fecha: TODAY, valor: 1603.33 }];
+    }
+    if (hostname === "query1.finance.yahoo.com") {
+      return {
+        spark: {
+          result: [
+            {
+              symbol: "VOO",
+              response: [
+                {
+                  meta: {
+                    currency: "USD",
+                    regularMarketPrice: 705.21,
+                    regularMarketTime:
+                      Date.parse("2026-10-09T20:00:00Z") / 1000,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
     }
     if (hostname === "api.invertironline.com") {
       return {
@@ -857,7 +895,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
       }),
     ]);
     await drive(d, memo);
-    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, LISTED]));
+    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, LISTED, US]));
     const listed = d.save.mock.calls
       .flatMap(([rows]) => rows.prices)
       .filter((row) => row.source === LISTED);
@@ -889,6 +927,6 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": `${LISTED}:read:unconfigured`,
     });
-    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO]));
+    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, US]));
   });
 });

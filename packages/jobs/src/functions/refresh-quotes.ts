@@ -45,6 +45,7 @@ type StepOutcome =
       prices: number;
       refused: Record<Refusal, string[]>;
       unread: string[];
+      idle?: true;
       ms: number;
     }
   | { ok: false; stage: QuoteStage; code: string; ms?: number };
@@ -67,13 +68,20 @@ async function refreshFeed(
   const elapsed = () => deps.now().getTime() - start.getTime();
   let stage: QuoteStage = "read";
   try {
-    const { fxRates, prices, refused, unread } = await feed.read(start);
+    const { fxRates, prices, refused, unread, idle } = await feed.read(start);
     stage = "save";
     const saved =
       fxRates.length + prices.length > 0
         ? await deps.store.save({ fxRates, prices })
         : { fxRates: 0, prices: 0 };
-    return { ok: true, ...saved, refused, unread, ms: elapsed() };
+    return {
+      ok: true,
+      ...saved,
+      refused,
+      unread,
+      ...(idle && { idle }),
+      ms: elapsed(),
+    };
   } catch (error) {
     const { code, known, retryable } = quoteFailureOf(error);
     const ms = elapsed();
@@ -155,6 +163,11 @@ function runLine(
     "plant.quotes.price_count": prices,
     "plant.quotes.invalid_count": invalidCount,
     "plant.quotes.unread": logList(done.flatMap(({ unread }) => unread)),
+    "plant.quotes.idle_feeds": logList(
+      results.flatMap(({ feed, outcome }) =>
+        outcome.ok && outcome.idle ? [feed] : [],
+      ),
+    ),
     "plant.quotes.failed_codes": logList(
       failed.map(({ feed, stage, code }) => `${feed}:${stage}:${code}`),
     ),

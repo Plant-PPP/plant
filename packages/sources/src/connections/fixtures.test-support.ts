@@ -188,6 +188,11 @@ export const IBKR_STATEMENT = `<?xml version="1.0" encoding="UTF-8"?>
 <Trade currency="USD" symbol="AAPL" tradeDate="20260915" quantity="10" tradePrice="175.5" proceeds="-1755" ibCommission="-1" buySell="BUY" tradeID="111" levelOfDetail="EXECUTION" />
 <Trade currency="USD" symbol="AAPL" tradeDate="20260915" quantity="10" tradePrice="175.5" proceeds="-1755" ibCommission="-1" buySell="BUY" tradeID="111" levelOfDetail="ORDER" />
 <Trade currency="USD" symbol="MSFT" tradeDate="20261002" quantity="-4" tradePrice="410" proceeds="1640" ibCommission="-1.2" buySell="SELL" tradeID="112" levelOfDetail="EXECUTION" />
+<Trade currency="USD" assetCategory="STK" listingExchange="ARCA" symbol="VOO" tradeDate="20261005" quantity="2" tradePrice="673" proceeds="-1346" ibCommission="-1" buySell="BUY" tradeID="114" levelOfDetail="EXECUTION" />
+<Trade currency="USD" assetCategory="STK" listingExchange="NYSE" symbol="BRK B" tradeDate="20261006" quantity="1" tradePrice="530" proceeds="-530" ibCommission="-1" buySell="BUY" tradeID="115" levelOfDetail="EXECUTION" />
+<Trade currency="USD" assetCategory="STK" listingExchange="LSEETF" symbol="CSPX" tradeDate="20261007" quantity="1" tradePrice="700" proceeds="-700" ibCommission="-1" buySell="BUY" tradeID="116" levelOfDetail="EXECUTION" />
+<Trade currency="USD" assetCategory="CASH" symbol="USD.ARS" tradeDate="20261008" quantity="100" tradePrice="1300" proceeds="-130000" ibCommission="-1" buySell="BUY" tradeID="117" levelOfDetail="EXECUTION" />
+<Trade currency="USD" assetCategory="STK" listingExchange="NASDAQ" symbol="ABCDEFGHIJK" tradeDate="20261009" quantity="1" tradePrice="1" proceeds="-1" ibCommission="0" buySell="BUY" tradeID="118" levelOfDetail="EXECUTION" />
 </Trades>
 <CashTransactions>
 <CashTransaction currency="USD" symbol="SPY" type="Dividends" amount="3.21" dateTime="20260930" transactionID="113" levelOfDetail="DETAIL" />

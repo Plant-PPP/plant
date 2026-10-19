@@ -4,6 +4,7 @@ import {
   type Exact,
   exactOf,
   fieldsPassed,
+  INSTRUMENT_SYMBOL_PATTERN,
   plus,
   positiveDecimalSchema,
   times,
@@ -11,11 +12,7 @@ import {
 } from "@plant/shared";
 import { z } from "zod";
 
-import {
-  type QuoteNeed,
-  SYMBOL_PATTERN,
-  type QuoteSnapshot,
-} from "../quotes/contract/quote";
+import type { QuoteNeed, QuoteSnapshot } from "../quotes/contract/quote";
 import { type ReferenceDollar, express } from "../valuation/denominator";
 import { DENOMINATORS, type Denominator } from "../valuation/denominators";
 import { quotesNeeded } from "../valuation/holdings";
@@ -45,7 +42,7 @@ export const liabilityFields = {
   lender: label.nullable(),
   currency: currencySchema.nullable(),
   uva: z.boolean(),
-  instrument_symbol: z.string().regex(SYMBOL_PATTERN).nullable(),
+  instrument_symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN).nullable(),
   balance: positiveDecimalSchema,
   installment: positiveDecimalSchema.nullable(),
   annual_rate: annualRate.nullable(),

@@ -3,6 +3,7 @@ import {
   compareDecimals,
   type Currency,
   exactOf,
+  INSTRUMENT_SYMBOL_PATTERN,
   minus,
   over,
   positiveDecimalSchema,
@@ -78,7 +79,7 @@ export const newAlertSchema = z
     z
       .object({
         subjectKind: z.literal("instrument"),
-        subject: z.string().regex(/^[A-Z0-9]{1,15}$/),
+        subject: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
         direction: z.enum(["above", "below"]),
         threshold: positiveDecimal,
         currency: z.enum(["ARS", "USD"]),
@@ -87,7 +88,7 @@ export const newAlertSchema = z
     z
       .object({
         subjectKind: z.literal("gain"),
-        subject: z.string().regex(/^[A-Z0-9]{1,15}$/),
+        subject: z.string().regex(INSTRUMENT_SYMBOL_PATTERN),
         direction: z.enum(["above", "below"]),
         percent: gainPercent,
       })

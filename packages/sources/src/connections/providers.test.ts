@@ -123,8 +123,8 @@ describe("ibkr", () => {
       "holdings",
     )) as HoldingsReading;
     expect(rowsOf(reading)).toEqual([
-      ["AAPL", "10", "USD"],
-      ["SPY", "2.5", "USD"],
+      ["AAPL.US", "10", "USD"],
+      ["SPY.US", "2.5", "USD"],
       ["USD", "812.4", "USD"],
     ]);
     expect(reading.draft.rows[0]).toMatchObject({
@@ -161,10 +161,16 @@ describe("ibkr", () => {
         each.charges,
       ]),
     ).toEqual([
-      ["2026-10-02", "sale", "MSFT", "4", "410", "1640", "1.2"],
-      ["2026-09-30", "dividend", "SPY", null, null, "3.21", null],
-      ["2026-09-15", "purchase", "AAPL", "10", "175.5", "1755", "1"],
+      ["2026-10-08", "purchase", "USD.ARS", "100", "1300", "130000", "1"],
+      ["2026-10-07", "purchase", "CSPX", "1", "700", "700", "1"],
+      ["2026-10-06", "purchase", "BRK-B.US", "1", "530", "530", "1"],
+      ["2026-10-05", "purchase", "VOO.US", "2", "673", "1346", "1"],
+      ["2026-10-02", "sale", "MSFT.US", "4", "410", "1640", "1.2"],
+      ["2026-09-30", "dividend", "SPY.US", null, null, "3.21", null],
+      ["2026-09-15", "purchase", "AAPL.US", "10", "175.5", "1755", "1"],
     ]);
+    // A US ticker the catalog cannot hold is skipped.
+    expect(reading.read.skippedRows).toBe(1);
   });
 
   it("refuses a query the token does not run, and gives up for now on a statement never generated", async () => {

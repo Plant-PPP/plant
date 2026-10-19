@@ -8,7 +8,7 @@ import type {
 } from "./quote";
 
 // One public quote source. read() returns the rows that passed the check, with
-// the key of every refused row. It throws a QuoteFeedError when the source
+// the key of every refused row, and idle when the source had nothing to quote. It throws a QuoteFeedError when the source
 // fails; any other error is a bug and passes through unchanged.
 export interface QuoteFeedPort {
   readonly id: QuoteSource;
@@ -16,8 +16,8 @@ export interface QuoteFeedPort {
 }
 
 // What an adapter hands the factory, before any row is checked. listed: its
-// prices are of instruments listed on BYMA, so on the weekend Friday's are the
-// market's last.
+// prices are of instruments listed on an exchange that closes on weekends
+// (BYMA, the US exchanges), so on the weekend Friday's are the market's last.
 export interface RawQuoteFeed {
   readonly id: QuoteSource;
   readonly listed: boolean;

@@ -1,7 +1,14 @@
-import type { Currency } from "@plant/shared";
+import { type Currency, LOCAL_SYMBOL_PATTERN, usTicker } from "@plant/shared";
 import { z } from "zod";
 
-import { type InstrumentType, normalizeSymbol } from "../instruments";
+import { expiring } from "../expiring";
+import {
+  type DollarLine,
+  dollarLineOf,
+  type InstrumentType,
+  normalizeSymbol,
+  symbolKey,
+} from "../instruments";
 import {
   createIolSession,
   type IolCredentials,
@@ -10,11 +17,16 @@ import {
   readPanel,
 } from "../quotes/adapters/iol/feed";
 import type { GetJson, PostForm } from "../quotes/contract/port";
-import { parseResponse, QuoteFeedError } from "../quotes/contract/quote";
+import {
+  feedReadCode,
+  parseResponse,
+  QuoteFeedError,
+} from "../quotes/contract/quote";
 
-// Where a listing comes from: BYMA through IOL's panels, or crypto named by
-// CoinGecko and quoted by Kraken.
-export const LISTING_MARKETS = ["byma", "crypto"] as const;
+// Where a listing comes from: BYMA through IOL's panels, the US exchanges
+// (NYSE, Nasdaq, NYSE Arca), or crypto named by CoinGecko and quoted by
+// Kraken.
+export const LISTING_MARKETS = ["byma", "us", "crypto"] as const;
 export type ListingMarket = (typeof LISTING_MARKETS)[number];
 
 // An instrument a provider lists, in the shape the catalog keeps it.
@@ -29,8 +41,6 @@ export type Listing = {
   lines?: readonly string[];
 };
 
-// The catalog's symbol check (instruments_symbol_format).
-export const SYMBOL_FORMAT = /^[A-Z0-9]{1,15}$/;
 const NAME_MAX = 120;
 
 const lineSchema = z.object({
@@ -74,7 +84,8 @@ export function panelListings(
       (typeof moneda === "string" &&
         Object.hasOwn(MONEDA, moneda) &&
         MONEDA[moneda] === "ARS");
-    if (!pesos || !SYMBOL_FORMAT.test(simbolo) || seen.has(simbolo)) continue;
+    if (!pesos || !LOCAL_SYMBOL_PATTERN.test(simbolo) || seen.has(simbolo))
+      continue;
     seen.add(simbolo);
     listings.push({
       symbol: simbolo,
@@ -95,7 +106,7 @@ export function panelListings(
       typeof moneda !== "string" ||
       !Object.hasOwn(MONEDA, moneda) ||
       MONEDA[moneda] !== "USD" ||
-      !SYMBOL_FORMAT.test(simbolo) ||
+      !LOCAL_SYMBOL_PATTERN.test(simbolo) ||
       !/[DC]$/.test(simbolo)
     ) {
       continue;
@@ -152,7 +163,7 @@ export function coinGeckoListings(json: unknown): Listing[] {
   const listings: Listing[] = [];
   for (const coin of ranked) {
     const symbol = coin.symbol.toUpperCase();
-    if (!SYMBOL_FORMAT.test(symbol) || seen.has(symbol)) continue;
+    if (!LOCAL_SYMBOL_PATTERN.test(symbol) || seen.has(symbol)) continue;
     seen.add(symbol);
     listings.push({
       symbol,
@@ -165,10 +176,43 @@ export function coinGeckoListings(json: unknown): Listing[] {
   return listings;
 }
 
-// The listings whose symbol or name holds the query, an exact symbol (or
-// the CEDEAR or bond whose dollar line it names) first,
-// then symbols that start with it, then the rest, each in the providers'
-// order.
+const DOLLAR_LINE_TYPES: readonly InstrumentType[] = ["cedear", "bond"];
+
+// Whether a listing is exactly what the text names: its own symbol, or one of
+// its dollar lines (GOGLD is GOOGL's MEP line, AL30D AL30's), with the line.
+export function exactMatch(
+  listing: Listing,
+  text: string,
+): { line: DollarLine | null } | null {
+  if (symbolKey(listing.symbol) === symbolKey(text)) return { line: null };
+  if (usTicker(text) !== null) return null;
+  const wanted = normalizeSymbol(text);
+  const line = dollarLineOf(wanted);
+  if (line === null) return null;
+  if (listing.lines?.some((each) => normalizeSymbol(each) === wanted)) {
+    return { line };
+  }
+  return DOLLAR_LINE_TYPES.includes(listing.type) &&
+    normalizeSymbol(listing.symbol) === wanted.slice(0, -1)
+    ? { line }
+    : null;
+}
+
+// The market's listing for exactly what an import called an instrument.
+export function exactListing(
+  listings: readonly Listing[],
+  called: string,
+): { listing: Listing; line: DollarLine | null } | null {
+  for (const listing of listings) {
+    const match = exactMatch(listing, called);
+    if (match) return { listing, ...match };
+  }
+  return null;
+}
+
+// The listings whose symbol or name holds the query: an exact match first
+// (or the US listing of a bare ticker: VOO finds VOO.US), then symbols that
+// start with it, then the rest, each in the providers' order.
 export function matchListings(
   listings: readonly Listing[],
   query: string,
@@ -176,18 +220,14 @@ export function matchListings(
 ): Listing[] {
   const wanted = normalizeSymbol(query);
   if (wanted === "") return [];
-  // GOOGLD and GOOGLC are GOOGL's dollar lines: the same CEDEAR or bond.
-  const base = /[DC]$/.test(wanted) ? wanted.slice(0, -1) : null;
-  const rank = ({ symbol, name, type, lines }: Listing) => {
-    const key = normalizeSymbol(symbol);
-    if (key === wanted) return 0;
-    if (lines?.some((line) => normalizeSymbol(line) === wanted)) return 0;
-    if (key === base && (type === "cedear" || type === "bond")) return 0;
+  const rank = (listing: Listing) => {
+    if (exactMatch(listing, query)) return 0;
+    if (normalizeSymbol(usTicker(listing.symbol) ?? "") === wanted) return 0;
+    const key = normalizeSymbol(listing.symbol);
+    const name = normalizeSymbol(listing.name);
     if (key.startsWith(wanted)) return 1;
-    if (normalizeSymbol(name).startsWith(wanted)) return 2;
-    return key.includes(wanted) || normalizeSymbol(name).includes(wanted)
-      ? 3
-      : null;
+    if (name.startsWith(wanted)) return 2;
+    return key.includes(wanted) || name.includes(wanted) ? 3 : null;
   };
   return listings
     .flatMap((listing) => {
@@ -232,15 +272,24 @@ export function krakenUsdAssets(json: unknown): ReadonlySet<string> {
   return assets;
 }
 
+// What a market's provider lists for a query.
+export type MarketReader = (query: string) => Promise<Listing[]>;
+
+// us: the US listings' reader, which the catalog factory wires.
 export type CatalogSearchDeps = {
   getJson: GetJson;
   postForm: PostForm;
   iol: IolCredentials | null;
+  us: MarketReader;
   now?: () => number;
 };
 
+// A market whose provider did not answer, with the feed code it failed with
+// (_OTHER for an error that carries none).
+export type MarketFailure = { market: ListingMarket; code: string };
+
 // What a search found, and the markets whose provider did not answer.
-export type SearchFound = { listings: Listing[]; failed: ListingMarket[] };
+export type SearchFound = { listings: Listing[]; failed: MarketFailure[] };
 
 export type CatalogSearch = {
   // What the providers of the given markets list for the query.
@@ -250,7 +299,8 @@ export type CatalogSearch = {
     markets?: readonly ListingMarket[],
   ): Promise<SearchFound>;
   // The provider's own listing for a symbol, checked again: a BYMA line IOL
-  // lists, or a crypto CoinGecko names that Kraken quotes in dollars.
+  // lists, a US listing the US reader finds, or a crypto CoinGecko names
+  // that Kraken quotes in dollars.
   verify(symbol: string, market: ListingMarket): Promise<Listing | null>;
 };
 
@@ -260,9 +310,6 @@ export type CatalogSearch = {
 export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
   const now = deps.now ?? Date.now;
   const login = createIolSession(deps);
-  let byma: { at: number; listings: Promise<Listing[]> } | null = null;
-  let kraken: { at: number; assets: Promise<ReadonlySet<string>> } | null =
-    null;
 
   async function readByma(): Promise<Listing[]> {
     if (!deps.iol) throw new QuoteFeedError("unconfigured");
@@ -285,34 +332,12 @@ export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
     });
   }
 
-  // A read kept a few hours; a failed one is asked again on the next call.
-  function kept<T>(
-    slot: { at: number; value: Promise<T> } | null,
-    read: () => Promise<T>,
-    keep: (next: { at: number; value: Promise<T> } | null) => void,
-  ): Promise<T> {
-    const at = now();
-    if (slot && at - slot.at < CACHE_TTL_MS) return slot.value;
-    const value = read();
-    const next = { at, value };
-    keep(next);
-    value.catch(() => keep(null));
-    return value;
-  }
-
-  const bymaListings = () =>
-    kept(byma && { at: byma.at, value: byma.listings }, readByma, (next) => {
-      byma = next && { at: next.at, listings: next.value };
-    });
-
-  const krakenAssets = () =>
-    kept(
-      kraken && { at: kraken.at, value: kraken.assets },
-      async () => krakenUsdAssets(await deps.getJson(ASSET_PAIRS_URL)),
-      (next) => {
-        kraken = next && { at: next.at, assets: next.value };
-      },
-    );
+  const bymaListings = expiring(readByma, CACHE_TTL_MS, now);
+  const krakenAssets = expiring(
+    async () => krakenUsdAssets(await deps.getJson(ASSET_PAIRS_URL)),
+    CACHE_TTL_MS,
+    now,
+  );
 
   async function crypto(query: string): Promise<Listing[]> {
     const [json, assets] = await Promise.all([
@@ -322,8 +347,19 @@ export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
     return coinGeckoListings(json).filter(({ symbol }) => assets.has(symbol));
   }
 
-  const readers: Record<ListingMarket, (query: string) => Promise<Listing[]>> =
-    { byma: () => bymaListings(), crypto };
+  const readers: Record<ListingMarket, MarketReader> = {
+    byma: () => bymaListings(),
+    // Yahoo writes a US ticker bare: VOO.US is asked as VOO.
+    us: (query) => deps.us(usTicker(query) ?? query),
+    crypto,
+  };
+
+  // The symbols each market's listings take.
+  const symbolOf: Record<ListingMarket, (symbol: string) => boolean> = {
+    byma: (symbol) => LOCAL_SYMBOL_PATTERN.test(symbol),
+    us: (symbol) => usTicker(symbol) !== null && !/[a-z]/.test(symbol),
+    crypto: (symbol) => LOCAL_SYMBOL_PATTERN.test(symbol),
+  };
 
   return {
     async search(query, limit, markets = LISTING_MARKETS) {
@@ -333,7 +369,12 @@ export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
       const read = await Promise.allSettled(
         asked.map((market) => readers[market](text)),
       );
-      const failed = asked.filter((_, i) => read[i]!.status === "rejected");
+      const failed = asked.flatMap((market, i) => {
+        const each = read[i]!;
+        return each.status === "rejected"
+          ? [{ market, code: feedReadCode(each.reason) ?? "_OTHER" }]
+          : [];
+      });
       if (failed.length === asked.length && asked.length > 0) {
         throw (read[0] as PromiseRejectedResult).reason;
       }
@@ -344,9 +385,8 @@ export function createCatalogSearch(deps: CatalogSearchDeps): CatalogSearch {
     },
 
     async verify(symbol, market) {
-      if (!SYMBOL_FORMAT.test(symbol)) return null;
-      const listings =
-        market === "byma" ? await bymaListings() : await crypto(symbol);
+      if (!symbolOf[market](symbol)) return null;
+      const listings = await readers[market](usTicker(symbol) ?? symbol);
       return listings.find((listing) => listing.symbol === symbol) ?? null;
     },
   };
