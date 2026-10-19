@@ -3,7 +3,13 @@
 import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { Badge } from "@/components/ui/badge";
 import { exactUnitPrice } from "@plant/core";
-import { buenosAiresDate, type Currency } from "@plant/shared";
+import {
+  buenosAiresDate,
+  type Currency,
+  exactOf,
+  times,
+  toDecimal,
+} from "@plant/shared";
 import { RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -27,7 +33,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { amountInput, parseAmountInput } from "@/lib/format/amount";
+import {
+  amountInput,
+  formatAmount,
+  parseAmountInput,
+} from "@/lib/format/amount";
 import { countOf } from "@/lib/format/text";
 import { instrumentLabel, instrumentNames } from "@/lib/holdings/holding-name";
 import {
@@ -457,7 +467,13 @@ export function ImportOperationsReview({
                       )}
                     </span>
                     {!row.discarded && missing[index]!.has("symbol") && (
-                      <ProblemText text={missingCopy} />
+                      <ProblemText
+                        text={
+                          item.operations?.[index]?.unknownSymbol
+                            ? "No lo encontramos entre los activos: elegilo en la lista"
+                            : missingCopy
+                        }
+                      />
                     )}
                   </div>
                   <Button
@@ -557,7 +573,12 @@ export function ImportOperationsReview({
                     Elegí el tipo para completar el resto.
                   </p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div
+                    className={cn(
+                      "grid gap-3",
+                      trade ? "sm:grid-cols-4" : "sm:grid-cols-3",
+                    )}
+                  >
                     {trade ? (
                       <>
                         <Figure
@@ -607,6 +628,14 @@ export function ImportOperationsReview({
                         change(row.id, { chargesText })
                       }
                     />
+                    {trade && (
+                      <div className="grid gap-1 text-xs">
+                        <span className="text-muted-foreground">{`Total (${row.currency})`}</span>
+                        <span className="flex h-9 items-center text-sm font-medium tabular-nums">
+                          {tradeTotal(row, type, row.currency)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
@@ -634,6 +663,23 @@ export function ImportOperationsReview({
       </div>
     </div>
   );
+}
+
+// A trade's quantity times its unit price as typed; the broker's own total
+// when the instrument, and so how its price is quoted, is not known yet.
+function tradeTotal(
+  row: { quantityText: string; priceText: string; amountText: string },
+  type: Parameters<typeof exactUnitPrice>[0] | undefined,
+  currency: Currency,
+): string {
+  const quantity = parseAmountInput(row.quantityText);
+  const price = parseAmountInput(row.priceText);
+  const perUnit = price && type ? exactUnitPrice(type, price) : null;
+  const total =
+    quantity && perUnit
+      ? toDecimal(times(exactOf(quantity), exactOf(perUnit)), 2)
+      : parseAmountInput(row.amountText);
+  return total ? formatAmount(total, currency) : "—";
 }
 
 function ProblemText({ text }: { text: string }) {

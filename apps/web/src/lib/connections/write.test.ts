@@ -401,6 +401,7 @@ describe("readApiKey", () => {
     const view = await readApiKey(
       client([
         {
+          id: "import-1",
           status: "failed",
           failure: "connection_rejected",
           updated_at: "2026-10-14T15:31:58Z",
@@ -413,6 +414,7 @@ describe("readApiKey", () => {
       keyHint: "lcom",
       connectedOn: "2026-10-14",
       lastSync: {
+        importId: "import-1",
         status: "failed",
         failure: "connection_rejected",
         on: "2026-10-14",

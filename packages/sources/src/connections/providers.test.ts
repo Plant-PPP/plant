@@ -338,6 +338,55 @@ describe("iol operations", () => {
     expect(reading.read.skippedRows).toBe(1);
   });
 
+  it("reads a dividend from the row that names the currency it was paid in, and drops its twin with no amount", async () => {
+    const paid = (
+      simbolo: string,
+      numero: number,
+      montoOperado: number | null,
+    ) => ({
+      numero,
+      fechaOrden: "2026-10-02T11:31:50.883",
+      tipo: "Pago de Dividendos",
+      estado: "terminada",
+      mercado: "BCBA",
+      simbolo,
+      cantidad: null,
+      monto: null,
+      precio: null,
+      fechaOperada: "2026-10-02T11:31:50.883",
+      cantidadOperada: null,
+      precioOperado: null,
+      montoOperado,
+    });
+    fake.answer = (request) =>
+      request.path === "/api/v2/operaciones"
+        ? {
+            status: 200,
+            body: [paid("NVDA", 7001, null), paid("NVDA US$", 7000, 0.17)],
+          }
+        : PROVIDER_FIXTURES.iol.ok(request);
+    const reading = (await iolConnection(deps()).read(
+      IOL_CREDENTIALS,
+      "operations",
+    )) as OperationsReading;
+    expect(operationsOf(reading)).toEqual([
+      {
+        date: "2026-10-02",
+        kind: "dividend",
+        symbol: "NVDA",
+        quantity: null,
+        price: null,
+        amount: "0.17",
+        charges: null,
+        reference: "7000",
+        currency: "USD",
+        confidence: "medium",
+        page: null,
+      },
+    ]);
+    expect(reading.read.skippedRows).toBe(0);
+  });
+
   it("asks IOL for the executed orders of the period, and keeps only those inside it", async () => {
     const reading = await iolConnection(deps()).read(
       IOL_CREDENTIALS,

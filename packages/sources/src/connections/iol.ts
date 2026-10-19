@@ -63,11 +63,18 @@ const orderSchema = z.object({
 });
 const ordersSchema = z.array(orderSchema);
 
-// IOL names an order's kind in Spanish words; only trades are operations.
+// IOL names an order's kind in Spanish words; trades and the income it pays
+// are operations.
 const KINDS: Record<string, DraftOperation["kind"]> = {
   compra: "purchase",
   venta: "sale",
+  "pago de dividendos": "dividend",
+  "pago de renta": "coupon",
 };
+
+// IOL lists a payment twice: once under the bare symbol with no amount, and
+// once under the symbol and the currency it was paid in ("NVDA US$").
+const PAID_IN = /^(.+?)\s+(US\$|\$)$/;
 
 const plain = (text: string | undefined) =>
   (text ?? "")
@@ -161,15 +168,22 @@ export function iolConnection({
     let skipped = 0;
     for (const order of orders.data) {
       const kind = KINDS[plain(order.tipo)];
-      const symbol = (order.simbolo ?? "").trim();
+      const income = kind === "dividend" || kind === "coupon";
+      const listed = (order.simbolo ?? "").trim();
+      const paidIn = income ? listed.match(PAID_IN) : null;
+      const symbol = paidIn ? paidIn[1]! : listed;
       const date = (order.fechaOperada ?? order.fechaOrden ?? "").match(
         DAY,
       )?.[0];
-      const currency =
-        currencyOf(order.moneda) ?? MARKET_CURRENCY[plain(order.mercado)];
+      const currency = paidIn
+        ? paidIn[2] === "US$"
+          ? "USD"
+          : "ARS"
+        : (currencyOf(order.moneda) ?? MARKET_CURRENCY[plain(order.mercado)]);
       const quantity = decimalOf(order.cantidadOperada ?? order.cantidad);
       const price = decimalOf(order.precioOperado ?? order.precio);
       const amount = decimalOf(order.montoOperado ?? order.monto);
+      if (income && !positive(amount)) continue;
       if (!kind || !SYMBOL.test(symbol) || !date || !currency) {
         skipped += 1;
         continue;

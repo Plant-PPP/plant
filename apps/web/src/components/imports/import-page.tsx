@@ -163,9 +163,9 @@ export function ImportPage({
     {
       id: "status",
       header: "Estado",
-      size: 176,
+      size: 248,
       cell: ({ row: { original: item } }) => (
-        <span className="flex flex-wrap items-center justify-end gap-2">
+        <span className="flex items-center justify-end gap-3 whitespace-nowrap">
           <StatusBadge item={item} />
           {item.status === "ready" && (
             <PageButton asChild>

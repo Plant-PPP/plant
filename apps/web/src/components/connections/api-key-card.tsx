@@ -1,11 +1,12 @@
 "use client";
 
-import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
+import { PAGE_BUTTON_CLASS, PageButton } from "@/components/ui/page-button";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
 import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
 import {
+  ArrowRight,
   CircleCheck,
   KeyRound,
   ListOrdered,
@@ -41,6 +42,7 @@ import {
   SUPERSEDED_SYNC_MESSAGE,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
+import { cn } from "@/lib/utils";
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
 
@@ -117,20 +119,29 @@ export function ApiKeyCard({
       aria-labelledby={headingId}
       className="border-primary/15 bg-muted/40 grid gap-3 rounded-lg border p-3"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-0.5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-3",
+          !apiKey && "justify-between",
+        )}
+      >
+        <div className={cn("grid gap-0.5", apiKey && "contents")}>
           <h2
             id={headingId}
-            className="flex items-center gap-2 text-sm font-medium"
+            className={cn(
+              "flex items-center gap-2 text-sm font-medium",
+              apiKey && "sr-only",
+            )}
           >
             <KeyRound aria-hidden className="text-primary size-4" />
             Conexión con {form.name}
           </h2>
-          <p className="text-muted-foreground text-xs">
-            {apiKey
-              ? `${form.hint}: …${apiKey.keyHint} · conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee: nunca opera ni retira.`
-              : `Conectá tu cuenta de ${form.name} para traer tus tenencias sin subir archivos. Plant solo lee: nunca opera ni retira.`}
-          </p>
+          {!apiKey && (
+            <p className="text-muted-foreground text-xs">
+              Conectá tu cuenta de {form.name} para traer tus tenencias sin
+              subir archivos. Plant solo lee: nunca opera ni retira.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {apiKey ? (
@@ -190,13 +201,20 @@ export function ApiKeyCard({
         <SyncStatus sync={apiKey.lastSync} provider={form.name} />
       )}
       {synced && (
-        <p role="status" className="text-sm">
-          {synced === "operations"
-            ? "Estamos leyendo tus operaciones."
-            : "Estamos leyendo tus tenencias."}{" "}
-          Cuando estén, revisalas y confirmalas en{" "}
-          <Link href="/import">Cargar</Link>.
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="status" className="text-sm">
+            {synced === "operations"
+              ? "Estamos leyendo tus operaciones."
+              : "Estamos leyendo tus tenencias."}{" "}
+            Cuando estén, las revisás y confirmás en Cargar.
+          </p>
+          <PageButton asChild>
+            <Link href="/import">
+              Ir a Cargar
+              <ArrowRight aria-hidden />
+            </Link>
+          </PageButton>
+        </div>
       )}
       {error && <FormAlert>{error}</FormAlert>}
       {dialog === "operations" && (
@@ -268,18 +286,23 @@ export function SyncStatus({
     );
   }
   return (
-    <p className="flex items-center gap-2 text-sm">
-      <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
-      <span>
-        Última sincronización: {when}.
-        {sync.status === "ready" && (
-          <>
-            {" "}
-            Revisala y confirmala en <Link href="/import">Cargar</Link>.
-          </>
-        )}
-      </span>
-    </p>
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="flex items-center gap-2 text-sm">
+        <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+        <span>
+          Última sincronización: {when}.
+          {sync.status === "ready" && " Está lista para revisar."}
+        </span>
+      </p>
+      {sync.status === "ready" && (
+        <PageButton asChild>
+          <Link href={`/import/${sync.importId}`}>
+            Revisar
+            <ArrowRight aria-hidden />
+          </Link>
+        </PageButton>
+      )}
+    </div>
   );
 }
 

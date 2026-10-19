@@ -212,6 +212,7 @@ function reviewOperation(
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || unpagedSource(origin),
     discarded: false,
+    ...(row.symbol !== null && !known && { unknownSymbol: row.symbol }),
   };
 }
 

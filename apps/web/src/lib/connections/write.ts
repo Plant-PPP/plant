@@ -220,7 +220,7 @@ async function readLastSync(
 ): Promise<LastSync | null> {
   const result = await client
     .from("imports")
-    .select("status, failure, updated_at")
+    .select("id, status, failure, updated_at")
     .eq("source_connection_id", accountId)
     .order("created_at", { ascending: false })
     .limit(1);
@@ -231,6 +231,7 @@ async function readLastSync(
   if (!sync) return null;
   const changed = new Date(sync.updated_at);
   return {
+    importId: sync.id,
     status: sync.status,
     failure: sync.failure,
     on: buenosAiresDate(changed),
