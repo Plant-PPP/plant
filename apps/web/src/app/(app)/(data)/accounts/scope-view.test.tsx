@@ -38,6 +38,7 @@ import type * as React from "react";
 import * as apiKeyActions from "@/app/(app)/(data)/accounts/api-key-actions";
 import * as cashActions from "@/app/(app)/(data)/accounts/cash-actions";
 import * as movementActions from "@/app/(app)/(data)/assets/movement-actions";
+import * as importActions from "@/app/(app)/(data)/import/actions";
 import type { HoldingRow } from "@/lib/holdings/read";
 import { holdingsView, writeOperation } from "@/lib/ledger/ledger";
 import {
@@ -141,7 +142,9 @@ it("hands the page and the connection card only data and server actions", async 
   expect(nonActionFunctions(cash.props, [cashActions])).toEqual([]);
   // The account is at IOL, which connects by API.
   expect(connection.props.form).toMatchObject({ provider: "iol" });
-  expect(nonActionFunctions(connection.props, [apiKeyActions])).toEqual([]);
+  expect(
+    nonActionFunctions(connection.props, [apiKeyActions, importActions]),
+  ).toEqual([]);
 });
 
 it.each([
