@@ -3,6 +3,7 @@ import { inngestJobRunner } from "@plant/jobs";
 import { BUENOS_AIRES_TZ, buenosAiresDate, type Database } from "@plant/shared";
 import {
   type ConnectionAdapters,
+  type ConnectionDraft,
   type ConnectionProvider,
   connectionAdapters,
   connectionDraftSchema,
@@ -29,6 +30,7 @@ import {
   syncDraftOf,
 } from "@/lib/connections/api-key";
 import { consentsGiven } from "@/lib/consent-given";
+import { SHOWN_IMPORTS } from "@/lib/imports/shown";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -213,6 +215,27 @@ const BUENOS_AIRES_TIME = new Intl.DateTimeFormat("es-AR", {
   hourCycle: "h23",
 });
 
+// A new sync of an account replaces its syncs of the same kind still ready
+// to review: they are discarded, so only the newest waits in Cargar.
+async function replaceReady(
+  client: Client,
+  accountId: string,
+  draft: ConnectionDraft,
+  newest: string,
+): Promise<void> {
+  const replaced = await client
+    .from("imports")
+    .update({ status: "failed" })
+    .eq("source_connection_id", accountId)
+    .eq("sync_draft", draft)
+    .eq("status", "ready")
+    .neq("id", newest)
+    .select("id");
+  if (classifyPostgrestResult(replaced, 200)) {
+    throw replaced.error ?? new Error("ready syncs not replaced");
+  }
+}
+
 // The account's latest sync, or null when it never synced.
 async function readLastSync(
   client: Client,
@@ -220,8 +243,9 @@ async function readLastSync(
 ): Promise<LastSync | null> {
   const result = await client
     .from("imports")
-    .select("status, failure, updated_at")
+    .select("id, status, failure, updated_at")
     .eq("source_connection_id", accountId)
+    .or(SHOWN_IMPORTS)
     .order("created_at", { ascending: false })
     .limit(1);
   if (classifyPostgrestResult(result, 200) || !result.data) {
@@ -231,6 +255,7 @@ async function readLastSync(
   if (!sync) return null;
   const changed = new Date(sync.updated_at);
   return {
+    importId: sync.id,
     status: sync.status,
     failure: sync.failure,
     on: buenosAiresDate(changed),
@@ -467,6 +492,7 @@ export async function syncAccount(
     };
     const started = async (importId: string): Promise<SyncResult> => {
       current.importId = importId;
+      await replaceReady(client, id, kind, importId);
       await startJob(current.userId, importId);
       log(current, "ok");
       revalidatePath("/import");

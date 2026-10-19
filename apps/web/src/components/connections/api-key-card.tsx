@@ -1,11 +1,12 @@
 "use client";
 
-import { PAGE_BUTTON_CLASS } from "@/components/ui/page-button";
+import { PAGE_BUTTON_CLASS, PageButton } from "@/components/ui/page-button";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { Notice } from "@/components/ui/notice";
 import { buenosAiresDate } from "@plant/shared";
 import type { ConnectionDraft, ReadPeriod } from "@plant/sources";
 import {
+  ArrowRight,
   CircleCheck,
   KeyRound,
   ListOrdered,
@@ -13,7 +14,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { useId, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,9 @@ import {
   SUPERSEDED_SYNC_MESSAGE,
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
+import { cn } from "@/lib/utils";
+
+const FOLLOW_MS = 2000;
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
 
@@ -89,7 +94,7 @@ export function ApiKeyCard({
     "connect" | "disconnect" | "operations" | null
   >(null);
   const operationsOpener = useRef<HTMLButtonElement>(null);
-  const [synced, setSynced] = useState<ConnectionDraft | null>(null);
+  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -97,17 +102,24 @@ export function ApiKeyCard({
   const sync = (draft: ConnectionDraft, period?: ReadPeriod) =>
     startTransition(async () => {
       setError(null);
-      setSynced(null);
       setConnected(false);
       const failure = await syncFailure(actions.sync(accountId, draft, period));
       if (failure) setError(failure);
-      else setSynced(draft);
+      else router.refresh();
     });
+
+  // While the latest sync is queued or being read, the card asks the server
+  // again until it is ready or failed.
+  const following = apiKey?.lastSync ? isBusy(apiKey.lastSync.status) : false;
+  useEffect(() => {
+    if (!following) return;
+    const timer = setInterval(() => router.refresh(), FOLLOW_MS);
+    return () => clearInterval(timer);
+  }, [following, router]);
 
   const disconnect = () =>
     startTransition(async () => {
       setError(null);
-      setSynced(null);
       setConnected(false);
       setError(await disconnectFailure(actions.disconnect(accountId)));
     });
@@ -117,20 +129,29 @@ export function ApiKeyCard({
       aria-labelledby={headingId}
       className="border-primary/15 bg-muted/40 grid gap-3 rounded-lg border p-3"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-0.5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-3",
+          !apiKey && "justify-between",
+        )}
+      >
+        <div className={cn("grid gap-0.5", apiKey && "contents")}>
           <h2
             id={headingId}
-            className="flex items-center gap-2 text-sm font-medium"
+            className={cn(
+              "flex items-center gap-2 text-sm font-medium",
+              apiKey && "sr-only",
+            )}
           >
             <KeyRound aria-hidden className="text-primary size-4" />
             Conexión con {form.name}
           </h2>
-          <p className="text-muted-foreground text-xs">
-            {apiKey
-              ? `${form.hint}: …${apiKey.keyHint} · conectada el ${formatDate(apiKey.connectedOn)}. Plant solo lee: nunca opera ni retira.`
-              : `Conectá tu cuenta de ${form.name} para traer tus tenencias sin subir archivos. Plant solo lee: nunca opera ni retira.`}
-          </p>
+          {!apiKey && (
+            <p className="text-muted-foreground text-xs">
+              Conectá tu cuenta de {form.name} para traer tus tenencias sin
+              subir archivos. Plant solo lee: nunca opera ni retira.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {apiKey ? (
@@ -186,17 +207,8 @@ export function ApiKeyCard({
           tenencias.
         </Notice>
       )}
-      {!synced && !connected && apiKey?.lastSync && (
+      {!connected && apiKey?.lastSync && (
         <SyncStatus sync={apiKey.lastSync} provider={form.name} />
-      )}
-      {synced && (
-        <p role="status" className="text-sm">
-          {synced === "operations"
-            ? "Estamos leyendo tus operaciones."
-            : "Estamos leyendo tus tenencias."}{" "}
-          Cuando estén, revisalas y confirmalas en{" "}
-          <Link href="/import">Cargar</Link>.
-        </p>
       )}
       {error && <FormAlert>{error}</FormAlert>}
       {dialog === "operations" && (
@@ -217,7 +229,6 @@ export function ApiKeyCard({
           connect={actions.connect}
           onConnected={() => {
             setError(null);
-            setSynced(null);
             setConnected(true);
           }}
           onClose={() => setDialog(null)}
@@ -268,24 +279,37 @@ export function SyncStatus({
     );
   }
   return (
-    <p className="flex items-center gap-2 text-sm">
-      <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
-      <span>
-        Última sincronización: {when}.
-        {sync.status === "ready" && (
-          <>
-            {" "}
-            Revisala y confirmala en <Link href="/import">Cargar</Link>.
-          </>
-        )}
-      </span>
-    </p>
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="flex items-center gap-2 text-sm">
+        <CircleCheck aria-hidden className="text-gain size-4 shrink-0" />
+        <span>
+          Última sincronización: {when}.
+          {sync.status === "ready" && " Está lista para revisar."}
+        </span>
+      </p>
+      {sync.status === "ready" && (
+        <PageButton asChild>
+          <Link href={`/import/${sync.importId}`}>
+            Revisar
+            <ArrowRight aria-hidden />
+          </Link>
+        </PageButton>
+      )}
+    </div>
   );
 }
 
-// A year back from a Buenos Aires day, as YYYY-MM-DD.
-export const yearBefore = (day: string): string =>
-  `${Number(day.slice(0, 4)) - 1}${day.slice(4)}`.replace(/-02-29$/, "-02-28");
+// A month back from a Buenos Aires day, as YYYY-MM-DD, its day kept within
+// the shorter month: the operations dialog starts there, so changing its day
+// and month keeps the year the user is in.
+export function monthBefore(day: string): string {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const [y, m] = month === 1 ? [year - 1, 12] : [year, month - 1];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const d = Math.min(Number(day.slice(8, 10)), last);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
 
 // The days the operations sync reads: a year up to today unless the user
 // picks others. Operations already in the account come back marked in the
@@ -303,7 +327,7 @@ function OperationsDialog({
 }) {
   const id = useId();
   const today = buenosAiresDate(new Date());
-  const [from, setFrom] = useState(yearBefore(today));
+  const [from, setFrom] = useState(monthBefore(today));
   const [to, setTo] = useState(today);
   const [error, setError] = useState<string | null>(null);
 

@@ -17,7 +17,7 @@ const render = (consent?: { accepted: boolean; accept: () => void }) =>
       imports={[]}
       used={0}
       reviewHref={(id) => `/import/${id}`}
-      actions={{ upload: () => {} }}
+      actions={{ upload: () => {}, discard: () => {} }}
       consent={consent}
     />,
   );
@@ -59,7 +59,7 @@ it("uploads to no account unless one is chosen, and lists such a file as having 
       ]}
       used={0}
       reviewHref={(id) => `/import/${id}`}
-      actions={{ upload: () => {} }}
+      actions={{ upload: () => {}, discard: () => {} }}
     />,
   );
   expect(html).toMatch(

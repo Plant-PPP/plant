@@ -6,7 +6,7 @@ import {
   disconnectFailure,
   periodFailure,
   syncFailure,
-  yearBefore,
+  monthBefore,
 } from "./api-key-card";
 
 const down = () => Promise.reject(new Error("network"));
@@ -42,8 +42,9 @@ it("says why the server refused, and nothing when it went through", async () => 
 });
 
 it("reads a year of operations back from today, a leap day as the 28th", () => {
-  expect(yearBefore("2026-10-14")).toBe("2025-10-14");
-  expect(yearBefore("2028-02-29")).toBe("2027-02-28");
+  expect(monthBefore("2026-10-19")).toBe("2026-09-19");
+  expect(monthBefore("2026-03-31")).toBe("2026-02-28");
+  expect(monthBefore("2026-01-15")).toBe("2025-12-15");
 });
 
 it.each([

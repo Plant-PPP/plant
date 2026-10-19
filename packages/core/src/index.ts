@@ -36,6 +36,13 @@ export {
   upcomingFrom,
   type UpcomingIncome,
 } from "./income/upcoming";
+export {
+  DOLLAR_HISTORY_HOUSES,
+  type HistoricalFxRate,
+  type HistoryKind,
+  parseDollarHistory,
+  readDollarHistory,
+} from "./quotes/adapters/argentinadatos/history";
 export type { IolCredentials } from "./quotes/adapters/iol/feed";
 export { type QuotedInstrument, quoteFeeds } from "./quotes/factory";
 export {

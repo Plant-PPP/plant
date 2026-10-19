@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { NOT_ADVICE, type ChatMessage } from "@/lib/assistant/chat";
 
-import { ChatTranscript } from "./chat-transcript";
+import { ChatTranscript, emphasized } from "./chat-transcript";
 
 const render = (
   messages: ChatMessage[],
@@ -52,4 +52,14 @@ it("shows the question in a bubble and the answer without one, then the notice",
 
 it("disables its questions once the month's are used", () => {
   expect(render([], null, 0)).toMatch(/<button[^>]*disabled/);
+});
+
+it("shows the answer's bold spans bold and the rest as written", () => {
+  expect(
+    renderToStaticMarkup(
+      <>{emphasized("Cobraste **US$ 0,45** este año, *no más*.")}</>,
+    ),
+  ).toBe(
+    'Cobraste <strong class="font-semibold">US$ 0,45</strong> este año, *no más*.',
+  );
 });

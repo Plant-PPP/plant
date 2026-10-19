@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  type HistoricalFxRate,
   type QuotedInstrument,
   QuoteStoreError,
   type QuoteStorePort,
@@ -28,6 +29,25 @@ export function priceAlertsSink(): { meet(): Promise<number> } {
       const result = await client.rpc("meet_price_alerts");
       const failure = classifyPostgrestResult(result, 200);
       if (failure) throw new Error(`price alerts: ${failure.code}`);
+      return result.data ?? 0;
+    },
+  };
+}
+
+// Inserts the past dollar rates fx_rates lacks, through the function only the
+// service role may run; how many it inserted.
+export function fxHistorySink(): {
+  backfill(rows: readonly HistoricalFxRate[]): Promise<number>;
+} {
+  const client = createServiceRoleClient();
+  return {
+    backfill: async (rows) => {
+      if (!client) throw new Error("fx backfill: unconfigured");
+      const result = await client.rpc("backfill_fx_rates", {
+        p_rows: [...rows],
+      });
+      const failure = classifyPostgrestResult(result, 200);
+      if (failure) throw new Error(`fx backfill: ${failure.code}`);
       return result.data ?? 0;
     },
   };

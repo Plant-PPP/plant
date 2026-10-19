@@ -71,9 +71,11 @@ SELECT set_eq(
   $$ SELECT proname || ': ' || btrim(regexp_replace(prosrc, '\s+', ' ', 'g')) FROM pg_proc
      WHERE oid IN ('private.guard_fx_rate_insert()'::regprocedure,
                    'private.guard_price_insert()'::regprocedure) $$,
-  ARRAY(SELECT format($b$%s: BEGIN IF NEW.%s <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$, g, c)
-        FROM (VALUES ('guard_fx_rate_insert', 'rate_date'), ('guard_price_insert', 'price_date')) v(g, c)),
-  'each guard refuses any day but today in Buenos Aires'
+  ARRAY[
+    $b$guard_fx_rate_insert: BEGIN IF NEW.rate_date <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND NOT ( NEW.rate_date < (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND pg_catalog.current_setting('plant.backfill_fx_rates', true) IS NOT DISTINCT FROM 'on' AND current_user = 'postgres' ) THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$,
+    $b$guard_price_insert: BEGIN IF NEW.price_date <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$
+  ],
+  'each guard refuses any day but today in Buenos Aires, past days of the dollars only to backfill_fx_rates'
 );
 
 SELECT ok(

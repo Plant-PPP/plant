@@ -298,9 +298,9 @@ it("offers a dollar bond and a crypto on one line only", () => {
 
 it("names each line's currency, and a market line's market", () => {
   const [peso, mep, cable] = optionsOf(AAPL, true);
-  expect(optionDetail(peso!, true, AAPL)).toBe("En pesos");
-  expect(optionDetail(mep!, true, AAPL)).toBe("En dólares MEP");
-  expect(optionDetail(cable!, true, AAPL)).toBe("En dólares cable");
+  expect(optionDetail(peso!, true, AAPL)).toBe("CEDEAR · En pesos");
+  expect(optionDetail(mep!, true, AAPL)).toBe("CEDEAR · En dólares MEP");
+  expect(optionDetail(cable!, true, AAPL)).toBe("CEDEAR · En dólares cable");
   const listing = { ...AAPL, market: "byma" } as const;
   const [, marketMep] = optionsOf({ ...listing, listing }, true);
   expect(optionDetail(marketMep!, true)).toBe("CEDEAR · En dólares MEP · BYMA");

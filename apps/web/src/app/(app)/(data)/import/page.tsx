@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import {
   acceptTerms,
+  discardImport,
   finishUpload,
   startUpload,
 } from "@/app/(app)/(data)/import/actions";
@@ -68,7 +69,12 @@ export default async function ImportPage() {
       imports={items}
       used={used}
       termsAccepted={accepted}
-      actions={{ start: startUpload, finish: finishUpload, acceptTerms }}
+      actions={{
+        start: startUpload,
+        finish: finishUpload,
+        acceptTerms,
+        discard: discardImport,
+      }}
     />
   );
 }

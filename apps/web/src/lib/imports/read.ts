@@ -1,4 +1,6 @@
 import "server-only";
+
+import { SHOWN_IMPORTS } from "./shown";
 import {
   type InstrumentType,
   quotedPrice,
@@ -82,6 +84,7 @@ export async function readImports(
       .select(
         `id, status, failure, document_date, created_at, ${IMPORT_ORIGIN_COLUMNS}`,
       )
+      .or(SHOWN_IMPORTS)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(limit + 1),
@@ -153,8 +156,26 @@ const debtSchema = z.object({
 });
 
 // Where a row with no page says it came from.
+// Where a row comes from: a document's page or the document; a sync says
+// nothing, since every row comes from the account.
 const unpagedSource = (origin: ImportOrigin) =>
-  origin === "sync" ? "De la sincronización" : "Del documento";
+  origin === "sync" ? "" : "Del documento";
+
+// What the import called an instrument, shown where Plant read it as
+// another or does not know it. A sync names its own symbols, so its dollar
+// lines (NVDAD for NVDA) say nothing.
+const namedAs = (
+  symbol: string,
+  known: ReturnType<typeof resolveSymbol>,
+  origin: ImportOrigin,
+): string | null =>
+  origin === "sync"
+    ? known
+      ? null
+      : `Viene como "${symbol}"`
+    : known && known.symbol === symbol.trim().toUpperCase()
+      ? null
+      : `Leído como "${symbol}"`;
 
 function reviewDebt(data: unknown, origin: ImportOrigin): ImportDebtRow {
   const row = debtSchema.parse(data);
@@ -193,9 +214,7 @@ function reviewOperation(
       ? origin === "sync"
         ? "La sincronización no dice qué activo es"
         : "El documento no dice qué activo es"
-      : known && known.symbol === row.symbol.trim().toUpperCase()
-        ? null
-        : `Leído como "${row.symbol}"`;
+      : namedAs(row.symbol, known, origin);
   return {
     id: row.id,
     date: row.date,
@@ -212,6 +231,7 @@ function reviewOperation(
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || unpagedSource(origin),
     discarded: false,
+    ...(row.symbol !== null && !known && { unknownSymbol: row.symbol }),
   };
 }
 
@@ -282,10 +302,7 @@ function reviewRow(
     };
   }
   const known = resolveSymbol(row.symbol, index);
-  const named =
-    known && known.symbol === row.symbol.trim().toUpperCase()
-      ? null
-      : `Leído como "${row.symbol}"`;
+  const named = namedAs(row.symbol, known, origin);
   const sameCurrency =
     !known || (!known.dollarLine && row.currency === known.instrumentCurrency);
   return {

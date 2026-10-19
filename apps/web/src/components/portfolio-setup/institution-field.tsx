@@ -11,16 +11,22 @@ import BancoNacion from "@/assets/institutions/banco-nacion.png";
 import BancoSantander from "@/assets/institutions/banco-santander.png";
 import Bbva from "@/assets/institutions/bbva.png";
 import Binance from "@/assets/institutions/binance.png";
+import Bitso from "@/assets/institutions/bitso.png";
 import Brubank from "@/assets/institutions/brubank.png";
 import BullMarket from "@/assets/institutions/bull-market.png";
 import Cocos from "@/assets/institutions/cocos.png";
+import Ibkr from "@/assets/institutions/ibkr.png";
 import Ieb from "@/assets/institutions/ieb.png";
 import Iol from "@/assets/institutions/iol.png";
 import Lemon from "@/assets/institutions/lemon.png";
 import MercadoPago from "@/assets/institutions/mercado-pago.png";
 import NaranjaX from "@/assets/institutions/naranja-x.png";
+import Nexo from "@/assets/institutions/nexo.png";
 import Ppi from "@/assets/institutions/ppi.png";
+import Ripio from "@/assets/institutions/ripio.png";
+import Roxom from "@/assets/institutions/roxom.png";
 import Uala from "@/assets/institutions/uala.png";
+import Wallbit from "@/assets/institutions/wallbit.png";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,16 +49,22 @@ const ICONS = {
   "Banco Santander": BancoSantander,
   BBVA: Bbva,
   Binance,
+  Bitso,
   Brubank,
   "Bull Market": BullMarket,
   Cocos,
   IEB: Ieb,
+  "Interactive Brokers": Ibkr,
   IOL: Iol,
   Lemon,
   "Mercado Pago": MercadoPago,
   "Naranja X": NaranjaX,
+  Nexo,
   PPI: Ppi,
+  Ripio,
+  Roxom,
   Ualá: Uala,
+  Wallbit,
 } satisfies Record<string, StaticImageData>;
 
 type Institution = keyof typeof ICONS;

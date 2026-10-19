@@ -280,8 +280,9 @@ SELECT set_eq(
         'public.imports_used_this_month()'::regprocedure::text,
         'public.account_credentials(uuid,uuid,text)'::regprocedure::text,
         'public.meet_price_alerts()'::regprocedure::text,
-        'public.audit_data_export(uuid,text,text)'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check and the export''s audit row are the only SECURITY DEFINER functions'
+        'public.audit_data_export(uuid,text,text)'::regprocedure::text,
+        'public.backfill_fx_rates(jsonb)'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check, the export''s audit row and the dollar backfill are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

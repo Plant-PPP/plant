@@ -9,10 +9,10 @@ import {
   Camera,
   CircleAlert,
   CircleCheck,
-  CircleDot,
   FileUp,
   Files,
   LoaderCircle,
+  Trash2,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,7 +20,12 @@ import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
-import { DataTable, TruncatedText } from "@/components/ui/data-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  DataTable,
+  TruncatedText,
+  actionsColumn,
+} from "@/components/ui/data-table";
 import { formatDate } from "@/lib/format/date";
 import { leftThisMonth } from "@/lib/format/text";
 import {
@@ -37,6 +42,8 @@ export type ImportActions = {
   // Starts reading each file into the account, or into none; each import's
   // status then changes on its own.
   upload: (files: readonly File[], accountId: string | null) => void;
+  // Takes a ready import the user will not confirm off the list.
+  discard: (importId: string) => void;
 };
 
 // The select's value for a file that belongs to no account.
@@ -44,26 +51,40 @@ const NO_ACCOUNT = "none";
 
 const ACCEPT = ".pdf,.csv,.xls,.xlsx,image/*";
 
-// An import's status as a row shows it: a colored icon and its label.
-function StatusBadge({ item }: { item: ImportItem }) {
-  const busy = isBusy(item.status);
-  const Icon = busy
-    ? LoaderCircle
-    : item.status === "ready"
-      ? CircleDot
-      : item.status === "failed"
-        ? CircleAlert
-        : CircleCheck;
+// An import's status as its row's action: a disabled button while it is
+// read, the button to review it once it is ready, and a quiet line once it is
+// confirmed or failed.
+function StatusAction({
+  item,
+  reviewHref,
+}: {
+  item: ImportItem;
+  reviewHref: (id: string) => string;
+}) {
+  if (isBusy(item.status)) {
+    return (
+      <PageButton type="button" disabled>
+        <LoaderCircle aria-hidden className="animate-spin" />
+        Analizando
+      </PageButton>
+    );
+  }
+  if (item.status === "ready") {
+    return (
+      <PageButton asChild>
+        <Link href={reviewHref(item.id)}>Revisar</Link>
+      </PageButton>
+    );
+  }
+  const failed = item.status === "failed";
+  const Icon = failed ? CircleAlert : CircleCheck;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
+    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
       <Icon
         aria-hidden
         className={cn(
           "size-3.5 shrink-0",
-          busy && "text-muted-foreground animate-spin",
-          item.status === "ready" && "text-primary",
-          item.status === "failed" && "text-destructive",
-          item.status === "confirmed" && "text-gain",
+          failed ? "text-destructive" : "text-gain",
         )}
       />
       {IMPORT_STATUS_LABELS[item.status]}
@@ -101,6 +122,7 @@ export function ImportPage({
   // An account archived since it was chosen is no choice any more.
   const accountId = accounts.some((each) => each.id === choice) ? choice : null;
   const [dragging, setDragging] = useState(false);
+  const [discarding, setDiscarding] = useState<ImportItem | null>(null);
   const files = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const left = Math.max(0, IMPORTS_PER_MONTH - used);
@@ -163,19 +185,27 @@ export function ImportPage({
     {
       id: "status",
       header: "Estado",
-      size: 176,
+      size: 136,
       cell: ({ row: { original: item } }) => (
-        <span className="flex flex-wrap items-center justify-end gap-2">
-          <StatusBadge item={item} />
-          {item.status === "ready" && (
-            <PageButton asChild>
-              <Link href={reviewHref(item.id)}>Revisar</Link>
-            </PageButton>
-          )}
+        <span className="flex justify-end whitespace-nowrap">
+          <StatusAction item={item} reviewHref={reviewHref} />
         </span>
       ),
       meta: { className: "text-right" },
     },
+    actionsColumn<ImportItem>(
+      [
+        {
+          id: "delete",
+          icon: Trash2,
+          tooltip: "Descartar",
+          label: (item) => `Descartar ${item.fileName}`,
+          onClick: setDiscarding,
+          hidden: (item) => item.status !== "ready",
+        },
+      ],
+      { pending: false },
+    ),
   ];
 
   return (
@@ -307,6 +337,20 @@ export function ImportPage({
           {latestReady && `${latestReady.fileName} está lista para revisar.`}
         </p>
       </Section>
+
+      {discarding && (
+        <ConfirmDialog
+          title="Descartar la carga"
+          description={`Sacamos "${discarding.fileName}" de tus cargas sin guardar nada de lo que leímos.`}
+          confirmLabel="Descartar"
+          returnFocusTo={() => null}
+          onClose={() => setDiscarding(null)}
+          onConfirm={() => {
+            actions.discard(discarding.id);
+            setDiscarding(null);
+          }}
+        />
+      )}
     </div>
   );
 }

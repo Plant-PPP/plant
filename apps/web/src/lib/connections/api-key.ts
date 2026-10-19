@@ -17,9 +17,10 @@ export type ApiKeyView = {
   lastSync?: LastSync | null;
 };
 
-// The account's latest sync: its status, why it failed, and when it last
-// changed, as a Buenos Aires day (YYYY-MM-DD) and time (HH:MM).
+// The account's latest sync: its import, its status, why it failed, and when
+// it last changed, as a Buenos Aires day (YYYY-MM-DD) and time (HH:MM).
 export type LastSync = {
+  importId: string;
   status: Database["public"]["Enums"]["import_status"];
   failure: Database["public"]["Enums"]["import_failure"] | null;
   on: string;

@@ -48,6 +48,7 @@ const render = (statuses: ImportStatus[]) =>
       start: jest.fn(),
       finish: jest.fn(),
       acceptTerms: jest.fn(),
+      discard: jest.fn(),
     },
   });
 
