@@ -232,14 +232,14 @@ describe("ibkr's period", () => {
 });
 
 describe("ibkr's ranges", () => {
-  it("asks a year at a time, newest first, up to two years, from the period's start", () => {
+  it("asks a year at a time, newest first, up to ten years, from the period's start", () => {
     expect(flexRanges({ from: "2025-01-01", to: null }, "2026-10-19")).toEqual([
-      { fd: "20251020", td: "20261019" },
-      { fd: "20250101", td: "20251019" },
+      { fd: "20251019", td: "20261018" },
+      { fd: "20250101", td: "20251018" },
     ]);
     expect(
-      flexRanges({ from: "2018-01-01", to: "2026-10-19" }, "2026-10-19"),
-    ).toHaveLength(2);
+      flexRanges({ from: "2000-01-01", to: "2026-10-19" }, "2026-10-19"),
+    ).toHaveLength(10);
     expect(flexRanges({ from: null, to: null }, "2026-10-19")).toEqual([]);
   });
 
@@ -263,10 +263,34 @@ describe("ibkr's ranges", () => {
       .filter((each) => each.path.endsWith("/SendRequest"))
       .map((each) => [each.query.get("fd"), each.query.get("td")]);
     expect(asked).toEqual([
-      ["20251020", "20261019"],
-      ["20250101", "20251019"],
+      ["20251019", "20261018"],
+      ["20250101", "20251018"],
     ]);
     expect(reading.operations).toHaveLength(1);
+  });
+
+  it("stops going back at the first year IBKR has no statement for, keeping the newer ones", async () => {
+    fake.answer = (request) => ({
+      status: 200,
+      type: "xml",
+      body: request.path.endsWith("/SendRequest")
+        ? request.query.get("fd") === "20251019"
+          ? "<FlexStatementResponse><Status>Success</Status><ReferenceCode>1</ReferenceCode></FlexStatementResponse>"
+          : "<FlexStatementResponse><Status>Fail</Status><ErrorCode>1003</ErrorCode><ErrorMessage>Statement is not available.</ErrorMessage></FlexStatementResponse>"
+        : `<FlexQueryResponse><FlexStatements count="1"><FlexStatement toDate="20261018"><Trades><Trade currency="USD" symbol="AAPL" tradeDate="20251103" quantity="1" tradePrice="100" proceeds="-100" ibCommission="0" buySell="BUY" tradeID="7" levelOfDetail="EXECUTION" /></Trades></FlexStatement></FlexStatements></FlexQueryResponse>`,
+    });
+    const reading = (await ibkrConnection({
+      ...deps(),
+      now: () => new Date("2026-10-19T15:00:00Z"),
+      sleep: async () => undefined,
+    }).read(IBKR_CREDENTIALS, "operations", {
+      from: "2020-01-01",
+      to: null,
+    })) as OperationsReading;
+    expect(
+      fake.requests.filter((each) => each.path.endsWith("/SendRequest")),
+    ).toHaveLength(2);
+    expect(reading.operations.map((each) => each.date)).toEqual(["2025-11-03"]);
   });
 });
 

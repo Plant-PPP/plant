@@ -96,23 +96,29 @@ const atLevel = (row: Record<string, string>, level: string) =>
   row.levelOfDetail === undefined || row.levelOfDetail.toUpperCase() === level;
 
 // The Flex Web Service reads at most 365 days per request; a longer period is
-// asked a year at a time, newest first, up to two years: each statement may
-// take the whole read budget, and a sync runs in one job step.
+// asked a year at a time, newest first, up to ten years, one request after
+// another: IBKR throttles a token's requests.
 const FLEX_RANGE_DAYS = 365;
-const FLEX_RANGES_MAX = 2;
+const FLEX_RANGES_MAX = 10;
 // IBKR answers 1018 to requests that come too close together.
 const FLEX_RANGE_PAUSE_MS = 1_000;
+// What IBKR answers for a range before the account existed.
+const NO_STATEMENT = "1003";
+
+class NoStatement extends Error {}
 
 type FlexRange = { fd: string; td: string };
 
 const flexDay = (day: string) => day.replaceAll("-", "");
 
-// The date ranges a period of operations is asked in; none when it has no
-// start, so the query's own period applies.
+// The date ranges a period of operations is asked in, up to yesterday; none
+// when it has no start, so the query's own period applies.
 export function flexRanges(period: ReadPeriod, today: string): FlexRange[] {
   if (!period.from) return [];
   const ranges: FlexRange[] = [];
-  let to = period.to && period.to < today ? period.to : today;
+  // Today's statement does not exist until the day closes (1003).
+  const yesterday = addDays(today, -1);
+  let to = period.to && period.to < yesterday ? period.to : yesterday;
   while (to >= period.from && ranges.length < FLEX_RANGES_MAX) {
     const start = addDays(to, -(FLEX_RANGE_DAYS - 1));
     const from = start < period.from ? period.from : start;
@@ -166,6 +172,9 @@ export function ibkrConnection({
     });
     const reference = textOf(xml, "ReferenceCode");
     if (textOf(xml, "Status") === "Success" && reference) return reference;
+    if (range && textOf(xml, "ErrorCode") === NO_STATEMENT) {
+      throw new NoStatement();
+    }
     throw failureOf(xml);
   };
 
@@ -325,10 +334,18 @@ export function ibkrConnection({
       if (ranges.length === 0) {
         return operations([await statement(credentials)]);
       }
+      // A year IBKR has no statement for is before the account opened: the
+      // older ones are too, so the read stops there with what it has.
       const statements: string[] = [];
       for (const [index, range] of ranges.entries()) {
         if (index > 0) await sleep(FLEX_RANGE_PAUSE_MS);
-        statements.push(await statement(credentials, range));
+        try {
+          statements.push(await statement(credentials, range));
+        } catch (error) {
+          if (!(error instanceof NoStatement)) throw error;
+          if (statements.length === 0) throw unavailable();
+          break;
+        }
       }
       return operations(statements);
     },
