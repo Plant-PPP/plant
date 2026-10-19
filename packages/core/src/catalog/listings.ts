@@ -24,6 +24,9 @@ export type Listing = {
   type: InstrumentType;
   currency: Currency;
   market: ListingMarket;
+  // The symbols of its dollar lines where the market lists them under a
+  // name of their own (GOGLD for GOOGL), so a search for one finds it.
+  lines?: readonly string[];
 };
 
 // The catalog's symbol check (instruments_symbol_format).
@@ -82,7 +85,48 @@ export function panelListings(
       market: "byma",
     });
   }
+  // Each dollar line goes with its peso line: the same symbol without its D
+  // or C (NUD, NU), else the same description, else the one peso symbol its
+  // stem's letters spell in order (GOGLD, GOOGL), as IOL names some lines
+  // after an older name ("Cedear Google Inc." for "Alphabet").
+  const lined = new Map<string, string[]>();
+  for (const { simbolo, descripcion, moneda } of lines) {
+    if (
+      typeof moneda !== "string" ||
+      !Object.hasOwn(MONEDA, moneda) ||
+      MONEDA[moneda] !== "USD" ||
+      !SYMBOL_FORMAT.test(simbolo) ||
+      !/[DC]$/.test(simbolo)
+    ) {
+      continue;
+    }
+    const stem = simbolo.slice(0, -1);
+    const name = nameOf(descripcion, "");
+    const spelled = listings.filter(
+      ({ symbol }) =>
+        symbol[0] === stem[0] &&
+        symbol.length - stem.length <= 2 &&
+        spells(symbol, stem),
+    );
+    const peso =
+      listings.find(({ symbol }) => symbol === stem) ??
+      (name === "" ? undefined : listings.find((each) => each.name === name)) ??
+      (spelled.length === 1 ? spelled[0] : undefined);
+    if (!peso || peso.symbol === simbolo) continue;
+    lined.set(peso.symbol, [...(lined.get(peso.symbol) ?? []), simbolo]);
+  }
+  for (const listing of listings) {
+    const found = lined.get(listing.symbol);
+    if (found) listing.lines = found;
+  }
   return listings;
+}
+
+// Whether `stem`'s letters appear in `symbol` in order.
+function spells(symbol: string, stem: string): boolean {
+  let at = 0;
+  for (const letter of symbol) if (letter === stem[at]) at += 1;
+  return at === stem.length;
 }
 
 const coinGeckoSchema = z.object({
@@ -134,9 +178,10 @@ export function matchListings(
   if (wanted === "") return [];
   // GOOGLD and GOOGLC are GOOGL's dollar lines: the same CEDEAR or bond.
   const base = /[DC]$/.test(wanted) ? wanted.slice(0, -1) : null;
-  const rank = ({ symbol, name, type }: Listing) => {
+  const rank = ({ symbol, name, type, lines }: Listing) => {
     const key = normalizeSymbol(symbol);
     if (key === wanted) return 0;
+    if (lines?.some((line) => normalizeSymbol(line) === wanted)) return 0;
     if (key === base && (type === "cedear" || type === "bond")) return 0;
     if (key.startsWith(wanted)) return 1;
     if (normalizeSymbol(name).startsWith(wanted)) return 2;

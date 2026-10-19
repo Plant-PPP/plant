@@ -226,6 +226,7 @@ export function InstrumentPicker({
   lines = false,
   line = null,
   markets,
+  suggestion,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: PickerName & {
@@ -249,6 +250,9 @@ export function InstrumentPicker({
   line?: DollarLine | null;
   // The markets the search looks in; all of them when not given.
   markets?: readonly ListingMarket[];
+  // The text the search starts with while nothing is chosen: what an import
+  // called an instrument Plant does not know.
+  suggestion?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 }) {
@@ -330,7 +334,8 @@ export function InstrumentPicker({
   // never on hover, which would scroll the list under the pointer.
   const followActive = useRef<ScrollLogicalPosition | null>(null);
 
-  function openWith(next: boolean, search = "") {
+  function openWith(next: boolean, typed = "") {
+    const search = typed === "" && value === "" ? (suggestion ?? "") : typed;
     if (next) {
       followActive.current = "start";
       setQuery(search);

@@ -299,9 +299,17 @@ export function SyncStatus({
   );
 }
 
-// A year back from a Buenos Aires day, as YYYY-MM-DD.
-export const yearBefore = (day: string): string =>
-  `${Number(day.slice(0, 4)) - 1}${day.slice(4)}`.replace(/-02-29$/, "-02-28");
+// A month back from a Buenos Aires day, as YYYY-MM-DD, its day kept within
+// the shorter month: the operations dialog starts there, so changing its day
+// and month keeps the year the user is in.
+export function monthBefore(day: string): string {
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const [y, m] = month === 1 ? [year - 1, 12] : [year, month - 1];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const d = Math.min(Number(day.slice(8, 10)), last);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
 
 // The days the operations sync reads: a year up to today unless the user
 // picks others. Operations already in the account come back marked in the
@@ -319,7 +327,7 @@ function OperationsDialog({
 }) {
   const id = useId();
   const today = buenosAiresDate(new Date());
-  const [from, setFrom] = useState(yearBefore(today));
+  const [from, setFrom] = useState(monthBefore(today));
   const [to, setTo] = useState(today);
   const [error, setError] = useState<string | null>(null);
 

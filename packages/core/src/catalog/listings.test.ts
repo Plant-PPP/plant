@@ -100,6 +100,7 @@ describe("panelListings", () => {
         type: "bond",
         currency: "USD",
         market: "byma",
+        lines: ["GD30D"],
       },
     ]);
   });
@@ -117,8 +118,37 @@ describe("panelListings", () => {
         type: "cedear",
         currency: "ARS",
         market: "byma",
+        lines: ["NUD"],
       },
     ]);
+  });
+
+  it("finds a CEDEAR by a dollar line IOL names its own way", () => {
+    // As IOL lists them: GOOGL's lines under Google's old name and a
+    // shorter symbol, IBIT's under a description cut differently.
+    const listings = panelListings("cedear", [
+      { simbolo: "GOGLC", descripcion: "Cedear Google Inc.", moneda: "2" },
+      { simbolo: "GOGLD", descripcion: "Cedear Google Inc.", moneda: "2" },
+      {
+        simbolo: "GOOGL",
+        descripcion: "Cedear Alphabet Inc. Cl. A",
+        moneda: "1",
+      },
+      {
+        simbolo: "IBIT",
+        descripcion: "Cedear Ishares Bitcoin Tr (Ibi",
+        moneda: "1",
+      },
+      {
+        simbolo: "IBITD",
+        descripcion: "Cedear Ishares Bitcoin Tr",
+        moneda: "2",
+      },
+    ]);
+    const found = (query: string) =>
+      matchListings(listings, query, 5).map(({ symbol }) => symbol);
+    expect(found("gogld")).toEqual(["GOOGL"]);
+    expect(found("ibitd")[0]).toBe("IBIT");
   });
 
   it("skips a symbol the catalog cannot hold and a malformed line", () => {

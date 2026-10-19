@@ -372,6 +372,7 @@ export function ImportOperationsReview({
                 }}
                 onAdded={addToCatalog}
                 markets={marketsFor(institution)}
+                suggestion={item.operations?.[index]?.unknownSymbol}
                 lines
                 line={lineOf(
                   instruments.find((each) => each.symbol === row.symbol),
