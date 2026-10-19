@@ -102,8 +102,9 @@ export const listingDetail = ({ type, currency, market }: Listing): string =>
     market === "byma" ? "BYMA" : "Cripto",
   ].join(" · ");
 
-// What an option shows under its name: a market listing's type, currency
-// and market, and the currency of a line where the instrument has lines.
+// What an option shows under its name: its type, a market listing's
+// currency and market, and the currency of a line where the instrument has
+// lines.
 export function optionDetail(
   option: PickerOption,
   lines: boolean,
@@ -112,7 +113,12 @@ export function optionDetail(
   const { listing } = option;
   const lined = lines && hasDollarLines(listing ?? instrument ?? {});
   const note = lined ? LINE_NOTES[option.line ?? ""] : null;
-  if (!listing) return note;
+  if (!listing) {
+    const type = instrument?.type
+      ? HOLDING_CLASS_LABELS[instrument.type]
+      : null;
+    return [type, note].filter(Boolean).join(" · ") || null;
+  }
   const market = listing.market === "byma" ? "BYMA" : "Cripto";
   return note
     ? [HOLDING_CLASS_LABELS[listing.type], note, market].join(" · ")
