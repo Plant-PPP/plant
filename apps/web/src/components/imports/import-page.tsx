@@ -13,6 +13,7 @@ import {
   FileUp,
   Files,
   LoaderCircle,
+  Trash2,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,7 +21,12 @@ import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { InstitutionIcon } from "@/components/portfolio-setup/institution-field";
-import { DataTable, TruncatedText } from "@/components/ui/data-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  DataTable,
+  TruncatedText,
+  actionsColumn,
+} from "@/components/ui/data-table";
 import { formatDate } from "@/lib/format/date";
 import { leftThisMonth } from "@/lib/format/text";
 import {
@@ -37,6 +43,8 @@ export type ImportActions = {
   // Starts reading each file into the account, or into none; each import's
   // status then changes on its own.
   upload: (files: readonly File[], accountId: string | null) => void;
+  // Takes a ready import the user will not confirm off the list.
+  discard: (importId: string) => void;
 };
 
 // The select's value for a file that belongs to no account.
@@ -101,6 +109,7 @@ export function ImportPage({
   // An account archived since it was chosen is no choice any more.
   const accountId = accounts.some((each) => each.id === choice) ? choice : null;
   const [dragging, setDragging] = useState(false);
+  const [discarding, setDiscarding] = useState<ImportItem | null>(null);
   const files = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const left = Math.max(0, IMPORTS_PER_MONTH - used);
@@ -176,6 +185,19 @@ export function ImportPage({
       ),
       meta: { className: "text-right" },
     },
+    actionsColumn<ImportItem>(
+      [
+        {
+          id: "delete",
+          icon: Trash2,
+          tooltip: "Descartar",
+          label: (item) => `Descartar ${item.fileName}`,
+          onClick: setDiscarding,
+          hidden: (item) => item.status !== "ready",
+        },
+      ],
+      { pending: false },
+    ),
   ];
 
   return (
@@ -307,6 +329,20 @@ export function ImportPage({
           {latestReady && `${latestReady.fileName} está lista para revisar.`}
         </p>
       </Section>
+
+      {discarding && (
+        <ConfirmDialog
+          title="Descartar la carga"
+          description={`Sacamos "${discarding.fileName}" de tus cargas sin guardar nada de lo que leímos.`}
+          confirmLabel="Descartar"
+          returnFocusTo={() => null}
+          onClose={() => setDiscarding(null)}
+          onConfirm={() => {
+            actions.discard(discarding.id);
+            setDiscarding(null);
+          }}
+        />
+      )}
     </div>
   );
 }

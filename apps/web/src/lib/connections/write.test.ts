@@ -53,6 +53,8 @@ jest.mock("@/lib/supabase/server", () => ({
           filters.push([column, value]);
           return builder;
         },
+        neq: () => builder,
+        or: () => builder,
         is: () => builder,
         order: () => builder,
         limit: () => builder,
@@ -388,6 +390,7 @@ describe("readApiKey", () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
+          or: () => builder,
           order: () => builder,
           limit: () => builder,
           then: (resolve: (value: unknown) => unknown) =>
@@ -612,7 +615,11 @@ describe("syncAccount", () => {
           },
         },
       ]);
-      expect(writes.filter((each) => each.table === "imports")).toEqual([]);
+      expect(
+        writes.filter(
+          (each) => each.table === "imports" && each.verb === "insert",
+        ),
+      ).toEqual([]);
       expect(startImport).toHaveBeenCalledWith({
         importId: "i1",
         userId: USER,
@@ -620,6 +627,26 @@ describe("syncAccount", () => {
       });
     },
   );
+
+  it("discards the account's syncs of the same kind still ready to review", async () => {
+    expect(await syncAccount(ACCOUNT)).toEqual({ ok: true, importId: "i1" });
+    expect(
+      writes.filter(
+        (each) => each.table === "imports" && each.verb === "update",
+      ),
+    ).toEqual([
+      {
+        table: "imports",
+        verb: "update",
+        body: { status: "failed" },
+        filters: [
+          ["source_connection_id", ACCOUNT],
+          ["sync_draft", "holdings"],
+          ["status", "ready"],
+        ],
+      },
+    ]);
+  });
 
   // A queued sync of operations, which a sync of holdings supersedes.
   const queuedOperations = () =>

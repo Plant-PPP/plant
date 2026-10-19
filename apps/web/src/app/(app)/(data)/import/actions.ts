@@ -10,6 +10,8 @@ import {
   type AccountResult,
   acceptTerms as accept,
   assignImportAccount as assign,
+  type DiscardResult,
+  discardImport as discard,
   type FinishResult,
   finishUpload as finish,
   type StartResult,
@@ -31,6 +33,10 @@ export async function assignImportAccount(
   input: unknown,
 ): Promise<AccountResult> {
   return assign(input);
+}
+
+export async function discardImport(importId: unknown): Promise<DiscardResult> {
+  return discard(importId);
 }
 
 export async function acceptTerms(): Promise<{ ok: boolean }> {

@@ -3,12 +3,14 @@ jest.mock("server-only", () => ({}), { virtual: true });
 import { IMPORTS_LISTED, readImportForReview, readImports } from "./read";
 
 const rpcs: string[] = [];
+const filters: string[] = [];
 // The list answers at most the rows asked for, as PostgREST does.
 const clientOf = (list: unknown, used: number | null) => ({
   from: () => {
     let limit = Infinity;
     const builder = {
       select: () => builder,
+      or: (filter: string) => (filters.push(filter), builder),
       order: () => builder,
       limit: (rows: number) => ((limit = rows), builder),
       then: (resolve: (value: unknown) => unknown) =>
@@ -157,25 +159,10 @@ it("lists a sync by its provider and says why it failed in its own words", async
   ]);
 });
 
-it("says a sync failed for another one replaced it", async () => {
-  const read = await readImports(
-    clientOf(
-      [
-        {
-          id: "s1",
-          status: "failed",
-          failure: null,
-          document_date: null,
-          created_at: "2026-10-12T15:00:00+00:00",
-          source_connection_id: "a1",
-          provider: "binance",
-          document: null,
-        },
-      ],
-      0,
-    ) as never,
-  );
-  expect(read.items[0]!.error).toBe("La reemplazaste por otra sincronización.");
+it("leaves out imports the user discarded or a later sync replaced", async () => {
+  filters.length = 0;
+  await readImports(clientOf([], 0) as never);
+  expect(filters).toEqual(["status.neq.failed,failure.not.is.null"]);
 });
 
 describe("with 51 imports", () => {
@@ -238,6 +225,7 @@ describe("readImportForReview", () => {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        or: () => builder,
         limit: () => builder,
         order: () => builder,
         then: (resolve: (value: unknown) => unknown) =>

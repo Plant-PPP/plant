@@ -59,6 +59,17 @@ export function addImport(
   };
 }
 
+// A ready import the user will not confirm leaves the list.
+export const discardImport = (state: PrototypeState, id: string) => ({
+  state: {
+    ...state,
+    imports: state.imports.filter(
+      (item) => item.id !== id || item.status !== "ready",
+    ),
+  },
+  result: null,
+});
+
 export const startReading = (state: PrototypeState, id: string) =>
   withImport(state, id, (item) => ({ ...item, status: "reading" }));
 

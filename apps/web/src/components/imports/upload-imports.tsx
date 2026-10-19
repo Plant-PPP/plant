@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { watchImports } from "@/lib/imports/live";
 import { type ImportItem, isBusy } from "@/lib/imports/review";
 import type {
+  DiscardResult,
   FinishResult,
   StartResult,
   UploadCode,
@@ -34,6 +35,7 @@ export type UploadActions = {
   start: (input: unknown) => Promise<StartResult>;
   finish: (input: unknown) => Promise<FinishResult>;
   acceptTerms: () => Promise<{ ok: boolean }>;
+  discard: (importId: string) => Promise<DiscardResult>;
 };
 
 // Sends one file: asks for a signed URL, puts the file there straight from the
@@ -142,6 +144,15 @@ export function UploadImports({
     });
   }
 
+  function discard(importId: string) {
+    startTransition(async () => {
+      const result = await settle(actions.discard(importId));
+      if (result === "rejected" || !result.ok)
+        toast.error("No pudimos descartar la carga. Probá de nuevo.");
+      router.refresh();
+    });
+  }
+
   function accept() {
     startTransition(async () => {
       const result = await settle(actions.acceptTerms());
@@ -158,7 +169,7 @@ export function UploadImports({
       imports={imports}
       used={used}
       reviewHref={reviewHref}
-      actions={{ upload }}
+      actions={{ upload, discard }}
       consent={{ accepted: termsAccepted, accept }}
     />
   );
