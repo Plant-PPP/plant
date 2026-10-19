@@ -6,6 +6,9 @@ import {
 import {
   type CashFlow,
   cashFlowsOf,
+  cashHeldAt,
+  type CashMovement,
+  openingOf,
   cashTakenFrom,
   chainedShare,
   compareMovements,
@@ -33,6 +36,7 @@ import {
   type StoredQuotes,
   snapshotOn,
   takesUnits,
+  unitFactor,
   VALUED_FX_KINDS,
   valueHoldings,
   valueLiabilities,
@@ -83,6 +87,8 @@ import {
 export type ClosesState = Ledger & {
   liabilities: readonly Liability[];
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
+  // Each cash holding's history, oldest first; one with none is not in it.
+  cashMovements?: ReadonlyMap<string, readonly CashMovement[]>;
   recalculated: ReadonlyMap<string, string>;
   partial: boolean;
 };
@@ -405,25 +411,46 @@ const rowAt = (row: HoldingRow, quantity: string): HoldingRow => ({
   holding: holdingSchema.parse({ ...row.holding, amount: quantity }),
 });
 
+// A cash holding's history, empty when it has none.
+const historyOf = (state: ClosesState, id: string): readonly CashMovement[] =>
+  state.cashMovements?.get(id) ?? [];
+
 // A holding that is not an instrument as it stood at the end of `date`, at
 // today's amount; a cash one also with what debt payments after that day
 // took from it, nothing of its own once closed (archiving keeps the amount
-// it had).
+// it had), and less what its history added after that day. Before its
+// opening balance it stands as right after it.
 export function otherAt(
   state: ClosesState,
   row: HoldingRow,
   date: string,
 ): HoldingRow[] {
   const { taken, closed } = debtPaymentsOf(state);
+  const history = historyOf(state, row.id);
+  const opening = openingOf(history);
+  const day = opening && date < opening.date ? addDays(opening.date, -1) : date;
   const payments = taken.get(row.id);
-  const after =
-    payments?.from[lastOnOrBefore(payments.dates, date) + 1] ?? ZERO;
-  if (row.holding.asset_class === "cash" && closed.has(row.id)) {
-    return after.n === 0n ? [] : [rowAt(row, stored(after))];
+  const after = payments?.from[lastOnOrBefore(payments.dates, day) + 1] ?? ZERO;
+  if (row.holding.asset_class !== "cash") {
+    if (after.n === 0n) return [row];
+    return [rowAt(row, stored(plus(exactOf(row.holding.amount), after)))];
   }
-  if (after.n === 0n) return [row];
-  return [rowAt(row, stored(plus(exactOf(row.holding.amount), after)))];
+  const shut = closed.has(row.id);
+  if (!shut && history.length === 0 && after.n === 0n) return [row];
+  const today = shut ? ZERO : exactOf(row.holding.amount);
+  const held = plus(
+    history.length > 0 ? cashHeldAt(history, today, date) : today,
+    after,
+  );
+  // A history that disagrees with today's amount may leave a day below 0,
+  // which held nothing.
+  return held.n <= 0n ? [] : [rowAt(row, stored(held))];
 }
+
+// Whether a holding is cash with a history, whose past amounts its own
+// movements give.
+const hasCashHistory = (state: ClosesState, row: HoldingRow): boolean =>
+  row.holding.asset_class === "cash" && historyOf(state, row.id).length > 0;
 
 // The holdings as they stood at the end of `date`: an instrument holding with
 // what its movements up to then left, a cash holding with today's amount
@@ -439,7 +466,9 @@ function holdingsAt(
   const byId = new Map(ledgers.map((ledger) => [ledger.row.id, ledger]));
   return allRows(state).flatMap((row) => {
     const ledger = byId.get(row.id);
-    if (!ledger) return otherAt(state, row, othersOn);
+    if (!ledger) {
+      return otherAt(state, row, hasCashHistory(state, row) ? date : othersOn);
+    }
     const last = lastOnOrBefore(ledger.movements, date);
     const quantity = last < 0 ? "0" : ledger.quantities[last]!;
     return exactOf(quantity).n === 0n ? [] : [rowAt(row, quantity)];
@@ -477,15 +506,20 @@ const movementsShown = (state: ClosesState): (readonly Movement[])[] =>
     return movements?.length ? [movements] : [];
   });
 
-// The day closes start from: the first movement's, else today.
+// The day closes start from: the first movement's, an instrument's or a cash
+// holding's, else today.
 const firstDay = (
+  state: ClosesState,
   ledgers: readonly { movements: readonly Movement[] }[],
-  today: string,
 ): string =>
-  ledgers
-    .map((ledger) => ledger.movements[0]!.date)
+  [
+    ...ledgers.map((ledger) => ledger.movements[0]!.date),
+    ...[...(state.cashMovements?.values() ?? [])].flatMap((history) =>
+      history.length > 0 ? [history[0]!.date] : [],
+    ),
+  ]
     .sort()
-    .at(0) ?? today;
+    .at(0) ?? state.today;
 
 // The quotes closes value holdings and debts at: every dollar kind, the euro,
 // the UVA, each instrument held and each instrument a debt is owed in.
@@ -504,8 +538,8 @@ export function closeDates(state: ClosesState): string[] {
   const movements = movementsShown(state);
   const days = monthsBetween(
     firstDay(
+      state,
       movements.map((each) => ({ movements: each })),
-      state.today,
     ),
     state.today,
   ).flatMap((month) => [month.from, month.to]);
@@ -586,6 +620,83 @@ export function debtFlowsOf(
   return { flows, held, interest, known };
 }
 
+// A cash movement's amount in `unit`, at its own date's rates; null when the
+// unit cannot express it.
+function cashInUnit(
+  state: ClosesState,
+  row: HoldingRow,
+  movement: CashMovement,
+  unit: Denominator,
+): Exact | null {
+  if (row.holding.asset_class !== "cash") return null;
+  const factor = unitFactor(
+    { ...movement, currency: row.holding.currency },
+    unit,
+    state.referenceDollar,
+  );
+  return factor && times(exactOf(movement.amount), factor);
+}
+
+// Each cash holding with a history, with its movements up to today.
+const cashHistories = (state: ClosesState) =>
+  allRows(state).flatMap((row) => {
+    const history = historyOf(state, row.id).filter(
+      (movement) => movement.date <= state.today,
+    );
+    return row.holding.asset_class === "cash" && history.length > 0
+      ? [{ row, history }]
+      : [];
+  });
+
+// The operations some cash holding settled: their cash legs in `unit`,
+// added up, or null when one could not be expressed in it.
+function settledOperations(
+  state: ClosesState,
+  unit: Denominator,
+): Map<string, Exact | null> {
+  const legs = new Map<string, Exact | null>();
+  for (const { row, history } of cashHistories(state)) {
+    for (const movement of history) {
+      if (movement.kind !== "settlement") continue;
+      const id = movement.operation_id!;
+      const value = cashInUnit(state, row, movement, unit);
+      const was = legs.has(id) ? legs.get(id)! : ZERO;
+      legs.set(id, was === null || value === null ? null : plus(was, value));
+    }
+  }
+  return legs;
+}
+
+// What an operation settled in cash the user held left in the holdings, as
+// one flow on its date: its income less its charges, the charges its
+// movements carry and whatever more its legs paid than its movements say
+// (a fee in another currency); what they paid less is income.
+function settledFlow(
+  date: string,
+  flows: readonly CashFlow[],
+  legs: Exact,
+): CashFlow {
+  let moved = ZERO;
+  let charges = ZERO;
+  let income = ZERO;
+  for (const flow of flows) {
+    moved = plus(moved, exactOf(flow.amount));
+    charges = plus(charges, exactOf(flow.charges));
+    if (flow.kind === "income") {
+      income = plus(income, exactOf(flow.amount), exactOf(flow.charges));
+    }
+  }
+  const rest = minus(legs, moved);
+  if (rest.n < 0n) charges = minus(charges, rest);
+  else income = plus(income, rest);
+  return {
+    kind: "settled",
+    date,
+    amount: stored(minus(income, charges)),
+    charges: stored(charges),
+  };
+}
+
 // Every month's close in `unit`, oldest first, from the month of the first
 // movement to the one in progress.
 export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
@@ -598,7 +709,7 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
   if (cached) return cached;
 
   const ledgers = ledgersOf(state, unit);
-  const first = firstDay(ledgers, state.today);
+  const first = firstDay(state, ledgers);
   // Net worth: what is held less what is owed, each as it stood that day. A
   // month's end is the next one's start, so each day is valued once.
   const values = new Map<
@@ -670,6 +781,42 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
   // from the day after the last one's end to its own end, today for the one
   // in progress.
   const byPeriod = new Map<string, [HoldingLedger, number][]>();
+  // Cash put in or taken out, and what cash with a history made or cost on
+  // its own, by month.
+  const cashByPeriod = new Map<string, (CashFlow | null)[]>();
+  const settled = settledOperations(state, unit);
+  for (const { row, history } of cashHistories(state)) {
+    for (const movement of history) {
+      if (
+        movement.kind === "opening_balance" ||
+        movement.kind === "settlement"
+      ) {
+        continue;
+      }
+      const value = cashInUnit(state, row, movement, unit);
+      const period = movement.date.slice(0, 7);
+      const own = cashByPeriod.get(period) ?? [];
+      own.push(
+        value === null
+          ? null
+          : movement.kind === "deposit" || movement.kind === "withdrawal"
+            ? {
+                kind: movement.kind === "deposit" ? "buy" : "sell",
+                date: movement.date,
+                amount: stored(negated(value)),
+                charges: "0",
+              }
+            : {
+                kind: "settled",
+                date: movement.date,
+                amount: stored(value),
+                charges:
+                  movement.kind === "charge" ? stored(negated(value)) : "0",
+              },
+      );
+      cashByPeriod.set(period, own);
+    }
+  }
   for (const ledger of ledgers) {
     ledger.movements.forEach((movement, index) => {
       if (movement.date > state.today) return;
@@ -689,13 +836,34 @@ export function closesOf(state: ClosesState, unit: Denominator): MonthClose[] {
     // Whether every movement of the month could be expressed in the unit,
     // and every opening balance and adjustment out priced on its day.
     let known = true;
+    // The flows of each operation a cash holding settled, which stay in the
+    // holdings.
+    const ofSettled = new Map<string, { date: string; flows: CashFlow[] }>();
     for (const [ledger, index] of byPeriod.get(month.period) ?? []) {
-      if (ledger.flows) {
+      const movement = ledger.movements[index]!;
+      if (!ledger.flows) known = false;
+      else if (settled.has(movement.operation_id)) {
+        const own = ofSettled.get(movement.operation_id) ?? {
+          date: movement.date,
+          flows: [],
+        };
+        own.flows.push(ledger.flows[index]!);
+        ofSettled.set(movement.operation_id, own);
+      } else {
         const { flow, priced } = flowOf(ledger, index);
         flows.push(flow);
         if (!priced) known = false;
-      } else known = false;
+      }
       realized.push(ledger.realized[index]!);
+    }
+    for (const [id, operation] of ofSettled) {
+      const legs = settled.get(id);
+      if (!legs) known = false;
+      else flows.push(settledFlow(operation.date, operation.flows, legs));
+    }
+    for (const flow of cashByPeriod.get(month.period) ?? []) {
+      if (flow) flows.push(flow);
+      else known = false;
     }
     const debts = debtFlowsOf(state, unit, month, pricedAt(state, month.to));
     return {
@@ -866,6 +1034,9 @@ export type ChangeBetween = {
   // What the debts' interest cost, negative; a close's figures carry it
   // positive, inside charges.
   interest: string;
+  // What operations and cash movements settled in cash the user held left
+  // in the holdings: their income less their charges.
+  kept: string;
   income: string;
   charges: string;
   result: string;
@@ -893,9 +1064,14 @@ export function changeBetween(
   // The debts, and the cash their payments took, as they stood at the month's
   // start: their flows are valued with its end quotes, so only those amounts
   // moved with the dollar.
+  // Cash with a history is valued apart: it has no price, so all of its
+  // market result is the dollar's.
+  const histories = new Set(cashHistories(state).map(({ row }) => row.id));
   const worthAt = (date: string, owedOn: string, snapshot: QuoteSnapshot) => {
     const held = valueHoldings(
-      holdingsAt(state, ledgers, date, owedOn).map((row) => row.holding),
+      holdingsAt(state, ledgers, date, owedOn)
+        .filter((row) => !histories.has(row.id))
+        .map((row) => row.holding),
       snapshot,
       options,
     );
@@ -905,12 +1081,57 @@ export function changeBetween(
       complete: held.complete && owed.complete,
     };
   };
+  // What a cash holding with a history held at a day, valued at its quotes.
+  const cashWorth = (row: HoldingRow, date: string, snapshot: QuoteSnapshot) =>
+    valueHoldings(
+      otherAt(state, row, date).map((each) => each.holding),
+      snapshot,
+      options,
+    );
   let dollar = ZERO;
   let yields = ZERO;
   let known = true;
   for (const month of months) {
     const end = pricedAt(state, month.to);
     const start = pricedAt(state, month.from);
+    for (const { row, history } of cashHistories(state)) {
+      const atEnd = cashWorth(row, month.to, end);
+      const atStart = cashWorth(row, month.from, start);
+      if (!atEnd.complete || !atStart.complete) known = false;
+      let moved = ZERO;
+      for (const movement of history) {
+        if (
+          movement.kind === "opening_balance" ||
+          movement.date <= month.from ||
+          movement.date > month.to
+        ) {
+          continue;
+        }
+        const value = cashInUnit(state, row, movement, unit);
+        if (value === null) known = false;
+        else moved = plus(moved, value);
+      }
+      // What debt payments took from it, valued as the debts' flows are.
+      const payments = debtPaymentsOf(state).taken.get(row.id);
+      payments?.dates.forEach((payment, index) => {
+        if (payment.date <= month.from || payment.date > month.to) return;
+        const amount = minus(
+          payments.from[index]!,
+          payments.from[index + 1] ?? ZERO,
+        );
+        const paid = valueHoldings(
+          [rowAt(row, stored(amount)).holding],
+          end,
+          options,
+        );
+        if (!paid.complete) known = false;
+        moved = minus(moved, exactOf(paid.total));
+      });
+      dollar = plus(
+        dollar,
+        minus(minus(exactOf(atEnd.total), exactOf(atStart.total)), moved),
+      );
+    }
     const fx = { ...end.fx };
     for (const kind of VALUED_FX_KINDS) {
       const now = end.fx[kind];
@@ -939,7 +1160,8 @@ export function changeBetween(
   const interest = negated(
     plus(...months.map((each) => exactOf(each.figures.interest))),
   );
-  yields = minus(yields, interest);
+  const kept = plus(...months.map((each) => exactOf(each.figures.kept)));
+  yields = minus(minus(yields, interest), kept);
   // Over the months whose return could be measured and that started with
   // something held, as a year's are.
   const measured = months.flatMap((each) =>
@@ -957,6 +1179,7 @@ export function changeBetween(
     dollar: stored(dollar),
     yields: stored(yields),
     interest: stored(interest),
+    kept: stored(kept),
     // What was paid out; what yields added is in `yields`, not here too.
     income: stored(minus(sum("income"), yields)),
     charges: stored(sum("charges")),

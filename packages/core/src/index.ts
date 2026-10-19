@@ -114,6 +114,7 @@ export {
   type MovementKind,
   type MovementRate,
   type MovementRates,
+  movementRatesSchema,
   movementSchema,
   REFERENCE_MAX,
   startsHolding,
@@ -137,8 +138,19 @@ export {
   replay,
   replayHoldings,
   type SaleResult,
+  unitFactor,
   unrealized,
 } from "./movements/replay";
+export {
+  CASH_MOVEMENT_KINDS,
+  type CashMovement,
+  type CashMovementKind,
+  cashHeldAt,
+  cashMovementSchema,
+  type CashRefusal,
+  admitCashHistory,
+  openingOf,
+} from "./movements/cash";
 export {
   type Admission,
   admitMovement,

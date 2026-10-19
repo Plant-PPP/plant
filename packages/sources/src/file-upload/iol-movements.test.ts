@@ -1,0 +1,346 @@
+import { readIolMovements } from "./iol-movements";
+
+const HEADER = [
+  "Nro. de Mov.",
+  "Nro. de Boleto",
+  "Tipo Mov.",
+  "Concert.",
+  "Liquid.",
+  "Est",
+  "Cant. titulos",
+  "Precio",
+  "Comis.",
+  "Iva Com.",
+  "Otros Imp.",
+  "Monto",
+  "Observaciones",
+  "Tipo Cuenta",
+];
+
+const exportOf = (rows: string[][]) => `
+<html><body>
+<tr><td colspan="15">Operaciones Historicas del periodo</td></tr>
+<table border="1">
+<tr>${HEADER.map((name) => `<th>${name}</th>`).join("")}</tr>
+${rows
+  .map(
+    (cells) =>
+      `<tr>${cells.map((cell) => `<td><span>${cell}</span>\r\n</td>`).join("")}</tr>`,
+  )
+  .join("\n")}
+</table></body></html>`;
+
+const row = (
+  number: string,
+  kind: string,
+  date: string,
+  units: string,
+  price: string,
+  commission: string,
+  vat: string,
+  other: string,
+  amount: string,
+  account: string,
+  state = "Terminada",
+) => [
+  number,
+  "1",
+  kind,
+  date,
+  date,
+  state,
+  units,
+  price,
+  commission,
+  vat,
+  other,
+  amount,
+  "",
+  account,
+];
+
+const USD = "Inversion Argentina Dolares";
+const ARS = "Inversion Argentina Pesos";
+
+describe("readIolMovements", () => {
+  test("reads each account side of trades, income and transfers", () => {
+    const read = readIolMovements(
+      exportOf([
+        row(
+          "501",
+          "Compra(ABCD)",
+          "02/09/26",
+          "10",
+          "12,5",
+          "1,00",
+          "0,21",
+          "0,00",
+          "-126,21",
+          USD,
+        ),
+        row(
+          "501",
+          "Compra(ABCD)",
+          "02/09/26",
+          "10",
+          "12,5",
+          "0,00",
+          "0,00",
+          "150,40",
+          "-150,40",
+          ARS,
+        ),
+        row(
+          "502",
+          "Venta(ABCD)",
+          "03/09/26",
+          "4",
+          "13,1234",
+          "0,50",
+          "0,11",
+          "0,00",
+          "51,88",
+          USD,
+        ),
+        row(
+          "503",
+          "Pago de Dividendos(ABC US$)",
+          "04/09/26",
+          "0",
+          "0",
+          "0,00",
+          "0,00",
+          "0,00",
+          "0,30",
+          USD,
+        ),
+        row(
+          "504",
+          "Pago de Dividendos(ABC)",
+          "04/09/26",
+          "0",
+          "0",
+          "1,00",
+          "0,21",
+          "0,00",
+          "-1,21",
+          ARS,
+        ),
+        row(
+          "505",
+          "Dep&#243;sito de Fondos - Transferencia",
+          "01/09/26",
+          "0",
+          "0",
+          "0,00",
+          "0,00",
+          "0,00",
+          "1.000,00",
+          USD,
+        ),
+        row(
+          "506",
+          "Extracci&#243;n de Fondos - Transferencia",
+          "05/09/26",
+          "0",
+          "0",
+          "0,00",
+          "0,00",
+          "0,00",
+          "-2.000,50",
+          USD,
+        ),
+        row(
+          "507",
+          "Cr&#233;dito",
+          "01/10/26",
+          "0",
+          "0",
+          "0,00",
+          "0,00",
+          "0,00",
+          "0,02",
+          USD,
+        ),
+      ]),
+    );
+    expect(read).toEqual({
+      ok: true,
+      skipped: 0,
+      rows: [
+        {
+          number: "501",
+          kind: "purchase",
+          symbol: "ABCD",
+          date: "2026-09-02",
+          quantity: "10",
+          price: "12.5",
+          commission: "1.00",
+          vat: "0.21",
+          otherTaxes: "0.00",
+          amount: "-126.21",
+          currency: "USD",
+        },
+        {
+          number: "501",
+          kind: "purchase",
+          symbol: "ABCD",
+          date: "2026-09-02",
+          quantity: "10",
+          price: "12.5",
+          commission: "0.00",
+          vat: "0.00",
+          otherTaxes: "150.40",
+          amount: "-150.40",
+          currency: "ARS",
+        },
+        {
+          number: "502",
+          kind: "sale",
+          symbol: "ABCD",
+          date: "2026-09-03",
+          quantity: "4",
+          price: "13.1234",
+          commission: "0.50",
+          vat: "0.11",
+          otherTaxes: "0.00",
+          amount: "51.88",
+          currency: "USD",
+        },
+        {
+          number: "503",
+          kind: "dividend",
+          symbol: "ABC",
+          date: "2026-09-04",
+          quantity: null,
+          price: null,
+          commission: "0.00",
+          vat: "0.00",
+          otherTaxes: "0.00",
+          amount: "0.30",
+          currency: "USD",
+        },
+        {
+          number: "504",
+          kind: "dividend",
+          symbol: "ABC",
+          date: "2026-09-04",
+          quantity: null,
+          price: null,
+          commission: "1.00",
+          vat: "0.21",
+          otherTaxes: "0.00",
+          amount: "-1.21",
+          currency: "ARS",
+        },
+        {
+          number: "505",
+          kind: "deposit",
+          symbol: null,
+          date: "2026-09-01",
+          quantity: null,
+          price: null,
+          commission: "0.00",
+          vat: "0.00",
+          otherTaxes: "0.00",
+          amount: "1000.00",
+          currency: "USD",
+        },
+        {
+          number: "506",
+          kind: "withdrawal",
+          symbol: null,
+          date: "2026-09-05",
+          quantity: null,
+          price: null,
+          commission: "0.00",
+          vat: "0.00",
+          otherTaxes: "0.00",
+          amount: "-2000.50",
+          currency: "USD",
+        },
+        {
+          number: "507",
+          kind: "credit",
+          symbol: null,
+          date: "2026-10-01",
+          quantity: null,
+          price: null,
+          commission: "0.00",
+          vat: "0.00",
+          otherTaxes: "0.00",
+          amount: "0.02",
+          currency: "USD",
+        },
+      ],
+    });
+  });
+
+  test("skips rows not finished, of unknown kinds or unreadable", () => {
+    const read = readIolMovements(
+      exportOf([
+        row(
+          "601",
+          "Compra(ABCD)",
+          "02/09/26",
+          "1",
+          "1",
+          "0",
+          "0",
+          "0",
+          "-1",
+          USD,
+          "Cancelada",
+        ),
+        row(
+          "602",
+          "Suscripci&#243;n FCI",
+          "02/09/26",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "-1",
+          ARS,
+        ),
+        row(
+          "603",
+          "Compra(ABCD)",
+          "31/02/26",
+          "1",
+          "1",
+          "0",
+          "0",
+          "0",
+          "-1",
+          USD,
+        ),
+        row(
+          "604",
+          "Compra(ABCD)",
+          "02/09/26",
+          "1",
+          "1",
+          "0",
+          "0",
+          "0",
+          "-1",
+          "Otra cuenta",
+        ),
+      ]),
+    );
+    expect(read).toEqual({ ok: true, rows: [], skipped: 4 });
+  });
+
+  test("refuses a file that is not the export", () => {
+    expect(readIolMovements("<table><tr><th>Fecha</th></tr></table>")).toEqual({
+      ok: false,
+      code: "unsupported",
+    });
+    expect(readIolMovements("hello")).toEqual({
+      ok: false,
+      code: "unsupported",
+    });
+  });
+});

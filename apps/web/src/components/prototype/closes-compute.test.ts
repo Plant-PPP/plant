@@ -77,7 +77,7 @@ it(
 // balance moves: the holdings' replay as before PLA-139, debts and cash as
 // compute rules them.
 const LARGE_DIGEST =
-  "892d33f718d958c93ea8218b8536891741e271a8abf44ac739f26dab2b888a16";
+  "64ac7a726ea27ddebb60f5edb921ae7b6ebd575eaff6cf13a69449e525371ad3";
 
 it(
   "closes 20,000 movements as before, one unit in a few seconds",

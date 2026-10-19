@@ -433,10 +433,10 @@ SELECT throws_ok(
 SELECT set_config('plant.write_operation', '', true);
 
 SELECT throws_ok(
-  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount)
-     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'USD', '0') $$,
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'other', 'USD', '0', '2026-10-01') $$,
   '23514', NULL,
-  'only an instrument holding may hold nothing'
+  'only an instrument or cash holding may hold nothing'
 );
 
 SELECT throws_ok(
@@ -589,9 +589,9 @@ SELECT throws_ok(
 
 SELECT throws_ok(
   $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount)
-     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'USD', '0') $$,
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'cash', 'USD', '-1') $$,
   '23514', NULL,
-  'an amount is above zero'
+  'an amount is not below zero'
 );
 
 -- Another user's account and a random id answer alike, with no hint.

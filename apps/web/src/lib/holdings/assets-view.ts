@@ -18,6 +18,7 @@ export type AssetsRead =
   | "debts"
   | "debt_events"
   | "debt_collateral"
+  | "cash_movements"
   | "archived_cash"
   | "api_key"
   | "taxes";

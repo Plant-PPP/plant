@@ -60,6 +60,7 @@ export function ScopePage({
   revision,
   loadMovements,
   connection,
+  cash,
 }: {
   scope: Scope;
   rows: HoldingRow[];
@@ -78,6 +79,8 @@ export function ScopePage({
   loadMovements: MovementsInput["loadMovements"];
   // An exchange account's connection by API, under its header.
   connection?: ReactNode;
+  // An account's cash with its opening balances and history, first.
+  cash?: ReactNode;
 }) {
   const url = useAssetsUrl(params);
   const id = useId();
@@ -183,6 +186,7 @@ export function ScopePage({
         }
       />
       {connection}
+      {cash}
       {empty ? (
         <EmptyState icon={Wallet} title={`${title} todavía no tiene tenencias`}>
           {scope.kind === "account"

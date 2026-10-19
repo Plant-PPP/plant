@@ -72,11 +72,21 @@ export async function updateHolding(
       input,
     },
     id,
-    (args) => {
+    async (args) => {
       const { asset_class, ...edited } = args.input;
-      // An instrument's units are what its movements leave.
+      // An instrument's units are what its movements leave, and so is the
+      // amount of cash with a history.
       const columns: Partial<typeof edited> = { ...edited };
       if (asset_class === "instrument") delete columns.amount;
+      if (asset_class === "cash") {
+        const history = await args.client
+          .from("cash_movements")
+          .select("id")
+          .eq("holding_id", args.id)
+          .limit(1);
+        if (history.error) return history;
+        if ((history.data ?? []).length > 0) delete columns.amount;
+      }
       const row = columns satisfies DecimalWrite<
         Update,
         Extract<Exclude<KeysOf<HoldingUpdate>, "asset_class">, keyof Update>,

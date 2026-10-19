@@ -204,6 +204,20 @@ export function rpcFailure(error: {
   return "failed";
 }
 
+// Whether the account's cash settled an operation: some cash movement is
+// its leg.
+async function settledInCash(client: Client, operationId: string) {
+  const result = await client
+    .from("cash_movements")
+    .select("id")
+    .eq("operation_id", operationId)
+    .limit(1);
+  if (classifyPostgrestResult(result, 200) || !result.data) {
+    throw new LedgerReadError("movements", "cash_legs");
+  }
+  return result.data.length > 0;
+}
+
 // Creates, rewrites (an id and an input) or deletes (an id and no input) an
 // operation: admitted by core against the user's ledger, then written by
 // write_operation with the revisions it read.
@@ -236,6 +250,11 @@ export async function runOperation(
     const client: Client = await createClient();
     const { ledger, truncated, symbolOf } = await ledgerFor(client, input);
     if (truncated) throw new LedgerReadError("movements", "truncated");
+    // Its cash legs keep what the broker settled; deleting it takes them.
+    if (action === "update_operation" && (await settledInCash(client, id!))) {
+      log(action, { ...fields, outcome: "settled" });
+      return { ok: false, code: "settled" };
+    }
     const target = id ?? crypto.randomUUID();
     const written =
       action === "delete_operation"
