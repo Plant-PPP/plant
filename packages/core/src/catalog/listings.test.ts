@@ -104,6 +104,23 @@ describe("panelListings", () => {
     ]);
   });
 
+  it("reads the panels' currency codes: 1 is pesos, 2 is a dollar line", () => {
+    expect(
+      panelListings("cedear", [
+        { simbolo: "NU", descripcion: "Cedear Nu Holdings", moneda: "1" },
+        { simbolo: "NUD", descripcion: "Cedear Nu Holdings", moneda: "2" },
+      ]),
+    ).toEqual([
+      {
+        symbol: "NU",
+        name: "Cedear Nu Holdings",
+        type: "cedear",
+        currency: "ARS",
+        market: "byma",
+      },
+    ]);
+  });
+
   it("skips a symbol the catalog cannot hold and a malformed line", () => {
     expect(
       panelListings("stock", [
