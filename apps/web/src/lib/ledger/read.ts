@@ -166,6 +166,44 @@ export function movementOfRow(row: Record<string, unknown>): Movement {
   return movementSchema.parse(picked);
 }
 
+// The user's manual prices and rates, which every valuation applies over
+// the stored quotes.
+export async function readManualQuotes(client: Client): Promise<{
+  manualPrices: ManualPrice[];
+  manualRates: ManualRate[];
+  truncated: boolean;
+}> {
+  const [prices, rates] = await Promise.all([
+    allRows(
+      "manual_prices",
+      (from, to) =>
+        client
+          .from("manual_prices")
+          .select("symbol, price_date, price:price::text, currency")
+          .order("symbol")
+          .order("price_date")
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
+    allRows(
+      "manual_rates",
+      (from, to) =>
+        client
+          .from("manual_rates")
+          .select("kind, rate_date, sell:sell::text")
+          .order("kind")
+          .order("rate_date")
+          .range(from, to),
+      LEDGER_MOVEMENT_LIMIT,
+    ),
+  ]);
+  return {
+    manualPrices: prices.rows as unknown as ManualPrice[],
+    manualRates: rates.rows as unknown as ManualRate[],
+    truncated: prices.cut || rates.cut,
+  };
+}
+
 const accountSchema = z.object({
   id: z.string(),
   institution: z.string(),
@@ -244,8 +282,7 @@ export async function readLedger(
     holdingsResult,
     movementsResult,
     instrumentsResult,
-    pricesResult,
-    ratesResult,
+    manual,
   ] = await Promise.all([
     client
       .from("source_connections")
@@ -264,28 +301,7 @@ export async function readLedger(
       .from("instruments")
       .select("symbol, name, currency, type, aliases")
       .order("symbol"),
-    allRows(
-      "manual_prices",
-      (from, to) =>
-        client
-          .from("manual_prices")
-          .select("symbol, price_date, price:price::text, currency")
-          .order("symbol")
-          .order("price_date")
-          .range(from, to),
-      LEDGER_MOVEMENT_LIMIT,
-    ),
-    allRows(
-      "manual_rates",
-      (from, to) =>
-        client
-          .from("manual_rates")
-          .select("kind, rate_date, sell:sell::text")
-          .order("kind")
-          .order("rate_date")
-          .range(from, to),
-      LEDGER_MOVEMENT_LIMIT,
-    ),
+    readManualQuotes(client),
   ]);
 
   const accounts = z
@@ -316,16 +332,11 @@ export async function readLedger(
       }),
     )
     .parse(checked("instruments", instrumentsResult));
-  const manualPrices = pricesResult.rows as unknown as ManualPrice[];
-  const manualRates = ratesResult.rows as unknown as ManualRate[];
 
   // A ledger read in part would admit writes against a history the database
   // does not have.
   const truncated =
-    holdingsResult.cut ||
-    movementsResult.cut ||
-    pricesResult.cut ||
-    ratesResult.cut;
+    holdingsResult.cut || movementsResult.cut || manual.truncated;
   const movements = new Map<string, Movement[]>();
   for (const row of movementRows) {
     const movement = movementOfRow(row);
@@ -391,8 +402,8 @@ export async function readLedger(
       nextEntryOrder: Math.max(0, ...entryOrders) + 1,
       revisions,
       quotes,
-      manualPrices,
-      manualRates,
+      manualPrices: manual.manualPrices,
+      manualRates: manual.manualRates,
       operationOrigins: new Map(),
     },
     truncated,

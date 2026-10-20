@@ -23,7 +23,7 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 }));
 const manual = { manualPrices: [] as unknown[], manualRates: [] as unknown[] };
 jest.mock("@/lib/ledger/read", () => ({
-  readLedger: async () => ({ ledger: manual, truncated: false }),
+  readManualQuotes: async () => ({ ...manual, truncated: false }),
 }));
 jest.mock("@/components/debts/debts-setup", () => ({
   DebtsSetup: () => null,

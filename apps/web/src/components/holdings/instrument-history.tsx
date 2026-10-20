@@ -131,7 +131,12 @@ export function InstrumentHistory({
   summary: InstrumentSummary;
   movements: Pick<
     MovementsInput,
-    "positions" | "revisions" | "transferCost" | "quoteOn" | "loadMovements"
+    | "positions"
+    | "revisions"
+    | "transferCost"
+    | "quoteOn"
+    | "loadMovements"
+    | "firstMovements"
   >;
   movementActions: MovementActions;
   // A page that deletes holdings, each with its movements.
@@ -494,6 +499,7 @@ export function InstrumentHistory({
               unit={unit}
               instrumentTypes={new Map([[instrument.symbol, instrument.type]])}
               load={movements.loadMovements}
+              first={movements.firstMovements}
               holdingName={(id) => {
                 const row = byId.get(id);
                 return row ? holdingPlace(row) : "";

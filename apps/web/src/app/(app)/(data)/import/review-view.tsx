@@ -42,6 +42,8 @@ export async function ImportReviewView({ id }: { id: string }) {
   };
   const today = buenosAiresDate(new Date());
   const fail = (error: unknown): never => {
+    // Logged already, by the read it came through.
+    if (error instanceof LoggedError) throw error;
     serverLog.error(
       IMPORTS_VIEW_EVENT,
       { ...contextFields(context), "plant.outcome": "error" },
@@ -49,13 +51,19 @@ export async function ImportReviewView({ id }: { id: string }) {
     );
     throw new LoggedError("imports.view_failed");
   };
-  const [referenceDollar, { ledger }] = await Promise.all([
+  const ledgerRead = readLedger(client, {
+    today,
+    referenceDollar: "mep",
+  }).catch(fail);
+  const [referenceDollar, { ledger }, item] = await Promise.all([
     readReferenceDollar(client, context),
-    readLedger(client, { today, referenceDollar: "mep" }).catch(fail),
+    ledgerRead,
+    readImportForReview(
+      client,
+      id,
+      ledgerRead.then((read) => read.ledger.instruments),
+    ).catch(fail),
   ]);
-  const item = await readImportForReview(client, id, ledger.instruments).catch(
-    fail,
-  );
   if (!item || item.status !== "ready") notFound();
   const account = ledger.accounts.find((each) => each.id === item.accountId);
   const state = { ...ledger, referenceDollar };

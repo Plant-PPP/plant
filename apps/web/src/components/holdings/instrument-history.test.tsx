@@ -14,7 +14,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { InstrumentHolding } from "@/lib/holdings/instrument-history";
 import { instrumentSummary } from "@/lib/holdings/instrument-history";
-import type { MovementLine } from "@/lib/holdings/movements-input";
+import type {
+  MovementLine,
+  MovementsPage,
+} from "@/lib/holdings/movements-input";
 import { assetKey } from "@/lib/holdings/assets-rows";
 import type { HoldingRow } from "@/lib/holdings/read";
 
@@ -69,6 +72,7 @@ function render(
   extra: {
     details?: HoldingDetails;
     accounts?: SourceConnectionRow[];
+    firstMovements?: MovementsPage;
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -92,6 +96,7 @@ function render(
         positions: new Map(),
         revisions: new Map(),
         loadMovements: async () => ({ ok: true, rows: [], next: null }),
+        firstMovements: extra.firstMovements,
       }}
       movementActions={{ create: done, update: done, delete: done }}
       actions={{ delete: async () => ({ ok: true, id: "x" }) }}
@@ -186,33 +191,15 @@ describe("with movements loaded", () => {
     operation: { accountId: "a-e1", instrument: "ETH", parts: [] },
   });
 
-  // The movements table reads its first page in an effect, which a server
-  // render never runs: it starts from the page already read.
-  const React = jest.requireActual<typeof import("react")>("react");
-  beforeEach(() => {
-    const useState = React.useState;
-    jest.spyOn(React, "useState").mockImplementation(((initial: unknown) =>
-      typeof initial === "object" &&
-      initial !== null &&
-      "kind" in initial &&
-      initial.kind === "loading"
-        ? [
-            {
-              kind: "ready",
-              rows: [
-                sale("m1", "e1", "2026-10-01"),
-                sale("m2", "gone", "2026-09-01"),
-              ].map((line) => ({ ...line, id: line.movement.id })),
-              next: null,
-            },
-            jest.fn(),
-          ]
-        : useState(initial)) as typeof React.useState);
-  });
-  afterEach(() => jest.restoreAllMocks());
+  // The page reads the first page of movements with it.
+  const firstMovements: MovementsPage = {
+    ok: true,
+    rows: [sale("m1", "e1", "2026-10-01"), sale("m2", "gone", "2026-09-01")],
+    next: null,
+  };
 
   it("acts only on a movement of a holding the page lists", () => {
-    const html = render([held("e1", "IOL")]);
+    const html = render([held("e1", "IOL")], { firstMovements });
     // A line names where it is, so two lines of one day stay apart.
     expect(html).toContain(
       'aria-label="Editar venta de 0,5 del 01/10/2026 en IOL · Principal"',
@@ -226,14 +213,14 @@ describe("with movements loaded", () => {
   });
 
   it("puts each movement's type and holding under its date on a narrow table", () => {
-    const html = render([held("e1", "IOL")]);
+    const html = render([held("e1", "IOL")], { firstMovements });
     expect(html).toMatch(
       /01\/10\/2026<span[^>]*@2xl:hidden[^>]*>Venta · IOL · Principal</,
     );
   });
 
   it("puts only the type under the date of a line whose holding is gone", () => {
-    const html = render([held("e1", "IOL")]);
+    const html = render([held("e1", "IOL")], { firstMovements });
     expect(html).toMatch(/01\/09\/2026<span[^>]*@2xl:hidden[^>]*>Venta</);
   });
 });

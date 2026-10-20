@@ -37,6 +37,7 @@ import {
 import {
   allRows,
   closedIds,
+  movementsPage,
   positionsOf,
   pricedSnapshotOf,
 } from "@/lib/ledger/ledger";
@@ -73,14 +74,22 @@ export async function ScopeView({
     params,
   };
   const today = buenosAiresDate(new Date());
-  const [holdings, dollar, { ledger: read, truncated }] = await Promise.all([
-    readHoldings(client, context),
-    readReferenceDollar(client, context),
-    // Its reference dollar is the profile's, set below.
-    readLedger(client, { today, referenceDollar: "mep" }).catch(
-      (error: unknown) => assetsViewFailure(context, "ledger", error),
-    ),
-  ]);
+  const [holdings, dollar, { ledger: read, truncated }, apiKey] =
+    await Promise.all([
+      readHoldings(client, context),
+      readReferenceDollar(client, context),
+      // Its reference dollar is the profile's, set below.
+      readLedger(client, { today, referenceDollar: "mep" }).catch(
+        (error: unknown) => assetsViewFailure(context, "ledger", error),
+      ),
+      // An exchange account offers its key; any account that holds one shows
+      // it.
+      kind === "account"
+        ? readApiKey(client, id).catch((error: unknown) =>
+            assetsViewFailure(context, "api_key", error),
+          )
+        : null,
+    ]);
   const ledger = { ...read, referenceDollar: dollar };
   const account = ledger.accounts.find((each) => each.id === id);
   const portfolio = ledger.portfolios.find((each) => each.id === id);
@@ -94,19 +103,6 @@ export async function ScopeView({
         : null;
   if (!scope) notFound();
 
-  // An exchange account offers its key; any account that holds one shows it.
-  const apiKey =
-    scope.kind === "account"
-      ? await readApiKey(client, id).catch((error: unknown) =>
-          assetsViewFailure(context, "api_key", error),
-        )
-      : null;
-  const cash =
-    scope.kind === "account"
-      ? await accountCash(client, id, ledger).catch((error: unknown) =>
-          assetsViewFailure(context, "cash_movements", error),
-        )
-      : null;
   const provider =
     apiKey?.provider ??
     (scope.kind === "account" ? providerOf(scope.institution) : null);
@@ -118,11 +114,18 @@ export async function ScopeView({
   const soldRows = allRows(ledger).filter(
     (row) => inScope(row) && closed.has(row.id),
   );
-  const quotes = await readSnapshot(
-    createQuoteReader(client),
-    today,
-    quotesNeeded(rows.map((row) => row.holding)),
-  ).catch((error: unknown) => assetsViewFailure(context, "snapshot", error));
+  const [cash, quotes] = await Promise.all([
+    scope.kind === "account"
+      ? accountCash(client, id, ledger).catch((error: unknown) =>
+          assetsViewFailure(context, "cash_movements", error),
+        )
+      : null,
+    readSnapshot(
+      createQuoteReader(client),
+      today,
+      quotesNeeded(rows.map((row) => row.holding)),
+    ).catch((error: unknown) => assetsViewFailure(context, "snapshot", error)),
+  ]);
   const priced = pricedSnapshotOf(ledger, quotes.snapshot);
   const reference = referenceUnit(dollar);
   const { unit: chosen } = parseAssetsParams(params, {
@@ -174,6 +177,12 @@ export async function ScopeView({
         .map((row) => ledger.revisions.get(row.id) ?? 0)
         .join(".")}
       loadMovements={loadMovements}
+      firstMovements={movementsPage(
+        ledger,
+        kind === "account" ? { accountId: id } : { portfolioId: id },
+        unit,
+        null,
+      )}
       cash={
         cash && (
           <CashHistory

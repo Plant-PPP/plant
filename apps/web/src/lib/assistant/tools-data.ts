@@ -106,17 +106,21 @@ export function assistantData({
   context,
   unit,
   today,
+  read,
 }: {
   client: SupabaseClient<Database>;
   context: ReadContext;
   unit: ChatUnit;
   today: string;
+  // What the caller already read for the same day, so it is not read again.
+  read?: Promise<ClosesRead>;
 }) {
-  let loaded: Promise<ClosesRead> | undefined;
+  let loaded: Promise<ClosesRead> | undefined = read;
   const load = () =>
-    (loaded ??= readReferenceDollar(client, context).then((referenceDollar) =>
-      readCloses(client, context, { today, referenceDollar }),
-    ));
+    (loaded ??= readCloses(client, context, {
+      today,
+      referenceDollar: readReferenceDollar(client, context),
+    }));
 
   const metaOf = (
     read: ClosesRead,
