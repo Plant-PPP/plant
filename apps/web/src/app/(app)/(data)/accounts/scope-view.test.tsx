@@ -26,6 +26,32 @@ jest.mock("@/lib/ledger/read", () => ({
   ...jest.requireActual("@/lib/ledger/read"),
   readLedger: (...args: unknown[]) => readLedger(...args),
 }));
+// The closes read, over the ledger and holdings the tests set.
+jest.mock("@/lib/summary/read", () => ({
+  readCloses: async () => {
+    const [{ ledger, truncated }, holdings] = await Promise.all([
+      readLedger(),
+      readHoldings(),
+    ]);
+    return {
+      state: {
+        ...ledger,
+        liabilities: [],
+        liabilityEvents: new Map(),
+        cashMovements: new Map(),
+        recalculated: new Map(),
+        partial: false,
+      },
+      ledger,
+      holdings,
+      ledgerTruncated: truncated,
+      debtsTruncated: false,
+      debtEventsTruncated: false,
+      cashTruncated: false,
+      archivedCashCount: 0,
+    };
+  },
+}));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
 }));

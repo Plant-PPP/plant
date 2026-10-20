@@ -10,6 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Wallet } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
+import { ClosesTable } from "@/components/summary/closes-table";
 import { DataTable } from "@/components/ui/data-table";
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { HOLDING_CLASS_LABELS, classOf } from "@/lib/holdings/classes";
@@ -22,6 +23,7 @@ import type {
 import type { HoldingRow } from "@/lib/holdings/read";
 import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
 import type { HoldingsValuation } from "@/lib/holdings/valuation-view";
+import type { YearClose } from "@/lib/summary/closes";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import { AssetsSummary } from "./assets-summary";
@@ -37,18 +39,19 @@ import {
   VALUE_CELL,
 } from "./sum-text";
 
-type ScopeTab = "holdings" | "movements" | "cash";
+type ScopeTab = "holdings" | "movements" | "cash" | "closes";
 const SCOPE_TABS: Record<ScopeTab, string> = {
   holdings: "Tenencias",
   movements: "Movimientos",
   cash: "Efectivo",
+  closes: "Cierres",
 };
 
-// Whether two params differ only in their tab, which the page shows from
-// what it already has.
-const onlyTabChanged = (next: KeysetParams, current: KeysetParams) =>
+// Whether two params differ only in their tab or closes' year, which the
+// page shows from what it already has.
+const onlyViewChanged = (next: KeysetParams, current: KeysetParams) =>
   [...new Set([...Object.keys(next), ...Object.keys(current)])].every(
-    (key) => key === "tab" || next[key] === current[key],
+    (key) => key === "tab" || key === "year" || next[key] === current[key],
   );
 
 // What a scope page is about: an account, by its institution, or a
@@ -77,6 +80,7 @@ export function ScopePage({
   firstMovements,
   connection,
   cash,
+  closes,
 }: {
   scope: Scope;
   rows: HoldingRow[];
@@ -98,14 +102,20 @@ export function ScopePage({
   connection?: ReactNode;
   // An account's cash with its opening balances and history, its own tab.
   cash?: ReactNode;
+  // Its closes by year, newest first, in the unit closes take.
+  closes?: { years: YearClose[]; unit: Denominator };
 }) {
-  const url = useAssetsUrl(params, (next) => onlyTabChanged(next, params));
+  const url = useAssetsUrl(params, (next) => onlyViewChanged(next, params));
   const id = useId();
   const options: SegmentedOption<ScopeTab>[] = [
     { value: "holdings", label: SCOPE_TABS.holdings, count: rows.length },
     { value: "movements", label: SCOPE_TABS.movements },
     ...(cash ? [{ value: "cash" as const, label: SCOPE_TABS.cash }] : []),
+    ...(closes ? [{ value: "closes" as const, label: SCOPE_TABS.closes }] : []),
   ];
+  const year =
+    closes?.years.find((each) => each.year === url.params.year) ??
+    closes?.years[0];
   const tab =
     options.find((each) => each.value === url.params.tab)?.value ?? "holdings";
   const title = scope.kind === "account" ? scope.institution : scope.name;
@@ -271,6 +281,38 @@ export function ScopePage({
               />
             )}
             {tab === "cash" && cash}
+            {tab === "closes" &&
+              closes &&
+              (year ? (
+                <>
+                  {closes.years.length > 1 && (
+                    <Segmented
+                      label="Años"
+                      options={closes.years.map((each) => ({
+                        value: each.year,
+                        label: each.year,
+                      }))}
+                      value={year.year}
+                      onChange={(next) =>
+                        url.set(
+                          "year",
+                          next === closes.years[0]?.year ? null : next,
+                        )
+                      }
+                    />
+                  )}
+                  <ClosesTable
+                    year={year}
+                    unit={closes.unit}
+                    valueHeader="Valor"
+                  />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Cada mes se cierra solo cuando termina: el primero aparece
+                  acá.
+                </p>
+              ))}
           </div>
         </>
       )}

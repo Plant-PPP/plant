@@ -11,7 +11,7 @@ import {
   readUnlistedCash,
   readHoldings,
 } from "@/lib/holdings/read";
-import { type StoredHolding, storedOf } from "@/lib/ledger/ledger";
+import { type Ledger, type StoredHolding, storedOf } from "@/lib/ledger/ledger";
 import { readLedger } from "@/lib/ledger/read";
 import type { ReadContext } from "@/lib/portfolio-setup/read";
 import { createQuoteReader } from "@/lib/quotes/quote-reader";
@@ -29,6 +29,8 @@ export const SUMMARY_VIEW_EVENT = "summary.view";
 // What Resumen and a close's page compute from, and what each read cut.
 export type ClosesRead = {
   state: ClosesState;
+  // The ledger as read, without the holdings the closes add to it.
+  ledger: Ledger;
   holdings: HoldingsView;
   ledgerTruncated: boolean;
   debtsTruncated: boolean;
@@ -129,6 +131,7 @@ export async function readCloses(
   ).catch((error: unknown) => assetsViewFailure(context, "snapshot", error));
   return {
     state: { ...unquoted, quotes },
+    ledger: read.ledger,
     holdings,
     ledgerTruncated: read.truncated,
     debtsTruncated: debts.activeTruncated,
