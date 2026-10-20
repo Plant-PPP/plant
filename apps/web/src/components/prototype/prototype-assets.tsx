@@ -74,6 +74,11 @@ export function PrototypeAssets({ params }: { params: KeysetParams }) {
       unit={unit}
       referenceUnit={reference}
       filter={filter}
+      live={{
+        snapshot,
+        referenceDollar: state.referenceDollar,
+        truncated: false,
+      }}
       params={params}
       accounts={state.accounts}
       portfolios={state.portfolios}

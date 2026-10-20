@@ -194,6 +194,11 @@ export default async function AssetsPage({
         unit={unit}
         referenceUnit={reference}
         filter={filter}
+        live={{
+          snapshot: priced.snapshot,
+          referenceDollar: dollar,
+          truncated: holdings.activeTruncated,
+        }}
         params={context.params}
         accounts={accounts.active}
         portfolios={portfolios.active}
