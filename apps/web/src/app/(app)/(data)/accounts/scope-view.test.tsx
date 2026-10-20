@@ -7,6 +7,9 @@ const notFound = jest.fn(() => {
 
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("next/navigation", () => ({ notFound: () => notFound() }));
+jest.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 jest.mock("@/lib/auth/session-claims", () => ({
   getSessionClaims: async () => ({ sub: "u1" }),
 }));

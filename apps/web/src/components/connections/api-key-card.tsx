@@ -21,6 +21,7 @@ import { useId, useRef, useState, useTransition } from "react";
 import { useImportsRefresh } from "@/components/imports/use-imports-refresh";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormAlert } from "@/components/ui/form-alert";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,10 @@ import {
   SYNC_PERIOD_START,
   type SyncResult,
 } from "@/lib/connections/api-key";
+import {
+  DISMISSED_SYNC_MAX_AGE,
+  dismissedSyncCookie,
+} from "@/lib/connections/dismissed-sync";
 import { formatDate } from "@/lib/format/date";
 import {
   importFailureMessage,
@@ -83,6 +88,7 @@ export function ApiKeyCard({
   form,
   apiKey,
   actions,
+  dismissedSyncId = null,
 }: {
   // Whose imports the card follows; the prototype's change in the browser.
   userId?: string | null;
@@ -90,6 +96,8 @@ export function ApiKeyCard({
   form: ConnectionForm;
   apiKey: ApiKeyView | null;
   actions: ApiKeyActions;
+  // The failed sync whose notice the user closed.
+  dismissedSyncId?: string | null;
 }) {
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
@@ -99,6 +107,7 @@ export function ApiKeyCard({
   const operationsOpener = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const [connected, setConnected] = useState(false);
+  const [dismissed, setDismissed] = useState(dismissedSyncId);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -208,26 +217,36 @@ export function ApiKeyCard({
           tenencias.
         </Notice>
       )}
-      {!connected && apiKey?.lastSync && (
-        <SyncStatus
-          sync={apiKey.lastSync}
-          provider={form.name}
-          onCancel={
-            actions.cancel &&
-            (() => {
-              const cancel = actions.cancel!;
+      {!connected &&
+        apiKey?.lastSync &&
+        !(
+          apiKey.lastSync.status === "failed" &&
+          apiKey.lastSync.importId === dismissed
+        ) && (
+          <SyncStatus
+            sync={apiKey.lastSync}
+            provider={form.name}
+            onDismiss={() => {
               const importId = apiKey.lastSync!.importId;
-              startTransition(async () => {
-                const result = await settle(cancel(importId));
-                if (result === "rejected" || !result.ok) {
-                  setError("No pudimos cancelar la sincronización.");
-                }
-                router.refresh();
-              });
-            })
-          }
-        />
-      )}
+              document.cookie = `${dismissedSyncCookie(accountId)}=${importId}; path=/; max-age=${DISMISSED_SYNC_MAX_AGE}; samesite=lax`;
+              setDismissed(importId);
+            }}
+            onCancel={
+              actions.cancel &&
+              (() => {
+                const cancel = actions.cancel!;
+                const importId = apiKey.lastSync!.importId;
+                startTransition(async () => {
+                  const result = await settle(cancel(importId));
+                  if (result === "rejected" || !result.ok) {
+                    setError("No pudimos cancelar la sincronización.");
+                  }
+                  router.refresh();
+                });
+              })
+            }
+          />
+        )}
       {error && <FormAlert>{error}</FormAlert>}
       {dialog === "operations" && (
         <OperationsDialog
@@ -272,10 +291,13 @@ export function SyncStatus({
   sync,
   provider,
   onCancel,
+  onDismiss,
 }: {
   sync: LastSync;
   provider: string;
   onCancel?: () => void;
+  // Closes a failed sync's notice.
+  onDismiss?: () => void;
 }) {
   const when = `${formatDate(sync.on)} a las ${sync.at}`;
   if (isBusy(sync.status)) {
@@ -299,6 +321,16 @@ export function SyncStatus({
       <Notice
         variant="error"
         title={`La última sincronización falló (${when})`}
+        action={
+          onDismiss && (
+            <IconButton
+              icon={X}
+              tooltip="Cerrar"
+              label="Cerrar el aviso de la sincronización"
+              onClick={onDismiss}
+            />
+          )
+        }
       >
         {sync.failure
           ? importFailureMessage(sync.failure, provider)

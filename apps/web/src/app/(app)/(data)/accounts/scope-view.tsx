@@ -1,5 +1,6 @@
 import { quotesNeeded, readSnapshot, referenceUnit } from "@plant/core";
 import { buenosAiresDate } from "@plant/shared";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
@@ -20,6 +21,7 @@ import { type Scope, ScopePage } from "@/components/holdings/scope-page";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { accountCash } from "@/lib/cash/view";
 import { connectionForm, providerOf } from "@/lib/connections/api-key";
+import { dismissedSyncCookie } from "@/lib/connections/dismissed-sync";
 import { readApiKey } from "@/lib/connections/write";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
@@ -202,6 +204,9 @@ export async function ScopeView({
             key="connection"
             userId={claims.sub}
             accountId={id}
+            dismissedSyncId={
+              (await cookies()).get(dismissedSyncCookie(id))?.value ?? null
+            }
             form={connectionForm(provider)}
             apiKey={apiKey}
             actions={{
