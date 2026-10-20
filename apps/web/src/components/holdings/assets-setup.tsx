@@ -6,7 +6,7 @@ import type {
   RealEstateFigures,
   ReferenceDollar,
 } from "@plant/core";
-import { compareDecimals } from "@plant/shared";
+import { compareDecimals, shownTicker } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Archive,
@@ -503,7 +503,7 @@ export function AssetsSetup({
   // holding's amount in its own unit.
   const held = (row: TenenciaRow) =>
     row.kind === "instrument"
-      ? `${formatQuantity(factsOf(row).quantity)} ${row.symbol}`
+      ? `${formatQuantity(factsOf(row).quantity)} ${shownTicker(row.symbol)}`
       : heldAmount(row.row);
 
   const columns: ColumnDef<TenenciaRow>[] = [
@@ -639,10 +639,10 @@ export function AssetsSetup({
               className="text-muted-foreground hover:text-foreground text-xs"
               aria-label={
                 manualDate
-                  ? `Precio corregido a mano el ${formatDate(manualDate)} de ${symbol}. Cambiarlo`
+                  ? `Precio corregido a mano el ${formatDate(manualDate)} de ${symbol && shownTicker(symbol)}. Cambiarlo`
                   : fed
-                    ? `Corregir el precio de ${symbol}`
-                    : `Cargar precio de ${symbol}`
+                    ? `Corregir el precio de ${symbol && shownTicker(symbol)}`
+                    : `Cargar precio de ${symbol && shownTicker(symbol)}`
               }
               onClick={opensPrice}
             >
@@ -1366,7 +1366,7 @@ export function AssetsSetup({
               () => prices.actions.set(toPriceInput(fields, instrument)),
               PRICE_MESSAGES,
               {
-                done: `Cargaste el precio de ${instrument.symbol}`,
+                done: `Cargaste el precio de ${shownTicker(instrument.symbol)}`,
                 reopen: (error) =>
                   setPriceDialog({
                     ...priceDialog,
@@ -1379,7 +1379,7 @@ export function AssetsSetup({
           onDelete={(date) => {
             const { symbol } = priceDialog;
             confirm({
-              title: `¿Borrar el precio manual de ${symbol}?`,
+              title: `¿Borrar el precio manual de ${shownTicker(symbol)}?`,
               description:
                 "Vuelve a valer el precio manual anterior, si cargaste otro. No se puede deshacer.",
               run: () =>
@@ -1388,7 +1388,7 @@ export function AssetsSetup({
                   () => prices.actions.delete!(symbol, date),
                   PRICE_MESSAGES,
                   {
-                    done: `Borraste el precio manual de ${symbol}`,
+                    done: `Borraste el precio manual de ${shownTicker(symbol)}`,
                     reopen: (error) =>
                       setPriceDialog({ symbol, initialError: error }),
                   },

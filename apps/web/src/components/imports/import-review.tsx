@@ -16,6 +16,7 @@ import {
   exactOf,
   times,
   toDecimal,
+  shownTicker,
 } from "@plant/shared";
 import { Check, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
@@ -940,7 +941,7 @@ function RowRouting({
       {sources.length > 0 && (
         <label className="grid gap-1">
           <span className="text-muted-foreground">
-            {`Ya tenés ${row.symbol} en otra cuenta. ¿Es un traspaso?`}
+            {`Ya tenés ${shownTicker(row.symbol)} en otra cuenta. ¿Es un traspaso?`}
           </span>
           <Select
             value={origin}

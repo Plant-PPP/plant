@@ -3,6 +3,7 @@ import {
   LOCAL_SYMBOL_PATTERN,
   usListingSymbol,
   usTicker,
+  shownTicker,
 } from "./symbol";
 
 it.each(["VOO.US", "BRK-B.US", "AAPL", "ABCDEFGHIJKLMNO", "GD30D"])(
@@ -50,4 +51,11 @@ it.each([
   [".US", null],
 ])("reads the ticker of %j as %j", (symbol, ticker) => {
   expect(usTicker(symbol)).toBe(ticker);
+});
+
+it("shows a US listing by its bare ticker and any other symbol as it is", () => {
+  expect(shownTicker("MELI.US")).toBe("MELI");
+  expect(shownTicker("BRK-B.US")).toBe("BRK-B");
+  expect(shownTicker("MELI")).toBe("MELI");
+  expect(shownTicker("GD30D")).toBe("GD30D");
 });

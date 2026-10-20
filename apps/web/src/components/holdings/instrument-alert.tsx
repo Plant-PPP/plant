@@ -1,5 +1,7 @@
 "use client";
 
+import { shownTicker } from "@plant/shared";
+
 import { Bell } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -61,12 +63,12 @@ export function InstrumentAlert({
         icon={Bell}
         actionId="alert"
         tooltip="Crear una alerta"
-        label={`Crear una alerta de ${symbol}`}
+        label={`Crear una alerta de ${shownTicker(symbol)}`}
         onClick={() => setOpen(true)}
       />
       {open && (
         <AppDialog
-          title={`Alerta de ${symbol}`}
+          title={`Alerta de ${shownTicker(symbol)}`}
           description="Te avisamos en el Resumen cuando llegue al precio que elijas. Tus alertas están en Ajustes, donde podés borrarlas."
           onClose={() => setOpen(false)}
         >
