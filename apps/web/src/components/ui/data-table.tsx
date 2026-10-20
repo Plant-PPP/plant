@@ -132,14 +132,22 @@ function DataTable<T extends DataTableRow>({
       className={cn(
         "@container overflow-hidden rounded-lg border",
         // A long list scrolls in its own box, which draws only the rows in
-        // view.
-        virtual && "max-h-[32rem] overflow-y-auto",
+        // view; the box scrolls both ways, so the header sticks to it.
+        virtual && "max-h-[32rem] overflow-auto",
       )}
     >
-      <Table className="table-fixed">
+      <Table
+        className="table-fixed"
+        containerClassName={cn(virtual && "overflow-visible")}
+      >
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader
-          className={cn(virtual && "bg-background sticky top-0 z-10")}
+          // Stuck over the rows, it needs a solid background, and a
+          // shadow for the border a sticky row loses.
+          className={cn(
+            virtual &&
+              "bg-background sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--border)] [&_tr]:bg-muted/50",
+          )}
         >
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className={headerRowClass}>
