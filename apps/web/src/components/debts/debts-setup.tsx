@@ -11,6 +11,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
+import { usePreload } from "@/hooks/use-preload";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { NameLink } from "@/components/holdings/holding-cells";
 import { UnitSelect } from "@/components/holdings/filter-select";
@@ -48,7 +49,8 @@ import type { ListView } from "@/lib/portfolio-setup/read";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
-import { DEBT_INVALID, DebtDialog } from "./debt-dialog";
+import { DEBT_INVALID } from "./debt-fields";
+import { DebtDialog, preloadDebtDialogs } from "./lazy-dialogs";
 import {
   type DebtFields,
   DEBT_DELETE_DESCRIPTION,
@@ -111,6 +113,7 @@ export function DebtsSetup({
     (state, change: ListChange<Row>) => applyChange<Row>(state, change),
   );
   const card = useSetupCard({ run, pending });
+  usePreload(preloadDebtDialogs);
   const url = useAssetsUrl(params);
   const id = useId();
   const [dialog, setDialog] = useState<DialogState | null>(null);

@@ -140,3 +140,6 @@ export function debtAmount(
     ? formatAmount(amount, debt.currency)
     : `${formatQuantity(amount)} ${unitOf(debt)}`;
 }
+
+export const DEBT_INVALID =
+  "Revisá la deuda: un nombre, un saldo mayor a 0 y, si los cargás, una cuota, una tasa de hasta 1000 % y fechas válidas.";

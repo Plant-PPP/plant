@@ -33,15 +33,13 @@ import type { InstrumentRow } from "@/lib/holdings/read";
 import { instrumentLabel } from "@/lib/holdings/holding-name";
 
 import {
+  DEBT_INVALID,
   type DebtFields,
   LIABILITY_KIND_LABELS,
   toLiabilityInput,
   unitOf,
   withKind,
 } from "./debt-fields";
-
-export const DEBT_INVALID =
-  "Revisá la deuda: un nombre, un saldo mayor a 0 y, si los cargás, una cuota, una tasa de hasta 1000 % y fechas válidas.";
 
 // Adds or edits a debt; it hands its fields to `onSubmit` as it closes, and a
 // refused write opens it again with the fields and the alert.

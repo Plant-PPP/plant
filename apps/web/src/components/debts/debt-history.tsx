@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { usePreload } from "@/hooks/use-preload";
 import { useAssetsUrl } from "@/components/holdings/assets-url";
 import { UnitSelect } from "@/components/holdings/filter-select";
 import {
@@ -82,12 +83,13 @@ import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 import { settle } from "@/lib/server-action-call";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 
+import type { PledgeOption } from "./debt-collateral-dialog";
 import {
   DebtCollateralDialog,
-  type PledgeOption,
-} from "./debt-collateral-dialog";
-import { DebtDialog } from "./debt-dialog";
-import { DebtEventDialog } from "./debt-event-dialog";
+  DebtDialog,
+  DebtEventDialog,
+  preloadDebtDialogs,
+} from "./lazy-dialogs";
 import {
   type CashOption,
   CASH_NOT_RESTORED,
@@ -264,6 +266,7 @@ export function DebtHistory({
     apply,
   );
   const card = useSetupCard({ run, pending });
+  usePreload(preloadDebtDialogs);
   const { heading } = card;
   const url = useAssetsUrl(params);
   const router = useRouter();

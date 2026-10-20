@@ -8,6 +8,9 @@ export const CASH_ENTRY_KINDS = [
 ] as const;
 export type CashEntryKind = (typeof CASH_ENTRY_KINDS)[number];
 
+// The currencies an account's cash is kept in.
+export const CASH_CURRENCIES: readonly Currency[] = ["ARS", "USD"];
+
 export type CashRefusalCode =
   | "invalid"
   | "not_found"

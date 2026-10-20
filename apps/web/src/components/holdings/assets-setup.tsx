@@ -20,6 +20,7 @@ import {
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 
+import { usePreload } from "@/hooks/use-preload";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageButton } from "@/components/ui/page-button";
 import {
@@ -127,11 +128,15 @@ import { InstitutionIcon } from "@/components/portfolio-setup/institution-field"
 import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
-import { RealEstateDialog } from "./real-estate-dialog";
 import { type SheetFields, sheetFields } from "./real-estate-fields";
-import { RenewDialog } from "./renew-dialog";
-import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
-import { PriceDialog } from "./price-dialog";
+import type { ChosenHolding } from "./holding-dialog";
+import {
+  HoldingDialog,
+  preloadHoldingDialogs,
+  PriceDialog,
+  RealEstateDialog,
+  RenewDialog,
+} from "./lazy-dialogs";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   type HoldingFields,
@@ -326,6 +331,7 @@ export function AssetsSetup({
       change ? applyChange(state, change) : state,
   );
   const card = useSetupCard({ run, pending });
+  usePreload(preloadHoldingDialogs);
   const url = useAssetsUrl(
     params,
     live && ((next) => answeredInPlace(params, next, tabs)),
