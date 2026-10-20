@@ -208,4 +208,35 @@ describe("planStatement", () => {
       "601",
     ]);
   });
+
+  it("settles a sync's cash against the operations Plant has only", () => {
+    const plan = planStatement(ROWS, {
+      ledger: state,
+      accountId: ACCOUNT,
+      cash: new Map(),
+      index,
+      create: false,
+      given: [{ currency: "USD", date: "2026-09-01", amount: "1000" }],
+    });
+    expect(plan.create).toEqual([]);
+    expect(plan.matched).toBe(1);
+    expect(plan.skipped).toBe(2);
+    expect(
+      plan.cash.get("USD")?.map((each) => [each.reference, each.kind]),
+    ).toEqual([
+      ["900", "deposit"],
+      ["700", "income"],
+      ["501", "settlement"],
+      ["601", "income"],
+    ]);
+    expect(plan.openings.get("USD")).toEqual({
+      date: "2026-09-01",
+      amount: "1000",
+    });
+    // A currency the provider gave no balance for opens as a statement does.
+    expect(plan.openings.get("ARS")).toEqual({
+      date: "2026-09-10",
+      amount: "152",
+    });
+  });
 });

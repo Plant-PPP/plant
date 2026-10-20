@@ -8,7 +8,7 @@ import {
   snapshotOn,
   VALUED_FX_KINDS,
 } from "@plant/core";
-import { readIolMovements } from "@plant/sources";
+import { type CashDraft, readIolMovements } from "@plant/sources";
 import {
   buenosAiresDate,
   type Currency,
@@ -49,7 +49,7 @@ import {
   type StatementResult,
 } from "./input";
 import { cashHoldingsOf, readCashMovements, sideOf } from "./read";
-import { planStatement } from "./statement";
+import { type CashSide, planStatement, type StatementPlan } from "./statement";
 
 type Client = SupabaseClient<Database>;
 
@@ -272,6 +272,92 @@ export async function writeCash(input: unknown): Promise<CashResult> {
   return result;
 }
 
+type StatementRefusal = Extract<StatementResult, { ok: false }>["code"];
+
+// Writes each currency's planned cash into the account, after the opening
+// balance a currency with no history takes: an operation's leg with that
+// operation's rates, any other with the day's. `created` names the
+// operations the plan made, by their number. It stops at the first currency
+// refused.
+async function writePlannedCash(
+  client: Client,
+  ledger: Ledger,
+  accountId: string,
+  {
+    plan,
+    cash,
+    created,
+    note,
+  }: {
+    plan: Pick<StatementPlan, "cash" | "openings">;
+    cash: ReadonlyMap<Currency, CashSide>;
+    created: ReadonlyMap<string, { id: string }>;
+    note: string;
+  },
+): Promise<{
+  code: StatementRefusal | null;
+  count: number;
+  failure?: unknown;
+}> {
+  const ratesOf = new Map<string, MovementRates>();
+  for (const movements of ledger.movements.values()) {
+    for (const movement of movements) {
+      ratesOf.set(movement.operation_id, movement.rates);
+    }
+  }
+  let count = 0;
+  for (const [currency, movements] of plan.cash) {
+    const side = cash.get(currency);
+    const inserts: Insert[] = [];
+    const opening = plan.openings.get(currency);
+    if (opening) {
+      const rates = ratesOn(ledger, opening.date, currency);
+      if (!rates) return { code: "no_rate", count };
+      inserts.push({
+        kind: "opening_balance",
+        date: opening.date,
+        amount: opening.amount,
+        operation_id: null,
+        reference: null,
+        note: note.slice(0, 200),
+        rates,
+      });
+    }
+    for (const movement of movements) {
+      const operation =
+        movement.operation === null
+          ? null
+          : "id" in movement.operation
+            ? movement.operation.id
+            : (created.get(movement.operation.number)?.id ?? null);
+      if (movement.operation !== null && operation === null) continue;
+      const rates =
+        (operation && ratesOf.get(operation)) ??
+        ratesOn(ledger, movement.date, currency);
+      if (!rates) return { code: "no_rate", count };
+      inserts.push({
+        kind: movement.kind,
+        date: movement.date,
+        amount: movement.amount,
+        operation_id: operation,
+        reference: movement.reference,
+        note: null,
+        rates,
+      });
+    }
+    if (inserts.length === 0) continue;
+    const holdingId =
+      side?.holdingId ??
+      (await createCash(client, ledger, accountId, currency));
+    const sent = await sendCash(client, holdingId, inserts, []);
+    if (!sent.ok) {
+      return { code: sent.code, count, failure: sent.failure };
+    }
+    count += inserts.length;
+  }
+  return { code: null, count };
+}
+
 const statementSchema = z
   .object({
     accountId: z.uuid(),
@@ -403,70 +489,18 @@ export async function importStatement(
           count += 1;
           ({ ledger, symbolOf } = await reread());
         }
-        // The rates of each operation's movements, which its legs take.
-        const ratesOf = new Map<string, MovementRates>();
-        for (const movements of ledger.movements.values()) {
-          for (const movement of movements) {
-            ratesOf.set(movement.operation_id, movement.rates);
+        if (result.ok) {
+          const written = await writePlannedCash(client, ledger, accountId, {
+            plan,
+            cash,
+            created,
+            note: `Saldo antes de ${fileName}`,
+          });
+          count += written.count;
+          if (written.code) {
+            failure = written.failure;
+            result = { ok: false, code: written.code, summary };
           }
-        }
-        for (const [currency, movements] of plan.cash) {
-          if (!result.ok) break;
-          const side = cash.get(currency)!;
-          const inserts: Insert[] = [];
-          const opening = plan.openings.get(currency);
-          if (opening) {
-            const rates = ratesOn(ledger, opening.date, currency);
-            if (!rates) {
-              result = { ok: false, code: "no_rate", summary };
-              break;
-            }
-            inserts.push({
-              kind: "opening_balance",
-              date: opening.date,
-              amount: opening.amount,
-              operation_id: null,
-              reference: null,
-              note: `Saldo antes de ${fileName}`.slice(0, 200),
-              rates,
-            });
-          }
-          for (const movement of movements) {
-            const operation =
-              movement.operation === null
-                ? null
-                : "id" in movement.operation
-                  ? movement.operation.id
-                  : (created.get(movement.operation.number)?.id ?? null);
-            if (movement.operation !== null && operation === null) continue;
-            const rates =
-              (operation && ratesOf.get(operation)) ??
-              ratesOn(ledger, movement.date, currency);
-            if (!rates) {
-              result = { ok: false, code: "no_rate", summary };
-              break;
-            }
-            inserts.push({
-              kind: movement.kind,
-              date: movement.date,
-              amount: movement.amount,
-              operation_id: operation,
-              reference: movement.reference,
-              note: null,
-              rates,
-            });
-          }
-          if (!result.ok) break;
-          const holdingId =
-            side.holdingId ??
-            (await createCash(client, ledger, accountId, currency));
-          const sent = await sendCash(client, holdingId, inserts, []);
-          if (!sent.ok) {
-            failure = sent.failure;
-            result = { ok: false, code: sent.code, summary };
-            break;
-          }
-          count += inserts.length;
         }
       }
     }
@@ -484,4 +518,72 @@ export async function importStatement(
     revalidatePath("/", "layout");
   }
   return result;
+}
+
+// Adds what a confirmed sync of operations read of the account's money to
+// its cash: the legs of the operations Plant has, and every other movement
+// as it is, from a currency's opening balance on (the one the provider gave
+// when the currency has none). A currency that would open below zero is
+// left out. Read again, it adds nothing.
+export async function writeSyncCash(
+  client: Client,
+  {
+    accountId,
+    cash,
+    note,
+  }: { accountId: string; cash: CashDraft; note: string },
+): Promise<{
+  code: StatementRefusal | null;
+  count: number;
+  failure?: unknown;
+}> {
+  const read = await ledgerForDates(client, [
+    ...cash.rows.map((row) => row.date),
+    ...cash.openings.map((opening) => opening.date),
+  ]);
+  if (read.truncated) throw new LedgerReadError("movements", "truncated");
+  const { ledger } = read;
+  const [holdings, histories] = await Promise.all([
+    cashHoldingsOf(client, accountId),
+    readCashMovements(client),
+  ]);
+  const sides = new Map(
+    (["ARS", "USD"] as Currency[]).map((currency) => [
+      currency,
+      sideOf(holdings, histories.byHolding, currency),
+    ]),
+  );
+  const index = instrumentIndex(
+    ledger.instruments.map((each) => ({
+      ...each,
+      aliases: (each as { aliases?: string[] }).aliases ?? [],
+    })),
+  );
+  const plan = planStatement(cash.rows, {
+    ledger,
+    accountId,
+    cash: sides,
+    index,
+    create: false,
+    given: cash.openings,
+  });
+  for (const [currency, movements] of plan.cash) {
+    const opened = sides
+      .get(currency)
+      ?.history.find((each) => each.kind === "opening_balance")?.date;
+    const kept = opened
+      ? movements.filter((movement) => movement.date >= opened)
+      : movements;
+    const opening = plan.openings.get(currency);
+    if (kept.length === 0 || (opening && exactOf(opening.amount).n < 0n)) {
+      plan.cash.delete(currency);
+      plan.openings.delete(currency);
+    } else plan.cash.set(currency, kept);
+  }
+  return writePlannedCash(client, ledger, accountId, {
+    plan,
+    cash: sides,
+    created: new Map(),
+    note,
+  });
 }

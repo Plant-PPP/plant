@@ -104,7 +104,10 @@ function operationsByNumber(
 // or created from the row; deposits, withdrawals and credits as they are; a
 // dividend's fee charged under its own number as a charge. What a currency's
 // history already holds is left out, so a statement read twice adds
-// nothing.
+// nothing. A sync's cash (`create` false) settles only the operations Plant
+// has, as the review confirmed them, takes a dividend it lacks as income,
+// and opens a currency at the balance
+// the provider gave (`given`) when it says.
 export function planStatement(
   rows: readonly StatementRow[],
   {
@@ -112,11 +115,15 @@ export function planStatement(
     accountId,
     cash,
     index,
+    create: creates = true,
+    given = [],
   }: {
     ledger: Ledger;
     accountId: string;
     cash: ReadonlyMap<Currency, CashSide>;
     index: InstrumentIndex;
+    create?: boolean;
+    given?: readonly { currency: Currency; date: string; amount: string }[];
   },
 ): StatementPlan {
   const existing = operationsByNumber(ledger, accountId);
@@ -203,6 +210,20 @@ export function planStatement(
     if (found) {
       matched += 1;
       operation = { id: found.id };
+    } else if (!creates) {
+      // A dividend Plant has no operation for was still paid: income.
+      for (const row of sides) {
+        if (row.kind === "dividend") {
+          add(row.currency, {
+            kind: compareDecimals(row.amount, "0") < 0 ? "charge" : "income",
+            date: row.date,
+            amount: row.amount,
+            reference: row.number,
+            operation: null,
+          });
+        } else skipped += 1;
+      }
+      continue;
     } else {
       const resolved = main.symbol && resolveSymbol(main.symbol, index);
       if (!resolved) {
@@ -247,6 +268,11 @@ export function planStatement(
   for (const [currency, movements] of planned) {
     const { history, today } = side(currency);
     if (history.length > 0 || from === null) continue;
+    const opening = given.find((each) => each.currency === currency);
+    if (opening) {
+      openings.set(currency, { date: opening.date, amount: opening.amount });
+      continue;
+    }
     const added = movements.reduce(
       (sum, movement) => plus(sum, exactOf(movement.amount)),
       ZERO,

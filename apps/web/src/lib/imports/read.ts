@@ -17,7 +17,7 @@ import {
   over,
   stored,
 } from "@plant/shared";
-import { draftAssetClassSchema } from "@plant/sources";
+import { cashDraftSchema, draftAssetClassSchema } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -239,6 +239,7 @@ const totalsSchema = z.object({
   printed_total_ars: z.string().nullable(),
   printed_total_usd: z.string().nullable(),
   skipped_rows: z.number().int().nonnegative(),
+  sync_cash: z.unknown().optional(),
 });
 
 // Whether a printed cost reads as one unit's: within ten times either way of
@@ -332,6 +333,14 @@ function reviewRow(
 // One of the user's imports with its draft, for its review; null when it is
 // not theirs. `instruments` are the ones a row may be; a promise lets the
 // caller read them alongside.
+// How many movements of cash a sync read, for its review to say.
+function syncCashOf(stored: unknown): { cashMovements?: number } {
+  const cash = cashDraftSchema.safeParse(stored);
+  return cash.success && cash.data.rows.length > 0
+    ? { cashMovements: cash.data.rows.length }
+    : {};
+}
+
 export async function readImportForReview(
   client: Client,
   id: string,
@@ -342,7 +351,7 @@ export async function readImportForReview(
       .from("imports")
       .select(
         "id, status, failure, document_date, created_at, " +
-          "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, skipped_rows, " +
+          "printed_total_ars:printed_total_ars::text, printed_total_usd:printed_total_usd::text, skipped_rows, sync_cash, " +
           IMPORT_ORIGIN_COLUMNS,
       )
       .eq("id", id)
@@ -422,6 +431,7 @@ export async function readImportForReview(
       ),
     }),
     skippedRows: printed.skipped_rows,
+    ...syncCashOf(printed.sync_cash),
     createdOn: buenosAiresDate(new Date(row.created_at)),
   };
 }

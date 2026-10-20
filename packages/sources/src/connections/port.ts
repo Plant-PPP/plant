@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { DRAFT_ROW_LIMIT, SourceError } from "../file-upload/draft";
+import {
+  CASH_DRAFT_ROW_LIMIT,
+  DRAFT_ROW_LIMIT,
+  SourceError,
+} from "../file-upload/draft";
 import type { HoldingsReading, OperationsReading } from "../port";
 
 // What a sync reads into its draft: the account's holdings, or the
@@ -18,7 +22,8 @@ const inPeriod = (date: string | null, { from, to }: ReadPeriod): boolean =>
   ((from === null || date >= from) && (to === null || date <= to));
 
 // The operations inside the period, newest first, at most DRAFT_ROW_LIMIT of
-// them; only those in the period that do not fit count as skipped.
+// them, and the movements of cash inside it; only the operations in the
+// period that do not fit count as skipped.
 const periodReading = (
   reading: OperationsReading,
   period: ReadPeriod,
@@ -28,6 +33,14 @@ const periodReading = (
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   return {
     operations: kept.slice(0, DRAFT_ROW_LIMIT),
+    ...(reading.cash && {
+      cash: {
+        rows: reading.cash.rows
+          .filter((each) => inPeriod(each.date, period))
+          .slice(0, CASH_DRAFT_ROW_LIMIT),
+        openings: reading.cash.openings,
+      },
+    }),
     read: {
       ...reading.read,
       skippedRows:

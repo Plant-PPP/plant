@@ -168,6 +168,7 @@ it("saves a document of operations as operations", async () => {
     USER,
     operations,
     0,
+    null,
   );
   expect(store.saveDraft).not.toHaveBeenCalled();
   expect(lines[0]!.fields).toMatchObject({
@@ -243,7 +244,13 @@ it("passes the operations and debts a reading left out to the store", async () =
   });
   await run();
   await run();
-  expect(store.saveOperations).toHaveBeenCalledWith(IMPORT, USER, [{}], 3);
+  expect(store.saveOperations).toHaveBeenCalledWith(
+    IMPORT,
+    USER,
+    [{}],
+    3,
+    null,
+  );
   expect(store.saveDebts).toHaveBeenCalledWith(IMPORT, USER, [{}], 3);
 });
 
@@ -854,6 +861,46 @@ describe("a sync", () => {
       USER,
       operations,
       0,
+      null,
+    );
+  });
+
+  it("keeps what a sync of operations read of the account's money", async () => {
+    const operation = {
+      date: "2026-10-01",
+      kind: "purchase" as const,
+      symbol: "VOO.US",
+      quantity: "1",
+      price: "500",
+      amount: null,
+      charges: null,
+      reference: "201",
+      currency: "USD" as const,
+      confidence: "high" as const,
+      page: null,
+    };
+    const cash = {
+      rows: [],
+      openings: [{ currency: "USD" as const, date: "2026-01-02", amount: "5" }],
+    };
+    const exchangeRead = jest.fn().mockResolvedValue({
+      operations: [operation],
+      cash,
+      read: { ...READ, reader: "api" },
+    });
+    const { store, run } = setUp({ exchangeRead });
+    store.load.mockResolvedValue({
+      ...SYNC,
+      draft: "operations",
+      period: { from: "2026-01-01", to: null },
+    });
+    expect(await run()).toEqual({ outcome: "ready", rows: 1 });
+    expect(store.saveOperations).toHaveBeenCalledWith(
+      IMPORT,
+      USER,
+      [operation],
+      0,
+      cash,
     );
   });
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type {
+  CashDraft,
   DraftDebt,
   DraftOperation,
   ImportDraft,
@@ -78,8 +79,10 @@ export type SourceReadInfo = {
 // What a read yields: the holdings a document lists, the operations a
 // document of operations shows, or what a card statement says is owed.
 export type HoldingsReading = { draft: ImportDraft; read: SourceReadInfo };
+// A sync of operations may also read the account's money.
 export type OperationsReading = {
   operations: DraftOperation[];
+  cash?: CashDraft;
   read: SourceReadInfo;
 };
 export type DebtsReading = { debts: DraftDebt[]; read: SourceReadInfo };

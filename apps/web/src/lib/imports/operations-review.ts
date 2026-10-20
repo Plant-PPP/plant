@@ -31,10 +31,12 @@ export function missingFields(
   return missing;
 }
 
-// Whether every operation kept is complete, and at least one is kept.
+// Whether every operation kept is complete, and at least one is kept, or
+// the import brings movements of cash to confirm on their own.
 export const operationsComplete = (
   rows: readonly ImportOperationRow[],
   today: string,
+  withCash = false,
 ) =>
-  rows.some((row) => !row.discarded) &&
+  (withCash || rows.some((row) => !row.discarded)) &&
   rows.every((row) => missingFields(row, today).length === 0);

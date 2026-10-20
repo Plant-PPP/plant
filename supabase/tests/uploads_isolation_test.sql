@@ -79,7 +79,7 @@ SELECT set_eq(
         'created_at:SELECT', 'updated_at:SELECT', 'failure:SELECT', 'document_date:SELECT',
         'printed_total_ars:SELECT', 'printed_total_usd:SELECT', 'skipped_rows:SELECT',
         'source_connection_id:SELECT', 'provider:SELECT', 'sync_draft:SELECT',
-        'sync_from:SELECT', 'sync_to:SELECT',
+        'sync_from:SELECT', 'sync_to:SELECT', 'sync_cash:SELECT',
         'document_id:INSERT', 'source_connection_id:INSERT',
         'provider:INSERT', 'sync_draft:INSERT', 'sync_from:INSERT', 'sync_to:INSERT',
         'status:UPDATE'],
