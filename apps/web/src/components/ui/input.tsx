@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { typedAmount } from "@/lib/format/amount";
+import { typedAmount } from "@/lib/format/typed-amount";
 import { cn } from "@/lib/utils";
 
 // An amount field (inputMode decimal) keeps, as it is typed or pasted, only
