@@ -30,3 +30,8 @@ export function usTicker(symbol: string): string | null {
     ? text.slice(0, -US_LISTING_SUFFIX.length)
     : null;
 }
+
+// A symbol as the user reads it: a US listing by its bare ticker (VOO.US is
+// VOO), since its type and market say where it trades; any other as it is.
+export const shownTicker = (symbol: string): string =>
+  usTicker(symbol) ?? symbol;

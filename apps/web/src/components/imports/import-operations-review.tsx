@@ -9,6 +9,7 @@ import {
   exactOf,
   times,
   toDecimal,
+  shownTicker,
 } from "@plant/shared";
 import { Pencil, RotateCcw, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
@@ -54,6 +55,7 @@ import {
   parseAmountInput,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { countOf } from "@/lib/format/text";
 import { instrumentLabel, instrumentNames } from "@/lib/holdings/holding-name";
 import {
@@ -758,8 +760,9 @@ export function ImportOperationsReview({
                       />
                     </TableHead>
                     <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead>Operación</TableHead>
                     <TableHead>Activo</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead className="text-right">Precio</TableHead>
                     <TableHead className="text-right">Gastos</TableHead>
@@ -773,7 +776,7 @@ export function ImportOperationsReview({
                   {readyRows.map(({ row, index }) =>
                     editing === row.id ? (
                       <TableRow key={row.id} className="hover:bg-transparent">
-                        <TableCell colSpan={9} className="p-2">
+                        <TableCell colSpan={10} className="p-2">
                           <ul>{card(row, index)}</ul>
                         </TableCell>
                       </TableRow>
@@ -811,13 +814,18 @@ export function ImportOperationsReview({
                             className="block truncate font-medium"
                             title={names.get(row.symbol)}
                           >
-                            {row.symbol}
+                            {shownTicker(row.symbol)}
                           </span>
                           {row.loaded && (
                             <span className="text-muted-foreground block">
                               Ya está cargada
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {types.get(row.symbol)
+                            ? HOLDING_CLASS_LABELS[types.get(row.symbol)!]
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {figureText(finals[index]!.quantity, formatQuantity)}

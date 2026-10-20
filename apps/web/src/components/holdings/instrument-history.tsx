@@ -1,5 +1,7 @@
 "use client";
 
+import { shownTicker } from "@plant/shared";
+
 import { InstrumentAlert } from "@/components/holdings/instrument-alert";
 import { PageCrumbs } from "@/components/layout/page-crumbs";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -207,8 +209,8 @@ export function InstrumentHistory({
         if (answer.kind === "done") {
           toast.success(
             on
-              ? `Incluiste ${instrument.symbol} en el reporte`
-              : `Sacaste ${instrument.symbol} del reporte`,
+              ? `Incluiste ${shownTicker(instrument.symbol)} en el reporte`
+              : `Sacaste ${shownTicker(instrument.symbol)} del reporte`,
           );
         } else if (answer.kind === "alert") toast.error(answer.text);
       },
@@ -229,7 +231,7 @@ export function InstrumentHistory({
               text={`${
                 original.closed
                   ? "Vendida"
-                  : `${formatQuantity(original.position.quantity)} ${instrument.symbol}`
+                  : `${formatQuantity(original.position.quantity)} ${shownTicker(instrument.symbol)}`
               } · ${original.row.portfolio.name}`}
             />
             {origin?.kind === "import" && (
@@ -395,7 +397,7 @@ export function InstrumentHistory({
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatTile
                 label="Valor actual"
-                note={`${formatQuantity(summary.quantity)} ${instrument.symbol}`}
+                note={`${formatQuantity(summary.quantity)} ${shownTicker(instrument.symbol)}`}
               >
                 {money(summary.value, unit)}
               </StatTile>

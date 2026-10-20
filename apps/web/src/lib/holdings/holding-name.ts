@@ -1,5 +1,5 @@
 import type { Holding } from "@plant/core";
-import type { Currency } from "@plant/shared";
+import { type Currency, shownTicker } from "@plant/shared";
 
 import { formatDate } from "@/lib/format/date";
 
@@ -32,7 +32,7 @@ export const currencyOf = (
 
 // An instrument as lists name it: "BTC · Bitcoin", or its symbol alone.
 export const instrumentLabel = (symbol: string, name?: string): string =>
-  name ? `${symbol} · ${name}` : symbol;
+  name ? `${shownTicker(symbol)} · ${name}` : shownTicker(symbol);
 
 // Where a holding is: "IOL · Largo plazo".
 export const holdingPlace = (row: {
