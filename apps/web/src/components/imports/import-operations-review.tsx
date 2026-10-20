@@ -251,7 +251,7 @@ export function ImportOperationsReview({
   ).length;
   const kept = finals.some((row) => !row.discarded);
   const complete =
-    operationsComplete(finals, today) &&
+    operationsComplete(finals, today, item.cashMovements !== undefined) &&
     invalidTyped.every((each) => each.size === 0);
 
   // The rows the filters show; the choices apply to these only.
@@ -348,7 +348,13 @@ export function ImportOperationsReview({
         const kept = finals.filter((row) => !row.discarded).length;
         toast.success(
           savedToast(
-            countOf(kept, "operación", "operaciones"),
+            kept > 0
+              ? countOf(kept, "operación", "operaciones")
+              : countOf(
+                  item.cashMovements ?? 0,
+                  "movimiento de efectivo",
+                  "movimientos de efectivo",
+                ),
             item,
             institution,
           ),
@@ -679,6 +685,11 @@ export function ImportOperationsReview({
               {countOf(doubtful, "dudosa", "dudosas")}
             </span>
           )}
+          {item.cashMovements !== undefined && (
+            <span className="text-muted-foreground text-xs">
+              {`y ${countOf(item.cashMovements, "movimiento", "movimientos")} de efectivo`}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
@@ -887,7 +898,7 @@ export function ImportOperationsReview({
           <Link href={backHref}>Después</Link>
         </Button>
         <Button type="button" disabled={!complete || pending} onClick={confirm}>
-          Confirmar operaciones
+          {kept ? "Confirmar operaciones" : "Confirmar efectivo"}
         </Button>
       </div>
     </div>

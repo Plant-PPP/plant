@@ -7,12 +7,17 @@ import {
   type Database,
   positiveDecimalSchema,
 } from "@plant/shared";
-import { DRAFT_DEBT_LIMIT } from "@plant/sources";
+import {
+  type CashDraft,
+  cashDraftSchema,
+  DRAFT_DEBT_LIMIT,
+} from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { writeSyncCash } from "@/lib/cash/write";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
   type CashEntry,
@@ -226,6 +231,7 @@ async function logConfirm({
   importId,
   draft,
   operations,
+  cash,
   started,
   result,
   failure,
@@ -235,6 +241,8 @@ async function logConfirm({
   importId: string | undefined;
   draft: "holdings" | "operations" | "debts";
   operations: number;
+  // What a confirmed sync wrote of the account's cash, and how it went.
+  cash?: SyncCash;
   started: number;
   result: MovementResult;
   failure: unknown;
@@ -246,12 +254,18 @@ async function logConfirm({
     "plant.import.id": importId,
     "plant.import.draft": draft,
     "plant.import.operation_count": operations,
+    "plant.import.cash_count": cash?.count,
+    "plant.import.cash_outcome": cash?.outcome,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
   if (outcome === "failed") serverLog.error(EVENT, line, failure);
-  else if (outcome === "ok") serverLog.info(EVENT, line);
-  else serverLog.warn(EVENT, line);
+  else if (cash?.outcome === "failed")
+    serverLog.error(EVENT, line, cash.failure);
+  else if (outcome === "ok" && (cash?.outcome ?? "ok") === "ok") {
+    serverLog.info(EVENT, line);
+  } else serverLog.warn(EVENT, line);
+  if (cash && cash.count > 0) revalidatePath("/", "layout");
   if (result.ok || outcome === "failed" || outcome === "stale") {
     revalidatePath("/import", "layout");
     revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
@@ -259,8 +273,54 @@ async function logConfirm({
   if (result.ok && draft !== "debts") await refreshGainAlerts(userId);
 }
 
+type SyncCash = { count: number; outcome: string; failure?: unknown };
+
+// What a sync read of the account's money, null when it read none.
+async function readSyncCash(
+  client: Client,
+  importId: string,
+): Promise<CashDraft | null> {
+  const result = await client
+    .from("imports")
+    .select("sync_cash")
+    .eq("id", importId)
+    .limit(1);
+  const failure = classifyPostgrestResult(result, 200);
+  if (failure || !result.data) {
+    throw new ImportsReadError(failure?.code ?? "no_data");
+  }
+  const stored = (result.data as { sync_cash: unknown }[])[0]?.sync_cash;
+  const cash = cashDraftSchema.safeParse(stored);
+  return cash.success ? cash.data : null;
+}
+
+// A confirmed sync's cash, after its operations, into the account's: a
+// refusal or a failure there leaves the operations confirmed, and a later
+// sync of the period adds what is missing.
+async function confirmSyncCash(
+  client: Client,
+  item: ImportToWrite,
+  cash: CashDraft,
+): Promise<SyncCash> {
+  try {
+    const written = await writeSyncCash(client, {
+      accountId: item.accountId,
+      cash,
+      note: "Saldo inicial según el broker",
+    });
+    return {
+      count: written.count,
+      outcome: written.code ?? "ok",
+      ...(written.failure !== undefined && { failure: written.failure }),
+    };
+  } catch (error) {
+    return { count: 0, outcome: "failed", failure: error };
+  }
+}
+
 // Writes the reviewed operations of a ready import into its account and
-// marks it confirmed, in confirm_import's one transaction. A refusal names
+// marks it confirmed, in confirm_import's one transaction, and then what a
+// sync read of the account's cash. A refusal names
 // the row it stopped at.
 export async function confirmImportOperations(
   importId: unknown,
@@ -274,6 +334,7 @@ export async function confirmImportOperations(
   let result: MovementResult & { rowId?: string };
   let failure: unknown;
   let operations = 0;
+  let cash: SyncCash | undefined;
   const id = z.uuid().safeParse(importId);
   const reviewed = z
     .array(z.record(z.string(), z.unknown()))
@@ -300,12 +361,19 @@ export async function confirmImportOperations(
           dates,
         );
         if (truncated) throw new LedgerReadError("movements", "truncated");
-        const written = writeImportOperations(
-          ledger,
-          item,
-          withoutLoaded(ledger, item.accountId, typed),
-          () => crypto.randomUUID(),
-        );
+        const syncCash = await readSyncCash(client, item.id);
+        const toWrite = withoutLoaded(ledger, item.accountId, typed);
+        // A sync whose operations are all in Plant still brings its cash.
+        const written =
+          syncCash && toWrite.every((row) => row.discarded)
+            ? {
+                state: ledger,
+                result: { ok: true as const, id: item.id },
+                operations: [],
+              }
+            : writeImportOperations(ledger, item, toWrite, () =>
+                crypto.randomUUID(),
+              );
         if (!written.result.ok) {
           result = {
             ...written.result,
@@ -320,6 +388,9 @@ export async function confirmImportOperations(
             symbolOf,
             written,
           ));
+          if (result.ok && syncCash) {
+            cash = await confirmSyncCash(client, item, syncCash);
+          }
         }
       }
     } catch (error) {
@@ -334,6 +405,7 @@ export async function confirmImportOperations(
     importId: id.success ? id.data : undefined,
     draft: "operations",
     operations,
+    cash,
     started,
     result,
     failure,

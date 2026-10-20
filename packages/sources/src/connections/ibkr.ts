@@ -2,12 +2,20 @@ import {
   addDays,
   buenosAiresDate,
   type Currency,
+  exactOf,
   PLANT_USER_AGENT,
+  plus,
+  stored,
   usListingSymbol,
 } from "@plant/shared";
 import { z } from "zod";
 
-import type { DraftOperation, DraftRow } from "../file-upload/draft";
+import type {
+  AccountMovementRow,
+  CashDraft,
+  DraftOperation,
+  DraftRow,
+} from "../file-upload/draft";
 import {
   bodyText,
   budgetedRead,
@@ -94,6 +102,133 @@ const absolute = (value: string | null) =>
 // not count twice: what has no level, or the one asked for.
 const atLevel = (row: Record<string, string>, level: string) =>
   row.levelOfDetail === undefined || row.levelOfDetail.toUpperCase() === level;
+
+// A cash transaction's kind of movement: a deposit or a withdrawal by its
+// sign, a dividend, and any other (interest, fees, taxes withheld) a credit.
+function cashKindOf(
+  type: string | undefined,
+  amount: string,
+): AccountMovementRow["kind"] {
+  if (type === "Deposits/Withdrawals") {
+    return amount.startsWith("-") ? "withdrawal" : "deposit";
+  }
+  return type === "Dividends" ? "dividend" : "credit";
+}
+
+// The money the statements moved in the account, oldest statement last: a
+// row per trade, at what it cost or paid with its commission, and per cash
+// transaction, each once (one Plant cannot read is left out: the sync's
+// operations count those); and what each currency held the first day of
+// the oldest. Its cash report lists each currency, or only the base currency's
+// summary, which is taken for the one currency every row is in.
+export function cashOf(statements: readonly string[]): CashDraft {
+  const rows: AccountMovementRow[] = [];
+  const seen = new Set<string>();
+  const add = (row: AccountMovementRow) => {
+    const key = `${row.kind}:${row.number}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
+  for (const xml of statements) {
+    for (const each of elements(xml, "Trade")) {
+      if (!atLevel(each, "EXECUTION")) continue;
+      const side = each.buySell?.toUpperCase();
+      const number = (each.tradeID ?? "").slice(0, 40);
+      const date = isoDate(each.tradeDate ?? each.dateTime);
+      const currency = currencyOf(each.currency);
+      const proceeds = decimalOf(each.proceeds);
+      const commission = decimalOf(each.ibCommission) ?? "0";
+      const taxes = decimalOf(each.taxes) ?? "0";
+      const amount =
+        decimalOf(each.netCash) ??
+        (proceeds === null
+          ? null
+          : stored(
+              plus(exactOf(proceeds), exactOf(commission), exactOf(taxes)),
+            ));
+      if (
+        (side !== "BUY" && side !== "SELL") ||
+        !number ||
+        date === null ||
+        currency === null ||
+        amount === null
+      ) {
+        continue;
+      }
+      const quantity = absolute(decimalOf(each.quantity));
+      const price = decimalOf(each.tradePrice);
+      add({
+        number,
+        kind: side === "BUY" ? "purchase" : "sale",
+        symbol: symbolOf(each),
+        date,
+        quantity: positive(quantity) ? quantity : null,
+        price: positive(price) ? price : null,
+        commission: absolute(commission) ?? "0",
+        vat: "0",
+        otherTaxes: absolute(taxes) ?? "0",
+        amount,
+        currency,
+      });
+    }
+    for (const each of elements(xml, "CashTransaction")) {
+      if (!atLevel(each, "DETAIL")) continue;
+      const number = (each.transactionID ?? "").slice(0, 40);
+      const date = isoDate(each.dateTime ?? each.settleDate ?? each.reportDate);
+      const currency = currencyOf(each.currency);
+      const amount = decimalOf(each.amount);
+      if (
+        !number ||
+        date === null ||
+        currency === null ||
+        amount === null ||
+        isZero(amount)
+      ) {
+        continue;
+      }
+      add({
+        number,
+        kind: cashKindOf(each.type, amount),
+        symbol: symbolOf(each),
+        date,
+        quantity: null,
+        price: null,
+        commission: "0",
+        vat: "0",
+        otherTaxes: "0",
+        amount,
+        currency,
+      });
+    }
+  }
+  const oldest = statements.at(-1);
+  const reports = oldest ? elements(oldest, "CashReportCurrency") : [];
+  const currencies = new Set(rows.map((row) => row.currency));
+  const only = currencies.size === 1 ? [...currencies][0]! : null;
+  const openings: CashDraft["openings"] = [];
+  for (const each of reports) {
+    const currency =
+      each.currency === "BASE_SUMMARY"
+        ? reports.length === 1
+          ? only
+          : null
+        : currencyOf(each.currency);
+    const date = isoDate(each.fromDate);
+    const amount = decimalOf(each.startingCash);
+    if (
+      currency === null ||
+      date === null ||
+      amount === null ||
+      amount.startsWith("-") ||
+      openings.some((opening) => opening.currency === currency)
+    ) {
+      continue;
+    }
+    openings.push({ currency, date, amount });
+  }
+  return { rows, openings };
+}
 
 // The Flex Web Service reads at most 365 days per request; a longer period is
 // asked a year at a time, newest first, up to ten years, one request after
@@ -331,7 +466,7 @@ export function ibkrConnection({
         });
       }
     }
-    return operationsReading(found, skipped);
+    return { ...operationsReading(found, skipped), cash: cashOf(statements) };
   };
 
   return defineConnection({

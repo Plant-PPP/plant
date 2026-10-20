@@ -120,6 +120,7 @@ export function createImportStore(client: Client): ImportStorePort {
       printed_total_ars: number | null;
       printed_total_usd: number | null;
       skipped_rows: number;
+      sync_cash?: Database["public"]["Tables"]["imports"]["Update"]["sync_cash"];
     },
   ) => {
     const marked = await client
@@ -269,7 +270,7 @@ export function createImportStore(client: Client): ImportStorePort {
       return true;
     },
 
-    async saveOperations(importId, userId, operations, skippedRows) {
+    async saveOperations(importId, userId, operations, skippedRows, cash) {
       if (!(await clearDraft(importId, userId))) return false;
       // Amounts stay decimal strings; the cast is only for the generated types.
       const decimal = (value: string | null) =>
@@ -300,6 +301,7 @@ export function createImportStore(client: Client): ImportStorePort {
         printed_total_ars: null,
         printed_total_usd: null,
         skipped_rows: skippedRows,
+        sync_cash: cash,
       });
       return true;
     },

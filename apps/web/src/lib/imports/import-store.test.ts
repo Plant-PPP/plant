@@ -322,6 +322,10 @@ it("replaces any draft with the operations, then marks the import ready", async 
       },
     ],
     3,
+    {
+      rows: [],
+      openings: [{ currency: "USD", date: "2026-09-01", amount: "10" }],
+    },
   );
   expect(calls.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual([
     "GET /rest/v1/imports",
@@ -355,13 +359,17 @@ it("replaces any draft with the operations, then marks the import ready", async 
     printed_total_ars: null,
     printed_total_usd: null,
     skipped_rows: 3,
+    sync_cash: {
+      rows: [],
+      openings: [{ currency: "USD", date: "2026-09-01", amount: "10" }],
+    },
   });
 });
 
 it("writes no draft for an import no longer being read", async () => {
   const { store, calls } = storeWith(draftAnswers({ beingRead: false }));
   expect(await store.saveDraft(IMPORT, USER, DRAFT, 0)).toBe(false);
-  expect(await store.saveOperations(IMPORT, USER, [], 0)).toBe(false);
+  expect(await store.saveOperations(IMPORT, USER, [], 0, null)).toBe(false);
   expect(await store.saveDebts(IMPORT, USER, [], 0)).toBe(false);
   expect(calls.map(({ method }) => method)).toEqual(["GET", "GET", "GET"]);
 });

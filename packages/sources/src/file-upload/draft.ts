@@ -1,6 +1,7 @@
 import {
   Constants,
   currencySchema,
+  decimalStringSchema,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -101,6 +102,60 @@ export const draftOperationSchema = z
   })
   .strict();
 
+// The kinds of movement a broker's statement of an account's money lists.
+export const ACCOUNT_MOVEMENT_KINDS = [
+  "purchase",
+  "sale",
+  "dividend",
+  "deposit",
+  "withdrawal",
+  "credit",
+] as const;
+
+// One account side of a movement of its money, as a broker's statement lists
+// it: its number, kind, the instrument as the statement names it, the day,
+// the units, price, commission, VAT on it and other taxes, the signed amount
+// the account moved, and the account's currency. A credit is any other
+// movement of the cash (interest, a fee, a tax withheld), by its sign.
+export const accountMovementRowSchema = z
+  .object({
+    number: z.string().trim().min(1).max(40),
+    kind: z.enum(ACCOUNT_MOVEMENT_KINDS),
+    symbol: z.string().trim().min(1).max(30).nullable(),
+    date: z.iso.date(),
+    quantity: positiveDecimalSchema.nullable(),
+    price: positiveDecimalSchema.nullable(),
+    commission: nonNegativeDecimalSchema,
+    vat: nonNegativeDecimalSchema,
+    otherTaxes: nonNegativeDecimalSchema,
+    amount: decimalStringSchema,
+    currency: currencySchema,
+  })
+  .strict();
+
+// The most movements of cash one sync keeps.
+export const CASH_DRAFT_ROW_LIMIT = 2000;
+
+// What a sync of operations read of the account's money: its movements, and
+// the balance each currency had on the first day read, when the provider
+// says.
+export const cashDraftSchema = z
+  .object({
+    rows: z.array(accountMovementRowSchema).max(CASH_DRAFT_ROW_LIMIT),
+    openings: z
+      .array(
+        z
+          .object({
+            currency: currencySchema,
+            date: z.iso.date(),
+            amount: nonNegativeDecimalSchema,
+          })
+          .strict(),
+      )
+      .max(Constants.public.Enums.currency.length),
+  })
+  .strict();
+
 // What a card statement says is owed in one currency. Whatever it does not
 // print, or the readings disagreed on, is null for the review to ask: the
 // card's name, the bank that issued it, the statement's balance, its minimum
@@ -121,6 +176,8 @@ export const draftDebtSchema = z
 // A card statement owes at most one balance per currency it bills in.
 export const DRAFT_DEBT_LIMIT = 10;
 
+export type AccountMovementRow = z.infer<typeof accountMovementRowSchema>;
+export type CashDraft = z.infer<typeof cashDraftSchema>;
 export type DraftDebt = z.infer<typeof draftDebtSchema>;
 export type DraftOperation = z.infer<typeof draftOperationSchema>;
 export type DraftRow = z.infer<typeof draftRowSchema>;

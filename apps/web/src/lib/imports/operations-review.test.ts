@@ -59,5 +59,8 @@ it("is complete when every kept operation is, and one is kept", () => {
     operationsComplete([row(), row({ discarded: true, symbol: "" })], TODAY),
   ).toBe(true);
   expect(operationsComplete([row({ discarded: true })], TODAY)).toBe(false);
+  expect(operationsComplete([row({ discarded: true })], TODAY, true)).toBe(
+    true,
+  );
   expect(operationsComplete([row({ symbol: "" })], TODAY)).toBe(false);
 });

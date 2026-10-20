@@ -250,6 +250,8 @@ export type ImportItem = {
   debts?: ImportDebtRow[];
   // Holdings, operations or debts the reading left out.
   skippedRows: number;
+  // The movements of the account's cash a sync read, which confirming adds.
+  cashMovements?: number;
   origin: ImportOrigin;
   createdOn: string;
 };

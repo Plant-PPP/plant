@@ -1,4 +1,5 @@
 import {
+  type CashDraft,
   type DraftDebt,
   type DraftOperation,
   type ConnectionAdapters,
@@ -80,11 +81,14 @@ export interface ImportStorePort {
     draft: ImportDraft,
     skippedRows: number,
   ): Promise<boolean>;
+  // `cash` is what the sync read of the account's money, null when the
+  // provider gives none.
   saveOperations(
     importId: string,
     userId: string,
     operations: DraftOperation[],
     skippedRows: number,
+    cash: CashDraft | null,
   ): Promise<boolean>;
   saveDebts(
     importId: string,
@@ -323,6 +327,7 @@ export async function runImportDocument(
                 userId,
                 reading.operations,
                 reading.read.skippedRows,
+                reading.cash ?? null,
               )
             : "debts" in reading
               ? await deps.store.saveDebts(

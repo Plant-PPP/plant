@@ -1,5 +1,7 @@
 import { type Currency, decimalStringSchema } from "@plant/shared";
 
+import type { AccountMovementRow } from "./draft";
+
 // IOL's "Movimientos históricos" export: an HTML table saved as .xls, one row
 // per account side of each movement. A trade in dollars settles its units and
 // commission in the dollar account and its market fee in the peso one, both
@@ -9,27 +11,12 @@ import { type Currency, decimalStringSchema } from "@plant/shared";
 export const IOL_MOVEMENTS_ROW_LIMIT = 5000;
 export const IOL_MOVEMENTS_BYTE_LIMIT = 5 * 1024 * 1024;
 
-export type IolMovementKind =
-  "purchase" | "sale" | "dividend" | "deposit" | "withdrawal" | "credit";
+export type IolMovementKind = AccountMovementRow["kind"];
 
-// One account side of a movement as IOL prints it: its order number, kind,
-// the symbol between parentheses (a CEDEAR's dollar line keeps its D, a
-// dividend's dollar side its " US$" dropped), the trade day, the units,
-// price, commission, VAT on it and other taxes, the signed amount the account
-// moved, and the account's currency.
-export type IolMovementRow = {
-  number: string;
-  kind: IolMovementKind;
-  symbol: string | null;
-  date: string;
-  quantity: string | null;
-  price: string | null;
-  commission: string;
-  vat: string;
-  otherTaxes: string;
-  amount: string;
-  currency: Currency;
-};
+// One account side of a movement as IOL prints it: the symbol between
+// parentheses (a CEDEAR's dollar line keeps its D, a dividend's dollar side
+// its " US$" dropped), and the order number its sides share.
+export type IolMovementRow = AccountMovementRow;
 
 // The rows read and how many were skipped, or why the file is not an export
 // Plant can read: not IOL's table, or past the limits.
