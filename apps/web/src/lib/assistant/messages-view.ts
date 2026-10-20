@@ -101,30 +101,44 @@ const metadataOf = (metadata: unknown) => {
   };
 };
 
+// Each message as the transcript shows it, kept while the message is the
+// same object: the chat replaces only the one streaming, so the others keep
+// their identity and the transcript does not render them again.
+const shownOf = new WeakMap<MessageLike, ChatMessage[]>();
+
 // The chat's messages as the transcript shows them: a question's text, an
 // answer's text, its charts and what it read, the day and its dollar. An
 // answer still streaming has no day yet.
 export function toChatMessages(
   messages: readonly MessageLike[],
 ): ChatMessage[] {
-  return messages.flatMap((message): ChatMessage[] => {
-    const text = textOf(message.parts);
-    if (message.role === "user") {
-      return [{ id: message.id, role: "user", text }];
+  return messages.flatMap((message) => {
+    let shown = shownOf.get(message);
+    if (!shown) {
+      shown = chatMessageOf(message);
+      shownOf.set(message, shown);
     }
-    if (message.role !== "assistant") return [];
-    const { asOf, rate, sources, charts } = metadataOf(message.metadata);
-    return [
-      {
-        id: message.id,
-        role: "assistant",
-        text,
-        charts,
-        table: null,
-        sources,
-        asOf: asOf ?? "",
-        rate,
-      },
-    ];
+    return shown;
   });
+}
+
+function chatMessageOf(message: MessageLike): ChatMessage[] {
+  const text = textOf(message.parts);
+  if (message.role === "user") {
+    return [{ id: message.id, role: "user", text }];
+  }
+  if (message.role !== "assistant") return [];
+  const { asOf, rate, sources, charts } = metadataOf(message.metadata);
+  return [
+    {
+      id: message.id,
+      role: "assistant",
+      text,
+      charts,
+      table: null,
+      sources,
+      asOf: asOf ?? "",
+      rate,
+    },
+  ];
 }

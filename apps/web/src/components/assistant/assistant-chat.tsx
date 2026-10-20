@@ -25,6 +25,8 @@ import { settle } from "@/lib/server-action-call";
 
 import { ChatLayout } from "./chat-layout";
 
+const STREAM_THROTTLE_MS = 50;
+
 // What the user reads when a question was refused: the server's own words; a
 // page instead of words is a session that expired.
 function refusalOf(error: Error): string {
@@ -81,6 +83,9 @@ export function AssistantChat({
   const { messages, sendMessage, setMessages, status, stop } =
     useChat<AssistantUIMessage>({
       transport,
+      // An answer streams a few words a chunk: one render per frame or so
+      // reads the same.
+      experimental_throttle: STREAM_THROTTLE_MS,
       onError: (error) => {
         failure.current = error;
       },

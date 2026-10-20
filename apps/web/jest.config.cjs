@@ -6,6 +6,7 @@ module.exports = {
   moduleNameMapper: {
     "\\.(png|svg)$": "<rootDir>/src/test/static-image.ts",
     "^@/(.*)$": "<rootDir>/src/$1",
+    "^use-stick-to-bottom$": "<rootDir>/src/test/stick-to-bottom.ts",
   },
   transform: {
     "^.+\\.tsx?$": [
