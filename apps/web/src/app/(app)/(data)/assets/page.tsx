@@ -108,7 +108,10 @@ export default async function AssetsPage({
         assetsViewFailure(context, "snapshot", error),
       ),
     })),
-    readSourceConnections(client, context, { archived: false }),
+    readSourceConnections(client, context, {
+      archived: false,
+      icons: false,
+    }),
     readPortfolios(client, context, { archived: false }),
     readInstruments(client, context),
     readReferenceDollar(client, context),

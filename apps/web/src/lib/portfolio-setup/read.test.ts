@@ -292,6 +292,20 @@ it("reads accounts with their portfolio", async () => {
   ]);
 });
 
+it("leaves out the site and its icon for a page that does not show them", async () => {
+  const { client, calls } = fakeClient(ok([]), ok([]));
+  await readSourceConnections(
+    client,
+    { userId: USER, requestId: REQUEST_ID, page: "/assets", params: {} },
+    { archived: false, icons: false },
+  );
+  expect(calls[0]![0]).toEqual([
+    "select",
+    "id, institution, include_in_tax_report, " +
+      "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
+  ]);
+});
+
 it("names the table of a failed read", async () => {
   const { client } = fakeClient(
     { data: null, error: { code: "57014" }, status: 500 },

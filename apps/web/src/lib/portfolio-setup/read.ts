@@ -245,11 +245,13 @@ export function readPortfolios(
 }
 
 // The portfolio is embedded through the composite foreign key, so RLS on
-// portfolios applies to it too.
+// portfolios applies to it too. `icons: false` leaves out each account's
+// site and the icon read from it, for a page that never shows them: an icon
+// is an image of up to tens of kilobytes.
 export function readSourceConnections(
   client: SupabaseClient<Database>,
   context: ReadContext,
-  options?: ListOptions,
+  { icons = true, ...options }: ListOptions & { icons?: boolean } = {},
 ): Promise<SourceConnectionsView> {
   return readList(
     client,
@@ -257,7 +259,7 @@ export function readSourceConnections(
       table: "source_connections",
       param: "accounts",
       columns:
-        "id, institution, include_in_tax_report, website, icon, " +
+        `id, institution, include_in_tax_report, ${icons ? "website, icon, " : ""}` +
         "portfolio:portfolios!source_connections_user_id_default_portfolio_id_fkey(id, name, archived_at)",
       toRow: (data) => ({
         id: String(data.id),
