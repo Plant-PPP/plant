@@ -16,8 +16,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 
+import { useImportsRefresh } from "@/components/imports/use-imports-refresh";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -45,8 +46,6 @@ import {
 } from "@/lib/imports/review";
 import { settle } from "@/lib/server-action-call";
 import { cn } from "@/lib/utils";
-
-const FOLLOW_MS = 2000;
 
 export const DISCONNECT_FAILED = "No pudimos desconectar la cuenta.";
 
@@ -79,11 +78,14 @@ export async function connectFailure(
 // credentials leave the browser once, to be kept in Vault; the page only
 // ever shows the last characters of the field they are named by.
 export function ApiKeyCard({
+  userId = null,
   accountId,
   form,
   apiKey,
   actions,
 }: {
+  // Whose imports the card follows; the prototype's change in the browser.
+  userId?: string | null;
   accountId: string;
   form: ConnectionForm;
   apiKey: ApiKeyView | null;
@@ -109,14 +111,12 @@ export function ApiKeyCard({
       else router.refresh();
     });
 
-  // While the latest sync is queued or being read, the card asks the server
-  // again until it is ready or failed.
-  const following = apiKey?.lastSync ? isBusy(apiKey.lastSync.status) : false;
-  useEffect(() => {
-    if (!following) return;
-    const timer = setInterval(() => router.refresh(), FOLLOW_MS);
-    return () => clearInterval(timer);
-  }, [following, router]);
+  // While the latest sync is queued or being read, the page is read again on
+  // each change to it, until it is ready or failed.
+  useImportsRefresh(
+    userId,
+    apiKey?.lastSync ? isBusy(apiKey.lastSync.status) : false,
+  );
 
   const disconnect = () =>
     startTransition(async () => {

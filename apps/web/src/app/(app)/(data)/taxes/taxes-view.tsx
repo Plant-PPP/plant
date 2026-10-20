@@ -38,15 +38,21 @@ export async function TaxesView({ params }: { params: KeysetParams }) {
     params,
   };
   const today = buenosAiresDate(new Date());
-  const referenceDollar = await readReferenceDollar(client, context);
-  const read = await readCloses(client, context, { today, referenceDollar });
+  const [read, excluded] = await Promise.all([
+    readCloses(client, context, {
+      today,
+      referenceDollar: readReferenceDollar(client, context),
+    }),
+    readExclusions(client).catch((error: unknown) =>
+      assetsViewFailure(context, "taxes", error),
+    ),
+  ]);
   const { state } = read;
   const years = taxYears(state);
   const year = taxYearOf(params.year, years, today);
-  const [officialBuy, euroBuy, excluded] = await Promise.all([
+  const [officialBuy, euroBuy] = await Promise.all([
     readOfficialBuy(client, taxDate(year, today), "official"),
     readOfficialBuy(client, taxDate(year, today), "eur"),
-    readExclusions(client),
   ]).catch((error: unknown) => assetsViewFailure(context, "taxes", error));
 
   let report: TaxReport;

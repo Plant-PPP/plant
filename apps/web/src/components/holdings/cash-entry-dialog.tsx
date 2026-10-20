@@ -18,7 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { parseAmountInput } from "@/lib/format/amount";
-import { type CashEntryKind, CASH_ENTRY_KINDS } from "@/lib/cash/input";
+import {
+  type CashEntryKind,
+  CASH_CURRENCIES,
+  CASH_ENTRY_KINDS,
+} from "@/lib/cash/input";
 import {
   CASH_ENTRY_LABELS,
   CASH_MESSAGES,
@@ -33,8 +37,6 @@ export type CashEntryFields = {
   amount: string;
   note: string;
 };
-
-export const CASH_CURRENCIES: readonly Currency[] = ["ARS", "USD"];
 
 // One movement of an account's cash typed by hand: the opening balance of
 // one currency (`opening`), or a deposit or a withdrawal in pesos or dollars.

@@ -108,7 +108,10 @@ export default async function AssetsPage({
         assetsViewFailure(context, "snapshot", error),
       ),
     })),
-    readSourceConnections(client, context, { archived: false }),
+    readSourceConnections(client, context, {
+      archived: false,
+      icons: false,
+    }),
     readPortfolios(client, context, { archived: false }),
     readInstruments(client, context),
     readReferenceDollar(client, context),
@@ -194,6 +197,11 @@ export default async function AssetsPage({
         unit={unit}
         referenceUnit={reference}
         filter={filter}
+        live={{
+          snapshot: priced.snapshot,
+          referenceDollar: dollar,
+          truncated: holdings.activeTruncated,
+        }}
         params={context.params}
         accounts={accounts.active}
         portfolios={portfolios.active}

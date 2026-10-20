@@ -39,7 +39,7 @@ export default async function ImportPage() {
     params: {},
   };
   const [accounts, reads] = await Promise.all([
-    readSourceConnections(client, context),
+    readSourceConnections(client, context, { icons: false }),
     Promise.all([readImports(client), termsAccepted(client)]).catch(
       (error: unknown) => {
         serverLog.error(

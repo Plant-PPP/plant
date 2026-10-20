@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
     "@plant/sources",
   ],
   poweredByHeader: false,
+  // Memoizes components and hooks at build time, so a parent's render does
+  // not redo every child's.
+  reactCompiler: true,
+  experimental: {
+    // Imported as namespaces from one package, which Next does not split by
+    // default.
+    optimizePackageImports: ["radix-ui"],
+  },
   // Every route. Pages also get their CSP, with a per-request nonce, from
   // proxy.ts; X-Frame-Options covers the routes it skips.
   async headers() {

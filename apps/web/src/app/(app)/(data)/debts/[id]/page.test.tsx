@@ -17,6 +17,7 @@ jest.mock("@/lib/request-id-server", () => ({
 jest.mock("@/lib/holdings/read", () => ({
   readReferenceDollar: async () => "mep",
   readHoldings: async () => ({ active: [], activeTruncated: false }),
+  readInstruments: async () => ({ rows: [], truncated: false }),
 }));
 jest.mock("@/lib/debts/read", () => ({
   ...jest.requireActual("@/lib/debts/read"),
@@ -28,8 +29,9 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),
 }));
 jest.mock("@/lib/ledger/read", () => ({
-  readLedger: async () => ({
-    ledger: { manualPrices: [], manualRates: [], instruments: [] },
+  readManualQuotes: async () => ({
+    manualPrices: [],
+    manualRates: [],
     truncated: false,
   }),
 }));

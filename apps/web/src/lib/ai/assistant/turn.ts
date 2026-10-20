@@ -167,7 +167,10 @@ export async function runAssistantTurn({
     return plainText(QUOTA_USED, 429);
   }
 
-  const existing = await store.conversation(userId, conversationId);
+  const [existing, history] = await Promise.all([
+    store.conversation(userId, conversationId),
+    store.history(userId, conversationId, HISTORY_TURNS),
+  ]);
   const unit = existing?.unit ?? asked;
   const userMessage: StoredMessage = {
     id: newId(),
@@ -230,7 +233,6 @@ export async function runAssistantTurn({
     return createUIMessageStreamResponse({ stream });
   }
 
-  const history = await store.history(userId, conversationId, HISTORY_TURNS);
   const data = assistantData({ client, context, unit, today });
   // What the answer read, gathered from its tools' results.
   const read: AnswerMetadata & { charts: ChartPart[] } = {

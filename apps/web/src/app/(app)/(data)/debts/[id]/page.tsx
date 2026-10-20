@@ -34,9 +34,13 @@ import {
 import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
-import { readHoldings, readReferenceDollar } from "@/lib/holdings/read";
+import {
+  readHoldings,
+  readInstruments,
+  readReferenceDollar,
+} from "@/lib/holdings/read";
 import { pricedSnapshotOf } from "@/lib/ledger/ledger";
-import { readLedger } from "@/lib/ledger/read";
+import { readManualQuotes } from "@/lib/ledger/read";
 import { serverLog } from "@/lib/log/server-log";
 import { navTitle } from "@/lib/navigation";
 import { contextFields } from "@/lib/portfolio-setup/read";
@@ -84,32 +88,38 @@ export default async function DebtPage({
   };
   if (!z.uuid().safeParse(id).success) missing();
   const today = buenosAiresDate(new Date());
-  const [debt, events, collateral, held, dollar, { ledger: read }] =
+  const debtRead = readLiability(client, id).catch((error: unknown) =>
+    assetsViewFailure(context, "debts", error),
+  );
+  const heldRead = readHoldings(client, context);
+  const [debt, events, collateral, held, dollar, instruments, manual, quotes] =
     await Promise.all([
-      readLiability(client, id).catch((error: unknown) =>
-        assetsViewFailure(context, "debts", error),
-      ),
+      debtRead,
       readLiabilityEvents(client, id).catch((error: unknown) =>
         assetsViewFailure(context, "debt_events", error),
       ),
       readCollateral(client, id).catch((error: unknown) =>
         assetsViewFailure(context, "debt_collateral", error),
       ),
-      readHoldings(client, context),
+      heldRead,
       readReferenceDollar(client, context),
-      readLedger(client, { today, referenceDollar: "mep" }).catch(
-        (error: unknown) => assetsViewFailure(context, "ledger", error),
+      readInstruments(client, context),
+      readManualQuotes(client).catch((error: unknown) =>
+        assetsViewFailure(context, "ledger", error),
       ),
+      Promise.all([debtRead, heldRead]).then(([found, rows]) => {
+        const forHoldings = quotesNeeded(rows.active.map((row) => row.holding));
+        const forDebt = liabilityQuotesNeeded(found ? [found] : []);
+        return readSnapshot(createQuoteReader(client), today, {
+          fxKinds: [...new Set([...forHoldings.fxKinds, ...forDebt.fxKinds])],
+          symbols: [...new Set([...forHoldings.symbols, ...forDebt.symbols])],
+        }).catch((error: unknown) =>
+          assetsViewFailure(context, "snapshot", error),
+        );
+      }),
     ]);
   if (!debt) return missing();
-  const ledger = { ...read, referenceDollar: dollar };
-  const forHoldings = quotesNeeded(held.active.map((row) => row.holding));
-  const forDebt = liabilityQuotesNeeded([debt]);
-  const quotes = await readSnapshot(createQuoteReader(client), today, {
-    fxKinds: [...new Set([...forHoldings.fxKinds, ...forDebt.fxKinds])],
-    symbols: [...new Set([...forHoldings.symbols, ...forDebt.symbols])],
-  }).catch((error: unknown) => assetsViewFailure(context, "snapshot", error));
-  const snapshot = pricedSnapshotOf(ledger, quotes.snapshot).snapshot;
+  const snapshot = pricedSnapshotOf(manual, quotes.snapshot).snapshot;
   const reference = referenceUnit(dollar);
   const unit =
     parseAssetsParams(query, { portfolioIds: [], tabs: TABS, salesYears: [] })
@@ -144,10 +154,10 @@ export default async function DebtPage({
       referenceUnit={reference}
       referenceDollar={dollar}
       params={query}
-      instruments={ledger.instruments}
+      instruments={instruments.rows}
       {...debtPageInputs(
         held.active,
-        ledger.instruments,
+        instruments.rows,
         debt,
         snapshot,
         unit,

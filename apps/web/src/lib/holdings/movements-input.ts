@@ -85,6 +85,8 @@ export type MovementsInput = {
   revisions: ReadonlyMap<string, number>;
   sales: SalesSlice;
   years: readonly string[];
+  // The first page of the page's own scope, read with the page.
+  firstMovements?: MovementsPage;
   loadMovements: (
     scope: MovementScope,
     unit: Denominator,

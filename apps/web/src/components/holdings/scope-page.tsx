@@ -59,6 +59,7 @@ export function ScopePage({
   backHref,
   revision,
   loadMovements,
+  firstMovements,
   connection,
   cash,
 }: {
@@ -77,6 +78,7 @@ export function ScopePage({
   // Changes when any of its movements does, so the list reads them again.
   revision: string;
   loadMovements: MovementsInput["loadMovements"];
+  firstMovements?: MovementsInput["firstMovements"];
   // An exchange account's connection by API, under its header.
   connection?: ReactNode;
   // An account's cash with its opening balances and history, first.
@@ -219,6 +221,7 @@ export function ScopePage({
                 )
               }
               load={loadMovements}
+              first={firstMovements}
               holdingName={(holdingId) => {
                 const row = byId.get(holdingId);
                 return row ? holdingName(row.holding, names) : "";

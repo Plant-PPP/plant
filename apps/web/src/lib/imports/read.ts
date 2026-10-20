@@ -330,13 +330,14 @@ function reviewRow(
 }
 
 // One of the user's imports with its draft, for its review; null when it is
-// not theirs. `instruments` are the ones a row may be.
+// not theirs. `instruments` are the ones a row may be; a promise lets the
+// caller read them alongside.
 export async function readImportForReview(
   client: Client,
   id: string,
-  instruments: readonly InstrumentRow[],
+  instruments: readonly InstrumentRow[] | PromiseLike<readonly InstrumentRow[]>,
 ): Promise<ImportItem | null> {
-  const [found, items, operations, debts] = await Promise.all([
+  const [found, items, operations, debts, known] = await Promise.all([
     client
       .from("imports")
       .select(
@@ -371,6 +372,7 @@ export async function readImportForReview(
       )
       .eq("import_id", id)
       .order("position"),
+    instruments,
   ]);
   const failure =
     classifyPostgrestResult(found, 200) ??
@@ -391,7 +393,7 @@ export async function readImportForReview(
   const row = rowSchema.parse(data);
   const printed = totalsSchema.parse(data);
   const index = instrumentIndex(
-    instruments.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
+    known.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
   );
   const origin = importOrigin(row);
   return {

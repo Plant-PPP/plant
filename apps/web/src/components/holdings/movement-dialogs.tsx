@@ -40,7 +40,7 @@ import type {
   SourceConnectionRow,
 } from "@/lib/portfolio-setup/read";
 
-import { MovementDialog } from "./movement-dialog";
+import { MovementDialog } from "./lazy-dialogs";
 import {
   type MovementFields,
   newMovementFields,

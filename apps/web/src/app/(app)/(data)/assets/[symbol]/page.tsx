@@ -29,6 +29,7 @@ import { readReferenceDollar } from "@/lib/holdings/read";
 import { holdingsValuation } from "@/lib/holdings/valuation-view";
 import {
   instrumentHoldings,
+  movementsPage,
   positionsOf,
   pricedSnapshotOf,
 } from "@/lib/ledger/ledger";
@@ -132,6 +133,7 @@ export default async function InstrumentPage({
         positions: positionsOf(ledger, unit),
         revisions: ledger.revisions,
         loadMovements,
+        firstMovements: movementsPage(ledger, { symbol }, unit, null),
         transferCost,
         quoteOn,
       }}

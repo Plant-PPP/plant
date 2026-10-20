@@ -63,12 +63,18 @@ export async function readCloses(
   {
     today,
     referenceDollar,
-  }: { today: string; referenceDollar: ReferenceDollar },
+  }: {
+    today: string;
+    // A promise lets the caller start this read before the profile's.
+    referenceDollar: ReferenceDollar | PromiseLike<ReferenceDollar>;
+  },
 ): Promise<ClosesRead> {
-  const [holdings, read, debts, events, cash] = await Promise.all([
+  const [reference, holdings, read, debts, events, cash] = await Promise.all([
+    referenceDollar,
     readHoldings(client, context, { archived: false }),
-    readLedger(client, { today, referenceDollar }).catch((error: unknown) =>
-      assetsViewFailure(context, "ledger", error),
+    // The ledger takes the reference dollar only to carry it.
+    readLedger(client, { today, referenceDollar: "mep" }).catch(
+      (error: unknown) => assetsViewFailure(context, "ledger", error),
     ),
     readLiabilities(client).catch((error: unknown) =>
       assetsViewFailure(context, "debts", error),
@@ -103,6 +109,7 @@ export async function readCloses(
         );
   const unquoted: ClosesState = {
     ...read.ledger,
+    referenceDollar: reference,
     holdings: [...read.ledger.holdings, ...others, ...emptied],
     liabilities: debts.active,
     liabilityEvents: events.byLiability,

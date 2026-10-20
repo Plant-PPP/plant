@@ -77,3 +77,21 @@ it("shows the charts kept with an answer, leaving out what is not one", () => {
     charts: [{ ...chart, points: [{ label: "Hipoteca", value: "100" }] }],
   });
 });
+
+it("keeps a message's view while the message is the same, as an answer streams after it", () => {
+  const question = {
+    id: "q1",
+    role: "user",
+    parts: [{ type: "text", text: "¿Cuánto tengo?" }],
+  };
+  const streaming = (text: string) => ({
+    id: "a1",
+    role: "assistant",
+    parts: [{ type: "text", text }],
+  });
+  const [first, partial] = toChatMessages([question, streaming("Tenés")]);
+  const [again, more] = toChatMessages([question, streaming("Tenés $ 10")]);
+  expect(again).toBe(first);
+  expect(more).not.toBe(partial);
+  expect(more).toMatchObject({ text: "Tenés $ 10" });
+});

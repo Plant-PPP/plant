@@ -23,7 +23,7 @@ jest.mock("@/lib/quotes/quote-reader", () => ({
 }));
 const manual = { manualPrices: [] as unknown[], manualRates: [] as unknown[] };
 jest.mock("@/lib/ledger/read", () => ({
-  readLedger: async () => ({ ledger: manual, truncated: false }),
+  readManualQuotes: async () => ({ ...manual, truncated: false }),
 }));
 jest.mock("@/components/debts/debts-setup", () => ({
   DebtsSetup: () => null,
@@ -33,6 +33,7 @@ jest.mock("@/components/prototype/prototype-debts", () => ({
 }));
 
 import type { LiabilitiesValue } from "@plant/core";
+import { buenosAiresDate } from "@plant/shared";
 import type * as React from "react";
 
 import { captureServerLog } from "@/lib/log/capture-server-log";
@@ -69,6 +70,9 @@ const UVA_LOAN = {
   anchored_on: "2026-01-01",
 };
 
+// The day the page values at, so the quotes are never too old for it.
+const TODAY = buenosAiresDate(new Date());
+
 let lines: Record<string, unknown>[];
 beforeEach(() => {
   lines = captureServerLog();
@@ -82,8 +86,8 @@ beforeEach(() => {
   });
   read.mockResolvedValue({
     fxRates: [
-      { kind: "uva", rate_date: "2026-10-12", sell: "1600" },
-      { kind: "mep", rate_date: "2026-10-12", sell: "1250" },
+      { kind: "uva", rate_date: TODAY, sell: "1600" },
+      { kind: "mep", rate_date: TODAY, sell: "1250" },
     ],
     prices: [],
   });
@@ -121,7 +125,7 @@ it("values in the unit ?unit names", async () => {
 });
 
 it("values with the user's manual dollar rate, as Resumen does", async () => {
-  manual.manualRates = [{ kind: "mep", rate_date: "2026-10-12", sell: "1600" }];
+  manual.manualRates = [{ kind: "mep", rate_date: TODAY, sell: "1600" }];
   try {
     // 160000 pesos at the user's 1600 a dollar.
     expect((await render()).valued.total).toBe("100");

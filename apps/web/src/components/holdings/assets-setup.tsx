@@ -1,6 +1,11 @@
 "use client";
 
-import type { Denominator, RealEstateFigures } from "@plant/core";
+import type {
+  Denominator,
+  QuoteSnapshot,
+  RealEstateFigures,
+  ReferenceDollar,
+} from "@plant/core";
 import { compareDecimals } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -15,6 +20,7 @@ import {
 import { type ReactNode, useId, useState } from "react";
 import Link from "next/link";
 
+import { usePreload } from "@/hooks/use-preload";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageButton } from "@/components/ui/page-button";
 import {
@@ -101,6 +107,7 @@ import type {
 import {
   type HoldingsValuation,
   hasUnitPrice,
+  holdingsValuation,
 } from "@/lib/holdings/valuation-view";
 import { PAGE_ROW_LIMIT, SALES_LIMIT } from "@/lib/portfolio-setup/limits";
 import { HOLDING_LINKS, WRITE_MESSAGES } from "@/lib/portfolio-setup/messages";
@@ -121,11 +128,15 @@ import { InstitutionIcon } from "@/components/portfolio-setup/institution-field"
 import { AccountsBreakdown } from "./accounts-breakdown";
 import { AssetsFilters } from "./assets-filters";
 import { AssetsSummary } from "./assets-summary";
-import { RealEstateDialog } from "./real-estate-dialog";
 import { type SheetFields, sheetFields } from "./real-estate-fields";
-import { RenewDialog } from "./renew-dialog";
-import { type ChosenHolding, HoldingDialog } from "./holding-dialog";
-import { PriceDialog } from "./price-dialog";
+import type { ChosenHolding } from "./holding-dialog";
+import {
+  HoldingDialog,
+  preloadHoldingDialogs,
+  PriceDialog,
+  RealEstateDialog,
+  RenewDialog,
+} from "./lazy-dialogs";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   type HoldingFields,
@@ -141,7 +152,7 @@ import {
   PortfoliosCell,
   TickerChip,
 } from "./holding-cells";
-import { useAssetsUrl } from "./assets-url";
+import { answeredInPlace, useAssetsUrl } from "./assets-url";
 import { PortfoliosBreakdown } from "./portfolios-breakdown";
 import { instrumentPreset, useMovementDialogs } from "./movement-dialogs";
 import { SalesSummary } from "./sales-summary";
@@ -268,10 +279,11 @@ type MovementProps =
 
 export function AssetsSetup({
   holdings,
-  valuation,
+  valuation: rendered,
   unit,
   referenceUnit,
-  filter,
+  filter: renderedFilter,
+  live,
   params,
   accounts,
   portfolios,
@@ -291,6 +303,13 @@ export function AssetsSetup({
   unit: Denominator;
   referenceUnit: Denominator;
   filter: AssetsFilter;
+  // Today's quotes the valuation took, for a page that filters and values its
+  // holdings itself as the filters change, without asking the server.
+  live?: {
+    snapshot: QuoteSnapshot;
+    referenceDollar: ReferenceDollar;
+    truncated: boolean;
+  };
   params: KeysetParams;
   accounts: SourceConnectionRow[];
   portfolios: PortfolioRow[];
@@ -312,9 +331,20 @@ export function AssetsSetup({
       change ? applyChange(state, change) : state,
   );
   const card = useSetupCard({ run, pending });
-  const url = useAssetsUrl(params);
+  usePreload(preloadHoldingDialogs);
+  const url = useAssetsUrl(
+    params,
+    live && ((next) => answeredInPlace(params, next, tabs)),
+  );
   // The tab shows at once; its data is already on the page.
   const tab = tabOf(url.params.tab, tabs);
+  const filter = live
+    ? parseAssetsParams(url.params, {
+        portfolioIds: portfolios.map(({ id }) => id),
+        tabs,
+        salesYears: [],
+      }).filter
+    : renderedFilter;
   const { archiving, delete: deleteHolding } = actions;
   // The movement columns, rows and tab, for a page that passes movements.
   const movement = movements &&
@@ -332,6 +362,17 @@ export function AssetsSetup({
     initialError?: string;
   } | null>(null);
   const names = instrumentNames(instruments);
+  const valuation = live
+    ? holdingsValuation({
+        holdings: holdings.active.filter((row) =>
+          matchesFilter(row, filter, names),
+        ),
+        truncated: live.truncated,
+        snapshot: live.snapshot,
+        unit,
+        referenceDollar: live.referenceDollar,
+      })
+    : rendered;
   // A placement at a rate with no name goes by its kind, where the page
   // knows it.
   const kindLabel = (row: HoldingRow) =>

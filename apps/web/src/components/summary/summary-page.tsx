@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
-import { useId, useState } from "react";
+import { Suspense, useId, useState } from "react";
 
 import { AccountsBreakdown } from "@/components/holdings/accounts-breakdown";
 import { type ScopeHrefs, scopeLink } from "@/lib/holdings/scope-hrefs";
@@ -118,7 +118,7 @@ export function SummaryPage({
   closesQuery: string;
   // The assistant's charts the user pinned, drawn again, and the way to let
   // one go.
-  pinned?: readonly PinnedChart[];
+  pinned?: readonly PinnedChart[] | Promise<readonly PinnedChart[]>;
   onUnpin?: (id: string) => Promise<boolean>;
   // The price alerts met and not seen yet, whether they could not be read,
   // and the way to mark one seen.
@@ -422,7 +422,11 @@ export function SummaryPage({
           )}
         </Section>
 
-        {onUnpin && <PinnedCharts pinned={pinned} onUnpin={onUnpin} />}
+        {onUnpin && (
+          <Suspense fallback={null}>
+            <PinnedCharts pinned={pinned} onUnpin={onUnpin} />
+          </Suspense>
+        )}
       </>
     );
   }

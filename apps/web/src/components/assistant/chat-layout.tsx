@@ -1,8 +1,11 @@
 "use client";
 
+import { ArrowDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { useStickToBottom } from "use-stick-to-bottom";
 
 import { FilterSelect } from "@/components/holdings/filter-select";
+import { IconButton } from "@/components/ui/icon-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   CHAT_UNITS,
@@ -23,6 +26,7 @@ export function ChatLayout({
   conversations,
   active,
   onOpen,
+  onPreview,
   onDelete,
   messages,
   arrivedId,
@@ -41,6 +45,8 @@ export function ChatLayout({
   active: ConversationSummary | undefined;
   // Opens a conversation, or a new one with null.
   onOpen: (conversationId: string | null) => void;
+  // Starts reading a conversation the user is about to open.
+  onPreview?: (conversationId: string) => void;
   // Deletes a conversation once the user confirmed it, and says so.
   onDelete: (conversationId: string) => void;
   messages: readonly ChatMessage[];
@@ -67,36 +73,17 @@ export function ChatLayout({
   const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
   const questionField = useRef<HTMLTextAreaElement>(null);
   const history = useRef<HTMLButtonElement>(null);
-  const scroller = useRef<HTMLDivElement>(null);
 
   // A conversation follows its last message while the user reads at its end,
   // as an answer comes in; an empty one stays at its top.
-  const following = useRef(true);
+  const { scrollRef, contentRef, isAtBottom, scrollToBottom } =
+    useStickToBottom({ initial: "instant", resize: "smooth" });
   const activeId = active?.id;
+  const started = messages.length > 0 || waiting !== null;
   useEffect(() => {
-    const region = scroller.current;
-    if (!region) return;
-    following.current = messages.length > 0 || waiting !== null;
-    region.scrollTop = following.current ? region.scrollHeight : 0;
-  }, [activeId, messages.length, waiting]);
-  useEffect(() => {
-    const region = scroller.current;
-    const content = region?.firstElementChild;
-    if (!region || !content) return;
-    const onScroll = () => {
-      following.current =
-        region.scrollHeight - region.scrollTop - region.clientHeight < 48;
-    };
-    const observer = new ResizeObserver(() => {
-      if (following.current) region.scrollTop = region.scrollHeight;
-    });
-    region.addEventListener("scroll", onScroll, { passive: true });
-    observer.observe(content);
-    return () => {
-      region.removeEventListener("scroll", onScroll);
-      observer.disconnect();
-    };
-  }, []);
+    if (started) void scrollToBottom("instant");
+    else if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [activeId, messages.length, started, scrollRef, scrollToBottom]);
 
   function ask(question: string) {
     const taken = onAsk(question);
@@ -114,6 +101,7 @@ export function ChatLayout({
         active={active}
         historyRef={history}
         onOpen={onOpen}
+        onPreview={onPreview}
         onDelete={() => active && setDeleting(active)}
       />
       <p role="status" className="sr-only">
@@ -123,7 +111,7 @@ export function ChatLayout({
           the page past the window. */}
       <div className="relative min-h-[12rem] flex-1">
         <div
-          ref={scroller}
+          ref={scrollRef}
           tabIndex={0}
           role="region"
           aria-label="Conversación"
@@ -137,8 +125,18 @@ export function ChatLayout({
             questionsLeft={questionsLeft}
             disclaimerId={disclaimerId}
             onAsk={(question) => void ask(question)?.catch(() => {})}
+            contentRef={contentRef}
           />
         </div>
+        {started && !isAtBottom && (
+          <IconButton
+            icon={ArrowDown}
+            tooltip="Ir al final"
+            label="Ir al final de la conversación"
+            onClick={() => void scrollToBottom()}
+            className="bg-background absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border shadow-sm"
+          />
+        )}
       </div>
       <div className="flex-none pt-2">
         <ChatComposer

@@ -43,9 +43,8 @@ import { summaryValuation } from "@/lib/summary/valuation";
 import type { KeysetParams } from "@/lib/supabase/keyset";
 import { createClient } from "@/lib/supabase/server";
 
-// The user's closes in the unit ?unit= names, when closes have it, else in
-// the reference dollar's.
-async function closesView(params: KeysetParams) {
+// Who is reading, and through which client.
+async function viewContext(params: KeysetParams) {
   const claims = await getSessionClaims();
   const client = await createClient();
   const context: ReadContext = {
@@ -54,13 +53,25 @@ async function closesView(params: KeysetParams) {
     page: "/",
     params,
   };
-  const today = buenosAiresDate(new Date());
-  const referenceDollar = await readReferenceDollar(client, context);
+  return { client, context, today: buenosAiresDate(new Date()) };
+}
+
+// The user's closes in the unit ?unit= names, when closes have it, else in
+// the reference dollar's.
+async function closesView({
+  client,
+  context,
+  today,
+}: Awaited<ReturnType<typeof viewContext>>) {
+  const referenceDollar = readReferenceDollar(client, context);
   const read = await readCloses(client, context, { today, referenceDollar });
-  const reference = referenceUnit(referenceDollar);
+  const reference = referenceUnit(await referenceDollar);
   const unit = closeUnit(
-    parseAssetsParams(params, { portfolioIds: [], tabs: TABS, salesYears: [] })
-      .unit,
+    parseAssetsParams(context.params, {
+      portfolioIds: [],
+      tabs: TABS,
+      salesYears: [],
+    }).unit,
     reference,
   );
   let closes: MonthClose[];
@@ -90,13 +101,14 @@ const closesFields = ({
 // The price alerts the quotes met that the user has not seen; none, logged
 // and flagged, when they could not be read.
 async function metAlerts({
+  client,
   context,
-}: Awaited<ReturnType<typeof closesView>>): Promise<{
+}: Awaited<ReturnType<typeof viewContext>>): Promise<{
   alerts: PriceAlert[];
   readFailed: boolean;
 }> {
   try {
-    const alerts = (await readAlerts(await createClient())).filter(
+    const alerts = (await readAlerts(client)).filter(
       (each) => each.metOn !== null && each.seenAt === null,
     );
     return { alerts, readFailed: false };
@@ -110,18 +122,13 @@ async function metAlerts({
   }
 }
 
-// The charts the user pinned from the assistant, each drawn again from today's
-// data in Resumen's unit (the reference dollar's when the assistant has no
-// such unit). One that fails is shown as not drawn, never the page.
-async function pinnedCharts({
+// The user's pins; none, logged, when they could not be read.
+async function pinsOf({
+  client,
   context,
-  unit,
-  reference,
-}: Awaited<ReturnType<typeof closesView>>): Promise<PinnedChart[]> {
-  const client = await createClient();
-  let pins: Pin[];
+}: Awaited<ReturnType<typeof viewContext>>): Promise<Pin[]> {
   try {
-    pins = await readPins(client);
+    return await readPins(client);
   } catch (error) {
     serverLog.error(
       SUMMARY_VIEW_EVENT,
@@ -130,8 +137,18 @@ async function pinnedCharts({
     );
     return [];
   }
-  if (pins.length === 0) return [];
-  const today = buenosAiresDate(new Date());
+}
+
+// The charts the user pinned from the assistant, each drawn again from the
+// data Resumen read, in its unit (the reference dollar's when the assistant
+// has no such unit). One that fails is shown as not drawn, never the page.
+async function pinnedCharts(
+  { client, context, today }: Awaited<ReturnType<typeof viewContext>>,
+  pins: Promise<Pin[]>,
+  { read, unit, reference }: Awaited<ReturnType<typeof closesView>>,
+): Promise<PinnedChart[]> {
+  const pinned = await pins;
+  if (pinned.length === 0) return [];
   const data = assistantData({
     client,
     context,
@@ -139,9 +156,10 @@ async function pinnedCharts({
       ? (unit as ChatUnit)
       : reference,
     today,
+    read: Promise.resolve(read),
   });
   return Promise.all(
-    pins.map(async (pin): Promise<PinnedChart> => {
+    pinned.map(async (pin): Promise<PinnedChart> => {
       try {
         const drawn = await data.chart(pin.topic, pin.portfolioId ?? undefined);
         return "error" in drawn
@@ -162,7 +180,10 @@ async function pinnedCharts({
 // Resumen: the net worth today, how it is split, and its closes; with
 // ?portfolio=, one portfolio's assets today.
 export async function SummaryView({ params }: { params: KeysetParams }) {
-  const view = await closesView(params);
+  const at = await viewContext(params);
+  const alerts = metAlerts(at);
+  const pins = pinsOf(at);
+  const view = await closesView(at);
   const { context, read, reference, unit, closes, years } = view;
   const { state } = read;
   const {
@@ -194,7 +215,7 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
     "plant.summary.portfolio": portfolio !== null,
   });
 
-  const met = await metAlerts(view);
+  const met = await alerts;
   return (
     <SummaryPage
       closes={closes}
@@ -209,7 +230,7 @@ export async function SummaryView({ params }: { params: KeysetParams }) {
       params={params}
       hrefs={SCOPE_HREFS}
       closesQuery={closesQuery(unit, reference)}
-      pinned={await pinnedCharts(view)}
+      pinned={pinnedCharts(at, pins, view)}
       onUnpin={unpinChart}
       metAlerts={met.alerts}
       alertsReadFailed={met.readFailed}
@@ -227,7 +248,7 @@ export async function CloseView({
   period: string;
   params: KeysetParams;
 }) {
-  const view = await closesView(params);
+  const view = await closesView(await viewContext(params));
   const { context, read, reference, unit, years } = view;
   const backHref = `/${closesQuery(unit, reference, backYear(period, years))}`;
   const year = /^\d{4}$/.test(period)

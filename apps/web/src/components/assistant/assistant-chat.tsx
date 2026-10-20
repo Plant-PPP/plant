@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -24,6 +25,15 @@ import { textOf, toChatMessages } from "@/lib/assistant/messages-view";
 import { settle } from "@/lib/server-action-call";
 
 import { ChatLayout } from "./chat-layout";
+
+const STREAM_THROTTLE_MS = 50;
+
+// A conversation as the history opens it, kept in the browser's cache so
+// opening it again, or after hovering it, needs no wait.
+const conversationQuery = (id: string) => ({
+  queryKey: ["assistant", "conversation", id],
+  queryFn: () => loadConversation(id),
+});
 
 // What the user reads when a question was refused: the server's own words; a
 // page instead of words is a session that expired.
@@ -68,6 +78,7 @@ export function AssistantChat({
   defaultUnit: ChatUnit;
 }) {
   const router = useRouter();
+  const queries = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fresh, setFresh] = useState(() => crypto.randomUUID());
   const [unit, setUnit] = useState<ChatUnit>(defaultUnit);
@@ -81,6 +92,9 @@ export function AssistantChat({
   const { messages, sendMessage, setMessages, status, stop } =
     useChat<AssistantUIMessage>({
       transport,
+      // An answer streams a few words a chunk: one render per frame or so
+      // reads the same.
+      experimental_throttle: STREAM_THROTTLE_MS,
       onError: (error) => {
         failure.current = error;
       },
@@ -123,8 +137,11 @@ export function AssistantChat({
       { body: { conversationId, unit: active?.unit ?? unit } },
     ).then(() => {
       // The month's questions and the history come back from the server
-      // either way.
+      // either way; the conversation kept in the browser is behind.
       router.refresh();
+      queries.removeQueries({
+        queryKey: conversationQuery(conversationId).queryKey,
+      });
       const error = failure.current;
       if (!error) return;
       // The question and whatever came of it were not kept: they leave the
@@ -147,10 +164,15 @@ export function AssistantChat({
       return;
     }
     setOpening(true);
-    const loaded = await settle(loadConversation(conversationId));
+    const loaded = await settle(
+      queries.fetchQuery(conversationQuery(conversationId)),
+    );
     if (loading.current !== conversationId) return;
     setOpening(false);
     if (loaded === "rejected" || loaded === null) {
+      queries.removeQueries({
+        queryKey: conversationQuery(conversationId).queryKey,
+      });
       // The conversation on screen stays the open one.
       toast.error("No pudimos abrir la conversación. Probá de nuevo.");
       return;
@@ -164,6 +186,7 @@ export function AssistantChat({
       conversations={conversations}
       active={active}
       onOpen={(id) => void open(id)}
+      onPreview={(id) => void queries.prefetchQuery(conversationQuery(id))}
       onDelete={(id) => {
         void settle(deleteConversation(id)).then((deleted) => {
           if (deleted !== true) {
@@ -171,6 +194,7 @@ export function AssistantChat({
             return;
           }
           toast.success("Borraste la conversación");
+          queries.removeQueries({ queryKey: conversationQuery(id).queryKey });
           if (id === activeId) void open(null);
           router.refresh();
         });

@@ -25,6 +25,7 @@ import type {
   MovementLine,
   MovementScope,
   MovementsInput,
+  MovementsPage,
 } from "@/lib/holdings/movements-input";
 import { settle } from "@/lib/server-action-call";
 
@@ -53,10 +54,14 @@ export function MovementsTable({
   limit,
   actions = [],
   pending = false,
+  first,
 }: {
   scope: MovementScope;
   unit: Denominator;
   load: MovementsInput["loadMovements"];
+  // The first page, when the server read it with the page: the table shows
+  // it at once instead of asking for it.
+  first?: MovementsPage;
   // Names each row's holding; a list of one holding's movements has none.
   holdingName?: (holdingId: string) => string;
   // Each instrument's type by symbol, so a bond's price shows per 100
@@ -67,26 +72,36 @@ export function MovementsTable({
   actions?: RowAction<MovementLine>[];
   pending?: boolean;
 }) {
-  const [loaded, setLoaded] = useState<Loaded>({ kind: "loading", rows: [] });
+  // What the table shows once the page after `cursor` came back, after
+  // `rows`.
+  function loadedOf(
+    page: MovementsPage | "rejected",
+    cursor: MovementCursor | null,
+    rows: Row[],
+  ): Loaded {
+    if (page === "rejected" || !page.ok) {
+      return { kind: "failed", rows, retry: cursor };
+    }
+    const shown = [
+      ...rows,
+      ...page.rows.map((line) => ({ ...line, id: line.movement.id })),
+    ];
+    return {
+      kind: "ready",
+      rows: limit === undefined ? shown : shown.slice(0, limit),
+      next: limit === undefined ? page.next : null,
+    };
+  }
+
+  const [loaded, setLoaded] = useState<Loaded>(() =>
+    first ? loadedOf(first, null, []) : { kind: "loading", rows: [] },
+  );
 
   // Reads the page after `cursor` and shows it after `rows`.
   function fetchPage(cursor: MovementCursor | null, rows: Row[]) {
     let cancelled = false;
     void settle(load(scope, unit, cursor)).then((page) => {
-      if (cancelled) return;
-      if (page === "rejected" || !page.ok) {
-        setLoaded({ kind: "failed", rows, retry: cursor });
-        return;
-      }
-      const shown = [
-        ...rows,
-        ...page.rows.map((line) => ({ ...line, id: line.movement.id })),
-      ];
-      setLoaded({
-        kind: "ready",
-        rows: limit === undefined ? shown : shown.slice(0, limit),
-        next: limit === undefined ? page.next : null,
-      });
+      if (!cancelled) setLoaded(loadedOf(page, cursor, rows));
     });
     return () => {
       cancelled = true;
@@ -98,9 +113,10 @@ export function MovementsTable({
     fetchPage(cursor, rows);
   }
 
-  // The first page, once; the caller's key reads it again.
+  // The first page, once, unless the server sent it; the caller's key reads
+  // it again.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => fetchPage(null, []), []);
+  useEffect(() => (first ? undefined : fetchPage(null, [])), []);
 
   const columns: ColumnDef<Row>[] = [
     {

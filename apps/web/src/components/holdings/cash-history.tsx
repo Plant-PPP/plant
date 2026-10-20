@@ -14,6 +14,7 @@ import { FileSpreadsheet, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { usePreload } from "@/hooks/use-preload";
 import { temporaryId } from "@/components/portfolio-setup/list-change";
 import { useOptimisticWrites } from "@/components/portfolio-setup/optimistic-writes";
 import {
@@ -27,10 +28,11 @@ import {
   TruncatedText,
 } from "@/components/ui/data-table";
 import { PageButton } from "@/components/ui/page-button";
-import type {
-  CashResult,
-  StatementResult,
-  StatementSummary,
+import {
+  CASH_CURRENCIES,
+  type CashResult,
+  type StatementResult,
+  type StatementSummary,
 } from "@/lib/cash/input";
 import {
   CASH_KIND_LABELS,
@@ -42,13 +44,13 @@ import { formatDate } from "@/lib/format/date";
 import { CURRENCY_LABELS } from "@/lib/holdings/messages";
 import { FAILED } from "@/lib/portfolio-setup/messages";
 
+import type { CashEntryFields } from "./cash-entry-dialog";
 import {
-  CASH_CURRENCIES,
   CashEntryDialog,
-  type CashEntryFields,
-} from "./cash-entry-dialog";
+  preloadCashDialogs,
+  StatementDialog,
+} from "./lazy-dialogs";
 import { NUMBER_CELL } from "./sum-text";
-import { StatementDialog } from "./statement-dialog";
 
 // One movement of the account's cash as the page lists it: what moved it
 // (the operation a leg settles, or the note) and, while its write runs,
@@ -137,6 +139,7 @@ export function CashHistory({
 }) {
   const { shown, pending, run } = useOptimisticWrites(sides, apply);
   const card = useSetupCard({ run, pending });
+  usePreload(preloadCashDialogs);
   const [entry, setEntry] = useState<{
     initial: CashEntryFields;
     initialError?: string;

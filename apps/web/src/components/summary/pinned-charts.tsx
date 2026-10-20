@@ -1,7 +1,7 @@
 "use client";
 
 import { ChartNoAxesColumn, Pin, PinOff } from "lucide-react";
-import { useState, useTransition } from "react";
+import { use, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ChartBoundary, ChartCard } from "@/components/assistant/chart-card";
@@ -16,17 +16,19 @@ import { settle } from "@/lib/server-action-call";
 export type PinnedChart = { id: string; chart: ChartPart | null; asOf: string };
 
 // The assistant's charts the user pinned, each drawn again, and the way to let
-// one go; it leaves at once and comes back if the server refuses.
+// one go; it leaves at once and comes back if the server refuses. The server
+// hands them over still drawing, so they stream in after the page.
 export function PinnedCharts({
   pinned,
   onUnpin,
 }: {
-  pinned: readonly PinnedChart[];
+  pinned: readonly PinnedChart[] | Promise<readonly PinnedChart[]>;
   onUnpin: (id: string) => Promise<boolean>;
 }) {
+  const drawn = pinned instanceof Promise ? use(pinned) : pinned;
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const [, startTransition] = useTransition();
-  const shown = pinned.filter((each) => !gone.has(each.id));
+  const shown = drawn.filter((each) => !gone.has(each.id));
   if (shown.length === 0) return null;
 
   function unpin(id: string) {

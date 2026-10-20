@@ -297,3 +297,21 @@ it("keeps a hidden action's place in its row", () => {
   expect(html).not.toContain("Editar Largo plazo");
   expect(html).toMatch(/<span aria-hidden="true" class="size-7"><\/span>/);
 });
+
+it("draws a long list's first screen in a box of its own, keeping its height", () => {
+  const many = Array.from({ length: 500 }, (_, index) => ({
+    id: `r${index}`,
+    name: `Movimiento ${index}`,
+  }));
+  const html = render([nameColumn], many);
+  expect(html).toContain("max-h-[32rem]");
+  expect(html).toContain(">Movimiento 0<");
+  expect(html).not.toContain(">Movimiento 499<");
+  expect(html).toMatch(/<tr aria-hidden="true" style="height:\d+px"><\/tr>/);
+});
+
+it("draws every row of a short list", () => {
+  const html = render([nameColumn]);
+  expect(html).not.toContain("max-h-[32rem]");
+  expect(html).not.toContain('aria-hidden="true" style="height');
+});

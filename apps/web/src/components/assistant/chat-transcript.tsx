@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { LoaderCircle } from "lucide-react";
 import { memo, useEffect, useState } from "react";
@@ -101,6 +101,7 @@ export function ChatTranscript({
   questionsLeft,
   disclaimerId,
   onAsk,
+  contentRef,
 }: {
   messages: readonly ChatMessage[];
   // The answer that just arrived, which reveals itself.
@@ -111,10 +112,12 @@ export function ChatTranscript({
   questionsLeft: number;
   disclaimerId: string;
   onAsk: (question: string) => void;
+  // The element whose growth the scroller follows.
+  contentRef?: Ref<HTMLDivElement>;
 }) {
   const empty = messages.length === 0 && waiting === null;
   return (
-    <div className="flex min-h-full flex-col">
+    <div ref={contentRef} className="flex min-h-full flex-col">
       {empty ? (
         <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-start justify-center py-16">
           <div aria-hidden className="mb-6 shrink-0 self-center">
