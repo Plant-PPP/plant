@@ -9,6 +9,7 @@ const TODAY = "2026-10-12";
 const state = initialState(buildFixtures(TODAY), TODAY);
 const read: ClosesRead = {
   state: { ...state, recalculated: new Map() },
+  ledger: state,
   holdings: holdingsView(state),
   ledgerTruncated: false,
   debtsTruncated: false,

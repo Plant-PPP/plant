@@ -28,10 +28,13 @@ export function ClosesTable({
   year,
   unit,
   href,
+  valueHeader = "Patrimonio neto",
 }: {
   year: YearClose;
   unit: Denominator;
-  href: (period: string) => string;
+  // Each month's detail; none where the detail would be the whole app's.
+  href?: (period: string) => string;
+  valueHeader?: string;
 }) {
   const columns: ColumnDef<Row>[] = [
     {
@@ -39,9 +42,13 @@ export function ClosesTable({
       header: "Mes",
       cell: ({ row: { original: close } }) => (
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link href={href(close.period)} className="font-medium">
-            {monthOf(close.period)}
-          </Link>
+          {href ? (
+            <Link href={href(close.period)} className="font-medium">
+              {monthOf(close.period)}
+            </Link>
+          ) : (
+            <span className="font-medium">{monthOf(close.period)}</span>
+          )}
           {(close.open || close.recalculatedOn) && (
             <CloseStatus close={close} />
           )}
@@ -73,7 +80,7 @@ export function ClosesTable({
     },
     {
       id: "end",
-      header: "Patrimonio neto",
+      header: valueHeader,
       meta: { className: VALUE_CELL },
       cell: ({ row: { original: close } }) => (
         <AmountText amount={close.figures.endValue} unit={unit} />
@@ -92,9 +99,13 @@ export function ClosesTable({
         <TableRow>
           <TableCell>
             <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <Link href={href(year.year)} className="font-medium">
-                {`Total ${year.year}`}
-              </Link>
+              {href ? (
+                <Link href={href(year.year)} className="font-medium">
+                  {`Total ${year.year}`}
+                </Link>
+              ) : (
+                <span className="font-medium">{`Total ${year.year}`}</span>
+              )}
               {!year.complete && <PartialMark />}
             </span>
           </TableCell>
