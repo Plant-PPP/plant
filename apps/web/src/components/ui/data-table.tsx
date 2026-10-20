@@ -72,7 +72,9 @@ function DataTable<T extends DataTableRow>({
   caption: string;
   footer?: React.ReactNode;
 }) {
-  // The app has no React Compiler, and nothing memoizes the table instance.
+  // TanStack keeps one table instance whose methods answer from the latest
+  // data, which the compiler would memoize as if they could not change.
+  "use no memo";
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
