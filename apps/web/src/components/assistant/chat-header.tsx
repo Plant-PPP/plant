@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import type { Ref } from "react";
+import { type Ref, useRef } from "react";
 
 import { choose } from "@/components/portfolio-setup/field-alert";
 import { IconButton } from "@/components/ui/icon-button";
@@ -20,12 +20,17 @@ import { countOf } from "@/lib/format/text";
 // The value of the history's first item, which starts a conversation.
 const NEW = "new";
 
+// How long the pointer or focus rests on a conversation before it is read
+// ahead: passing over the list reads none.
+const PREVIEW_DELAY_MS = 150;
+
 // The bar over the chat: the conversations to go back to, the open one's
 // title, and deleting it.
 export function ChatHeader({
   conversations,
   active,
   onOpen,
+  onPreview,
   onDelete,
   historyRef,
 }: {
@@ -33,10 +38,20 @@ export function ChatHeader({
   active: ConversationSummary | undefined;
   // Opens a conversation, or a new one with null.
   onOpen: (conversationId: string | null) => void;
+  // Starts reading a conversation the user rests on.
+  onPreview?: (conversationId: string) => void;
   onDelete: () => void;
   // Where focus goes back to once a conversation is deleted.
   historyRef: Ref<HTMLButtonElement>;
 }) {
+  const resting = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rest = (id: string) => {
+    clearTimeout(resting.current);
+    if (onPreview) {
+      resting.current = setTimeout(() => onPreview(id), PREVIEW_DELAY_MS);
+    }
+  };
+  const leave = () => clearTimeout(resting.current);
   return (
     <div className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-muted-foreground/20 pb-2 sm:grid-cols-[1fr_auto_1fr]">
       <Select
@@ -64,6 +79,10 @@ export function ChatHeader({
               key={conversation.id}
               value={conversation.id}
               className="mb-1 rounded-lg last:mb-0"
+              onPointerEnter={() => rest(conversation.id)}
+              onPointerLeave={leave}
+              onFocus={() => rest(conversation.id)}
+              onBlur={leave}
             >
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs">{conversation.title}</span>

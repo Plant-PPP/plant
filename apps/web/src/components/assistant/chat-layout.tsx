@@ -26,6 +26,7 @@ export function ChatLayout({
   conversations,
   active,
   onOpen,
+  onPreview,
   onDelete,
   messages,
   arrivedId,
@@ -44,6 +45,8 @@ export function ChatLayout({
   active: ConversationSummary | undefined;
   // Opens a conversation, or a new one with null.
   onOpen: (conversationId: string | null) => void;
+  // Starts reading a conversation the user is about to open.
+  onPreview?: (conversationId: string) => void;
   // Deletes a conversation once the user confirmed it, and says so.
   onDelete: (conversationId: string) => void;
   messages: readonly ChatMessage[];
@@ -98,6 +101,7 @@ export function ChatLayout({
         active={active}
         historyRef={history}
         onOpen={onOpen}
+        onPreview={onPreview}
         onDelete={() => active && setDeleting(active)}
       />
       <p role="status" className="sr-only">

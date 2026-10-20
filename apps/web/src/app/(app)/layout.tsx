@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { PageCrumbsProvider } from "@/components/layout/page-crumbs";
+import { QueryProvider } from "@/components/query-provider";
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar";
 import { AppSidebarHeader } from "@/components/layout/sidebar/app-sidebar-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -26,7 +27,9 @@ export default async function AppLayout({
         <SidebarInset>
           <PageCrumbsProvider>
             <AppSidebarHeader />
-            <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
+            <div className="flex flex-1 flex-col gap-4 p-4">
+              <QueryProvider>{children}</QueryProvider>
+            </div>
           </PageCrumbsProvider>
         </SidebarInset>
       </div>

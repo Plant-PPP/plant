@@ -50,6 +50,14 @@ jest.mock("@ai-sdk/react", () => ({
     stop: jest.fn(),
   }),
 }));
+// One cache, as the provider gives the chat; the test calls it as a function.
+jest.mock("@tanstack/react-query", () => {
+  const actual = jest.requireActual("@tanstack/react-query");
+  const client = new actual.QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return { ...actual, useQueryClient: () => client };
+});
 jest.mock("@/lib/ai/assistant/transport", () => ({
   chatTransport: () => ({}),
 }));
