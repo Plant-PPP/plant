@@ -286,6 +286,7 @@ export function CashHistory({
       heading={card.heading}
       pending={pending}
       title="Efectivo"
+      page
       description="Con su historial, lo que pusiste o sacaste son los depósitos y las extracciones; las compras y ventas mueven plata dentro de la cuenta."
       addLabel="Registrar movimiento"
       onAdd={openEntry}
