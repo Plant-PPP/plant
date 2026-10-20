@@ -7,8 +7,10 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { type LucideIcon, MoreHorizontal } from "lucide-react";
 import type * as React from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,6 +59,12 @@ type DataTableRow = { id: string; unsaved?: true };
 
 const ACTIONS_COLUMN = "actions";
 
+// Lists longer than this, such as an account's cash after years of imports,
+// draw only the rows in view.
+const VIRTUAL_FROM = 200;
+// A row of one line, as the virtual list guesses it until it measures one.
+const ROW_HEIGHT = 41;
+
 // Rows in the order given. The columns with no `size` share the width the
 // sized ones leave; the table sits in a container, so a column can respond to
 // the table's width with `@`-variants. `footer` is one more row after the
@@ -86,6 +94,22 @@ function DataTable<T extends DataTableRow>({
     getRowId: (row) => row.id,
   });
 
+  // Past VIRTUAL_FROM rows only those in view, and a few around them, are
+  // drawn; spacer rows keep the scroll height.
+  const scroller = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: table.getRowModel().rows.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => ROW_HEIGHT,
+    getItemKey: (index) => table.getRowModel().rows[index]?.id ?? index,
+    overscan: 12,
+    // A server render draws the rows of the box's first screen.
+    initialRect: { width: 0, height: 512 },
+  });
+  const windowed = virtualizer.getVirtualItems();
+  const before = windowed[0]?.start ?? 0;
+  const after = virtualizer.getTotalSize() - (windowed.at(-1)?.end ?? 0);
+
   // Column names only help when several columns show side by side: a list of
   // one column, or a table below @2xl (its secondary columns use
   // `hidden @2xl:table-cell` and fold into the first), keeps its header row
@@ -98,14 +122,25 @@ function DataTable<T extends DataTableRow>({
       ? "@max-2xl:collapse @max-2xl:border-b-0!"
       : "collapse border-b-0!";
 
+  const rows = table.getRowModel().rows;
+  const virtual = rows.length > VIRTUAL_FROM;
+
   return (
     <div
+      ref={scroller}
       data-slot="data-table"
-      className="@container overflow-hidden rounded-lg border"
+      className={cn(
+        "@container overflow-hidden rounded-lg border",
+        // A long list scrolls in its own box, which draws only the rows in
+        // view.
+        virtual && "max-h-[32rem] overflow-y-auto",
+      )}
     >
       <Table className="table-fixed">
         <TableCaption className="sr-only">{caption}</TableCaption>
-        <TableHeader>
+        <TableHeader
+          className={cn(virtual && "bg-background sticky top-0 z-10")}
+        >
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className={headerRowClass}>
               {headerGroup.headers.map((header) => (
@@ -127,9 +162,17 @@ function DataTable<T extends DataTableRow>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => (
+          {virtual && before > 0 && (
+            <tr aria-hidden style={{ height: before }} />
+          )}
+          {(virtual
+            ? windowed.map((item) => ({ row: rows[item.index]!, item }))
+            : rows.map((row) => ({ row, item: null }))
+          ).map(({ row, item }) => (
             <TableRow
               key={row.id}
+              ref={item ? virtualizer.measureElement : undefined}
+              data-index={item?.index}
               data-row-id={row.id}
               aria-busy={row.original.unsaved || undefined}
               className={row.original.unsaved ? "opacity-60" : undefined}
@@ -144,6 +187,7 @@ function DataTable<T extends DataTableRow>({
               ))}
             </TableRow>
           ))}
+          {virtual && after > 0 && <tr aria-hidden style={{ height: after }} />}
         </TableBody>
         {footer && <TableFooter>{footer}</TableFooter>}
       </Table>
