@@ -1,10 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react";
+import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { watchImports } from "@/lib/imports/live";
 import { type ImportItem, isBusy } from "@/lib/imports/review";
 import type {
   DiscardResult,
@@ -18,6 +17,7 @@ import { settle } from "@/lib/server-action-call";
 import { createClient } from "@/lib/supabase/client";
 
 import { ImportPage } from "./import-page";
+import { useImportsRefresh } from "./use-imports-refresh";
 
 // What the user reads when a file is refused, after its name.
 export const UPLOAD_MESSAGES: Record<UploadCode, string> = {
@@ -83,9 +83,6 @@ const putToSignedUrl = async (
 
 const reviewHref = (id: string) => `/import/${id}`;
 
-// Several changes within this window re-read the page once.
-const REFRESH_DELAY_MS = 250;
-
 // Cargar over the database: each file goes to Storage and starts a queued
 // import; the list refreshes once every file is sent, and again on each change
 // to an import while one is queued or being read.
@@ -110,22 +107,7 @@ export function UploadImports({
   const [, startTransition] = useTransition();
   const following = imports.some((item) => isBusy(item.status));
 
-  // The channel stays open only while an import is in flight: an open channel
-  // has the browser refresh a session near its expiry
-  // (lib/supabase/client.ts).
-  useEffect(() => {
-    if (!following) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refresh = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => router.refresh(), REFRESH_DELAY_MS);
-    };
-    const stop = watchImports(createClient(), userId, refresh);
-    return () => {
-      clearTimeout(timer);
-      stop();
-    };
-  }, [following, userId, router]);
+  useImportsRefresh(userId, following);
 
   function upload(files: readonly File[], accountId: string | null) {
     startTransition(async () => {
