@@ -8,6 +8,7 @@ import {
   parseAmountInput,
   percentInput,
   percentToFraction,
+  typedAmount,
 } from "./amount";
 import { formatDate } from "./date";
 
@@ -170,4 +171,19 @@ it("writes a currency's symbol as its amounts start", () => {
   expect(currencySymbol("ARS")).toBe("$");
   expect(currencySymbol("USD")).toBe("US$");
   expect(currencySymbol("EUR")).toBe("€");
+});
+
+describe("typedAmount", () => {
+  it.each([
+    ["30117,=....2ninini", "30117,2"],
+    ["1.234.567,89", "1.234.567,89"],
+    ["12.5", "12.5"],
+    ["US$ 1.000", "1.000"],
+    [",5", "5"],
+    ["1,2,3", "1,23"],
+    ["1,2.3", "1,23"],
+    ["-5", "5"],
+  ])("keeps %j as %j", (text, kept) => {
+    expect(typedAmount(text)).toBe(kept);
+  });
 });
