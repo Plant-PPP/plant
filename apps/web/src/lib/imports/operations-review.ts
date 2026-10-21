@@ -1,6 +1,21 @@
 import { compareDecimals } from "@plant/shared";
 
-import type { ImportOperationRow } from "./review";
+import type { ImportOperationKind, ImportOperationRow } from "./review";
+
+// Whether an operation moves units at a price per unit: a trade, or a
+// deposit valued at what each unit cost.
+export const movesUnits = (kind: ImportOperationKind | null): boolean =>
+  kind === "purchase" || kind === "sale" || kind === "adjustment";
+
+// The review's name for each kind: an imported adjustment is units that
+// came in from outside, a deposit.
+export const IMPORT_KIND_LABELS: Record<ImportOperationKind, string> = {
+  purchase: "Compra",
+  sale: "Venta",
+  dividend: "Dividendo",
+  coupon: "Cupón",
+  adjustment: "Depósito",
+};
 
 // What an operation still needs before it is confirmed: a date no later than
 // today, a kind, an instrument, and a trade's units and price or an income's
@@ -22,7 +37,7 @@ export function missingFields(
   if (row.date === null || row.date > today) missing.push("date");
   if (row.kind === null) missing.push("kind");
   if (row.symbol === "") missing.push("symbol");
-  if (row.kind === "purchase" || row.kind === "sale") {
+  if (movesUnits(row.kind)) {
     if (!positive(row.quantity)) missing.push("quantity");
     if (!positive(row.price)) missing.push("price");
   } else if (row.kind !== null && !positive(row.amount)) {

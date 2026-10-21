@@ -22,7 +22,7 @@ import type { ImportOperationRow } from "./review";
 // anything typed; a kept one is complete.
 const keptSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.enum(["purchase", "sale"]),
+    kind: z.enum(["purchase", "sale", "adjustment"]),
     quantity: positiveDecimalSchema,
     price: positiveDecimalSchema,
   }),
@@ -48,9 +48,15 @@ const reviewedSchema = z.union([
 ]);
 
 // Within a day, units come in before income is counted and before units go
-// out, so a day's sale finds that day's purchase; across days the dates
-// order them, oldest first.
-const DAY_ORDER = { purchase: 0, dividend: 1, coupon: 1, sale: 2 } as const;
+// out, so a day's sale finds that day's deposit or purchase; across days the
+// dates order them, oldest first.
+const DAY_ORDER = {
+  adjustment: 0,
+  purchase: 0,
+  dividend: 1,
+  coupon: 1,
+  sale: 2,
+} as const;
 
 // The portfolio of the account's holding of an instrument with the latest
 // movement on or before a day, open or closed; none when it never had one.
@@ -141,7 +147,22 @@ export function writeImportOperations<S extends Ledger>(
       note: `Carga de ${item.fileName}`.slice(0, 200),
     };
     let input;
-    if (kind === "purchase" || kind === "sale") {
+    if (kind === "adjustment") {
+      const price = exactUnitPrice(instrument.type, row.price!);
+      if (price === null) return refuse({ ok: false, code: "invalid" }, row.id);
+      input = {
+        kind,
+        direction: "in" as const,
+        ...common,
+        price,
+        parts: [
+          {
+            portfolio_id: held[0]?.row.portfolio.id ?? account.portfolio.id,
+            quantity: row.quantity!,
+          },
+        ],
+      };
+    } else if (kind === "purchase" || kind === "sale") {
       const price = exactUnitPrice(instrument.type, row.price!);
       if (price === null) return refuse({ ok: false, code: "invalid" }, row.id);
       let parts: { portfolio_id: string; quantity: string }[];

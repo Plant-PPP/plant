@@ -9,6 +9,7 @@ it.each([
   ["Interactive Brokers", ["us", "crypto"]],
   ["IBKR", ["us", "crypto"]],
   ["Wallbit", ["us", "crypto"]],
+  ["Roxom", ["us", "crypto"]],
   ["", ["byma", "us", "crypto"]],
   [undefined, ["byma", "us", "crypto"]],
 ])("searches %j's instruments in %j", (institution, markets) => {

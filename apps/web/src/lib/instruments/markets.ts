@@ -1,14 +1,14 @@
 import type { ListingMarket } from "@plant/core";
 
 // Exchanges that hold only crypto, Argentine brokers that trade on BYMA, and
-// foreign brokers that trade on the US exchanges, by the account's
-// institution name.
+// foreign brokers that trade on the US exchanges (Roxom among them: it lists
+// US shares beside bitcoin), by the account's institution name.
 const CRYPTO_EXCHANGES =
-  /^(binance|nexo|bitso|ripio|roxom|lemon|buenbit|belo|kraken|coinbase|satoshitango|fiwind|bybit|okx)\b/i;
+  /^(binance|nexo|bitso|ripio|lemon|buenbit|belo|kraken|coinbase|satoshitango|fiwind|bybit|okx)\b/i;
 const BYMA_BROKERS =
   /^(iol|invertir ?online|ppi|portfolio personal|balanz|cocos|bull ?market|eco ?valores|allaria|adcap|iceberg|inviu|max ?capital|global ?valores|puente|cohen|santander|galicia|bbva|macro|icbc|supervielle|patagonia)\b/i;
 const FOREIGN_BROKERS =
-  /^(interactive ?brokers|ibkr|wallbit|charles schwab|schwab|firstrade|tastytrade|webull|robinhood|etoro|hapi)\b/i;
+  /^(interactive ?brokers|ibkr|wallbit|roxom|charles schwab|schwab|firstrade|tastytrade|webull|robinhood|etoro|hapi)\b/i;
 
 // The markets an account's instruments are searched in: crypto for an
 // exchange, BYMA for an Argentine broker, the US exchanges and crypto for a

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { movesUnits } from "./operations-review";
 import { SHOWN_IMPORTS } from "./shown";
 import {
   type InstrumentType,
@@ -16,12 +17,19 @@ import {
   exactOf,
   over,
   stored,
+  usListingSymbol,
+  usTicker,
 } from "@plant/shared";
-import { cashDraftSchema, draftAssetClassSchema } from "@plant/sources";
+import {
+  cashDraftSchema,
+  draftAssetClassSchema,
+  OPERATION_KINDS,
+} from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { InstrumentRow } from "@/lib/holdings/read";
+import { marketsFor } from "@/lib/instruments/markets";
 import {
   importFailureMessage,
   type ImportDebtRow,
@@ -131,7 +139,7 @@ const itemSchema = z.object({
 const operationSchema = z.object({
   id: z.string(),
   date: z.string().nullable(),
-  kind: z.enum(["purchase", "sale", "dividend", "coupon"]).nullable(),
+  kind: z.enum(OPERATION_KINDS).nullable(),
   symbol: z.string().nullable(),
   quantity: z.string().nullable(),
   price: z.string().nullable(),
@@ -200,14 +208,21 @@ function reviewDebt(data: unknown, origin: ImportOrigin): ImportDebtRow {
 // its symbol; one it does not, or none named, is left for the user to choose,
 // with what the document called it. The currency is the operation's own: a
 // dollar line of AL30 (AL30D) is a dollar trade of AL30. The price stays as
-// printed until the instrument is known.
+// printed until the instrument is known; a trade or deposit read with its
+// total and units but no price takes the one they make (in an account that
+// trades only on the US exchanges, before its instrument is known too: its
+// prices are per unit).
 function reviewOperation(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
   origin: ImportOrigin,
+  usOnly: boolean,
 ): ImportOperationRow {
   const row = operationSchema.parse(data);
-  const known = row.symbol === null ? null : resolveSymbol(row.symbol, index);
+  const { known, asked } =
+    row.symbol === null
+      ? { known: null, asked: null }
+      : resolvedFor(row.symbol, index, usOnly);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
   const named =
     row.symbol === null
@@ -221,7 +236,14 @@ function reviewOperation(
     kind: row.kind,
     symbol: known?.symbol ?? "",
     quantity: row.quantity,
-    price: row.price,
+    price:
+      row.price ??
+      ((known || usOnly) && movesUnits(row.kind) && row.amount && row.quantity
+        ? quotedPrice(
+            known?.type ?? "stock",
+            stored(over(exactOf(row.amount), exactOf(row.quantity))),
+          )
+        : null),
     amount: row.amount,
     charges: row.charges,
     reference: row.reference?.trim() || null,
@@ -231,8 +253,27 @@ function reviewOperation(
     confidence: row.confidence,
     source: [page, named].filter(Boolean).join(" · ") || unpagedSource(origin),
     discarded: false,
-    ...(row.symbol !== null && !known && { unknownSymbol: row.symbol }),
+    ...(asked !== null && !known && { unknownSymbol: asked }),
   };
+}
+
+// The instrument a document names, for an account that trades on the US
+// exchanges and not on BYMA: its US listing (NVDA is NVDA.US), named so when
+// the catalog lacks it, and crypto as it is. For any other account, the
+// name as the catalog resolves it.
+function resolvedFor(
+  text: string,
+  index: ReturnType<typeof instrumentIndex>,
+  usOnly: boolean,
+): { known: ReturnType<typeof resolveSymbol>; asked: string } {
+  if (!usOnly) return { known: resolveSymbol(text, index), asked: text };
+  const us = usTicker(text) === null ? usListingSymbol(text) : null;
+  const listing = us === null ? null : resolveSymbol(us, index);
+  if (listing) return { known: listing, asked: us! };
+  const plain = resolveSymbol(text, index);
+  return plain && (plain.type === "crypto" || usTicker(plain.symbol) !== null)
+    ? { known: plain, asked: text }
+    : { known: null, asked: us ?? text };
 }
 
 const totalsSchema = z.object({
@@ -345,6 +386,10 @@ export async function readImportForReview(
   client: Client,
   id: string,
   instruments: readonly InstrumentRow[] | PromiseLike<readonly InstrumentRow[]>,
+  // The user's accounts, for the markets the import's account trades in.
+  accounts:
+    | readonly { id: string; institution: string }[]
+    | PromiseLike<readonly { id: string; institution: string }[]> = [],
 ): Promise<ImportItem | null> {
   const [found, items, operations, debts, known] = await Promise.all([
     client
@@ -405,6 +450,14 @@ export async function readImportForReview(
     known.map((each) => ({ ...each, aliases: each.aliases ?? [] })),
   );
   const origin = importOrigin(row);
+  const institution = (await accounts).find(
+    (each) => each.id === origin.accountId,
+  )?.institution;
+  const markets = marketsFor(institution);
+  const usOnly =
+    institution !== undefined &&
+    markets.includes("us") &&
+    !markets.includes("byma");
   return {
     id: row.id,
     ...origin,
@@ -422,7 +475,7 @@ export async function readImportForReview(
     ),
     ...(operations.data.length > 0 && {
       operations: (operations.data as unknown[]).map((each) =>
-        reviewOperation(each, index, origin.origin),
+        reviewOperation(each, index, origin.origin, usOnly),
       ),
     }),
     ...(debts.data.length > 0 && {

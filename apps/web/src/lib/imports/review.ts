@@ -191,7 +191,8 @@ export type ImportRow = {
 };
 
 // The operations a document of operations may show.
-export type ImportOperationKind = "purchase" | "sale" | "dividend" | "coupon";
+export type ImportOperationKind =
+  "purchase" | "sale" | "dividend" | "coupon" | "adjustment";
 
 // One operation as the document shows it, for the user to complete: every
 // null (an empty symbol for the instrument) is something the document does
