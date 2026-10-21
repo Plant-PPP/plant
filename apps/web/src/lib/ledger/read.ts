@@ -38,7 +38,8 @@ export type LedgerStep =
   | "movements"
   | "instruments"
   | "manual_prices"
-  | "manual_rates";
+  | "manual_rates"
+  | "loans";
 
 export class LedgerReadError extends Error {
   constructor(
@@ -283,6 +284,7 @@ export async function readLedger(
     movementsResult,
     instrumentsResult,
     manual,
+    loansResult,
   ] = await Promise.all([
     client
       .from("source_connections")
@@ -302,6 +304,10 @@ export async function readLedger(
       .select("symbol, name, currency, type, aliases")
       .order("symbol"),
     readManualQuotes(client),
+    client
+      .from("liabilities")
+      .select("label, disbursement_operation_id")
+      .not("disbursement_operation_id", "is", null),
   ]);
 
   const accounts = z
@@ -405,6 +411,17 @@ export async function readLedger(
       manualPrices: manual.manualPrices,
       manualRates: manual.manualRates,
       operationOrigins: new Map(),
+      loans: new Map(
+        z
+          .array(
+            z.object({
+              label: z.string(),
+              disbursement_operation_id: z.string(),
+            }),
+          )
+          .parse(checked("loans", loansResult))
+          .map((row) => [row.disbursement_operation_id, row.label]),
+      ),
     },
     truncated,
     symbolOf,

@@ -54,7 +54,8 @@ SELECT set_eq(
         'kind:UPDATE', 'label:UPDATE', 'lender:UPDATE', 'currency:UPDATE', 'uva:UPDATE',
         'instrument_symbol:UPDATE', 'balance:UPDATE', 'installment:UPDATE',
         'annual_rate:UPDATE', 'installments_left:UPDATE', 'next_due_on:UPDATE',
-        'matures_on:UPDATE', 'accrues:UPDATE', 'opened_on:UPDATE'],
+        'matures_on:UPDATE', 'accrues:UPDATE', 'opened_on:UPDATE',
+        'disbursement_operation_id:UPDATE'],
   'a user reads, deletes and writes a debt''s own columns, never its owner or id'
 );
 

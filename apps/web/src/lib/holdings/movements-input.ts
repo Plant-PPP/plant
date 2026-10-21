@@ -35,6 +35,8 @@ export type MovementLine = {
 export type OperationParts = {
   accountId: string;
   instrument: string;
+  // The debt whose money the operation brought in, by its name.
+  loan?: string;
   parts: {
     movement: Movement;
     accountId: string;

@@ -289,17 +289,23 @@ isOneToOne: false
                   ]
                 },"liabilities": {
                   Row: {
-                    "accrues": boolean,"anchored_on": string,"annual_rate": number | null,"balance": number,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"installment": number | null,"installments_left": number | null,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender": string | null,"matures_on": string | null,"next_due_on": string | null,"opened_on": string | null,"updated_at": string,"user_id": string,"uva": boolean
+                    "accrues": boolean,"anchored_on": string,"annual_rate": number | null,"balance": number,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"disbursement_operation_id": string | null,"id": string,"installment": number | null,"installments_left": number | null,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender": string | null,"matures_on": string | null,"next_due_on": string | null,"opened_on": string | null,"updated_at": string,"user_id": string,"uva": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance": number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance": number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"disbursement_operation_id"?: string | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind": Database["public"]['Enums']["liability_kind"],"label": string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
                   }
                   Update: {
-                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance"?: number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"],"label"?: string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
+                    "accrues"?: boolean,"anchored_on"?: string,"annual_rate"?: number | null,"balance"?: number,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"disbursement_operation_id"?: string | null,"id"?: string,"installment"?: number | null,"installments_left"?: number | null,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"],"label"?: string,"lender"?: string | null,"matures_on"?: string | null,"next_due_on"?: string | null,"opened_on"?: string | null,"updated_at"?: string,"user_id"?: string,"uva"?: boolean
                   }
                   Relationships: [
                     {
+      foreignKeyName: "liabilities_disbursement_operation_fkey"
+      columns: ["user_id","disbursement_operation_id"]
+isOneToOne: false
+      referencedRelation: "operations"
+      referencedColumns: ["user_id","id"]
+    },{
       foreignKeyName: "liabilities_instrument_symbol_fkey"
       columns: ["instrument_symbol"]
 isOneToOne: false

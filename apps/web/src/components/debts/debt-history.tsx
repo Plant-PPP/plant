@@ -85,6 +85,10 @@ import type { KeysetParams } from "@/lib/supabase/keyset";
 
 import type { PledgeOption } from "./debt-collateral-dialog";
 import {
+  DebtDisbursementDialog,
+  type DisbursementChoice,
+} from "./debt-disbursement-dialog";
+import {
   DebtCollateralDialog,
   DebtDialog,
   DebtEventDialog,
@@ -128,6 +132,11 @@ export type DebtPageActions = {
   events: DebtEventActions;
   debts: Pick<DebtActions, "update" | "delete">;
   collateral: (debtId: string, holdingIds: string[]) => Promise<WriteResult>;
+  // Absent where the debt's disbursement cannot be named (the prototype).
+  disbursement?: (
+    debtId: string,
+    operationId: string | null,
+  ) => Promise<WriteResult>;
 };
 
 type EventRow = LiabilityEvent & { unsaved?: true };
@@ -150,13 +159,15 @@ type State = {
   debt: Liability & { unsaved?: true };
   events: EventRow[];
   collateral: string[];
+  disbursement: string | null;
 };
 
 type Change =
   | { kind: "debt"; debt: Liability }
   | { kind: "event"; row: EventRow }
   | { kind: "delete_event"; id: string }
-  | { kind: "collateral"; ids: string[] };
+  | { kind: "collateral"; ids: string[] }
+  | { kind: "disbursement"; operationId: string | null };
 
 function apply(state: State, change: Change): State {
   switch (change.kind) {
@@ -173,6 +184,8 @@ function apply(state: State, change: Change): State {
       };
     case "collateral":
       return { ...state, collateral: change.ids };
+    case "disbursement":
+      return { ...state, disbursement: change.operationId };
   }
 }
 
@@ -238,6 +251,7 @@ export function DebtHistory({
   instruments,
   cash,
   pledgeOptions,
+  disbursement = { current: null, options: [] },
   actions,
 }: {
   debt: Liability;
@@ -255,6 +269,12 @@ export function DebtHistory({
   // The cash holdings a payment can come from, in the debt's currency.
   cash: readonly CashOption[];
   pledgeOptions: readonly PledgeOption[];
+  // The deposit that brought the loan's money in, and the ones that could
+  // have.
+  disbursement?: {
+    current: string | null;
+    options: readonly DisbursementChoice[];
+  };
   actions: DebtPageActions;
 }) {
   const { shown, pending, run } = useOptimisticWrites<State, Change>(
@@ -262,6 +282,7 @@ export function DebtHistory({
       debt: initialDebt,
       events: [...initialEvents],
       collateral: [...initialCollateral],
+      disbursement: disbursement.current,
     },
     apply,
   );
@@ -276,6 +297,9 @@ export function DebtHistory({
   const [debtDialog, setDebtDialog] = useState<Retry<DebtFields> | null>(null);
   const [collateralDialog, setCollateralDialog] = useState<Retry<
     string[]
+  > | null>(null);
+  const [disbursementDialog, setDisbursementDialog] = useState<Retry<
+    string | null
   > | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<LiabilityEvent | null>(
     null,
@@ -558,6 +582,17 @@ export function DebtHistory({
                 <ShieldCheck />
                 Garantía
               </DropdownMenuItem>
+              {actions.disbursement &&
+                (disbursement.options.length > 0 ||
+                  shown.disbursement !== null) && (
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onSelect={() => !busy && setDisbursementDialog({})}
+                  >
+                    <HandCoins />
+                    Desembolso
+                  </DropdownMenuItem>
+                )}
             </>
           )}
           <DropdownMenuItem
@@ -792,6 +827,34 @@ export function DebtHistory({
                 done: "Guardaste la garantía",
                 reopen: (error) =>
                   setCollateralDialog({ initial: ids, initialError: error }),
+              },
+            )
+          }
+        />
+      )}
+      {disbursementDialog && (
+        <DebtDisbursementDialog
+          options={disbursement.options}
+          initial={
+            disbursementDialog.initial === undefined
+              ? shown.disbursement
+              : disbursementDialog.initial
+          }
+          initialError={disbursementDialog.initialError}
+          returnFocusTo={() => card.focusHeading()}
+          onClose={() => setDisbursementDialog(null)}
+          onSubmit={(operationId) =>
+            card.dialogAction(
+              { kind: "disbursement", operationId },
+              () => actions.disbursement!(debt.id, operationId),
+              COLLATERAL_MESSAGES,
+              {
+                done: "Guardaste el desembolso",
+                reopen: (error) =>
+                  setDisbursementDialog({
+                    initial: operationId,
+                    initialError: error,
+                  }),
               },
             )
           }

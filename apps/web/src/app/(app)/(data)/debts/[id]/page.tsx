@@ -7,7 +7,7 @@ import {
   referenceUnit,
   valueLiabilities,
 } from "@plant/core";
-import { buenosAiresDate } from "@plant/shared";
+import { buenosAiresDate, shownTicker } from "@plant/shared";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import {
   deleteDebtEvent,
   recordDebtEvent,
   setDebtCollateral,
+  setDebtDisbursement,
   updateDebt,
   updateDebtEvent,
 } from "../actions";
@@ -28,11 +29,14 @@ import {
   DEBTS_VIEW_EVENT,
   debtsViewOutcome,
   readCollateral,
+  readDisbursement,
   readLiability,
   readLiabilityEvents,
 } from "@/lib/debts/read";
 import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
+import { formatQuantity } from "@/lib/format/amount";
+import { formatDate } from "@/lib/format/date";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
 import {
   readHoldings,
@@ -119,6 +123,13 @@ export default async function DebtPage({
       }),
     ]);
   if (!debt) return missing();
+  const disbursement = await readDisbursement(
+    client,
+    id,
+    debt.instrument_symbol ?? null,
+  ).catch((error: unknown) =>
+    assetsViewFailure(context, "debt_disbursement", error),
+  );
   const snapshot = pricedSnapshotOf(manual, quotes.snapshot).snapshot;
   const reference = referenceUnit(dollar);
   const unit =
@@ -163,6 +174,14 @@ export default async function DebtPage({
         unit,
         dollar,
       )}
+      disbursement={{
+        current: disbursement.current,
+        options: disbursement.options.map((option) => ({
+          operationId: option.operationId,
+          label: `${formatDate(option.date)} · ${formatQuantity(option.quantity)} ${shownTicker(debt.instrument_symbol ?? "")}`,
+          place: option.institution,
+        })),
+      }}
       actions={{
         events: {
           record: recordDebtEvent,
@@ -171,6 +190,7 @@ export default async function DebtPage({
         },
         debts: { update: updateDebt, delete: deleteDebt },
         collateral: setDebtCollateral,
+        disbursement: setDebtDisbursement,
       }}
     />
   );

@@ -178,3 +178,85 @@ export async function readLiabilityEvents(
   }
   return { byLiability, cut };
 }
+
+// A deposit that may be a loan's disbursement: units of the debt's
+// instrument that came into one of the user's holdings, by the operation.
+export type DisbursementOption = {
+  operationId: string;
+  date: string;
+  quantity: string;
+  // The account it came into, by its institution.
+  institution: string;
+};
+
+// What a debt in units of an instrument says brought its money in, and the
+// deposits of that instrument that could have: units in at a cost, newest
+// first. A debt in a currency has none to choose.
+export async function readDisbursement(
+  client: Client,
+  liabilityId: string,
+  instrumentSymbol: string | null,
+): Promise<{ current: string | null; options: DisbursementOption[] }> {
+  // Every holding of the instrument, sold to zero ones too: a loan's units
+  // are often spent at once.
+  const held =
+    instrumentSymbol === null
+      ? { data: [], error: null }
+      : await client
+          .from("holdings")
+          .select("id, source_connections!inner(institution)")
+          .eq("instrument_symbol", instrumentSymbol)
+          .is("archived_at", null)
+          .limit(PAGE_ROW_LIMIT);
+  if (held.error || !held.data) {
+    throw new DebtsReadError(held.error?.code ?? "no_data");
+  }
+  const institutions = new Map(
+    (
+      held.data as unknown as {
+        id: string;
+        source_connections: { institution: string };
+      }[]
+    ).map((row) => [row.id, row.source_connections.institution]),
+  );
+  const holdingIds = [...institutions.keys()];
+  const [debt, movements] = await Promise.all([
+    client
+      .from("liabilities")
+      .select("disbursement_operation_id")
+      .eq("id", liabilityId),
+    holdingIds.length === 0
+      ? null
+      : client
+          .from("movements")
+          .select("operation_id, date, quantity:quantity::text, holding_id")
+          .in("holding_id", [...holdingIds])
+          .eq("kind", "adjustment")
+          .eq("direction", "in")
+          .gt("price", 0)
+          .order("date", { ascending: false })
+          .limit(PAGE_ROW_LIMIT),
+  ]);
+  const failure =
+    classifyPostgrestResult(
+      debt as Parameters<typeof classifyPostgrestResult>[0],
+      200,
+    ) ??
+    (movements &&
+      classifyPostgrestResult(
+        movements as Parameters<typeof classifyPostgrestResult>[0],
+        200,
+      ));
+  if (failure || !debt.data || (movements && !movements.data)) {
+    throw new DebtsReadError(failure?.code ?? "no_data");
+  }
+  return {
+    current: debt.data[0]?.disbursement_operation_id ?? null,
+    options: (movements?.data ?? []).map((row) => ({
+      operationId: row.operation_id,
+      date: row.date,
+      quantity: row.quantity as unknown as string,
+      institution: institutions.get(row.holding_id) ?? "",
+    })),
+  };
+}

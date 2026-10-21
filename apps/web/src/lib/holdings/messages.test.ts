@@ -164,3 +164,31 @@ describe("a movement's name in its actions", () => {
     );
   });
 });
+
+it("names the units a loan brought in a loan", () => {
+  const movement = {
+    kind: "adjustment",
+    direction: "in",
+    price: "1",
+    holding_id: "h1",
+  } as Movement;
+  expect(
+    lineLabel({
+      movement,
+      operation: {
+        accountId: "a1",
+        instrument: "USDT",
+        loan: "Préstamo Roxom",
+        parts: [
+          {
+            movement,
+            accountId: "a1",
+            institution: "Roxom",
+            portfolioId: "p1",
+            portfolioName: "Principal",
+          },
+        ],
+      },
+    }),
+  ).toBe("Préstamo");
+});
