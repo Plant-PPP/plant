@@ -6,6 +6,8 @@
 export const PROPOSAL_KINDS = {
   proposeDebt: "debt",
   proposeAccount: "account",
+  proposeHoldings: "holdings",
+  proposeOperations: "operations",
 } as const;
 export type ProposalTool = keyof typeof PROPOSAL_KINDS;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[ProposalTool];
@@ -129,7 +131,9 @@ export const proposalsNote = (
       (each) =>
         `[Propuesta "${each.title}": ${
           each.state === "confirmed"
-            ? "el usuario la confirmó y quedó cargada"
+            ? each.kind === "holdings" || each.kind === "operations"
+              ? "el usuario la confirmó y la está revisando en Cargar"
+              : "el usuario la confirmó y quedó cargada"
             : each.state === "declined"
               ? "el usuario la descartó"
               : "sin respuesta del usuario todavía"

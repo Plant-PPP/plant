@@ -10,7 +10,11 @@ import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { createClient } from "@/lib/supabase/server";
 
-import { PROPOSAL_KINDS, type ProposalTool } from "./proposals";
+import {
+  PROPOSAL_KINDS,
+  type ProposalKind,
+  type ProposalTool,
+} from "./proposals";
 
 const answerSchema = z
   .object({
@@ -20,8 +24,10 @@ const answerSchema = z
   })
   .strict();
 
+// A confirmed holdings or operations proposal is staged as an import: href is
+// its review.
 export type ProposalAnswer =
-  | { ok: true }
+  | { ok: true; href?: string }
   | {
       ok: false;
       code: "invalid" | "not_found" | "answered" | "refused" | "failed";
@@ -37,7 +43,7 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
   const requestId = await currentRequestId();
   const parsed = answerSchema.safeParse(input);
   let result: ProposalAnswer;
-  let kind: string | undefined;
+  let kind: ProposalKind | undefined;
   let failure: unknown;
   if (!parsed.success) {
     result = { ok: false, code: "invalid" };
@@ -90,12 +96,17 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
         const written =
           kind === "debt"
             ? await writeLiability("create_liability", null, part.output.input)
-            : await createAccount(part.output.input);
+            : kind === "account"
+              ? await createAccount(part.output.input)
+              : await stageImport(kind, part.output.input);
         if (!written.ok) {
           result = { ok: false, code: "refused" };
         } else {
           await record("confirmed");
-          result = { ok: true };
+          result = {
+            ok: true,
+            ...("href" in written && { href: written.href }),
+          };
         }
       }
     } catch (error) {
@@ -136,4 +147,28 @@ async function createAccount(input: unknown) {
     includeInTaxReport: true,
     defaultPortfolioId: portfolio,
   });
+}
+
+const stagedSchema = z.object({
+  accountId: z.uuid(),
+  rows: z.array(z.record(z.string(), z.unknown())).min(1).max(200),
+});
+
+// Holdings or operations staged as a ready import of the account, which the
+// database checks is the user's; the user confirms them in its review.
+async function stageImport(
+  draft: "holdings" | "operations",
+  input: unknown,
+): Promise<{ ok: false } | { ok: true; href: string }> {
+  const parsed = stagedSchema.safeParse(input);
+  if (!parsed.success) return { ok: false };
+  const client = await createClient();
+  const staged = await client.rpc("stage_assistant_import", {
+    p_source_connection_id: parsed.data.accountId,
+    p_draft: draft,
+    p_rows: parsed.data
+      .rows as Database["public"]["Functions"]["stage_assistant_import"]["Args"]["p_rows"],
+  });
+  if (staged.error || !staged.data) return { ok: false };
+  return { ok: true, href: `/import/${staged.data}` };
 }

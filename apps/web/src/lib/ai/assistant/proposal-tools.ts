@@ -69,6 +69,109 @@ const accountArgs = z.object({
     .describe("La institución: Nexo, Roxom, Banco Galicia."),
 });
 
+const currency = z.enum(Constants.public.Enums.currency);
+const symbol = z
+  .string()
+  .min(1)
+  .max(30)
+  .describe("El símbolo como figura: BTC, NVDA, AL30, USD.");
+const account = z
+  .string()
+  .min(1)
+  .max(NAME_LIMITS.source_connections.institution)
+  .describe("El nombre exacto de una cuenta que el usuario ya tiene.");
+
+const holdingsArgs = z.object({
+  account,
+  rows: z
+    .array(
+      z.object({
+        symbol,
+        quantity: decimal.describe("La cantidad que tiene hoy."),
+        currency: currency.describe(
+          "La moneda en que cotiza o, para un saldo, la del saldo.",
+        ),
+        cash: z
+          .boolean()
+          .describe(
+            "true solo para un saldo en una moneda (USD, EUR, ARS); USDT, USDC y las demás cripto son false.",
+          ),
+        price: decimal.nullable().describe("El precio por unidad si se ve."),
+        cost: decimal.nullable().describe("Lo que costó en total si se ve."),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+const OPERATION_KINDS = [
+  "purchase",
+  "sale",
+  "dividend",
+  "coupon",
+  "adjustment",
+] as const;
+
+const operationsArgs = z.object({
+  account,
+  rows: z
+    .array(
+      z.object({
+        date: day.nullable(),
+        kind: z
+          .enum(OPERATION_KINDS)
+          .describe(
+            "purchase: compra; sale: venta; dividend y coupon: cobro; adjustment: un depósito o retiro de unidades que no fue compra ni venta.",
+          ),
+        symbol,
+        quantity: decimal.nullable(),
+        price: decimal.nullable().describe("El precio por unidad."),
+        amount: decimal
+          .nullable()
+          .describe("Lo cobrado, para un dividendo o cupón."),
+        charges: decimal.nullable().describe("Comisiones e impuestos."),
+        currency,
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+const KIND_WORDS: Record<(typeof OPERATION_KINDS)[number], string> = {
+  purchase: "Compra",
+  sale: "Venta",
+  dividend: "Dividendo",
+  coupon: "Cupón",
+  adjustment: "Ajuste",
+};
+
+// A card shows this many rows, and how many more there are.
+const SHOWN_ROWS = 8;
+const capped = (lines: string[]): string[] =>
+  lines.length > SHOWN_ROWS
+    ? [...lines.slice(0, SHOWN_ROWS), `y ${lines.length - SHOWN_ROWS} más`]
+    : lines;
+
+type Account = { id: string; institution: string };
+
+// The one open account of that name, or why there is none to load into.
+function accountNamed(
+  held: readonly Account[],
+  name: string,
+): Account | { error: string } {
+  const matches = held.filter(
+    (each) => each.institution.toLowerCase() === name.trim().toLowerCase(),
+  );
+  if (matches.length === 1) return matches[0]!;
+  return matches.length === 0
+    ? {
+        error: `El usuario no tiene la cuenta "${name}". Si la tiene que crear, proponela con proposeAccount y esperá que la confirme; si es otra, preguntale con askUser.`,
+      }
+    : {
+        error: `El usuario tiene varias cuentas "${name}": preguntale con askUser en cuál.`,
+      };
+}
+
 const askArgs = z.object({
   question: z.string().min(1).max(200),
   options: z
@@ -115,8 +218,8 @@ export function proposalTools({
   debts,
 }: {
   today: string;
-  // The user's open accounts, by institution.
-  accounts: () => Promise<readonly string[]>;
+  // The user's open accounts.
+  accounts: () => Promise<readonly Account[]>;
   // The user's debts, by name and lender.
   debts: () => Promise<readonly { label: string; lender: string | null }[]>;
 }) {
@@ -180,12 +283,79 @@ export function proposalTools({
       execute: async ({ institution }): Promise<ProposalOutput> => {
         const name = institution.trim();
         const held = await accounts();
-        if (held.some((each) => each.toLowerCase() === name.toLowerCase())) {
+        if (
+          held.some(
+            (each) => each.institution.toLowerCase() === name.toLowerCase(),
+          )
+        ) {
           return { error: `El usuario ya tiene la cuenta ${name}.` };
         }
         return {
           proposal: { title: name, lines: ["Cuenta nueva"] },
           input: { institution: name },
+        };
+      },
+    }),
+    proposeHoldings: tool({
+      description:
+        "Propone cargar las tenencias de hoy de una cuenta que el usuario ya tiene (lo que muestra una captura de saldos o de cartera). No escribe nada: si la confirma, el usuario la revisa en Cargar y la carga desde ahí. Una sola llamada con todas las filas de la cuenta.",
+      inputSchema: holdingsArgs,
+      execute: async (args): Promise<ProposalOutput> => {
+        const target = accountNamed(await accounts(), args.account);
+        if ("error" in target) return target;
+        const rows = args.rows.map((row) => ({
+          symbol: row.symbol.toUpperCase(),
+          quantity: row.quantity,
+          currency: row.currency,
+          asset_class: row.cash ? "cash" : "instrument",
+          price: row.cash ? null : row.price,
+          cost: row.cash ? null : row.cost,
+        }));
+        return {
+          proposal: {
+            title: `Tenencias en ${target.institution}`,
+            lines: capped(
+              rows.map((row) =>
+                row.asset_class === "cash"
+                  ? `Saldo: ${formatAmount(row.quantity, row.currency)}`
+                  : `${formatQuantity(row.quantity)} ${row.symbol}${row.price ? ` a ${formatAmount(row.price, row.currency)}` : ""}`,
+              ),
+            ),
+          },
+          input: { accountId: target.id, rows },
+        };
+      },
+    }),
+    proposeOperations: tool({
+      description:
+        "Propone cargar operaciones (compras, ventas, cobros, depósitos de unidades) de una cuenta que el usuario ya tiene. No escribe nada: si la confirma, el usuario las revisa en Cargar y las carga desde ahí. Una sola llamada con todas las operaciones de la cuenta.",
+      inputSchema: operationsArgs,
+      execute: async (args): Promise<ProposalOutput> => {
+        const target = accountNamed(await accounts(), args.account);
+        if ("error" in target) return target;
+        const rows = args.rows.map((row) => ({
+          ...row,
+          symbol: row.symbol.toUpperCase(),
+        }));
+        return {
+          proposal: {
+            title: `Operaciones en ${target.institution}`,
+            lines: capped(
+              rows.map(
+                (row) =>
+                  `${row.date ? `${formatDate(row.date)} · ` : ""}${KIND_WORDS[row.kind]} ${
+                    row.quantity ? `${formatQuantity(row.quantity)} ` : ""
+                  }${row.symbol}${
+                    row.amount
+                      ? ` por ${formatAmount(row.amount, row.currency)}`
+                      : row.price
+                        ? ` a ${formatAmount(row.price, row.currency)}`
+                        : ""
+                  }`,
+              ),
+            ),
+          },
+          input: { accountId: target.id, rows },
         };
       },
     }),

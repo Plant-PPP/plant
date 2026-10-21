@@ -1077,3 +1077,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **The `.claude/settings.json` deny list is an aid, not the boundary.** What really protects `staging` and `production` is the GitHub ruleset (required PR, green CI, no force push or deletion).
 - **Telemetry starts with logs** (PLA-21). The Dash0 export waits for PLA-73; `/api/inngest` emits nothing of its own until its first real job.
 - **Ported skills:** the ones the plan lists (§2 ter), with `enforce-tenant-isolation` turned into `enforce-owner-isolation`. The night-autonomy ones have no skill of their own: the mode is armed only by an explicit request and is described in `_shared/night-shift/detect.md`.
+
+## The assistant's holdings and operations go through the review
+
+The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOperations`) of an account the user already has. Confirming the card does not write them: `stage_assistant_import` stages a ready import of that account with the proposed rows (provider `assistant`, no file, no API key), and the user lands on its review in Cargar, which resolves symbols, flags what is already loaded and asks for what is missing before `confirm_import` writes it.

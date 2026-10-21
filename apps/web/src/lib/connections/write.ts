@@ -33,6 +33,7 @@ import { consentsGiven } from "@/lib/consent-given";
 import { SHOWN_IMPORTS } from "@/lib/imports/shown";
 import { serverLog } from "@/lib/log/server-log";
 import { userLimiter } from "@/lib/reports/limit";
+import { ASSISTANT_PROVIDER } from "@/lib/imports/origin";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
 import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
@@ -245,6 +246,7 @@ async function readLastSync(
     .from("imports")
     .select("id, status, failure, updated_at")
     .eq("source_connection_id", accountId)
+    .neq("provider", ASSISTANT_PROVIDER)
     .or(SHOWN_IMPORTS)
     .order("created_at", { ascending: false })
     .limit(1);

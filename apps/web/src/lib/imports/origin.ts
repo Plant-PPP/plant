@@ -15,9 +15,15 @@ export const IMPORT_ORIGIN_COLUMNS =
   "source_connection_id, provider, sync_draft, " +
   "document:uploaded_documents!imports_user_id_document_id_fkey(file_name, mime_type, source_connection_id)";
 
+// What the assistant proposed and the user staged from its card: an import
+// of an account with no file and no API behind it.
+export const ASSISTANT_PROVIDER = "assistant";
+
 export const importOriginSchema = z.object({
   source_connection_id: z.string().nullish(),
-  provider: connectionProviderSchema.nullish(),
+  provider: z
+    .union([connectionProviderSchema, z.literal(ASSISTANT_PROVIDER)])
+    .nullish(),
   sync_draft: connectionDraftSchema.nullish(),
   document: z
     .object({
@@ -49,7 +55,21 @@ export function importOrigin(row: z.infer<typeof importOriginSchema>): {
           : "document",
     };
   }
-  if (row.source_connection_id && row.provider) {
+  if (row.source_connection_id && row.provider === ASSISTANT_PROVIDER) {
+    return {
+      fileName:
+        row.sync_draft === "operations"
+          ? "Operaciones del asistente"
+          : "Tenencias del asistente",
+      accountId: row.source_connection_id,
+      origin: "sync",
+    };
+  }
+  if (
+    row.source_connection_id &&
+    row.provider &&
+    row.provider !== ASSISTANT_PROVIDER
+  ) {
     const name = PROVIDERS[row.provider].name;
     return {
       fileName:
@@ -67,4 +87,8 @@ export function importOrigin(row: z.infer<typeof importOriginSchema>): {
 export const syncProvider = (
   row: z.infer<typeof importOriginSchema>,
 ): string | null =>
-  row.document === null && row.provider ? PROVIDERS[row.provider].name : null;
+  row.document === null && row.provider
+    ? row.provider === ASSISTANT_PROVIDER
+      ? "Asistente"
+      : PROVIDERS[row.provider].name
+    : null;

@@ -164,6 +164,7 @@ SELECT is_empty(
                                        'public.write_cash_movements(uuid,jsonb,uuid[])'::regprocedure,
                                        'public.supersede_queued_sync(uuid,uuid,text,text,date,date)'::regprocedure,
                                        'public.imports_used_this_month()'::regprocedure,
+                                       'public.stage_assistant_import(uuid,text,jsonb)'::regprocedure,
                                        'public.quotes_before(date,public.fx_rate_kind[],text[])'::regprocedure]))
             OR (p.pronamespace = 'private'::regnamespace
                 AND has_function_privilege('service_role', p.oid, 'EXECUTE'))) $$,
@@ -283,8 +284,9 @@ SELECT set_eq(
         'public.account_credentials(uuid,uuid,text)'::regprocedure::text,
         'public.meet_price_alerts()'::regprocedure::text,
         'public.audit_data_export(uuid,text,text)'::regprocedure::text,
-        'public.backfill_fx_rates(jsonb)'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check, the export''s audit row and the dollar backfill are the only SECURITY DEFINER functions'
+        'public.backfill_fx_rates(jsonb)'::regprocedure::text,
+        'public.stage_assistant_import(uuid,text,jsonb)'::regprocedure::text],
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check, the export''s audit row, the dollar backfill and the assistant''s staged imports are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(
