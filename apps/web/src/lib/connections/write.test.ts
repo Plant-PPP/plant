@@ -390,6 +390,7 @@ describe("readApiKey", () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
+          neq: () => builder,
           or: () => builder,
           order: () => builder,
           limit: () => builder,

@@ -251,6 +251,11 @@ export function AssistantChat({
           );
           return false;
         }
+        if (decision === "confirm" && answered.href) {
+          toast.success("Revisalo y cargalo desde acá");
+          router.push(answered.href);
+          return true;
+        }
         if (decision === "confirm") toast.success("Listo, quedó cargado");
         if (activeId) {
           queries.removeQueries({

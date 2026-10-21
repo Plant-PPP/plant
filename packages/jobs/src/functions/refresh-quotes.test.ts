@@ -20,7 +20,7 @@ import {
   runRefreshQuotes,
 } from "./refresh-quotes";
 
-const [DOLLARS, INDEX, CRYPTO, LISTED, US] =
+const [DOLLARS, INDEX, CRYPTO, LISTED, US, GECKO] =
   Constants.public.Enums.quote_source;
 const RETRIES = 2;
 const RUN_ID = "01M8Z3K4567890QWERTYXABCDE";
@@ -767,7 +767,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     return { feeds, reads };
   };
   const everyFeed = (code: string) =>
-    [DOLLARS, INDEX, CRYPTO, LISTED, US]
+    [DOLLARS, INDEX, CRYPTO, LISTED, US, GECKO]
       .map((id) => `${id}:read:${code}`)
       .sort()
       .join(",");
@@ -778,9 +778,9 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const d = deps(feeds);
     const { thrown } = await drive(d);
     expect(thrown).toBeInstanceOf(NonRetriableError);
-    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1, 1]);
     expect(feedLines(d.lines).map((line) => [line.level, line.error])).toEqual(
-      [DOLLARS, INDEX, CRYPTO, LISTED, US].map(() => ["error", bug]),
+      [DOLLARS, INDEX, CRYPTO, LISTED, US, GECKO].map(() => ["error", bug]),
     );
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
@@ -795,7 +795,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(forged);
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1]);
+    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1, 1]);
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("_OTHER"),
       "plant.quotes.unread": "",
@@ -816,7 +816,7 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     const { feeds, reads } = failing(new QuoteFeedError("timeout"));
     const d = deps(feeds);
     await drive(d);
-    expect([...reads.values()]).toEqual(Array(5).fill(RETRIES + 1));
+    expect([...reads.values()]).toEqual(Array(6).fill(RETRIES + 1));
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": everyFeed("timeout"),
       "plant.quotes.stage": "read",
@@ -874,6 +874,14 @@ describe("runRefreshQuotes over the factory's feeds", () => {
         ],
       };
     }
+    if (hostname === "api.coingecko.com") {
+      return {
+        bitcoin: {
+          usd: 1,
+          last_updated_at: Date.parse("2026-10-09T20:00:00Z") / 1000,
+        },
+      };
+    }
     return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
   };
 
@@ -895,7 +903,9 @@ describe("runRefreshQuotes over the factory's feeds", () => {
       }),
     ]);
     await drive(d, memo);
-    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, LISTED, US]));
+    expect(sources(d)).toEqual(
+      new Set([DOLLARS, INDEX, CRYPTO, LISTED, US, GECKO]),
+    );
     const listed = d.save.mock.calls
       .flatMap(([rows]) => rows.prices)
       .filter((row) => row.source === LISTED);
@@ -927,6 +937,6 @@ describe("runRefreshQuotes over the factory's feeds", () => {
     expect(runLines(d.lines)[0]?.fields).toMatchObject({
       "plant.quotes.failed_codes": `${LISTED}:read:unconfigured`,
     });
-    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, US]));
+    expect(sources(d)).toEqual(new Set([DOLLARS, INDEX, CRYPTO, US, GECKO]));
   });
 });

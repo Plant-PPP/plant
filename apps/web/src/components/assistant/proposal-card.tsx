@@ -1,14 +1,33 @@
 "use client";
 
-import { Check, HandCoins, Landmark, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Check,
+  HandCoins,
+  Landmark,
+  Wallet,
+  X,
+} from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ProposalState, ProposalView } from "@/lib/assistant/proposals";
 import { cn } from "@/lib/utils";
 
-const ICONS = { debt: HandCoins, account: Landmark } as const;
-const KIND_LABELS = { debt: "Deuda", account: "Cuenta" } as const;
+const ICONS = {
+  debt: HandCoins,
+  account: Landmark,
+  holdings: Wallet,
+  operations: ArrowLeftRight,
+} as const;
+const KIND_LABELS = {
+  debt: "Deuda",
+  account: "Cuenta",
+  holdings: "Tenencias",
+  operations: "Operaciones",
+} as const;
+// Holdings and operations are confirmed in their review, not on the card.
+const STAGED = new Set<ProposalView["kind"]>(["holdings", "operations"]);
 
 const STATE_LABELS: Record<Exclude<ProposalState, "pending">, string> = {
   confirmed: "Cargada",
@@ -76,7 +95,7 @@ export function ProposalCard({
               onClick={() => answer("confirm")}
             >
               <Check aria-hidden />
-              Confirmar
+              {STAGED.has(proposal.kind) ? "Revisar y cargar" : "Confirmar"}
             </Button>
           </div>
         )
@@ -87,7 +106,9 @@ export function ProposalCard({
           ) : (
             <X aria-hidden className="size-3.5" />
           )}
-          {STATE_LABELS[state]}
+          {state === "confirmed" && STAGED.has(proposal.kind)
+            ? "Enviada a Cargar"
+            : STATE_LABELS[state]}
         </p>
       )}
     </div>

@@ -284,9 +284,9 @@ export async function runAssistantTurn({
         accounts: async () => {
           const result = await client
             .from("source_connections")
-            .select("institution")
+            .select("id, institution")
             .is("archived_at", null);
-          return (result.data ?? []).map((row) => row.institution);
+          return result.data ?? [];
         },
         debts: async () => {
           const result = await client
