@@ -59,8 +59,8 @@ INSERT INTO public.ai_messages (user_id, id, conversation_id, role, parts) VALUE
 -- ── What the API roles hold ─────────────────────────────────────────────────
 SELECT set_eq(
   $$ SELECT pg_temp.acl('public.ai_messages', 'authenticated') $$,
-  ARRAY['(table):SELECT'],
-  'a user only reads their messages'
+  ARRAY['(table):SELECT', 'proposal_states:UPDATE'],
+  'a user reads their messages and answers only their proposals'
 );
 
 SELECT set_eq(

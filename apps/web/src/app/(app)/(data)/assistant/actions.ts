@@ -13,6 +13,10 @@ import {
   pinSourceSchema,
   unpinChart as unpinOwn,
 } from "@/lib/assistant/pins";
+import {
+  answerProposal as answerOwn,
+  type ProposalAnswer,
+} from "@/lib/assistant/answer-proposal";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -145,4 +149,8 @@ export async function unpinChart(id: unknown): Promise<boolean> {
     );
     return false;
   }
+}
+
+export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
+  return answerOwn(input);
 }

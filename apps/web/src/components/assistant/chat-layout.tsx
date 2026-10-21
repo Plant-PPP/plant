@@ -17,7 +17,7 @@ import { UNIT_LABELS } from "@/lib/holdings/messages";
 
 import { ChatComposer } from "./chat-composer";
 import { ChatHeader } from "./chat-header";
-import { ChatTranscript } from "./chat-transcript";
+import { ChatTranscript, type ProposalAnswerer } from "./chat-transcript";
 
 // The assistant's page around whichever chat drives it: the history and the
 // open conversation's title above, the conversation in the middle, scrolling
@@ -35,6 +35,7 @@ export function ChatLayout({
   suggestions,
   questionsLeft,
   onAsk,
+  onProposal,
   busy,
   onStop,
   unit,
@@ -60,7 +61,9 @@ export function ChatLayout({
   questionsLeft: number;
   // Null when the question was not taken; a rejected promise puts it back in
   // the field.
-  onAsk: (question: string) => Promise<unknown> | null;
+  onAsk: (question: string, files?: File[]) => Promise<unknown> | null;
+  // Answers one of an answer's proposals.
+  onProposal?: ProposalAnswerer;
   busy: boolean;
   onStop?: () => void;
   unit: ChatUnit;
@@ -85,8 +88,8 @@ export function ChatLayout({
     else if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [activeId, messages.length, started, scrollRef, scrollToBottom]);
 
-  function ask(question: string) {
-    const taken = onAsk(question);
+  function ask(question: string, files?: File[]) {
+    const taken = onAsk(question, files);
     // A clicked suggestion unmounts, so focus moves to the question field, or
     // to the history when this question used the month's last one.
     if (taken) (questionsLeft > 1 ? questionField : history).current?.focus();
@@ -125,6 +128,7 @@ export function ChatLayout({
             questionsLeft={questionsLeft}
             disclaimerId={disclaimerId}
             onAsk={(question) => void ask(question)?.catch(() => {})}
+            onProposal={onProposal}
             contentRef={contentRef}
           />
         </div>

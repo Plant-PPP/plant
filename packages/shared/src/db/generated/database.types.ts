@@ -55,14 +55,14 @@ isOneToOne: true
                   ]
                 },"ai_messages": {
                   Row: {
-                    "conversation_id": string,"created_at": string,"id": string,"metadata": Json | null,"parts": NonNullable<Json>,"role": string,"user_id": string
+                    "conversation_id": string,"created_at": string,"id": string,"metadata": Json | null,"parts": NonNullable<Json>,"proposal_states": NonNullable<Json>,"role": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"created_at"?: string,"id": string,"metadata"?: Json | null,"parts": NonNullable<Json>,"role": string,"user_id"?: string
+                    "conversation_id": string,"created_at"?: string,"id": string,"metadata"?: Json | null,"parts": NonNullable<Json>,"proposal_states"?: NonNullable<Json>,"role": string,"user_id"?: string
                   }
                   Update: {
-                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"metadata"?: Json | null,"parts"?: NonNullable<Json>,"role"?: string,"user_id"?: string
+                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"metadata"?: Json | null,"parts"?: NonNullable<Json>,"proposal_states"?: NonNullable<Json>,"role"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

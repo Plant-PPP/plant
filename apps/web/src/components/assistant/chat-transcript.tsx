@@ -2,10 +2,11 @@
 
 import type { ReactNode, Ref } from "react";
 
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Paperclip } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { Button } from "@/components/ui/button";
 import {
   type AssistantMessage,
   type ChatMessage,
@@ -19,6 +20,14 @@ import { leftThisMonth } from "@/lib/format/text";
 
 import { AnswerTable } from "./answer-table";
 import { ChartBoundary, ChartCard } from "./chart-card";
+import { ProposalCard } from "./proposal-card";
+
+// Writes the user's answer to a proposal; whether it was kept.
+export type ProposalAnswerer = (
+  messageId: string,
+  proposalId: string,
+  decision: "confirm" | "decline",
+) => Promise<boolean>;
 
 const WORDS_PER_TICK = 3;
 const TICK_MS = 40;
@@ -55,9 +64,17 @@ export function emphasized(text: string): ReactNode[] {
 const Answer = memo(function Answer({
   message,
   animate,
+  last,
+  onAsk,
+  onProposal,
 }: {
   message: AssistantMessage;
   animate: boolean;
+  // Whether it is the conversation's last answer: only its question takes
+  // an answer.
+  last: boolean;
+  onAsk: (question: string) => void;
+  onProposal?: ProposalAnswerer;
 }) {
   const text = useRevealed(message.text, animate);
   const done = text.length === message.text.length;
@@ -67,6 +84,37 @@ const Answer = memo(function Answer({
         <span className="sr-only">Plant: </span>
         {emphasized(text)}
       </p>
+      {done &&
+        message.proposals?.map((proposal) => (
+          <ProposalCard
+            key={proposal.id}
+            proposal={proposal}
+            onAnswer={
+              onProposal &&
+              ((decision) => onProposal(message.id, proposal.id, decision))
+            }
+          />
+        ))}
+      {done && message.question && (
+        <div className="grid gap-2">
+          <p className="font-medium">{message.question.text}</p>
+          {last && (
+            <div className="flex flex-wrap gap-2">
+              {message.question.options.map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAsk(option)}
+                >
+                  {option}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {done && message.table && <AnswerTable table={message.table} />}
       {done &&
         message.charts.slice(0, MAX_CHARTS).map((chart, index) => (
@@ -101,6 +149,7 @@ export function ChatTranscript({
   questionsLeft,
   disclaimerId,
   onAsk,
+  onProposal,
   contentRef,
 }: {
   messages: readonly ChatMessage[];
@@ -112,6 +161,8 @@ export function ChatTranscript({
   questionsLeft: number;
   disclaimerId: string;
   onAsk: (question: string) => void;
+  // Answers one of an answer's proposals; absent, its cards only show.
+  onProposal?: ProposalAnswerer;
   // The element whose growth the scroller follows.
   contentRef?: Ref<HTMLDivElement>;
 }) {
@@ -142,16 +193,30 @@ export function ChatTranscript({
           {messages.map((message) =>
             message.role === "user" ? (
               <div key={message.id} className="flex justify-end">
-                <p className="bg-primary text-primary-foreground max-w-[85%] rounded-lg p-2 text-[13px] break-words whitespace-pre-wrap sm:max-w-[80%]">
-                  <span className="sr-only">Vos: </span>
-                  {message.text}
-                </p>
+                <div className="grid max-w-[85%] justify-items-end gap-1 sm:max-w-[80%]">
+                  {message.attachments?.map((name) => (
+                    <p
+                      key={name}
+                      className="text-muted-foreground flex items-center gap-1 text-xs"
+                    >
+                      <Paperclip aria-hidden className="size-3" />
+                      {name}
+                    </p>
+                  ))}
+                  <p className="bg-primary text-primary-foreground rounded-lg p-2 text-[13px] break-words whitespace-pre-wrap">
+                    <span className="sr-only">Vos: </span>
+                    {message.text}
+                  </p>
+                </div>
               </div>
             ) : (
               <Answer
                 key={message.id}
                 message={message}
                 animate={message.id === arrivedId}
+                last={message.id === messages.at(-1)?.id}
+                onAsk={onAsk}
+                onProposal={onProposal}
               />
             ),
           )}

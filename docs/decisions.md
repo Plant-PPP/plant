@@ -2,6 +2,12 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-21 · The assistant reads files and proposes what to load
+
+- **A question may attach up to four pictures or PDFs** (2,8 MB each, the request under 4 MB), sent inline in the chat request and read by the model as file parts. They are not stored: the question keeps their names in its metadata. A question with files and no text asks "Mirá lo que adjunté." Spreadsheets still go through Cargar.
+- **The assistant proposes, the user confirms.** `proposeDebt` and `proposeAccount` check what they would write (the debt against `liabilityInputSchema`, the account against the ones the user has, a debt against the user's debts by name or lender) and return a card's words and the checked input, writing nothing. `askUser` returns a question with two to four options, shown as buttons under the last answer. Holdings and operations are still loaded from Cargar; the assistant says so.
+- **Proposals and questions are kept with the answer** as its tool parts (`ai_messages.parts`), and the user's answer to each in `ai_messages.proposal_states`, by tool call id. The user writes it under RLS (`authenticated` holds `UPDATE` on that column only). Confirming reads the proposal back from the kept answer, never from the browser, and writes it through the app's own writes (`writeLiability`, `createSourceConnection`) as the session's user. The model reads each proposal's outcome next turn as a line under its answer.
+
 ## 2026-10-21 · An exchange's log as operations
 
 - **A document of operations may list deposits of units**: units that came into the account from outside it without a trade (a crypto deposit from a wallet, a loan's disbursement). The draft keeps them as kind `adjustment` (`import_operations` takes it), always units in, and the review calls them "Depósito". Confirmed, each is an adjustment in at the cost per unit read, so the closes count its value that day as money put in. Withdrawals of units are not read yet.

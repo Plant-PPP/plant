@@ -63,7 +63,7 @@ export async function conversationMessages(
 ): Promise<ChatMessage[]> {
   const { data, error } = await client
     .from("ai_messages")
-    .select("id, role, parts, metadata")
+    .select("id, role, parts, metadata, proposal_states")
     .eq("user_id", userId)
     .eq("conversation_id", conversationId)
     // The newest first, then turned around; a turn's question and answer are
@@ -77,6 +77,12 @@ export async function conversationMessages(
     data.reverse().map((row) => ({
       ...row,
       parts: Array.isArray(row.parts) ? row.parts : [],
+      proposalStates:
+        typeof row.proposal_states === "object" &&
+        row.proposal_states !== null &&
+        !Array.isArray(row.proposal_states)
+          ? row.proposal_states
+          : {},
     })),
   );
 }
