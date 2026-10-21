@@ -285,8 +285,9 @@ SELECT set_eq(
         'public.meet_price_alerts()'::regprocedure::text,
         'public.audit_data_export(uuid,text,text)'::regprocedure::text,
         'public.backfill_fx_rates(jsonb)'::regprocedure::text,
+        'public.save_first_prices(jsonb)'::regprocedure::text,
         'public.stage_assistant_import(uuid,text,jsonb)'::regprocedure::text],
-  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check, the export''s audit row, the dollar backfill and the assistant''s staged imports are the only SECURITY DEFINER functions'
+  'the signup, session, MFA factor, file deletion, conversation deletion, import quota and account credentials triggers, the quota count, the job''s credentials read, the price alerts check, the export''s audit row, the dollar backfill, the first prices and the assistant''s staged imports are the only SECURITY DEFINER functions'
 );
 
 SELECT ok(

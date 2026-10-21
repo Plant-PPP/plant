@@ -51,6 +51,9 @@ export type SavedCounts = { fxRates: number; prices: number };
 // retry can help.
 export interface QuoteStorePort {
   save(rows: QuoteRows): Promise<SavedCounts>;
+  // Saves the latest of each symbol's earlier prices, only for a symbol with
+  // no price stored; how many it inserted.
+  saveFirst?(prices: readonly Price[]): Promise<number>;
 }
 
 // The stored quotes for every key a need names, dated from `from` to `to`

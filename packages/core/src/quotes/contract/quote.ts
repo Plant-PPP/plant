@@ -129,9 +129,12 @@ export type Refusal = (typeof REFUSALS)[number];
 
 // refused lists the key of every row not kept, so every raw row is kept or in
 // exactly one bucket. unread lists each unread part as key:code.
+// earlier holds the prices refused only for their date: a symbol with no
+// price yet takes its last close from them.
 export type QuoteBatch = {
   fxRates: FxRate[];
   prices: Price[];
+  earlier?: Price[];
   refused: Record<Refusal, string[]>;
   unread: string[];
   idle?: true;
@@ -360,6 +363,7 @@ function checkTable<T>(
   rows: readonly object[],
   stamp: { source: QuoteSource; fetched_at: string },
   refused: Record<Refusal, string[]>,
+  earlier: T[] = [],
 ): T[] {
   const keyOf = (row: object) => {
     const value = (row as Record<string, unknown>)[table.keys[0]];
@@ -375,7 +379,10 @@ function checkTable<T>(
     }
     const window = table.window(parsed.data);
     if (window === "kept") fresh.push(parsed.data);
-    else refused[window].push(keyOf(parsed.data as object));
+    else {
+      refused[window].push(keyOf(parsed.data as object));
+      earlier.push(parsed.data);
+    }
   }
   const last = new Map(
     fresh.map((row) => [
@@ -413,6 +420,7 @@ export function checkBatch(
     stamp,
     refused,
   );
+  const earlier: Price[] = [];
   const prices = checkTable(
     {
       schema: priceSchema,
@@ -424,12 +432,14 @@ export function checkBatch(
     raw.prices,
     stamp,
     refused,
+    earlier,
   );
   const unread = raw.unread ?? [];
   refused.invalid.push(...unread.map(({ key }) => key));
   return {
     fxRates,
     prices,
+    earlier,
     refused,
     unread: unread.map(({ key, code }) => `${key}:${code}`),
   };

@@ -1081,3 +1081,6 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## The assistant's holdings and operations go through the review
 
 The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOperations`) of an account the user already has. Confirming the card does not write them: `stage_assistant_import` stages a ready import of that account with the proposed rows (provider `assistant`, no file, no API key), and the user lands on its review in Cargar, which resolves symbols, flags what is already loaded and asks for what is missing before `confirm_import` writes it.
+## A new symbol takes its last close at once
+
+A symbol loaded during the day had no price until the quotes job ran after the close. The job now keeps the prices its feeds refuse only for their date, and `save_first_prices` stores the latest of them for a symbol `prices` has no row of; once a symbol has one, only the hourly run adds the next. Confirming an import, and clicking the logo, asks for a run at once.

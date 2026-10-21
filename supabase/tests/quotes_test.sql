@@ -73,9 +73,9 @@ SELECT set_eq(
                    'private.guard_price_insert()'::regprocedure) $$,
   ARRAY[
     $b$guard_fx_rate_insert: BEGIN IF NEW.rate_date <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND NOT ( NEW.rate_date < (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND pg_catalog.current_setting('plant.backfill_fx_rates', true) IS NOT DISTINCT FROM 'on' AND current_user = 'postgres' ) THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$,
-    $b$guard_price_insert: BEGIN IF NEW.price_date <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$
+    $b$guard_price_insert: BEGIN IF NEW.price_date <> (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND NOT ( NEW.price_date < (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date AND pg_catalog.current_setting('plant.first_prices', true) IS NOT DISTINCT FROM 'on' AND current_user = 'postgres' ) THEN RAISE EXCEPTION 'a quote is dated today' USING ERRCODE = 'PT403'; END IF; RETURN NEW; END;$b$
   ],
-  'each guard refuses any day but today in Buenos Aires, past days of the dollars only to backfill_fx_rates'
+  'each guard refuses any day but today in Buenos Aires, past days of the dollars only to backfill_fx_rates and of prices only to save_first_prices'
 );
 
 SELECT ok(
