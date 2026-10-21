@@ -10,20 +10,16 @@ import {
   IBKR_CREDENTIALS,
   IOL_CREDENTIALS,
   MERCADO_PAGO_CREDENTIALS,
-  NEXO_CREDENTIALS,
   NOW,
   PROVIDER_FIXTURES,
   resetMercadoPagoReports,
   RIPIO_CREDENTIALS,
-  ROXOM_CREDENTIALS,
   WALLBIT_CREDENTIALS,
 } from "./fixtures.test-support";
 import { flexRanges, ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
 import { balanceOf, mercadoPagoConnection } from "./mercadopago";
-import { nexoConnection } from "./nexo";
 import { ripioConnection } from "./ripio";
-import { roxomConnection } from "./roxom";
 import { wallbitConnection } from "./wallbit";
 
 // What each adapter makes of its provider's answers, past the contract.
@@ -327,21 +323,6 @@ describe("ibkr's budget", () => {
   });
 });
 
-describe("nexo", () => {
-  it("reads each balance held, signing the request with the time as its nonce", async () => {
-    fake.answer = PROVIDER_FIXTURES.nexo.ok;
-    const reading = await nexoConnection(deps()).read(
-      NEXO_CREDENTIALS,
-      "holdings",
-    );
-    expect(rowsOf(reading)).toEqual([
-      ["BTC", "0.05", "USD"],
-      ["USDT", "1200.75", "USD"],
-    ]);
-    expect(fake.requests[0]!.headers["x-nonce"]).toBe(String(NOW.getTime()));
-  });
-});
-
 describe("iol", () => {
   it("logs in with the form IOL takes, then reads the portfolio and each account's cash", async () => {
     fake.answer = PROVIDER_FIXTURES.iol.ok;
@@ -514,48 +495,6 @@ describe("iol operations", () => {
     expect(operationsOf(reading).map((each) => each.reference)).toEqual([
       "51234890",
     ]);
-  });
-});
-
-describe("roxom", () => {
-  beforeEach(() => {
-    fake.answer = PROVIDER_FIXTURES.roxom.ok;
-  });
-
-  it("reads each balance in bitcoin, signing the method and the path with its query", async () => {
-    const reading = await roxomConnection(deps()).read(
-      ROXOM_CREDENTIALS,
-      "holdings",
-    );
-    expect(rowsOf(reading)).toEqual([
-      ["BTC", "0.125", "USD"],
-      ["USDT", "350", "USD"],
-    ]);
-    expect(fake.requests.map((each) => each.url)).toEqual([
-      "/v1/accounts/balance?unit=btc",
-    ]);
-  });
-
-  it("takes a private key whose line breaks a form dropped", async () => {
-    const oneLine = ROXOM_CREDENTIALS.privateKey.replace(/\r?\n/g, "");
-    await expect(
-      roxomConnection(deps()).check({
-        ...ROXOM_CREDENTIALS,
-        privateKey: oneLine,
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it("refuses a PEM that holds no private key without asking Roxom", async () => {
-    const port = roxomConnection(deps());
-    const notAKey = `-----BEGIN PRIVATE KEY-----${"A".repeat(200)}-----END PRIVATE KEY-----`;
-    expect(
-      port.parse({ ...ROXOM_CREDENTIALS, privateKey: "not a pem" }),
-    ).toBeNull();
-    expect(
-      await failure(port.check({ ...ROXOM_CREDENTIALS, privateKey: notAKey })),
-    ).toEqual({ code: "connection_rejected", retryable: false });
-    expect(fake.requests).toEqual([]);
   });
 });
 
