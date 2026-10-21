@@ -1,4 +1,5 @@
 import { createArgentinadatosFeed } from "./adapters/argentinadatos/feed";
+import { createCoingeckoFeed } from "./adapters/coingecko/feed";
 import { createDolarapiFeed } from "./adapters/dolarapi/feed";
 import { type Currency, usTicker } from "@plant/shared";
 
@@ -71,14 +72,16 @@ export function quoteFeeds(deps: {
     (await instruments()).filter(
       ({ symbol }) => (usTicker(symbol) !== null) === us,
     );
+  const crypto = async () =>
+    (await instruments())
+      .filter(({ type, currency }) => type === "crypto" && currency === "USD")
+      .map(({ symbol }) => symbol);
   return [
     createDolarapiFeed(deps.getJson),
     createArgentinadatosFeed(deps.getJson),
-    createKrakenFeed(deps.getJson, async () =>
-      (await instruments())
-        .filter(({ type, currency }) => type === "crypto" && currency === "USD")
-        .map(({ symbol }) => symbol),
-    ),
+    createKrakenFeed(deps.getJson, crypto),
+    // After Kraken: a crypto Kraken has no market for, like NEXO.
+    createCoingeckoFeed(deps.getJson, crypto),
     createIolFeed({
       getJson: deps.getJson,
       postForm: deps.postForm,

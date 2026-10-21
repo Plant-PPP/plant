@@ -375,6 +375,14 @@ describe("quoteFeeds", () => {
         },
       };
     }
+    if (hostname === "api.coingecko.com") {
+      return {
+        bitcoin: {
+          usd: 1,
+          last_updated_at: Date.parse(NOW.toISOString()) / 1000,
+        },
+      };
+    }
     return { error: [], result: { XXBTZUSD: { c: ["1", "1"] } } };
   };
 
@@ -534,7 +542,7 @@ describe("quoteFeeds", () => {
       iol: CREDENTIALS,
       instruments: async () => [],
     });
-    for (const id of ["yahoo", "iol", "kraken"]) {
+    for (const id of ["yahoo", "iol", "kraken", "coingecko"]) {
       const batch = await feeds.find((feed) => feed.id === id)!.read(NOW);
       expect([batch.prices, batch.idle, batch.unread]).toEqual([[], true, []]);
     }
