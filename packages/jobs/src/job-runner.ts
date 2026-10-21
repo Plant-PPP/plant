@@ -3,6 +3,7 @@ import {
   IMPORT_CANCELLED_EVENT,
   IMPORT_REQUESTED_EVENT,
 } from "./functions/import-document";
+import { REFRESH_QUOTES_EVENT } from "./functions/refresh-quotes";
 
 // What the web app asks of the background jobs; it never names the engine.
 export interface JobRunner {
@@ -18,6 +19,9 @@ export interface JobRunner {
   }): Promise<void>;
   // Stops the read of an import the user cancelled, if one is running.
   cancelImport(input: { importId: string; userId: string }): Promise<void>;
+  // Reads the quotes now, as the hourly run would. A run already going
+  // absorbs it.
+  refreshQuotes(): Promise<void>;
 }
 
 export function inngestJobRunner(client = inngest): JobRunner {
@@ -34,6 +38,9 @@ export function inngestJobRunner(client = inngest): JobRunner {
         name: IMPORT_CANCELLED_EVENT,
         data: { importId, userId },
       });
+    },
+    async refreshQuotes() {
+      await client.send({ name: REFRESH_QUOTES_EVENT, data: {} });
     },
   };
 }
