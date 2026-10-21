@@ -6,7 +6,7 @@ import {
   type Movement,
   type MovementKind,
 } from "@plant/core";
-import type { Currency } from "@plant/shared";
+import { compareDecimals, type Currency } from "@plant/shared";
 
 import { formatAmount, formatQuantity } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -56,7 +56,16 @@ export const MOVEMENT_KIND_LABELS: Record<MovementKind, string> = {
   yield: "Rendimiento",
 };
 
+// Units that came in from outside at a cost (a crypto deposit, a loan's
+// disbursement) read as a deposit; an adjustment with none, as a split, as
+// an adjustment.
+const isDeposit = (movement: Movement): boolean =>
+  movement.kind === "adjustment" &&
+  movement.direction === "in" &&
+  compareDecimals(movement.price, "0") > 0;
+
 const movementLabel = (movement: Movement): string => {
+  if (isDeposit(movement)) return "Depósito";
   if (isYield(movement)) {
     return movement.direction === "in"
       ? MOVEMENT_KIND_LABELS.yield
