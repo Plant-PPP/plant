@@ -1,6 +1,6 @@
-import { proposalTools } from "./proposal-tools";
+jest.mock("server-only", () => ({}), { virtual: true });
 
-jest.mock("server-only", () => ({}));
+import { proposalTools } from "./proposal-tools";
 
 const NEXO = {
   id: "6f1c1a52-7c1a-4b1e-9a3e-1d2c3b4a5f60",
