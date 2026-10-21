@@ -630,6 +630,9 @@ isOneToOne: false
 "restore_cash":
 { Args: { "p_amount": number,"p_currency": Database["public"]['Enums']["currency"],"p_holding_id": string }; Returns: string
                            },
+"save_first_prices":
+{ Args: { "p_rows": Json }; Returns: number
+                           },
 "supersede_queued_sync":
 { Args: { "p_provider": string,"p_queued_id": string,"p_source_connection_id": string,"p_sync_draft": string,"p_sync_from"?: string,"p_sync_to"?: string }; Returns: string
                            },

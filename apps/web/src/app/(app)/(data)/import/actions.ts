@@ -1,5 +1,6 @@
 "use server";
 
+import { getSessionClaims } from "@/lib/auth/session-claims";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
   confirmImportDebts as confirmDebts,
@@ -17,6 +18,7 @@ import {
   type StartResult,
   startUpload as start,
 } from "@/lib/imports/write";
+import { requestQuotes } from "@/lib/quotes/request-quotes";
 
 // The arguments come from the browser; lib/imports/write parses each one and
 // writes as the session's user, under RLS.
@@ -48,14 +50,14 @@ export async function confirmImport(
   rows: unknown,
   heldCash: unknown,
 ): Promise<MovementResult> {
-  return confirmRows(importId, rows, heldCash);
+  return quoted(await confirmRows(importId, rows, heldCash));
 }
 
 export async function confirmImportOperations(
   importId: unknown,
   rows: unknown,
 ): Promise<MovementResult & { rowId?: string }> {
-  return confirmOperations(importId, rows);
+  return quoted(await confirmOperations(importId, rows));
 }
 
 export async function confirmImportDebts(
@@ -63,4 +65,10 @@ export async function confirmImportDebts(
   rows: unknown,
 ): Promise<MovementResult> {
   return confirmDebts(importId, rows);
+}
+
+// A confirmed import may bring a symbol with no price yet.
+async function quoted<R extends { ok: boolean }>(result: R): Promise<R> {
+  if (result.ok) await requestQuotes((await getSessionClaims()).sub);
+  return result;
 }

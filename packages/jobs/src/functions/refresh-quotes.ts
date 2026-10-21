@@ -68,12 +68,22 @@ async function refreshFeed(
   const elapsed = () => deps.now().getTime() - start.getTime();
   let stage: QuoteStage = "read";
   try {
-    const { fxRates, prices, refused, unread, idle } = await feed.read(start);
+    const {
+      fxRates,
+      prices,
+      earlier = [],
+      refused,
+      unread,
+      idle,
+    } = await feed.read(start);
     stage = "save";
     const saved =
       fxRates.length + prices.length > 0
         ? await deps.store.save({ fxRates, prices })
         : { fxRates: 0, prices: 0 };
+    if (earlier.length > 0 && deps.store.saveFirst) {
+      saved.prices += await deps.store.saveFirst(earlier);
+    }
     return {
       ok: true,
       ...saved,
