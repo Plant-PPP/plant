@@ -244,12 +244,14 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
     documentDate: z.iso.date().safeParse(answer.documentDate).success
       ? answer.documentDate
       : null,
-    rows: answer.rows.flatMap((row) => {
+    rows: answer.rows.flatMap(({ account: named, cost: printed, ...row }) => {
       // A printed value that is not a positive amount is left out, never the
       // row it is on.
       const value = row.value?.trim() || null;
-      const cost = row.cost?.trim() || null;
-      const account = row.account?.trim().slice(0, 60) || null;
+      // A model may answer null for what it leaves out; the draft takes
+      // neither then.
+      const cost = printed?.trim() || null;
+      const account = named?.trim().slice(0, 60) || null;
       // A balance in a currency Plant keeps (USD, EUR) is cash in it,
       // whatever currency the reading valued it in.
       const fiat = Constants.public.Enums.currency.find(
