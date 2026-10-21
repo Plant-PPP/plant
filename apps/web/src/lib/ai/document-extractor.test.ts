@@ -170,6 +170,38 @@ it("drops a date that is not one", async () => {
   expect(draft.documentDate).toBeNull();
 });
 
+it("keeps a row whose account and cost the model answers as null", async () => {
+  const { draft } = holdings(
+    await extract(
+      answering(
+        JSON.stringify({
+          kind: "screenshot",
+          documentDate: null,
+          rows: [
+            {
+              symbol: "ETH",
+              quantity: "37.23938885",
+              price: "2489.63",
+              value: "92691.52",
+              account: null,
+              cost: null,
+              currency: "USD",
+              confidence: "high",
+              page: 1,
+            },
+          ],
+          operations: [],
+          totals: [],
+        }),
+      ),
+    ),
+  );
+  expect(draft.rows).toEqual([
+    expect.objectContaining({ symbol: "ETH", quantity: "37.23938885" }),
+  ]);
+  expect(draft.rows[0]).not.toHaveProperty("account");
+});
+
 it("keeps the totals the statement prints, one per currency", async () => {
   const { draft } = holdings(
     await extract(
