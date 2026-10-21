@@ -509,6 +509,11 @@ const cardStatement = (balance: string) =>
     totals: [],
     debts: [
       {
+        kind: "credit_card",
+        instrumentSymbol: null,
+        annualRatePercent: null,
+        accrues: null,
+        openedOn: null,
         label: " Visa ",
         lender: "Galicia",
         currency: "ARS",
@@ -519,6 +524,11 @@ const cardStatement = (balance: string) =>
         page: 1,
       },
       {
+        kind: "credit_card",
+        instrumentSymbol: null,
+        annualRatePercent: null,
+        accrues: null,
+        openedOn: null,
         label: "Visa",
         lender: null,
         currency: "USD",
@@ -543,15 +553,83 @@ it("reads a document both readers call a card statement as its debts", async () 
   // that reads is left out.
   expect(reading.debts).toEqual([
     {
+      kind: null,
       label: "Visa",
       lender: "Galicia",
       currency: "ARS",
+      instrumentSymbol: null,
       balance: null,
       minimumPayment: "25000",
       dueDate: "2026-10-20",
+      annualRate: null,
+      accrues: null,
+      openedOn: null,
       confidence: "low",
       page: 1,
     },
+  ]);
+});
+
+it("reads a loan statement as a debt of its kind, its rate a fraction", async () => {
+  const loans = JSON.stringify({
+    kind: "loan_statement",
+    documentDate: null,
+    rows: [],
+    operations: [],
+    totals: [],
+    debts: [
+      {
+        kind: "usd_debt",
+        instrumentSymbol: null,
+        annualRatePercent: "13.9",
+        accrues: true,
+        openedOn: "2026-10-01",
+        label: "Credit Line",
+        lender: "Nexo",
+        currency: "USD",
+        balance: "1500.25",
+        minimumPayment: null,
+        dueDate: null,
+        confidence: "high",
+        page: 1,
+      },
+      {
+        kind: "crypto_loan",
+        instrumentSymbol: "btc",
+        annualRatePercent: "not a rate",
+        accrues: true,
+        openedOn: null,
+        label: "Préstamo BTC",
+        lender: null,
+        currency: "USD",
+        balance: "0.05",
+        minimumPayment: null,
+        dueDate: null,
+        confidence: "high",
+        page: 1,
+      },
+    ],
+  });
+  const { run } = byModel({ [READERS[0]]: loans, [READERS[1]]: loans });
+  const reading = await run();
+  expect(reading.read.documentKind).toBe("loan_statement");
+  if (!("debts" in reading)) throw new Error("not read as debts");
+  expect(reading.debts).toEqual([
+    expect.objectContaining({
+      kind: "usd_debt",
+      currency: "USD",
+      annualRate: "0.139",
+      accrues: true,
+      openedOn: "2026-10-01",
+      confidence: "high",
+    }),
+    expect.objectContaining({
+      kind: "crypto_loan",
+      currency: null,
+      instrumentSymbol: "BTC",
+      annualRate: null,
+      balance: "0.05",
+    }),
   ]);
 });
 
@@ -567,6 +645,11 @@ it("counts the debts two readings make past the limit as skipped", async () => {
         ...Array.from({ length: ars }, () => ["ARS", "1000"]),
         ...Array.from({ length: usd }, () => ["USD", "10"]),
       ].map(([currency, balance]) => ({
+        kind: "credit_card",
+        instrumentSymbol: null,
+        annualRatePercent: null,
+        accrues: null,
+        openedOn: null,
         label: "Visa",
         lender: "Galicia",
         currency,

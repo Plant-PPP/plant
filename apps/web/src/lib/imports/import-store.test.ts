@@ -435,13 +435,18 @@ it("throws a store error with only the step and code", async () => {
   expect(String(error)).not.toContain("row details");
 });
 
-it("replaces any draft with a card statement's debts, then marks the import ready", async () => {
+it("replaces any draft with a statement's debts, then marks the import ready", async () => {
   const { store, calls } = storeWith(draftAnswers());
   await store.saveDebts(
     IMPORT,
     USER,
     [
       {
+        kind: "personal_loan",
+        instrumentSymbol: null,
+        annualRate: "0.455",
+        accrues: false,
+        openedOn: "2026-10-01",
         label: "Visa",
         lender: null,
         currency: "ARS",
@@ -467,12 +472,17 @@ it("replaces any draft with a card statement's debts, then marks the import read
       user_id: USER,
       import_id: IMPORT,
       position: 0,
+      kind: "personal_loan",
       label: "Visa",
       lender: null,
       currency: "ARS",
+      instrument_symbol: null,
       balance: "250000.5",
       minimum_payment: null,
       due_date: "2026-10-20",
+      annual_rate: "0.455",
+      accrues: false,
+      opened_on: "2026-10-01",
       confidence: "high",
       source_page: 1,
     },

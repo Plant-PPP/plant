@@ -3,6 +3,11 @@ import { DRAFT_DEBT_LIMIT, type DraftDebt } from "@plant/sources";
 import { mergeDebts } from "./debt-consensus";
 
 const debt = (patch: Partial<DraftDebt> = {}): DraftDebt => ({
+  kind: null,
+  instrumentSymbol: null,
+  annualRate: null,
+  accrues: null,
+  openedOn: null,
   label: "Visa",
   lender: "Galicia",
   currency: "ARS",
@@ -58,4 +63,30 @@ it("counts the debts past the limit the two readings make together as cut", () =
   );
   expect(merged.rows).toHaveLength(DRAFT_DEBT_LIMIT);
   expect(merged.cut).toBe(12 - DRAFT_DEBT_LIMIT);
+});
+
+it("merges a loan's rate, accrual and balance day like its figures", () => {
+  const loan = debt({
+    kind: "crypto_loan",
+    currency: null,
+    instrumentSymbol: "BTC",
+    balance: "0.05",
+    annualRate: "0.12",
+    accrues: true,
+    openedOn: "2026-10-01",
+  });
+  expect(mergeDebts([loan], [{ ...loan, annualRate: "0.120" }]).rows).toEqual([
+    loan,
+  ]);
+  expect(
+    mergeDebts([loan], [{ ...loan, accrues: false, openedOn: null }]).rows,
+  ).toEqual([{ ...loan, accrues: null, openedOn: null, confidence: "low" }]);
+});
+
+it("never pairs a loan with a card in the same currency", () => {
+  const loan = debt({ kind: "personal_loan" });
+  expect(mergeDebts([debt()], [loan]).rows).toEqual([
+    { ...debt(), confidence: "low" },
+    { ...loan, confidence: "low" },
+  ]);
 });

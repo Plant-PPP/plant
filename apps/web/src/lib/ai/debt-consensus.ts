@@ -4,22 +4,24 @@ import { DRAFT_DEBT_LIMIT, type DraftDebt } from "@plant/sources";
 const sameDecimal = (a: string | null, b: string | null) =>
   a === null || b === null ? a === b : compareDecimals(a, b) === 0;
 
-// A debt's identity across readings: its currency, and which occurrence it is.
+// A debt's identity across readings: its kind and unit, and which occurrence
+// it is.
 function keyed(debts: readonly DraftDebt[]) {
   const seen = new Map<string, number>();
   const out = new Map<string, DraftDebt>();
   for (const debt of debts) {
-    const n = seen.get(debt.currency) ?? 0;
-    seen.set(debt.currency, n + 1);
-    out.set(`${debt.currency}#${n}`, debt);
+    const unit = `${debt.kind ?? "card"}:${debt.currency ?? debt.instrumentSymbol}`;
+    const n = seen.get(unit) ?? 0;
+    seen.set(unit, n + 1);
+    out.set(`${unit}#${n}`, debt);
   }
   return out;
 }
 
-// Merges two readings of a card statement, in the first reading's order. A
-// debt both list keeps each figure and date they agree on and leaves null,
-// marked low, any they do not; the card's name and bank are the first
-// reading's, the second's where the first has none. A debt only one reading
+// Merges two readings of a card or loan statement, in the first reading's
+// order. A debt both list keeps each figure, date, rate and accrual they
+// agree on and leaves null, marked low, any they do not; the debt's name and
+// lender are the first reading's, the second's where the first has none. A debt only one reading
 // lists is kept, low. `cut` counts the debts past DRAFT_DEBT_LIMIT left out.
 export function mergeDebts(
   first: readonly DraftDebt[],
@@ -38,6 +40,9 @@ export function mergeDebts(
       balance: sameDecimal(one.balance, two.balance),
       minimumPayment: sameDecimal(one.minimumPayment, two.minimumPayment),
       dueDate: one.dueDate === two.dueDate,
+      annualRate: sameDecimal(one.annualRate, two.annualRate),
+      accrues: one.accrues === two.accrues,
+      openedOn: one.openedOn === two.openedOn,
     };
     const balance = agree.balance ? one.balance : null;
     const minimumPayment = agree.minimumPayment ? one.minimumPayment : null;
@@ -46,12 +51,17 @@ export function mergeDebts(
     const disputed = Object.values(agree).some((each) => !each);
     const order = ["low", "medium", "high"] as const;
     merged.push({
+      kind: one.kind,
       label: one.label ?? two.label,
       lender: one.lender ?? two.lender,
       currency: one.currency,
+      instrumentSymbol: one.instrumentSymbol,
       balance,
       minimumPayment,
       dueDate,
+      annualRate: agree.annualRate ? one.annualRate : null,
+      accrues: agree.accrues ? one.accrues : null,
+      openedOn: agree.openedOn ? one.openedOn : null,
       confidence: disputed
         ? "low"
         : order[

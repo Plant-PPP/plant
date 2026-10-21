@@ -189,14 +189,14 @@ isOneToOne: false
                   ]
                 },"import_debts": {
                   Row: {
-                    "balance": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at": string,"currency": Database["public"]['Enums']["currency"],"due_date": string | null,"id": string,"import_id": string,"label": string | null,"lender": string | null,"minimum_payment": number | null,"position": number,"source_page": number | null,"user_id": string
+                    "accrues": boolean | null,"annual_rate": number | null,"balance": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"due_date": string | null,"id": string,"import_id": string,"instrument_symbol": string | null,"kind": Database["public"]['Enums']["liability_kind"] | null,"label": string | null,"lender": string | null,"minimum_payment": number | null,"opened_on": string | null,"position": number,"source_page": number | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "balance"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"due_date"?: string | null,"id"?: string,"import_id": string,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"position": number,"source_page"?: number | null,"user_id": string
+                    "accrues"?: boolean | null,"annual_rate"?: number | null,"balance"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"due_date"?: string | null,"id"?: string,"import_id": string,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"] | null,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"opened_on"?: string | null,"position": number,"source_page"?: number | null,"user_id": string
                   }
                   Update: {
-                    "balance"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"due_date"?: string | null,"id"?: string,"import_id"?: string,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"position"?: number,"source_page"?: number | null,"user_id"?: string
+                    "accrues"?: boolean | null,"annual_rate"?: number | null,"balance"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"due_date"?: string | null,"id"?: string,"import_id"?: string,"instrument_symbol"?: string | null,"kind"?: Database["public"]['Enums']["liability_kind"] | null,"label"?: string | null,"lender"?: string | null,"minimum_payment"?: number | null,"opened_on"?: string | null,"position"?: number,"source_page"?: number | null,"user_id"?: string
                   }
                   Relationships: [
                     {

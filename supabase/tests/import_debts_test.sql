@@ -1,12 +1,12 @@
--- A card statement's draft of debts and confirm_import_debts: what the job may
--- write as service_role, that each user reads only their own draft, and that
--- a user confirms only their own ready import, writing their own card debts,
--- all or nothing.
+-- A card or loan statement's draft of debts and confirm_import_debts: what the
+-- job may write as service_role, that each user reads only their own draft,
+-- and that a user confirms only their own ready import, writing their own card
+-- debts and loans, all or nothing.
 --
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(18);
+SELECT plan(23);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -50,7 +50,8 @@ FROM public.portfolios
 WHERE user_id IN ('a0000000-0000-4000-8000-00000000000a', 'b0000000-0000-4000-8000-00000000000b');
 ALTER TABLE public.source_connections ENABLE TRIGGER portfolio_setup_1_lock;
 
--- Ana has three card statements ready to review; Beto has one.
+-- Ana has three card statements and a loan statement ready to review; Beto
+-- has one.
 INSERT INTO public.uploaded_documents (id, user_id, source_connection_id, storage_path,
                                        file_name, mime_type, size_bytes, sha256)
 SELECT id, owner, connection, owner || '/imports/' || id || '/' || id,
@@ -62,6 +63,8 @@ FROM (VALUES
    'a5000000-0000-4000-8000-0000000000a5'::uuid, '2'),
   ('a8000000-0000-4000-8000-0000000000a3'::uuid, 'a0000000-0000-4000-8000-00000000000a'::uuid,
    'a5000000-0000-4000-8000-0000000000a5'::uuid, '4'),
+  ('a8000000-0000-4000-8000-0000000000a4'::uuid, 'a0000000-0000-4000-8000-00000000000a'::uuid,
+   'a5000000-0000-4000-8000-0000000000a5'::uuid, '5'),
   ('b8000000-0000-4000-8000-0000000000b1'::uuid, 'b0000000-0000-4000-8000-00000000000b'::uuid,
    'b5000000-0000-4000-8000-0000000000b5'::uuid, '3')) AS docs (id, owner, connection, digit);
 INSERT INTO public.imports (id, user_id, document_id, status) VALUES
@@ -71,6 +74,8 @@ INSERT INTO public.imports (id, user_id, document_id, status) VALUES
    'a8000000-0000-4000-8000-0000000000a2', 'ready'),
   ('a9000000-0000-4000-8000-0000000000a3', 'a0000000-0000-4000-8000-00000000000a',
    'a8000000-0000-4000-8000-0000000000a3', 'ready'),
+  ('a9000000-0000-4000-8000-0000000000a4', 'a0000000-0000-4000-8000-00000000000a',
+   'a8000000-0000-4000-8000-0000000000a4', 'ready'),
   ('b9000000-0000-4000-8000-0000000000b1', 'b0000000-0000-4000-8000-00000000000b',
    'b8000000-0000-4000-8000-0000000000b1', 'ready');
 
@@ -91,7 +96,8 @@ SELECT set_eq(
   ARRAY['(table):DELETE', 'id:SELECT', 'user_id:SELECT', 'import_id:SELECT',
         'user_id:INSERT', 'import_id:INSERT', 'position:INSERT', 'label:INSERT', 'lender:INSERT',
         'currency:INSERT', 'balance:INSERT', 'minimum_payment:INSERT', 'due_date:INSERT',
-        'confidence:INSERT', 'source_page:INSERT'],
+        'confidence:INSERT', 'source_page:INSERT', 'kind:INSERT', 'annual_rate:INSERT',
+        'accrues:INSERT', 'opened_on:INSERT', 'instrument_symbol:INSERT'],
   'the job writes and replaces a draft of debts, nothing more'
 );
 
@@ -120,6 +126,22 @@ VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000
 INSERT INTO public.import_debts (user_id, import_id, position, currency, confidence)
 VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000000a1', 1,
         'USD', 'low');
+
+SELECT lives_ok(
+  $$ INSERT INTO public.import_debts (user_id, import_id, position, kind, label, instrument_symbol,
+                                     balance, annual_rate, accrues, opened_on, confidence)
+     VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000000a4', 0,
+             'crypto_loan', 'Préstamo BTC', 'BTC', '0.05', '0.12', true, '2026-10-01', 'high') $$,
+  'the job files a crypto loan with no currency'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.import_debts (user_id, import_id, position, confidence)
+                      VALUES ('a0000000-0000-4000-8000-00000000000a',
+                              'a9000000-0000-4000-8000-0000000000a4', 1, 'high') $$),
+  '23514',
+  'but no other debt without one'
+);
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.import_debts (user_id, import_id, position, currency,
@@ -156,7 +178,8 @@ SELECT set_config('request.jwt.claims',
 
 SELECT results_eq(
   $$ SELECT d.label, d.balance::text, d.due_date::text, d.confidence::text
-     FROM public.import_debts d ORDER BY d.position $$,
+     FROM public.import_debts d
+     WHERE d.import_id = 'a9000000-0000-4000-8000-0000000000a1' ORDER BY d.position $$,
   $$ VALUES ('Visa', '250000.50000000', '2026-10-20', 'high'),
             (NULL, NULL, NULL, 'low') $$,
   'a user reads their own draft of debts'
@@ -238,6 +261,41 @@ SELECT results_eq(
   $$ SELECT balance::text, installment::text, next_due_on::text FROM public.liabilities $$,
   $$ VALUES ('310000.00000000', '30000.00000000', '2026-11-20') $$,
   'keeping the minimum payment and due date it had'
+);
+
+-- A loan statement makes new debts of their kind; none updates a card.
+SELECT is(
+  pg_temp.error_of($$ SELECT public.confirm_import_debts('a9000000-0000-4000-8000-0000000000a4',
+    jsonb_build_array(jsonb_build_object(
+      'liability_id', (SELECT id FROM public.liabilities), 'kind', 'personal_loan',
+      'label', 'Préstamo', 'currency', 'ARS', 'balance', '1'))) $$),
+  '22023',
+  'a loan never updates a card debt'
+);
+
+SELECT is(
+  public.confirm_import_debts('a9000000-0000-4000-8000-0000000000a4',
+    jsonb_build_array(
+      jsonb_build_object('kind', 'crypto_loan', 'label', 'Préstamo BTC', 'currency', NULL,
+                         'instrument_symbol', 'BTC', 'balance', '0.05', 'annual_rate', '0.12',
+                         'accrues', true, 'opened_on', '2026-10-01'),
+      jsonb_build_object('kind', 'usd_debt', 'label', 'Credit Line', 'lender', 'Nexo',
+                         'currency', 'USD', 'balance', '1500', 'installment', '100',
+                         'annual_rate', '0.139', 'accrues', false,
+                         'next_due_on', '2026-11-01'))),
+  'a9000000-0000-4000-8000-0000000000a4'::uuid,
+  'a user confirms their loan statement'
+);
+
+SELECT results_eq(
+  $$ SELECT kind::text, currency::text, instrument_symbol, balance::text, installment::text,
+            annual_rate::text, accrues, opened_on::text
+     FROM public.liabilities WHERE kind <> 'credit_card' ORDER BY kind::text DESC $$,
+  $$ VALUES ('usd_debt', 'USD', NULL, '1500.00000000', '100.00000000', '0.13900000', false,
+             NULL),
+            ('crypto_loan', NULL, 'BTC', '0.05000000', NULL, '0.12000000', true,
+             '2026-10-01') $$,
+  'as new debts with their unit, rate and accrual'
 );
 
 SELECT * FROM finish();

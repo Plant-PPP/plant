@@ -153,12 +153,17 @@ const operationSchema = z.object({
 
 const debtSchema = z.object({
   id: z.string(),
+  kind: z.enum(Constants.public.Enums.liability_kind).nullable(),
   label: z.string().nullable(),
   lender: z.string().nullable(),
-  currency: z.enum(Constants.public.Enums.currency),
+  currency: z.enum(Constants.public.Enums.currency).nullable(),
+  instrument_symbol: z.string().nullable(),
   balance: z.string().nullable(),
   minimum_payment: z.string().nullable(),
   due_date: z.string().nullable(),
+  annual_rate: z.string().nullable(),
+  accrues: z.boolean().nullable(),
+  opened_on: z.string().nullable(),
   confidence: z.enum(Constants.public.Enums.import_confidence),
   source_page: z.number().nullable(),
 });
@@ -189,12 +194,17 @@ function reviewDebt(data: unknown, origin: ImportOrigin): ImportDebtRow {
   const row = debtSchema.parse(data);
   return {
     id: row.id,
+    kind: row.kind,
     label: row.label,
     lender: row.lender,
     currency: row.currency,
+    instrumentSymbol: row.instrument_symbol,
     balance: row.balance,
     minimumPayment: row.minimum_payment,
     dueDate: row.due_date,
+    annualRate: row.annual_rate,
+    accrues: row.accrues,
+    openedOn: row.opened_on,
     confidence: row.confidence,
     source:
       row.source_page === null
@@ -421,8 +431,9 @@ export async function readImportForReview(
     client
       .from("import_debts")
       .select(
-        "id, label, lender, currency, balance:balance::text, " +
-          "minimum_payment:minimum_payment::text, due_date, confidence, source_page",
+        "id, kind, label, lender, currency, instrument_symbol, balance:balance::text, " +
+          "minimum_payment:minimum_payment::text, due_date, " +
+          "annual_rate:annual_rate::text, accrues, opened_on, confidence, source_page",
       )
       .eq("import_id", id)
       .order("position"),
