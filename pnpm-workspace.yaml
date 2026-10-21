@@ -15,7 +15,7 @@ catalog:
   inngest: 4.24.0
   jest: ^30.5.2
   ts-jest: ^29.4.14
-  typescript: ^5.9.3
+  typescript: ^7.0.2
   typescript-eslint: ^8.71.2
   zod: ^4.6.7
 
