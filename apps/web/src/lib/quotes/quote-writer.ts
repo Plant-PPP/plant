@@ -8,7 +8,7 @@ import type {
 
 import { STORE_TIMEOUT_MS, storeError } from "@/lib/quotes/store-error";
 import type { DecimalInsert } from "@/lib/supabase/decimal-columns";
-import { postgrestInsert } from "@/lib/supabase/postgrest-write";
+import { postgrestCall, postgrestInsert } from "@/lib/supabase/postgrest-write";
 
 type Tables = Database["public"]["Tables"];
 
@@ -76,6 +76,19 @@ export function createQuoteWriter(
             .abortSignal(signal),
         ),
       };
+    },
+    async saveFirst(prices) {
+      if (prices.length === 0) return 0;
+      const result = await postgrestCall(
+        (signal) =>
+          client
+            .rpc("save_first_prices", { p_rows: [...prices] })
+            .abortSignal(signal),
+        STORE_TIMEOUT_MS,
+        [200],
+      );
+      if ("code" in result) throw storeError(result);
+      return result.data ?? 0;
     },
   };
 }
