@@ -2,6 +2,13 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-21 · An exchange's log as operations
+
+- **A document of operations may list deposits of units**: units that came into the account from outside it without a trade (a crypto deposit from a wallet, a loan's disbursement). The draft keeps them as kind `adjustment` (`import_operations` takes it), always units in, and the review calls them "Depósito". Confirmed, each is an adjustment in at the cost per unit read, so the closes count its value that day as money put in. Withdrawals of units are not read yet.
+- **The reader takes an exchange's log**: a trade of one asset for another comes as two fills, and the sign of each amount says which was given (a sale) and which received (a purchase), whatever the side column says; both go in dollars. Moves between the account's sub-accounts and collateral locked, topped up or released are left out. A loan's disbursement is a deposit of the borrowed asset; the loan itself is a debt the user adds in Deudas, with its collateral.
+- **A trade or deposit read with its total and units but no price takes the price they make**, on the instrument's quote basis, once the instrument is known. In an account that trades only on the US exchanges, it does so before the instrument is known too, since its prices are per unit. Plant computes it rather than asking the model to divide.
+- **In an account that trades on the US exchanges and not on BYMA, an operation's ticker is its US listing**: NVDA is NVDA.US, named so when the catalog lacks it, so the review adds it; crypto stays as it is. Roxom is such an account: it lists US shares beside bitcoin.
+
 ## 2026-10-21 · An IBKR sync brings the account's cash
 
 - **A sync of operations may read the account's money too** (`OperationsReading.cash`, a `CashDraft`): its movements as rows of the same shape as IOL's Movimientos históricos (`AccountMovementRow`), and the balance each currency opened with. The job keeps it in `imports.sync_cash` (jsonb, at most 2 MB; `authenticated` reads it, `service_role` writes it), not in a table of its own: it is read whole once, at the confirmation, and never edited in the review.

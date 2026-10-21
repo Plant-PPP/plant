@@ -58,17 +58,15 @@ import { formatDate } from "@/lib/format/date";
 import { HOLDING_CLASS_LABELS } from "@/lib/holdings/classes";
 import { countOf } from "@/lib/format/text";
 import { instrumentLabel, instrumentNames } from "@/lib/holdings/holding-name";
-import {
-  CURRENCY_LABELS,
-  MOVEMENT_KIND_LABELS,
-  MOVEMENT_MESSAGES,
-} from "@/lib/holdings/messages";
+import { CURRENCY_LABELS, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
+  IMPORT_KIND_LABELS,
   type MissingField,
   missingFields,
+  movesUnits,
   operationsComplete,
 } from "@/lib/imports/operations-review";
 import {
@@ -91,7 +89,13 @@ export type OperationsReviewActions = {
   ) => Promise<MovementResult & { rowId?: string }>;
 };
 
-const KINDS: ImportOperationKind[] = ["purchase", "sale", "dividend", "coupon"];
+const KINDS: ImportOperationKind[] = [
+  "purchase",
+  "sale",
+  "dividend",
+  "coupon",
+  "adjustment",
+];
 
 // What a refusal means for an operation read from a document.
 const MESSAGES = {
@@ -166,7 +170,7 @@ function typedInvalid(
   if (row.discarded) return invalid;
   // Only the figures the kind shows: a trade's units and price, an income's
   // amount, and the charges.
-  const trade = row.kind === "purchase" || row.kind === "sale";
+  const trade = movesUnits(row.kind);
   const income = row.kind === "dividend" || row.kind === "coupon";
   const figures: FigureField[] = [
     ...(trade ? (["quantity", "price"] as const) : []),
@@ -403,7 +407,7 @@ export function ImportOperationsReview({
   // edited.
   const card = (row: EditedOperation, index: number) => {
     const type = types.get(row.symbol);
-    const trade = row.kind === "purchase" || row.kind === "sale";
+    const trade = movesUnits(row.kind);
     return (
       <li
         key={row.id}
@@ -517,7 +521,7 @@ export function ImportOperationsReview({
               <SelectContent>
                 {KINDS.map((kind) => (
                   <SelectItem key={kind} value={kind}>
-                    {MOVEMENT_KIND_LABELS[kind]}
+                    {IMPORT_KIND_LABELS[kind]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -709,7 +713,7 @@ export function ImportOperationsReview({
               <SelectItem value="all">Todos los tipos</SelectItem>
               {KINDS.map((kind) => (
                 <SelectItem key={kind} value={kind}>
-                  {MOVEMENT_KIND_LABELS[kind]}
+                  {IMPORT_KIND_LABELS[kind]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -818,7 +822,7 @@ export function ImportOperationsReview({
                           {row.date ? formatDate(row.date) : "—"}
                         </TableCell>
                         <TableCell>
-                          {row.kind ? MOVEMENT_KIND_LABELS[row.kind] : "—"}
+                          {row.kind ? IMPORT_KIND_LABELS[row.kind] : "—"}
                         </TableCell>
                         <TableCell className="max-w-48">
                           <span
@@ -852,7 +856,7 @@ export function ImportOperationsReview({
                           )}
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
-                          {row.kind === "purchase" || row.kind === "sale"
+                          {movesUnits(row.kind)
                             ? tradeTotal(
                                 row,
                                 types.get(row.symbol),

@@ -62,6 +62,12 @@ export async function ImportReviewView({ id }: { id: string }) {
       client,
       id,
       ledgerRead.then((read) => read.ledger.instruments),
+      ledgerRead.then((read) =>
+        read.ledger.accounts.map(({ id, institution }) => ({
+          id,
+          institution,
+        })),
+      ),
     ).catch(fail),
   ]);
   if (!item || item.status !== "ready") notFound();

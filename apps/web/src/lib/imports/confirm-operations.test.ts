@@ -80,6 +80,29 @@ it("puts a day's purchase before that day's sale, whatever the order read", () =
   expect(written.result).toEqual({ ok: true, id: "i1" });
 });
 
+it("brings a deposit's units in before that day's sale of them", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("sale", { kind: "sale", quantity: "3" }),
+      row("deposit", { kind: "adjustment", quantity: "5", price: "17000" }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const movements = [...written.state.movements.values()].flat();
+  expect(movements.map((each) => each.kind)).toEqual(["adjustment", "sale"]);
+  expect(movements[0]).toMatchObject({
+    direction: "in",
+    quantity: "5",
+    price: "17000",
+  });
+  expect(heldOn(written.state, ACCOUNT, "2026-09-15")).toEqual(
+    new Map([["AAPL", "2"]]),
+  );
+});
+
 it("refuses a sale of more units than the account held, naming the row", () => {
   const ledger = emptyLedger();
   const written = writeImportOperations(

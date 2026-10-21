@@ -73,12 +73,15 @@ export const importDraftSchema = z
   })
   .strict();
 
-// The operations a document of operations may show.
+// The operations a document of operations may show. An adjustment is units
+// that came in from outside the account without a trade: a crypto deposit
+// from a wallet, or a loan's disbursement.
 export const OPERATION_KINDS = [
   "purchase",
   "sale",
   "dividend",
   "coupon",
+  "adjustment",
 ] as const;
 
 // One operation as the document shows it. Whatever it does not print, or the
