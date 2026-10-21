@@ -165,20 +165,20 @@ describe("a movement's name in its actions", () => {
   });
 });
 
-it("names the units a loan brought in a loan", () => {
-  const movement = {
-    kind: "adjustment",
-    direction: "in",
-    price: "1",
-    holding_id: "h1",
-  } as Movement;
-  expect(
-    lineLabel({
+describe("an adjustment's line", () => {
+  const adjusted = (direction: "in" | "out", price: string, loan?: string) => {
+    const movement = {
+      kind: "adjustment",
+      direction,
+      price,
+      holding_id: "h1",
+    } as Movement;
+    return lineLabel({
       movement,
       operation: {
         accountId: "a1",
-        instrument: "USDT",
-        loan: "Préstamo Roxom",
+        instrument: "BTC",
+        ...(loan !== undefined && { loan }),
         parts: [
           {
             movement,
@@ -189,6 +189,19 @@ it("names the units a loan brought in a loan", () => {
           },
         ],
       },
-    }),
-  ).toBe("Préstamo");
+    });
+  };
+
+  it("reads units in at a cost as a deposit", () => {
+    expect(adjusted("in", "84000")).toBe("Depósito");
+  });
+
+  it("names the units a loan brought in a loan", () => {
+    expect(adjusted("in", "1", "Préstamo Roxom")).toBe("Préstamo");
+  });
+
+  it("keeps an adjustment with no cost, or units out, as an adjustment", () => {
+    expect(adjusted("in", "0")).toBe("Ajuste (entran)");
+    expect(adjusted("out", "0")).toBe("Ajuste (salen)");
+  });
 });
