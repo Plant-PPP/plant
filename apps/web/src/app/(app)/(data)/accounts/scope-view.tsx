@@ -198,6 +198,7 @@ export async function ScopeView({
       cash={
         cash && (
           <CashHistory
+            key="cash"
             accountId={id}
             sides={cash}
             today={today}
