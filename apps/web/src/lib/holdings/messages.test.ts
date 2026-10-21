@@ -164,3 +164,39 @@ describe("a movement's name in its actions", () => {
     );
   });
 });
+
+describe("an adjustment's line", () => {
+  const adjusted = (direction: "in" | "out", price: string) => {
+    const movement = {
+      kind: "adjustment",
+      direction,
+      price,
+      holding_id: "h1",
+    } as Movement;
+    return lineLabel({
+      movement,
+      operation: {
+        accountId: "a1",
+        instrument: "BTC",
+        parts: [
+          {
+            movement,
+            accountId: "a1",
+            institution: "Roxom",
+            portfolioId: "p1",
+            portfolioName: "Principal",
+          },
+        ],
+      },
+    });
+  };
+
+  it("reads units in at a cost as a deposit", () => {
+    expect(adjusted("in", "84000")).toBe("Depósito");
+  });
+
+  it("keeps an adjustment with no cost, or units out, as an adjustment", () => {
+    expect(adjusted("in", "0")).toBe("Ajuste (entran)");
+    expect(adjusted("out", "0")).toBe("Ajuste (salen)");
+  });
+});
