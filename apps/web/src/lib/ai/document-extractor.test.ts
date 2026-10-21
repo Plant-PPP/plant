@@ -170,36 +170,55 @@ it("drops a date that is not one", async () => {
   expect(draft.documentDate).toBeNull();
 });
 
+const screenshotOf = (row: Record<string, unknown>) =>
+  answering(
+    JSON.stringify({
+      kind: "screenshot",
+      documentDate: null,
+      rows: [{ currency: "USD", confidence: "high", page: 1, ...row }],
+      operations: [],
+      totals: [],
+    }),
+  );
+
 it("keeps a row whose account and cost the model answers as null", async () => {
   const { draft } = holdings(
     await extract(
-      answering(
-        JSON.stringify({
-          kind: "screenshot",
-          documentDate: null,
-          rows: [
-            {
-              symbol: "ETH",
-              quantity: "37.23938885",
-              price: "2489.63",
-              value: "92691.52",
-              account: null,
-              cost: null,
-              currency: "USD",
-              confidence: "high",
-              page: 1,
-            },
-          ],
-          operations: [],
-          totals: [],
-        }),
-      ),
+      screenshotOf({
+        symbol: "ETH",
+        quantity: "37.23938885",
+        price: "2489.63",
+        value: "92691.52",
+        account: null,
+        cost: null,
+      }),
     ),
   );
   expect(draft.rows).toEqual([
     expect.objectContaining({ symbol: "ETH", quantity: "37.23938885" }),
   ]);
   expect(draft.rows[0]).not.toHaveProperty("account");
+});
+
+it("reads a balance in a currency Plant keeps as cash in it", async () => {
+  const { draft } = holdings(
+    await extract(
+      screenshotOf({
+        symbol: "EUR",
+        quantity: "22.39",
+        price: null,
+        value: "25.15",
+      }),
+    ),
+  );
+  expect(draft.rows).toEqual([
+    expect.objectContaining({
+      symbol: "EUR",
+      quantity: "22.39",
+      assetClass: "cash",
+      currency: "EUR",
+    }),
+  ]);
 });
 
 it("keeps the totals the statement prints, one per currency", async () => {
