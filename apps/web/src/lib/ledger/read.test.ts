@@ -70,7 +70,7 @@ function fakeClient(
           return builder;
         },
       };
-      for (const method of ["select", "eq", "gte", "lte", "order"]) {
+      for (const method of ["select", "eq", "gte", "lte", "order", "not"]) {
         builder[method] = (...args: unknown[]) => {
           own.push([method, ...args]);
           return builder;
@@ -150,6 +150,7 @@ function responses(movements: unknown[] = [MOVEMENT_ROW]) {
     ]),
     manual_prices: ok([]),
     manual_rates: ok([]),
+    liabilities: ok([{ label: "Préstamo", disbursement_operation_id: "o1" }]),
   };
 }
 

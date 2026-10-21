@@ -166,7 +166,7 @@ describe("a movement's name in its actions", () => {
 });
 
 describe("an adjustment's line", () => {
-  const adjusted = (direction: "in" | "out", price: string) => {
+  const adjusted = (direction: "in" | "out", price: string, loan?: string) => {
     const movement = {
       kind: "adjustment",
       direction,
@@ -178,6 +178,7 @@ describe("an adjustment's line", () => {
       operation: {
         accountId: "a1",
         instrument: "BTC",
+        ...(loan !== undefined && { loan }),
         parts: [
           {
             movement,
@@ -193,6 +194,10 @@ describe("an adjustment's line", () => {
 
   it("reads units in at a cost as a deposit", () => {
     expect(adjusted("in", "84000")).toBe("Depósito");
+  });
+
+  it("names the units a loan brought in a loan", () => {
+    expect(adjusted("in", "1", "Préstamo Roxom")).toBe("Préstamo");
   });
 
   it("keeps an adjustment with no cost, or units out, as an adjustment", () => {

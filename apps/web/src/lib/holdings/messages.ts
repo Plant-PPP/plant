@@ -82,6 +82,7 @@ export function lineLabel({
   movement,
   operation,
 }: Pick<MovementLine, "movement" | "operation">): string {
+  if (operation.loan !== undefined) return "Préstamo";
   const own = operation.parts.find(
     (part) => part.movement.holding_id === movement.holding_id,
   );

@@ -114,6 +114,9 @@ export type Ledger = {
   manualRates: readonly ManualRate[];
   // Where each operation came from, by id; one typed by hand has none.
   operationOrigins: ReadonlyMap<string, HoldingOrigin>;
+  // The operations that brought a loan's money in, by id, with the debt's
+  // name.
+  loans?: ReadonlyMap<string, string>;
 };
 
 // A holding with the ids of its account and portfolio. An instrument holding
@@ -518,10 +521,12 @@ export function operationOf(
     }
   }
   if (!placed || placed.holding.asset_class !== "instrument") return null;
+  const loan = state.loans?.get(operationId);
   return {
     accountId: placed.accountId,
     instrument: placed.holding.instrument_symbol,
     parts,
+    ...(loan !== undefined && { loan }),
   };
 }
 
