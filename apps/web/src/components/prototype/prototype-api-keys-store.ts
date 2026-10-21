@@ -44,15 +44,10 @@ const BALANCES: Record<
     { symbol: "SPY", quantity: "2.5" },
     { symbol: "NVDA", quantity: "8" },
   ],
-  nexo: [
-    { symbol: "BTC", quantity: "0.05" },
-    { symbol: "ETH", quantity: "1.2" },
-  ],
   iol: [
     { symbol: "AL30", quantity: "1500" },
     { symbol: "MELI", quantity: "4" },
   ],
-  roxom: [{ symbol: "BTC", quantity: "0.125" }],
   // The prototype has no cash to sync: the money in the account stands as
   // the money market fund it earns in.
   mercadopago: [{ symbol: "FIMAAHO", quantity: "200000" }],

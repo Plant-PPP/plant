@@ -1,4 +1,4 @@
-import { createHmac, createVerify, generateKeyPairSync } from "node:crypto";
+import { createHmac } from "node:crypto";
 
 import type { ConnectionProvider } from "./adapters";
 import { binanceConnection } from "./binance";
@@ -7,14 +7,12 @@ import type { FakeReply, FakeRequest } from "./fake-provider.test-support";
 import { ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
 import { mercadoPagoConnection } from "./mercadopago";
-import { nexoConnection } from "./nexo";
 import type {
   ConnectionDeps,
   ConnectionProviderPort,
   Credentials,
 } from "./port";
 import { ripioConnection } from "./ripio";
-import { roxomConnection } from "./roxom";
 import { wallbitConnection } from "./wallbit";
 
 // Each provider faked for its adapter, with made-up credentials and data:
@@ -231,56 +229,6 @@ const ibkr: ProviderFixture = {
     ),
 };
 
-// ── Nexo Pro ────────────────────────────────────────────────────────────────
-export const NEXO_CREDENTIALS = {
-  apiKey: "nexoKey00000001",
-  apiSecret: "nexoSecret0000001",
-};
-const nexoSigned = (request: FakeRequest) =>
-  request.headers["x-api-key"] === NEXO_CREDENTIALS.apiKey &&
-  request.headers["x-signature"] ===
-    createHmac("sha256", NEXO_CREDENTIALS.apiSecret)
-      .update(String(request.headers["x-nonce"]))
-      .digest("base64");
-const nexo: ProviderFixture = {
-  make: nexoConnection,
-  credentials: NEXO_CREDENTIALS,
-  ok: (request) =>
-    !nexoSigned(request)
-      ? json({ errorMessage: "Unauthorized", errorCode: 101 }, 401)
-      : request.path === "/accountSummary"
-        ? json({
-            balances: [
-              {
-                assetName: "BTC",
-                totalBalance: 0.05,
-                availableBalance: 0.05,
-                lockedBalance: 0,
-                debt: 0,
-                interest: 0,
-              },
-              {
-                assetName: "USDT",
-                totalBalance: 1200.75,
-                availableBalance: 1200.75,
-                lockedBalance: 0,
-                debt: 0,
-                interest: 0,
-              },
-              {
-                assetName: "ETH",
-                totalBalance: 0,
-                availableBalance: 0,
-                lockedBalance: 0,
-                debt: 0,
-                interest: 0,
-              },
-            ],
-          })
-        : json({}, 404),
-  refuse: () => json({ errorMessage: "Unauthorized", errorCode: 101 }, 401),
-};
-
 // ── InvertirOnline ──────────────────────────────────────────────────────────
 export const IOL_CREDENTIALS = {
   username: "ana.test",
@@ -389,63 +337,6 @@ const iol: ProviderFixture = {
     request.path === "/token"
       ? json({ error: "invalid_grant" }, 400)
       : json({}, 401),
-};
-
-// ── Roxom ───────────────────────────────────────────────────────────────────
-// A key pair made for the tests: Roxom keeps the public half.
-const roxomKeys = generateKeyPairSync("rsa", { modulusLength: 2048 });
-export const ROXOM_CREDENTIALS = {
-  apiKey: "rxk_key_0000000000000001",
-  privateKey: roxomKeys.privateKey
-    .export({ type: "pkcs8", format: "pem" })
-    .toString(),
-};
-const roxomSigned = (request: FakeRequest) =>
-  request.headers["x-api-key"] === ROXOM_CREDENTIALS.apiKey &&
-  createVerify("sha256")
-    .update(`${request.method}:${request.url}`)
-    .verify(
-      roxomKeys.publicKey,
-      String(request.headers["x-api-signature"] ?? ""),
-      "base64",
-    );
-const roxom: ProviderFixture = {
-  make: roxomConnection,
-  credentials: ROXOM_CREDENTIALS,
-  ok: (request) =>
-    !roxomSigned(request)
-      ? json({ error: 401, message: "Unauthorized" }, 401)
-      : request.path === "/v1/accounts/balance" &&
-          request.query.get("unit") === "btc"
-        ? json({
-            error: false,
-            data: {
-              lastUpdated: NOW.getTime(),
-              balances: [
-                {
-                  asset: "BTC",
-                  assetClass: "crypto",
-                  available: "0.10000000",
-                  current: "0.12500000",
-                  lockedInOrders: "0.02500000",
-                },
-                {
-                  asset: "USDT",
-                  assetClass: "crypto",
-                  available: "350.00000000",
-                  current: "350.00000000",
-                },
-                {
-                  asset: "USDC",
-                  assetClass: "crypto",
-                  available: "0.00000000",
-                  current: "0.00000000",
-                },
-              ],
-            },
-          })
-        : json({}, 404),
-  refuse: () => json({ error: 401, message: "Unauthorized" }, 401),
 };
 
 // ── Mercado Pago ────────────────────────────────────────────────────────────
@@ -644,9 +535,7 @@ export const PROVIDER_FIXTURES: Record<ConnectionProvider, ProviderFixture> = {
   binance,
   wallbit,
   ibkr,
-  nexo,
   iol,
-  roxom,
   mercadopago: mercadoPago,
   bitso,
   ripio,

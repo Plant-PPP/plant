@@ -11,7 +11,6 @@ import {
   IBKR_STATEMENT,
   IOL_CREDENTIALS,
   MERCADO_PAGO_CREDENTIALS,
-  NEXO_CREDENTIALS,
   NOW,
   PROVIDER_FIXTURES,
   resetMercadoPagoReports,
@@ -21,7 +20,6 @@ import { bodyText, jsonOf } from "./http";
 import { ibkrConnection } from "./ibkr";
 import { iolConnection } from "./iol";
 import { mercadoPagoConnection } from "./mercadopago";
-import { nexoConnection } from "./nexo";
 import { wallbitConnection } from "./wallbit";
 
 // What each adapter makes of balances: cash, held fiat Plant does not keep,
@@ -310,33 +308,6 @@ describe("balances a draft cannot hold", () => {
       ],
     );
     expect(reading.read.skippedRows).toBe(2);
-  });
-
-  it("counts Nexo's negative balances and a fiat Plant does not keep, and reads pesos as cash", async () => {
-    fake.answer = (request) =>
-      request.path === "/accountSummary"
-        ? {
-            status: 200,
-            body: {
-              balances: [
-                { assetName: "BTC", totalBalance: 0.05 },
-                { assetName: "ETH", totalBalance: -0.2 },
-                { assetName: "EUR", totalBalance: 10 },
-                { assetName: "ARS", totalBalance: 1000 },
-                { assetName: "SOL", totalBalance: 0 },
-              ],
-            },
-          }
-        : PROVIDER_FIXTURES.nexo.ok(request);
-    const reading = await nexoConnection(deps()).read(
-      NEXO_CREDENTIALS,
-      "holdings",
-    );
-    expect(rowsOf(reading)).toEqual([
-      ["ARS", "1000", "ARS", "cash"],
-      ["BTC", "0.05", "USD", "instrument"],
-    ]);
-    expect(holdings(reading).read.skippedRows).toBe(2);
   });
 });
 
