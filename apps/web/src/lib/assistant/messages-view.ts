@@ -9,6 +9,12 @@ import {
   MAX_CHART_POINTS,
   MAX_CHARTS,
 } from "./chat";
+import {
+  type ProposalView,
+  proposalsOf,
+  type QuestionView,
+  questionOf,
+} from "./proposals";
 
 // A chat message as stored or streamed: its parts and what the answer says
 // under it.
@@ -17,6 +23,8 @@ export type MessageLike = {
   role: string;
   parts: readonly unknown[];
   metadata?: unknown;
+  // What the user answered to its proposals, as kept.
+  proposalStates?: Readonly<Record<string, unknown>>;
 };
 
 // The text of a message's parts, a paragraph each; its tool calls and steps
@@ -124,11 +132,41 @@ export function toChatMessages(
 
 function chatMessageOf(message: MessageLike): ChatMessage[] {
   const text = textOf(message.parts);
+  const meta = (
+    typeof message.metadata === "object" && message.metadata !== null
+      ? message.metadata
+      : {}
+  ) as Record<string, unknown>;
   if (message.role === "user") {
-    return [{ id: message.id, role: "user", text }];
+    // Kept, its files' names; just sent, its file parts.
+    const attachments = Array.isArray(meta.attachments)
+      ? meta.attachments.filter(isText)
+      : message.parts.flatMap((part) => {
+          const file = part as { type?: unknown; filename?: unknown };
+          return file.type === "file" && isText(file.filename)
+            ? [file.filename]
+            : [];
+        });
+    return [
+      {
+        id: message.id,
+        role: "user",
+        text,
+        ...(attachments.length > 0 && { attachments }),
+      },
+    ];
   }
   if (message.role !== "assistant") return [];
   const { asOf, rate, sources, charts } = metadataOf(message.metadata);
+  // A reopened answer carries its proposals in its metadata; a streamed or
+  // kept one, in its tool parts.
+  const proposals = Array.isArray(meta.proposals)
+    ? (meta.proposals as ProposalView[])
+    : proposalsOf(message.parts, message.proposalStates ?? {});
+  const question =
+    meta.question !== undefined
+      ? ((meta.question as QuestionView | null) ?? null)
+      : questionOf(message.parts);
   return [
     {
       id: message.id,
@@ -139,6 +177,8 @@ function chatMessageOf(message: MessageLike): ChatMessage[] {
       sources,
       asOf: asOf ?? "",
       rate,
+      ...(proposals.length > 0 && { proposals }),
+      ...(question && { question }),
     },
   ];
 }

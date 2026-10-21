@@ -29,6 +29,7 @@ import {
 } from "@/lib/assistant/chat";
 import { SOURCES } from "@/lib/assistant/figures";
 import { textOf } from "@/lib/assistant/messages-view";
+import { isKeptPart, proposalsNote } from "@/lib/assistant/proposals";
 import type { AssistantStore, StoredMessage } from "@/lib/assistant/store";
 import { assistantData } from "@/lib/assistant/tools-data";
 import { errorType, serverLog } from "@/lib/log/server-log";
@@ -37,6 +38,7 @@ import { contextFields, type ReadContext } from "@/lib/portfolio-setup/read";
 import { costedModel, type ModelFactory, telemetryOf } from "../costed-model";
 import type { AssistantUIMessage } from "./messages";
 import { assistantPrompt } from "./prompt";
+import { proposalTools } from "./proposal-tools";
 import { assistantTools } from "./tools";
 
 export const ASSISTANT_MODEL = "claude-haiku-4-5" satisfies PricedModelId;
@@ -79,10 +81,23 @@ export const plainText = (body: string, status: number) =>
     headers: { "content-type": "text/plain; charset=utf-8" },
   });
 
+// A file the user attached to a question: an image or a PDF, read by the
+// model as it is.
+export type Attachment = {
+  filename: string;
+  mediaType: string;
+  // Base64, no data: prefix.
+  data: string;
+};
+
 // What the model reads of a stored turn: its text only, a question as
-// untrusted text.
+// untrusted text, and under an answer how the user answered its proposals.
 const forModel = (message: StoredMessage): AssistantUIMessage => {
-  const body = textOf(message.parts);
+  const note =
+    message.role === "assistant"
+      ? proposalsNote(message.parts, message.proposalStates ?? {})
+      : "";
+  const body = [textOf(message.parts), note].filter(Boolean).join("\n\n");
   return {
     id: message.id,
     role: message.role,
@@ -120,7 +135,7 @@ function fitted(metadata: AnswerMetadata & { charts: ChartPart[] }) {
 const stored = (message: AssistantUIMessage): StoredMessage => ({
   id: message.id,
   role: message.role === "user" ? "user" : "assistant",
-  parts: message.parts.filter((part) => part.type === "text"),
+  parts: message.parts.filter(isKeptPart),
   metadata: message.metadata ?? null,
 });
 
@@ -137,6 +152,7 @@ export async function runAssistantTurn({
   context,
   conversationId,
   question,
+  attachments = [],
   unit: asked,
   today,
   report,
@@ -148,6 +164,9 @@ export async function runAssistantTurn({
   context: ReadContext;
   conversationId: string;
   question: string;
+  // What the user attached, read by the model with the question and never
+  // kept: the question keeps their names.
+  attachments?: readonly Attachment[];
   unit: ChatUnit;
   today: string;
   report: TurnReport;
@@ -176,7 +195,10 @@ export async function runAssistantTurn({
     id: newId(),
     role: "user",
     parts: [{ type: "text", text: question }],
-    metadata: null,
+    metadata:
+      attachments.length > 0
+        ? { attachments: attachments.map((each) => each.filename) }
+        : null,
   };
 
   const save = async (answer: AssistantUIMessage) => {
@@ -253,9 +275,27 @@ export async function runAssistantTurn({
       record,
     }),
     instructions: assistantPrompt(unit),
-    tools: assistantTools(data, logFields, () => {
-      read.complete = false;
-    }),
+    tools: {
+      ...assistantTools(data, logFields, () => {
+        read.complete = false;
+      }),
+      ...proposalTools({
+        today,
+        accounts: async () => {
+          const result = await client
+            .from("source_connections")
+            .select("institution")
+            .is("archived_at", null);
+          return (result.data ?? []).map((row) => row.institution);
+        },
+        debts: async () => {
+          const result = await client
+            .from("liabilities")
+            .select("label, lender");
+          return result.data ?? [];
+        },
+      }),
+    },
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     stopWhen: stepCountIs(MAX_STEPS),
     prepareStep: ({ stepNumber }) =>
@@ -307,18 +347,33 @@ export async function runAssistantTurn({
         // An answer with no text, as a failed turn's, would be refused by the
         // provider as a turn.
         ...history.filter((message) => textOf(message.parts).trim() !== ""),
-        userMessage,
-      ].map(forModel),
+      ]
+        .map(forModel)
+        .concat({
+          ...forModel(userMessage),
+          parts: [
+            ...forModel(userMessage).parts,
+            ...attachments.map((each) => ({
+              type: "file" as const,
+              mediaType: each.mediaType,
+              filename: each.filename,
+              url: `data:${each.mediaType};base64,${each.data}`,
+            })),
+          ],
+        }),
       abortSignal: AbortSignal.timeout(TURN_MS),
       generateMessageId: newId,
       messageMetadata: ({ part }) =>
         part.type === "finish" ? fitted(read) : undefined,
       onFinish: async ({ responseMessage, outcome, finishReason }) => {
         const answer = responseMessage as AssistantUIMessage;
+        // An answer may be only a proposal's card or a question.
+        const kept = answer.parts.filter(isKeptPart);
         if (
           outcome.status === "completed" &&
           finishReason !== "error" &&
-          textOf(answer.parts).trim() !== ""
+          (textOf(answer.parts).trim() !== "" ||
+            kept.some((part) => part.type !== "text"))
         ) {
           report({ outcome: "answered" });
           await save(answer);

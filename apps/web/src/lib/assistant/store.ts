@@ -7,6 +7,8 @@ export type StoredMessage = {
   role: "user" | "assistant";
   parts: unknown[];
   metadata: Record<string, unknown> | null;
+  // What the user answered to the answer's proposals, by tool call id.
+  proposalStates?: Record<string, unknown>;
 };
 
 // Where the assistant keeps a user's conversations and counts their

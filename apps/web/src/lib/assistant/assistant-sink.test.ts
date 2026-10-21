@@ -137,11 +137,11 @@ describe("history", () => {
   it("reads the user's last turns, oldest first", async () => {
     const { store, calls } = storeWith(() => ({
       status: 200,
-      body: [answer, question],
+      body: [{ ...answer, proposal_states: { call_1: "confirmed" } }, question],
     }));
     expect(await store.history(USER, CONVERSATION, 10)).toEqual([
-      question,
-      answer,
+      { ...question, proposalStates: {} },
+      { ...answer, proposalStates: { call_1: "confirmed" } },
     ]);
     const params = calls[0]!.url.searchParams;
     expect(params.get("user_id")).toBe(`eq.${USER}`);

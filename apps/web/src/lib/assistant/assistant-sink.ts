@@ -20,6 +20,15 @@ const storedSchema = z.object({
   role: z.enum(["user", "assistant"]),
   parts: z.array(z.unknown()),
   metadata: z.record(z.string(), z.unknown()).nullable(),
+  proposal_states: z.record(z.string(), z.unknown()).optional(),
+});
+
+const storedOf = (row: z.infer<typeof storedSchema>): StoredMessage => ({
+  id: row.id,
+  role: row.role,
+  parts: row.parts,
+  metadata: row.metadata,
+  proposalStates: row.proposal_states ?? {},
 });
 
 function checked(
@@ -72,7 +81,7 @@ export function createAssistantStore(client: Client): AssistantStore {
     async history(userId, conversationId, turns) {
       const result = await client
         .from("ai_messages")
-        .select("id, role, parts, metadata")
+        .select("id, role, parts, metadata, proposal_states")
         .eq("user_id", userId)
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
@@ -83,7 +92,7 @@ export function createAssistantStore(client: Client): AssistantStore {
       const rows = z.array(storedSchema).safeParse(result.data ?? []);
       if (!rows.success)
         throw new AssistantStoreError("history", "invalid_row");
-      return rows.data.reverse();
+      return rows.data.reverse().map(storedOf);
     },
 
     async saveTurn(userId, { conversationId, messages }) {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { PROMPT_VERSION } from "@/lib/ai/assistant/prompt";
 import {
   ASSISTANT_MODEL,
+  type Attachment,
   plainText,
   runAssistantTurn,
   type TurnOutcome,
@@ -27,9 +28,58 @@ import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
-// The longest question the chat takes, and the largest body it reads.
+// The longest question the chat takes, and the largest body it reads: room
+// for a few screenshots, under what a function takes.
 const QUESTION_LIMIT = 500;
-const BODY_LIMIT = 16_384;
+const BODY_LIMIT = 4_000_000;
+
+// The files a question may attach: pictures and PDFs the model reads, a few
+// a question.
+const ATTACHMENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+] as const;
+const ATTACHMENT_LIMIT = 4;
+const ATTACHMENT_BYTES = 2_800_000;
+// What the question says when the user only attached files.
+const FILES_ONLY = "Mirá lo que adjunté.";
+
+const filePart = z.object({
+  type: z.literal("file"),
+  mediaType: z.enum(ATTACHMENT_TYPES),
+  filename: z.string().trim().min(1).max(120).optional(),
+  url: z.string().startsWith("data:"),
+});
+
+// The files a question's parts attach, read from their data URLs, or null
+// when one is not a picture or a PDF, or past the limits.
+function attachmentsOf(parts: readonly unknown[]): Attachment[] | null {
+  const files = parts.filter(
+    (part) =>
+      typeof part === "object" &&
+      part !== null &&
+      (part as { type?: unknown }).type === "file",
+  );
+  if (files.length > ATTACHMENT_LIMIT) return null;
+  const read: Attachment[] = [];
+  for (const each of files) {
+    const parsed = filePart.safeParse(each);
+    if (!parsed.success) return null;
+    const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/.exec(
+      parsed.data.url,
+    );
+    if (!match || match[1] !== parsed.data.mediaType) return null;
+    if (Math.floor((match[2]!.length * 3) / 4) > ATTACHMENT_BYTES) return null;
+    read.push({
+      filename: parsed.data.filename ?? "archivo",
+      mediaType: parsed.data.mediaType,
+      data: match[2]!,
+    });
+  }
+  return read;
+}
 
 const body = z.object({
   conversationId: z.uuid(),
@@ -115,11 +165,20 @@ export async function POST(request: Request): Promise<Response> {
             })(),
           )
         : null;
-    const question = parsed?.success
+    const attachments = parsed?.success
+      ? attachmentsOf(parsed.data.message.parts)
+      : null;
+    const typed = parsed?.success
       ? textOf(parsed.data.message.parts).trim()
       : "";
+    const question =
+      typed === "" && attachments && attachments.length > 0
+        ? FILES_ONLY
+        : typed;
+    fields["plant.assistant.attachment_count"] = attachments?.length;
     if (
       !parsed?.success ||
+      attachments === null ||
       question === "" ||
       question.length > QUESTION_LIMIT
     ) {
@@ -149,6 +208,7 @@ export async function POST(request: Request): Promise<Response> {
       },
       conversationId: parsed.data.conversationId,
       question,
+      attachments,
       unit: parsed.data.unit,
       today: buenosAiresDate(new Date()),
       report: (turn) => {

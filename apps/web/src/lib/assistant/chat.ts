@@ -1,4 +1,5 @@
 import type { ChartTemplate } from "@/lib/charts/templates";
+import type { ProposalView, QuestionView } from "./proposals";
 import type { Denominator } from "@plant/core";
 
 import { countOf } from "@/lib/format/text";
@@ -69,6 +70,8 @@ export type UserMessage = {
   id: string;
   role: "user";
   text: string;
+  // The names of the files it attached.
+  attachments?: string[];
 };
 
 export type AssistantMessage = {
@@ -82,6 +85,10 @@ export type AssistantMessage = {
   // The day it was calculated, and the dollar it used when the unit is one.
   asOf: string;
   rate: { label: string; sell: string } | null;
+  // What it proposed to load, each with the user's answer, and the question
+  // it ended with.
+  proposals?: ProposalView[];
+  question?: QuestionView | null;
 };
 
 export type ChatMessage = UserMessage | AssistantMessage;
@@ -122,6 +129,9 @@ export type AnswerMetadata = {
   complete: boolean;
   // The charts its tools drew, kept with the answer.
   charts?: ChartPart[];
+  // A reopened answer's proposals and question, as the chat holds them.
+  proposals?: ProposalView[];
+  question?: QuestionView | null;
 };
 
 // The most questions a month on the beta plan. A question counts once asked,
