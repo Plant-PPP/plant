@@ -170,6 +170,40 @@ it("drops a date that is not one", async () => {
   expect(draft.documentDate).toBeNull();
 });
 
+it("reads a balance in a currency Plant keeps as cash in it", async () => {
+  const { draft } = holdings(
+    await extract(
+      answering(
+        JSON.stringify({
+          kind: "screenshot",
+          documentDate: null,
+          rows: [
+            {
+              symbol: "EUR",
+              quantity: "22.39",
+              price: null,
+              value: "25.15",
+              currency: "USD",
+              confidence: "high",
+              page: 1,
+            },
+          ],
+          operations: [],
+          totals: [],
+        }),
+      ),
+    ),
+  );
+  expect(draft.rows).toEqual([
+    expect.objectContaining({
+      symbol: "EUR",
+      quantity: "22.39",
+      assetClass: "cash",
+      currency: "EUR",
+    }),
+  ]);
+});
+
 it("keeps the totals the statement prints, one per currency", async () => {
   const { draft } = holdings(
     await extract(

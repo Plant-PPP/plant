@@ -250,8 +250,14 @@ const toDraft = (answer: z.infer<typeof answerSchema>): ImportDraft => {
       const value = row.value?.trim() || null;
       const cost = row.cost?.trim() || null;
       const account = row.account?.trim().slice(0, 60) || null;
+      // A balance in a currency Plant keeps (USD, EUR) is cash in it,
+      // whatever currency the reading valued it in.
+      const fiat = Constants.public.Enums.currency.find(
+        (each) => each === row.symbol.trim().toUpperCase(),
+      );
       const parsed = draftRowSchema.safeParse({
         ...row,
+        ...(fiat && { assetClass: "cash", currency: fiat }),
         quantity: row.quantity.trim(),
         price: row.price?.trim() || null,
         value: positiveDecimalSchema.safeParse(value).success ? value : null,
