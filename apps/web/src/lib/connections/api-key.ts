@@ -117,13 +117,6 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
     fields: { token: "Token de Flex", queryId: "ID de la Flex Query" },
     help: "En el Client Portal, entrá a Rendimiento e informes → Flex Queries y creá una Activity Flex Query en XML con Open Positions, Cash Report, Trades y Cash Transactions; anotá su ID. Después activá Flex Web Service en la misma pantalla y generá un token. Ese token solo pide tus informes: no puede operar.",
   },
-  nexo: {
-    name: "Nexo",
-    institution: /^nexo\b/i,
-    fields: { apiKey: "API key", apiSecret: "API secret" },
-    help: "En Nexo Pro, andá a API Management y creá una key con el rol VIEWER, que solo puede leer. Leemos los saldos de Nexo Pro; los de tu cuenta de ahorro cargalos con un resumen.",
-    confirm: "Confirmo que la key tiene el rol VIEWER (solo lectura).",
-  },
   iol: {
     name: "InvertirOnline",
     institution: /^(iol|invertir ?online)\b/i,
@@ -131,14 +124,6 @@ export const PROVIDERS: Record<ConnectionProvider, ProviderCopy> = {
     help: "IOL no tiene un acceso de solo lectura: se conecta con tu usuario y contraseña. Plant los guarda cifrados y solo los usa para leer tu portafolio y tu estado de cuenta; nunca opera.",
     confirm:
       "Entiendo que IOL no tiene acceso de solo lectura y que Plant solo lee.",
-  },
-  roxom: {
-    name: "Roxom",
-    institution: /^roxom\b/i,
-    fields: { apiKey: "Key ID", privateKey: "Clave privada" },
-    help: 'En Roxom, tocá tu perfil → API → "Generate API Key" y copiá el Key ID y la clave privada, que Roxom muestra una sola vez (el bloque entero, de "-----BEGIN PRIVATE KEY-----" a "-----END PRIVATE KEY-----"). Roxom no tiene keys de solo lectura: Plant guarda la clave cifrada y solo la usa para leer tus saldos; nunca opera.',
-    confirm:
-      "Entiendo que la key de Roxom no es de solo lectura y que Plant solo lee.",
   },
   mercadopago: {
     name: "Mercado Pago",
