@@ -286,6 +286,7 @@ export function DebtDialog({
               "nextDueOn",
               "maturesOn",
               "openedOn",
+              "principal",
             ] as const
           ).some((key) => initial[key] !== "")}
         >
@@ -317,6 +318,7 @@ export function DebtDialog({
               {shown.accrues && text("openedOn", "Saldo al", { type: "date" })}
             </>
           )}
+          {text("principal", `Capital (${unit})`, { inputMode: "decimal" })}
         </MoreFields>
         {alert && <FormAlert id={`${id}-alert`}>{alert}</FormAlert>}
         <DialogActions

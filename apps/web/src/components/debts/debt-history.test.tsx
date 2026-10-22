@@ -159,3 +159,12 @@ it("lists a pledge on a holding no longer held, with no value", () => {
   expect(html).not.toContain("Préstamo sobre garantía");
   expect(html).not.toContain("Sin cotización de algún activo");
 });
+
+it("splits what is owed into capital and interest when the capital is known", () => {
+  const html = render({ ...loan, principal: "900" }, []);
+  expect(html).toContain("Capital");
+  expect(html).toContain("US$ 900,00");
+  expect(html).toContain("Intereses");
+  expect(html).toContain("US$ 100,00");
+  expect(render(loan, [])).not.toContain("Intereses");
+});

@@ -4,7 +4,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(17);
+SELECT plan(19);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -50,11 +50,11 @@ SELECT set_eq(
         'kind:INSERT', 'label:INSERT', 'lender:INSERT', 'currency:INSERT', 'uva:INSERT',
         'instrument_symbol:INSERT', 'balance:INSERT', 'installment:INSERT',
         'annual_rate:INSERT', 'installments_left:INSERT', 'next_due_on:INSERT',
-        'matures_on:INSERT', 'accrues:INSERT', 'opened_on:INSERT',
+        'matures_on:INSERT', 'accrues:INSERT', 'opened_on:INSERT', 'principal:INSERT',
         'kind:UPDATE', 'label:UPDATE', 'lender:UPDATE', 'currency:UPDATE', 'uva:UPDATE',
         'instrument_symbol:UPDATE', 'balance:UPDATE', 'installment:UPDATE',
         'annual_rate:UPDATE', 'installments_left:UPDATE', 'next_due_on:UPDATE',
-        'matures_on:UPDATE', 'accrues:UPDATE', 'opened_on:UPDATE',
+        'matures_on:UPDATE', 'accrues:UPDATE', 'opened_on:UPDATE', 'principal:UPDATE',
         'disbursement_operation_id:UPDATE'],
   'a user reads, deletes and writes a debt''s own columns, never its owner or id'
 );
@@ -133,6 +133,19 @@ SELECT is(
   'a debt owes more than nothing'
 );
 
+SELECT lives_ok(
+  $$ INSERT INTO public.liabilities (kind, label, currency, balance, principal)
+     VALUES ('usd_debt', 'Línea', 'USD', '58501.09', '54719.05') $$,
+  'a debt records the principal within its balance'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO public.liabilities (kind, label, currency, balance, principal)
+                      VALUES ('usd_debt', 'Línea', 'USD', '100', '100.01') $$),
+  '23514',
+  'the principal is at most the balance'
+);
+
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.liabilities (user_id, kind, label, currency, balance)
                       VALUES ('b0000000-0000-4000-8000-00000000000b', 'credit_card', 'Visa', 'ARS', '1') $$),
@@ -159,7 +172,7 @@ SELECT is(
 DELETE FROM public.liabilities WHERE kind = 'crypto_loan';
 SELECT is(
   (SELECT count(*)::int FROM public.liabilities),
-  2,
+  3,
   'a user deletes their own debt'
 );
 

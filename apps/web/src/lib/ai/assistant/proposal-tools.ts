@@ -1,6 +1,10 @@
 import "server-only";
-import { LIABILITY_KINDS, liabilityInputSchema } from "@plant/core";
-import { Constants } from "@plant/shared";
+import {
+  LIABILITY_KINDS,
+  liabilityInputSchema,
+  principalSplit,
+} from "@plant/core";
+import { Constants, fromScaled, toScaled } from "@plant/shared";
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -44,6 +48,16 @@ const debtArgs = z.object({
     .nullable()
     .describe("Solo un préstamo cripto: el símbolo de la cripto (USDT)."),
   balance: decimal.describe("Lo que se debe hoy, intereses incluidos."),
+  principal: decimal
+    .nullable()
+    .describe(
+      "El capital pedido si el documento lo separa de los intereses (Capital 54719.05).",
+    ),
+  accruedInterest: decimal
+    .nullable()
+    .describe(
+      "Los intereses acumulados si el documento los muestra (Intereses acumulados 3782.04).",
+    ),
   annualRatePercent: decimal
     .nullable()
     .describe("La tasa anual en porcentaje: 12.9 es 12,9 %."),
@@ -181,6 +195,15 @@ const askArgs = z.object({
     .describe("De dos a cuatro respuestas cortas para elegir."),
 });
 
+// The principal as printed, or else the balance less the printed interest
+// when that leaves something: the model's own arithmetic is never used.
+function principalOf(args: z.infer<typeof debtArgs>): string | null {
+  if (args.principal !== null) return args.principal;
+  if (args.accruedInterest === null) return null;
+  const rest = toScaled(args.balance) - toScaled(args.accruedInterest);
+  return rest > 0n ? fromScaled(rest) : null;
+}
+
 // The debt a proposal's arguments make, or why they make none.
 export function debtInputOf(
   args: z.infer<typeof debtArgs>,
@@ -199,6 +222,7 @@ export function debtInputOf(
     instrument_symbol:
       args.kind === "crypto_loan" ? args.instrumentSymbol?.toUpperCase() : null,
     balance: args.balance,
+    principal: principalOf(args),
     installment: args.accrues ? null : args.installment,
     annual_rate: rate,
     installments_left: args.accrues ? null : args.installmentsLeft,
@@ -250,16 +274,23 @@ export function proposalTools({
           };
         }
         const unit = debt.instrument_symbol ?? debt.currency ?? "USD";
-        const balance =
+        const amount = (value: string) =>
           debt.instrument_symbol !== null
-            ? `${formatQuantity(debt.balance)} ${debt.instrument_symbol}`
-            : formatAmount(debt.balance, unit as "ARS" | "USD" | "EUR");
+            ? `${formatQuantity(value)} ${debt.instrument_symbol}`
+            : formatAmount(value, unit as "ARS" | "USD" | "EUR");
+        const balance = amount(debt.balance);
+        const split = principalSplit(debt.balance, debt.principal);
         return {
           proposal: {
             title: debt.label,
             lines: [
               `${LIABILITY_KIND_LABELS[debt.kind]}${debt.lender ? ` con ${debt.lender}` : ""}`,
               `Saldo: ${balance}${debt.opened_on ? ` al ${formatDate(debt.opened_on)}` : ""}`,
+              ...(split
+                ? [
+                    `Capital: ${amount(split.principal)} · Intereses: ${amount(split.interest)}`,
+                  ]
+                : []),
               ...(debt.annual_rate !== null
                 ? [
                     `Tasa: ${formatFraction(debt.annual_rate)} anual${debt.accrues ? ", se suma al saldo cada día" : ""}`,

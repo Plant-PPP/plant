@@ -220,6 +220,7 @@ export {
   liabilityQuotesNeeded,
   type LiabilityKind,
   liabilitySchema,
+  principalSplit,
   valueLiabilities,
 } from "./liabilities/liability";
 export {

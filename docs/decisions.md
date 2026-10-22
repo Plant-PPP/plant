@@ -1090,6 +1090,10 @@ The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOper
 
 A symbol loaded during the day had no price until the quotes job ran after the close. The job now keeps the prices its feeds refuse only for their date, and `save_first_prices` stores the latest of them for a symbol `prices` has no row of; once a symbol has one, only the hourly run adds the next. Confirming an import, and clicking the logo, asks for a run at once.
 
+## A debt's principal stays as recorded
+
+A debt may record its `principal`: the part of its anchor day's balance that is not interest, at most that balance. The interest shown is today's balance less that principal, never below 0; payments and the lender's figures do not move the principal, which the user edits when the lender reports a new one. The assistant takes the principal as printed, or derives it from the printed accrued interest in code.
+
 ## Production has its own database
 
 `plant-production` (São Paulo, like staging) replaces sharing `plant-staging`, which supersedes "Shared database until the beta" and "`supabase` always runs first and, until the beta, applies nothing". The `production` environment holds `SUPABASE_PROJECT_REF` and `SUPABASE_DB_URL`, so Promote pushes the pending migrations there before it deploys; Vercel's Production variables point at it and Preview stays on staging, where `PLANT_RUN_JOBS` is set too. Migrations stay additive, because production runs the previous code until the deploy ends. What the dashboard holds by hand, in both projects: the custom access token hook, URL Configuration, custom SMTP (Resend; Supabase's own mailer sends two emails an hour and lets no template be edited) and the code template from `supabase/templates/login-code.html`. That template quotes no font name: Auth rendered the version with `&quot;` inside a style as its default email, with no error.

@@ -18,6 +18,7 @@ import {
   takesCashLink,
   takesEvents,
   valueLiabilities,
+  principalSplit,
 } from "@plant/core";
 import { sumOrNull } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -317,6 +318,17 @@ export function DebtHistory({
     referenceDollar,
   });
   const value = valued.items[0]?.value ?? null;
+  const split = principalSplit(figure.balance, debt.principal);
+  // A part of the balance in the view's unit, or null without its quote.
+  const partValue = (part: string) =>
+    valueLiabilities([{ ...owed!, balance: part }], snapshot, {
+      denominator: unit,
+      referenceDollar,
+    }).items[0]?.value ?? null;
+  const partNote = (part: string) => {
+    const shownValue = partValue(part);
+    return shownValue === null ? NO_QUOTE : formatAmount(shownValue, unit);
+  };
   // A pledged holding the user no longer holds stays in the dialog, so it can
   // be unpledged, and out of the figures: it has no value to count.
   const known = new Set(pledgeOptions.map((each) => each.id));
@@ -711,6 +723,16 @@ export function DebtHistory({
                 <MissingFigure text="Sin cuota" />
               )}
             </StatTile>
+          )}
+          {split && !debt.unsaved && (
+            <>
+              <StatTile label="Capital" note={partNote(split.principal)}>
+                {debtAmount(debt, split.principal)}
+              </StatTile>
+              <StatTile label="Intereses" note={partNote(split.interest)}>
+                {debtAmount(debt, split.interest)}
+              </StatTile>
+            </>
           )}
           {pledged.length > 0 && (
             <StatTile

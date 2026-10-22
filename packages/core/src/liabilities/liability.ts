@@ -1,14 +1,17 @@
 import {
+  compareDecimals,
   Constants,
   currencySchema,
   type Exact,
   exactOf,
   fieldsPassed,
+  fromScaled,
   INSTRUMENT_SYMBOL_PATTERN,
   plus,
   positiveDecimalSchema,
   times,
   toDecimal,
+  toScaled,
 } from "@plant/shared";
 import { z } from "zod";
 
@@ -34,7 +37,8 @@ const label = z.string().trim().min(1).max(LIABILITY_LABEL_MAX);
 
 // A debt by the column names it is stored under. Its balance and installment
 // are in its unit: the currency, UVA units when `uva`, or units of
-// `instrument_symbol`. The balance and rate are those of its anchor day
+// `instrument_symbol`. The principal, when the lender separates it, is the
+// part of the anchor day's balance that is not interest. The balance and rate are those of its anchor day
 // (opened_on, or the day it was created); the rate is a yearly fraction.
 export const liabilityFields = {
   kind: z.enum(LIABILITY_KINDS),
@@ -44,6 +48,7 @@ export const liabilityFields = {
   uva: z.boolean(),
   instrument_symbol: z.string().regex(INSTRUMENT_SYMBOL_PATTERN).nullable(),
   balance: positiveDecimalSchema,
+  principal: positiveDecimalSchema.nullable().optional(),
   installment: positiveDecimalSchema.nullable(),
   annual_rate: annualRate.nullable(),
   installments_left: z.number().int().positive().max(600).nullable(),
@@ -90,6 +95,24 @@ export const accrualAgrees = (debt: AccrualColumns): boolean =>
     debt.installments_left === null &&
     debt.next_due_on === null);
 
+// The liabilities_principal CHECK: the principal is part of the balance.
+export const principalAgrees = (debt: {
+  balance: string;
+  principal?: string | null;
+}): boolean =>
+  debt.principal == null || compareDecimals(debt.principal, debt.balance) <= 0;
+
+// What a debt owes split into principal and interest: the interest is what
+// the balance on the day adds to the recorded principal, never below 0.
+export function principalSplit(
+  balance: string,
+  principal: string | null | undefined,
+): { principal: string; interest: string } | null {
+  if (principal == null) return null;
+  const interest = toScaled(balance) - toScaled(principal);
+  return { principal, interest: fromScaled(interest > 0n ? interest : 0n) };
+}
+
 export const liabilityInputSchema = z
   .object(liabilityFields)
   .strict()
@@ -101,6 +124,11 @@ export const liabilityInputSchema = z
   .refine(accrualAgrees, {
     message: "A debt that accrues has a start date and no installment",
     path: ["accrues"],
+    when: fieldsPassed,
+  })
+  .refine(principalAgrees, {
+    message: "The principal is at most the balance",
+    path: ["principal"],
     when: fieldsPassed,
   });
 
