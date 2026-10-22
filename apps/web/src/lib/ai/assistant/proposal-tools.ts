@@ -1,5 +1,7 @@
 import "server-only";
 import {
+  INSTALLMENTS_MAX,
+  installmentsInputSchema,
   LIABILITY_KINDS,
   liabilityInputSchema,
   principalSplit,
@@ -74,6 +76,13 @@ const debtArgs = z.object({
   installmentsLeft: z.number().int().min(1).max(600).nullable(),
   nextDueOn: day.nullable(),
   maturesOn: day.nullable(),
+  installments: z
+    .array(z.object({ dueOn: day, amount: decimal }))
+    .max(INSTALLMENTS_MAX)
+    .nullable()
+    .describe(
+      "El plan de cuotas que quedan por pagar, cada una con su fecha y monto, cuando las cuotas no son todas iguales (3160 el 2026-10-31, 8160 el 2026-11-30, 6 semestrales de 4080). Solo lo que falta pagar.",
+    ),
 });
 
 const accountArgs = z.object({
@@ -187,6 +196,11 @@ const realEstateArgs = z.object({
   amount: decimal.describe("Lo que vale, según el usuario."),
   currency,
   valuedOn: day.nullable().describe("El día de esa valuación; null es hoy."),
+  cost: decimal
+    .nullable()
+    .describe(
+      "Lo que le costó al usuario, financiación incluida, si es distinto del valor: precio financiado 40800. null si no lo sabés.",
+    ),
 });
 
 const PROPERTIES_ACCOUNT = "Inmuebles";
@@ -296,6 +310,24 @@ export function proposalTools({
             error: `El usuario ya tiene la deuda "${same.label}"${same.lender ? ` con ${same.lender}` : ""}. No la propongas de nuevo: decíselo y, si no está claro si es otra, preguntale con askUser.`,
           };
         }
+        const plan = (args.installments ?? [])
+          .map((each) => ({ due_on: each.dueOn, amount: each.amount }))
+          .sort((x, y) => x.due_on.localeCompare(y.due_on));
+        if (!installmentsInputSchema.safeParse(plan).success) {
+          return {
+            error:
+              "El plan de cuotas no es válido: cada cuota necesita una fecha YYYY-MM-DD y un monto mayor a cero.",
+          };
+        }
+        const planTotal = plan.reduce(
+          (sum, each) => sum + toScaled(each.amount),
+          0n,
+        );
+        if (plan.length > 0 && planTotal !== toScaled(debt.balance)) {
+          return {
+            error: `Las cuotas suman ${fromScaled(planTotal)} y el saldo es ${debt.balance}: el saldo tiene que ser lo que falta pagar, la suma de las cuotas. Corregí uno de los dos.`,
+          };
+        }
         const unit = debt.instrument_symbol ?? debt.currency ?? "USD";
         const amount = (value: string) =>
           debt.instrument_symbol !== null
@@ -319,6 +351,11 @@ export function proposalTools({
                     `Tasa: ${formatFraction(debt.annual_rate)} anual${debt.accrues ? ", se suma al saldo cada día" : ""}`,
                   ]
                 : []),
+              ...(plan.length > 0
+                ? [
+                    `Plan: ${plan.length} cuotas · próxima ${amount(plan[0]!.amount)} el ${formatDate(plan[0]!.due_on)}`,
+                  ]
+                : []),
               ...(debt.installment !== null
                 ? [
                     `Cuota: ${formatAmount(debt.installment, unit as "ARS" | "USD" | "EUR")}${debt.installments_left ? ` · quedan ${debt.installments_left}` : ""}`,
@@ -327,6 +364,7 @@ export function proposalTools({
             ],
           },
           input: debt,
+          ...(plan.length > 0 && { installments: plan }),
         };
       },
     }),
@@ -441,6 +479,7 @@ export function proposalTools({
           matures_on: null,
           valued_on: args.valuedOn ?? today,
           label: args.label,
+          cost: args.cost,
         });
         if (!parsed.success || parsed.data.asset_class !== "real_estate") {
           return {
@@ -460,6 +499,9 @@ export function proposalTools({
             lines: [
               `Inmueble en ${target.institution}`,
               `Valor: ${formatAmount(holding.amount, holding.currency)} al ${formatDate(holding.valued_on)}`,
+              ...(holding.cost
+                ? [`Costo: ${formatAmount(holding.cost, holding.currency)}`]
+                : []),
             ],
           },
           input: holding,

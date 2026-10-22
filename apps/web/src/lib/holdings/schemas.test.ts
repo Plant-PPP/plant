@@ -158,6 +158,22 @@ it("refuses a fixed term maturing before it starts", () => {
   ).toBe(false);
 });
 
+it("takes a property's cost as optional, positive and its class's only", () => {
+  const takes = (c: keyof typeof SAMPLES, cost: unknown) =>
+    holdingInsertSchema.safeParse(insert(c, { cost })).success;
+  expect(holdingInsertSchema.safeParse(insert("real_estate")).success).toBe(
+    true,
+  );
+  expect(takes("real_estate", null)).toBe(true);
+  expect(takes("real_estate", "40800")).toBe(true);
+  expect(takes("real_estate", "0")).toBe(false);
+  expect(takes("other", "40800")).toBe(false);
+  expect(
+    holdingUpdateSchema.safeParse(update("real_estate", { cost: "40800" }))
+      .success,
+  ).toBe(true);
+});
+
 it("trims a label", () => {
   const parsed = holdingInsertSchema.parse(
     insert("real_estate", { label: "  Depto " }),

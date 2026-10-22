@@ -18,6 +18,7 @@ const ACTIONS = {
     delete: async () => ({ ok: true as const, id: "d1" }),
   },
   collateral: async () => ({ ok: true as const, id: "d1" }),
+  installments: async () => ({ ok: true as const, id: "d1" }),
 };
 
 const SNAPSHOT: QuoteSnapshot = {
@@ -167,4 +168,47 @@ it("splits what is owed into capital and interest when the capital is known", ()
   expect(html).toContain("Intereses");
   expect(html).toContain("US$ 100,00");
   expect(render(loan, [])).not.toContain("Intereses");
+});
+
+it("shows the installment plan with each installment's status", () => {
+  const garage: Liability = {
+    ...loan,
+    label: "Cochera",
+    accrues: false,
+    annual_rate: null,
+  };
+  const html = renderToStaticMarkup(
+    <DebtHistory
+      debt={garage}
+      events={[event({ amount: "5000", date: "2026-10-31" })]}
+      collateral={[]}
+      installments={[
+        { due_on: "2026-10-31", amount: "3160" },
+        { due_on: "2026-11-30", amount: "8160" },
+        { due_on: "2027-05-06", amount: "4080" },
+      ]}
+      complete
+      today="2026-10-15"
+      snapshot={SNAPSHOT}
+      unit="usd_mep"
+      referenceUnit="usd_mep"
+      referenceDollar="mep"
+      params={{}}
+      instruments={[]}
+      cash={[]}
+      pledgeOptions={[]}
+      actions={ACTIONS}
+    />,
+  );
+  expect(html).toContain("Plan de cuotas");
+  expect(html).toContain("Pagada");
+  expect(html).toContain("Parcial");
+  expect(html).toContain("Pendiente");
+  // The next installment owes what the payment left of it.
+  expect(html).toContain("Falta US$ 6.320,00");
+  expect(html).toContain("Vence el 30/11/2026");
+});
+
+it("shows no plan for a debt without one", () => {
+  expect(render(loan, [])).not.toContain("Plan de cuotas</h2>");
 });

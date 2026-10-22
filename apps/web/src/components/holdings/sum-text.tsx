@@ -1,4 +1,5 @@
 import type { Denominator } from "@plant/core";
+import type { Currency } from "@plant/shared";
 
 import { countOf } from "@/lib/format/text";
 import {
@@ -137,7 +138,7 @@ export function GainLossText({
   unit,
 }: {
   gain: GainLoss | null | undefined;
-  unit: Denominator;
+  unit: Denominator | Currency;
 }) {
   if (gain === undefined) return CALCULATING;
   if (gain === null) return <MissingFigure text="Sin resultado" />;

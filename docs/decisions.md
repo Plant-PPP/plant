@@ -2,6 +2,11 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-22 · The assistant runs on Sonnet; a property keeps its cost
+
+- **The assistant runs on Claude Sonnet 5.5** (`ASSISTANT_MODEL`): Haiku 4.5 got the arithmetic and multi-step loading wrong (a financed property's value, cost and debt). Sonnet 5.5 refuses sampling parameters, disabled thinking and forced tool choice, so the assistant and its eval judge send none.
+- **A property may carry its purchase cost** (`holdings.cost`, real estate only): what it cost the user, financing included. Activos shows its result, value less cost, in the property's currency.
+
 ## 2026-10-22 · Cargar reads loan statements
 
 - **A loan or credit line statement is read as debts, like a card's** (document kind `loan_statement`): each loan with its kind, balance, rate (read in percent, stored as a fraction), whether it accrues and the day of its balance. A dollar credit line (xUSD, USD, USDC) is a `usd_debt`; a `crypto_loan` is owed in a non-dollar crypto or explicitly in USDT, with no currency. In `import_debts` a null kind is a card, so earlier drafts stay valid. The review makes each loan a new debt, checked against `liabilityInputSchema`; only a card updates one the user has.
@@ -1097,3 +1102,7 @@ A debt may record its `principal`: the part of its anchor day's balance that is 
 ## Production has its own database
 
 `plant-production` (São Paulo, like staging) replaces sharing `plant-staging`, which supersedes "Shared database until the beta" and "`supabase` always runs first and, until the beta, applies nothing". The `production` environment holds `SUPABASE_PROJECT_REF` and `SUPABASE_DB_URL`, so Promote pushes the pending migrations there before it deploys; Vercel's Production variables point at it and Preview stays on staging, where `PLANT_RUN_JOBS` is set too. Migrations stay additive, because production runs the previous code until the deploy ends. What the dashboard holds by hand, in both projects: the custom access token hook, URL Configuration, custom SMTP (Resend; Supabase's own mailer sends two emails an hour and lets no template be edited) and the code template from `supabase/templates/login-code.html`. That template quotes no font name: Auth rendered the version with `&quot;` inside a style as its default email, with no error.
+
+## A debt's installment plan
+
+A debt may carry a plan in `liability_installments`: one row per installment, its date and amount in the debt's unit, at most 600 (`position` 0–599, unique per debt). The plan is replaced whole by `replace_liability_installments`, which runs as the caller, so a failed write never leaves half a plan. Whether an installment is paid is derived, never stored: the debt's recorded payments cover the installments in date order (`installmentPlan` in core), so an installment is paid once the payments reach every amount due up to it, partial while they reach part of it. The plan starts where the user's payment records start: what was paid before them is entered as a smaller first installment (the remaining 3.160 of an 8.160 installment). With a plan, the debts list's Cuota and Vence and the debt page's Cuota show the next unpaid installment's remainder and date instead of the debt's own `installment` and `next_due_on`, which still serve debts without a plan.

@@ -157,14 +157,14 @@ isOneToOne: false
                   ]
                 },"holdings": {
                   Row: {
-                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"movements_revision": number,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
+                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"movements_revision": number,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Relationships: [
                     {
@@ -359,6 +359,26 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     },{
       foreignKeyName: "liability_events_user_id_liability_id_fkey"
+      columns: ["user_id","liability_id"]
+isOneToOne: false
+      referencedRelation: "liabilities"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
+                },"liability_installments": {
+                  Row: {
+                    "amount": number,"created_at": string,"due_on": string,"id": string,"liability_id": string,"position": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"due_on": string,"id"?: string,"liability_id": string,"position": number,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"due_on"?: string,"id"?: string,"liability_id"?: string,"position"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "liability_installments_user_id_liability_id_fkey"
       columns: ["user_id","liability_id"]
 isOneToOne: false
       referencedRelation: "liabilities"
@@ -626,6 +646,9 @@ isOneToOne: false
                            },
 "record_liability_event":
 { Args: { "p_cash": Json,"p_event": Json,"p_liability_id": string }; Returns: string
+                           },
+"replace_liability_installments":
+{ Args: { "p_installments": Json,"p_liability_id": string }; Returns: number
                            },
 "restore_cash":
 { Args: { "p_amount": number,"p_currency": Database["public"]['Enums']["currency"],"p_holding_id": string }; Returns: string

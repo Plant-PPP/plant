@@ -1,4 +1,5 @@
 import {
+  installmentsInputSchema,
   admitLiabilityEvent,
   admitLiabilityEventDeletion,
   admitLiabilityUpdate,
@@ -108,12 +109,15 @@ export function deleteLiability(
   liabilityEvents.delete(id);
   const liabilityCollateral = new Map(state.liabilityCollateral);
   liabilityCollateral.delete(id);
+  const liabilityInstallments = new Map(state.liabilityInstallments);
+  liabilityInstallments.delete(id);
   return {
     state: {
       ...state,
       liabilities: state.liabilities.filter((each) => each.id !== id),
       liabilityEvents,
       liabilityCollateral,
+      liabilityInstallments,
     },
     result: { ok: true, id },
   };
@@ -392,6 +396,24 @@ export function setCollateral(
   liabilityCollateral.set(debtId, [...new Set(ids.data)]);
   return {
     state: { ...state, liabilityCollateral },
+    result: { ok: true, id: debtId },
+  };
+}
+
+export function setInstallments(
+  state: PrototypeState,
+  debtId: string,
+  installments: unknown,
+): Write<WriteResult> {
+  const plan = installmentsInputSchema.safeParse(installments);
+  if (!plan.success) return refusedWrite(state, "invalid");
+  if (!state.liabilities.some((each) => each.id === debtId)) {
+    return refusedWrite(state, "not_found");
+  }
+  const liabilityInstallments = new Map(state.liabilityInstallments);
+  liabilityInstallments.set(debtId, plan.data);
+  return {
+    state: { ...state, liabilityInstallments },
     result: { ok: true, id: debtId },
   };
 }

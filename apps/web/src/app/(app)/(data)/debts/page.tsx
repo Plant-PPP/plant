@@ -16,9 +16,11 @@ import { getSessionClaims } from "@/lib/auth/session-claims";
 import {
   DEBTS_VIEW_EVENT,
   debtsViewOutcome,
+  readInstallments,
   readLiabilities,
   readLiabilityEvents,
 } from "@/lib/debts/read";
+import { debtPlans } from "@/lib/debts/plans";
 import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
@@ -58,11 +60,14 @@ export default async function DebtsPage({
   const debtsRead = readLiabilities(client).catch((error: unknown) =>
     assetsViewFailure(context, "debts", error),
   );
-  const [debts, events, instruments, dollar, manual, quotes] =
+  const [debts, events, installments, instruments, dollar, manual, quotes] =
     await Promise.all([
       debtsRead,
       readLiabilityEvents(client).catch((error: unknown) =>
         assetsViewFailure(context, "debt_events", error),
+      ),
+      readInstallments(client).catch((error: unknown) =>
+        assetsViewFailure(context, "debt_installments", error),
       ),
       readInstruments(client, context),
       readReferenceDollar(client, context),
@@ -113,6 +118,7 @@ export default async function DebtsPage({
         debts={debts}
         owed={owed}
         complete={!events.cut && overflowCount === 0}
+        plans={debtPlans(installments.byLiability, events.byLiability)}
         valued={valued}
         unit={unit}
         referenceUnit={reference}

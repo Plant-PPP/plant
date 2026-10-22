@@ -2,6 +2,7 @@
 
 import {
   type Denominator,
+  type InstallmentPlan,
   isOwed,
   type LiabilitiesValue,
   type Liability,
@@ -89,6 +90,7 @@ export function DebtsSetup({
   debts,
   owed: owedToday,
   complete,
+  plans = {},
   valued,
   unit,
   referenceUnit,
@@ -101,6 +103,8 @@ export function DebtsSetup({
   owed: readonly LiabilityOnDate[];
   // Whether every debt's history was read and computed in full.
   complete: boolean;
+  // The installment plan of each debt that has one, by debt.
+  plans?: Readonly<Record<string, InstallmentPlan>>;
   // Each debt's balance and the total in the page's unit.
   valued: LiabilitiesValue;
   unit: Denominator;
@@ -130,6 +134,22 @@ export function DebtsSetup({
     const figure = computed.get(debt.id);
     return figure === undefined || isOwed(figure);
   });
+  // A debt with a plan shows its next installment instead of its own fields.
+  const planOf = (debt: Row) => (debt.unsaved ? undefined : plans[debt.id]);
+  const installmentOf = (debt: Row) => {
+    const plan = planOf(debt);
+    return plan ? (plan.next?.owed ?? null) : debt.installment;
+  };
+  const dueOf = (debt: Row) => {
+    const plan = planOf(debt);
+    return plan ? (plan.next?.due_on ?? null) : debt.next_due_on;
+  };
+  const leftOf = (debt: Row) => {
+    const plan = planOf(debt);
+    return plan
+      ? plan.installments.filter((each) => each.status !== "paid").length
+      : debt.installments_left;
+  };
 
   function submit(state: DialogState, fields: DebtFields): boolean {
     const input = toLiabilityInput(fields);
@@ -205,19 +225,22 @@ export function DebtsSetup({
       header: "Cuota",
       size: 152,
       meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
-      cell: ({ row: { original: debt } }) =>
-        debt.installment ? (
+      cell: ({ row: { original: debt } }) => {
+        const installment = installmentOf(debt);
+        const left = leftOf(debt);
+        return installment ? (
           <span>
-            {debtAmount(debt, debt.installment)}
-            {debt.installments_left && (
+            {debtAmount(debt, installment)}
+            {left ? (
               <span className="text-muted-foreground block text-xs">
-                {`${debt.installments_left === 1 ? "Queda" : "Quedan"} ${debt.installments_left}`}
+                {`${left === 1 ? "Queda" : "Quedan"} ${left}`}
               </span>
-            )}
+            ) : null}
           </span>
         ) : (
-          <MissingFigure text="Sin cuota" />
-        ),
+          <MissingFigure text={planOf(debt) ? "Todas pagadas" : "Sin cuota"} />
+        );
+      },
     },
     {
       id: "rate",
@@ -239,8 +262,10 @@ export function DebtsSetup({
       header: "Vence",
       size: 112,
       meta: { className: "hidden @4xl:table-cell text-muted-foreground" },
-      cell: ({ row: { original: debt } }) =>
-        debt.next_due_on ? formatDate(debt.next_due_on) : null,
+      cell: ({ row: { original: debt } }) => {
+        const due = dueOf(debt);
+        return due ? formatDate(due) : null;
+      },
     },
     {
       id: "value",
@@ -277,7 +302,7 @@ export function DebtsSetup({
     ),
   ];
 
-  const monthly = live.filter((debt) => debt.installment);
+  const monthly = live.filter((debt) => installmentOf(debt));
 
   return (
     <div className="grid gap-4">
@@ -334,15 +359,13 @@ export function DebtsSetup({
               label="Próximo vencimiento"
               note={
                 live
-                  .filter((debt) => debt.next_due_on)
-                  .sort((a, b) =>
-                    a.next_due_on!.localeCompare(b.next_due_on!),
-                  )[0]?.label
+                  .filter((debt) => dueOf(debt))
+                  .sort((a, b) => dueOf(a)!.localeCompare(dueOf(b)!))[0]?.label
               }
             >
               {(() => {
                 const next = live
-                  .map((debt) => debt.next_due_on)
+                  .map((debt) => dueOf(debt))
                   .filter((date): date is string => date !== null)
                   .sort()[0];
                 return next ? (

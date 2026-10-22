@@ -18,6 +18,7 @@ import {
   recordDebtEvent,
   setDebtCollateral,
   setDebtDisbursement,
+  setDebtInstallments,
   updateDebt,
   updateDebtEvent,
 } from "../actions";
@@ -30,6 +31,7 @@ import {
   debtsViewOutcome,
   readCollateral,
   readDisbursement,
+  readInstallments,
   readLiability,
   readLiabilityEvents,
 } from "@/lib/debts/read";
@@ -96,32 +98,44 @@ export default async function DebtPage({
     assetsViewFailure(context, "debts", error),
   );
   const heldRead = readHoldings(client, context);
-  const [debt, events, collateral, held, dollar, instruments, manual, quotes] =
-    await Promise.all([
-      debtRead,
-      readLiabilityEvents(client, id).catch((error: unknown) =>
-        assetsViewFailure(context, "debt_events", error),
-      ),
-      readCollateral(client, id).catch((error: unknown) =>
-        assetsViewFailure(context, "debt_collateral", error),
-      ),
-      heldRead,
-      readReferenceDollar(client, context),
-      readInstruments(client, context),
-      readManualQuotes(client).catch((error: unknown) =>
-        assetsViewFailure(context, "ledger", error),
-      ),
-      Promise.all([debtRead, heldRead]).then(([found, rows]) => {
-        const forHoldings = quotesNeeded(rows.active.map((row) => row.holding));
-        const forDebt = liabilityQuotesNeeded(found ? [found] : []);
-        return readSnapshot(createQuoteReader(client), today, {
-          fxKinds: [...new Set([...forHoldings.fxKinds, ...forDebt.fxKinds])],
-          symbols: [...new Set([...forHoldings.symbols, ...forDebt.symbols])],
-        }).catch((error: unknown) =>
-          assetsViewFailure(context, "snapshot", error),
-        );
-      }),
-    ]);
+  const [
+    debt,
+    events,
+    collateral,
+    installments,
+    held,
+    dollar,
+    instruments,
+    manual,
+    quotes,
+  ] = await Promise.all([
+    debtRead,
+    readLiabilityEvents(client, id).catch((error: unknown) =>
+      assetsViewFailure(context, "debt_events", error),
+    ),
+    readCollateral(client, id).catch((error: unknown) =>
+      assetsViewFailure(context, "debt_collateral", error),
+    ),
+    readInstallments(client, id).catch((error: unknown) =>
+      assetsViewFailure(context, "debt_installments", error),
+    ),
+    heldRead,
+    readReferenceDollar(client, context),
+    readInstruments(client, context),
+    readManualQuotes(client).catch((error: unknown) =>
+      assetsViewFailure(context, "ledger", error),
+    ),
+    Promise.all([debtRead, heldRead]).then(([found, rows]) => {
+      const forHoldings = quotesNeeded(rows.active.map((row) => row.holding));
+      const forDebt = liabilityQuotesNeeded(found ? [found] : []);
+      return readSnapshot(createQuoteReader(client), today, {
+        fxKinds: [...new Set([...forHoldings.fxKinds, ...forDebt.fxKinds])],
+        symbols: [...new Set([...forHoldings.symbols, ...forDebt.symbols])],
+      }).catch((error: unknown) =>
+        assetsViewFailure(context, "snapshot", error),
+      );
+    }),
+  ]);
   if (!debt) return missing();
   const disbursement = await readDisbursement(
     client,
@@ -149,6 +163,8 @@ export default async function DebtPage({
     "plant.liability.id": id,
     "plant.liability.event_count": debtEvents.length,
     "plant.liability.collateral_count": collateral.length,
+    "plant.liability.installment_count":
+      installments.byLiability.get(id)?.length ?? 0,
     "plant.assets.unit": unit,
     "plant.quotes.dropped_count": quotes.invalidCount,
   });
@@ -158,6 +174,7 @@ export default async function DebtPage({
       debt={debt}
       events={debtEvents}
       collateral={collateral}
+      installments={installments.byLiability.get(id) ?? []}
       complete={!events.cut}
       today={today}
       snapshot={snapshot}
@@ -191,6 +208,7 @@ export default async function DebtPage({
         debts: { update: updateDebt, delete: deleteDebt },
         collateral: setDebtCollateral,
         disbursement: setDebtDisbursement,
+        installments: setDebtInstallments,
       }}
     />
   );

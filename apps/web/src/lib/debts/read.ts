@@ -1,5 +1,7 @@
 import "server-only";
 import {
+  type Installment,
+  installmentSchema,
   type LiabilitiesValue,
   type Liability,
   type LiabilityEvent,
@@ -124,6 +126,50 @@ export async function readCollateral(
     throw new DebtsReadError(failure?.code ?? "no_data");
   }
   return result.data.map((row) => row.holding_id);
+}
+
+const INSTALLMENT_PAGE = 1000;
+export const INSTALLMENT_READ_LIMIT = 5000;
+
+// The installment plans of the user's debts, or one debt's, each in its
+// order, up to INSTALLMENT_READ_LIMIT rows; `cut` says the read stopped there.
+export async function readInstallments(
+  client: Client,
+  liabilityId?: string,
+): Promise<{ byLiability: Map<string, Installment[]>; cut: boolean }> {
+  const byLiability = new Map<string, Installment[]>();
+  for (let from = 0; from < INSTALLMENT_READ_LIMIT; from += INSTALLMENT_PAGE) {
+    let query = client
+      .from("liability_installments")
+      .select("liability_id, due_on, amount:amount::text");
+    if (liabilityId !== undefined)
+      query = query.eq("liability_id", liabilityId);
+    const result = await query
+      .order("liability_id")
+      .order("position")
+      .range(from, from + INSTALLMENT_PAGE - 1);
+    const failure = classifyPostgrestResult(
+      result as Parameters<typeof classifyPostgrestResult>[0],
+      200,
+    );
+    if (failure || !result.data) {
+      throw new DebtsReadError(failure?.code ?? "no_data");
+    }
+    for (const row of result.data as unknown as {
+      liability_id: string;
+      due_on: string;
+      amount: string;
+    }[]) {
+      const plan = byLiability.get(row.liability_id) ?? [];
+      plan.push(
+        installmentSchema.parse({ due_on: row.due_on, amount: row.amount }),
+      );
+      byLiability.set(row.liability_id, plan);
+    }
+    if (result.data.length < INSTALLMENT_PAGE)
+      return { byLiability, cut: false };
+  }
+  return { byLiability, cut: true };
 }
 
 const EVENT_COLUMNS =

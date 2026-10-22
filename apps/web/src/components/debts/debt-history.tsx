@@ -6,6 +6,8 @@ import {
   admitLiabilityUpdate,
   compareLiabilityEvents,
   type Denominator,
+  type Installment,
+  type InstallmentStatus,
   type Liability,
   type LiabilityEvent,
   type LiabilityEventKind,
@@ -23,6 +25,7 @@ import {
 import { sumOrNull } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
+  CalendarClock,
   HandCoins,
   MoreHorizontal,
   Pencil,
@@ -70,6 +73,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Section } from "@/components/ui/section";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
 import { DEBT_EVENT_LABELS } from "@/lib/debts/labels";
+import { planOf } from "@/lib/debts/plans";
 import type { DebtEventResult } from "@/lib/debts/events-write";
 import { amountInput, formatAmount, formatFraction } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
@@ -93,6 +97,7 @@ import {
   DebtCollateralDialog,
   DebtDialog,
   DebtEventDialog,
+  DebtInstallmentsDialog,
   preloadDebtDialogs,
 } from "./lazy-dialogs";
 import {
@@ -138,6 +143,10 @@ export type DebtPageActions = {
     debtId: string,
     operationId: string | null,
   ) => Promise<WriteResult>;
+  installments: (
+    debtId: string,
+    installments: Installment[],
+  ) => Promise<WriteResult>;
 };
 
 type EventRow = LiabilityEvent & { unsaved?: true };
@@ -147,6 +156,18 @@ const OPENED_AFTER_EVENTS =
 
 const REOPENING_KEPT =
   "Este ajuste reabrió la deuda y hay movimientos después: borralos primero.";
+
+const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = {
+  paid: "Pagada",
+  partial: "Parcial",
+  pending: "Pendiente",
+};
+
+type InstallmentRow = Installment & {
+  id: string;
+  status: InstallmentStatus;
+  owed: string;
+};
 
 const COLLATERAL_MESSAGES: WriteMessages = {
   ...WRITE_MESSAGES.holdings,
@@ -161,6 +182,7 @@ type State = {
   events: EventRow[];
   collateral: string[];
   disbursement: string | null;
+  installments: Installment[];
 };
 
 type Change =
@@ -168,7 +190,8 @@ type Change =
   | { kind: "event"; row: EventRow }
   | { kind: "delete_event"; id: string }
   | { kind: "collateral"; ids: string[] }
-  | { kind: "disbursement"; operationId: string | null };
+  | { kind: "disbursement"; operationId: string | null }
+  | { kind: "installments"; installments: Installment[] };
 
 function apply(state: State, change: Change): State {
   switch (change.kind) {
@@ -187,6 +210,8 @@ function apply(state: State, change: Change): State {
       return { ...state, collateral: change.ids };
     case "disbursement":
       return { ...state, disbursement: change.operationId };
+    case "installments":
+      return { ...state, installments: change.installments };
   }
 }
 
@@ -242,6 +267,7 @@ export function DebtHistory({
   debt: initialDebt,
   events: initialEvents,
   collateral: initialCollateral,
+  installments: initialInstallments = [],
   complete,
   today,
   snapshot,
@@ -258,6 +284,8 @@ export function DebtHistory({
   debt: Liability;
   events: readonly LiabilityEvent[];
   collateral: readonly string[];
+  // The debt's installment plan, empty without one.
+  installments?: readonly Installment[];
   // Whether every event was read.
   complete: boolean;
   today: string;
@@ -284,6 +312,7 @@ export function DebtHistory({
       events: [...initialEvents],
       collateral: [...initialCollateral],
       disbursement: disbursement.current,
+      installments: [...initialInstallments],
     },
     apply,
   );
@@ -301,6 +330,9 @@ export function DebtHistory({
   > | null>(null);
   const [disbursementDialog, setDisbursementDialog] = useState<Retry<
     string | null
+  > | null>(null);
+  const [installmentsDialog, setInstallmentsDialog] = useState<Retry<
+    Installment[]
   > | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<LiabilityEvent | null>(
     null,
@@ -352,6 +384,13 @@ export function DebtHistory({
       ? loanToValue(value, pledgedValue)
       : null;
   const cashOf = new Map(cash.map((each) => [each.id, each]));
+  const plan =
+    shown.installments.length > 0
+      ? planOf(shown.installments, shown.events)
+      : null;
+  const installmentRows: InstallmentRow[] = (plan?.installments ?? []).map(
+    (each, index) => ({ ...each, id: `${index}` }),
+  );
   // Newest first, in the reverse of the order core applies them.
   const rows = [...shown.events].sort((a, b) => compareLiabilityEvents(b, a));
 
@@ -534,6 +573,43 @@ export function DebtHistory({
     ),
   ];
 
+  const installmentColumns: ColumnDef<InstallmentRow>[] = [
+    {
+      id: "date",
+      header: "Fecha",
+      size: 104,
+      meta: { className: "text-muted-foreground whitespace-nowrap" },
+      cell: ({ row: { original } }) => formatDate(original.due_on),
+    },
+    {
+      id: "amount",
+      header: "Monto",
+      size: 152,
+      meta: { className: NUMBER_CELL },
+      cell: ({ row: { original } }) => debtAmount(debt, original.amount),
+    },
+    {
+      id: "status",
+      header: "Estado",
+      cell: ({ row: { original } }) => (
+        <>
+          <span
+            className={
+              original.status === "paid" ? "text-muted-foreground" : undefined
+            }
+          >
+            {INSTALLMENT_STATUS_LABELS[original.status]}
+          </span>
+          {original.status === "partial" && (
+            <span className="text-muted-foreground block text-xs">
+              {`Falta ${debtAmount(debt, original.owed)}`}
+            </span>
+          )}
+        </>
+      ),
+    },
+  ];
+
   const toolbarActions = (
     <>
       {history && (
@@ -587,6 +663,13 @@ export function DebtHistory({
                   Cancelar la deuda
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                className="text-xs"
+                onSelect={() => !busy && setInstallmentsDialog({})}
+              >
+                <CalendarClock />
+                Plan de cuotas
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-xs"
                 onSelect={() => !busy && setCollateralDialog({})}
@@ -712,12 +795,22 @@ export function DebtHistory({
             <StatTile
               label="Cuota"
               note={
-                debt.next_due_on
-                  ? `Vence el ${formatDate(debt.next_due_on)}`
-                  : undefined
+                plan
+                  ? plan.next
+                    ? `Vence el ${formatDate(plan.next.due_on)}`
+                    : undefined
+                  : debt.next_due_on
+                    ? `Vence el ${formatDate(debt.next_due_on)}`
+                    : undefined
               }
             >
-              {debt.installment ? (
+              {plan ? (
+                plan.next ? (
+                  debtAmount(debt, plan.next.owed)
+                ) : (
+                  <MissingFigure text="Todas pagadas" />
+                )
+              ) : debt.installment ? (
                 debtAmount(debt, debt.installment)
               ) : (
                 <MissingFigure text="Sin cuota" />
@@ -752,6 +845,28 @@ export function DebtHistory({
           )}
         </StatGrid>
       </div>
+
+      {plan && (
+        <Section
+          title="Plan de cuotas"
+          description="Los pagos registrados cubren las cuotas en orden de fecha."
+          actions={
+            <PageButton
+              disabled={busy}
+              onClick={() => !busy && setInstallmentsDialog({})}
+            >
+              <Pencil />
+              Editar
+            </PageButton>
+          }
+        >
+          <DataTable
+            caption={`Cuotas de ${debt.label}`}
+            columns={installmentColumns}
+            data={installmentRows}
+          />
+        </Section>
+      )}
 
       {history ? (
         <Section
@@ -849,6 +964,30 @@ export function DebtHistory({
                 done: "Guardaste la garantía",
                 reopen: (error) =>
                   setCollateralDialog({ initial: ids, initialError: error }),
+              },
+            )
+          }
+        />
+      )}
+      {installmentsDialog && (
+        <DebtInstallmentsDialog
+          initial={installmentsDialog.initial ?? shown.installments}
+          initialError={installmentsDialog.initialError}
+          unit={unitOf(debt)}
+          returnFocusTo={() => card.focusHeading()}
+          onClose={() => setInstallmentsDialog(null)}
+          onSubmit={(installments) =>
+            card.dialogAction(
+              { kind: "installments", installments },
+              () => actions.installments(debt.id, installments),
+              COLLATERAL_MESSAGES,
+              {
+                done: "Guardaste el plan de cuotas",
+                reopen: (error) =>
+                  setInstallmentsDialog({
+                    initial: installments,
+                    initialError: error,
+                  }),
               },
             )
           }

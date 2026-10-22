@@ -41,7 +41,7 @@ import { assistantPrompt } from "./prompt";
 import { proposalTools } from "./proposal-tools";
 import { assistantTools } from "./tools";
 
-export const ASSISTANT_MODEL = "claude-haiku-4-5" satisfies PricedModelId;
+export const ASSISTANT_MODEL = "claude-sonnet-5-5" satisfies PricedModelId;
 
 // The turns of a conversation the model reads again with a new question.
 const HISTORY_TURNS = 10;
