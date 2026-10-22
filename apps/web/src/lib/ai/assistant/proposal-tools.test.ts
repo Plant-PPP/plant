@@ -5,6 +5,12 @@ import { proposalTools } from "./proposal-tools";
 const NEXO = {
   id: "6f1c1a52-7c1a-4b1e-9a3e-1d2c3b4a5f60",
   institution: "Nexo",
+  default_portfolio_id: "b1000000-0000-4000-8000-0000000000b1",
+};
+const PROPERTIES = {
+  id: "a1000000-0000-4000-8000-0000000000a1",
+  institution: "Inmuebles",
+  default_portfolio_id: "b1000000-0000-4000-8000-0000000000b2",
 };
 
 const tools = (accounts = [NEXO]) =>
@@ -179,5 +185,64 @@ describe("proposeDebt", () => {
     expect(
       (await propose({ accruedInterest: "58501.09" })).input.principal,
     ).toBeNull();
+  });
+});
+
+describe("proposeRealEstate", () => {
+  const property = {
+    account: "Nexo",
+    label: "Cochera Palermo",
+    amount: "25000",
+    currency: "USD",
+    valuedOn: "2026-10-01",
+  };
+
+  it("proposes a property in the named account", async () => {
+    expect(await run(tools().proposeRealEstate, property)).toEqual({
+      proposal: {
+        title: "Cochera Palermo",
+        lines: [
+          "Inmueble en Nexo",
+          expect.stringMatching(/^Valor: US\$\s?25\.000(,00)? al /),
+        ],
+      },
+      input: expect.objectContaining({
+        asset_class: "real_estate",
+        source_connection_id: NEXO.id,
+        portfolio_id: NEXO.default_portfolio_id,
+        amount: "25000",
+        currency: "USD",
+        valued_on: "2026-10-01",
+        label: "Cochera Palermo",
+      }),
+    });
+  });
+
+  it("falls back to the Inmuebles account, valued today", async () => {
+    const output = await run(tools([NEXO, PROPERTIES]).proposeRealEstate, {
+      ...property,
+      account: null,
+      valuedOn: null,
+    });
+    expect(output).toMatchObject({
+      proposal: { lines: ["Inmueble en Inmuebles", expect.any(String)] },
+      input: {
+        source_connection_id: PROPERTIES.id,
+        portfolio_id: PROPERTIES.default_portfolio_id,
+        valued_on: "2026-10-22",
+      },
+    });
+  });
+
+  it("asks to propose the Inmuebles account when there is none", async () => {
+    expect(
+      await run(tools().proposeRealEstate, { ...property, account: "Casa" }),
+    ).toEqual({ error: expect.stringContaining("proposeAccount") });
+  });
+
+  it("refuses an amount that is not a value", async () => {
+    expect(
+      await run(tools().proposeRealEstate, { ...property, amount: "0" }),
+    ).toEqual({ error: expect.stringContaining("amount") });
   });
 });

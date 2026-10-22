@@ -284,7 +284,7 @@ export async function runAssistantTurn({
         accounts: async () => {
           const result = await client
             .from("source_connections")
-            .select("id, institution")
+            .select("id, institution, default_portfolio_id")
             .is("archived_at", null);
           return result.data ?? [];
         },

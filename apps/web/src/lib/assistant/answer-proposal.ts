@@ -3,6 +3,7 @@ import type { Database } from "@plant/shared";
 import { z } from "zod";
 
 import { createSourceConnection } from "@/app/(app)/(data)/accounts/actions";
+import { createHolding } from "@/app/(app)/(data)/assets/actions";
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { writeLiability } from "@/lib/debts/write";
 import { serverLog } from "@/lib/log/server-log";
@@ -98,7 +99,9 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
             ? await writeLiability("create_liability", null, part.output.input)
             : kind === "account"
               ? await createAccount(part.output.input)
-              : await stageImport(kind, part.output.input);
+              : kind === "real_estate"
+                ? await createHolding(part.output.input)
+                : await stageImport(kind, part.output.input);
         if (!written.ok) {
           result = { ok: false, code: "refused" };
         } else {
