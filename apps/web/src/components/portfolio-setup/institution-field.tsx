@@ -3,6 +3,8 @@
 import Image, { type StaticImageData } from "next/image";
 import { useRef } from "react";
 import type * as React from "react";
+
+import { useInstitutionIcon } from "./institution-icons";
 import Allaria from "@/assets/institutions/allaria.png";
 import Balanz from "@/assets/institutions/balanz.png";
 import BancoGalicia from "@/assets/institutions/banco-galicia.png";
@@ -191,6 +193,8 @@ export function InstitutionIcon({
   name: string;
   icon?: string | null;
 }) {
+  const saved = useInstitutionIcon(name);
+  icon ??= saved;
   if (!isInstitution(name) && icon) {
     return (
       <Image
