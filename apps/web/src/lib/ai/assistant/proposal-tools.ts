@@ -17,6 +17,7 @@ import {
   percentToFraction,
 } from "@/lib/format/amount";
 import { formatDate } from "@/lib/format/date";
+import { holdingInsertSchema } from "@/lib/holdings/schemas";
 import { NAME_LIMITS } from "@/lib/portfolio-setup/limits";
 
 const decimal = z
@@ -166,7 +167,29 @@ const capped = (lines: string[]): string[] =>
     ? [...lines.slice(0, SHOWN_ROWS), `y ${lines.length - SHOWN_ROWS} más`]
     : lines;
 
-type Account = { id: string; institution: string };
+type Account = {
+  id: string;
+  institution: string;
+  default_portfolio_id: string;
+};
+
+const realEstateArgs = z.object({
+  account: account
+    .nullable()
+    .describe(
+      "El nombre exacto de la cuenta donde va; null para la cuenta Inmuebles.",
+    ),
+  label: z
+    .string()
+    .min(1)
+    .max(NAME_LIMITS.holdings.label)
+    .describe("Un nombre corto: Cochera Palermo."),
+  amount: decimal.describe("Lo que vale, según el usuario."),
+  currency,
+  valuedOn: day.nullable().describe("El día de esa valuación; null es hoy."),
+});
+
+const PROPERTIES_ACCOUNT = "Inmuebles";
 
 // The one open account of that name, or why there is none to load into.
 function accountNamed(
@@ -387,6 +410,59 @@ export function proposalTools({
             ),
           },
           input: { accountId: target.id, rows },
+        };
+      },
+    }),
+    proposeRealEstate: tool({
+      description:
+        "Propone cargar un inmueble (casa, departamento, cochera, terreno) con el valor que dice el usuario. No escribe nada: el usuario lo confirma o descarta en una card. Va en una cuenta que el usuario ya tiene; sin cuenta, en Inmuebles.",
+      inputSchema: realEstateArgs,
+      execute: async (args): Promise<ProposalOutput> => {
+        const held = await accounts();
+        const named = args.account ? accountNamed(held, args.account) : null;
+        const target =
+          named && !("error" in named)
+            ? named
+            : accountNamed(held, PROPERTIES_ACCOUNT);
+        if ("error" in target) {
+          return {
+            error: `No hay una cuenta para el inmueble. Proponé la cuenta "${PROPERTIES_ACCOUNT}" con proposeAccount y esperá que el usuario la confirme antes de proponer el inmueble.`,
+          };
+        }
+        const parsed = holdingInsertSchema.safeParse({
+          asset_class: "real_estate",
+          source_connection_id: target.id,
+          portfolio_id: target.default_portfolio_id,
+          instrument_symbol: null,
+          currency: args.currency,
+          amount: args.amount,
+          annual_rate: null,
+          started_on: null,
+          matures_on: null,
+          valued_on: args.valuedOn ?? today,
+          label: args.label,
+        });
+        if (!parsed.success || parsed.data.asset_class !== "real_estate") {
+          return {
+            error: `Los datos no forman un inmueble válido: ${
+              parsed.success
+                ? "asset_class"
+                : parsed.error.issues
+                    .map((issue) => issue.path.join(".") || issue.message)
+                    .join(", ")
+            }. Corregilos o preguntale al usuario.`,
+          };
+        }
+        const holding = parsed.data;
+        return {
+          proposal: {
+            title: holding.label,
+            lines: [
+              `Inmueble en ${target.institution}`,
+              `Valor: ${formatAmount(holding.amount, holding.currency)} al ${formatDate(holding.valued_on)}`,
+            ],
+          },
+          input: holding,
         };
       },
     }),

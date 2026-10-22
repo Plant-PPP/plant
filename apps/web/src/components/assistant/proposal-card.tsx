@@ -7,6 +7,7 @@ import {
   Landmark,
   Wallet,
   X,
+  Home,
 } from "lucide-react";
 import { useState, useTransition } from "react";
 
@@ -19,12 +20,14 @@ const ICONS = {
   account: Landmark,
   holdings: Wallet,
   operations: ArrowLeftRight,
+  real_estate: Home,
 } as const;
 const KIND_LABELS = {
   debt: "Deuda",
   account: "Cuenta",
   holdings: "Tenencias",
   operations: "Operaciones",
+  real_estate: "Inmueble",
 } as const;
 // Holdings and operations are confirmed in their review, not on the card.
 const STAGED = new Set<ProposalView["kind"]>(["holdings", "operations"]);

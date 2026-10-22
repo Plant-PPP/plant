@@ -8,6 +8,7 @@ export const PROPOSAL_KINDS = {
   proposeAccount: "account",
   proposeHoldings: "holdings",
   proposeOperations: "operations",
+  proposeRealEstate: "real_estate",
 } as const;
 export type ProposalTool = keyof typeof PROPOSAL_KINDS;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[ProposalTool];
