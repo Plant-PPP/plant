@@ -25,6 +25,7 @@ export type DebtFields = {
   uva: boolean;
   instrument: string;
   balance: string;
+  principal: string;
   installment: string;
   rate: string;
   installmentsLeft: string;
@@ -44,6 +45,7 @@ export function debtFields(debt: Liability | null): DebtFields {
       uva: false,
       instrument: "",
       balance: "",
+      principal: "",
       installment: "",
       rate: "",
       installmentsLeft: "",
@@ -61,6 +63,7 @@ export function debtFields(debt: Liability | null): DebtFields {
     uva: debt.uva,
     instrument: debt.instrument_symbol ?? "",
     balance: amountInput(debt.balance),
+    principal: debt.principal ? amountInput(debt.principal) : "",
     installment: debt.installment ? amountInput(debt.installment) : "",
     rate: debt.annual_rate ? percentInput(debt.annual_rate) : "",
     installmentsLeft: debt.installments_left
@@ -107,6 +110,7 @@ export function toLiabilityInput(fields: DebtFields) {
     uva: !crypto && fields.currency === "ARS" && fields.uva,
     instrument_symbol: crypto ? optional(fields.instrument) : null,
     balance: parseAmountInput(fields.balance),
+    principal: parsedOr(fields.principal, parseAmountInput),
     installment: shown.installments
       ? parsedOr(fields.installment, parseAmountInput)
       : null,
@@ -142,4 +146,4 @@ export function debtAmount(
 }
 
 export const DEBT_INVALID =
-  "Revisá la deuda: un nombre, un saldo mayor a 0 y, si los cargás, una cuota, una tasa de hasta 1000 % y fechas válidas.";
+  "Revisá la deuda: un nombre, un saldo mayor a 0 y, si los cargás, un capital de hasta el saldo, una cuota, una tasa de hasta 1000 % y fechas válidas.";

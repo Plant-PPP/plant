@@ -50,7 +50,7 @@ export class DebtsReadError extends Error {
 // Amounts are selected as text, so they stay exact decimal strings.
 const COLUMNS =
   "id, kind, label, lender, currency, uva, instrument_symbol, " +
-  "balance:balance::text, installment:installment::text, " +
+  "balance:balance::text, principal:principal::text, installment:installment::text, " +
   "annual_rate:annual_rate::text, installments_left, next_due_on, matures_on, " +
   "accrues, opened_on, anchored_on";
 

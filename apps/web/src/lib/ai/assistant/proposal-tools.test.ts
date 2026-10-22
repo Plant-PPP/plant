@@ -133,3 +133,51 @@ describe("proposeOperations", () => {
     });
   });
 });
+
+describe("proposeDebt", () => {
+  const line = {
+    kind: "usd_debt",
+    label: "Línea Nexo",
+    lender: "Nexo",
+    currency: "USD",
+    instrumentSymbol: null,
+    balance: "58501.09",
+    principal: null,
+    accruedInterest: null,
+    annualRatePercent: "12.9",
+    accrues: true,
+    openedOn: "2026-10-20",
+    installment: null,
+    installmentsLeft: null,
+    nextDueOn: null,
+    maturesOn: null,
+  };
+  const propose = (args: object) =>
+    run(tools().proposeDebt, { ...line, ...args }) as Promise<{
+      proposal: { lines: string[] };
+      input: { principal?: string | null };
+    }>;
+
+  it("keeps the printed capital and shows the interest it leaves", async () => {
+    const output = await propose({
+      principal: "54719.05",
+      accruedInterest: "9999",
+    });
+    expect(output.input.principal).toBe("54719.05");
+    expect(output.proposal.lines).toContain(
+      "Capital: US$ 54.719,05 · Intereses: US$ 3.782,04",
+    );
+  });
+
+  it("derives the capital from the printed interest", async () => {
+    const output = await propose({ accruedInterest: "3782.04" });
+    expect(output.input.principal).toBe("54719.05");
+  });
+
+  it("leaves the capital out without either figure or when the interest covers the balance", async () => {
+    expect((await propose({})).input.principal).toBeNull();
+    expect(
+      (await propose({ accruedInterest: "58501.09" })).input.principal,
+    ).toBeNull();
+  });
+});

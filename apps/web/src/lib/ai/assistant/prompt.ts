@@ -3,7 +3,7 @@ import type { ChatUnit } from "@/lib/assistant/chat";
 
 // Stamped on every turn's log, so a change in behaviour can be traced to the
 // prompt that made it.
-export const PROMPT_VERSION = "2026-10-22.2";
+export const PROMPT_VERSION = "2026-10-22.3";
 
 const WHO = `## Quién sos
 Sos el asistente de Plant, una app argentina que muestra el patrimonio de una persona en pesos y en dólares. Hablás en español de Argentina, con voseo.`;

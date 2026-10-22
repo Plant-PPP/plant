@@ -7,6 +7,7 @@ import {
   liabilityInputSchema,
   liabilityQuotesNeeded,
   liabilityValue,
+  principalSplit,
   valueLiabilities,
 } from "./liability";
 
@@ -208,4 +209,29 @@ it("values a paid-off debt at 0 without a quote", () => {
   );
   expect(valued.complete).toBe(true);
   expect(valued.total).toBe("0");
+});
+
+it("takes a principal up to the balance", () => {
+  const row: Partial<Liability> = debt({});
+  delete row.id;
+  delete row.anchored_on;
+  const parse = (principal: string | null) =>
+    liabilityInputSchema.safeParse({ ...row, principal }).success;
+  expect(parse(null)).toBe(true);
+  expect(parse("1000")).toBe(true);
+  expect(parse("900.5")).toBe(true);
+  expect(parse("1000.01")).toBe(false);
+  expect(parse("0")).toBe(false);
+});
+
+it("splits what is owed into principal and interest", () => {
+  expect(principalSplit("58501.09", "54719.05")).toEqual({
+    principal: "54719.05",
+    interest: "3782.04",
+  });
+  expect(principalSplit("500", "800")).toEqual({
+    principal: "800",
+    interest: "0",
+  });
+  expect(principalSplit("500", null)).toBeNull();
 });

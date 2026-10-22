@@ -1089,3 +1089,7 @@ The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOper
 ## A new symbol takes its last close at once
 
 A symbol loaded during the day had no price until the quotes job ran after the close. The job now keeps the prices its feeds refuse only for their date, and `save_first_prices` stores the latest of them for a symbol `prices` has no row of; once a symbol has one, only the hourly run adds the next. Confirming an import, and clicking the logo, asks for a run at once.
+
+## A debt's principal stays as recorded
+
+A debt may record its `principal`: the part of its anchor day's balance that is not interest, at most that balance. The interest shown is today's balance less that principal, never below 0; payments and the lender's figures do not move the principal, which the user edits when the lender reports a new one. The assistant takes the principal as printed, or derives it from the printed accrued interest in code.
