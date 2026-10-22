@@ -334,6 +334,7 @@ function reviewRow(
   data: unknown,
   index: ReturnType<typeof instrumentIndex>,
   origin: ImportOrigin,
+  usOnly: boolean,
 ): ImportRow {
   const row = itemSchema.parse(data);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
@@ -353,7 +354,7 @@ function reviewRow(
       discarded: false,
     };
   }
-  const known = resolveSymbol(row.symbol, index);
+  const { known } = resolvedFor(row.symbol, index, usOnly);
   const named = namedAs(row.symbol, known, origin);
   const sameCurrency =
     !known || (!known.dollarLine && row.currency === known.instrumentCurrency);
@@ -482,7 +483,7 @@ export async function readImportForReview(
       amount === null ? [] : [{ currency, amount }],
     ),
     rows: (items.data as unknown[]).map((each) =>
-      reviewRow(each, index, origin.origin),
+      reviewRow(each, index, origin.origin, usOnly),
     ),
     ...(operations.data.length > 0 && {
       operations: (operations.data as unknown[]).map((each) =>
