@@ -814,13 +814,14 @@ export function ImportReview({
                 )}
                 <Button
                   type="button"
-                  size="sm"
+                  size="icon"
                   variant="ghost"
+                  className="justify-self-end"
                   aria-label={`${row.discarded ? "Recuperar" : "Descartar"} la fila ${index + 1}`}
+                  title={row.discarded ? "Recuperar" : "Descartar"}
                   onClick={() => change(row.id, { discarded: !row.discarded })}
                 >
                   {row.discarded ? <RotateCcw /> : <X />}
-                  {row.discarded ? "Recuperar" : "Descartar"}
                 </Button>
                 {routing &&
                   !row.discarded &&
@@ -902,7 +903,8 @@ function RowRouting({
   onChange: (patch: Partial<EditedRow>) => void;
 }) {
   const sources = routing.elsewhere.get(row.symbol) ?? [];
-  if (!isNew && sources.length === 0) return null;
+  const choosesPortfolio = isNew && routing.portfolios.length > 1;
+  if (!choosesPortfolio && sources.length === 0) return null;
   const portfolio = row.portfolioId ?? routing.defaultPortfolioId;
   const origin =
     sources.find((each) => each.id === row.transferFrom)?.id ?? PURCHASE;
@@ -912,7 +914,7 @@ function RowRouting({
       : `Traspaso desde ${sources.find((each) => each.id === value)?.institution ?? ""}`;
   return (
     <div className="grid gap-3 text-xs sm:col-span-4 sm:grid-cols-2">
-      {isNew && (
+      {choosesPortfolio && (
         <label className="grid gap-1">
           <span className="text-muted-foreground">Cartera</span>
           <Select
