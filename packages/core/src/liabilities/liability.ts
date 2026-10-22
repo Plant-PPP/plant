@@ -102,15 +102,20 @@ export const principalAgrees = (debt: {
 }): boolean =>
   debt.principal == null || compareDecimals(debt.principal, debt.balance) <= 0;
 
-// What a debt owes split into principal and interest: the interest is what
-// the balance on the day adds to the recorded principal, never below 0.
+// What a debt owes split into principal and interest. Payments pay the
+// principal first: what is left of it is the recorded principal less what was
+// paid, never below 0 nor above the balance, and the interest is the rest of
+// the balance.
 export function principalSplit(
   balance: string,
   principal: string | null | undefined,
+  paid = "0",
 ): { principal: string; interest: string } | null {
   if (principal == null) return null;
-  const interest = toScaled(balance) - toScaled(principal);
-  return { principal, interest: fromScaled(interest > 0n ? interest : 0n) };
+  const owed = toScaled(balance);
+  const unpaid = toScaled(principal) - toScaled(paid);
+  const left = unpaid < 0n ? 0n : unpaid > owed ? owed : unpaid;
+  return { principal: fromScaled(left), interest: fromScaled(owed - left) };
 }
 
 export const liabilityInputSchema = z

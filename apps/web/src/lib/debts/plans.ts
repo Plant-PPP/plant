@@ -1,3 +1,4 @@
+import { fromScaled, toScaled } from "@plant/shared";
 import {
   type Installment,
   type InstallmentPlan,
@@ -26,5 +27,23 @@ export function debtPlans(
     [...installments]
       .filter(([, plan]) => plan.length > 0)
       .map(([id, plan]) => [id, planOf(plan, events.get(id) ?? [])]),
+  );
+}
+
+// What each debt's recorded payments add up to, by debt.
+export function paidByDebt(
+  events: ReadonlyMap<string, readonly LiabilityEvent[]>,
+): Record<string, string> {
+  return Object.fromEntries(
+    [...events].map(([id, each]) => [
+      id,
+      fromScaled(
+        each.reduce(
+          (sum, event) =>
+            event.kind === "payment" ? sum + toScaled(event.amount) : sum,
+          0n,
+        ),
+      ),
+    ]),
   );
 }

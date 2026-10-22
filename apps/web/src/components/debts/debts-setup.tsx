@@ -91,6 +91,7 @@ export function DebtsSetup({
   owed: owedToday,
   complete,
   plans = {},
+  paid = {},
   valued,
   unit,
   referenceUnit,
@@ -105,6 +106,8 @@ export function DebtsSetup({
   complete: boolean;
   // The installment plan of each debt that has one, by debt.
   plans?: Readonly<Record<string, InstallmentPlan>>;
+  // What each debt's recorded payments add up to, by debt.
+  paid?: Readonly<Record<string, string>>;
   // Each debt's balance and the total in the page's unit.
   valued: LiabilitiesValue;
   unit: Denominator;
@@ -216,7 +219,11 @@ export function DebtsSetup({
       cell: ({ row: { original: debt } }) => {
         const today = todayOf(debt);
         if (!today) return CALCULATING;
-        const split = principalSplit(today.balance, debt.principal);
+        const split = principalSplit(
+          today.balance,
+          debt.principal,
+          paid[debt.id],
+        );
         return split ? debtAmount(debt, split[part]) : "—";
       },
     })),

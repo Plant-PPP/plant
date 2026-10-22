@@ -22,7 +22,7 @@ import {
   valueLiabilities,
   principalSplit,
 } from "@plant/core";
-import { sumOrNull } from "@plant/shared";
+import { fromScaled, sumOrNull, toScaled } from "@plant/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   CalendarClock,
@@ -350,7 +350,14 @@ export function DebtHistory({
     referenceDollar,
   });
   const value = valued.items[0]?.value ?? null;
-  const split = principalSplit(figure.balance, debt.principal);
+  const paid = fromScaled(
+    shown.events.reduce(
+      (sum, event) =>
+        event.kind === "payment" ? sum + toScaled(event.amount) : sum,
+      0n,
+    ),
+  );
+  const split = principalSplit(figure.balance, debt.principal, paid);
   // A part of the balance in the view's unit, or null without its quote.
   const partValue = (part: string) =>
     valueLiabilities([{ ...owed!, balance: part }], snapshot, {
