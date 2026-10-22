@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createSourceConnection } from "@/app/(app)/(data)/accounts/actions";
 import { createHolding } from "@/app/(app)/(data)/assets/actions";
 import { getSessionClaims } from "@/lib/auth/session-claims";
+import { writeInstallments } from "@/lib/debts/installments-write";
 import { writeLiability } from "@/lib/debts/write";
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
@@ -96,7 +97,7 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
       } else {
         const written =
           kind === "debt"
-            ? await writeLiability("create_liability", null, part.output.input)
+            ? await createDebt(part.output)
             : kind === "account"
               ? await createAccount(part.output.input)
               : kind === "real_estate"
@@ -174,4 +175,11 @@ async function stageImport(
   });
   if (staged.error || !staged.data) return { ok: false };
   return { ok: true, href: `/import/${staged.data}` };
+}
+
+// A proposed debt, and its installment plan when the proposal carries one.
+async function createDebt(output: { input?: unknown; installments?: unknown }) {
+  const created = await writeLiability("create_liability", null, output.input);
+  if (!created.ok || output.installments === undefined) return created;
+  return writeInstallments(created.id, output.installments);
 }

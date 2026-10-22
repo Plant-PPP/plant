@@ -157,6 +157,7 @@ describe("proposeDebt", () => {
     installmentsLeft: null,
     nextDueOn: null,
     maturesOn: null,
+    installments: null,
   };
   const propose = (args: object) =>
     run(tools().proposeDebt, { ...line, ...args }) as Promise<{
@@ -185,6 +186,46 @@ describe("proposeDebt", () => {
     expect(
       (await propose({ accruedInterest: "58501.09" })).input.principal,
     ).toBeNull();
+  });
+
+  const garage = {
+    kind: "mortgage",
+    label: "Grupo Briones",
+    lender: "Grupo Briones",
+    balance: "35800",
+    principal: "29000",
+    annualRatePercent: null,
+    accrues: false,
+    openedOn: "2026-10-22",
+    installments: [
+      { dueOn: "2026-11-30", amount: "8160" },
+      { dueOn: "2026-10-31", amount: "3160" },
+      ...[0, 1, 2, 3, 4, 5].map((n) => ({
+        dueOn: `${2027 + Math.floor(n / 2)}-${n % 2 === 0 ? "05" : "11"}-06`,
+        amount: "4080",
+      })),
+    ],
+  };
+
+  it("carries a plan that adds up to the balance, soonest first", async () => {
+    const output = (await propose(garage)) as unknown as {
+      proposal: { lines: string[] };
+      installments: { due_on: string; amount: string }[];
+    };
+    expect(output.installments).toHaveLength(8);
+    expect(output.installments[0]).toEqual({
+      due_on: "2026-10-31",
+      amount: "3160",
+    });
+    expect(output.proposal.lines).toContain(
+      "Plan: 8 cuotas · próxima US$ 3.160,00 el 31/10/2026",
+    );
+  });
+
+  it("refuses a plan that does not add up to the balance", async () => {
+    expect(await propose({ ...garage, balance: "40800" })).toEqual({
+      error: expect.stringContaining("suman 35800"),
+    });
   });
 });
 
