@@ -6,6 +6,7 @@ import {
   type LiabilitiesValue,
   type Liability,
   type LiabilityOnDate,
+  principalSplit,
 } from "@plant/core";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
@@ -184,7 +185,18 @@ export function DebtsSetup({
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: debt } }) => {
         const today = todayOf(debt);
-        return today ? debtAmount(debt, today.balance) : CALCULATING;
+        if (!today) return CALCULATING;
+        const split = principalSplit(today.balance, debt.principal);
+        return (
+          <span>
+            {debtAmount(debt, today.balance)}
+            {split && (
+              <span className="text-muted-foreground block text-xs">
+                {`Capital ${debtAmount(debt, split.principal)} · Intereses ${debtAmount(debt, split.interest)}`}
+              </span>
+            )}
+          </span>
+        );
       },
     },
     {
