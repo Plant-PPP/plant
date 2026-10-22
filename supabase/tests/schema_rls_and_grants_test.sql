@@ -34,7 +34,8 @@
 -- - No extension is installed in either schema, anon can execute no function
 --   in them, authenticated only the RPCs (write_operation, confirm_import, confirm_import_debts,
 --   move_cash, restore_cash, record_liability_event, update_liability_event,
---   delete_liability_event, write_cash_movements and supersede_queued_sync, which run as the caller
+--   delete_liability_event, replace_liability_installments, write_cash_movements and
+--   supersede_queued_sync, which run as the caller
 --   with an empty search_path,
 --   imports_used_this_month and quotes_before (quotes_before_test.sql)), service_role none in private, only
 --   service_role orphan_import_files, which runs as the caller,
@@ -161,6 +162,7 @@ SELECT is_empty(
                                        'public.record_liability_event(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.update_liability_event(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.delete_liability_event(uuid)'::regprocedure,
+                                       'public.replace_liability_installments(uuid,jsonb)'::regprocedure,
                                        'public.write_cash_movements(uuid,jsonb,uuid[])'::regprocedure,
                                        'public.supersede_queued_sync(uuid,uuid,text,text,date,date)'::regprocedure,
                                        'public.imports_used_this_month()'::regprocedure,
@@ -184,6 +186,7 @@ SELECT ok(
                                        'public.record_liability_event(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.update_liability_event(uuid,jsonb,jsonb)'::regprocedure,
                                        'public.delete_liability_event(uuid)'::regprocedure,
+                                       'public.replace_liability_installments(uuid,jsonb)'::regprocedure,
                                        'public.write_cash_movements(uuid,jsonb,uuid[])'::regprocedure,
                                        'public.supersede_queued_sync(uuid,uuid,text,text,date,date)'::regprocedure])),
   'the write RPCs run as the caller with an empty search_path'

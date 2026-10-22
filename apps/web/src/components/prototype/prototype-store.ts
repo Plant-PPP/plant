@@ -1,5 +1,6 @@
 import type { ChartPart } from "@/lib/assistant/chat";
 import {
+  type Installment,
   type Liability,
   type LiabilityEvent,
   placementFigures,
@@ -71,6 +72,8 @@ export type PrototypeState = Ledger & {
   liabilityEvents: ReadonlyMap<string, readonly LiabilityEvent[]>;
   // The holdings pledged for each debt, by debt.
   liabilityCollateral: ReadonlyMap<string, readonly string[]>;
+  // Each debt's installment plan, by debt.
+  liabilityInstallments: ReadonlyMap<string, readonly Installment[]>;
   // Newest first.
   imports: ImportItem[];
   // The day of each upload, deleted accounts' included: the monthly limit
@@ -240,6 +243,7 @@ export function initialState(
     liabilityCollateral: new Map(
       Object.entries(fixtures.liabilityCollateral ?? {}),
     ),
+    liabilityInstallments: new Map(),
     imports: [],
     uploadedOn: [],
     conversations: [],

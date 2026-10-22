@@ -34,6 +34,7 @@ export function PrototypeDebt({
       debt={debt}
       events={state.liabilityEvents.get(id) ?? []}
       collateral={state.liabilityCollateral.get(id) ?? []}
+      installments={state.liabilityInstallments.get(id) ?? []}
       complete
       today={state.today}
       snapshot={snapshot}
@@ -54,6 +55,7 @@ export function PrototypeDebt({
         events: actions.debtEvents,
         debts: actions.debts,
         collateral: actions.debtCollateral,
+        installments: actions.debtInstallments,
       }}
     />
   );

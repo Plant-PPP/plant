@@ -365,6 +365,26 @@ isOneToOne: false
       referencedColumns: ["user_id","id"]
     }
                   ]
+                },"liability_installments": {
+                  Row: {
+                    "amount": number,"created_at": string,"due_on": string,"id": string,"liability_id": string,"position": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"due_on": string,"id"?: string,"liability_id": string,"position": number,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"due_on"?: string,"id"?: string,"liability_id"?: string,"position"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "liability_installments_user_id_liability_id_fkey"
+      columns: ["user_id","liability_id"]
+isOneToOne: false
+      referencedRelation: "liabilities"
+      referencedColumns: ["user_id","id"]
+    }
+                  ]
                 },"manual_prices": {
                   Row: {
                     "created_at": string,"currency": Database["public"]['Enums']["currency"],"id": string,"price": number,"price_date": string,"symbol": string,"updated_at": string,"user_id": string
@@ -626,6 +646,9 @@ isOneToOne: false
                            },
 "record_liability_event":
 { Args: { "p_cash": Json,"p_event": Json,"p_liability_id": string }; Returns: string
+                           },
+"replace_liability_installments":
+{ Args: { "p_installments": Json,"p_liability_id": string }; Returns: number
                            },
 "restore_cash":
 { Args: { "p_amount": number,"p_currency": Database["public"]['Enums']["currency"],"p_holding_id": string }; Returns: string
