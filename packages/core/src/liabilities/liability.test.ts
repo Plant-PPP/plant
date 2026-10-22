@@ -230,8 +230,20 @@ it("splits what is owed into principal and interest", () => {
     interest: "3782.04",
   });
   expect(principalSplit("500", "800")).toEqual({
-    principal: "800",
+    principal: "500",
     interest: "0",
   });
   expect(principalSplit("500", null)).toBeNull();
+});
+
+it("lets payments pay the principal first", () => {
+  // 40.800 financed for a 34.000 property, 5.000 paid.
+  expect(principalSplit("35800", "34000", "5000")).toEqual({
+    principal: "29000",
+    interest: "6800",
+  });
+  expect(principalSplit("2000", "34000", "38800")).toEqual({
+    principal: "0",
+    interest: "2000",
+  });
 });

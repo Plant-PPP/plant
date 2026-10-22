@@ -20,7 +20,7 @@ import {
   readLiabilities,
   readLiabilityEvents,
 } from "@/lib/debts/read";
-import { debtPlans } from "@/lib/debts/plans";
+import { debtPlans, paidByDebt } from "@/lib/debts/plans";
 import { isProductionDeployment } from "@/lib/deployment";
 import { parseAssetsParams, TABS } from "@/lib/holdings/assets-filter";
 import { assetsViewFailure } from "@/lib/holdings/assets-view";
@@ -119,6 +119,7 @@ export default async function DebtsPage({
         owed={owed}
         complete={!events.cut && overflowCount === 0}
         plans={debtPlans(installments.byLiability, events.byLiability)}
+        paid={paidByDebt(events.byLiability)}
         valued={valued}
         unit={unit}
         referenceUnit={reference}
