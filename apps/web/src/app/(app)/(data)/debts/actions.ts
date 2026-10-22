@@ -6,6 +6,7 @@ import {
 } from "@/lib/debts/events-write";
 import { writeCollateral } from "@/lib/debts/collateral-write";
 import { writeDisbursement } from "@/lib/debts/disbursement-write";
+import { writeInstallments } from "@/lib/debts/installments-write";
 import { writeLiability } from "@/lib/debts/write";
 import type { WriteResult } from "@/lib/portfolio-setup/write-result";
 
@@ -71,4 +72,11 @@ export async function setDebtDisbursement(
   operationId: unknown,
 ): Promise<WriteResult> {
   return writeDisbursement(debtId, operationId);
+}
+
+export async function setDebtInstallments(
+  debtId: unknown,
+  installments: unknown,
+): Promise<WriteResult> {
+  return writeInstallments(debtId, installments);
 }

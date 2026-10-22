@@ -251,6 +251,17 @@ export {
   takesCashLink,
   takesEvents,
 } from "./liabilities/history";
+export {
+  type Installment,
+  type InstallmentPlan,
+  installmentPlan,
+  INSTALLMENTS_MAX,
+  installmentSchema,
+  installmentSeries,
+  installmentsInputSchema,
+  type InstallmentStatus,
+  type PlannedInstallment,
+} from "./liabilities/installments";
 export { marketSearch } from "./catalog/factory";
 export {
   type CatalogSearch,

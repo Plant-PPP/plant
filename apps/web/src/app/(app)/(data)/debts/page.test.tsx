@@ -17,6 +17,7 @@ jest.mock("@/lib/debts/read", () => ({
   ...jest.requireActual("@/lib/debts/read"),
   readLiabilities: (...args: unknown[]) => readLiabilities(...args),
   readLiabilityEvents: async () => ({ byLiability: new Map(), cut: false }),
+  readInstallments: async () => ({ byLiability: new Map(), cut: false }),
 }));
 jest.mock("@/lib/quotes/quote-reader", () => ({
   createQuoteReader: () => ({ read }),

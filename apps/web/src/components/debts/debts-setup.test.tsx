@@ -2,7 +2,12 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-import { type Liability, type LiabilityOnDate } from "@plant/core";
+import {
+  type InstallmentPlan,
+  installmentPlan,
+  type Liability,
+  type LiabilityOnDate,
+} from "@plant/core";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { CALCULATING, NO_QUOTE } from "@/components/holdings/sum-text";
@@ -38,6 +43,7 @@ const render = (
   active: Liability[],
   owed: Partial<Liability>[],
   complete = true,
+  plans: Record<string, InstallmentPlan> = {},
 ) =>
   renderToStaticMarkup(
     <DebtsSetup
@@ -53,6 +59,7 @@ const render = (
         (each, i) => ({ ...each, ...owed[i] }) as LiabilityOnDate,
       )}
       complete={complete}
+      plans={plans}
       valued={{ total: "0", complete: true, items: [] }}
       unit="usd_mep"
       referenceUnit="usd_mep"
@@ -135,4 +142,26 @@ it("shows no total when no debt has a quote", () => {
   const html = render([debt({})], [{}]);
   expect(tile(html, "Total")).toContain(NO_QUOTE);
   expect(tile(html, "Total")).not.toContain("US$ 0,00");
+});
+
+it("shows a planned debt's next installment and due date", () => {
+  const plan = installmentPlan(
+    [
+      { due_on: "2026-10-31", amount: "3160" },
+      { due_on: "2026-11-30", amount: "8160" },
+      { due_on: "2027-05-06", amount: "4080" },
+    ],
+    [{ amount: "3160" }],
+  );
+  const html = render(
+    [debt({ installment: "999", next_due_on: "2026-10-01" })],
+    [{}],
+    true,
+    { d1: plan },
+  );
+  expect(html).toContain("US$ 8.160,00");
+  expect(html).toContain("Quedan 2");
+  expect(html).toContain(formatDate("2026-11-30"));
+  expect(html).not.toContain("US$ 999,00");
+  expect(html).not.toContain(formatDate("2026-10-01"));
 });

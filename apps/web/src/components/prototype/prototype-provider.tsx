@@ -99,6 +99,7 @@ type Prototype = {
     debts: DebtActions;
     debtEvents: DebtEventActions;
     debtCollateral: DebtPageActions["collateral"];
+    debtInstallments: DebtPageActions["installments"];
     imports: ImportActions & ReviewActions;
     apiKeys: ApiKeyActions;
     assistant: AssistantActions;
@@ -489,6 +490,8 @@ export function PrototypeProvider({
     },
     debtCollateral: (debtId, holdingIds) =>
       write((s) => debts.setCollateral(s, debtId, holdingIds)),
+    debtInstallments: (debtId, installments) =>
+      write((s) => debts.setInstallments(s, debtId, installments)),
     portfolios: {
       create: (input) =>
         write((s) => accounts.createPortfolio(s, input, crypto.randomUUID())),

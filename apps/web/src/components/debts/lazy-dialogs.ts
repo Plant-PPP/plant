@@ -19,10 +19,18 @@ export const DebtCollateralDialog = dynamic(
     ),
   { ssr: false },
 );
+export const DebtInstallmentsDialog = dynamic(
+  () =>
+    import("./debt-installments-dialog").then(
+      (module) => module.DebtInstallmentsDialog,
+    ),
+  { ssr: false },
+);
 
 export const preloadDebtDialogs = () =>
   Promise.all([
     import("./debt-dialog"),
     import("./debt-event-dialog"),
     import("./debt-collateral-dialog"),
+    import("./debt-installments-dialog"),
   ]);
