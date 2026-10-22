@@ -1,5 +1,5 @@
 import { PDF_PAGE_LIMIT } from "@plant/sources";
-import type { ImportIssue } from "@plant/core";
+import type { ImportIssue, LiabilityKind } from "@plant/core";
 import {
   compareDecimals,
   type Currency,
@@ -218,16 +218,23 @@ export type ImportOperationRow = {
   unknownSymbol?: string;
 };
 
-// What a card statement says is owed in one currency, as the review shows
-// it: null where the statement does not print it or the readings disagreed.
+// What a card statement says is owed in one currency, or a loan statement
+// for one loan, as the review shows it: null where the statement does not
+// print it or the readings disagreed. A null kind is a card; a crypto loan
+// has no currency but an instrument; the rate is a yearly fraction.
 export type ImportDebtRow = {
   id: string;
+  kind: LiabilityKind | null;
   label: string | null;
   lender: string | null;
-  currency: Currency;
+  currency: Currency | null;
+  instrumentSymbol: string | null;
   balance: string | null;
   minimumPayment: string | null;
   dueDate: string | null;
+  annualRate: string | null;
+  accrues: boolean | null;
+  openedOn: string | null;
   confidence: Confidence;
   source: string;
   discarded: boolean;

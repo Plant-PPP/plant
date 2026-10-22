@@ -608,12 +608,17 @@ describe("readImportForReview", () => {
         [
           {
             id: "d1",
+            kind: null,
             label: "Visa",
             lender: null,
             currency: "ARS",
+            instrument_symbol: null,
             balance: "1000",
             minimum_payment: null,
             due_date: null,
+            annual_rate: null,
+            accrues: null,
+            opened_on: null,
             confidence: "high",
             source_page: null,
           },

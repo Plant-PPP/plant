@@ -41,13 +41,14 @@ export type SourceInput = {
 
 // What a document is, as its reading tells: an account's statement of
 // holdings, a trade ticket, a list of operations, a screenshot of holdings, a
-// card statement, or something else.
+// card statement, a loan or credit line statement, or something else.
 export const documentKindSchema = z.enum([
   "account_statement",
   "trade_ticket",
   "operations_list",
   "screenshot",
   "card_statement",
+  "loan_statement",
   "other",
 ]);
 export type DocumentKind = z.infer<typeof documentKindSchema>;
@@ -59,7 +60,10 @@ export const OPERATION_DOCUMENT_KINDS: readonly DocumentKind[] = [
 ];
 
 // The kinds of document whose reading is debts.
-export const DEBT_DOCUMENT_KINDS: readonly DocumentKind[] = ["card_statement"];
+export const DEBT_DOCUMENT_KINDS: readonly DocumentKind[] = [
+  "card_statement",
+  "loan_statement",
+];
 
 // How a source was read: by a model reading the document, from a
 // spreadsheet's columns, whose mapping was saved already (hit), made now

@@ -30,6 +30,7 @@ import {
   importOrigin,
   importOriginSchema,
 } from "@/lib/imports/origin";
+import { isCard, loanInputOf } from "@/lib/imports/debts-review";
 import { ImportsReadError } from "@/lib/imports/read";
 import { writeImportOperations } from "@/lib/imports/confirm-operations";
 import { withoutLoaded } from "@/lib/imports/operations-loaded";
@@ -418,15 +419,26 @@ export async function confirmImportOperations(
 const reviewedDebtSchema = z
   .object({
     liabilityId: z.uuid().nullable(),
+    kind: z.enum(Constants.public.Enums.liability_kind).nullable(),
     label: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
     lender: z.string().trim().min(1).max(LIABILITY_LABEL_MAX).nullable(),
-    currency: currencySchema,
+    currency: currencySchema.nullable(),
+    instrumentSymbol: z.string().nullable(),
     balance: positiveDecimalSchema,
     minimumPayment: positiveDecimalSchema.nullable(),
     dueDate: z.iso.date().nullable(),
+    annualRate: z.string().nullable(),
+    accrues: z.boolean().nullable(),
+    openedOn: z.iso.date().nullable(),
   })
   .loose()
-  .refine((debt) => debt.liabilityId !== null || debt.label !== null);
+  .refine((debt) => debt.liabilityId !== null || debt.label !== null)
+  // A card is in a currency; a loan is a new debt Deudas would store.
+  .refine((debt) =>
+    isCard(debt)
+      ? debt.currency !== null
+      : debt.liabilityId === null && loanInputOf(debt).success,
+  );
 
 // Writes the debts a review kept from a card statement and marks the import
 // confirmed, in confirm_import_debts' one transaction.
@@ -465,15 +477,34 @@ export async function confirmImportDebts(
       debts = reviewed.data.length;
       const response = await client.rpc("confirm_import_debts", {
         p_import_id: id.data,
-        p_debts: reviewed.data.map((debt) => ({
-          liability_id: debt.liabilityId,
-          label: debt.label,
-          lender: debt.lender,
-          currency: debt.currency,
-          balance: debt.balance,
-          installment: debt.minimumPayment,
-          next_due_on: debt.dueDate,
-        })),
+        p_debts: reviewed.data.map((debt) => {
+          if (isCard(debt)) {
+            return {
+              liability_id: debt.liabilityId,
+              label: debt.label,
+              lender: debt.lender,
+              currency: debt.currency,
+              balance: debt.balance,
+              installment: debt.minimumPayment,
+              next_due_on: debt.dueDate,
+            };
+          }
+          const loan = loanInputOf(debt).data!;
+          return {
+            liability_id: null,
+            kind: loan.kind,
+            label: loan.label,
+            lender: loan.lender,
+            currency: loan.currency,
+            instrument_symbol: loan.instrument_symbol,
+            balance: loan.balance,
+            installment: loan.installment,
+            annual_rate: loan.annual_rate,
+            accrues: loan.accrues,
+            opened_on: loan.opened_on,
+            next_due_on: loan.next_due_on,
+          };
+        }),
       });
       if (!classifyPostgrestResult(response, 200)) {
         result = { ok: true, id: id.data };

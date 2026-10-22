@@ -10,6 +10,11 @@ import { type CardDebt, ImportDebtsReview } from "./import-debts-review";
 
 const debt = (extra: Partial<ImportDebtRow> = {}): ImportDebtRow => ({
   id: "d1",
+  kind: null,
+  instrumentSymbol: null,
+  annualRate: null,
+  accrues: null,
+  openedOn: null,
   label: "Visa",
   lender: "Galicia",
   currency: "ARS",
@@ -108,4 +113,37 @@ it("asks for a balance above 0 when the statement has a 0", () => {
   const html = render([debt({ balance: "0" })]);
   expect(html).toContain("Ingresá un monto mayor a 0");
   expect(html).not.toContain("Falta en el documento");
+});
+
+it("shows a loan as a new debt of its kind, with its rate and accrual", () => {
+  const html = render(
+    [
+      debt({
+        kind: "usd_debt",
+        label: "Credit Line",
+        lender: "Nexo",
+        currency: "USD",
+        minimumPayment: null,
+        dueDate: null,
+        annualRate: "0.139",
+        accrues: true,
+        openedOn: "2026-10-01",
+      }),
+    ],
+    [{ id: "c1", label: "Credit Line", lender: null, currency: "USD" }],
+  );
+  expect(html).toContain('aria-label="Tipo de la deuda 1"');
+  expect(html).not.toContain("A qué deuda va");
+  expect(html).toContain('value="13,9"');
+  expect(html).toContain('aria-label="Fecha del saldo de la deuda 1"');
+  expect(html).not.toContain("Pago mínimo");
+  expect(confirmButton(html)).not.toContain('disabled=""');
+});
+
+it("asks a crypto loan for its crypto before confirming", () => {
+  const html = render([
+    debt({ kind: "crypto_loan", currency: null, instrumentSymbol: null }),
+  ]);
+  expect(html).toContain("Ingresá el ticker, como BTC");
+  expect(confirmButton(html)).toContain('disabled=""');
 });

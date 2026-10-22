@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-22 · Cargar reads loan statements
+
+- **A loan or credit line statement is read as debts, like a card's** (document kind `loan_statement`): each loan with its kind, balance, rate (read in percent, stored as a fraction), whether it accrues and the day of its balance. A dollar credit line (xUSD, USD, USDC) is a `usd_debt`; a `crypto_loan` is owed in a non-dollar crypto or explicitly in USDT, with no currency. In `import_debts` a null kind is a card, so earlier drafts stay valid. The review makes each loan a new debt, checked against `liabilityInputSchema`; only a card updates one the user has.
+
 ## 2026-10-21 · The assistant reads files and proposes what to load
 
 - **A question may attach up to four pictures or PDFs** (2,8 MB each, the request under 4 MB), sent inline in the chat request and read by the model as file parts. They are not stored: the question keeps their names in its metadata. A question with files and no text asks "Mirá lo que adjunté." Spreadsheets still go through Cargar.
@@ -1081,6 +1085,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 ## The assistant's holdings and operations go through the review
 
 The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOperations`) of an account the user already has. Confirming the card does not write them: `stage_assistant_import` stages a ready import of that account with the proposed rows (provider `assistant`, no file, no API key), and the user lands on its review in Cargar, which resolves symbols, flags what is already loaded and asks for what is missing before `confirm_import` writes it.
+
 ## A new symbol takes its last close at once
 
 A symbol loaded during the day had no price until the quotes job ran after the close. The job now keeps the prices its feeds refuse only for their date, and `save_first_prices` stores the latest of them for a symbol `prices` has no row of; once a symbol has one, only the hourly run adds the next. Confirming an import, and clicking the logo, asks for a run at once.

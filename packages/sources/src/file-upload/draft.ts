@@ -1,7 +1,9 @@
 import {
   Constants,
   currencySchema,
+  compareDecimals,
   decimalStringSchema,
+  LOCAL_SYMBOL_PATTERN,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
 } from "@plant/shared";
@@ -163,20 +165,42 @@ export const cashDraftSchema = z
 // print, or the readings disagreed on, is null for the review to ask: the
 // card's name, the bank that issued it, the statement's balance, its minimum
 // payment and its due date.
+// A debt as a card, loan or credit line statement shows it. A null kind is a
+// card; a crypto loan is owed in units of `instrumentSymbol`, with no
+// currency. The rate is a yearly fraction.
 export const draftDebtSchema = z
   .object({
+    kind: z
+      .enum(Constants.public.Enums.liability_kind)
+      .nullable()
+      .default(null),
     label: z.string().trim().min(1).max(60).nullable(),
     lender: z.string().trim().min(1).max(60).nullable(),
-    currency: currencySchema,
+    currency: currencySchema.nullable(),
+    instrumentSymbol: z
+      .string()
+      .regex(LOCAL_SYMBOL_PATTERN)
+      .nullable()
+      .default(null),
     balance: positiveDecimalSchema.nullable(),
     minimumPayment: positiveDecimalSchema.nullable(),
     dueDate: z.iso.date().nullable(),
+    annualRate: nonNegativeDecimalSchema
+      .refine((rate) => compareDecimals(rate, "10") <= 0)
+      .nullable()
+      .default(null),
+    accrues: z.boolean().nullable().default(null),
+    openedOn: z.iso.date().nullable().default(null),
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),
   })
-  .strict();
+  .strict()
+  .refine((debt) => debt.currency !== null || debt.kind === "crypto_loan", {
+    path: ["currency"],
+  });
 
-// A card statement owes at most one balance per currency it bills in.
+// A statement owes at most one balance per currency it bills in, or a few
+// loans.
 export const DRAFT_DEBT_LIMIT = 10;
 
 export type AccountMovementRow = z.infer<typeof accountMovementRowSchema>;
