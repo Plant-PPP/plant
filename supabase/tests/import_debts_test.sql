@@ -128,19 +128,19 @@ VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000
         'USD', 'low');
 
 SELECT lives_ok(
-  $$ INSERT INTO public.import_debts (user_id, import_id, position, kind, label, instrument_symbol,
-                                     balance, annual_rate, accrues, opened_on, confidence)
+  $$ INSERT INTO public.import_debts (user_id, import_id, position, kind, label, currency,
+                                     instrument_symbol, balance, annual_rate, accrues, opened_on, confidence)
      VALUES ('a0000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-0000000000a4', 0,
-             'crypto_loan', 'Préstamo BTC', 'BTC', '0.05', '0.12', true, '2026-10-01', 'high') $$,
-  'the job files a crypto loan with no currency'
+             'crypto_loan', 'Préstamo BTC', 'USD', 'BTC', '0.05', '0.12', true, '2026-10-01', 'high') $$,
+  'the job files a crypto loan, its currency a placeholder'
 );
 
 SELECT is(
   pg_temp.error_of($$ INSERT INTO public.import_debts (user_id, import_id, position, confidence)
                       VALUES ('a0000000-0000-4000-8000-00000000000a',
                               'a9000000-0000-4000-8000-0000000000a4', 1, 'high') $$),
-  '23514',
-  'but no other debt without one'
+  '23502',
+  'every draft debt has a currency, a crypto loan''s a placeholder'
 );
 
 SELECT is(

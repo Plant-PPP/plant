@@ -1,8 +1,7 @@
 -- What the import job reads from a loan or credit line statement, next to a
 -- card's: the debt's kind, rate, whether it accrues and the day of its
--- balance, and for a crypto loan the instrument it is owed in, with no
--- currency. A null kind is a card. 20261022020001 validates the currency
--- check.
+-- balance, and for a crypto loan the instrument it is owed in; its currency
+-- is a placeholder the review ignores. A null kind is a card.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 
@@ -15,10 +14,6 @@ ALTER TABLE public.import_debts
     CONSTRAINT import_debts_opened_on_in_range CHECK (opened_on BETWEEN '1900-01-01' AND '9999-12-31'),
   ADD COLUMN instrument_symbol text
     CONSTRAINT import_debts_instrument_symbol CHECK (instrument_symbol ~ '^[A-Z0-9]{1,15}$');
-
-ALTER TABLE public.import_debts ALTER COLUMN currency DROP NOT NULL;
-ALTER TABLE public.import_debts
-  ADD CONSTRAINT import_debts_currency CHECK (currency IS NOT NULL OR kind IS NOT DISTINCT FROM 'crypto_loan') NOT VALID;
 
 COMMENT ON COLUMN public.import_debts.kind IS 'The debt''s kind, or null for a card.';
 COMMENT ON COLUMN public.import_debts.annual_rate IS 'The yearly rate as a fraction, or null.';

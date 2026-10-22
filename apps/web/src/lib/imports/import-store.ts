@@ -318,7 +318,8 @@ export function createImportStore(client: Client): ImportStorePort {
         kind: debt.kind,
         label: debt.label,
         lender: debt.lender,
-        currency: debt.currency,
+        // A crypto loan has no currency; the column takes a placeholder.
+        currency: debt.currency ?? "USD",
         instrument_symbol: debt.instrumentSymbol,
         balance: decimal(debt.balance),
         minimum_payment: decimal(debt.minimumPayment),
