@@ -63,7 +63,7 @@ Everything in the repo is English: code, identifiers, comments, test names, migr
 
 ## Supabase
 
-**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that leaves one unapplied since the last deploy, after the `database` job and Tomas's approval in GitHub. Until the beta that database is also production's: migrations are additive only (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
+**Never run `supabase db push`.** The `deploy-migrations` job in `ci.yml` applies migrations to `plant-staging` on every merge to `staging` that leaves one unapplied since the last deploy, after the `database` job and Tomas's approval in GitHub. Production has its own database, `plant-production`, which the _Promote to production_ workflow migrates before it deploys. Migrations stay additive (a `DROP` or `RENAME` waits until production runs code that no longer uses it), and after merging one, check that the deploy goes green.
 
 ```bash
 pnpm exec supabase migration new <name>

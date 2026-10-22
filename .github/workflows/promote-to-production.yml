@@ -184,10 +184,9 @@ jobs:
     steps:
       - run: echo approved
 
-  # Always first, so the code never runs ahead of its schema. Until the beta,
-  # production shares the plant-staging database, which ci.yml already
-  # migrated, so the environment has no SUPABASE_PROJECT_REF and the job applies
-  # nothing.
+  # Always first, so the code never runs ahead of its schema: it pushes the
+  # pending migrations to plant-production. An environment without
+  # SUPABASE_PROJECT_REF applies nothing.
   supabase:
     name: Supabase production migrations
     needs: [detect-changes, approve]

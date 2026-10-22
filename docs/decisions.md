@@ -1089,3 +1089,7 @@ The assistant proposes holdings (`proposeHoldings`) and operations (`proposeOper
 ## A new symbol takes its last close at once
 
 A symbol loaded during the day had no price until the quotes job ran after the close. The job now keeps the prices its feeds refuse only for their date, and `save_first_prices` stores the latest of them for a symbol `prices` has no row of; once a symbol has one, only the hourly run adds the next. Confirming an import, and clicking the logo, asks for a run at once.
+
+## Production has its own database
+
+`plant-production` (São Paulo, like staging) replaces sharing `plant-staging`, which supersedes "Shared database until the beta" and "`supabase` always runs first and, until the beta, applies nothing". The `production` environment holds `SUPABASE_PROJECT_REF` and `SUPABASE_DB_URL`, so Promote pushes the pending migrations there before it deploys; Vercel's Production variables point at it and Preview stays on staging, where `PLANT_RUN_JOBS` is set too. Migrations stay additive, because production runs the previous code until the deploy ends. What the dashboard holds by hand, in both projects: the custom access token hook, URL Configuration, custom SMTP (Resend; Supabase's own mailer sends two emails an hour and lets no template be edited) and the code template from `supabase/templates/login-code.html`. That template quotes no font name: Auth rendered the version with `&quot;` inside a style as its default email, with no error.
