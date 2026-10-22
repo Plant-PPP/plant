@@ -185,20 +185,21 @@ export function DebtsSetup({
       meta: { className: `hidden @2xl:table-cell ${NUMBER_CELL}` },
       cell: ({ row: { original: debt } }) => {
         const today = todayOf(debt);
-        if (!today) return CALCULATING;
-        const split = principalSplit(today.balance, debt.principal);
-        return (
-          <span>
-            {debtAmount(debt, today.balance)}
-            {split && (
-              <span className="text-muted-foreground block text-xs">
-                {`Capital ${debtAmount(debt, split.principal)} · Intereses ${debtAmount(debt, split.interest)}`}
-              </span>
-            )}
-          </span>
-        );
+        return today ? debtAmount(debt, today.balance) : CALCULATING;
       },
     },
+    ...(["principal", "interest"] as const).map((part): ColumnDef<Row> => ({
+      id: part,
+      header: part === "principal" ? "Capital" : "Intereses",
+      size: 152,
+      meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
+      cell: ({ row: { original: debt } }) => {
+        const today = todayOf(debt);
+        if (!today) return CALCULATING;
+        const split = principalSplit(today.balance, debt.principal);
+        return split ? debtAmount(debt, split[part]) : "—";
+      },
+    })),
     {
       id: "installment",
       header: "Cuota",
