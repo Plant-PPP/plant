@@ -7,7 +7,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(98);
+SELECT plan(102);
 
 -- The SQLSTATE and hint a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -94,9 +94,10 @@ SELECT set_eq(
         'source_connection_id:INSERT', 'portfolio_id:INSERT', 'asset_class:INSERT',
         'instrument_symbol:INSERT', 'amount:INSERT', 'currency:INSERT', 'annual_rate:INSERT',
         'started_on:INSERT', 'matures_on:INSERT', 'valued_on:INSERT', 'label:INSERT',
+        'cost:INSERT',
         'portfolio_id:UPDATE', 'amount:UPDATE', 'currency:UPDATE', 'annual_rate:UPDATE',
         'started_on:UPDATE', 'matures_on:UPDATE', 'valued_on:UPDATE', 'label:UPDATE',
-        'archived_at:UPDATE', 'movements_revision:UPDATE'],
+        'cost:UPDATE', 'archived_at:UPDATE', 'movements_revision:UPDATE'],
   'a user reads and deletes holdings and writes only their fields, the archive flag and the movements revision'
 );
 
@@ -569,6 +570,33 @@ SELECT lives_ok(
   $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label)
      VALUES ('a5000000-0000-4000-8000-0000000000a5', 'other', 'ARS', '1', '2026-10-01', repeat('x', 80)) $$,
   'a label may have 80 characters'
+);
+
+SELECT lives_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label, cost)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'real_estate', 'USD', '34000', '2026-10-01', 'Casa', '40800') $$,
+  'a property may carry what it cost'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label, cost)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'real_estate', 'USD', '34000', '2026-10-01', 'Casa 2', '0') $$,
+  '23514', NULL,
+  'a property''s cost is above zero'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label, cost)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'real_estate', 'USD', '34000', '2026-10-01', 'Casa 3', 'NaN') $$,
+  '23514', NULL,
+  'a property''s cost is a number'
+);
+
+SELECT throws_ok(
+  $$ INSERT INTO public.holdings (source_connection_id, asset_class, currency, amount, valued_on, label, cost)
+     VALUES ('a5000000-0000-4000-8000-0000000000a5', 'other', 'ARS', '1', '2026-10-01', 'Auto 2', '5') $$,
+  '23514', NULL,
+  'only a property carries a cost'
 );
 
 SELECT throws_ok(

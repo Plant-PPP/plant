@@ -39,9 +39,11 @@ export const FIELDS_BY_CLASS = {
     "matures_on",
     "label",
   ],
-  real_estate: ["currency", "amount", "valued_on", "label"],
+  real_estate: ["currency", "amount", "valued_on", "label", "cost"],
   other: ["currency", "amount", "valued_on", "label"],
-} as const satisfies Record<AssetClass, readonly (keyof Holding)[]>;
+} as const satisfies {
+  [C in AssetClass]: readonly (keyof Extract<Holding, { asset_class: C }>)[];
+};
 
 // The dialog's fields, as typed.
 export type HoldingFields = {
@@ -56,6 +58,7 @@ export type HoldingFields = {
   maturesOn: string;
   valuedOn: string;
   label: string;
+  cost: string;
   // Whether the asset counts in the report, and what a placement at a rate
   // is, on a page that lets the user choose; the holding's own columns never
   // carry either.
@@ -80,6 +83,7 @@ export function initialFields(
       maturesOn: "",
       valuedOn: defaults.today,
       label: "",
+      cost: "",
     };
   }
   const { holding } = row;
@@ -95,8 +99,17 @@ export function initialFields(
     maturesOn: holding.matures_on ?? "",
     valuedOn: holding.valued_on ?? defaults.today,
     label: holding.label ?? "",
+    cost:
+      holding.asset_class === "real_estate" && holding.cost
+        ? amountInput(holding.cost)
+        : "",
   };
 }
+
+// A property's optional cost: empty is null, and text the parser refuses goes
+// as typed, for the schema to refuse under its field.
+const costOf = (text: string) =>
+  text.trim() === "" ? null : (parseAmountInput(text) ?? text);
 
 // What the dialog sends to create the holding: every class column explicit,
 // null where the class has none or the user left an optional one empty. A
@@ -117,6 +130,7 @@ export function toInsert(fields: HoldingFields) {
     matures_on: keep("matures_on", fields.maturesOn || null),
     valued_on: keep("valued_on", fields.valuedOn || null),
     label: keep("label", fields.label.trim() === "" ? null : fields.label),
+    ...(filled.has("cost") && { cost: costOf(fields.cost) }),
   };
 }
 
@@ -133,6 +147,7 @@ export function toUpdate(fields: HoldingFields, portfolioBefore: string) {
     matures_on,
     valued_on,
     label,
+    ...rest
   } = toInsert(fields);
   const columns = {
     asset_class,
@@ -143,6 +158,7 @@ export function toUpdate(fields: HoldingFields, portfolioBefore: string) {
     matures_on,
     valued_on,
     label,
+    ...("cost" in rest && { cost: rest.cost }),
   };
   return portfolio_id === portfolioBefore
     ? columns
@@ -185,7 +201,8 @@ export type DialogField =
   | "startedOn"
   | "maturesOn"
   | "valuedOn"
-  | "label";
+  | "label"
+  | "cost";
 
 const MESSAGES = WRITE_MESSAGES.holdings;
 
@@ -200,6 +217,7 @@ const FIELD_BY_COLUMN: Record<string, DialogField> = {
   matures_on: "maturesOn",
   valued_on: "valuedOn",
   label: "label",
+  cost: "cost",
 };
 
 const DATE_MESSAGE = `Usá una fecha entre ${HOLDING_DATE_MIN.slice(0, 4)} y ${HOLDING_DATE_MAX.slice(0, 4)}.`;
@@ -217,6 +235,7 @@ export const FIELD_MESSAGES: Record<DialogField, string> = {
   maturesOn: DATE_MESSAGE,
   valuedOn: DATE_MESSAGE,
   label: invalidName(NAME_LIMITS.holdings.label),
+  cost: "Ingresá un número mayor a cero, con coma para los decimales: 40800, o dejalo vacío.",
 };
 
 export const MATURITY_MESSAGE =
@@ -240,6 +259,7 @@ const FORM_ORDER: readonly DialogField[] = [
   "startedOn",
   "maturesOn",
   "valuedOn",
+  "cost",
   "label",
 ];
 

@@ -56,7 +56,7 @@ const embeds = z.object({
 // foreign keys, so each is the holding owner's; RLS applies to them as well.
 export const HOLDING_COLUMNS =
   "id, portfolio_id, asset_class, instrument_symbol, amount:amount::text, currency, " +
-  "annual_rate:annual_rate::text, started_on, matures_on, valued_on, label, " +
+  "annual_rate:annual_rate::text, started_on, matures_on, valued_on, label, cost:cost::text, " +
   "source_connection:source_connections!holdings_user_id_source_connection_id_fkey" +
   "(id, institution), " +
   "portfolio:portfolios!holdings_user_id_portfolio_id_fkey(id, name), " +

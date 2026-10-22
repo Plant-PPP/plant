@@ -195,6 +195,7 @@ describe("proposeRealEstate", () => {
     amount: "25000",
     currency: "USD",
     valuedOn: "2026-10-01",
+    cost: null,
   };
 
   it("proposes a property in the named account", async () => {
@@ -214,7 +215,26 @@ describe("proposeRealEstate", () => {
         currency: "USD",
         valued_on: "2026-10-01",
         label: "Cochera Palermo",
+        cost: null,
       }),
+    });
+  });
+
+  it("carries what a financed property cost", async () => {
+    const output = await run(tools().proposeRealEstate, {
+      ...property,
+      amount: "34000",
+      cost: "40800",
+    });
+    expect(output).toMatchObject({
+      proposal: {
+        lines: [
+          "Inmueble en Nexo",
+          expect.any(String),
+          expect.stringMatching(/^Costo: US\$\s?40\.800(,00)?$/),
+        ],
+      },
+      input: { amount: "34000", cost: "40800" },
     });
   });
 

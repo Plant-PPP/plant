@@ -28,7 +28,7 @@ import type { DecimalWrite } from "@/lib/supabase/decimal-columns";
 // keys keep its account and portfolio the user's.
 
 type Tables = Database["public"]["Tables"];
-type Amounts = "amount" | "annual_rate";
+type Amounts = "amount" | "annual_rate" | "cost";
 type Insert = Tables["holdings"]["Insert"];
 type Update = Tables["holdings"]["Update"];
 type KeysOf<T> = T extends unknown ? keyof T : never;

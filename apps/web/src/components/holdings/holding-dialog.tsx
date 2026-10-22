@@ -446,6 +446,11 @@ export function HoldingDialog({
             )}
           {shown.has("valued_on") &&
             textField("valuedOn", "valuedOn", "Valuado el", { type: "date" })}
+          {shown.has("cost") &&
+            textField("cost", "cost", "Costo de compra (opcional)", {
+              inputMode: "decimal",
+              autoComplete: "off",
+            })}
           {shown.has("label") &&
             (NAMED_CLASSES.has(fields.assetClass) ? (
               textField("label", "label", "Nombre", { autoComplete: "off" })

@@ -85,6 +85,7 @@ import { PRICE_MESSAGES } from "@/lib/holdings/messages";
 import {
   averageOf,
   costTotals,
+  gainOf,
   overExactSum,
 } from "@/lib/holdings/cost-totals";
 import {
@@ -737,9 +738,26 @@ export function AssetsSetup({
         header: "G/P",
         meta: { className: `hidden @3xl:table-cell ${NUMBER_CELL}` },
         cell: ({ row: { original: row } }) =>
+          propertyResult(row) ??
           figure(row, ({ gain }) => <GainLossText gain={gain} unit={unit} />),
       },
     ];
+  }
+
+  // A property with its purchase cost: its stated value less that cost, in
+  // the property's currency.
+  function propertyResult(row: TenenciaRow) {
+    if (row.kind !== "holding" || row.unsaved) return null;
+    const { holding } = row.row;
+    if (holding.asset_class !== "real_estate" || !holding.cost) return null;
+    return (
+      <span title="Resultado: valor menos costo de compra">
+        <GainLossText
+          gain={gainOf(holding.cost, holding.amount)}
+          unit={holding.currency}
+        />
+      </span>
+    );
   }
 
   function addAssetMovement(row: TenenciaRow & { kind: "instrument" }) {

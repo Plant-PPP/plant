@@ -84,11 +84,12 @@ const classColumns = <L extends Label>(label: L) => ({
     valued_on: none,
     label: label.nullable(),
   }),
-  // A value the user states, with its date and a label.
+  // A value the user states, with its date and a label, and what it cost.
   real_estate: columns({
     currency,
     valued_on: holdingDateSchema,
     label,
+    cost: positiveDecimalSchema.nullable().optional(),
     instrument_symbol: none,
     annual_rate: none,
     started_on: none,

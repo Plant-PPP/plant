@@ -161,7 +161,6 @@ async function judge(question: string, answer: string) {
     prompt: `Pregunta del usuario:\n${question}\n\nRespuesta del asistente:\n${answer}`,
     output: Output.object({ schema: verdict }),
     maxOutputTokens: 200,
-    temperature: 0,
   });
   return output;
 }

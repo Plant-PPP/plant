@@ -187,6 +187,11 @@ const realEstateArgs = z.object({
   amount: decimal.describe("Lo que vale, según el usuario."),
   currency,
   valuedOn: day.nullable().describe("El día de esa valuación; null es hoy."),
+  cost: decimal
+    .nullable()
+    .describe(
+      "Lo que le costó al usuario, financiación incluida, si es distinto del valor: precio financiado 40800. null si no lo sabés.",
+    ),
 });
 
 const PROPERTIES_ACCOUNT = "Inmuebles";
@@ -441,6 +446,7 @@ export function proposalTools({
           matures_on: null,
           valued_on: args.valuedOn ?? today,
           label: args.label,
+          cost: args.cost,
         });
         if (!parsed.success || parsed.data.asset_class !== "real_estate") {
           return {
@@ -460,6 +466,9 @@ export function proposalTools({
             lines: [
               `Inmueble en ${target.institution}`,
               `Valor: ${formatAmount(holding.amount, holding.currency)} al ${formatDate(holding.valued_on)}`,
+              ...(holding.cost
+                ? [`Costo: ${formatAmount(holding.cost, holding.currency)}`]
+                : []),
             ],
           },
           input: holding,

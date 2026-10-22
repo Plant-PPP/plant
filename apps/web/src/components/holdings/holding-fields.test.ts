@@ -64,6 +64,7 @@ const SAMPLES: Record<AssetClass, HoldingFields> = {
     amount: "90000",
     valuedOn: "2026-10-01",
     label: "Depto",
+    cost: "108000",
   },
   other: {
     ...base,
@@ -134,6 +135,25 @@ it("sends the portfolio only when it moved", () => {
   expect(toUpdate(SAMPLES.instrument, PORTFOLIO)).not.toHaveProperty(
     "instrument_symbol",
   );
+});
+
+it("sends a property's cost, empty as null, and no cost for other classes", () => {
+  expect(toInsert(SAMPLES.real_estate).cost).toBe("108000");
+  expect(toInsert({ ...SAMPLES.real_estate, cost: " " }).cost).toBeNull();
+  expect(toUpdate(SAMPLES.real_estate, PORTFOLIO)).toHaveProperty(
+    "cost",
+    "108000",
+  );
+  expect(toInsert(SAMPLES.other)).not.toHaveProperty("cost");
+  expect(toUpdate(SAMPLES.other, PORTFOLIO)).not.toHaveProperty("cost");
+});
+
+it("refuses a property's cost the parser cannot read under its field", () => {
+  const parsed = holdingInsertSchema.safeParse(
+    toInsert({ ...SAMPLES.real_estate, cost: "abc" }),
+  );
+  expect(parsed.success).toBe(false);
+  if (!parsed.success) expect(refusal(parsed.error).field).toBe("cost");
 });
 
 it("sends an empty optional label as null", () => {

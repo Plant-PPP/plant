@@ -46,6 +46,18 @@ describe("costUsd", () => {
     ).toBe("0.0042");
   });
 
+  it("prices the assistant's model", () => {
+    // 1,000 × 2.00 + 2,000 × 0.20 + 400 × 2.50 + 500 × 10.00 = 8,400 per 1M
+    expect(
+      costUsd("claude-sonnet-5-5", {
+        input: 1000,
+        cacheRead: 2000,
+        cacheWrite: 400,
+        output: 500,
+      }),
+    ).toBe("0.0084");
+  });
+
   it("returns 0 for no tokens", () => {
     expect(costUsd("gemini-3.8-flash", none)).toBe("0");
   });

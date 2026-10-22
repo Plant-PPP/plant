@@ -43,6 +43,12 @@ export const MODEL_PRICING = {
     cacheRead: "0.10",
     cacheWrite: "1.25",
   },
+  "claude-sonnet-5-5": {
+    input: "2.00",
+    output: "10.00",
+    cacheRead: "0.20",
+    cacheWrite: "2.50",
+  },
 } as const satisfies Record<string, ModelPricing>;
 
 export type PricedModelId = keyof typeof MODEL_PRICING;

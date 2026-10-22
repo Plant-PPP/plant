@@ -157,14 +157,14 @@ isOneToOne: false
                   ]
                 },"holdings": {
                   Row: {
-                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"movements_revision": number,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
+                    "amount": number,"annual_rate": number | null,"archived_at": string | null,"asset_class": Database["public"]['Enums']["asset_class"],"cost": number | null,"created_at": string,"currency": Database["public"]['Enums']["currency"] | null,"id": string,"instrument_symbol": string | null,"label": string | null,"matures_on": string | null,"movements_revision": number,"portfolio_id": string,"source_connection_id": string,"started_on": string | null,"updated_at": string,"user_id": string,"valued_on": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount": number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class": Database["public"]['Enums']["asset_class"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id": string,"source_connection_id": string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
+                    "amount"?: number,"annual_rate"?: number | null,"archived_at"?: string | null,"asset_class"?: Database["public"]['Enums']["asset_class"],"cost"?: number | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"] | null,"id"?: string,"instrument_symbol"?: string | null,"label"?: string | null,"matures_on"?: string | null,"movements_revision"?: number,"portfolio_id"?: string,"source_connection_id"?: string,"started_on"?: string | null,"updated_at"?: string,"user_id"?: string,"valued_on"?: string | null
                   }
                   Relationships: [
                     {

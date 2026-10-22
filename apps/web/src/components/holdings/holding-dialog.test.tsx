@@ -107,7 +107,16 @@ it.each([
   [
     "real_estate",
     { currency: "USD" },
-    ["Tipo", "Cuenta", "Cartera", "Moneda", "Valor", "Valuado el", "Nombre"],
+    [
+      "Tipo",
+      "Cuenta",
+      "Cartera",
+      "Moneda",
+      "Valor",
+      "Valuado el",
+      "Costo de compra (opcional)",
+      "Nombre",
+    ],
   ],
   [
     "other",
