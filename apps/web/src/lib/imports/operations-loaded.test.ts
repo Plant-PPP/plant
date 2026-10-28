@@ -209,3 +209,29 @@ it("sets aside a payment its debt already has, once", () => {
     false,
   ]);
 });
+
+it("finds a numbered row in an operation loaded with no number, never in one under another number", () => {
+  const unnumbered = after([
+    row("buy", { reference: null }),
+    withdrawal("send", { kind: "transfer", counterpartId: BINGX }),
+  ]);
+  expect(loaded(unnumbered, [withdrawal("x", { reference: "tx-1" })])).toEqual([
+    true,
+  ]);
+  const numbered = after([
+    row("buy", { reference: null }),
+    withdrawal("out", { reference: "tx-2" }),
+  ]);
+  expect(loaded(numbered, [withdrawal("x", { reference: "tx-1" })])).toEqual([
+    false,
+  ]);
+});
+
+it("discards on confirm only what the account holds under the same number", () => {
+  const state = after([row("buy", { reference: null })]);
+  expect(
+    withoutLoaded(state, ACCOUNT, [row("again", { reference: "123" })]).map(
+      (each) => each.discarded,
+    ),
+  ).toEqual([false]);
+});

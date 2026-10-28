@@ -72,18 +72,25 @@ function loadedOperations(state: Ledger, accountId: string): Loaded[] {
 }
 
 // Where a row looks for its loaded operation: under its transaction number
-// when it has one, else under its instrument and day. One with no kind, or
+// when it has one, then under its instrument and day. One with no kind, or
 // with no number and no instrument or day, is none of the account's; nor is
 // a debt payment, which its debt's payments tell.
-function keyOfRow(row: ImportOperationRow): string | null {
-  if (row.kind === null || row.debtPayment) return null;
+function lookupsOf(
+  row: ImportOperationRow,
+): { key: string; byNumber: boolean }[] {
+  if (row.kind === null || row.debtPayment) return [];
   const motion = motionOf(
     row.kind,
     row.kind === "transfer" ? "out" : (row.direction ?? null),
   );
-  if (row.reference !== null) return `${motion}|#${row.reference}`;
-  if (row.symbol === "" || row.date === null) return null;
-  return `${motion}|${row.symbol}|${row.date}`;
+  return [
+    ...(row.reference !== null
+      ? [{ key: `${motion}|#${row.reference}`, byNumber: true }]
+      : []),
+    ...(row.symbol !== "" && row.date !== null
+      ? [{ key: `${motion}|${row.symbol}|${row.date}`, byNumber: false }]
+      : []),
+  ];
 }
 
 function indexed(loaded: readonly Loaded[]): Map<string, Loaded[]> {
@@ -100,12 +107,15 @@ function indexed(loaded: readonly Loaded[]): Map<string, Loaded[]> {
 }
 
 // Whether an operation of the account is one a document shows: moving units
-// the same way, of its instrument (when the document names one) with its
-// transaction number, or, with no number, of its instrument on its day with
-// its units or its amount across portfolios.
-const isSame = (loaded: Loaded, row: ImportOperationRow) => {
+// the same way, of its instrument (when the document names one), with its
+// transaction number, or else on its day with its units or its amount across
+// portfolios. A row with a number is taken that way only for an operation
+// loaded with none (as the assistant or a hand-typed one), never for one
+// under another number.
+const isSame = (loaded: Loaded, row: ImportOperationRow, byNumber: boolean) => {
   if (row.symbol !== "" && loaded.symbol !== row.symbol) return false;
-  if (row.reference !== null) return true;
+  if (byNumber) return true;
+  if (row.reference !== null && loaded.references.size > 0) return false;
   const figure =
     row.kind === "dividend" || row.kind === "coupon"
       ? row.amount
@@ -125,17 +135,19 @@ export function markLoaded(
   state: Ledger,
   accountId: string,
   rows: readonly ImportOperationRow[],
+  { byNumberOnly = false } = {},
 ): ImportOperationRow[] {
   const index = indexed(loadedOperations(state, accountId));
   const claimed = new Set<string>();
   return rows.map((row) => {
-    const key = keyOfRow(row);
-    const match =
-      key === null
-        ? undefined
-        : index
-            .get(key)
-            ?.find((each) => !claimed.has(each.id) && isSame(each, row));
+    let match: Loaded | undefined;
+    for (const { key, byNumber } of lookupsOf(row)) {
+      if (byNumberOnly && !byNumber) continue;
+      match = index
+        .get(key)
+        ?.find((each) => !claimed.has(each.id) && isSame(each, row, byNumber));
+      if (match) break;
+    }
     if (!match) return row;
     claimed.add(match.id);
     return { ...row, discarded: true, loaded: true };
@@ -169,7 +181,7 @@ export function withoutLoaded(
   accountId: string,
   rows: readonly ImportOperationRow[],
 ): ImportOperationRow[] {
-  const marked = markLoaded(state, accountId, rows);
+  const marked = markLoaded(state, accountId, rows, { byNumberOnly: true });
   return rows.map((row, index) =>
     row.reference !== null && marked[index]!.loaded && !row.discarded
       ? { ...row, discarded: true }
