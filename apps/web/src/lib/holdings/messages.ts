@@ -147,6 +147,12 @@ export const MOVEMENT_MESSAGES: Record<
     "Cambió el efectivo o las tenencias de la cuenta. Revisá y confirmá de nuevo.",
   settled:
     "Esta operación movió el efectivo de la cuenta: para cambiarla, borrala y volvé a importar los movimientos.",
+  counterpart_not_found:
+    "La cuenta de destino del traspaso ya no está abierta. Elegí otra.",
+  too_many_operations:
+    "Son demasiados movimientos para confirmar juntos. Descartá algunos y cargalos en otra importación.",
+  already_loaded:
+    "La cuenta de destino ya tiene esas unidades cargadas como ingreso. Cargalo como retiro.",
   portfolio_archived: WRITE_MESSAGES.holdings.portfolio_archived,
   source_connection_archived:
     WRITE_MESSAGES.holdings.source_connection_archived,

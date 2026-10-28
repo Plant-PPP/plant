@@ -10,7 +10,8 @@
       "date": "2026-09-12",
       "kind": "adjustment",
       "symbol": "USDT",
-      "quantity": "2500"
+      "quantity": "2500",
+      "direction": "in"
     }
   ],
   "leftOut": 6

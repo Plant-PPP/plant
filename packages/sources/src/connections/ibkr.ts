@@ -431,6 +431,7 @@ export function ibkrConnection({
         add({
           date: isoDate(each.tradeDate ?? each.dateTime),
           kind: side === "BUY" ? "purchase" : "sale",
+          direction: null,
           symbol,
           quantity,
           price: positive(price) ? price : null,
@@ -454,6 +455,7 @@ export function ibkrConnection({
         add({
           date: isoDate(each.dateTime ?? each.settleDate ?? each.reportDate),
           kind: "dividend",
+          direction: null,
           symbol,
           quantity: null,
           price: null,

@@ -743,6 +743,7 @@ it("leaves a field the readers disagree on for the review", async () => {
     {
       date: "2026-09-01",
       kind: "purchase",
+      direction: null,
       symbol: "GGAL",
       quantity: null,
       price: "5000",
@@ -848,6 +849,7 @@ it("leaves out what changes nothing held, counted", async () => {
   expect(operations).toEqual([
     expect.objectContaining({
       kind: "adjustment",
+      direction: "in",
       symbol: "BTC",
       quantity: "0.1",
       price: "81000",
@@ -856,31 +858,47 @@ it("leaves out what changes nothing held, counted", async () => {
   expect(read.leftOut).toBe(3);
 });
 
-it("leaves units that left the account for the review to name, its fee a row of its own", async () => {
+it("reads units sent out of the account as leaving it, a fee in them a row of its own", async () => {
   const { operations } = await readLog([
     logRow("withdrawal", "BTC", "-0.09", { feeUnits: "0.00005" }),
     logRow("loan_repayment", "USDT", "-1500"),
   ]);
   expect(operations).toEqual([
-    expect.objectContaining({ kind: null, symbol: "BTC", quantity: "0.09" }),
     expect.objectContaining({
-      kind: null,
+      kind: "adjustment",
+      direction: "out",
+      symbol: "BTC",
+      quantity: "0.09",
+    }),
+    expect.objectContaining({
+      kind: "adjustment",
+      direction: "out",
       symbol: "BTC",
       quantity: "0.00005",
       reference: null,
     }),
-    expect.objectContaining({ kind: null, symbol: "USDT", quantity: "1500" }),
+    expect.objectContaining({
+      kind: null,
+      direction: null,
+      symbol: "USDT",
+      quantity: "1500",
+    }),
   ]);
 });
 
-it("reads a ticket's operations as before when no row says what it is", async () => {
-  const { operations } = await readLog([operation()], ["trade_ticket"]);
+it("reads a ticket's operations as before when no row says what it is, its adjustment one in", async () => {
+  const { operations } = await readLog(
+    [operation(), operation({ kind: "adjustment", reference: "124" })],
+    ["trade_ticket"],
+  );
   expect(operations).toEqual([
     expect.objectContaining({
       kind: "purchase",
+      direction: null,
       quantity: "100",
       price: "5000",
     }),
+    expect.objectContaining({ kind: "adjustment", direction: "in" }),
   ]);
 });
 

@@ -45,6 +45,7 @@ const item = (operations: ImportOperationRow[]): ImportItem => ({
 const render = (operations: ImportOperationRow[]) =>
   renderToStaticMarkup(
     <ImportOperationsReview
+      accounts={[]}
       item={item(operations)}
       institution="IOL"
       instruments={[
@@ -138,6 +139,7 @@ it("says how many operations the reading left out", () => {
   const html = (skippedRows: number) =>
     renderToStaticMarkup(
       <ImportOperationsReview
+        accounts={[]}
         item={{ ...item([operation()]), skippedRows }}
         institution="IOL"
         instruments={[]}
@@ -194,6 +196,7 @@ it("never brings back an operation the account holds under its number", () => {
 it("words what a sync did not bring by the sync, never a document", () => {
   const html = renderToStaticMarkup(
     <ImportOperationsReview
+      accounts={[]}
       item={{
         ...item([operation({ price: null, source: "De la sincronización" })]),
         origin: "sync",

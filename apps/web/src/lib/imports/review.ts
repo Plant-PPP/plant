@@ -1,4 +1,4 @@
-import { PDF_PAGE_LIMIT } from "@plant/sources";
+import { OPERATION_KINDS, PDF_PAGE_LIMIT } from "@plant/sources";
 import type { ImportIssue, LiabilityKind } from "@plant/core";
 import {
   compareDecimals,
@@ -191,8 +191,10 @@ export type ImportRow = {
 };
 
 // The operations a document of operations may show.
-export type ImportOperationKind =
-  "purchase" | "sale" | "dividend" | "coupon" | "adjustment";
+// The kinds of operation a draft holds: those a reading shows, and a
+// transfer, which only the user or the assistant names.
+export const IMPORT_OPERATION_KINDS = [...OPERATION_KINDS, "transfer"] as const;
+export type ImportOperationKind = (typeof IMPORT_OPERATION_KINDS)[number];
 
 // One operation as the document shows it, for the user to complete: every
 // null (an empty symbol for the instrument) is something the document does
@@ -202,6 +204,11 @@ export type ImportOperationRow = {
   id: string;
   date: string | null;
   kind: ImportOperationKind | null;
+  // Which way an adjustment's units moved; absent on one read before
+  // directions were kept, which came in.
+  direction?: "in" | "out" | null;
+  // The user's account a transfer's units go to.
+  counterpartId?: string | null;
   symbol: string;
   quantity: string | null;
   price: string | null;

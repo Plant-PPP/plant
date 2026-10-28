@@ -127,6 +127,9 @@ export async function ImportReviewView({ id }: { id: string }) {
         }}
         institution={account?.institution ?? ""}
         instruments={ledger.instruments}
+        accounts={ledger.accounts
+          .filter((each) => each.id !== accountId)
+          .map(({ id, institution }) => ({ id, institution }))}
         backHref="/import"
         doneHref="/import"
         actions={{ confirm: confirmImportOperations }}

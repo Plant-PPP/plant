@@ -5,6 +5,7 @@ import { mergeOperations } from "./operation-consensus";
 const operation = (extra: Partial<DraftOperation> = {}): DraftOperation => ({
   date: "2026-09-01",
   kind: "purchase",
+  direction: null,
   symbol: "GGAL",
   quantity: "100",
   price: "5000",
@@ -97,4 +98,20 @@ it("counts the operations past the limit the two readings make together as cut",
   const merged = mergeOperations(of("A", 1), of("B", 1001));
   expect(merged.rows).toHaveLength(DRAFT_ROW_LIMIT);
   expect(merged.cut).toBe(DRAFT_ROW_LIMIT);
+});
+
+it("leaves an adjustment whose direction the readings disagree on for the review", () => {
+  const [row] = mergeOperations(
+    [operation({ kind: "adjustment", direction: "in" })],
+    [operation({ kind: "adjustment", direction: "out" })],
+  ).rows;
+  expect(row).toMatchObject({ kind: null, direction: null, confidence: "low" });
+});
+
+it("keeps an adjustment's direction the readings agree on", () => {
+  const [row] = mergeOperations(
+    [operation({ kind: "adjustment", direction: "out" })],
+    [operation({ kind: "adjustment", direction: "out" })],
+  ).rows;
+  expect(row).toMatchObject({ kind: "adjustment", direction: "out" });
 });

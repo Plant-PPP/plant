@@ -34,6 +34,7 @@ import { isCard, loanInputOf } from "@/lib/imports/debts-review";
 import { ImportsReadError } from "@/lib/imports/read";
 import { writeImportOperations } from "@/lib/imports/confirm-operations";
 import { withoutLoaded } from "@/lib/imports/operations-loaded";
+import { type KeptCounts, keptCounts } from "@/lib/imports/operations-review";
 import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
 import { LedgerReadError } from "@/lib/ledger/read";
 import {
@@ -233,6 +234,7 @@ async function logConfirm({
   draft,
   operations,
   cash,
+  kept,
   started,
   result,
   failure,
@@ -244,6 +246,7 @@ async function logConfirm({
   operations: number;
   // What a confirmed sync wrote of the account's cash, and how it went.
   cash?: SyncCash;
+  kept?: KeptCounts;
   started: number;
   result: MovementResult;
   failure: unknown;
@@ -257,6 +260,9 @@ async function logConfirm({
     "plant.import.operation_count": operations,
     "plant.import.cash_count": cash?.count,
     "plant.import.cash_outcome": cash?.outcome,
+    "plant.import.transfer_count": kept?.transfers,
+    "plant.import.units_out_count": kept?.unitsOut,
+    "plant.import.loaded_count": kept?.loaded,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
@@ -336,6 +342,7 @@ export async function confirmImportOperations(
   let failure: unknown;
   let operations = 0;
   let cash: SyncCash | undefined;
+  let kept: KeptCounts | undefined;
   const id = z.uuid().safeParse(importId);
   const reviewed = z
     .array(z.record(z.string(), z.unknown()))
@@ -364,6 +371,7 @@ export async function confirmImportOperations(
         if (truncated) throw new LedgerReadError("movements", "truncated");
         const syncCash = await readSyncCash(client, item.id);
         const toWrite = withoutLoaded(ledger, item.accountId, typed);
+        kept = keptCounts(typed, toWrite);
         // A sync whose operations are all in Plant still brings its cash.
         const written =
           syncCash && toWrite.every((row) => row.discarded)
@@ -407,6 +415,7 @@ export async function confirmImportOperations(
     draft: "operations",
     operations,
     cash,
+    kept,
     started,
     result,
     failure,

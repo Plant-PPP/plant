@@ -209,3 +209,172 @@ it("books an income paid after the units left on the holding that had them", () 
   );
   expect(written.result).toEqual({ ok: true, id: "i1" });
 });
+
+const BINGX = "b5000000-0000-4000-8000-0000000000b5";
+
+// The user with a second account, at the same portfolio.
+function twoAccounts() {
+  const ledger = emptyLedger();
+  return {
+    ...ledger,
+    accounts: [
+      ...ledger.accounts,
+      {
+        id: BINGX,
+        institution: "BingX",
+        includeInTaxReport: true,
+        portfolio: { id: PORTFOLIO, name: "Principal", archived: false },
+      },
+    ],
+  };
+}
+
+it("takes a withdrawal's units out of the account", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("buy"),
+      row("out", {
+        kind: "adjustment",
+        direction: "out",
+        quantity: "2",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const movements = [...written.state.movements.values()].flat();
+  expect(movements[1]).toMatchObject({
+    kind: "adjustment",
+    direction: "out",
+    quantity: "2",
+  });
+  expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+    new Map([["AAPL", "3"]]),
+  );
+});
+
+it("refuses a withdrawal of more units than the account held", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("buy"),
+      row("out", {
+        kind: "adjustment",
+        direction: "out",
+        quantity: "6",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written).toMatchObject({
+    result: { ok: false, code: "oversold" },
+    rowId: "out",
+  });
+});
+
+it("moves a transfer's units to the other account, its fee on the leaving side", () => {
+  const written = writeImportOperations(
+    twoAccounts(),
+    ITEM,
+    [
+      row("buy"),
+      row("send", {
+        kind: "transfer",
+        direction: "out",
+        counterpartId: BINGX,
+        quantity: "4",
+        price: null,
+        charges: "1.5",
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  expect(written.operations).toHaveLength(2);
+  expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+    new Map([["AAPL", "1"]]),
+  );
+  expect(heldOn(written.state, BINGX, "2026-09-16")).toEqual(
+    new Map([["AAPL", "4"]]),
+  );
+  const leaving = [...written.state.movements.values()]
+    .flat()
+    .find((each) => "direction" in each && each.direction === "out");
+  expect(leaving).toMatchObject({
+    kind: "transfer",
+    charges: [{ amount: "1.5" }],
+  });
+});
+
+it("refuses a transfer to an account that is not open or is the import's own", () => {
+  for (const counterpartId of [
+    "c5000000-0000-4000-8000-0000000000c5",
+    ACCOUNT,
+  ]) {
+    const written = writeImportOperations(
+      twoAccounts(),
+      ITEM,
+      [
+        row("buy"),
+        row("send", {
+          kind: "transfer",
+          direction: "out",
+          counterpartId,
+          quantity: "4",
+          price: null,
+          date: "2026-09-16",
+        }),
+      ],
+      newId,
+    );
+    expect(written).toMatchObject({
+      result: { ok: false, code: "counterpart_not_found" },
+      rowId: "send",
+      operations: [],
+    });
+  }
+});
+
+it("refuses a transfer whose units the other account already shows coming in", () => {
+  const deposited = writeImportOperations(
+    twoAccounts(),
+    { ...ITEM, accountId: BINGX },
+    [
+      row("deposit", {
+        kind: "adjustment",
+        direction: "in",
+        quantity: "4",
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  ).state;
+  const written = writeImportOperations(
+    deposited,
+    ITEM,
+    [
+      row("buy"),
+      row("send", {
+        kind: "transfer",
+        direction: "out",
+        counterpartId: BINGX,
+        quantity: "4",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written).toMatchObject({
+    result: { ok: false, code: "already_loaded" },
+    rowId: "send",
+  });
+});

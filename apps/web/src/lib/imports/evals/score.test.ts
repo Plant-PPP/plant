@@ -132,6 +132,7 @@ describe("scoreReading over operations", () => {
   const operation = (extra: Partial<DraftOperation> = {}): DraftOperation => ({
     date: "2026-09-01",
     kind: "purchase",
+    direction: null,
     symbol: "BTC",
     quantity: "0.05",
     price: null,

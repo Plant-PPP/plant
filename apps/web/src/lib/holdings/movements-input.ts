@@ -128,6 +128,14 @@ export type MovementResult =
         // An edit of an operation its account's cash settled, whose legs
         // would no longer match it.
         | "settled"
+        // An imported transfer to an account that is not another open one
+        // of the user's.
+        | "counterpart_not_found"
+        // An imported transfer whose units the other account already shows
+        // coming in.
+        | "already_loaded"
+        // An import that writes more operations than one confirmation takes.
+        | "too_many_operations"
         | Extract<
             PortfolioSetupGuardHint,
             "portfolio_archived" | "source_connection_archived"

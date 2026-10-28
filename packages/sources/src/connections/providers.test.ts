@@ -365,6 +365,7 @@ describe("iol operations", () => {
       {
         date: "2026-09-20",
         kind: "sale",
+        direction: null,
         symbol: "AAPL",
         quantity: "5",
         price: "18400",
@@ -378,6 +379,7 @@ describe("iol operations", () => {
       {
         date: "2026-09-02",
         kind: "purchase",
+        direction: null,
         symbol: "AL30",
         quantity: "1000",
         price: "73.4",
@@ -427,6 +429,7 @@ describe("iol operations", () => {
       {
         date: "2026-10-02",
         kind: "dividend",
+        direction: null,
         symbol: "NVDA",
         quantity: null,
         price: null,

@@ -310,6 +310,7 @@ it("replaces any draft with the operations, then marks the import ready", async 
       {
         date: "2026-09-01",
         kind: "purchase",
+        direction: null,
         symbol: null,
         quantity: "100",
         price: "5000",
@@ -342,6 +343,7 @@ it("replaces any draft with the operations, then marks the import ready", async 
       position: 0,
       date: "2026-09-01",
       kind: "purchase",
+      direction: null,
       symbol: null,
       quantity: "100",
       price: "5000",

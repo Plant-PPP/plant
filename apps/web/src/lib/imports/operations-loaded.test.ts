@@ -1,4 +1,8 @@
-import { ACCOUNT, emptyLedger } from "@/lib/ledger/ledger-fixture.test-support";
+import {
+  ACCOUNT,
+  emptyLedger,
+  PORTFOLIO,
+} from "@/lib/ledger/ledger-fixture.test-support";
 
 import { writeImportOperations } from "./confirm-operations";
 import { markLoaded, withoutLoaded } from "./operations-loaded";
@@ -28,10 +32,29 @@ let next = 0;
 const newId = () =>
   `0d000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
 
+const BINGX = "b5000000-0000-4000-8000-0000000000b5";
+
+// The user with a second account, at the same portfolio.
+function twoAccounts() {
+  const ledger = emptyLedger();
+  return {
+    ...ledger,
+    accounts: [
+      ...ledger.accounts,
+      {
+        id: BINGX,
+        institution: "BingX",
+        includeInTaxReport: true,
+        portfolio: { id: PORTFOLIO, name: "Principal", archived: false },
+      },
+    ],
+  };
+}
+
 // The account after these operations were confirmed once.
 const after = (rows: ImportOperationRow[]) =>
   writeImportOperations(
-    emptyLedger(),
+    twoAccounts(),
     { id: "i1", accountId: ACCOUNT, date: "2026-09-15", fileName: "a.pdf" },
     rows,
     newId,
@@ -108,4 +131,49 @@ it("discards on confirm a numbered operation the account already holds, even one
     // With no number, the user decides whether it is the same one.
     ["unnumbered", false],
   ]);
+});
+
+const withdrawal = (id: string, extra: Partial<ImportOperationRow> = {}) =>
+  row(id, {
+    kind: "adjustment",
+    direction: "out",
+    quantity: "2",
+    price: null,
+    reference: null,
+    date: "2026-09-16",
+    ...extra,
+  });
+
+it("finds a withdrawal in the units a transfer took out, and not in units that came in", () => {
+  const state = after([
+    row("buy", { reference: null }),
+    withdrawal("send", { kind: "transfer", counterpartId: BINGX }),
+  ]);
+  expect(loaded(state, [withdrawal("x")])).toEqual([true]);
+  expect(loaded(state, [withdrawal("x", { direction: "in" })])).toEqual([
+    false,
+  ]);
+  // The account the units went to holds them as a deposit.
+  expect(loaded(state, [withdrawal("x", { direction: "in" })], BINGX)).toEqual([
+    true,
+  ]);
+});
+
+it("finds a transfer in the units a withdrawal took out", () => {
+  const state = after([row("buy", { reference: null }), withdrawal("out")]);
+  expect(
+    loaded(state, [
+      withdrawal("x", { kind: "transfer", counterpartId: BINGX }),
+    ]),
+  ).toEqual([true]);
+});
+
+it("finds a withdrawal by its transaction number", () => {
+  const state = after([
+    row("buy", { reference: null }),
+    withdrawal("out", { reference: "tx-1" }),
+  ]);
+  expect(
+    loaded(state, [withdrawal("x", { reference: "tx-1", quantity: "9" })]),
+  ).toEqual([true]);
 });

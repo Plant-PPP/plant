@@ -4,7 +4,7 @@ import { DRAFT_ROW_LIMIT, type DraftOperation } from "@plant/sources";
 // The fields two readings of an operation must agree on; one they do not is
 // left null for the review to ask.
 const DECIMALS = ["quantity", "price", "amount", "charges"] as const;
-const TEXTS = ["date", "kind", "reference"] as const;
+const TEXTS = ["date", "kind", "direction", "reference"] as const;
 
 const sameDecimal = (a: string | null, b: string | null) =>
   a === null || b === null ? a === b : compareDecimals(a, b) === 0;
@@ -99,6 +99,13 @@ export function mergeOperations(
         return [field, null];
       }),
     ) as Pick<DraftOperation, (typeof TEXTS)[number]>;
+    // A kind and its direction stand or fall together: an adjustment whose
+    // direction the readings disagree on is one the review names.
+    if (texts.kind !== "adjustment") {
+      texts.direction = null;
+    } else if (texts.direction === null) {
+      texts.kind = null;
+    }
     const symbol = x.symbol === y.symbol ? x.symbol : null;
     if (symbol !== x.symbol) disputed = true;
     // The currency cannot be left empty: the first reading's stands, for the

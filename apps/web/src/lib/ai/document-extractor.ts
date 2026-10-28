@@ -386,25 +386,31 @@ const LEFT_OUT: readonly (typeof ROW_EVENTS)[number][] = [
 ];
 
 // What a row of a log is in the draft, from what it is and the sign of its
-// units: a fill is a purchase when units came in and a sale when they left,
-// units from outside come in as an adjustment. Units that left the account
-// any other way are left for the review to say what they are.
+// units: a fill is a purchase when units came in and a sale when they left;
+// units from outside come in as an adjustment, and units sent out, or a fee
+// charged in them, leave as one. A repayment is left for the review to say
+// what it is.
 const fromEvent = (
   operation: AnsweredOperation,
-): { kind: DraftOperation["kind"]; quantity: string | null } => {
+): Pick<DraftOperation, "kind" | "direction" | "quantity"> => {
   const units = signed(operation.units);
   const quantity = units?.size ?? decimalOf(operation.quantity);
   switch (operation.event) {
     case "trade":
       return {
         kind: units === null ? operation.kind : units.out ? "sale" : "purchase",
+        direction:
+          units === null && operation.kind === "adjustment" ? "in" : null,
         quantity,
       };
     case "deposit":
     case "loan_disbursement":
-      return { kind: "adjustment", quantity };
+      return { kind: "adjustment", direction: "in", quantity };
+    case "withdrawal":
+    case "fee":
+      return { kind: "adjustment", direction: "out", quantity };
     default:
-      return { kind: null, quantity };
+      return { kind: null, direction: null, quantity };
   }
 };
 
@@ -429,9 +435,14 @@ const toOperations = (
     const date = z.iso.date().safeParse(operation.date).success
       ? operation.date
       : null;
-    const { kind, quantity } =
+    // A ticket's or a broker list's adjustment is units that came in.
+    const { kind, direction, quantity } =
       event === null
-        ? { kind: operation.kind, quantity: decimalOf(operation.quantity) }
+        ? {
+            kind: operation.kind,
+            direction: operation.kind === "adjustment" ? ("in" as const) : null,
+            quantity: decimalOf(operation.quantity),
+          }
         : fromEvent(operation);
     const common = {
       date,
@@ -445,6 +456,7 @@ const toOperations = (
     const parsed = draftOperationSchema.safeParse({
       ...common,
       kind,
+      direction,
       quantity,
       price: decimalOf(operation.price),
       amount: decimalOf(operation.amount),
@@ -469,7 +481,8 @@ const toOperations = (
     const feeRow = draftOperationSchema.safeParse({
       ...common,
       reference: null,
-      kind: null,
+      kind: "adjustment",
+      direction: "out",
       quantity: fee,
       price: null,
       amount: null,
