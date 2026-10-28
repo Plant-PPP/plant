@@ -343,6 +343,29 @@ it("refuses a transfer to an account that is not open or is the import's own", (
   }
 });
 
+it("sends two equal transfers of a day to the same account, each its own", () => {
+  const send = (id: string, reference: string) =>
+    row(id, {
+      kind: "transfer",
+      direction: "out",
+      counterpartId: BINGX,
+      quantity: "2",
+      price: null,
+      reference,
+      date: "2026-09-16",
+    });
+  const written = writeImportOperations(
+    twoAccounts(),
+    ITEM,
+    [row("buy"), send("s1", "tx1"), send("s2", "tx2")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  expect(heldOn(written.state, BINGX, "2026-09-16")).toEqual(
+    new Map([["AAPL", "4"]]),
+  );
+});
+
 it("refuses a transfer whose units the other account already shows coming in", () => {
   const deposited = writeImportOperations(
     twoAccounts(),
@@ -487,6 +510,34 @@ describe("debt payments", () => {
         { ...payable, cash: [] },
       ),
     ).toMatchObject({ result: { ok: false, code: "no_cash" }, rowId: "paid" });
+  });
+
+  it("takes each payment from the cash the earlier ones left, refusing one past it", () => {
+    const fromCash = (id: string, quantity: string) =>
+      payment(id, { kind: "adjustment", direction: "out", quantity });
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [fromCash("first", "100"), fromCash("second", "50")],
+      newId,
+      payable,
+    );
+    expect(written.payments.map((each) => each.cash?.expected)).toEqual([
+      "800",
+      "700",
+    ]);
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [fromCash("first", "700"), fromCash("second", "200")],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({
+      result: { ok: false, code: "insufficient_cash" },
+      rowId: "second",
+    });
   });
 
   it("refuses a debt it may not pay, and a UVA debt from the account's cash", () => {

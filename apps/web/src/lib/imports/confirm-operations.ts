@@ -2,6 +2,9 @@ import { exactUnitPrice, REFERENCE_MAX } from "@plant/core";
 import {
   compareDecimals,
   type Currency,
+  exactOf,
+  minus,
+  stored,
   currencySchema,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
@@ -171,6 +174,7 @@ export function writeImportOperations<S extends Ledger>(
   let next = state;
   const operations: string[] = [];
   const payments: DebtPayment[] = [];
+  const cashLeft = new Map<string, string>();
   for (const reviewed of kept) {
     let row = reviewed;
     if (reviewed.debtPayment) {
@@ -193,11 +197,18 @@ export function writeImportOperations<S extends Ledger>(
         if (held.length !== 1) {
           return refuse({ ok: false, code: "no_cash" }, reviewed.id);
         }
-        cash = {
-          holding_id: held[0]!.id,
-          take: true,
-          expected: held[0]!.amount,
-        };
+        // What the holding has once the import's earlier payments took
+        // theirs, as the database checks each one against.
+        const { id } = held[0]!;
+        const left = cashLeft.get(id) ?? held[0]!.amount;
+        if (compareDecimals(left, reviewed.quantity!) < 0) {
+          return refuse({ ok: false, code: "insufficient_cash" }, reviewed.id);
+        }
+        cash = { holding_id: id, take: true, expected: left };
+        cashLeft.set(
+          id,
+          stored(minus(exactOf(left), exactOf(reviewed.quantity!))),
+        );
       }
       payments.push({
         liability_id: debt.id,
@@ -273,9 +284,10 @@ export function writeImportOperations<S extends Ledger>(
       if (!counterpart) {
         return refuse({ ok: false, code: "counterpart_not_found" }, row.id);
       }
-      // Units the other account already shows coming in, by the transfer's
-      // number or on its day, would arrive twice.
-      if (arrived(next, counterpart.id, row)) {
+      // Units the other account already showed coming in, by the
+      // transfer's number or on its day, would arrive twice. Read before this
+      // import, so its own transfers are not taken for them.
+      if (arrived(state, counterpart.id, row)) {
         return refuse({ ok: false, code: "already_loaded" }, row.id);
       }
       const parts = takeUnits(held, row.quantity!);

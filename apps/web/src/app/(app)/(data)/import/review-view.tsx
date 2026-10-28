@@ -125,18 +125,17 @@ export async function ImportReviewView({ id }: { id: string }) {
 
   if (item.operations) {
     const institution = account?.institution ?? "";
-    // A repayment pays one of the user's debts that is not a card: the one
-    // in its unit named as the account's institution, else the only one, for
-    // the user to change; one its debt already has starts set aside.
+    // A repayment pays one of the user's debts that is not a card, which any
+    // row may be made into: the one in its unit named as the account's
+    // institution, else the only one, for the user to change; one its debt
+    // already has starts set aside.
     const repays = item.operations.some((row) => row.debtPayment);
-    const [debts, events] = repays
-      ? await Promise.all([
-          readLiabilities(client).then((read) =>
-            read.active.filter((debt) => debt.kind !== "credit_card"),
-          ),
-          readLiabilityEvents(client),
-        ]).catch(fail)
-      : [[], null];
+    const [debts, events] = await Promise.all([
+      readLiabilities(client).then((read) =>
+        read.active.filter((debt) => debt.kind !== "credit_card"),
+      ),
+      repays ? readLiabilityEvents(client) : null,
+    ]).catch(fail);
     const named = item.operations.map((row) =>
       row.debtPayment && !row.payDebtId
         ? {
