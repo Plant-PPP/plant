@@ -2,6 +2,10 @@
 
 Decisions that are not in the plan, or that detail it. Newest first.
 
+## 2026-10-28 · Cargar reads with Claude
+
+- **Cargar's two readers are Claude Sonnet 5.5 and Claude Haiku 4.5, and Sonnet settles what they disagree on** (`READERS`, `TIEBREAK_MODEL` in `document-extractor.ts`). On staging, the Gemini readers misread wide screenshots of an exchange's logs (internal moves as withdrawals, a purchase as a sale) and one of them answered 503 for long stretches, leaving one reading. Claude takes no HEIC picture, so a HEIC is still read by the two Gemini models. `structuredCall` picks the provider by the model's id; the column mapper stays on Gemini.
+
 ## 2026-10-28 · An exchange's log read whole: outflows, transfers and repayments
 
 - **The reader classifies every row of a log** (`event`: trade, deposit, withdrawal, fee, internal, collateral, loan_disbursement, loan_repayment, interest) with its units signed as printed, and the mapping to the draft is code, not the model's: a fill is a purchase or a sale by its sign; a deposit or a disbursement is units in; a withdrawal, or a fee charged in the asset itself (a row of its own), is units out; a repayment is a debt payment. Internal moves between sub-accounts, collateral and accrued interest are left out and counted (`plant.import.left_count` on `imports.read`); the debt's balance computes its interest. When the two readers disagree on the document's kind but either read operations, the operations stand (`plant.import.read_path` = `kind_disputed`), so a log is never "nothing found". A credit line's own history log is read as operations.

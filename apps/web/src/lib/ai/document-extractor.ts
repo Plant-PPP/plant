@@ -48,12 +48,19 @@ import { mergeOperations } from "./operation-consensus";
 import { structuredCall } from "./structured-call";
 
 // The two models that read each statement, as it is, side by side, and the
-// one that reads again only what they disagree on.
+// one that reads again only what they disagree on: Claude, which reads wide
+// screenshots of an exchange's logs better. Claude takes no HEIC picture, so
+// Gemini reads those.
 export const READERS = [
+  "claude-sonnet-5-5",
+  "claude-haiku-4-5",
+] as const satisfies readonly PricedModelId[];
+export const TIEBREAK_MODEL = "claude-sonnet-5-5" satisfies PricedModelId;
+export const HEIC_READERS = [
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
 ] as const satisfies readonly PricedModelId[];
-export const TIEBREAK_MODEL = "gemini-3.5-flash-lite" satisfies PricedModelId;
+const HEIC_TIEBREAK_MODEL = "gemini-3.5-flash-lite" satisfies PricedModelId;
 
 // The longest one reading may take; the two readers and the tiebreak run in
 // two rounds inside one step.
@@ -571,6 +578,9 @@ export function documentExtractor({
   model?: ModelFactory;
 }): FileReader {
   return async ({ bytes, mimeType, userId, importId, lastAttempt }) => {
+    const heic = mimeType === "image/heic";
+    const readers = heic ? HEIC_READERS : READERS;
+    const tiebreakModel = heic ? HEIC_TIEBREAK_MODEL : TIEBREAK_MODEL;
     const read = async (modelId: PricedModelId, ask: string) => {
       const answer = await structuredCall({
         modelId,
@@ -609,8 +619,8 @@ export function documentExtractor({
       kind && NOT_HOLDINGS.includes(kind) ? { ...draft, rows: [] } : draft;
     const ask = "List the holdings in this statement.";
     const [one, two] = await Promise.allSettled([
-      read(READERS[0], ask),
-      read(READERS[1], ask),
+      read(readers[0], ask),
+      read(readers[1], ask),
     ]);
     // A reader the provider may answer later fails the reading for the step
     // to retry, unless no retry follows. Otherwise one reader failing leaves
@@ -748,7 +758,7 @@ export function documentExtractor({
       // step to retry, unless no retry follows; otherwise it settles on the
       // two readings, whatever they differ on marked low.
       const tiebreak = await read(
-        TIEBREAK_MODEL,
+        tiebreakModel,
         tiebreakBrief(compared.disputes, first, second),
       ).catch((error: unknown) => {
         if (error instanceof SourceError && error.retryable && !lastAttempt) {
