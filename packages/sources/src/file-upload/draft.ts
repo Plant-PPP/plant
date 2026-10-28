@@ -90,11 +90,15 @@ export const OPERATION_KINDS = [
 // readings disagreed on, is null for the review to ask: the instrument as it
 // names it, the units, the price as printed (a bond's per 100 nominal), a
 // dividend's or coupon's amount or a trade's printed total, its charges added
-// up, and its transaction number.
+// up, and its transaction number. An adjustment says whether its units came
+// in or left; no other kind does. A loan's repayment is a debt payment: with
+// no kind when the document only shows the debt paid, or units that left the
+// account.
 export const draftOperationSchema = z
   .object({
     date: z.iso.date().nullable(),
     kind: z.enum(OPERATION_KINDS).nullable(),
+    direction: z.enum(Constants.public.Enums.movement_direction).nullable(),
     symbol: z.string().trim().min(1).max(30).nullable(),
     quantity: positiveDecimalSchema.nullable(),
     price: positiveDecimalSchema.nullable(),
@@ -104,8 +108,21 @@ export const draftOperationSchema = z
     currency: currencySchema,
     confidence: importConfidenceSchema,
     page: z.number().int().min(1).max(10000).nullable(),
+    debtPayment: z.boolean(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (operation) =>
+      (operation.kind === "adjustment") === (operation.direction !== null),
+    { message: "An adjustment, and only one, has a direction" },
+  )
+  .refine(
+    (operation) =>
+      !operation.debtPayment ||
+      operation.kind === null ||
+      (operation.kind === "adjustment" && operation.direction === "out"),
+    { message: "A debt payment has no kind, or takes units out" },
+  );
 
 // The kinds of movement a broker's statement of an account's money lists.
 export const ACCOUNT_MOVEMENT_KINDS = [

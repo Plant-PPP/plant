@@ -178,6 +178,8 @@ export function wallbitConnection({
     return {
       date: Number.isNaN(at.getTime()) ? null : buenosAiresDate(at),
       kind: buying ? "purchase" : "sale",
+      direction: null,
+      debtPayment: false,
       symbol,
       quantity,
       price: null,

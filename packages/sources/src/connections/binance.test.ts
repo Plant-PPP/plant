@@ -133,6 +133,8 @@ describe("binanceConnection", () => {
       mapping: "none",
       skippedRows: 2,
       disputes: 0,
+      leftOut: 0,
+      readPath: null,
       documentKind: null,
     });
   });

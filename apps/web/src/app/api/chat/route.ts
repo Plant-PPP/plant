@@ -222,6 +222,16 @@ export async function POST(request: Request): Promise<Response> {
         if (turn.errorType !== undefined) {
           fields["error.type"] = turn.errorType;
         }
+        const files = {
+          "plant.assistant.attachment_kept_count": turn.attachmentsKept,
+          "plant.assistant.attachment_failed_count": turn.attachmentsFailed,
+          "plant.assistant.file_replay_count": turn.filesReplayed,
+          "plant.assistant.file_missing_count": turn.filesMissing,
+          "plant.assistant.file_failed_count": turn.filesFailed,
+        };
+        for (const [key, value] of Object.entries(files)) {
+          if (value !== undefined) fields[key] = value;
+        }
         if (turn.done) emit();
       },
     });

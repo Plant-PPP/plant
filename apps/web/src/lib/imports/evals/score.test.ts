@@ -1,4 +1,4 @@
-import type { DraftRow, ImportDraft } from "@plant/sources";
+import type { DraftOperation, DraftRow, ImportDraft } from "@plant/sources";
 
 import {
   expectedReadingSchema,
@@ -126,4 +126,65 @@ it("refuses an expected file with a quantity that is not a plain decimal", () =>
       rows: [{ symbol: "AL30", quantity: "1.000,5", currency: "USD" }],
     }).success,
   ).toBe(false);
+});
+
+describe("scoreReading over operations", () => {
+  const operation = (extra: Partial<DraftOperation> = {}): DraftOperation => ({
+    date: "2026-09-01",
+    kind: "purchase",
+    direction: null,
+    debtPayment: false,
+    symbol: "BTC",
+    quantity: "0.05",
+    price: null,
+    amount: null,
+    charges: null,
+    reference: null,
+    currency: "USD",
+    confidence: "high",
+    page: 1,
+    ...extra,
+  });
+  const wanted = expectedReadingSchema.parse({
+    operations: [
+      { date: "2026-09-01", kind: "purchase", symbol: "BTC", quantity: "0.05" },
+      { date: "2026-09-02", kind: null, symbol: "BTC", quantity: "0.02" },
+    ],
+  });
+
+  it("counts an operation right by its day, kind, instrument and units", () => {
+    const score = scoreReading(wanted, draft([]), [
+      operation(),
+      operation({ date: "2026-09-02", kind: null, quantity: "0.020" }),
+    ]);
+    expect(score).toMatchObject({ rows: 2, right: 2, wrong: [], extra: [] });
+  });
+
+  it("counts a sale read for a purchase wrong, and the sale extra", () => {
+    const score = scoreReading(wanted, draft([]), [
+      operation({ kind: "sale" }),
+      operation({ date: "2026-09-02", kind: null, quantity: "0.02" }),
+    ]);
+    expect(score.right).toBe(1);
+    expect(score.wrong).toEqual(["2026-09-01|purchase|BTC"]);
+    expect(score.extra).toEqual(["2026-09-01|sale|BTC"]);
+  });
+
+  it("tells a debt payment from a row the review names", () => {
+    const score = scoreReading(wanted, draft([]), [
+      operation(),
+      operation({
+        date: "2026-09-02",
+        kind: null,
+        quantity: "0.02",
+        debtPayment: true,
+      }),
+    ]);
+    expect(score.wrong).toEqual(["2026-09-02|?|BTC"]);
+    expect(score.extra).toEqual(["2026-09-02|? payment|BTC"]);
+  });
+
+  it("takes a document with neither holdings nor operations for a mistake", () => {
+    expect(expectedReadingSchema.safeParse({}).success).toBe(false);
+  });
 });

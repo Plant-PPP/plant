@@ -1,5 +1,9 @@
 import type { ImportOperationRow } from "./review";
-import { missingFields, operationsComplete } from "./operations-review";
+import {
+  keptCounts,
+  missingFields,
+  operationsComplete,
+} from "./operations-review";
 
 const TODAY = "2026-10-14";
 
@@ -63,4 +67,64 @@ it("is complete when every kept operation is, and one is kept", () => {
     true,
   );
   expect(operationsComplete([row({ symbol: "" })], TODAY)).toBe(false);
+});
+
+it("asks a withdrawal for its units and a transfer also for the account", () => {
+  const out = {
+    kind: "adjustment" as const,
+    price: null,
+    direction: "out" as const,
+  };
+  expect(missingFields(row({ ...out, quantity: null }), TODAY)).toEqual([
+    "quantity",
+  ]);
+  expect(
+    missingFields(
+      row({ ...out, kind: "transfer", counterpartId: null }),
+      TODAY,
+    ),
+  ).toEqual(["counterpart"]);
+});
+
+it("counts what the kept operations move and those the account already held", () => {
+  const reviewed = [
+    row({ id: "send", kind: "transfer", direction: "out" }),
+    row({ id: "out", kind: "adjustment", direction: "out" }),
+    row({ id: "in", kind: "adjustment", direction: "in" }),
+    row({ id: "held" }),
+    row({ id: "dropped", discarded: true }),
+    row({ id: "repaid", kind: null, debtPayment: true, payDebtId: "d1" }),
+  ];
+  const toWrite = reviewed.map((each) =>
+    each.id === "held" ? { ...each, discarded: true } : each,
+  );
+  expect(keptCounts(reviewed, toWrite)).toEqual({
+    transfers: 1,
+    unitsOut: 1,
+    debtPayments: 1,
+    loaded: 1,
+  });
+});
+
+it("asks a repayment for its amount and debt, never an instrument", () => {
+  const payment = row({
+    kind: null,
+    debtPayment: true,
+    symbol: "",
+    quantity: null,
+    price: null,
+  });
+  expect(missingFields(payment, TODAY)).toEqual(["quantity", "debt"]);
+  expect(
+    missingFields(
+      {
+        ...payment,
+        kind: "adjustment",
+        direction: "out",
+        quantity: "5",
+        payDebtId: "d1",
+      },
+      TODAY,
+    ),
+  ).toEqual([]);
 });

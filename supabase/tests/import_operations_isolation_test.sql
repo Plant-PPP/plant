@@ -78,7 +78,8 @@ SELECT set_eq(
   ARRAY['(table):DELETE', 'id:SELECT', 'user_id:SELECT', 'import_id:SELECT',
         'user_id:INSERT', 'import_id:INSERT', 'position:INSERT', 'date:INSERT', 'kind:INSERT',
         'symbol:INSERT', 'quantity:INSERT', 'price:INSERT', 'amount:INSERT', 'charges:INSERT',
-        'reference:INSERT', 'currency:INSERT', 'confidence:INSERT', 'source_page:INSERT'],
+        'reference:INSERT', 'currency:INSERT', 'confidence:INSERT', 'source_page:INSERT',
+        'direction:INSERT', 'debt_payment:INSERT'],
   'the job writes and replaces a draft of operations, nothing more'
 );
 
@@ -115,9 +116,9 @@ SELECT is(
   pg_temp.error_of($$ INSERT INTO public.import_operations (user_id, import_id, position, kind,
                         currency, confidence)
                       VALUES ('a0000000-0000-4000-8000-00000000000a',
-                              'a1000000-0000-4000-8000-0000000000a1', 2, 'transfer', 'ARS', 'high') $$),
+                              'a1000000-0000-4000-8000-0000000000a1', 2, 'yield', 'ARS', 'high') $$),
   '23514',
-  'an operation read from a document is a purchase, a sale, a dividend or a coupon'
+  'a draft holds no kind of operation the review cannot name'
 );
 
 RESET ROLE;

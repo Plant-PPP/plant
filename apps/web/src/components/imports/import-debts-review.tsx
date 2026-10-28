@@ -37,6 +37,7 @@ import { CURRENCY_LABELS, MOVEMENT_MESSAGES } from "@/lib/holdings/messages";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
   cardFor,
+  loanLoaded,
   debtsComplete,
   isCard,
   loanInputOf,
@@ -118,6 +119,7 @@ export function ImportDebtsReview({
   item,
   institution,
   cards,
+  loans,
   backHref,
   doneHref,
   actions,
@@ -125,6 +127,8 @@ export function ImportDebtsReview({
   item: ImportItem;
   institution: string;
   cards: readonly CardDebt[];
+  // The user's other debts, for a loan statement of one already in Deudas.
+  loans: Parameters<typeof loanLoaded>[1];
   backHref: string;
   doneHref: string;
   actions: DebtsReviewActions;
@@ -138,8 +142,10 @@ export function ImportDebtsReview({
       const card = cardFor(debt, cards);
       const liabilityId = card !== null && !proposed.has(card) ? card : null;
       if (liabilityId) proposed.add(liabilityId);
+      const loaded = loanLoaded(debt, loans);
       return {
         ...debt,
+        ...(loaded && { discarded: true, loaded }),
         liabilityId,
         balanceText: debt.balance === null ? "" : amountInput(debt.balance),
         minimumText:
@@ -270,6 +276,11 @@ export function ImportDebtsReview({
                       {row.source && <span>{row.source}</span>}
                       {item.origin !== "sync" && (
                         <span>{`Confianza ${CONFIDENCE_LABELS[row.confidence].toLowerCase()}`}</span>
+                      )}
+                      {row.loaded && (
+                        <span className="text-foreground">
+                          Ya está cargada en Deudas
+                        </span>
                       )}
                     </span>
                   </div>

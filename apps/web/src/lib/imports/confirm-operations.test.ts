@@ -209,3 +209,365 @@ it("books an income paid after the units left on the holding that had them", () 
   );
   expect(written.result).toEqual({ ok: true, id: "i1" });
 });
+
+const BINGX = "b5000000-0000-4000-8000-0000000000b5";
+
+// The user with a second account, at the same portfolio.
+function twoAccounts() {
+  const ledger = emptyLedger();
+  return {
+    ...ledger,
+    accounts: [
+      ...ledger.accounts,
+      {
+        id: BINGX,
+        institution: "BingX",
+        includeInTaxReport: true,
+        portfolio: { id: PORTFOLIO, name: "Principal", archived: false },
+      },
+    ],
+  };
+}
+
+it("takes a withdrawal's units out of the account", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("buy"),
+      row("out", {
+        kind: "adjustment",
+        direction: "out",
+        quantity: "2",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  const movements = [...written.state.movements.values()].flat();
+  expect(movements[1]).toMatchObject({
+    kind: "adjustment",
+    direction: "out",
+    quantity: "2",
+  });
+  expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+    new Map([["AAPL", "3"]]),
+  );
+});
+
+it("refuses a withdrawal of more units than the account held", () => {
+  const written = writeImportOperations(
+    emptyLedger(),
+    ITEM,
+    [
+      row("buy"),
+      row("out", {
+        kind: "adjustment",
+        direction: "out",
+        quantity: "6",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written).toMatchObject({
+    result: { ok: false, code: "oversold" },
+    rowId: "out",
+  });
+});
+
+it("moves a transfer's units to the other account, its fee on the leaving side", () => {
+  const written = writeImportOperations(
+    twoAccounts(),
+    ITEM,
+    [
+      row("buy"),
+      row("send", {
+        kind: "transfer",
+        direction: "out",
+        counterpartId: BINGX,
+        quantity: "4",
+        price: null,
+        charges: "1.5",
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  expect(written.operations).toHaveLength(2);
+  expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+    new Map([["AAPL", "1"]]),
+  );
+  expect(heldOn(written.state, BINGX, "2026-09-16")).toEqual(
+    new Map([["AAPL", "4"]]),
+  );
+  const leaving = [...written.state.movements.values()]
+    .flat()
+    .find((each) => "direction" in each && each.direction === "out");
+  expect(leaving).toMatchObject({
+    kind: "transfer",
+    charges: [{ amount: "1.5" }],
+  });
+});
+
+it("refuses a transfer to an account that is not open or is the import's own", () => {
+  for (const counterpartId of [
+    "c5000000-0000-4000-8000-0000000000c5",
+    ACCOUNT,
+  ]) {
+    const written = writeImportOperations(
+      twoAccounts(),
+      ITEM,
+      [
+        row("buy"),
+        row("send", {
+          kind: "transfer",
+          direction: "out",
+          counterpartId,
+          quantity: "4",
+          price: null,
+          date: "2026-09-16",
+        }),
+      ],
+      newId,
+    );
+    expect(written).toMatchObject({
+      result: { ok: false, code: "counterpart_not_found" },
+      rowId: "send",
+      operations: [],
+    });
+  }
+});
+
+it("sends two equal transfers of a day to the same account, each its own", () => {
+  const send = (id: string, reference: string) =>
+    row(id, {
+      kind: "transfer",
+      direction: "out",
+      counterpartId: BINGX,
+      quantity: "2",
+      price: null,
+      reference,
+      date: "2026-09-16",
+    });
+  const written = writeImportOperations(
+    twoAccounts(),
+    ITEM,
+    [row("buy"), send("s1", "tx1"), send("s2", "tx2")],
+    newId,
+  );
+  expect(written.result).toEqual({ ok: true, id: "i1" });
+  expect(heldOn(written.state, BINGX, "2026-09-16")).toEqual(
+    new Map([["AAPL", "4"]]),
+  );
+});
+
+it("refuses a transfer whose units the other account already shows coming in", () => {
+  const deposited = writeImportOperations(
+    twoAccounts(),
+    { ...ITEM, accountId: BINGX },
+    [
+      row("deposit", {
+        kind: "adjustment",
+        direction: "in",
+        quantity: "4",
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  ).state;
+  const written = writeImportOperations(
+    deposited,
+    ITEM,
+    [
+      row("buy"),
+      row("send", {
+        kind: "transfer",
+        direction: "out",
+        counterpartId: BINGX,
+        quantity: "4",
+        price: null,
+        date: "2026-09-16",
+      }),
+    ],
+    newId,
+  );
+  expect(written).toMatchObject({
+    result: { ok: false, code: "already_loaded" },
+    rowId: "send",
+  });
+});
+
+describe("debt payments", () => {
+  const LOAN = {
+    id: "d1",
+    currency: null,
+    uva: false,
+    instrument_symbol: "AAPL",
+  };
+  const DOLLARS = {
+    id: "d2",
+    currency: "USD" as const,
+    uva: false,
+    instrument_symbol: null,
+  };
+  const UVA = {
+    id: "d3",
+    currency: "ARS" as const,
+    uva: true,
+    instrument_symbol: null,
+  };
+  const payable = {
+    debts: [LOAN, DOLLARS, UVA],
+    cash: [
+      { id: "c1", accountId: ACCOUNT, currency: "USD" as const, amount: "800" },
+    ],
+  };
+  const payment = (id: string, extra: Partial<ImportOperationRow> = {}) =>
+    row(id, {
+      kind: null,
+      debtPayment: true,
+      payDebtId: "d2",
+      symbol: "",
+      quantity: "100",
+      price: null,
+      date: "2026-09-16",
+      ...extra,
+    });
+  const event = (date: string, amount: string) => ({
+    kind: "payment",
+    date,
+    amount,
+    annual_rate: null,
+    settles: false,
+  });
+
+  it("pays a debt on its own, with nothing out of the account", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [payment("paid")],
+      newId,
+      payable,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(written.operations).toEqual([]);
+    expect(written.payments).toEqual([
+      { liability_id: "d2", event: event("2026-09-16", "100"), cash: null },
+    ]);
+  });
+
+  it("pays a crypto loan with the units that left the account", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [
+        row("buy"),
+        payment("paid", {
+          kind: "adjustment",
+          direction: "out",
+          payDebtId: "d1",
+          quantity: "2",
+        }),
+      ],
+      newId,
+      payable,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+      new Map([["AAPL", "3"]]),
+    );
+    expect(written.payments).toEqual([
+      { liability_id: "d1", event: event("2026-09-16", "2"), cash: null },
+    ]);
+  });
+
+  it("pays a debt in a currency from the account's one cash holding in it", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [payment("paid", { kind: "adjustment", direction: "out" })],
+      newId,
+      payable,
+    );
+    expect(written.payments).toEqual([
+      {
+        liability_id: "d2",
+        event: event("2026-09-16", "100"),
+        cash: { holding_id: "c1", take: true, expected: "800" },
+      },
+    ]);
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [payment("paid", { kind: "adjustment", direction: "out" })],
+        newId,
+        { ...payable, cash: [] },
+      ),
+    ).toMatchObject({ result: { ok: false, code: "no_cash" }, rowId: "paid" });
+  });
+
+  it("takes each payment from the cash the earlier ones left, refusing one past it", () => {
+    const fromCash = (id: string, quantity: string) =>
+      payment(id, { kind: "adjustment", direction: "out", quantity });
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [fromCash("first", "100"), fromCash("second", "50")],
+      newId,
+      payable,
+    );
+    expect(written.payments.map((each) => each.cash?.expected)).toEqual([
+      "800",
+      "700",
+    ]);
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [fromCash("first", "700"), fromCash("second", "200")],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({
+      result: { ok: false, code: "insufficient_cash" },
+      rowId: "second",
+    });
+  });
+
+  it("refuses a debt it may not pay, and a UVA debt from the account's cash", () => {
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [payment("paid", { payDebtId: "card" })],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({
+      result: { ok: false, code: "debt_not_found" },
+      rowId: "paid",
+      payments: [],
+    });
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [
+          payment("paid", {
+            kind: "adjustment",
+            direction: "out",
+            payDebtId: "d3",
+          }),
+        ],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({ result: { ok: false, code: "no_cash_link" } });
+  });
+});

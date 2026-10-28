@@ -7,10 +7,13 @@ import {
   principalSplit,
 } from "@plant/core";
 import { Constants, fromScaled, toScaled } from "@plant/shared";
+import { OPERATION_KINDS } from "@plant/sources";
 import { tool } from "ai";
 import { z } from "zod";
 
 import type { ProposalOutput } from "@/lib/assistant/proposals";
+import { debtsNamed } from "@/lib/imports/debts-review";
+import { reviewKindOf } from "@/lib/imports/operations-review";
 import { LIABILITY_KIND_LABELS } from "@/lib/debts/labels";
 import {
   formatAmount,
@@ -128,14 +131,6 @@ const holdingsArgs = z.object({
     .max(200),
 });
 
-const OPERATION_KINDS = [
-  "purchase",
-  "sale",
-  "dividend",
-  "coupon",
-  "adjustment",
-] as const;
-
 const operationsArgs = z.object({
   account,
   rows: z
@@ -143,9 +138,34 @@ const operationsArgs = z.object({
       z.object({
         date: day.nullable(),
         kind: z
-          .enum(OPERATION_KINDS)
+          .enum([...OPERATION_KINDS, "transfer", "debt_payment"])
           .describe(
-            "purchase: compra; sale: venta; dividend y coupon: cobro; adjustment: un depósito o retiro de unidades que no fue compra ni venta.",
+            "purchase: compra; sale: venta; dividend y coupon: cobro; adjustment: unidades que entraron (un depósito desde afuera, un préstamo recibido) o salieron (un retiro hacia afuera, una comisión cobrada en la cripto) sin compra ni venta; transfer: unidades enviadas a otra cuenta del usuario; debt_payment: el pago de un préstamo o línea de crédito. Nunca propongas un colateral ni un movimiento entre subcuentas (funding, trading).",
+          ),
+        direction: z
+          .enum(["in", "out"])
+          .nullable()
+          .describe(
+            "Solo para adjustment: in si las unidades entraron a la cuenta, out si salieron.",
+          ),
+        toAccount: account
+          .nullable()
+          .describe(
+            "Solo para transfer: el nombre exacto de la otra cuenta del usuario adonde fueron.",
+          ),
+        debt: z
+          .string()
+          .min(1)
+          .max(60)
+          .nullable()
+          .describe(
+            "Solo para debt_payment: el nombre o el prestamista de la deuda que paga, como figura en sus deudas.",
+          ),
+        fromAccount: z
+          .boolean()
+          .nullable()
+          .describe(
+            "Solo para debt_payment: true si el pago salió de esta cuenta (sus unidades o su efectivo), false si el documento solo muestra la deuda pagada.",
           ),
         symbol,
         quantity: decimal.nullable(),
@@ -161,14 +181,6 @@ const operationsArgs = z.object({
     .max(200),
 });
 
-const KIND_WORDS: Record<(typeof OPERATION_KINDS)[number], string> = {
-  purchase: "Compra",
-  sale: "Venta",
-  dividend: "Dividendo",
-  coupon: "Cupón",
-  adjustment: "Ajuste",
-};
-
 // A card shows this many rows, and how many more there are.
 const SHOWN_ROWS = 8;
 const capped = (lines: string[]): string[] =>
@@ -181,6 +193,9 @@ type Account = {
   institution: string;
   default_portfolio_id: string;
 };
+
+// A debt of the user's, as a proposal names it.
+type Debt = { id: string; kind: string; label: string; lender: string | null };
 
 const realEstateArgs = z.object({
   account: account
@@ -270,6 +285,98 @@ export function debtInputOf(
   });
 }
 
+// An operation as stage_assistant_import takes it.
+type StagedOperation = {
+  date: string | null;
+  kind: (typeof OPERATION_KINDS)[number] | "transfer" | null;
+  direction: "in" | "out" | null;
+  counterpart_connection_id: string | null;
+  debt_payment: boolean;
+  pays_liability_id: string | null;
+  symbol: string | null;
+  quantity: string | null;
+  price: string | null;
+  amount: string | null;
+  charges: string | null;
+  currency: z.infer<typeof currency>;
+};
+
+// A proposed operation as the draft keeps it, its account or debt named as
+// one of the user's (`named`, for the card), or why it names none.
+function stagedOperationOf(
+  row: z.infer<typeof operationsArgs>["rows"][number],
+  target: Account,
+  held: readonly Account[],
+  payable: readonly Debt[],
+): { staged: StagedOperation; named?: string } | { error: string } {
+  const common = {
+    date: row.date,
+    counterpart_connection_id: null,
+    debt_payment: false,
+    pays_liability_id: null,
+    symbol: row.symbol.toUpperCase(),
+    quantity: row.quantity,
+    price: row.price,
+    amount: row.amount,
+    charges: row.charges,
+    currency: row.currency,
+  };
+  if (row.kind === "transfer") {
+    if (!row.toAccount) {
+      return {
+        error:
+          "Un traspaso necesita toAccount, la otra cuenta del usuario adonde fueron las unidades. Si no la sabés, preguntale con askUser.",
+      };
+    }
+    const to = accountNamed(held, row.toAccount);
+    if ("error" in to) return to;
+    if (to.id === target.id) {
+      return {
+        error:
+          "Un traspaso va a otra cuenta, no a la misma. Si salieron de la cuenta hacia afuera, es un adjustment con direction out.",
+      };
+    }
+    return {
+      staged: {
+        ...common,
+        kind: "transfer",
+        direction: "out",
+        counterpart_connection_id: to.id,
+      },
+      named: `a ${to.institution}`,
+    };
+  }
+  if (row.kind === "debt_payment") {
+    const named = row.debt ? debtsNamed([row.debt], payable) : [];
+    if (named.length !== 1) {
+      return {
+        error:
+          named.length === 0
+            ? `El usuario no tiene una deuda "${row.debt ?? ""}" que no sea una tarjeta. Si tiene que cargarla, proponela con proposeDebt; si es otra, preguntale con askUser.`
+            : `El usuario tiene varias deudas "${row.debt}": preguntale con askUser cuál pagó.`,
+      };
+    }
+    const debt = named[0]!;
+    return {
+      staged: {
+        ...common,
+        kind: row.fromAccount ? "adjustment" : null,
+        direction: row.fromAccount ? "out" : null,
+        debt_payment: true,
+        pays_liability_id: debt.id,
+      },
+      named: `de ${debt.label}`,
+    };
+  }
+  return {
+    staged: {
+      ...common,
+      kind: row.kind,
+      direction: row.kind === "adjustment" ? (row.direction ?? "in") : null,
+    },
+  };
+}
+
 // The assistant's proposals: each checks what it would write and hands back
 // a card for the user to confirm, writing nothing. And its question, for
 // when it is not sure what the user wants.
@@ -282,7 +389,7 @@ export function proposalTools({
   // The user's open accounts.
   accounts: () => Promise<readonly Account[]>;
   // The user's debts, by name and lender.
-  debts: () => Promise<readonly { label: string; lender: string | null }[]>;
+  debts: () => Promise<readonly Debt[]>;
 }) {
   return {
     proposeDebt: tool({
@@ -420,34 +527,48 @@ export function proposalTools({
     }),
     proposeOperations: tool({
       description:
-        "Propone cargar operaciones (compras, ventas, cobros, depósitos de unidades) de una cuenta que el usuario ya tiene. No escribe nada: si la confirma, el usuario las revisa en Cargar y las carga desde ahí. Una sola llamada con todas las operaciones de la cuenta.",
+        "Propone cargar operaciones (compras, ventas, cobros, depósitos y retiros de unidades, traspasos a otra cuenta del usuario, pagos de una deuda) de una cuenta que el usuario ya tiene. No escribe nada: si la confirma, el usuario las revisa en Cargar y las carga desde ahí. Una sola llamada con todas las operaciones de la cuenta.",
       inputSchema: operationsArgs,
       execute: async (args): Promise<ProposalOutput> => {
-        const target = accountNamed(await accounts(), args.account);
+        const held = await accounts();
+        const target = accountNamed(held, args.account);
         if ("error" in target) return target;
-        const rows = args.rows.map((row) => ({
-          ...row,
-          symbol: row.symbol.toUpperCase(),
-        }));
+        const payable = args.rows.some((row) => row.kind === "debt_payment")
+          ? (await debts()).filter((debt) => debt.kind !== "credit_card")
+          : [];
+        const rows: { staged: StagedOperation; named?: string }[] = [];
+        for (const row of args.rows) {
+          const read = stagedOperationOf(row, target, held, payable);
+          if ("error" in read) return read;
+          rows.push(read);
+        }
         return {
           proposal: {
             title: `Operaciones en ${target.institution}`,
             lines: capped(
-              rows.map(
-                (row) =>
-                  `${row.date ? `${formatDate(row.date)} · ` : ""}${KIND_WORDS[row.kind]} ${
-                    row.quantity ? `${formatQuantity(row.quantity)} ` : ""
-                  }${row.symbol}${
-                    row.amount
-                      ? ` por ${formatAmount(row.amount, row.currency)}`
-                      : row.price
-                        ? ` a ${formatAmount(row.price, row.currency)}`
-                        : ""
-                  }`,
-              ),
+              rows.map(({ staged: row, named }) => {
+                const kind = reviewKindOf({
+                  kind: row.kind,
+                  direction: row.direction,
+                  debtPayment: row.debt_payment,
+                });
+                const where = named ? ` ${named}` : "";
+                return `${row.date ? `${formatDate(row.date)} · ` : ""}${kind?.label ?? "Operación"} ${
+                  row.quantity ? `${formatQuantity(row.quantity)} ` : ""
+                }${row.symbol ?? ""}${where}${
+                  row.amount
+                    ? ` por ${formatAmount(row.amount, row.currency)}`
+                    : row.price
+                      ? ` a ${formatAmount(row.price, row.currency)}`
+                      : ""
+                }`.replace(/\s+/g, " ");
+              }),
             ),
           },
-          input: { accountId: target.id, rows },
+          input: {
+            accountId: target.id,
+            rows: rows.map(({ staged }) => staged),
+          },
         };
       },
     }),

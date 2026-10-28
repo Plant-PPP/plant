@@ -1,6 +1,7 @@
 import { quantityOn } from "@plant/core";
 import {
   compareDecimals,
+  type Currency,
   exactOf,
   nonNegativeDecimalSchema,
   plus,
@@ -67,6 +68,78 @@ export function holdingsOn(state: Ledger, accountId: string, date: string) {
         : [];
     })
     .sort((a, b) => compareDecimals(b.quantity, a.quantity));
+}
+
+// Units taken from an account's holdings of an instrument, largest first, as
+// one part per portfolio; null when they hold fewer.
+export function takeUnits(
+  held: readonly { portfolioId: string; quantity: string }[],
+  quantity: string,
+): { portfolio_id: string; quantity: string }[] | null {
+  let left = quantity;
+  const parts: { portfolio_id: string; quantity: string }[] = [];
+  for (const each of held) {
+    if (compareDecimals(left, "0") <= 0) break;
+    const taken =
+      compareDecimals(each.quantity, left) < 0 ? each.quantity : left;
+    parts.push({ portfolio_id: each.portfolioId, quantity: taken });
+    left = difference(left, taken);
+  }
+  return compareDecimals(left, "0") > 0 ? null : parts;
+}
+
+// The portfolio units of an instrument arrive in: the one of the account
+// holding the most of it that day, else the account's default.
+export function arrivalPortfolio(
+  state: Ledger,
+  account: { id: string; portfolio: { id: string } },
+  symbol: string,
+  date: string,
+): string {
+  return (
+    holdingsOn(state, account.id, date).find((each) => each.symbol === symbol)
+      ?.row.portfolio.id ?? account.portfolio.id
+  );
+}
+
+// A transfer of an instrument's units from a portfolio of one of the user's
+// accounts into a portfolio of another, carrying their cost; its fee is a
+// charge of the side they leave.
+export function transferInput(transfer: {
+  from: { accountId: string; portfolioId: string };
+  to: { accountId: string; portfolioId: string };
+  symbol: string;
+  date: string;
+  currency: Currency;
+  quantity: string;
+  charges: { kind: "other"; label: string; amount: string }[];
+  reference: string | null;
+  note: string;
+}) {
+  return {
+    kind: "transfer" as const,
+    source_connection_id: transfer.from.accountId,
+    instrument_symbol: transfer.symbol,
+    date: transfer.date,
+    currency: transfer.currency,
+    charges: transfer.charges,
+    parts: [
+      {
+        portfolio_id: transfer.from.portfolioId,
+        direction: "out" as const,
+        quantity: transfer.quantity,
+      },
+      {
+        portfolio_id: transfer.to.portfolioId,
+        source_connection_id: transfer.to.accountId,
+        direction: "in" as const,
+        quantity: transfer.quantity,
+        price: null,
+      },
+    ],
+    reference: transfer.reference,
+    note: transfer.note,
+  };
 }
 
 // The instruments whose balance the account set after a day, with an opening
@@ -225,7 +298,7 @@ export function writeImport<S extends Ledger>(
     // another account as a transfer, carrying their cost, or else at the
     // price read. Fewer go out of the largest holdings first.
     const destination =
-      row.portfolioId ?? holdings[0]?.portfolio.id ?? account.portfolio.id;
+      row.portfolioId ?? arrivalPortfolio(next, account, row.symbol, date);
     if (order > 0 && row.transferFrom !== undefined) {
       const source = holdingsOn(next, row.transferFrom, date).find(
         (each) => each.symbol === row.symbol,
@@ -236,29 +309,20 @@ export function writeImport<S extends Ledger>(
       const operationId = newId();
       const moved = writeOperation(
         next,
-        {
-          kind: "transfer",
-          source_connection_id: row.transferFrom,
-          instrument_symbol: row.symbol,
+        transferInput({
+          from: {
+            accountId: row.transferFrom,
+            portfolioId: source.portfolio.id,
+          },
+          to: { accountId: account.id, portfolioId: destination },
+          symbol: row.symbol,
           date,
           currency: instrument.currency,
-          parts: [
-            {
-              portfolio_id: source.portfolio.id,
-              direction: "out",
-              quantity: diff,
-            },
-            {
-              portfolio_id: destination,
-              source_connection_id: account.id,
-              direction: "in",
-              quantity: diff,
-              price: null,
-            },
-          ],
+          quantity: diff,
+          charges: [],
           reference: null,
           note: `Carga de ${item.fileName}`.slice(0, 200),
-        },
+        }),
         {
           operationId,
           newId,
@@ -274,15 +338,14 @@ export function writeImport<S extends Ledger>(
     if (order > 0) {
       parts = [{ portfolio_id: destination, quantity: diff }];
     } else {
-      let left = difference("0", diff);
-      parts = [];
-      for (const each of holdings) {
-        if (compareDecimals(left, "0") <= 0) break;
-        const units = each.quantity;
-        const taken = compareDecimals(units, left) < 0 ? units : left;
-        parts.push({ portfolio_id: each.portfolio.id, quantity: taken });
-        left = difference(left, taken);
-      }
+      // Fewer units than held: what is held always covers the difference.
+      parts = takeUnits(
+        holdings.map((each) => ({
+          portfolioId: each.portfolio.id,
+          quantity: each.quantity,
+        })),
+        difference("0", diff),
+      )!;
     }
     // A portfolio that held it before, even down to zero, adjusts; one that
     // never did opens with a balance.

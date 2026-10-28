@@ -2,9 +2,11 @@ import "server-only";
 import { LIABILITY_LABEL_MAX } from "@plant/core";
 import {
   buenosAiresDate,
+  CASH_MOVE_GUARD,
   Constants,
   currencySchema,
   type Database,
+  LIABILITY_EVENT_GUARD,
   positiveDecimalSchema,
 } from "@plant/shared";
 import {
@@ -18,10 +20,12 @@ import { z } from "zod";
 
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { writeSyncCash } from "@/lib/cash/write";
+import { readLiabilities } from "@/lib/debts/read";
 import type { MovementResult } from "@/lib/holdings/movements-input";
 import {
   type CashEntry,
   cashEntries,
+  readHeldCash,
   reviewedCashSchema,
 } from "@/lib/imports/cash";
 import { type ImportToWrite, writeImportRouted } from "@/lib/imports/confirm";
@@ -32,8 +36,12 @@ import {
 } from "@/lib/imports/origin";
 import { isCard, loanInputOf } from "@/lib/imports/debts-review";
 import { ImportsReadError } from "@/lib/imports/read";
-import { writeImportOperations } from "@/lib/imports/confirm-operations";
+import {
+  type DebtPayment,
+  writeImportOperations,
+} from "@/lib/imports/confirm-operations";
 import { withoutLoaded } from "@/lib/imports/operations-loaded";
+import { type KeptCounts, keptCounts } from "@/lib/imports/operations-review";
 import type { ImportOperationRow, ImportRow } from "@/lib/imports/review";
 import { LedgerReadError } from "@/lib/ledger/read";
 import {
@@ -50,7 +58,10 @@ import {
 import { serverLog } from "@/lib/log/server-log";
 import { REQUEST_ID_FIELD } from "@/lib/request-id";
 import { currentRequestId } from "@/lib/request-id-server";
-import { classifyPostgrestResult } from "@/lib/supabase/postgrest-write";
+import {
+  classifyPostgrestResult,
+  knownHint,
+} from "@/lib/supabase/postgrest-write";
 import { createClient } from "@/lib/supabase/server";
 
 type Client = SupabaseClient<Database>;
@@ -101,15 +112,58 @@ async function readyImport(
 
 type LedgerRead = Awaited<ReturnType<typeof ledgerFor>>;
 
+type RefusalCode = Extract<MovementResult, { ok: false }>["code"];
+
+// The debts an import's payments may pay, every one of the user's but their
+// cards, and the cash they may be paid from.
+async function payableFor(client: Client) {
+  const [debts, cash] = await Promise.all([
+    readLiabilities(client),
+    readHeldCash(client),
+  ]);
+  return {
+    debts: debts.active.filter((debt) => debt.kind !== "credit_card"),
+    cash,
+  };
+}
+
+// What a refused debt payment means: a debt that is not the user's to pay,
+// or the debt's or the cash's guard, their hints read only against the known
+// lists.
+function paymentFailure(error: {
+  code?: string;
+  hint?: string | null;
+}): RefusalCode | undefined {
+  if (error.code === "PT404" && error.hint === "debt_not_found") {
+    return "debt_not_found";
+  }
+  const failure = { code: error.code ?? "" };
+  const debt = knownHint([LIABILITY_EVENT_GUARD], failure, error.hint);
+  if (debt === "before_opening") return "debt_before_opening";
+  if (debt === "settled") return "debt_settled";
+  if (debt === "future_date" || debt === "no_cash_link") return debt;
+  if (
+    knownHint([CASH_MOVE_GUARD], failure, error.hint) === "insufficient_cash"
+  ) {
+    return "insufficient_cash";
+  }
+  return undefined;
+}
+
 // Sends the operations written to confirm_import, each with the revisions of
-// its instruments as the ledger was read, and then the cash balances: the
-// database checks them once, and writes them in turn, all or nothing.
+// its instruments as the ledger was read, then the debt payments and the
+// cash balances: the database checks them once, and writes them in turn, all
+// or nothing.
 async function sendConfirm(
   client: Client,
   importId: string,
   ledger: LedgerRead["ledger"],
   symbolOf: LedgerRead["symbolOf"],
-  written: { state: LedgerRead["ledger"]; operations: string[] },
+  written: {
+    state: LedgerRead["ledger"];
+    operations: string[];
+    payments?: readonly DebtPayment[];
+  },
   cash: readonly CashEntry[] = [],
 ): Promise<{ result: MovementResult; failure?: unknown }> {
   const response = await client.rpc("confirm_import", {
@@ -123,6 +177,7 @@ async function sendConfirm(
           operationSymbols(written.state, operation),
         ),
       })),
+      ...(written.payments ?? []).map((payment) => ({ debt_payment: payment })),
       ...cash,
     ],
   });
@@ -132,7 +187,8 @@ async function sendConfirm(
   const code =
     response.error?.hint === "stale"
       ? "stale"
-      : rpcFailure(response.error ?? {});
+      : (paymentFailure(response.error ?? {}) ??
+        rpcFailure(response.error ?? {}));
   return {
     result: { ok: false, code },
     ...(code === "failed" && { failure: response.error }),
@@ -233,6 +289,7 @@ async function logConfirm({
   draft,
   operations,
   cash,
+  kept,
   started,
   result,
   failure,
@@ -244,6 +301,7 @@ async function logConfirm({
   operations: number;
   // What a confirmed sync wrote of the account's cash, and how it went.
   cash?: SyncCash;
+  kept?: KeptCounts;
   started: number;
   result: MovementResult;
   failure: unknown;
@@ -257,6 +315,10 @@ async function logConfirm({
     "plant.import.operation_count": operations,
     "plant.import.cash_count": cash?.count,
     "plant.import.cash_outcome": cash?.outcome,
+    "plant.import.transfer_count": kept?.transfers,
+    "plant.import.units_out_count": kept?.unitsOut,
+    "plant.import.debt_payment_count": kept?.debtPayments,
+    "plant.import.loaded_count": kept?.loaded,
     "plant.import.duration_ms": Math.round(performance.now() - started),
     "plant.outcome": outcome,
   };
@@ -270,6 +332,7 @@ async function logConfirm({
   if (result.ok || outcome === "failed" || outcome === "stale") {
     revalidatePath("/import", "layout");
     revalidatePath(draft === "debts" ? "/debts" : "/assets", "layout");
+    if ((kept?.debtPayments ?? 0) > 0) revalidatePath("/debts", "layout");
   }
   if (result.ok && draft !== "debts") await refreshGainAlerts(userId);
 }
@@ -336,6 +399,7 @@ export async function confirmImportOperations(
   let failure: unknown;
   let operations = 0;
   let cash: SyncCash | undefined;
+  let kept: KeptCounts | undefined;
   const id = z.uuid().safeParse(importId);
   const reviewed = z
     .array(z.record(z.string(), z.unknown()))
@@ -364,6 +428,10 @@ export async function confirmImportOperations(
         if (truncated) throw new LedgerReadError("movements", "truncated");
         const syncCash = await readSyncCash(client, item.id);
         const toWrite = withoutLoaded(ledger, item.accountId, typed);
+        const payable = toWrite.some((row) => !row.discarded && row.debtPayment)
+          ? await payableFor(client)
+          : undefined;
+        kept = keptCounts(typed, toWrite);
         // A sync whose operations are all in Plant still brings its cash.
         const written =
           syncCash && toWrite.every((row) => row.discarded)
@@ -371,9 +439,14 @@ export async function confirmImportOperations(
                 state: ledger,
                 result: { ok: true as const, id: item.id },
                 operations: [],
+                payments: [],
               }
-            : writeImportOperations(ledger, item, toWrite, () =>
-                crypto.randomUUID(),
+            : writeImportOperations(
+                ledger,
+                item,
+                toWrite,
+                () => crypto.randomUUID(),
+                payable,
               );
         if (!written.result.ok) {
           result = {
@@ -381,7 +454,7 @@ export async function confirmImportOperations(
             ...(written.rowId && { rowId: written.rowId }),
           };
         } else {
-          operations = written.operations.length;
+          operations = written.operations.length + written.payments.length;
           ({ result, failure } = await sendConfirm(
             client,
             item.id,
@@ -407,6 +480,7 @@ export async function confirmImportOperations(
     draft: "operations",
     operations,
     cash,
+    kept,
     started,
     result,
     failure,

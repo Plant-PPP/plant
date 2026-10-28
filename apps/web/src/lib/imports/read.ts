@@ -20,17 +20,14 @@ import {
   usListingSymbol,
   usTicker,
 } from "@plant/shared";
-import {
-  cashDraftSchema,
-  draftAssetClassSchema,
-  OPERATION_KINDS,
-} from "@plant/sources";
+import { cashDraftSchema, draftAssetClassSchema } from "@plant/sources";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { InstrumentRow } from "@/lib/holdings/read";
 import { marketsFor } from "@/lib/instruments/markets";
 import {
+  IMPORT_OPERATION_KINDS,
   importFailureMessage,
   type ImportDebtRow,
   type ImportItem,
@@ -139,7 +136,11 @@ const itemSchema = z.object({
 const operationSchema = z.object({
   id: z.string(),
   date: z.string().nullable(),
-  kind: z.enum(OPERATION_KINDS).nullable(),
+  kind: z.enum(IMPORT_OPERATION_KINDS).nullable(),
+  direction: z.enum(Constants.public.Enums.movement_direction).nullable(),
+  counterpart_connection_id: z.string().nullable(),
+  debt_payment: z.boolean(),
+  pays_liability_id: z.string().nullable(),
   symbol: z.string().nullable(),
   quantity: z.string().nullable(),
   price: z.string().nullable(),
@@ -234,21 +235,30 @@ function reviewOperation(
       ? { known: null, asked: null }
       : resolvedFor(row.symbol, index, usOnly);
   const page = row.source_page === null ? null : `Página ${row.source_page}`;
+  // A payment's debt is in its own unit: the document need not name one.
   const named =
-    row.symbol === null
-      ? origin === "sync"
-        ? "La sincronización no dice qué activo es"
-        : "El documento no dice qué activo es"
-      : namedAs(row.symbol, known, origin);
+    row.symbol === null && row.debt_payment
+      ? null
+      : row.symbol === null
+        ? origin === "sync"
+          ? "La sincronización no dice qué activo es"
+          : "El documento no dice qué activo es"
+        : namedAs(row.symbol, known, origin);
   return {
     id: row.id,
     date: row.date,
     kind: row.kind,
+    // An adjustment stored before directions were kept came in.
+    direction:
+      row.kind === "adjustment" ? (row.direction ?? "in") : row.direction,
+    counterpartId: row.counterpart_connection_id,
+    debtPayment: row.debt_payment,
+    payDebtId: row.pays_liability_id,
     symbol: known?.symbol ?? "",
     quantity: row.quantity,
     price:
       row.price ??
-      ((known || usOnly) && movesUnits(row.kind) && row.amount && row.quantity
+      ((known || usOnly) && movesUnits(row) && row.amount && row.quantity
         ? quotedPrice(
             known?.type ?? "stock",
             stored(over(exactOf(row.amount), exactOf(row.quantity))),
@@ -423,9 +433,10 @@ export async function readImportForReview(
     client
       .from("import_operations")
       .select(
-        "id, date, kind, symbol, quantity:quantity::text, price:price::text, " +
-          "amount:amount::text, charges:charges::text, reference, currency, " +
-          "confidence, source_page",
+        "id, date, kind, direction, counterpart_connection_id, debt_payment, " +
+          "pays_liability_id, symbol, " +
+          "quantity:quantity::text, price:price::text, amount:amount::text, " +
+          "charges:charges::text, reference, currency, confidence, source_page",
       )
       .eq("import_id", id)
       .order("position"),

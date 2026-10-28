@@ -6,6 +6,7 @@ import {
 } from "@plant/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { removeAttachments } from "./attachment-files";
 import type { ChatMessage, ConversationSummary } from "./chat";
 import { toChatMessages } from "./messages-view";
 
@@ -87,15 +88,24 @@ export async function conversationMessages(
   );
 }
 
+// Deletes one of the user's conversations, its messages with it, and then
+// the files its questions kept. Files a failure leaves behind go with the
+// orphan files job once 30 days old; `filesLeft` says so.
 export async function deleteConversation(
   client: Client,
   userId: string,
   conversationId: string,
-): Promise<void> {
+): Promise<{ filesLeft: boolean }> {
   const { error } = await client
     .from("ai_conversations")
     .delete()
     .eq("user_id", userId)
     .eq("id", conversationId);
   if (error) throw error;
+  try {
+    await removeAttachments(client, userId, conversationId);
+    return { filesLeft: false };
+  } catch {
+    return { filesLeft: true };
+  }
 }

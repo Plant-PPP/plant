@@ -57,6 +57,8 @@ const READ = {
   mapping: "none",
   skippedRows: 0,
   disputes: 0,
+  leftOut: 0,
+  readPath: null,
   documentKind: "account_statement",
 } as const;
 
@@ -335,6 +337,8 @@ it("reads the file into a draft and marks the import ready", async () => {
         "plant.import.mapping": "none",
         "plant.import.skipped_count": 0,
         "plant.import.dispute_count": 0,
+        "plant.import.left_count": 0,
+        "plant.import.read_path": "unknown",
         "plant.import.id": IMPORT,
       }),
     },
@@ -352,6 +356,8 @@ it("logs how many rows the reading skipped", async () => {
         mapping: "hit",
         skippedRows: 2,
         disputes: 0,
+        leftOut: 0,
+        readPath: null,
         documentKind: null,
       },
     }),

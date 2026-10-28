@@ -82,6 +82,23 @@ export const debtsComplete = (rows: readonly ReviewedDebt[]) =>
   rows.some((row) => !row.discarded) &&
   rows.every((row) => missingDebtFields(row).length === 0);
 
+// The user's debts whose name or lender reads as one of `names`, however
+// written.
+export function debtsNamed<D extends { label: string; lender: string | null }>(
+  names: readonly (string | null)[],
+  debts: readonly D[],
+): D[] {
+  const wanted = names
+    .filter((each): each is string => each !== null)
+    .map(normalizeSymbol)
+    .filter((each) => each !== "");
+  return debts.filter((debt) =>
+    [debt.label, debt.lender].some(
+      (each) => each !== null && wanted.includes(normalizeSymbol(each)),
+    ),
+  );
+}
+
 // The user's card debt a statement's debt updates: the one in its currency
 // whose name or bank reads the same, when exactly one does; none otherwise,
 // and none for a loan.
@@ -94,17 +111,63 @@ export function cardFor(
     currency: string | null;
   }[],
 ): string | null {
-  const names = [debt.label, debt.lender]
-    .filter((each): each is string => each !== null)
-    .map(normalizeSymbol)
-    .filter((each) => each !== "");
-  if (names.length === 0 || !isCard(debt)) return null;
-  const same = cards.filter(
-    (card) =>
-      card.currency === debt.currency &&
-      [card.label, card.lender].some(
-        (each) => each !== null && names.includes(normalizeSymbol(each)),
-      ),
+  if (!isCard(debt)) return null;
+  const same = debtsNamed(
+    [debt.label, debt.lender],
+    cards.filter((card) => card.currency === debt.currency),
   );
   return same.length === 1 ? same[0]!.id : null;
+}
+
+// The unit a debt is owed in: a crypto loan's instrument, UVA for a peso
+// loan in UVA, else its currency.
+export const debtUnit = (debt: {
+  currency: string | null;
+  uva: boolean;
+  instrument_symbol: string | null;
+}): string => debt.instrument_symbol ?? (debt.uva ? "UVA" : debt.currency!);
+
+// The debt a repayment in a document of an account pays: of the user's debts
+// in the repayment's unit, the one named as the account's institution, else
+// the only one; none when that leaves several or none.
+export function debtPaid<
+  D extends {
+    id: string;
+    label: string;
+    lender: string | null;
+    currency: string | null;
+    uva: boolean;
+    instrument_symbol: string | null;
+  },
+>(unit: string, institution: string, debts: readonly D[]): D | null {
+  const inUnit = debts.filter((debt) => debtUnit(debt) === unit);
+  const named = debtsNamed([institution], inUnit);
+  if (named.length === 1) return named[0]!;
+  return inUnit.length === 1 ? inUnit[0]! : null;
+}
+
+// Whether a loan statement's debt is one the user already has in Deudas: one
+// in its unit whose name or lender reads as the statement's.
+export function loanLoaded(
+  row: Pick<
+    ImportDebtRow,
+    "kind" | "label" | "lender" | "currency" | "instrumentSymbol"
+  >,
+  loans: readonly {
+    label: string;
+    lender: string | null;
+    currency: string | null;
+    instrument_symbol: string | null;
+  }[],
+): boolean {
+  if (isCard(row)) return false;
+  const unit = row.instrumentSymbol ?? row.currency;
+  return (
+    debtsNamed(
+      [row.label, row.lender],
+      loans.filter(
+        (loan) => (loan.instrument_symbol ?? loan.currency) === unit,
+      ),
+    ).length > 0
+  );
 }

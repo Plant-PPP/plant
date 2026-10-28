@@ -76,8 +76,10 @@ export function tableSql(table: string): string {
 // A renamed one is read under its new name.
 export function lastConstraint(table: string, name: string): string {
   const sql = tableSql(table);
-  const start = sql.lastIndexOf(`CONSTRAINT ${name} CHECK (`);
-  if (start < 0) throw new Error(`no CHECK ${name} on ${table}`);
+  const start = [
+    ...sql.matchAll(new RegExp(`CONSTRAINT ${name}\\s+CHECK \\(`, "g")),
+  ].at(-1)?.index;
+  if (start === undefined) throw new Error(`no CHECK ${name} on ${table}`);
   const open = sql.indexOf("(", start);
   let depth = 0;
   for (let i = open; i < sql.length; i++) {

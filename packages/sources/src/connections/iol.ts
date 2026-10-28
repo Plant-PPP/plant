@@ -262,6 +262,8 @@ export function iolConnection({
       found.push({
         date,
         kind,
+        direction: null,
+        debtPayment: false,
         symbol,
         quantity: positive(quantity) ? quantity : null,
         price: positive(price) ? price : null,

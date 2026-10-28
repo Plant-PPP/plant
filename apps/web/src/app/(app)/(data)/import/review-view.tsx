@@ -13,11 +13,15 @@ import { ImportDebtsReview } from "@/components/imports/import-debts-review";
 import { ImportOperationsReview } from "@/components/imports/import-operations-review";
 import { ImportReview } from "@/components/imports/import-review";
 import { getSessionClaims } from "@/lib/auth/session-claims";
-import { readLiabilities } from "@/lib/debts/read";
+import { readLiabilities, readLiabilityEvents } from "@/lib/debts/read";
 import { cashIn, readHeldCash } from "@/lib/imports/cash";
 import { heldElsewhere, heldOn } from "@/lib/imports/confirm";
 import { routeRows } from "@/lib/imports/accounts-routing";
-import { markLoaded } from "@/lib/imports/operations-loaded";
+import { debtPaid, debtUnit } from "@/lib/imports/debts-review";
+import {
+  markLoaded,
+  markPaymentsLoaded,
+} from "@/lib/imports/operations-loaded";
 import { IMPORTS_VIEW_EVENT, readImportForReview } from "@/lib/imports/read";
 import { readLedger } from "@/lib/ledger/read";
 import { readReferenceDollar } from "@/lib/holdings/read";
@@ -87,6 +91,7 @@ export async function ImportReviewView({ id }: { id: string }) {
         item={item}
         institution={account?.institution ?? ""}
         cards={debts.active.filter((debt) => debt.kind === "credit_card")}
+        loans={debts.active.filter((debt) => debt.kind !== "credit_card")}
         backHref="/import"
         doneHref="/debts"
         actions={{ confirm: confirmImportDebts }}
@@ -119,14 +124,57 @@ export async function ImportReviewView({ id }: { id: string }) {
   }
 
   if (item.operations) {
+    const institution = account?.institution ?? "";
+    // A repayment pays one of the user's debts that is not a card, which any
+    // row may be made into: the one in its unit named as the account's
+    // institution, else the only one, for the user to change; one its debt
+    // already has starts set aside.
+    const repays = item.operations.some((row) => row.debtPayment);
+    const [debts, events] = await Promise.all([
+      readLiabilities(client).then((read) =>
+        read.active.filter((debt) => debt.kind !== "credit_card"),
+      ),
+      repays ? readLiabilityEvents(client) : null,
+    ]).catch(fail);
+    const named = item.operations.map((row) =>
+      row.debtPayment && !row.payDebtId
+        ? {
+            ...row,
+            payDebtId:
+              debtPaid(row.symbol || row.currency, institution, debts)?.id ??
+              null,
+          }
+        : row,
+    );
+    const paid = events
+      ? [...events.byLiability.values()]
+          .flat()
+          .filter((event) => event.kind === "payment" && event.amount !== null)
+          .map((event) => ({
+            liability_id: event.liability_id,
+            date: event.date,
+            amount: event.amount!,
+          }))
+      : [];
     return (
       <ImportOperationsReview
         item={{
           ...item,
-          operations: markLoaded(state, accountId, item.operations),
+          operations: markPaymentsLoaded(
+            markLoaded(state, accountId, named),
+            paid,
+          ),
         }}
-        institution={account?.institution ?? ""}
+        institution={institution}
         instruments={ledger.instruments}
+        accounts={ledger.accounts
+          .filter((each) => each.id !== accountId)
+          .map(({ id, institution }) => ({ id, institution }))}
+        debts={debts.map((debt) => ({
+          id: debt.id,
+          label: debt.label,
+          unit: debtUnit(debt),
+        }))}
         backHref="/import"
         doneHref="/import"
         actions={{ confirm: confirmImportOperations }}

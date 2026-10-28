@@ -63,16 +63,19 @@ import type { MovementResult } from "@/lib/holdings/movements-input";
 import { priceBasisLabel } from "@/lib/holdings/price-input";
 import type { InstrumentRow } from "@/lib/holdings/read";
 import {
-  IMPORT_KIND_LABELS,
+  kindFields,
   type MissingField,
   missingFields,
   movesUnits,
   operationsComplete,
+  REVIEW_KINDS,
+  type ReviewKindId,
+  reviewKindOf,
+  takesUnitsOut,
 } from "@/lib/imports/operations-review";
 import {
   CONFIDENCE_LABELS,
   type ImportItem,
-  type ImportOperationKind,
   type ImportOperationRow,
   lackingDate,
   lackingFigure,
@@ -89,20 +92,16 @@ export type OperationsReviewActions = {
   ) => Promise<MovementResult & { rowId?: string }>;
 };
 
-const KINDS: ImportOperationKind[] = [
-  "purchase",
-  "sale",
-  "dividend",
-  "coupon",
-  "adjustment",
-];
-
 // What a refusal means for an operation read from a document.
 const MESSAGES = {
   ...MOVEMENT_MESSAGES,
   not_found: "No tenías ese activo en la cuenta en esa fecha.",
   oversold:
-    "Esa venta saca más unidades de las que tenías en la cuenta en esa fecha.",
+    "Esa operación saca más unidades de las que tenías en la cuenta en esa fecha.",
+  counterpart_not_found:
+    "Elegí otra de tus cuentas abiertas como destino del traspaso.",
+  already_loaded:
+    "La otra cuenta ya tiene esas unidades cargadas como ingreso: elegí Retiro para no contarlas dos veces.",
 } as const;
 
 // An operation as the user completes it: its figures as typed.
@@ -131,6 +130,10 @@ const finalOf = (row: EditedOperation): ImportOperationRow => ({
   id: row.id,
   date: row.date,
   kind: row.kind,
+  direction: row.direction ?? null,
+  counterpartId: row.counterpartId ?? null,
+  debtPayment: row.debtPayment ?? false,
+  payDebtId: row.payDebtId ?? null,
   symbol: row.symbol,
   quantity: parseAmountInput(row.quantityText),
   price: parseAmountInput(row.priceText),
@@ -168,14 +171,16 @@ function typedInvalid(
 ): Set<FigureField> {
   const invalid = new Set<FigureField>();
   if (row.discarded) return invalid;
-  // Only the figures the kind shows: a trade's units and price, an income's
-  // amount, and the charges.
-  const trade = movesUnits(row.kind);
+  // Only the figures the kind shows: a trade's units and price, units
+  // going out, an income's amount, and the charges.
+  const trade = movesUnits(row);
   const income = row.kind === "dividend" || row.kind === "coupon";
+  const payment = row.debtPayment ?? false;
   const figures: FigureField[] = [
     ...(trade ? (["quantity", "price"] as const) : []),
+    ...(takesUnitsOut(row) || payment ? (["quantity"] as const) : []),
     ...(income ? (["amount"] as const) : []),
-    "charges",
+    ...(payment ? [] : (["charges"] as const)),
   ];
   for (const figure of figures) {
     const text = row[FIGURE_TEXT[figure]];
@@ -198,6 +203,8 @@ export function ImportOperationsReview({
   item,
   institution,
   instruments: givenInstruments,
+  accounts,
+  debts,
   backHref,
   doneHref,
   actions,
@@ -205,6 +212,10 @@ export function ImportOperationsReview({
   item: ImportItem;
   institution: string;
   instruments: InstrumentRow[];
+  // The user's other open accounts, where a transfer may send units.
+  accounts: { id: string; institution: string }[];
+  // The user's debts a repayment may pay, each in its unit.
+  debts: { id: string; label: string; unit: string }[];
   backHref: string;
   doneHref: string;
   actions: OperationsReviewActions;
@@ -219,9 +230,7 @@ export function ImportOperationsReview({
   const [alert, setAlert] = useState<string>();
   const [refused, setRefused] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const [kindShown, setKindShown] = useState<ImportOperationKind | "all">(
-    "all",
-  );
+  const [kindShown, setKindShown] = useState<ReviewKindId | "all">("all");
   const [symbolShown, setSymbolShown] = useState("all");
   const [editing, setEditing] = useState<string | null>(null);
   const [attention, setAttention] = useState(
@@ -241,6 +250,10 @@ export function ImportOperationsReview({
       ),
   );
 
+  const debtOf = (row: ImportOperationRow) =>
+    debts.find((debt) => debt.id === row.payDebtId);
+  const debtNameOf = (row: ImportOperationRow) => debtOf(row)?.label;
+  const debtUnitOf = (row: ImportOperationRow) => debtOf(row)?.unit;
   const finals = rows.map(finalOf);
   const missing = finals.map((row) => new Set(missingFields(row, today)));
   const invalidTyped = rows.map((row) =>
@@ -260,7 +273,7 @@ export function ImportOperationsReview({
 
   // The rows the filters show; the choices apply to these only.
   const shown = (row: EditedOperation) =>
-    (kindShown === "all" || row.kind === kindShown) &&
+    (kindShown === "all" || reviewKindOf(row)?.id === kindShown) &&
     (symbolShown === "all" || row.symbol === symbolShown);
   const symbols = [...new Set(rows.map((row) => row.symbol))]
     .filter((symbol) => symbol !== "")
@@ -407,7 +420,9 @@ export function ImportOperationsReview({
   // edited.
   const card = (row: EditedOperation, index: number) => {
     const type = types.get(row.symbol);
-    const trade = movesUnits(row.kind);
+    const trade = movesUnits(row);
+    const out = takesUnitsOut(row);
+    const payment = row.debtPayment ?? false;
     return (
       <li
         key={row.id}
@@ -423,7 +438,11 @@ export function ImportOperationsReview({
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="grid min-w-0 gap-1">
-            {row.picks ? (
+            {payment ? (
+              <span className="truncate font-medium">
+                {debtNameOf(row) ?? "Pago de deuda"}
+              </span>
+            ) : row.picks ? (
               <InstrumentPicker
                 id={`${pickerId}-${row.id}`}
                 aria-label={`Activo de la operación ${index + 1}`}
@@ -505,10 +524,10 @@ export function ImportOperationsReview({
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Tipo</span>
             <Select
-              value={row.kind ?? ""}
+              value={reviewKindOf(row)?.id ?? ""}
               disabled={row.discarded}
-              onValueChange={(kind) =>
-                change(row.id, { kind: kind as ImportOperationKind })
+              onValueChange={(id) =>
+                change(row.id, kindFields(id as ReviewKindId))
               }
             >
               <SelectTrigger
@@ -519,9 +538,9 @@ export function ImportOperationsReview({
                 <SelectValue placeholder="Elegí el tipo" />
               </SelectTrigger>
               <SelectContent>
-                {KINDS.map((kind) => (
-                  <SelectItem key={kind} value={kind}>
-                    {IMPORT_KIND_LABELS[kind]}
+                {REVIEW_KINDS.map((kind) => (
+                  <SelectItem key={kind.id} value={kind.id}>
+                    {kind.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -581,10 +600,53 @@ export function ImportOperationsReview({
             </Select>
           </label>
         </div>
-        {row.kind === null ? (
+        {reviewKindOf(row) === null ? (
           <p className="text-muted-foreground text-xs">
             Elegí el tipo para completar el resto.
           </p>
+        ) : payment ? (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <label className="grid gap-1 text-xs sm:col-span-2">
+              <span className="text-muted-foreground">Deuda</span>
+              <Select
+                value={row.payDebtId ?? ""}
+                disabled={row.discarded}
+                onValueChange={(payDebtId) => change(row.id, { payDebtId })}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-label={`Deuda que paga la operación ${index + 1}`}
+                  aria-invalid={invalid(index, "debt")}
+                >
+                  <SelectValue placeholder="Elegí la deuda" />
+                </SelectTrigger>
+                <SelectContent>
+                  {debts.map((debt) => (
+                    <SelectItem key={debt.id} value={debt.id}>
+                      {`${debt.label} (${shownTicker(debt.unit)})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!row.discarded && missing[index]!.has("debt") && (
+                <ProblemText
+                  text={
+                    debts.length === 0
+                      ? "No tenés deudas para pagar: cargala en Deudas"
+                      : "Elegí qué deuda pagó"
+                  }
+                />
+              )}
+            </label>
+            <Figure
+              label={`Monto${debtUnitOf(row) ? ` (${shownTicker(debtUnitOf(row)!)})` : ""}`}
+              aria={`Monto pagado en la operación ${index + 1}`}
+              value={row.quantityText}
+              disabled={row.discarded}
+              problem={problem(index, "quantity")}
+              onChange={(quantityText) => change(row.id, { quantityText })}
+            />
+          </div>
         ) : (
           <div className={cn("grid gap-3", "sm:grid-cols-4")}>
             {trade ? (
@@ -609,6 +671,49 @@ export function ImportOperationsReview({
                   problem={problem(index, "price")}
                   onChange={(priceText) => change(row.id, { priceText })}
                 />
+              </>
+            ) : out ? (
+              <>
+                <Figure
+                  label="Cantidad"
+                  aria={`Cantidad de la operación ${index + 1}`}
+                  value={row.quantityText}
+                  disabled={row.discarded}
+                  problem={problem(index, "quantity")}
+                  onChange={(quantityText) => change(row.id, { quantityText })}
+                />
+                {row.kind === "transfer" && (
+                  <label className="grid gap-1 text-xs sm:col-span-2">
+                    <span className="text-muted-foreground">
+                      Hacia la cuenta
+                    </span>
+                    <Select
+                      value={row.counterpartId ?? ""}
+                      disabled={row.discarded}
+                      onValueChange={(counterpartId) =>
+                        change(row.id, { counterpartId })
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label={`Cuenta de destino de la operación ${index + 1}`}
+                        aria-invalid={invalid(index, "counterpart")}
+                      >
+                        <SelectValue placeholder="Elegí la cuenta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.institution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!row.discarded && missing[index]!.has("counterpart") && (
+                      <ProblemText text="Elegí a qué cuenta fueron" />
+                    )}
+                  </label>
+                )}
               </>
             ) : (
               <Figure
@@ -699,7 +804,7 @@ export function ImportOperationsReview({
           <Select
             value={kindShown}
             onValueChange={(value) =>
-              setKindShown(value as ImportOperationKind | "all")
+              setKindShown(value as ReviewKindId | "all")
             }
           >
             <SelectTrigger
@@ -711,9 +816,9 @@ export function ImportOperationsReview({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los tipos</SelectItem>
-              {KINDS.map((kind) => (
-                <SelectItem key={kind} value={kind}>
-                  {IMPORT_KIND_LABELS[kind]}
+              {REVIEW_KINDS.map((kind) => (
+                <SelectItem key={kind.id} value={kind.id}>
+                  {kind.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -821,15 +926,15 @@ export function ImportOperationsReview({
                         <TableCell className="tabular-nums">
                           {row.date ? formatDate(row.date) : "—"}
                         </TableCell>
-                        <TableCell>
-                          {row.kind ? IMPORT_KIND_LABELS[row.kind] : "—"}
-                        </TableCell>
+                        <TableCell>{reviewKindOf(row)?.label ?? "—"}</TableCell>
                         <TableCell className="max-w-48">
                           <span
                             className="block truncate font-medium"
                             title={names.get(row.symbol)}
                           >
-                            {shownTicker(row.symbol)}
+                            {row.debtPayment
+                              ? (debtNameOf(row) ?? "—")
+                              : shownTicker(row.symbol)}
                           </span>
                           {row.loaded && (
                             <span className="text-muted-foreground block">
@@ -856,7 +961,7 @@ export function ImportOperationsReview({
                           )}
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
-                          {movesUnits(row.kind)
+                          {movesUnits(row)
                             ? tradeTotal(
                                 row,
                                 types.get(row.symbol),

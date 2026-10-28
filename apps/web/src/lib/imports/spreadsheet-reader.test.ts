@@ -59,6 +59,8 @@ it("maps a format's columns once, then reads the same format without the model",
     mapping: "miss",
     skippedRows: 0,
     disputes: 0,
+    leftOut: 0,
+    readPath: null,
     documentKind: null,
   });
   expect(
@@ -78,6 +80,8 @@ it("maps a format's columns once, then reads the same format without the model",
     mapping: "hit",
     skippedRows: 0,
     disputes: 0,
+    leftOut: 0,
+    readPath: null,
     documentKind: null,
   });
   expect(mapColumns).toHaveBeenCalledTimes(1);

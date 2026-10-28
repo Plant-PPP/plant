@@ -1,0 +1,41 @@
+{
+  "operations": [
+    {
+      "date": "2026-09-18",
+      "kind": "purchase",
+      "symbol": "USDT",
+      "quantity": "2100"
+    },
+    {
+      "date": "2026-09-18",
+      "kind": "sale",
+      "symbol": "MSFT",
+      "quantity": "10"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "sale",
+      "symbol": "BTC",
+      "quantity": "0.02840909"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "purchase",
+      "symbol": "MSFT",
+      "quantity": "10"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "purchase",
+      "symbol": "BTC",
+      "quantity": "0.02840909"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "sale",
+      "symbol": "USDT",
+      "quantity": "2500"
+    }
+  ],
+  "leftOut": 2
+}

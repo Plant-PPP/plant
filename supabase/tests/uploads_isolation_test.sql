@@ -5,7 +5,7 @@
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(24);
+SELECT plan(26);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -150,6 +150,20 @@ SELECT is(
                       VALUES ('imports', 'a0000000-0000-4000-8000-00000000000a/other/y') $$),
   '42501',
   'nor outside the imports folder'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO storage.objects (bucket_id, name)
+                      VALUES ('imports', 'a0000000-0000-4000-8000-00000000000a/assistant/c/m-0') $$),
+  NULL,
+  'a user keeps a chat file in their own folder'
+);
+
+SELECT is(
+  pg_temp.error_of($$ INSERT INTO storage.objects (bucket_id, name)
+                      VALUES ('imports', 'b0000000-0000-4000-8000-00000000000b/assistant/c/m-0') $$),
+  '42501',
+  'never in another user''s'
 );
 
 UPDATE storage.objects SET name = name || '-2' WHERE bucket_id = 'imports';

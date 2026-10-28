@@ -47,6 +47,8 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
   let result: ProposalAnswer;
   let kind: ProposalKind | undefined;
   let failure: unknown;
+  // Why the database refused a staged import, and its code.
+  let staging: Staging | undefined;
   if (!parsed.success) {
     result = { ok: false, code: "invalid" };
   } else {
@@ -103,8 +105,12 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
               : kind === "real_estate"
                 ? await createHolding(part.output.input)
                 : await stageImport(kind, part.output.input);
+        if ("staging" in written) staging = written.staging;
         if (!written.ok) {
-          result = { ok: false, code: "refused" };
+          result = {
+            ok: false,
+            code: staging?.failed ? "failed" : "refused",
+          };
         } else {
           await record("confirmed");
           result = {
@@ -126,6 +132,9 @@ export async function answerProposal(input: unknown): Promise<ProposalAnswer> {
       ? parsed.data.decision
       : undefined,
     "plant.outcome": result.ok ? "ok" : result.code,
+    "plant.assistant.refusal": staging?.hint,
+    "error.type": staging?.code,
+    "plant.import.id": staging?.importId,
   };
   if (!result.ok && result.code === "failed") {
     serverLog.error("assistant.proposal", line, failure);
@@ -158,12 +167,34 @@ const stagedSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).min(1).max(200),
 });
 
+// How staging an import went, for the log: the import made, or the
+// database's code and the hint of a refusal, and whether it failed rather
+// than refused (an account or a debt that is not the user's, an account
+// syncing, a bad row).
+type Staging = {
+  importId?: string;
+  code?: string;
+  hint?: string;
+  failed?: boolean;
+};
+
+// The refusals stage_assistant_import names.
+const STAGING_HINTS = [
+  "counterpart_not_found",
+  "debt_not_found",
+  "sync_in_progress",
+] as const;
+
 // Holdings or operations staged as a ready import of the account, which the
-// database checks is the user's; the user confirms them in its review.
+// database checks is the user's, as any account or debt a row names; the
+// user confirms them in its review.
 async function stageImport(
   draft: "holdings" | "operations",
   input: unknown,
-): Promise<{ ok: false } | { ok: true; href: string }> {
+): Promise<
+  | { ok: false; staging?: Staging }
+  | { ok: true; href: string; staging: Staging }
+> {
   const parsed = stagedSchema.safeParse(input);
   if (!parsed.success) return { ok: false };
   const client = await createClient();
@@ -173,8 +204,20 @@ async function stageImport(
     p_rows: parsed.data
       .rows as Database["public"]["Functions"]["stage_assistant_import"]["Args"]["p_rows"],
   });
-  if (staged.error || !staged.data) return { ok: false };
-  return { ok: true, href: `/import/${staged.data}` };
+  if (staged.error || !staged.data) {
+    const code = staged.error?.code;
+    const refused = code === "PT404" || code === "PT409" || code === "22023";
+    const hint = STAGING_HINTS.find((each) => each === staged.error?.hint);
+    return {
+      ok: false,
+      staging: { code, failed: !refused, ...(hint && { hint }) },
+    };
+  }
+  return {
+    ok: true,
+    href: `/import/${staged.data}`,
+    staging: { importId: staged.data },
+  };
 }
 
 // A proposed debt, and its installment plan when the proposal carries one.

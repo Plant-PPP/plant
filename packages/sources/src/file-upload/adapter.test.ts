@@ -23,6 +23,8 @@ const reading = (reader: "document" | "sheet"): SourceReading => ({
     mapping: "none",
     skippedRows: 0,
     disputes: 0,
+    leftOut: 0,
+    readPath: null,
     documentKind: null,
   },
 });

@@ -1,5 +1,8 @@
+import { lastConstraint } from "@plant/shared/testing";
+
 import {
   IMPORT_FAILURE_MESSAGES,
+  IMPORT_OPERATION_KINDS,
   importFailureMessage,
   lackingField,
   lackingFigure,
@@ -127,4 +130,14 @@ it("names a sync's save by its account, a file's by the file too", () => {
       "Cocos",
     ),
   ).toBe("Guardaste 2 operaciones de boletos.pdf en Cocos");
+});
+
+it("names the kinds a draft of operations may hold, as the database does", () => {
+  const check = lastConstraint(
+    "import_operations",
+    "import_operations_kind_check",
+  );
+  expect([...check.matchAll(/'([a-z_]+)'/g)].map(([, kind]) => kind)).toEqual([
+    ...IMPORT_OPERATION_KINDS,
+  ]);
 });
