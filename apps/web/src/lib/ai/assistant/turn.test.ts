@@ -136,3 +136,59 @@ it("starts no conversation when the answer fails", async () => {
   expect(started).toEqual([]);
   expect(saved).toEqual([]);
 });
+
+it("says why an answer that ran out of tokens failed", async () => {
+  const { store, saved } = storeWith();
+  const reports: Parameters<TurnReport>[0][] = [];
+  const response = await runAssistantTurn({
+    client: {} as never,
+    store,
+    record: async () => {},
+    model: () =>
+      new MockLanguageModelV3({
+        doStream: async () => ({
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: "stream-start", warnings: [] });
+              controller.enqueue({
+                type: "finish",
+                usage: {
+                  inputTokens: {
+                    total: 10,
+                    noCache: 10,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
+                  outputTokens: {
+                    total: 8192,
+                    text: 8192,
+                    reasoning: undefined,
+                  },
+                },
+                finishReason: { unified: "length", raw: "max_tokens" },
+              });
+              controller.close();
+            },
+          }),
+        }),
+      }),
+    context: {
+      userId: USER,
+      requestId: undefined,
+      page: "/assistant",
+      params: {},
+    },
+    conversationId: CONVERSATION,
+    question: "Cargá estas operaciones",
+    unit: "usd_mep",
+    today: "2026-10-13",
+    report: (report) => {
+      reports.push(report);
+    },
+  });
+  await response.text();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(saved).toEqual([]);
+  expect(reports).toContainEqual({ outcome: "failed" });
+  expect(reports).toContainEqual({ errorType: "finish_length" });
+});

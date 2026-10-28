@@ -60,8 +60,9 @@ export const ASSISTANT_MODEL = "claude-sonnet-5-5" satisfies PricedModelId;
 const HISTORY_TURNS = 10;
 // The most steps a turn takes, the last of them answering without tools.
 const MAX_STEPS = 6;
-// Room for a long answer; bounds what one step can cost.
-const MAX_OUTPUT_TOKENS = 2_048;
+// Room for a long answer or a proposal of a log's many rows, read from
+// several screenshots; bounds what one step can cost.
+const MAX_OUTPUT_TOKENS = 8_192;
 // A turn ends before the chat route's maxDuration would cut it.
 const TURN_MS = 50_000;
 
@@ -500,6 +501,9 @@ export async function runAssistantTurn({
           report({
             outcome: outcome.status === "aborted" ? "aborted" : "failed",
           });
+          // Why the last step stopped (out of tokens, refused), unless the
+          // stream's error already said.
+          if (!streamError) report({ errorType: `finish_${finishReason}` });
         }
         report({ done: true });
       },
