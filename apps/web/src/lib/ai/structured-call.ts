@@ -1,4 +1,5 @@
 import "server-only";
+import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import type { AiCostInsert, AiCostType, PricedModelId } from "@plant/shared";
 import { SourceError } from "@plant/sources";
@@ -38,7 +39,7 @@ export async function structuredCall<T>({
   userId,
   importId,
   record,
-  model = (id) => google(id),
+  model = (id) => (id.startsWith("claude-") ? anthropic(id) : google(id)),
   system,
   messages,
   schema,

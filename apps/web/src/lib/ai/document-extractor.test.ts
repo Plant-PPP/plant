@@ -10,6 +10,7 @@ import { captureServerLog } from "@/lib/log/capture-server-log";
 
 import {
   documentExtractor,
+  HEIC_READERS,
   READERS,
   TIEBREAK_MODEL,
 } from "./document-extractor";
@@ -945,4 +946,15 @@ it("logs a failed model call with the import it was reading", async () => {
       "plant.import.id": "i1",
     }),
   );
+});
+
+it("reads a statement with Claude, and a HEIC picture, which Claude does not take, with Gemini", async () => {
+  const answer = reading([row("AAPL", "5")]);
+  await extract(answering(answer));
+  await extract(answering(answer), "image/heic");
+  expect(record.mock.calls.map(([row]) => row.model_id)).toEqual([
+    ...READERS,
+    ...HEIC_READERS,
+  ]);
+  expect(READERS.every((id) => id.startsWith("claude-"))).toBe(true);
 });
