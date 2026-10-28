@@ -24,6 +24,7 @@ const reading = (reader: "document" | "sheet"): SourceReading => ({
     skippedRows: 0,
     disputes: 0,
     leftOut: 0,
+    readPath: null,
     documentKind: null,
   },
 });

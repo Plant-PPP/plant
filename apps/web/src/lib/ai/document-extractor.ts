@@ -613,6 +613,7 @@ export function documentExtractor({
               skippedRows: 0,
               disputes: 0,
               leftOut: 0,
+              readPath: "one_reading",
               documentKind: null,
             },
           };
@@ -633,6 +634,7 @@ export function documentExtractor({
               skippedRows: 0,
               disputes: 0,
               leftOut: survivor.value.leftOut,
+              readPath: "one_reading",
               documentKind: null,
             },
           };
@@ -645,13 +647,17 @@ export function documentExtractor({
             skippedRows: 0,
             disputes: 0,
             leftOut: 0,
+            readPath: "one_reading",
             documentKind: null,
           },
         };
       }
       throw passing ?? errors.find((e) => e !== null);
     }
-    const operationsRead = (documentKind: DocumentKind | null) => {
+    const operationsRead = (
+      documentKind: DocumentKind | null,
+      readPath: "agreed" | "kind_disputed" = "agreed",
+    ) => {
       const merged = mergeOperations(
         one.value.operations,
         two.value.operations,
@@ -664,6 +670,7 @@ export function documentExtractor({
           skippedRows: merged.cut,
           disputes: 0,
           leftOut: Math.max(one.value.leftOut, two.value.leftOut),
+          readPath,
           documentKind,
         },
       };
@@ -683,6 +690,7 @@ export function documentExtractor({
           skippedRows: merged.cut,
           disputes: 0,
           leftOut: 0,
+          readPath: "agreed",
           documentKind: one.value.kind,
         },
       };
@@ -737,7 +745,7 @@ export function documentExtractor({
       draft.rows.length === 0 &&
       one.value.operations.length + two.value.operations.length > 0
     ) {
-      return operationsRead(documentKind);
+      return operationsRead(documentKind, "kind_disputed");
     }
     return {
       draft: holdingsOf(draft, documentKind),
@@ -747,6 +755,7 @@ export function documentExtractor({
         skippedRows: cut,
         disputes: disputed,
         leftOut: 0,
+        readPath: documentKind ? "agreed" : "kind_disputed",
         documentKind,
       },
     };

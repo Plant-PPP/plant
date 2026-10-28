@@ -107,6 +107,7 @@ it("reads the holdings and costs the call to the user", async () => {
     skippedRows: 0,
     disputes: 0,
     leftOut: 0,
+    readPath: "agreed",
     documentKind: "account_statement",
   });
   expect(draft).toEqual({
@@ -781,6 +782,7 @@ it("reads operations when one reader calls the document a ticket and the other a
   const reading = await run();
   if (!("operations" in reading)) throw new Error("read as holdings");
   expect(reading.operations).toHaveLength(1);
+  expect(reading.read.readPath).toBe("agreed");
 });
 
 it("keeps a lone reader's operations, every one low, when the other fails", async () => {
@@ -890,6 +892,7 @@ it("keeps a log's rows when one reader takes it for a loan's statement", async (
   ]);
   expect(operations).toHaveLength(1);
   expect(read.documentKind).toBeNull();
+  expect(read.readPath).toBe("kind_disputed");
 });
 
 it("keeps a lone reader's log rows when it calls the document something else", async () => {
@@ -903,6 +906,7 @@ it("keeps a lone reader's log rows when it calls the document something else", a
   const reading = await run();
   if (!("operations" in reading)) throw new Error("read as holdings");
   expect(reading.operations).toHaveLength(1);
+  expect(reading.read.readPath).toBe("one_reading");
 });
 
 it("logs a failed model call with the import it was reading", async () => {

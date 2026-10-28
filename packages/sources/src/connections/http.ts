@@ -136,6 +136,7 @@ export function holdingsReading(
       skippedRows: skipped + Math.max(0, rows.length - DRAFT_ROW_LIMIT),
       disputes: 0,
       leftOut: 0,
+      readPath: null,
       documentKind: null,
     },
   };
@@ -155,6 +156,7 @@ export function operationsReading(
       skippedRows: skipped,
       disputes: 0,
       leftOut: 0,
+      readPath: null,
       documentKind: null,
     },
   };

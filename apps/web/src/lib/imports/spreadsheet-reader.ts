@@ -90,6 +90,7 @@ export function spreadsheetReader({
         skippedRows: reading.skippedRows,
         disputes: 0,
         leftOut: 0,
+        readPath: null,
         documentKind: null,
       },
     };
