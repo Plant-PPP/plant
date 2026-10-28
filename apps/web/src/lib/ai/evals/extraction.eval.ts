@@ -1,6 +1,7 @@
-// The extraction eval against the real models, over the test documents in
-// evals/local-docs/, which never enter the repo. Not part of `pnpm test`;
-// skipped without GOOGLE_GENERATIVE_AI_API_KEY or without documents.
+// The extraction eval against the real models, over the made-up documents in
+// fixtures/ and the test documents in evals/local-docs/, which never enter
+// the repo. Not part of `pnpm test`; skipped without
+// GOOGLE_GENERATIVE_AI_API_KEY.
 //
 //   pnpm --filter @plant/web eval:extraction
 
@@ -23,7 +24,10 @@ import { spreadsheetReader } from "@/lib/imports/spreadsheet-reader";
 import { columnMapper } from "../column-mapper";
 import { documentExtractor } from "../document-extractor";
 
-const DOCS = join(__dirname, "../../../../../../evals/local-docs");
+const FOLDERS = [
+  join(__dirname, "fixtures"),
+  join(__dirname, "../../../../../../evals/local-docs"),
+];
 
 const TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -38,15 +42,16 @@ const TYPES: Record<string, string> = {
 };
 
 // Each document with its expected reading next to it.
-const documents = existsSync(DOCS)
-  ? readdirSync(DOCS).flatMap((name) => {
+const documents = FOLDERS.filter((folder) => existsSync(folder)).flatMap(
+  (folder) =>
+    readdirSync(folder).flatMap((name) => {
       const type = TYPES[extname(name).toLowerCase()];
-      const expected = join(DOCS, `${name}.expected.json`);
+      const expected = join(folder, `${name}.expected.json`);
       return type && existsSync(expected)
-        ? [{ name, type, path: join(DOCS, name), expected }]
+        ? [{ name, type, path: join(folder, name), expected }]
         : [];
-    })
-  : [];
+    }),
+);
 
 // Mappings kept in memory for the run, so each spreadsheet maps its columns.
 const mappings: ColumnMappingsPort = {
@@ -62,13 +67,16 @@ const source = fileUploadSource({
   }),
 });
 
-const run =
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY && documents.length > 0
-    ? describe
-    : describe.skip;
+const run = process.env.GOOGLE_GENERATIVE_AI_API_KEY ? describe : describe.skip;
 
 run("extraction", () => {
-  const scores: { name: string; score: ReadingScore; disputes: number }[] = [];
+  const scores: {
+    name: string;
+    score: ReadingScore;
+    disputes: number;
+    leftOut: number;
+    wantLeftOut: number | undefined;
+  }[] = [];
 
   it.each(documents)(
     "reads $name",
@@ -84,15 +92,19 @@ run("extraction", () => {
         institution: name.split(/[-_.]/)[0] ?? "eval",
         lastAttempt: true,
       });
-      // A document read as operations lists no holdings to score.
+      // A document read as operations lists no holdings, and one read as
+      // holdings no operations.
       const draft =
         "draft" in reading
           ? reading.draft
           : { documentDate: null, rows: [], totals: [] };
+      const operations = "operations" in reading ? reading.operations : [];
       scores.push({
         name,
-        score: scoreReading(want, draft),
+        score: scoreReading(want, draft, operations),
         disputes: reading.read.disputes,
+        leftOut: reading.read.leftOut,
+        wantLeftOut: want.leftOut,
       });
     },
     300_000,
@@ -101,10 +113,11 @@ run("extraction", () => {
   afterAll(() => {
     // Names and counts only: the documents' figures stay out of the output.
     const lines = scores.map(
-      ({ name, score, disputes }) =>
+      ({ name, score, disputes, leftOut, wantLeftOut }) =>
         `${name}: ${score.right} right, ${score.flagged} flagged, ` +
         `${score.wrong.length} wrong, ${score.extra.length} extra of ${score.rows} rows; ` +
-        `totals ${score.totalsRight}/${score.totals}; ${disputes} disputes`,
+        `totals ${score.totalsRight}/${score.totals}; ${disputes} disputes; ` +
+        `left out ${leftOut}${wantLeftOut === undefined ? "" : `/${wantLeftOut}`}`,
     );
     const bar = meetsTheBar(scores.map(({ score }) => score));
     lines.push(

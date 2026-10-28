@@ -106,6 +106,7 @@ it("reads the holdings and costs the call to the user", async () => {
     mapping: "none",
     skippedRows: 0,
     disputes: 0,
+    leftOut: 0,
     documentKind: "account_statement",
   });
   expect(draft).toEqual({
@@ -792,6 +793,116 @@ it("keeps a lone reader's operations, every one low, when the other fails", asyn
   expect(reading.operations).toEqual([
     expect.objectContaining({ symbol: "GGAL", confidence: "low" }),
   ]);
+});
+
+// A row of an exchange's log as the model tells it: what it is and its units
+// with their sign.
+const logRow = (event: string, symbol: string, units: string, extra = {}) =>
+  operation({
+    event,
+    symbol,
+    units,
+    kind: null,
+    quantity: null,
+    price: null,
+    charges: null,
+    reference: null,
+    currency: "USD",
+    ...extra,
+  });
+
+const readLog = async (rows: object[], kinds = ["operations_list"]) => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading(rows, kinds[0]),
+    [READERS[1]]: operationsReading(rows, kinds[1] ?? kinds[0]),
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  return reading;
+};
+
+it("reads a trade's fills by the sign of their units", async () => {
+  const { operations } = await readLog([
+    logRow("trade", "USDT", "-4000", { price: "1" }),
+    logRow("trade", "BTC", "+0.0472", { price: "84745.76" }),
+  ]);
+  expect(operations).toEqual([
+    expect.objectContaining({ kind: "sale", symbol: "USDT", quantity: "4000" }),
+    expect.objectContaining({
+      kind: "purchase",
+      symbol: "BTC",
+      quantity: "0.0472",
+    }),
+  ]);
+});
+
+it("leaves out what changes nothing held, counted", async () => {
+  const { operations, read } = await readLog([
+    logRow("internal", "USDT", "3000"),
+    logRow("collateral", "BTC", "-0.09"),
+    logRow("interest", "USDT", "0.79"),
+    logRow("deposit", "BTC", "0.1", { price: "81000" }),
+  ]);
+  expect(operations).toEqual([
+    expect.objectContaining({
+      kind: "adjustment",
+      symbol: "BTC",
+      quantity: "0.1",
+      price: "81000",
+    }),
+  ]);
+  expect(read.leftOut).toBe(3);
+});
+
+it("leaves units that left the account for the review to name, its fee a row of its own", async () => {
+  const { operations } = await readLog([
+    logRow("withdrawal", "BTC", "-0.09", { feeUnits: "0.00005" }),
+    logRow("loan_repayment", "USDT", "-1500"),
+  ]);
+  expect(operations).toEqual([
+    expect.objectContaining({ kind: null, symbol: "BTC", quantity: "0.09" }),
+    expect.objectContaining({
+      kind: null,
+      symbol: "BTC",
+      quantity: "0.00005",
+      reference: null,
+    }),
+    expect.objectContaining({ kind: null, symbol: "USDT", quantity: "1500" }),
+  ]);
+});
+
+it("reads a ticket's operations as before when no row says what it is", async () => {
+  const { operations } = await readLog([operation()], ["trade_ticket"]);
+  expect(operations).toEqual([
+    expect.objectContaining({
+      kind: "purchase",
+      quantity: "100",
+      price: "5000",
+    }),
+  ]);
+});
+
+it("keeps a log's rows when one reader takes it for a loan's statement", async () => {
+  const rows = [logRow("loan_repayment", "USDT", "-1500")];
+  const { operations, read } = await readLog(rows, [
+    "operations_list",
+    "loan_statement",
+  ]);
+  expect(operations).toHaveLength(1);
+  expect(read.documentKind).toBeNull();
+});
+
+it("keeps a lone reader's log rows when it calls the document something else", async () => {
+  const { run } = byModel({
+    [READERS[0]]: operationsReading(
+      [logRow("deposit", "BTC", "0.1", { price: "81000" })],
+      "other",
+    ),
+    [READERS[1]]: "not json",
+  });
+  const reading = await run();
+  if (!("operations" in reading)) throw new Error("read as holdings");
+  expect(reading.operations).toHaveLength(1);
 });
 
 it("logs a failed model call with the import it was reading", async () => {

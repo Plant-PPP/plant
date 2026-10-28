@@ -1,0 +1,30 @@
+{
+  "operations": [
+    { "date": "2026-09-18", "kind": null, "symbol": "BTC", "quantity": "0.05" },
+    {
+      "date": "2026-09-18",
+      "kind": null,
+      "symbol": "BTC",
+      "quantity": "0.00004"
+    },
+    {
+      "date": "2026-09-18",
+      "kind": null,
+      "symbol": "USDT",
+      "quantity": "2100"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "adjustment",
+      "symbol": "USDT",
+      "quantity": "2500"
+    },
+    {
+      "date": "2026-09-12",
+      "kind": "adjustment",
+      "symbol": "BTC",
+      "quantity": "0.08"
+    }
+  ],
+  "leftOut": 5
+}
