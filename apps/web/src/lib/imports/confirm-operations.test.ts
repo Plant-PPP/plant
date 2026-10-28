@@ -378,3 +378,145 @@ it("refuses a transfer whose units the other account already shows coming in", (
     rowId: "send",
   });
 });
+
+describe("debt payments", () => {
+  const LOAN = {
+    id: "d1",
+    currency: null,
+    uva: false,
+    instrument_symbol: "AAPL",
+  };
+  const DOLLARS = {
+    id: "d2",
+    currency: "USD" as const,
+    uva: false,
+    instrument_symbol: null,
+  };
+  const UVA = {
+    id: "d3",
+    currency: "ARS" as const,
+    uva: true,
+    instrument_symbol: null,
+  };
+  const payable = {
+    debts: [LOAN, DOLLARS, UVA],
+    cash: [
+      { id: "c1", accountId: ACCOUNT, currency: "USD" as const, amount: "800" },
+    ],
+  };
+  const payment = (id: string, extra: Partial<ImportOperationRow> = {}) =>
+    row(id, {
+      kind: null,
+      debtPayment: true,
+      payDebtId: "d2",
+      symbol: "",
+      quantity: "100",
+      price: null,
+      date: "2026-09-16",
+      ...extra,
+    });
+  const event = (date: string, amount: string) => ({
+    kind: "payment",
+    date,
+    amount,
+    annual_rate: null,
+    settles: false,
+  });
+
+  it("pays a debt on its own, with nothing out of the account", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [payment("paid")],
+      newId,
+      payable,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(written.operations).toEqual([]);
+    expect(written.payments).toEqual([
+      { liability_id: "d2", event: event("2026-09-16", "100"), cash: null },
+    ]);
+  });
+
+  it("pays a crypto loan with the units that left the account", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [
+        row("buy"),
+        payment("paid", {
+          kind: "adjustment",
+          direction: "out",
+          payDebtId: "d1",
+          quantity: "2",
+        }),
+      ],
+      newId,
+      payable,
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(heldOn(written.state, ACCOUNT, "2026-09-16")).toEqual(
+      new Map([["AAPL", "3"]]),
+    );
+    expect(written.payments).toEqual([
+      { liability_id: "d1", event: event("2026-09-16", "2"), cash: null },
+    ]);
+  });
+
+  it("pays a debt in a currency from the account's one cash holding in it", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [payment("paid", { kind: "adjustment", direction: "out" })],
+      newId,
+      payable,
+    );
+    expect(written.payments).toEqual([
+      {
+        liability_id: "d2",
+        event: event("2026-09-16", "100"),
+        cash: { holding_id: "c1", take: true, expected: "800" },
+      },
+    ]);
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [payment("paid", { kind: "adjustment", direction: "out" })],
+        newId,
+        { ...payable, cash: [] },
+      ),
+    ).toMatchObject({ result: { ok: false, code: "no_cash" }, rowId: "paid" });
+  });
+
+  it("refuses a debt it may not pay, and a UVA debt from the account's cash", () => {
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [payment("paid", { payDebtId: "card" })],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({
+      result: { ok: false, code: "debt_not_found" },
+      rowId: "paid",
+      payments: [],
+    });
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [
+          payment("paid", {
+            kind: "adjustment",
+            direction: "out",
+            payDebtId: "d3",
+          }),
+        ],
+        newId,
+        payable,
+      ),
+    ).toMatchObject({ result: { ok: false, code: "no_cash_link" } });
+  });
+});

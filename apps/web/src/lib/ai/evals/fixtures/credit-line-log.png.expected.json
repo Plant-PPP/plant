@@ -4,7 +4,8 @@
       "date": "2026-09-18",
       "kind": null,
       "symbol": "USDT",
-      "quantity": "2100"
+      "quantity": "2100",
+      "debtPayment": true
     },
     {
       "date": "2026-09-12",

@@ -93,6 +93,7 @@ it("counts what the kept operations move and those the account already held", ()
     row({ id: "in", kind: "adjustment", direction: "in" }),
     row({ id: "held" }),
     row({ id: "dropped", discarded: true }),
+    row({ id: "repaid", kind: null, debtPayment: true, payDebtId: "d1" }),
   ];
   const toWrite = reviewed.map((each) =>
     each.id === "held" ? { ...each, discarded: true } : each,
@@ -100,6 +101,30 @@ it("counts what the kept operations move and those the account already held", ()
   expect(keptCounts(reviewed, toWrite)).toEqual({
     transfers: 1,
     unitsOut: 1,
+    debtPayments: 1,
     loaded: 1,
   });
+});
+
+it("asks a repayment for its amount and debt, never an instrument", () => {
+  const payment = row({
+    kind: null,
+    debtPayment: true,
+    symbol: "",
+    quantity: null,
+    price: null,
+  });
+  expect(missingFields(payment, TODAY)).toEqual(["quantity", "debt"]);
+  expect(
+    missingFields(
+      {
+        ...payment,
+        kind: "adjustment",
+        direction: "out",
+        quantity: "5",
+        payDebtId: "d1",
+      },
+      TODAY,
+    ),
+  ).toEqual([]);
 });

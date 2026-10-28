@@ -1,6 +1,7 @@
 import { exactUnitPrice, REFERENCE_MAX } from "@plant/core";
 import {
   compareDecimals,
+  type Currency,
   currencySchema,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
@@ -8,6 +9,7 @@ import {
 import { z } from "zod";
 
 import type { MovementResult } from "@/lib/holdings/movements-input";
+import type { HeldCash } from "@/lib/imports/cash";
 import { allRows, type Ledger, writeOperation } from "@/lib/ledger/ledger";
 
 import {
@@ -30,10 +32,12 @@ const reviewedSchema = z.union([
     id: z.string(),
     discarded: z.literal(false),
     date: z.iso.date(),
-    kind: z.enum(IMPORT_OPERATION_KINDS),
+    kind: z.enum(IMPORT_OPERATION_KINDS).nullable(),
     direction: z.enum(["in", "out"]).nullable().optional(),
     counterpartId: z.string().nullable().optional(),
-    symbol: z.string().min(1),
+    debtPayment: z.boolean().optional(),
+    payDebtId: z.string().nullable().optional(),
+    symbol: z.string(),
     quantity: z.string().nullable(),
     price: z.string().nullable(),
     amount: z.string().nullable(),
@@ -46,21 +50,48 @@ const reviewedSchema = z.union([
 const complete = (row: ImportOperationRow) =>
   row.discarded ||
   (reviewKindOf(row)?.needs.every((need) =>
-    need === "counterpart"
-      ? Boolean(row.counterpartId)
-      : positiveDecimalSchema.safeParse(row[need]).success,
+    need === "symbol"
+      ? row.symbol !== ""
+      : need === "counterpart"
+        ? Boolean(row.counterpartId)
+        : need === "debt"
+          ? Boolean(row.payDebtId)
+          : positiveDecimalSchema.safeParse(row[need]).success,
   ) ??
     false);
 
 // Within a day, units come in before income is counted and before units go
-// out, so a day's sale or withdrawal finds that day's deposit or purchase;
-// across days the dates order them, oldest first.
+// out, so a day's sale, withdrawal or payment finds that day's deposit or
+// purchase; across days the dates order them, oldest first.
 const dayOrder = (row: ImportOperationRow) =>
   row.kind === "dividend" || row.kind === "coupon"
     ? 1
-    : row.kind === "sale" || takesUnitsOut(row)
+    : row.kind === "sale" || row.debtPayment || takesUnitsOut(row)
       ? 2
       : 0;
+
+// A debt an import's payment may pay: one of the user's that is not a card,
+// in its unit.
+export type PayableDebt = {
+  id: string;
+  currency: Currency | null;
+  uva: boolean;
+  instrument_symbol: string | null;
+};
+
+// A payment confirm_import records on a debt, as record_liability_event
+// takes it: paid from the account's cash, when it was, taking it.
+export type DebtPayment = {
+  liability_id: string;
+  event: {
+    kind: "payment";
+    date: string;
+    amount: string;
+    annual_rate: null;
+    settles: false;
+  };
+  cash: { holding_id: string; take: true; expected: string } | null;
+};
 
 // The portfolio of the account's holding of an instrument with the latest
 // movement on or before a day, open or closed; none when it never had one.
@@ -101,11 +132,22 @@ export function writeImportOperations<S extends Ledger>(
   item: ImportToWrite,
   rows: readonly ImportOperationRow[],
   newId: () => string,
-): ImportWrite<S> & { rowId?: string } {
+  // The debts a payment may pay and the cash it may come from.
+  payable: { debts: readonly PayableDebt[]; cash: readonly HeldCash[] } = {
+    debts: [],
+    cash: [],
+  },
+): ImportWrite<S> & { rowId?: string; payments: DebtPayment[] } {
   const refuse = (
     result: Extract<MovementResult, { ok: false }>,
     rowId?: string,
-  ) => ({ state, result, operations: [], ...(rowId && { rowId }) });
+  ) => ({
+    state,
+    result,
+    operations: [],
+    payments: [],
+    ...(rowId && { rowId }),
+  });
   const account = state.accounts.find((each) => each.id === item.accountId);
   if (!account) return refuse({ ok: false, code: "not_found" });
   if (
@@ -128,7 +170,54 @@ export function writeImportOperations<S extends Ledger>(
 
   let next = state;
   const operations: string[] = [];
-  for (const row of kept) {
+  const payments: DebtPayment[] = [];
+  for (const reviewed of kept) {
+    let row = reviewed;
+    if (reviewed.debtPayment) {
+      const debt = payable.debts.find((each) => each.id === reviewed.payDebtId);
+      if (!debt) {
+        return refuse({ ok: false, code: "debt_not_found" }, reviewed.id);
+      }
+      const fromAccount = reviewed.kind === "adjustment";
+      let cash: DebtPayment["cash"] = null;
+      // A debt in a currency paid from the account takes its one cash
+      // holding in that currency.
+      if (fromAccount && debt.instrument_symbol === null) {
+        if (debt.currency === null || debt.uva) {
+          return refuse({ ok: false, code: "no_cash_link" }, reviewed.id);
+        }
+        const held = payable.cash.filter(
+          (each) =>
+            each.accountId === account.id && each.currency === debt.currency,
+        );
+        if (held.length !== 1) {
+          return refuse({ ok: false, code: "no_cash" }, reviewed.id);
+        }
+        cash = {
+          holding_id: held[0]!.id,
+          take: true,
+          expected: held[0]!.amount,
+        };
+      }
+      payments.push({
+        liability_id: debt.id,
+        event: {
+          kind: "payment",
+          date: reviewed.date!,
+          amount: reviewed.quantity!,
+          annual_rate: null,
+          settles: false,
+        },
+        cash,
+      });
+      if (!fromAccount || debt.instrument_symbol === null) continue;
+      // A crypto loan paid from the account: its units left it.
+      row = {
+        ...reviewed,
+        symbol: debt.instrument_symbol,
+        debtPayment: false,
+      };
+    }
     const kind = row.kind!;
     const date = row.date!;
     const instrument = next.instruments.find(
@@ -261,8 +350,13 @@ export function writeImportOperations<S extends Ledger>(
     if (!result.ok) return refuse(result, row.id);
     operations.push(...operationIds);
   }
-  if (operations.length > CONFIRM_OPERATION_LIMIT) {
+  if (operations.length + payments.length > CONFIRM_OPERATION_LIMIT) {
     return refuse({ ok: false, code: "too_many_operations" });
   }
-  return { state: next, result: { ok: true, id: item.id }, operations };
+  return {
+    state: next,
+    result: { ok: true, id: item.id },
+    operations,
+    payments,
+  };
 }

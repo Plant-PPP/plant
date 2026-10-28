@@ -42,12 +42,17 @@ const item = (debts: ImportDebtRow[]): ImportItem => ({
   createdOn: "2026-10-14",
 });
 
-const render = (debts: ImportDebtRow[], cards: CardDebt[] = []) =>
+const render = (
+  debts: ImportDebtRow[],
+  cards: CardDebt[] = [],
+  loans: Parameters<typeof ImportDebtsReview>[0]["loans"] = [],
+) =>
   renderToStaticMarkup(
     <ImportDebtsReview
       item={item(debts)}
       institution="Galicia"
       cards={cards}
+      loans={loans}
       backHref="/import"
       doneHref="/debts"
       actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
@@ -95,6 +100,7 @@ it("says how many debts the reading left out", () => {
         item={{ ...item([debt()]), skippedRows }}
         institution="Galicia"
         cards={[]}
+        loans={[]}
         backHref="/import"
         doneHref="/debts"
         actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
@@ -146,4 +152,45 @@ it("asks a crypto loan for its crypto before confirming", () => {
   ]);
   expect(html).toContain("Ingresá el ticker, como BTC");
   expect(confirmButton(html)).toContain('disabled=""');
+});
+
+it("sets aside a loan already in Deudas", () => {
+  const loan = debt({
+    kind: "usd_debt",
+    label: "Línea de crédito",
+    lender: "Exchange A",
+    currency: "USD",
+    minimumPayment: null,
+    dueDate: null,
+    accrues: false,
+  });
+  const html = render(
+    [loan],
+    [],
+    [
+      {
+        label: "Mi línea",
+        lender: "Exchange A",
+        currency: "USD",
+        instrument_symbol: null,
+      },
+    ],
+  );
+  expect(html).toContain("Ya está cargada en Deudas");
+  expect(html).toContain('aria-label="Recuperar la deuda 1"');
+  // Another unit is another loan.
+  expect(
+    render(
+      [loan],
+      [],
+      [
+        {
+          label: "Mi línea",
+          lender: "Exchange A",
+          currency: null,
+          instrument_symbol: "BTC",
+        },
+      ],
+    ),
+  ).not.toContain("Ya está cargada en Deudas");
 });

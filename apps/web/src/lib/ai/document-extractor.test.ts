@@ -744,6 +744,7 @@ it("leaves a field the readers disagree on for the review", async () => {
       date: "2026-09-01",
       kind: "purchase",
       direction: null,
+      debtPayment: false,
       symbol: "GGAL",
       quantity: null,
       price: "5000",
@@ -858,7 +859,7 @@ it("leaves out what changes nothing held, counted", async () => {
   expect(read.leftOut).toBe(3);
 });
 
-it("reads units sent out of the account as leaving it, a fee in them a row of its own", async () => {
+it("reads units sent out of the account as leaving it, a fee in them a row of its own, a repayment as a debt payment", async () => {
   const { operations } = await readLog([
     logRow("withdrawal", "BTC", "-0.09", { feeUnits: "0.00005" }),
     logRow("loan_repayment", "USDT", "-1500"),
@@ -882,7 +883,12 @@ it("reads units sent out of the account as leaving it, a fee in them a row of it
       direction: null,
       symbol: "USDT",
       quantity: "1500",
+      debtPayment: true,
     }),
+  ]);
+  expect(operations.slice(0, 2)).toEqual([
+    expect.objectContaining({ debtPayment: false }),
+    expect.objectContaining({ debtPayment: false }),
   ]);
 });
 

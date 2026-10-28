@@ -12,7 +12,8 @@ const decimal = z.string().regex(/^\d+(\.\d+)?$/);
 // evals/local-docs/<name>.expected.json: each holding's symbol, units and
 // currency, and the holdings totals the document prints; or, for a document
 // of operations, each operation's day, kind (null for one the review names)
-// and an adjustment's direction, instrument and units, and how many rows of a log it leaves out.
+// and an adjustment's direction, whether it repays a debt, instrument and
+// units, and how many rows of a log it leaves out.
 export const expectedReadingSchema = z
   .object({
     rows: z
@@ -33,6 +34,7 @@ export const expectedReadingSchema = z
             date: z.iso.date(),
             kind: z.enum(OPERATION_KINDS).nullable(),
             direction: z.enum(["in", "out"]).nullable().default(null),
+            debtPayment: z.boolean().default(false),
             symbol: z.string().min(1),
             quantity: decimal,
           })
@@ -70,9 +72,10 @@ const operationKeyOf = (row: {
   date: string | null;
   kind: string | null;
   direction: string | null;
+  debtPayment: boolean;
   symbol: string | null;
 }) =>
-  `${row.date}|${row.kind ?? "?"}${row.direction ? ` ${row.direction}` : ""}|${row.symbol?.trim().toUpperCase()}`;
+  `${row.date}|${row.kind ?? "?"}${row.direction ? ` ${row.direction}` : ""}${row.debtPayment ? " payment" : ""}|${row.symbol?.trim().toUpperCase()}`;
 
 // How a reading did against a document's expected holdings. A row is right
 // when the reading lists its symbol and currency with the same units, or

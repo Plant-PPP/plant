@@ -1,4 +1,9 @@
-import { draftAssetClassSchema, importDraftSchema, SourceError } from "./draft";
+import {
+  draftAssetClassSchema,
+  draftOperationSchema,
+  importDraftSchema,
+  SourceError,
+} from "./draft";
 
 const row = {
   symbol: "AAPL",
@@ -105,4 +110,44 @@ describe("SourceError", () => {
 
 it("takes a draft row as an instrument or as cash, as the database names them", () => {
   expect(draftAssetClassSchema.options).toEqual(["instrument", "cash"]);
+});
+
+describe("draftOperationSchema", () => {
+  const operation = {
+    date: "2026-09-01",
+    kind: null,
+    direction: null,
+    symbol: "USDT",
+    quantity: "500",
+    price: null,
+    amount: null,
+    charges: null,
+    reference: null,
+    currency: "USD",
+    confidence: "medium",
+    page: 1,
+    debtPayment: true,
+  };
+
+  it("takes a debt payment with no kind, or as units out", () => {
+    expect(draftOperationSchema.safeParse(operation).success).toBe(true);
+    expect(
+      draftOperationSchema.safeParse({
+        ...operation,
+        kind: "adjustment",
+        direction: "out",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a debt payment as units in or a trade", () => {
+    for (const patch of [
+      { kind: "adjustment", direction: "in" },
+      { kind: "sale" },
+    ]) {
+      expect(
+        draftOperationSchema.safeParse({ ...operation, ...patch }).success,
+      ).toBe(false);
+    }
+  });
 });

@@ -136,6 +136,15 @@ export type MovementResult =
         | "already_loaded"
         // An import that writes more operations than one confirmation takes.
         | "too_many_operations"
+        // An imported payment on a debt that is not one of the user's (or is
+        // a card), dated before the debt opened or after it was paid off,
+        // or paid from cash the account does not hold once in its currency.
+        | "debt_not_found"
+        | "debt_before_opening"
+        | "debt_settled"
+        | "no_cash"
+        | "no_cash_link"
+        | "insufficient_cash"
         | Extract<
             PortfolioSetupGuardHint,
             "portfolio_archived" | "source_connection_archived"

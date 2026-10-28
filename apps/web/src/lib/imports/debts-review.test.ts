@@ -1,5 +1,6 @@
 import {
   cardFor,
+  debtPaid,
   debtsComplete,
   loanInputOf,
   missingDebtFields,
@@ -111,4 +112,36 @@ it("makes a loan the debt Deudas stores, with no installment when it accrues", (
 it("never proposes a card debt for a loan", () => {
   const cards = [{ id: "c1", label: "Visa", lender: null, currency: "ARS" }];
   expect(cardFor(debt({ kind: "personal_loan" }), cards)).toBeNull();
+});
+
+describe("debtPaid", () => {
+  const debt = (
+    id: string,
+    extra: Partial<Parameters<typeof debtPaid>[2][number]> = {},
+  ) => ({
+    id,
+    label: "Préstamo",
+    lender: null,
+    currency: "USD",
+    uva: false,
+    instrument_symbol: null,
+    ...extra,
+  });
+
+  it("picks the debt in the repayment's unit named as the account, else the only one", () => {
+    const line = debt("line", { lender: "Exchange A" });
+    const other = debt("other", { lender: "Banco" });
+    expect(debtPaid("USD", "Exchange A", [line, other])?.id).toBe("line");
+    expect(debtPaid("USD", "Exchange B", [line])?.id).toBe("line");
+    expect(debtPaid("USD", "Exchange B", [line, other])).toBeNull();
+  });
+
+  it("never takes a UVA debt for a peso repayment, nor a crypto loan for its currency", () => {
+    const mortgage = debt("uva", { currency: "ARS", uva: true });
+    const crypto = debt("btc", { currency: null, instrument_symbol: "BTC" });
+    expect(debtPaid("ARS", "Banco", [mortgage])).toBeNull();
+    expect(debtPaid("UVA", "Banco", [mortgage])?.id).toBe("uva");
+    expect(debtPaid("BTC", "Exchange A", [crypto])?.id).toBe("btc");
+    expect(debtPaid("USD", "Exchange A", [crypto])).toBeNull();
+  });
 });

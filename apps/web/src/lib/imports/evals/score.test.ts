@@ -133,6 +133,7 @@ describe("scoreReading over operations", () => {
     date: "2026-09-01",
     kind: "purchase",
     direction: null,
+    debtPayment: false,
     symbol: "BTC",
     quantity: "0.05",
     price: null,
@@ -167,6 +168,20 @@ describe("scoreReading over operations", () => {
     expect(score.right).toBe(1);
     expect(score.wrong).toEqual(["2026-09-01|purchase|BTC"]);
     expect(score.extra).toEqual(["2026-09-01|sale|BTC"]);
+  });
+
+  it("tells a debt payment from a row the review names", () => {
+    const score = scoreReading(wanted, draft([]), [
+      operation(),
+      operation({
+        date: "2026-09-02",
+        kind: null,
+        quantity: "0.02",
+        debtPayment: true,
+      }),
+    ]);
+    expect(score.wrong).toEqual(["2026-09-02|?|BTC"]);
+    expect(score.extra).toEqual(["2026-09-02|? payment|BTC"]);
   });
 
   it("takes a document with neither holdings nor operations for a mistake", () => {

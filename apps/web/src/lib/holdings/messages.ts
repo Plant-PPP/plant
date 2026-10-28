@@ -149,6 +149,14 @@ export const MOVEMENT_MESSAGES: Record<
     "Esta operación movió el efectivo de la cuenta: para cambiarla, borrala y volvé a importar los movimientos.",
   counterpart_not_found:
     "La cuenta de destino del traspaso ya no está abierta. Elegí otra.",
+  debt_not_found: "Esa deuda ya no está en Deudas. Elegí otra.",
+  debt_before_opening: "El pago es anterior al inicio de la deuda.",
+  debt_settled: "La deuda ya estaba saldada en esa fecha.",
+  no_cash:
+    "La cuenta no tiene un único saldo en la moneda de la deuda para tomar el pago. Elegí Pago de deuda y ajustá el efectivo a mano.",
+  no_cash_link:
+    "Esa deuda no se paga con efectivo de la cuenta. Elegí Pago de deuda.",
+  insufficient_cash: "La cuenta no tiene efectivo suficiente para ese pago.",
   too_many_operations:
     "Son demasiados movimientos para confirmar juntos. Descartá algunos y cargalos en otra importación.",
   already_loaded:

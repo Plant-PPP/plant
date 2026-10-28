@@ -229,14 +229,14 @@ isOneToOne: false
                   ]
                 },"import_operations": {
                   Row: {
-                    "amount": number | null,"charges": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"counterpart_connection_id": string | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string | null,"direction": Database["public"]['Enums']["movement_direction"] | null,"id": string,"import_id": string,"kind": Database["public"]['Enums']["movement_kind"] | null,"position": number,"price": number | null,"quantity": number | null,"reference": string | null,"source_page": number | null,"symbol": string | null,"user_id": string
+                    "amount": number | null,"charges": number | null,"confidence": Database["public"]['Enums']["import_confidence"],"counterpart_connection_id": string | null,"created_at": string,"currency": Database["public"]['Enums']["currency"],"date": string | null,"debt_payment": boolean,"direction": Database["public"]['Enums']["movement_direction"] | null,"id": string,"import_id": string,"kind": Database["public"]['Enums']["movement_kind"] | null,"pays_liability_id": string | null,"position": number,"price": number | null,"quantity": number | null,"reference": string | null,"source_page": number | null,"symbol": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount"?: number | null,"charges"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"counterpart_connection_id"?: string | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date"?: string | null,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"id"?: string,"import_id": string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"position": number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id": string
+                    "amount"?: number | null,"charges"?: number | null,"confidence": Database["public"]['Enums']["import_confidence"],"counterpart_connection_id"?: string | null,"created_at"?: string,"currency": Database["public"]['Enums']["currency"],"date"?: string | null,"debt_payment"?: boolean,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"id"?: string,"import_id": string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"pays_liability_id"?: string | null,"position": number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id": string
                   }
                   Update: {
-                    "amount"?: number | null,"charges"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"counterpart_connection_id"?: string | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string | null,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"id"?: string,"import_id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"position"?: number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id"?: string
+                    "amount"?: number | null,"charges"?: number | null,"confidence"?: Database["public"]['Enums']["import_confidence"],"counterpart_connection_id"?: string | null,"created_at"?: string,"currency"?: Database["public"]['Enums']["currency"],"date"?: string | null,"debt_payment"?: boolean,"direction"?: Database["public"]['Enums']["movement_direction"] | null,"id"?: string,"import_id"?: string,"kind"?: Database["public"]['Enums']["movement_kind"] | null,"pays_liability_id"?: string | null,"position"?: number,"price"?: number | null,"quantity"?: number | null,"reference"?: string | null,"source_page"?: number | null,"symbol"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -244,6 +244,12 @@ isOneToOne: false
       columns: ["user_id","counterpart_connection_id"]
 isOneToOne: false
       referencedRelation: "source_connections"
+      referencedColumns: ["user_id","id"]
+    },{
+      foreignKeyName: "import_operations_pays_liability_fkey"
+      columns: ["user_id","pays_liability_id"]
+isOneToOne: false
+      referencedRelation: "liabilities"
       referencedColumns: ["user_id","id"]
     },{
       foreignKeyName: "import_operations_user_id_import_id_fkey"

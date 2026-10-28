@@ -80,7 +80,7 @@ const ROW_EVENTS = [
 // draft's schema afterwards, and a row that fails it is left out.
 const answerSchema = z.object({
   kind: documentKindSchema.describe(
-    "What the document is. account_statement: shows positions or balances, even if it also lists the period's movements or card spending. trade_ticket: a confirmation or detail of one or a few operations (boleto, comprobante, a transaction's detail screen), with no positions. operations_list: a list of an account's purchases, sales, dividends, coupons or deposits over a period, with no positions, an exchange's transaction or history log among them. screenshot: a capture of an app or site showing positions. card_statement: a credit card's spending statement only, with no account balances. loan_statement: a loan's or credit line's statement (a personal loan, a mortgage, a crypto-backed credit line), with what is owed and no holdings. other: anything else.",
+    "What the document is. account_statement: shows positions or balances, even if it also lists the period's movements or card spending. trade_ticket: a confirmation or detail of one or a few operations (boleto, comprobante, a transaction's detail screen), with no positions. operations_list: a list of an account's purchases, sales, dividends, coupons or deposits over a period, with no positions, an exchange's transaction or history log among them, a credit line's own history of disbursements, repayments, interest and collateral too. screenshot: a capture of an app or site showing positions. card_statement: a credit card's spending statement only, with no account balances. loan_statement: a loan's or credit line's statement (a personal loan, a mortgage, a crypto-backed credit line), with what is owed and no holdings, not a list of its events. other: anything else.",
   ),
   documentDate: z
     .string()
@@ -388,11 +388,11 @@ const LEFT_OUT: readonly (typeof ROW_EVENTS)[number][] = [
 // What a row of a log is in the draft, from what it is and the sign of its
 // units: a fill is a purchase when units came in and a sale when they left;
 // units from outside come in as an adjustment, and units sent out, or a fee
-// charged in them, leave as one. A repayment is left for the review to say
-// what it is.
+// charged in them, leave as one. A repayment is a payment on a debt, which the
+// review names; whether its units left this account is the review's to say.
 const fromEvent = (
   operation: AnsweredOperation,
-): Pick<DraftOperation, "kind" | "direction" | "quantity"> => {
+): Pick<DraftOperation, "kind" | "direction" | "quantity" | "debtPayment"> => {
   const units = signed(operation.units);
   const quantity = units?.size ?? decimalOf(operation.quantity);
   switch (operation.event) {
@@ -402,15 +402,28 @@ const fromEvent = (
         direction:
           units === null && operation.kind === "adjustment" ? "in" : null,
         quantity,
+        debtPayment: false,
       };
     case "deposit":
     case "loan_disbursement":
-      return { kind: "adjustment", direction: "in", quantity };
+      return {
+        kind: "adjustment",
+        direction: "in",
+        quantity,
+        debtPayment: false,
+      };
     case "withdrawal":
     case "fee":
-      return { kind: "adjustment", direction: "out", quantity };
+      return {
+        kind: "adjustment",
+        direction: "out",
+        quantity,
+        debtPayment: false,
+      };
+    case "loan_repayment":
+      return { kind: null, direction: null, quantity, debtPayment: true };
     default:
-      return { kind: null, direction: null, quantity };
+      return { kind: null, direction: null, quantity, debtPayment: false };
   }
 };
 
@@ -436,12 +449,13 @@ const toOperations = (
       ? operation.date
       : null;
     // A ticket's or a broker list's adjustment is units that came in.
-    const { kind, direction, quantity } =
+    const { kind, direction, quantity, debtPayment } =
       event === null
         ? {
             kind: operation.kind,
             direction: operation.kind === "adjustment" ? ("in" as const) : null,
             quantity: decimalOf(operation.quantity),
+            debtPayment: false,
           }
         : fromEvent(operation);
     const common = {
@@ -458,6 +472,7 @@ const toOperations = (
       kind,
       direction,
       quantity,
+      debtPayment,
       price: decimalOf(operation.price),
       amount: decimalOf(operation.amount),
       charges: decimalOf(operation.charges, nonNegativeDecimalSchema),
@@ -465,6 +480,7 @@ const toOperations = (
     if (!parsed.success) return [];
     const { price, amount, charges } = parsed.data;
     const kept = [
+      debtPayment || null,
       date,
       kind,
       symbol,
@@ -483,6 +499,7 @@ const toOperations = (
       reference: null,
       kind: "adjustment",
       direction: "out",
+      debtPayment: false,
       quantity: fee,
       price: null,
       amount: null,

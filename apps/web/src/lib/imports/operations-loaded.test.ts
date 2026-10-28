@@ -5,7 +5,11 @@ import {
 } from "@/lib/ledger/ledger-fixture.test-support";
 
 import { writeImportOperations } from "./confirm-operations";
-import { markLoaded, withoutLoaded } from "./operations-loaded";
+import {
+  markLoaded,
+  markPaymentsLoaded,
+  withoutLoaded,
+} from "./operations-loaded";
 import type { ImportOperationRow } from "./review";
 
 const row = (
@@ -176,4 +180,32 @@ it("finds a withdrawal by its transaction number", () => {
   expect(
     loaded(state, [withdrawal("x", { reference: "tx-1", quantity: "9" })]),
   ).toEqual([true]);
+});
+
+it("sets aside a payment its debt already has, once", () => {
+  const payment = (id: string, extra: Partial<ImportOperationRow> = {}) =>
+    row(id, {
+      kind: null,
+      debtPayment: true,
+      payDebtId: "d1",
+      quantity: "500",
+      price: null,
+      reference: null,
+      ...extra,
+    });
+  const marked = markPaymentsLoaded(
+    [
+      payment("same"),
+      payment("again"),
+      payment("other day", { date: "2026-09-16" }),
+      payment("other debt", { payDebtId: "d2" }),
+    ],
+    [{ liability_id: "d1", date: "2026-09-15", amount: "500.00000000" }],
+  );
+  expect(marked.map((each) => each.loaded ?? false)).toEqual([
+    true,
+    false,
+    false,
+    false,
+  ]);
 });

@@ -209,6 +209,9 @@ export type ImportOperationRow = {
   direction?: "in" | "out" | null;
   // The user's account a transfer's units go to.
   counterpartId?: string | null;
+  // Whether it repays a loan, and the user's debt it pays.
+  debtPayment?: boolean;
+  payDebtId?: string | null;
   symbol: string;
   quantity: string | null;
   price: string | null;
@@ -245,6 +248,8 @@ export type ImportDebtRow = {
   confidence: Confidence;
   source: string;
   discarded: boolean;
+  // A loan already in Deudas: it starts discarded.
+  loaded?: boolean;
 };
 
 export type ImportItem = {

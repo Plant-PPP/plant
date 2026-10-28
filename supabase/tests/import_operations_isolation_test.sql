@@ -79,7 +79,7 @@ SELECT set_eq(
         'user_id:INSERT', 'import_id:INSERT', 'position:INSERT', 'date:INSERT', 'kind:INSERT',
         'symbol:INSERT', 'quantity:INSERT', 'price:INSERT', 'amount:INSERT', 'charges:INSERT',
         'reference:INSERT', 'currency:INSERT', 'confidence:INSERT', 'source_page:INSERT',
-        'direction:INSERT'],
+        'direction:INSERT', 'debt_payment:INSERT'],
   'the job writes and replaces a draft of operations, nothing more'
 );
 

@@ -132,6 +132,8 @@ const finalOf = (row: EditedOperation): ImportOperationRow => ({
   kind: row.kind,
   direction: row.direction ?? null,
   counterpartId: row.counterpartId ?? null,
+  debtPayment: row.debtPayment ?? false,
+  payDebtId: row.payDebtId ?? null,
   symbol: row.symbol,
   quantity: parseAmountInput(row.quantityText),
   price: parseAmountInput(row.priceText),
@@ -173,11 +175,12 @@ function typedInvalid(
   // going out, an income's amount, and the charges.
   const trade = movesUnits(row);
   const income = row.kind === "dividend" || row.kind === "coupon";
+  const payment = row.debtPayment ?? false;
   const figures: FigureField[] = [
     ...(trade ? (["quantity", "price"] as const) : []),
-    ...(takesUnitsOut(row) ? (["quantity"] as const) : []),
+    ...(takesUnitsOut(row) || payment ? (["quantity"] as const) : []),
     ...(income ? (["amount"] as const) : []),
-    "charges",
+    ...(payment ? [] : (["charges"] as const)),
   ];
   for (const figure of figures) {
     const text = row[FIGURE_TEXT[figure]];
@@ -201,6 +204,7 @@ export function ImportOperationsReview({
   institution,
   instruments: givenInstruments,
   accounts,
+  debts,
   backHref,
   doneHref,
   actions,
@@ -210,6 +214,8 @@ export function ImportOperationsReview({
   instruments: InstrumentRow[];
   // The user's other open accounts, where a transfer may send units.
   accounts: { id: string; institution: string }[];
+  // The user's debts a repayment may pay, each in its unit.
+  debts: { id: string; label: string; unit: string }[];
   backHref: string;
   doneHref: string;
   actions: OperationsReviewActions;
@@ -244,6 +250,10 @@ export function ImportOperationsReview({
       ),
   );
 
+  const debtOf = (row: ImportOperationRow) =>
+    debts.find((debt) => debt.id === row.payDebtId);
+  const debtNameOf = (row: ImportOperationRow) => debtOf(row)?.label;
+  const debtUnitOf = (row: ImportOperationRow) => debtOf(row)?.unit;
   const finals = rows.map(finalOf);
   const missing = finals.map((row) => new Set(missingFields(row, today)));
   const invalidTyped = rows.map((row) =>
@@ -412,6 +422,7 @@ export function ImportOperationsReview({
     const type = types.get(row.symbol);
     const trade = movesUnits(row);
     const out = takesUnitsOut(row);
+    const payment = row.debtPayment ?? false;
     return (
       <li
         key={row.id}
@@ -427,7 +438,11 @@ export function ImportOperationsReview({
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="grid min-w-0 gap-1">
-            {row.picks ? (
+            {payment ? (
+              <span className="truncate font-medium">
+                {debtNameOf(row) ?? "Pago de deuda"}
+              </span>
+            ) : row.picks ? (
               <InstrumentPicker
                 id={`${pickerId}-${row.id}`}
                 aria-label={`Activo de la operación ${index + 1}`}
@@ -585,10 +600,53 @@ export function ImportOperationsReview({
             </Select>
           </label>
         </div>
-        {row.kind === null ? (
+        {reviewKindOf(row) === null ? (
           <p className="text-muted-foreground text-xs">
             Elegí el tipo para completar el resto.
           </p>
+        ) : payment ? (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <label className="grid gap-1 text-xs sm:col-span-2">
+              <span className="text-muted-foreground">Deuda</span>
+              <Select
+                value={row.payDebtId ?? ""}
+                disabled={row.discarded}
+                onValueChange={(payDebtId) => change(row.id, { payDebtId })}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-label={`Deuda que paga la operación ${index + 1}`}
+                  aria-invalid={invalid(index, "debt")}
+                >
+                  <SelectValue placeholder="Elegí la deuda" />
+                </SelectTrigger>
+                <SelectContent>
+                  {debts.map((debt) => (
+                    <SelectItem key={debt.id} value={debt.id}>
+                      {`${debt.label} (${shownTicker(debt.unit)})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!row.discarded && missing[index]!.has("debt") && (
+                <ProblemText
+                  text={
+                    debts.length === 0
+                      ? "No tenés deudas para pagar: cargala en Deudas"
+                      : "Elegí qué deuda pagó"
+                  }
+                />
+              )}
+            </label>
+            <Figure
+              label={`Monto${debtUnitOf(row) ? ` (${shownTicker(debtUnitOf(row)!)})` : ""}`}
+              aria={`Monto pagado en la operación ${index + 1}`}
+              value={row.quantityText}
+              disabled={row.discarded}
+              problem={problem(index, "quantity")}
+              onChange={(quantityText) => change(row.id, { quantityText })}
+            />
+          </div>
         ) : (
           <div className={cn("grid gap-3", "sm:grid-cols-4")}>
             {trade ? (
@@ -874,7 +932,9 @@ export function ImportOperationsReview({
                             className="block truncate font-medium"
                             title={names.get(row.symbol)}
                           >
-                            {shownTicker(row.symbol)}
+                            {row.debtPayment
+                              ? (debtNameOf(row) ?? "—")
+                              : shownTicker(row.symbol)}
                           </span>
                           {row.loaded && (
                             <span className="text-muted-foreground block">

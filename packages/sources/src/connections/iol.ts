@@ -263,6 +263,7 @@ export function iolConnection({
         date,
         kind,
         direction: null,
+        debtPayment: false,
         symbol,
         quantity: positive(quantity) ? quantity : null,
         price: positive(price) ? price : null,

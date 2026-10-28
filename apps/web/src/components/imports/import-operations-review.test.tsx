@@ -46,6 +46,7 @@ const render = (operations: ImportOperationRow[]) =>
   renderToStaticMarkup(
     <ImportOperationsReview
       accounts={[]}
+      debts={[]}
       item={item(operations)}
       institution="IOL"
       instruments={[
@@ -140,6 +141,7 @@ it("says how many operations the reading left out", () => {
     renderToStaticMarkup(
       <ImportOperationsReview
         accounts={[]}
+        debts={[]}
         item={{ ...item([operation()]), skippedRows }}
         institution="IOL"
         instruments={[]}
@@ -197,6 +199,7 @@ it("words what a sync did not bring by the sync, never a document", () => {
   const html = renderToStaticMarkup(
     <ImportOperationsReview
       accounts={[]}
+      debts={[]}
       item={{
         ...item([operation({ price: null, source: "De la sincronización" })]),
         origin: "sync",
@@ -225,4 +228,36 @@ it("asks for figures above 0 when the reading has a 0", () => {
   ]);
   expect(income).toContain("Ingresá un monto mayor a 0");
   expect(income).not.toContain("Falta en el documento");
+});
+
+it("asks a repayment for the debt it pays, and lists it under the debt once named", () => {
+  const payment = operation({
+    kind: null,
+    debtPayment: true,
+    symbol: "",
+    quantity: "500",
+    price: null,
+    reference: null,
+  });
+  const withDebts = (row: ImportOperationRow) =>
+    renderToStaticMarkup(
+      <ImportOperationsReview
+        accounts={[]}
+        debts={[{ id: "d1", label: "Línea de crédito", unit: "USDT" }]}
+        item={item([row])}
+        institution="Exchange A"
+        instruments={[]}
+        backHref="/import"
+        doneHref="/import"
+        actions={{ confirm: async () => ({ ok: true, id: "i1" }) }}
+      />,
+    );
+  const asked = withDebts(payment);
+  expect(asked).toContain("Para completar (1)");
+  expect(asked).toContain("Elegí qué deuda pagó");
+  expect(asked).not.toContain("Elegí un activo");
+  const named = withDebts({ ...payment, payDebtId: "d1" });
+  expect(named).not.toContain("Para completar");
+  expect(named).toContain("Línea de crédito");
+  expect(confirmButton(named)).not.toContain(' disabled=""');
 });

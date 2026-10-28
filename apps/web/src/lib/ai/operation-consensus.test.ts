@@ -15,6 +15,7 @@ const operation = (extra: Partial<DraftOperation> = {}): DraftOperation => ({
   currency: "ARS",
   confidence: "high",
   page: 1,
+  debtPayment: false,
   ...extra,
 });
 
@@ -114,4 +115,35 @@ it("keeps an adjustment's direction the readings agree on", () => {
     [operation({ kind: "adjustment", direction: "out" })],
   ).rows;
   expect(row).toMatchObject({ kind: "adjustment", direction: "out" });
+});
+
+it("keeps a debt payment both readings name, and names none they disagree on", () => {
+  const payment = operation({
+    kind: null,
+    debtPayment: true,
+    price: null,
+    charges: null,
+  });
+  expect(mergeOperations([payment], [payment]).rows).toEqual([payment]);
+  expect(
+    mergeOperations(
+      [payment],
+      [
+        operation({
+          kind: "adjustment",
+          direction: "out",
+          price: null,
+          charges: null,
+        }),
+      ],
+    ).rows,
+  ).toEqual([
+    {
+      ...payment,
+      debtPayment: false,
+      kind: null,
+      direction: null,
+      confidence: "low",
+    },
+  ]);
 });

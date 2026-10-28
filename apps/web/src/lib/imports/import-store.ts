@@ -282,6 +282,7 @@ export function createImportStore(client: Client): ImportStorePort {
         date: operation.date,
         kind: operation.kind,
         direction: operation.direction,
+        debt_payment: operation.debtPayment,
         symbol: operation.symbol,
         quantity: decimal(operation.quantity),
         price: decimal(operation.price),

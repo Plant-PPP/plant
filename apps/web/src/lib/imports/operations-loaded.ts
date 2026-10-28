@@ -73,9 +73,10 @@ function loadedOperations(state: Ledger, accountId: string): Loaded[] {
 
 // Where a row looks for its loaded operation: under its transaction number
 // when it has one, else under its instrument and day. One with no kind, or
-// with no number and no instrument or day, is none of the account's.
+// with no number and no instrument or day, is none of the account's; nor is
+// a debt payment, which its debt's payments tell.
 function keyOfRow(row: ImportOperationRow): string | null {
-  if (row.kind === null) return null;
+  if (row.kind === null || row.debtPayment) return null;
   const motion = motionOf(
     row.kind,
     row.kind === "transfer" ? "out" : (row.direction ?? null),
@@ -174,4 +175,30 @@ export function withoutLoaded(
       ? { ...row, discarded: true }
       : row,
   );
+}
+
+// The draft's debt payments with those their debt already has set aside: a
+// payment of that debt on that day of that amount. Each payment answers for
+// one row at most.
+export function markPaymentsLoaded(
+  rows: readonly ImportOperationRow[],
+  paid: readonly { liability_id: string; date: string; amount: string }[],
+): ImportOperationRow[] {
+  const byDay = new Map<string, string[]>();
+  for (const each of paid) {
+    const key = `${each.liability_id}|${each.date}`;
+    byDay.set(key, [...(byDay.get(key) ?? []), each.amount]);
+  }
+  return rows.map((row) => {
+    if (!row.debtPayment || !row.payDebtId || row.quantity === null) {
+      return row;
+    }
+    const amounts = byDay.get(`${row.payDebtId}|${row.date}`) ?? [];
+    const at = amounts.findIndex(
+      (amount) => compareDecimals(amount, row.quantity!) === 0,
+    );
+    if (at < 0) return row;
+    amounts.splice(at, 1);
+    return { ...row, discarded: true, loaded: true };
+  });
 }

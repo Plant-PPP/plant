@@ -106,6 +106,14 @@ export function mergeOperations(
     } else if (texts.direction === null) {
       texts.kind = null;
     }
+    // So do whether it repays a debt: one the readings disagree on is
+    // neither, for the review to name.
+    const debtPayment = x.debtPayment && y.debtPayment;
+    if (x.debtPayment !== y.debtPayment) {
+      disputed = true;
+      texts.kind = null;
+      texts.direction = null;
+    }
     const symbol = x.symbol === y.symbol ? x.symbol : null;
     if (symbol !== x.symbol) disputed = true;
     // The currency cannot be left empty: the first reading's stands, for the
@@ -115,6 +123,7 @@ export function mergeOperations(
       ...x,
       ...decimals,
       ...texts,
+      debtPayment,
       symbol,
       confidence: disputed
         ? "low"
