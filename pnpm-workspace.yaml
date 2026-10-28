@@ -8,15 +8,15 @@ packages:
 # endpoint in apps/web and the orchestrators in packages/jobs must serve the
 # same SDK, or the functions registered with Inngest drift from the code.
 catalog:
-  "@supabase/supabase-js": ^2.117.3
+  "@supabase/supabase-js": ^2.118.0
   "@types/jest": ^30.0.0
   "@types/node": ^26.6.5
-  eslint: ^10.12.0
-  inngest: 4.24.0
+  eslint: ^10.13.0
+  inngest: 4.25.0
   jest: ^30.5.2
-  ts-jest: ^29.4.14
+  ts-jest: ^29.4.15
   typescript: ^5.9.3
-  typescript-eslint: ^8.71.2
+  typescript-eslint: ^8.72.0
   zod: ^4.6.7
 
 # Patched versions of dev-tool dependencies that CI's `pnpm audit` flags.
