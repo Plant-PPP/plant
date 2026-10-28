@@ -9,6 +9,7 @@ import {
   MAX_CHART_POINTS,
   MAX_CHARTS,
 } from "./chat";
+import { keptAttachmentsOf } from "./attachments";
 import {
   type ProposalView,
   proposalsOf,
@@ -140,7 +141,7 @@ function chatMessageOf(message: MessageLike): ChatMessage[] {
   if (message.role === "user") {
     // Kept, its files' names; just sent, its file parts.
     const attachments = Array.isArray(meta.attachments)
-      ? meta.attachments.filter(isText)
+      ? keptAttachmentsOf(meta).map((each) => each.filename)
       : message.parts.flatMap((part) => {
           const file = part as { type?: unknown; filename?: unknown };
           return file.type === "file" && isText(file.filename)

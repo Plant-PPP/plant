@@ -896,7 +896,8 @@ SELECT is((SELECT last_value FROM canary_misses), 0::bigint,
 
 -- Storage: one RESTRICTIVE policy on storage.objects, the MFA gate, and every
 -- permissive one lets authenticated read, add or remove a file of the imports
--- bucket under their own folder; none lets a file be overwritten.
+-- bucket under their own folder, of imports or of chat files; none lets a
+-- file be overwritten.
 SELECT is_empty(
   $$ SELECT 'restrictive policies: ' || count(*) FROM pg_policies
      WHERE schemaname = 'storage' AND tablename = 'objects' AND permissive = 'RESTRICTIVE'
@@ -914,8 +915,9 @@ SELECT is_empty(
        AND (roles <> '{authenticated}'::name[] OR cmd NOT IN ('SELECT', 'INSERT', 'DELETE')
             OR coalesce(qual, with_check) NOT LIKE '%bucket_id = ''imports''%'
             OR coalesce(qual, with_check) NOT LIKE '%[1] = %auth.uid()%'
-            OR coalesce(qual, with_check) NOT LIKE '%[2] = ''imports''%') $$,
-  'storage.objects has the MFA gate, and each user reaches only the imports files in their own folder, never overwriting one'
+            OR (coalesce(qual, with_check) NOT LIKE '%[2] = ''imports''%'
+                AND coalesce(qual, with_check) NOT LIKE '%[2] = ''assistant''%')) $$,
+  'storage.objects has the MFA gate, and each user reaches only the imports and chat files in their own folder, never overwriting one'
 );
 
 SELECT set_eq(

@@ -126,17 +126,102 @@ describe("proposeOperations", () => {
         title: "Operaciones en Nexo",
         lines: [
           "21/10/2026 · Compra 0,1 BTC a US$ 84.000,00",
-          "Ajuste 4.000 USDT",
+          "Depósito 4.000 USDT",
         ],
       },
       input: {
         accountId: NEXO.id,
         rows: [
           expect.objectContaining({ symbol: "BTC", kind: "purchase" }),
-          expect.objectContaining({ symbol: "USDT", kind: "adjustment" }),
+          expect.objectContaining({
+            symbol: "USDT",
+            kind: "adjustment",
+            direction: "in",
+          }),
         ],
       },
     });
+  });
+
+  const OTHER = {
+    id: "7f1c1a52-7c1a-4b1e-9a3e-1d2c3b4a5f61",
+    institution: "Exchange B",
+    default_portfolio_id: NEXO.default_portfolio_id,
+  };
+  const LINE = { id: "d1", kind: "usd_debt", label: "Línea", lender: "Nexo" };
+  const withDebts = proposalTools({
+    today: "2026-10-22",
+    accounts: async () => [NEXO, OTHER],
+    debts: async () => [
+      LINE,
+      { id: "c1", kind: "credit_card", label: "Visa", lender: "Banco" },
+    ],
+  });
+  const operation = (extra: object) => ({
+    date: "2026-10-21",
+    symbol: "BTC",
+    quantity: "0.09",
+    price: null,
+    amount: null,
+    charges: null,
+    currency: "USD",
+    direction: null,
+    toAccount: null,
+    debt: null,
+    fromAccount: null,
+    ...extra,
+  });
+
+  it("proposes units out, a transfer to another account and a debt's payment", async () => {
+    const output = (await run(withDebts.proposeOperations, {
+      account: "Nexo",
+      rows: [
+        operation({ kind: "adjustment", direction: "out" }),
+        operation({ kind: "transfer", toAccount: "exchange b" }),
+        operation({
+          kind: "debt_payment",
+          symbol: "USD",
+          quantity: "500",
+          debt: "nexo",
+          fromAccount: false,
+        }),
+      ],
+    })) as { proposal: { lines: string[] }; input: { rows: unknown[] } };
+    expect(output.proposal.lines).toEqual([
+      "21/10/2026 · Retiro 0,09 BTC",
+      "21/10/2026 · Traspaso a otra cuenta 0,09 BTC a Exchange B",
+      "21/10/2026 · Pago de deuda 500 USD de Línea",
+    ]);
+    expect(output.input.rows).toEqual([
+      expect.objectContaining({ kind: "adjustment", direction: "out" }),
+      expect.objectContaining({
+        kind: "transfer",
+        direction: "out",
+        counterpart_connection_id: OTHER.id,
+      }),
+      expect.objectContaining({
+        kind: null,
+        direction: null,
+        debt_payment: true,
+        pays_liability_id: "d1",
+      }),
+    ]);
+    expect(JSON.stringify(output.input)).not.toContain("Exchange B");
+  });
+
+  it("says why it proposes no transfer to the same account, nor a payment on a card", async () => {
+    expect(
+      await run(withDebts.proposeOperations, {
+        account: "Nexo",
+        rows: [operation({ kind: "transfer", toAccount: "Nexo" })],
+      }),
+    ).toEqual({ error: expect.stringContaining("otra cuenta") });
+    expect(
+      await run(withDebts.proposeOperations, {
+        account: "Nexo",
+        rows: [operation({ kind: "debt_payment", debt: "Visa" })],
+      }),
+    ).toEqual({ error: expect.stringContaining("no tiene una deuda") });
   });
 });
 

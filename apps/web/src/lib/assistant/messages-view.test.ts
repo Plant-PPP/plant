@@ -95,3 +95,32 @@ it("keeps a message's view while the message is the same, as an answer streams a
   expect(more).not.toBe(partial);
   expect(more).toMatchObject({ text: "Tenés $ 10" });
 });
+
+it("shows the names of a question's kept files, as kept now and before", () => {
+  expect(
+    toChatMessages([
+      {
+        id: "now",
+        role: "user",
+        parts: [{ type: "text", text: "Mirá lo que adjunté." }],
+        metadata: {
+          attachments: [
+            {
+              filename: "log.png",
+              mediaType: "image/png",
+              path: "u/assistant/c/m-0",
+            },
+          ],
+        },
+      },
+      {
+        id: "before",
+        role: "user",
+        parts: [{ type: "text", text: "Y este" }],
+        metadata: { attachments: ["resumen.pdf"] },
+      },
+    ]).map((message) =>
+      message.role === "user" ? message.attachments : undefined,
+    ),
+  ).toEqual([["log.png"], ["resumen.pdf"]]);
+});

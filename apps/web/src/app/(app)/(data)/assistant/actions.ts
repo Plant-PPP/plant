@@ -70,12 +70,16 @@ export async function deleteConversation(id: unknown): Promise<boolean> {
   const claims = await getSessionClaims();
   const requestId = await currentRequestId();
   try {
-    await deleteOwn(await createClient(), claims.sub, parsed.data);
-    serverLog.info("assistant.conversation", {
+    const { filesLeft } = await deleteOwn(
+      await createClient(),
+      claims.sub,
+      parsed.data,
+    );
+    serverLog[filesLeft ? "warn" : "info"]("assistant.conversation", {
       [REQUEST_ID_FIELD]: requestId,
       "enduser.id": claims.sub,
       "plant.assistant.action": "delete",
-      "plant.outcome": "ok",
+      "plant.outcome": filesLeft ? "files_left" : "ok",
     });
     return true;
   } catch (error) {

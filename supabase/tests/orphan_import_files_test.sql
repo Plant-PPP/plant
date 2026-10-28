@@ -1,10 +1,11 @@
 -- The orphan files finder: only objects of the imports bucket over a day old
--- that no document points at, after the cursor, and only service_role may ask.
+-- that no document points at, chat files once 30 days old, after the cursor,
+-- and only service_role may ask.
 --
 -- Run with: pnpm exec supabase test db --local
 
 BEGIN;
-SELECT plan(10);
+SELECT plan(11);
 
 -- The SQLSTATE a statement raises, or NULL if it succeeds.
 CREATE FUNCTION pg_temp.error_of(statement text) RETURNS text LANGUAGE plpgsql AS $f$
@@ -70,7 +71,15 @@ VALUES
   -- Another bucket.
   ('00000000-0000-4000-8000-000000000006', 'pgtap-other',
    'a0000000-0000-4000-8000-00000000000a/imports/old.pdf',
-   now() - interval '40 days');
+   now() - interval '40 days'),
+  -- A chat file its conversation still reads.
+  ('00000000-0000-4000-8000-000000000007', 'imports',
+   'a0000000-0000-4000-8000-00000000000a/assistant/a3000000-0000-4000-8000-000000000007/msg-0',
+   now() - interval '29 days'),
+  -- One past its 30 days.
+  ('00000000-0000-4000-8000-000000000008', 'imports',
+   'a0000000-0000-4000-8000-00000000000a/assistant/a3000000-0000-4000-8000-000000000008/msg-0',
+   now() - interval '31 days');
 
 SET LOCAL ROLE service_role;
 
@@ -79,8 +88,16 @@ SELECT results_eq(
   $$ VALUES ('00000000-0000-4000-8000-000000000003',
              'a0000000-0000-4000-8000-00000000000a/imports/a1000000-0000-4000-8000-000000000003/a2000000-0000-4000-8000-000000000003'),
             ('00000000-0000-4000-8000-000000000004',
-             'b0000000-0000-4000-8000-00000000000b/imports/mi-resumen.pdf') $$,
+             'b0000000-0000-4000-8000-00000000000b/imports/mi-resumen.pdf'),
+            ('00000000-0000-4000-8000-000000000008',
+             'a0000000-0000-4000-8000-00000000000a/assistant/a3000000-0000-4000-8000-000000000008/msg-0') $$,
   'only the imports objects over a day old with no document, of every user, by id'
+);
+
+SELECT is_empty(
+  $$ SELECT 1 FROM public.orphan_import_files(100)
+     WHERE id = '00000000-0000-4000-8000-000000000007' $$,
+  'never a chat file under 30 days old'
 );
 
 SELECT is_empty(
@@ -109,7 +126,7 @@ SELECT results_eq(
 
 SELECT results_eq(
   $$ SELECT id::text FROM public.orphan_import_files(100, '00000000-0000-4000-8000-000000000003') $$,
-  ARRAY['00000000-0000-4000-8000-000000000004'],
+  ARRAY['00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000008'],
   'the next batch starts after the cursor'
 );
 

@@ -19,6 +19,15 @@ import {
 
 import { ADVICE_ANSWER, isAdvice } from "@/lib/assistant/advice";
 import {
+  keepAttachments,
+  replayAttachments,
+} from "@/lib/assistant/attachment-files";
+import {
+  type Attachment,
+  type KeptAttachment,
+  keptAttachmentsOf,
+} from "@/lib/assistant/attachments";
+import {
   ANSWER_FAILED,
   type AnswerMetadata,
   type ChartPart,
@@ -29,7 +38,11 @@ import {
 } from "@/lib/assistant/chat";
 import { SOURCES } from "@/lib/assistant/figures";
 import { textOf } from "@/lib/assistant/messages-view";
-import { isKeptPart, proposalsNote } from "@/lib/assistant/proposals";
+import {
+  isKeptPart,
+  proposalsNote,
+  questionOf,
+} from "@/lib/assistant/proposals";
 import type { AssistantStore, StoredMessage } from "@/lib/assistant/store";
 import { assistantData } from "@/lib/assistant/tools-data";
 import { errorType, serverLog } from "@/lib/log/server-log";
@@ -70,6 +83,13 @@ export type TurnReport = (fields: {
   done?: boolean;
   // What failed, by type only.
   errorType?: string;
+  // The question's files kept for the conversation, and those that could
+  // not be; an earlier question's read again, missing or failed.
+  attachmentsKept?: number;
+  attachmentsFailed?: number;
+  filesReplayed?: number;
+  filesMissing?: number;
+  filesFailed?: number;
 }) => void;
 
 const newId = createIdGenerator({ prefix: "msg", size: 16 });
@@ -81,22 +101,46 @@ export const plainText = (body: string, status: number) =>
     headers: { "content-type": "text/plain; charset=utf-8" },
   });
 
-// A file the user attached to a question: an image or a PDF, read by the
-// model as it is.
-export type Attachment = {
-  filename: string;
-  mediaType: string;
-  // Base64, no data: prefix.
-  data: string;
+export type { Attachment } from "@/lib/assistant/attachments";
+
+// What the model reads of an answer's question: its text and the options it
+// offered, which the user's next question may answer.
+const questionNote = (parts: readonly unknown[]): string => {
+  const asked = questionOf(parts);
+  if (!asked) return "";
+  const options =
+    asked.options.length > 0 ? ` Opciones: ${asked.options.join(" / ")}.` : "";
+  return `[Preguntaste: "${asked.text}".${options}]`;
 };
 
+// What the model reads of a question's files when it does not read them
+// again: their names.
+const filesNote = (kept: readonly KeptAttachment[], gone = false) =>
+  kept.length === 0
+    ? ""
+    : `(archivos: ${kept.map((each) => each.filename).join(", ")}${gone ? "; ya no están disponibles" : ""})`;
+
 // What the model reads of a stored turn: its text only, a question as
-// untrusted text, and under an answer how the user answered its proposals.
-const forModel = (message: StoredMessage): AssistantUIMessage => {
+// untrusted text with the names of its files, and under an answer the
+// question it asked and how the user answered its proposals.
+const forModel = (
+  message: StoredMessage,
+  replayed?: { files: readonly Attachment[]; gone: boolean },
+): AssistantUIMessage => {
   const note =
     message.role === "assistant"
-      ? proposalsNote(message.parts, message.proposalStates ?? {})
-      : "";
+      ? [
+          questionNote(message.parts),
+          proposalsNote(message.parts, message.proposalStates ?? {}),
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : replayed && replayed.files.length > 0
+        ? ""
+        : filesNote(
+            keptAttachmentsOf(message.metadata),
+            replayed?.gone ?? false,
+          );
   const body = [textOf(message.parts), note].filter(Boolean).join("\n\n");
   return {
     id: message.id,
@@ -106,9 +150,33 @@ const forModel = (message: StoredMessage): AssistantUIMessage => {
         type: "text",
         text: message.role === "user" ? neutralizePromptText(body) : body,
       },
+      ...(replayed?.files ?? []).map(filePartOf),
     ],
   };
 };
+
+const filePartOf = (file: Attachment) => ({
+  type: "file" as const,
+  mediaType: file.mediaType,
+  filename: file.filename,
+  url: `data:${file.mediaType};base64,${file.data}`,
+});
+
+// Marks the end of what every step of a turn sends alike, for the provider
+// to cache: the steps after the first read it again.
+const cachedUpTo = (message: AssistantUIMessage): AssistantUIMessage => ({
+  ...message,
+  parts: message.parts.map((part, index) =>
+    index === message.parts.length - 1
+      ? {
+          ...part,
+          providerMetadata: {
+            anthropic: { cacheControl: { type: "ephemeral" } },
+          },
+        }
+      : part,
+  ) as AssistantUIMessage["parts"],
+});
 
 // The most an answer's metadata takes as JSON. Its column keeps 4096 bytes of
 // jsonb (ai_messages.metadata), which runs up to about a sixth over the JSON
@@ -164,8 +232,9 @@ export async function runAssistantTurn({
   context: ReadContext;
   conversationId: string;
   question: string;
-  // What the user attached, read by the model with the question and never
-  // kept: the question keeps their names.
+  // What the user attached, read by the model with the question and kept
+  // for the conversation: the question keeps their names and paths, and a
+  // later turn reads the latest ones again.
   attachments?: readonly Attachment[];
   unit: ChatUnit;
   today: string;
@@ -186,23 +255,45 @@ export async function runAssistantTurn({
     return plainText(QUOTA_USED, 429);
   }
 
+  const messageId = newId();
+  // Stored while the turn runs; the question names what was kept once saved.
+  const keeping =
+    attachments.length > 0
+      ? keepAttachments(
+          client,
+          { userId, conversationId, messageId },
+          attachments,
+        ).then((result) => {
+          report({
+            attachmentsKept: result.kept.length - result.failed,
+            attachmentsFailed: result.failed,
+          });
+          if (result.failed > 0) {
+            serverLog.warn("assistant.attachment", {
+              ...logFields,
+              "plant.assistant.attachment_step": "keep",
+              "error.type": result.errorType,
+            });
+          }
+          return result.kept;
+        })
+      : Promise.resolve([]);
   const [existing, history] = await Promise.all([
     store.conversation(userId, conversationId),
     store.history(userId, conversationId, HISTORY_TURNS),
   ]);
   const unit = existing?.unit ?? asked;
   const userMessage: StoredMessage = {
-    id: newId(),
+    id: messageId,
     role: "user",
     parts: [{ type: "text", text: question }],
-    metadata:
-      attachments.length > 0
-        ? { attachments: attachments.map((each) => each.filename) }
-        : null,
+    metadata: null,
   };
 
   const save = async (answer: AssistantUIMessage) => {
     try {
+      const kept = await keeping;
+      if (kept.length > 0) userMessage.metadata = { attachments: kept };
       // Started with its first saved turn, so a question that fails leaves
       // no empty conversation.
       if (!existing) {
@@ -291,7 +382,7 @@ export async function runAssistantTurn({
         debts: async () => {
           const result = await client
             .from("liabilities")
-            .select("label, lender");
+            .select("id, kind, label, lender");
           return result.data ?? [];
         },
       }),
@@ -337,30 +428,58 @@ export async function runAssistantTurn({
     },
   });
 
+  // A question with no files of its own reads again the latest ones the
+  // conversation kept, so an answer to the assistant's question still sees
+  // them.
+  const replay =
+    attachments.length === 0
+      ? await replayAttachments(client, { userId, conversationId }, history)
+      : null;
+  if (replay?.messageId) {
+    report({
+      filesReplayed: replay.files.length,
+      filesMissing: replay.missing,
+      filesFailed: replay.failed,
+    });
+    if (replay.failed > 0) {
+      serverLog.warn("assistant.attachment", {
+        ...logFields,
+        "plant.assistant.attachment_step": "replay",
+        "error.type": replay.errorType,
+      });
+    }
+  }
+
   // An error the stream met, logged once: the SDK calls back twice for one.
   // Only its type is logged, as a tool's bad input carries the model's input.
   let streamError = false;
   try {
     return await createAgentUIStreamResponse({
       agent,
-      uiMessages: [
-        // An answer with no text, as a failed turn's, would be refused by the
-        // provider as a turn.
-        ...history.filter((message) => textOf(message.parts).trim() !== ""),
-      ]
-        .map(forModel)
-        .concat({
-          ...forModel(userMessage),
-          parts: [
-            ...forModel(userMessage).parts,
-            ...attachments.map((each) => ({
-              type: "file" as const,
-              mediaType: each.mediaType,
-              filename: each.filename,
-              url: `data:${each.mediaType};base64,${each.data}`,
-            })),
-          ],
-        }),
+      uiMessages: history
+        .map((message) =>
+          forModel(
+            message,
+            message.id === replay?.messageId
+              ? {
+                  files: replay.files,
+                  gone: replay.files.length === 0,
+                }
+              : undefined,
+          ),
+        )
+        // An answer with nothing to read, as a failed turn's, would be
+        // refused by the provider as a turn.
+        .filter((message) => textOf(message.parts).trim() !== "")
+        .concat(
+          cachedUpTo({
+            ...forModel(userMessage),
+            parts: [
+              ...forModel(userMessage).parts,
+              ...attachments.map(filePartOf),
+            ],
+          }),
+        ),
       abortSignal: AbortSignal.timeout(TURN_MS),
       generateMessageId: newId,
       messageMetadata: ({ part }) =>
