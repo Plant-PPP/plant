@@ -1,9 +1,18 @@
 "use server";
 
+import { QUOTE_CLOSE_HOUR } from "@plant/core";
+import { buenosAiresHour } from "@plant/shared";
+
 import { getSessionClaims } from "@/lib/auth/session-claims";
 import { requestQuotes } from "@/lib/quotes/request-quotes";
 
-export async function refreshPrices(): Promise<{ ok: boolean }> {
+// Before the close hour the job keeps no traded price, so the day's prices
+// are still the last close.
+export async function refreshPrices(): Promise<{
+  ok: boolean;
+  beforeClose: boolean;
+}> {
   const claims = await getSessionClaims();
-  return { ok: await requestQuotes(claims.sub) };
+  const ok = await requestQuotes(claims.sub);
+  return { ok, beforeClose: buenosAiresHour(new Date()) < QUOTE_CLOSE_HOUR };
 }

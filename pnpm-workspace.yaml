@@ -25,6 +25,7 @@ catalog:
 overrides:
   adm-zip: ^0.6.1
   shell-quote: ^1.11.0
+  systeminformation: ^5.33.16
   "@ai-sdk/provider-utils>undici": ^6.29.1
 
 auditConfig:

@@ -9,7 +9,8 @@ import { BrandLogo } from "@/components/layout/brand-logo";
 import { cn } from "@/lib/utils";
 
 // The mark updates every price: it asks for the quotes job and spins until
-// the request is in.
+// the request is in. Before the close hour the prices shown are already the
+// last close, and the day's comes with the evening runs.
 export function AppSidebarLogoLink() {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -23,10 +24,15 @@ export function AppSidebarLogoLink() {
       onClick={() =>
         start(async () => {
           const result = await refreshPrices();
-          if (result.ok) {
+          if (!result.ok) toast.error("No pudimos actualizar los precios.");
+          else if (result.beforeClose) {
+            toast.info(
+              "Ya tenés el último cierre. El de hoy llega desde las 18 hs.",
+            );
+          } else {
             toast.success("Actualizando precios. En unos minutos se ven.");
             router.refresh();
-          } else toast.error("No pudimos actualizar los precios.");
+          }
         })
       }
     >
