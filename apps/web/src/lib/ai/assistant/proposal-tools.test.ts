@@ -1,6 +1,6 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { proposalTools } from "./proposal-tools";
+import { proposalTools, unitsShort } from "./proposal-tools";
 
 const NEXO = {
   id: "6f1c1a52-7c1a-4b1e-9a3e-1d2c3b4a5f60",
@@ -18,6 +18,7 @@ const tools = (accounts = [NEXO]) =>
     today: "2026-10-22",
     accounts: async () => accounts,
     debts: async () => [],
+    unitsHeld: async () => [],
   });
 
 const run = (tool: { execute?: unknown }, args: unknown) =>
@@ -156,6 +157,7 @@ describe("proposeOperations", () => {
       LINE,
       { id: "c1", kind: "credit_card", label: "Visa", lender: "Banco" },
     ],
+    unitsHeld: async () => [{ symbol: "BTC", units: "0.2" }],
   });
   const operation = (extra: object) => ({
     date: "2026-10-21",
@@ -207,6 +209,19 @@ describe("proposeOperations", () => {
       }),
     ]);
     expect(JSON.stringify(output.input)).not.toContain("Exchange B");
+  });
+
+  it("asks how to cover units out past what the account holds", async () => {
+    const output = (await run(withDebts.proposeOperations, {
+      account: "Nexo",
+      rows: [
+        operation({ kind: "sale", quantity: "0.15", price: "70000" }),
+        operation({ kind: "transfer", toAccount: "exchange b" }),
+      ],
+    })) as { error: string };
+    expect(output.error).toContain("salen 0,24 BTC");
+    expect(output.error).toContain("faltan 0,04 BTC");
+    expect(output.error).toContain("askUser");
   });
 
   it("says why it proposes no transfer to the same account, nor a payment on a card", async () => {
@@ -390,5 +405,59 @@ describe("proposeRealEstate", () => {
     expect(
       await run(tools().proposeRealEstate, { ...property, amount: "0" }),
     ).toEqual({ error: expect.stringContaining("amount") });
+  });
+});
+
+describe("unitsShort", () => {
+  const staged = (
+    date: string | null,
+    kind: "purchase" | "sale" | "adjustment",
+    quantity: string,
+    direction: "in" | "out" | null = null,
+  ) => ({
+    date,
+    kind,
+    direction,
+    counterpart_connection_id: null,
+    debt_payment: false,
+    pays_liability_id: null,
+    symbol: "NEXO",
+    quantity,
+    price: null,
+    amount: null,
+    charges: null,
+    currency: "USD" as const,
+  });
+
+  it("counts a day's units in before its units out, from what the account holds", () => {
+    const held = [{ symbol: "NEXO", units: "11407.27720786" }];
+    const sales = [
+      staged("2026-10-30", "sale", "5252.78696117"),
+      staged("2026-10-30", "sale", "6164.39977266"),
+    ];
+    expect(unitsShort(sales, held)).toEqual({
+      symbol: "NEXO",
+      out: "11417.18673383",
+      held: "11407.27720786",
+      lacking: "9.90952597",
+    });
+    expect(
+      unitsShort(
+        [...sales, staged("2026-10-30", "adjustment", "9.90952597", "in")],
+        held,
+      ),
+    ).toBeNull();
+  });
+
+  it("adds the account's holdings of an instrument across portfolios", () => {
+    expect(
+      unitsShort(
+        [staged("2026-10-30", "sale", "3")],
+        [
+          { symbol: "NEXO", units: "1" },
+          { symbol: "NEXO", units: "2" },
+        ],
+      ),
+    ).toBeNull();
   });
 });
