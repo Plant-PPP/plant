@@ -211,6 +211,29 @@ describe("proposeOperations", () => {
     expect(JSON.stringify(output.input)).not.toContain("Exchange B");
   });
 
+  it("keeps a payment's amount as its quantity, however the model gives it", async () => {
+    const output = (await run(withDebts.proposeOperations, {
+      account: "Nexo",
+      rows: [
+        operation({
+          kind: "debt_payment",
+          symbol: "USD",
+          quantity: null,
+          amount: "4976.99",
+          debt: "nexo",
+          fromAccount: true,
+        }),
+      ],
+    })) as { input: { rows: unknown[] } };
+    expect(output.input.rows).toEqual([
+      expect.objectContaining({
+        debt_payment: true,
+        quantity: "4976.99",
+        amount: null,
+      }),
+    ]);
+  });
+
   it("asks how to cover units out past what the account holds", async () => {
     const output = (await run(withDebts.proposeOperations, {
       account: "Nexo",

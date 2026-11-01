@@ -179,7 +179,11 @@ const operationsArgs = z.object({
             "Solo para debt_payment: true si el pago salió de esta cuenta (sus unidades o su efectivo), false si el documento solo muestra la deuda pagada.",
           ),
         symbol,
-        quantity: decimal.nullable(),
+        quantity: decimal
+          .nullable()
+          .describe(
+            "Las unidades; para debt_payment, el monto pagado en la moneda de la deuda.",
+          ),
         price: decimal.nullable().describe("El precio por unidad."),
         amount: decimal
           .nullable()
@@ -371,6 +375,10 @@ function stagedOperationOf(
     return {
       staged: {
         ...common,
+        // The review reads a payment's amount, in its debt's unit, as its
+        // quantity; the model may give it as the amount.
+        quantity: row.quantity ?? row.amount,
+        amount: null,
         kind: row.fromAccount ? "adjustment" : null,
         direction: row.fromAccount ? "out" : null,
         debt_payment: true,
@@ -611,7 +619,7 @@ export function proposalTools({
         );
         if (short) {
           return {
-            error: `En ${target.institution} salen ${formatQuantity(short.out)} ${short.symbol} y la cuenta tiene ${formatQuantity(short.held)}: faltan ${formatQuantity(short.lacking)} ${short.symbol}. No ajustes nada por tu cuenta: preguntale al usuario con askUser cómo cubrir la diferencia, por ejemplo agregarla como intereses o depósito (adjustment in, antes de la salida), bajar la salida a lo que tiene, o una operación que falta cargar.`,
+            error: `En ${target.institution} salen ${formatQuantity(short.out)} ${short.symbol} y la cuenta tiene ${formatQuantity(short.held)}: faltan ${formatQuantity(short.lacking)} ${short.symbol}. No ajustes nada por tu cuenta: preguntale al usuario con askUser cómo cubrir la diferencia, por ejemplo agregarla como intereses o depósito (adjustment in con su precio, antes de la salida), bajar la salida a lo que tiene, o una operación que falta cargar.`,
           };
         }
         return {
