@@ -63,10 +63,10 @@ const HISTORY_TURNS = 10;
 // The most steps a turn takes, the last of them answering without tools.
 const MAX_STEPS = 6;
 // Room for a long answer or a proposal of a log's many rows, read from
-// several screenshots; bounds what one step can cost.
-const MAX_OUTPUT_TOKENS = 8_192;
+// several screenshots or a spreadsheet; bounds what one step can cost.
+const MAX_OUTPUT_TOKENS = 16_384;
 // A turn ends before the chat route's maxDuration would cut it.
-const TURN_MS = 50_000;
+const TURN_MS = 280_000;
 
 export type TurnOutcome =
   | "answered"

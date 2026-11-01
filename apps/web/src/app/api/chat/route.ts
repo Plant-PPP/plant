@@ -31,7 +31,8 @@ import {
 } from "@/lib/request-id";
 import { createClient } from "@/lib/supabase/server";
 
-export const maxDuration = 60;
+// Room for a proposal of a long log's rows; Fluid compute allows 300 s.
+export const maxDuration = 300;
 
 // The longest question the chat takes, and the largest body it reads: room
 // for a few screenshots, under what a function takes.
