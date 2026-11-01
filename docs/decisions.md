@@ -500,7 +500,7 @@ Decisions that are not in the plan, or that detail it. Newest first.
 - **Production only.** `/assistant` and `/api/chat` answer with the real chat in production; previews, staging included, keep the prototype, so PLA-47's "streaming in staging" is checked in production and locally with production's code. Without `ANTHROPIC_API_KEY` a question that needs the model gets 503 and counts nothing; the fixed answer still works.
 - **Not yet:** a link from a cost row to its conversation and prompt caching, which the AI costs entry expected with the chat; one user's 30 questions a month cost too little to need either.
 - **Tool calls are logged, not audited**: they only read, and each turn's line counts them; `audit_log` keeps what changes data, like a deleted conversation.
-- **Claude Haiku 4.5 through AI SDK's `ToolLoopAgent`** (`lib/ai/assistant/turn.ts`, the one line to change the model). It takes up to 6 steps, the last without tools, within 50 seconds. Each call is costed as `assistant_chat` (`costedModel`, shared with the import's calls).
+- **Claude Haiku 4.5 through AI SDK's `ToolLoopAgent`** (`lib/ai/assistant/turn.ts`, the one line to change the model). It takes up to 6 steps, the last without tools, within 280 seconds: proposing a long exchange log's rows takes over a minute, and with Fluid compute the chat route may run 300 s on Hobby. Each call is costed as `assistant_chat` (`costedModel`, shared with the import's calls).
 - **Five read-only tools** (`lib/assistant/tools-data.ts`), read once per turn the way Resumen reads (`readCloses`), through the session's client under RLS:
   - net worth today: assets, debts and what is left;
   - the largest holdings;
