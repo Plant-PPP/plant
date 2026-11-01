@@ -540,6 +540,44 @@ describe("debt payments", () => {
     });
   });
 
+  it("pays from what the import's earlier sales brought in before the account's cash", () => {
+    const fromAccount = (id: string, quantity: string) =>
+      payment(id, { kind: "adjustment", direction: "out", quantity });
+    const sell = row("sell", {
+      kind: "sale",
+      date: "2026-09-16",
+      quantity: "2",
+      price: "1000",
+      charges: "10",
+      currency: "USD",
+    });
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [row("buy", { currency: "USD" }), sell, fromAccount("paid", "1990")],
+      newId,
+      { ...payable, cash: [] },
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(written.payments).toEqual([
+      { liability_id: "d2", event: event("2026-09-16", "1990"), cash: null },
+    ]);
+    expect(
+      writeImportOperations(
+        emptyLedger(),
+        ITEM,
+        [
+          row("buy", { currency: "USD" }),
+          sell,
+          fromAccount("first", "1500"),
+          fromAccount("second", "500"),
+        ],
+        newId,
+        payable,
+      ).payments.map((each) => each.cash?.expected ?? null),
+    ).toEqual([null, "800"]);
+  });
+
   it("refuses a debt it may not pay, and a UVA debt from the account's cash", () => {
     expect(
       writeImportOperations(

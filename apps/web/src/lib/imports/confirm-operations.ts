@@ -1,10 +1,15 @@
 import { exactUnitPrice, REFERENCE_MAX } from "@plant/core";
 import {
   compareDecimals,
+  compareExact,
   type Currency,
+  type Exact,
   exactOf,
   minus,
+  plus,
   stored,
+  times,
+  ZERO,
   currencySchema,
   nonNegativeDecimalSchema,
   positiveDecimalSchema,
@@ -175,6 +180,10 @@ export function writeImportOperations<S extends Ledger>(
   const operations: string[] = [];
   const payments: DebtPayment[] = [];
   const cashLeft = new Map<string, string>();
+  // What the import's earlier sales brought in, per currency, that no
+  // payment used yet: Plant keeps no cash from them, so a payment from the
+  // account they cover is paid with the units that left, not its cash.
+  const proceeds = new Map<Currency, Exact>();
   for (const reviewed of kept) {
     let row = reviewed;
     if (reviewed.debtPayment) {
@@ -184,31 +193,37 @@ export function writeImportOperations<S extends Ledger>(
       }
       const fromAccount = reviewed.kind === "adjustment";
       let cash: DebtPayment["cash"] = null;
-      // A debt in a currency paid from the account takes its one cash
-      // holding in that currency.
+      // A debt in a currency paid from the account takes what the import's
+      // earlier sales brought in, else its one cash holding in that currency.
       if (fromAccount && debt.instrument_symbol === null) {
         if (debt.currency === null || debt.uva) {
           return refuse({ ok: false, code: "no_cash_link" }, reviewed.id);
         }
-        const held = payable.cash.filter(
-          (each) =>
-            each.accountId === account.id && each.currency === debt.currency,
-        );
-        if (held.length !== 1) {
-          return refuse({ ok: false, code: "no_cash" }, reviewed.id);
+        const sold = proceeds.get(debt.currency) ?? ZERO;
+        const amount = exactOf(reviewed.quantity!);
+        if (compareExact(sold, amount) >= 0) {
+          proceeds.set(debt.currency, minus(sold, amount));
+        } else {
+          const held = payable.cash.filter(
+            (each) =>
+              each.accountId === account.id && each.currency === debt.currency,
+          );
+          if (held.length !== 1) {
+            return refuse({ ok: false, code: "no_cash" }, reviewed.id);
+          }
+          // What the holding has once the import's earlier payments took
+          // theirs, as the database checks each one against.
+          const { id } = held[0]!;
+          const left = cashLeft.get(id) ?? held[0]!.amount;
+          if (compareDecimals(left, reviewed.quantity!) < 0) {
+            return refuse(
+              { ok: false, code: "insufficient_cash" },
+              reviewed.id,
+            );
+          }
+          cash = { holding_id: id, take: true, expected: left };
+          cashLeft.set(id, stored(minus(exactOf(left), amount)));
         }
-        // What the holding has once the import's earlier payments took
-        // theirs, as the database checks each one against.
-        const { id } = held[0]!;
-        const left = cashLeft.get(id) ?? held[0]!.amount;
-        if (compareDecimals(left, reviewed.quantity!) < 0) {
-          return refuse({ ok: false, code: "insufficient_cash" }, reviewed.id);
-        }
-        cash = { holding_id: id, take: true, expected: left };
-        cashLeft.set(
-          id,
-          stored(minus(exactOf(left), exactOf(reviewed.quantity!))),
-        );
       }
       payments.push({
         liability_id: debt.id,
@@ -347,6 +362,16 @@ export function writeImportOperations<S extends Ledger>(
       if (parts === null)
         return refuse({ ok: false, code: "oversold" }, row.id);
       result = write({ kind, ...common, price, parts });
+      if (result.ok) {
+        const brought = minus(
+          times(exactOf(price), exactOf(row.quantity!)),
+          exactOf(row.charges ?? "0"),
+        );
+        proceeds.set(
+          row.currency,
+          plus(proceeds.get(row.currency) ?? ZERO, brought),
+        );
+      }
     } else {
       // Paid after the units left, it goes to the holding that had them
       // last.
