@@ -12,6 +12,11 @@ import {
 } from "@/lib/ai/assistant/turn";
 import { aiCostSink } from "@/lib/ai/ai-cost-sink";
 import { assistantSink } from "@/lib/assistant/assistant-sink";
+import {
+  ATTACHMENT_BYTES,
+  ATTACHMENT_LIMIT,
+  ATTACHMENT_TYPES,
+} from "@/lib/assistant/attachments";
 import { ANSWER_FAILED, CHAT_UNITS } from "@/lib/assistant/chat";
 import { textOf } from "@/lib/assistant/messages-view";
 import { getSessionClaims } from "@/lib/auth/session-claims";
@@ -33,16 +38,6 @@ export const maxDuration = 60;
 const QUESTION_LIMIT = 500;
 const BODY_LIMIT = 4_000_000;
 
-// The files a question may attach: pictures and PDFs the model reads, a few
-// a question.
-const ATTACHMENT_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-] as const;
-const ATTACHMENT_LIMIT = 4;
-const ATTACHMENT_BYTES = 2_800_000;
 // What the question says when the user only attached files.
 const FILES_ONLY = "Mirá lo que adjunté.";
 
@@ -54,7 +49,7 @@ const filePart = z.object({
 });
 
 // The files a question's parts attach, read from their data URLs, or null
-// when one is not a picture or a PDF, or past the limits.
+// when one is not a picture, a PDF or a spreadsheet, or past the limits.
 function attachmentsOf(parts: readonly unknown[]): Attachment[] | null {
   const files = parts.filter(
     (part) =>

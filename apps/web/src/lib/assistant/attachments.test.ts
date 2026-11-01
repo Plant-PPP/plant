@@ -1,5 +1,6 @@
 import {
   attachmentPath,
+  attachmentTypeOf,
   isAttachmentOf,
   keptAttachmentsOf,
 } from "./attachments";
@@ -36,4 +37,26 @@ it("keeps a file in the user's folder of the conversation, and reads only from t
       CONVERSATION,
     ),
   ).toBe(false);
+});
+
+it("takes a spreadsheet by its extension, whatever the browser calls it", () => {
+  expect(attachmentTypeOf({ name: "nexo.csv", type: "" })).toBe("text/csv");
+  expect(
+    attachmentTypeOf({ name: "nexo.csv", type: "application/vnd.ms-excel" }),
+  ).toBe("text/csv");
+  expect(attachmentTypeOf({ name: "cartera.XLSX", type: "" })).toBe(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  expect(attachmentTypeOf({ name: "foto", type: "image/png" })).toBe(
+    "image/png",
+  );
+});
+
+it("refuses what the chat does not take", () => {
+  expect(attachmentTypeOf({ name: "foto.heic", type: "image/heic" })).toBe(
+    null,
+  );
+  expect(attachmentTypeOf({ name: "notas.txt", type: "text/plain" })).toBe(
+    null,
+  );
 });

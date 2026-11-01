@@ -1,7 +1,49 @@
 // The files a user attaches to a question, kept for the conversation so its
 // later turns read them again.
 
-// A file the user attached: an image or a PDF, read by the model as it is.
+import { uploadTypeOf } from "@/lib/imports/upload";
+
+// Spreadsheets the model reads as the text of their first sheet.
+export const SPREADSHEET_TYPES = [
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+] as const;
+
+// The files a question may attach: pictures, PDFs and spreadsheets, a few a
+// question, each small enough for the request to carry.
+export const ATTACHMENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+  ...SPREADSHEET_TYPES,
+] as const;
+export const ATTACHMENT_LIMIT = 4;
+export const ATTACHMENT_BYTES = 2_800_000;
+
+export type AttachmentType = (typeof ATTACHMENT_TYPES)[number];
+
+const isAttachmentType = (type: string | null): type is AttachmentType =>
+  (ATTACHMENT_TYPES as readonly (string | null)[]).includes(type);
+
+export const isSpreadsheet = (type: string) =>
+  (SPREADSHEET_TYPES as readonly string[]).includes(type);
+
+// The type a picked file is sent as: its extension's, as browsers name a CSV
+// a spreadsheet or nothing at all, or else what the browser says; null for
+// one the chat does not take.
+export function attachmentTypeOf(file: {
+  name: string;
+  type: string;
+}): AttachmentType | null {
+  const named = uploadTypeOf(file.name);
+  if (isAttachmentType(named)) return named;
+  return isAttachmentType(file.type) ? file.type : null;
+}
+
+// A file the user attached: an image or a PDF, read by the model as it is, or
+// a spreadsheet, read as text.
 export type Attachment = {
   filename: string;
   mediaType: string;

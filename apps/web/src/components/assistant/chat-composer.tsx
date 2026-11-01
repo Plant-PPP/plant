@@ -20,17 +20,12 @@ import {
 } from "@/components/ui/input-group";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
-
-// The files a question attaches: pictures and PDFs, a few at a time, each
-// small enough for the request to carry.
-const ATTACH_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-];
-const ATTACH_LIMIT = 4;
-const ATTACH_BYTES = 2_800_000;
+import {
+  ATTACHMENT_BYTES,
+  ATTACHMENT_LIMIT,
+  ATTACHMENT_TYPES,
+  attachmentTypeOf,
+} from "@/lib/assistant/attachments";
 
 // Where a question is written: the field, the files it attaches, the unit the
 // answer comes in, and sending. It keeps the draft, so typing re-renders only itself; ⌘K (Ctrl+K)
@@ -63,16 +58,17 @@ export function ChatComposer({
   const picker = useRef<HTMLInputElement>(null);
   const mac = useMac();
 
-  // Files picked, dropped or pasted: only pictures and PDFs, small enough,
-  // a few a question.
+  // Files picked, dropped or pasted: only pictures, PDFs and spreadsheets,
+  // small enough, a few a question.
   function attach(picked: readonly File[]) {
     const taken = picked.filter(
-      (file) => ATTACH_TYPES.includes(file.type) && file.size <= ATTACH_BYTES,
+      (file) =>
+        attachmentTypeOf(file) !== null && file.size <= ATTACHMENT_BYTES,
     );
     if (taken.length < picked.length) {
-      toast.error("Adjuntá imágenes o PDFs de hasta 2,8 MB.");
+      toast.error("Adjuntá imágenes, PDFs, CSV o Excel de hasta 2,8 MB.");
     }
-    setFiles((current) => [...current, ...taken].slice(0, ATTACH_LIMIT));
+    setFiles((current) => [...current, ...taken].slice(0, ATTACHMENT_LIMIT));
   }
 
   // On this page ⌘K focuses the field; elsewhere the sidebar's Asistente
@@ -119,7 +115,7 @@ export function ChatComposer({
       <input
         ref={picker}
         type="file"
-        accept={ATTACH_TYPES.join(",")}
+        accept={[...ATTACHMENT_TYPES, ".csv", ".xls", ".xlsx"].join(",")}
         multiple
         hidden
         onChange={(event) => {
@@ -185,7 +181,7 @@ export function ChatComposer({
             variant="ghost"
             size="icon-sm"
             className="size-7"
-            disabled={disabled || files.length >= ATTACH_LIMIT}
+            disabled={disabled || files.length >= ATTACHMENT_LIMIT}
             onClick={() => picker.current?.click()}
           >
             <Paperclip className="size-4" />

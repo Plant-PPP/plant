@@ -24,9 +24,11 @@ import {
 } from "@/lib/assistant/attachment-files";
 import {
   type Attachment,
+  isSpreadsheet,
   type KeptAttachment,
   keptAttachmentsOf,
 } from "@/lib/assistant/attachments";
+import { spreadsheetText } from "@/lib/assistant/spreadsheet-text";
 import {
   ANSWER_FAILED,
   type AnswerMetadata,
@@ -156,12 +158,17 @@ const forModel = (
   };
 };
 
-const filePartOf = (file: Attachment) => ({
-  type: "file" as const,
-  mediaType: file.mediaType,
-  filename: file.filename,
-  url: `data:${file.mediaType};base64,${file.data}`,
-});
+// A file as the model reads it: a spreadsheet as its text, anything else as
+// it is.
+const filePartOf = (file: Attachment) =>
+  isSpreadsheet(file.mediaType)
+    ? { type: "text" as const, text: spreadsheetText(file) }
+    : {
+        type: "file" as const,
+        mediaType: file.mediaType,
+        filename: file.filename,
+        url: `data:${file.mediaType};base64,${file.data}`,
+      };
 
 // Marks the end of what every step of a turn sends alike, for the provider
 // to cache: the steps after the first read it again.
