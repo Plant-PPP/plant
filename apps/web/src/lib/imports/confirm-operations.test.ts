@@ -578,6 +578,41 @@ describe("debt payments", () => {
     ).toEqual([null, "800"]);
   });
 
+  it("pays a day's debts after all of that day's sales, wherever they are listed", () => {
+    const written = writeImportOperations(
+      emptyLedger(),
+      ITEM,
+      [
+        row("buy", { currency: "USD" }),
+        payment("paid", {
+          kind: "adjustment",
+          direction: "out",
+          quantity: "3000",
+        }),
+        row("first", {
+          kind: "sale",
+          date: "2026-09-16",
+          quantity: "2",
+          price: "1000",
+          currency: "USD",
+        }),
+        row("second", {
+          kind: "sale",
+          date: "2026-09-16",
+          quantity: "1",
+          price: "1000",
+          currency: "USD",
+        }),
+      ],
+      newId,
+      { ...payable, cash: [] },
+    );
+    expect(written.result).toEqual({ ok: true, id: "i1" });
+    expect(written.payments).toEqual([
+      { liability_id: "d2", event: event("2026-09-16", "3000"), cash: null },
+    ]);
+  });
+
   it("refuses a debt it may not pay, and a UVA debt from the account's cash", () => {
     expect(
       writeImportOperations(

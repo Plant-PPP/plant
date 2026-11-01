@@ -70,13 +70,16 @@ const complete = (row: ImportOperationRow) =>
 
 // Within a day, units come in before income is counted and before units go
 // out, so a day's sale, withdrawal or payment finds that day's deposit or
-// purchase; across days the dates order them, oldest first.
+// purchase, and a debt is paid last, with what all of the day's sales brought
+// in; across days the dates order them, oldest first.
 const dayOrder = (row: ImportOperationRow) =>
-  row.kind === "dividend" || row.kind === "coupon"
-    ? 1
-    : row.kind === "sale" || row.debtPayment || takesUnitsOut(row)
-      ? 2
-      : 0;
+  row.debtPayment
+    ? 3
+    : row.kind === "dividend" || row.kind === "coupon"
+      ? 1
+      : row.kind === "sale" || takesUnitsOut(row)
+        ? 2
+        : 0;
 
 // A debt an import's payment may pay: one of the user's that is not a card,
 // in its unit.
