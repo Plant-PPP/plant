@@ -393,6 +393,19 @@ export async function runAssistantTurn({
             .select("id, kind, label, lender");
           return result.data ?? [];
         },
+        unitsHeld: async (accountId) => {
+          const result = await client
+            .from("holdings")
+            .select("instrument_symbol, amount")
+            .eq("source_connection_id", accountId)
+            .eq("asset_class", "instrument")
+            .is("archived_at", null);
+          return (result.data ?? []).flatMap(({ instrument_symbol, amount }) =>
+            instrument_symbol === null
+              ? []
+              : [{ symbol: instrument_symbol, units: String(amount) }],
+          );
+        },
       }),
     },
     maxOutputTokens: MAX_OUTPUT_TOKENS,

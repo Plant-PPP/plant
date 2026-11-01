@@ -6,7 +6,18 @@ import {
   liabilityInputSchema,
   principalSplit,
 } from "@plant/core";
-import { Constants, fromScaled, toScaled } from "@plant/shared";
+import {
+  compareExact,
+  Constants,
+  type Exact,
+  exactOf,
+  fromScaled,
+  minus,
+  plus,
+  stored,
+  toScaled,
+  ZERO,
+} from "@plant/shared";
 import { OPERATION_KINDS } from "@plant/sources";
 import { tool } from "ai";
 import { z } from "zod";
@@ -377,6 +388,53 @@ function stagedOperationOf(
   };
 }
 
+// Units of a proposal's rows that leave the account past what it holds: each
+// symbol's running total, in date order with a day's units in before its
+// units out, from what the account holds today. The first short symbol, with
+// how many units it lacks, or null.
+export function unitsShort(
+  rows: readonly StagedOperation[],
+  holdings: readonly { symbol: string; units: string }[],
+): { symbol: string; out: string; held: string; lacking: string } | null {
+  const held = new Map<string, Exact>();
+  for (const { symbol, units } of holdings) {
+    held.set(symbol, plus(held.get(symbol) ?? ZERO, exactOf(units)));
+  }
+  const sign = (row: StagedOperation): 1 | -1 | 0 =>
+    row.debt_payment || row.kind === "dividend" || row.kind === "coupon"
+      ? 0
+      : row.kind === "purchase" ||
+          (row.kind === "adjustment" && row.direction === "in")
+        ? 1
+        : -1;
+  const ordered = rows
+    .filter((row) => row.quantity !== null && sign(row) !== 0)
+    .toSorted(
+      (a, b) =>
+        (a.date ?? "9999-12-31").localeCompare(b.date ?? "9999-12-31") ||
+        sign(b) - sign(a),
+    );
+  const left = new Map<string, Exact>();
+  const out = new Map<string, Exact>();
+  for (const row of ordered) {
+    const symbol = row.symbol ?? "";
+    const units = exactOf(row.quantity!);
+    const before = left.get(symbol) ?? held.get(symbol) ?? ZERO;
+    const after = sign(row) === 1 ? plus(before, units) : minus(before, units);
+    if (sign(row) === -1) out.set(symbol, plus(out.get(symbol) ?? ZERO, units));
+    if (compareExact(after, ZERO) < 0) {
+      return {
+        symbol,
+        out: stored(out.get(symbol)!),
+        held: stored(held.get(symbol) ?? ZERO),
+        lacking: stored(minus(ZERO, after)),
+      };
+    }
+    left.set(symbol, after);
+  }
+  return null;
+}
+
 // The assistant's proposals: each checks what it would write and hands back
 // a card for the user to confirm, writing nothing. And its question, for
 // when it is not sure what the user wants.
@@ -384,12 +442,17 @@ export function proposalTools({
   today,
   accounts,
   debts,
+  unitsHeld,
 }: {
   today: string;
   // The user's open accounts.
   accounts: () => Promise<readonly Account[]>;
   // The user's debts, by name and lender.
   debts: () => Promise<readonly Debt[]>;
+  // The units of each of an account's holdings of an instrument today.
+  unitsHeld: (
+    accountId: string,
+  ) => Promise<readonly { symbol: string; units: string }[]>;
 }) {
   return {
     proposeDebt: tool({
@@ -541,6 +604,15 @@ export function proposalTools({
           const read = stagedOperationOf(row, target, held, payable);
           if ("error" in read) return read;
           rows.push(read);
+        }
+        const short = unitsShort(
+          rows.map(({ staged }) => staged),
+          await unitsHeld(target.id),
+        );
+        if (short) {
+          return {
+            error: `En ${target.institution} salen ${formatQuantity(short.out)} ${short.symbol} y la cuenta tiene ${formatQuantity(short.held)}: faltan ${formatQuantity(short.lacking)} ${short.symbol}. No ajustes nada por tu cuenta: preguntale al usuario con askUser cómo cubrir la diferencia, por ejemplo agregarla como intereses o depósito (adjustment in, antes de la salida), bajar la salida a lo que tiene, o una operación que falta cargar.`,
+          };
         }
         return {
           proposal: {
