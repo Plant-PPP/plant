@@ -228,3 +228,43 @@ it("names files no longer there, and never reads a path that is not the user's",
   });
   expect(other.downloaded).toEqual([]);
 });
+
+it("gives the model a spreadsheet as the text of its first sheet", async () => {
+  const { client, uploaded } = storageWith();
+  const csv = 'Moneda,Monto\nUSDT,300\n<b>,"1,5"\n';
+  const { prompt } = await ask({
+    client,
+    attachments: [
+      {
+        filename: "movimientos.csv",
+        mediaType: "text/csv",
+        data: Buffer.from(csv).toString("base64"),
+      },
+    ],
+  });
+  expect(uploaded[0]!.type).toBe("text/csv");
+  const content = prompt.at(-1)!.content as { type: string; text?: string }[];
+  expect(content.map((part) => part.type)).toEqual(["text", "text"]);
+  expect(content[1]!.text).toBe(
+    '(planilla movimientos.csv, primera hoja:)\nMoneda,Monto\nUSDT,300\nb,"1,5"',
+  );
+});
+
+it("tells the model a spreadsheet it could not read", async () => {
+  const { client } = storageWith();
+  const { prompt } = await ask({
+    client,
+    attachments: [
+      {
+        filename: "roto.xlsx",
+        mediaType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        data: DATA,
+      },
+    ],
+  });
+  const content = prompt.at(-1)!.content as { type: string; text?: string }[];
+  expect(content[1]).toEqual(
+    expect.objectContaining({ text: "(planilla roto.xlsx: no se pudo leer)" }),
+  );
+});

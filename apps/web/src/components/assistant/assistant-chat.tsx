@@ -23,6 +23,7 @@ import {
   LIVE_SUGGESTED_QUESTIONS,
   QUESTIONS_PER_MONTH,
 } from "@/lib/assistant/chat";
+import { attachmentTypeOf } from "@/lib/assistant/attachments";
 import { textOf, toChatMessages } from "@/lib/assistant/messages-view";
 import { settle } from "@/lib/server-action-call";
 
@@ -30,7 +31,8 @@ import { ChatLayout } from "./chat-layout";
 
 const STREAM_THROTTLE_MS = 50;
 
-// A file as the chat sends it: its bytes in a data URL.
+// A file as the chat sends it: its bytes in a data URL of the type it is
+// attached as.
 const asFilePart = (file: File) =>
   new Promise<{
     type: "file";
@@ -38,13 +40,14 @@ const asFilePart = (file: File) =>
     filename: string;
     url: string;
   }>((resolve, reject) => {
+    const mediaType = attachmentTypeOf(file) ?? file.type;
     const reader = new FileReader();
     reader.onload = () =>
       resolve({
         type: "file",
-        mediaType: file.type,
+        mediaType,
         filename: file.name,
-        url: String(reader.result),
+        url: `data:${mediaType};base64,${String(reader.result).split(",")[1] ?? ""}`,
       });
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
